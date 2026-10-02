@@ -16,10 +16,12 @@ change to what gets generated is reviewed as a diff of the generated code.
 |---|---|
 | `home.one` | `src/screens/home.tsx` |
 | `studio.one` | `src/screens/studio.tsx` |
-| `docs.one` | `src/screens/docs.tsx` |
+| `language.one` | `src/screens/language.tsx` |
+| `releases.one` | `src/screens/releases.tsx` |
+| `mission.one` | `src/screens/mission.tsx` |
 | every file | `src/app.tsx`, `src/main.tsx`, `package.json`, `tsconfig.json`, `vite.config.ts` |
 
-`src/docs.generated.ts` and `index.html` are generated too but aren't kept here. The docs
+`src/pages/*.generated.ts` and `index.html` are generated too but aren't kept here. They
 change whenever a page does, so they're tested for their shape instead.
 
 ## api and firestore.rules

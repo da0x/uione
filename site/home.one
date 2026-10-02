@@ -1,13 +1,15 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The landing page. It is outside any namespace, so it is the site's root: /.
+// The front page. It is outside any namespace, so it is the site's root: /. The
+// studio leads, since it's where most people will write uione; the compiler, its
+// releases and the language follow.
 
 screen "uione" / {
-	hero "Write the feature once." {
-		text "One short file describes a whole feature: its data, its rules, the commands that change it, the live views that show it, who may do what, and its screens. uione generates the React app, the Go backend and the Firestore rules from it."
-		link #waitlist "Join the waitlist"
-		link /docs/language "Read the docs"
+	hero "Write a whole app in your browser." {
+		text "The uione studio is where you describe a feature in one short file: its data, its rules, who may do what, and its screens. It checks every line as you type, shows the React, Go and Firestore rules each line becomes, and deploys to your own Google Cloud project. There's nothing to install."
+		link #waitlist "Join the studio's waitlist"
+		link namespace language "Learn the language"
 	}
 
 	section "A whole feature" {
@@ -15,7 +17,24 @@ screen "uione" / {
 		code "../examples/library/main.one"
 	}
 
+	section "One file in, a whole project out" {
+		text "one, the compiler, turns a folder of .one files into a React app, a Go backend, the Firestore rules that guard its data, and a Pulumi program for the cloud it runs on. What it writes is short enough to read and built with the tools you already use."
+		text "Every app works the same way: commands are the only writes, every write is an event, views are built from events, and every screen is live."
+	}
+
+	section "Install" {
+		text "uione 0.2.0 is out: the compiler, and its libraries for Go and npm. The compiler builds from source with CMake and a C++23 compiler."
+		link /language/start "Install it and build a first project"
+		link namespace releases "What's new in 0.2.0"
+	}
+
+	section "Free software" {
+		text "The compiler is under the AGPL, and the libraries apps are built on are under the LGPL. What the compiler generates belongs to you."
+		link namespace mission "Why uione exists"
+	}
+
 	section "Join the waitlist" #waitlist {
+		text "The studio opens at studio.uione.io. Leave your address to hear when."
 		form waitlist::signup::create {
 			email
 		}

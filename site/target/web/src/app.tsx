@@ -6,8 +6,10 @@
 import { App } from "@uione/react";
 import { firebaseSource } from "@uione/react/firebase";
 import { radix } from "@uione/radix";
-import { docs } from "./screens/docs";
 import { home } from "./screens/home";
+import { language } from "./screens/language";
+import { mission } from "./screens/mission";
+import { releases } from "./screens/releases";
 import { studio } from "./screens/studio";
 
 // Views are read live from Firestore, and commands go to the Go backend. While
@@ -27,7 +29,7 @@ const cloud = {
 };
 const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud), personal: ["studio::projects"] });
 
-export const site = { name: "uione", icon: "/icon.svg", screens: [docs, home, studio], ui: radix, data };
+export const site = { name: "uione", icon: "/icon.svg", screens: [home, language, mission, releases, studio], ui: radix, data };
 
 export default function Site() {
   return <App {...site} />;

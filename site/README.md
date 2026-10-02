@@ -7,11 +7,13 @@ private per-person view.
 | File | What it is |
 |---|---|
 | `site.one` | the project: domain, Firebase project, region, component adapter, sign-in |
-| `home.one` | the landing page at `/`, with the waitlist form and live count |
+| `home.one` | the front page at `/`: the studio first, then the compiler, installing it, and the waitlist |
 | `waitlist.one` | the waitlist: an entity, a public command, and a public count |
-| `docs.one` | `/docs/:page`, one page per file in `docs/` |
+| `language.one` | `/language/:page`, one page per file in `language/`: starting, the overview, the reference |
+| `releases.one` | `/releases/:page`, one page per release in `releases/`, newest first |
+| `mission.one` | `/mission`: why uione exists |
 | `studio.one` | `/studio`: your projects, private to you |
-| `docs/` | the documentation pages, in markdown |
+| `language/`, `releases/` | those pages, in markdown |
 | `target/` | hand-written examples of the code `one build` should generate, for review |
 
 `one build site` writes `site/build/`, which is never committed and never edited.

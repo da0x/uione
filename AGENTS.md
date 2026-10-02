@@ -118,7 +118,7 @@ under a different one.
   word in a `.one` file updates both grammars under `editors/` and `expected.tsv` in
   the same commit, and `node editors/test.mjs` passes. See `editors/README.md`.
 - **Every example stays true.** An example `.one` file is only changed together with
-  anything that quotes it: the docs under `site/docs/`, the landing page, and
+  anything that quotes it: the pages under `site/language/`, the landing page, and
   `editors/expected.tsv`.
 - **Every name in a `.one` file is snake_case**, keywords included (`signed_in`). How
   names are displayed is the reader's choice; how they're stored is not. See

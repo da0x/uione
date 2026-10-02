@@ -1,0 +1,15 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The language: how to install it and start, what it is, and every part of it.
+// Every markdown file in language/ is a page, named by its file without the number:
+// language/03-reference.md is /language/reference. The pages list themselves in
+// file order, and the markdown becomes HTML when the site is built.
+
+namespace language {
+
+	screen language /:page {
+		markdown "language/*.md"
+	}
+
+} // namespace language

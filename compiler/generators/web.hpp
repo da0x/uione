@@ -157,7 +157,7 @@ namespace one::generators {
             out.push_back(file("vite.config.ts", vite_config()));
             out.push_back(file("src/main.tsx", main_tsx()));
             out.push_back(file("src/app.tsx", app_tsx(screens)));
-            if (docs_) out.push_back(file("src/docs.generated.ts", docs_module(*docs_)));
+            for (const auto& pages : pages_) out.push_back(file("src/pages/" + pages.name + ".generated.ts", pages_module(pages)));
             if (!icon_.empty()) out.push_back(file("public/icon.svg", icon_svg()));
             return out;
         }
@@ -174,14 +174,19 @@ namespace one::generators {
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
         std::vector<std::string> personal_;  // views with one document per person
-        std::optional<std::string> docs_;                        // the markdown pattern, like docs/*.md
-        std::string docs_base_;                                  // the address pages live under, like /docs
+        // A set of markdown pages, one per file, shown by a screen like /docs/:page.
+        struct page_set {
+            std::string pattern;  // the files, like docs/*.md
+            std::string name;     // the generated module's name, from the address: docs
+            code::source source;  // the item that names them
+        };
+        std::vector<page_set> pages_;
+        std::string docs_base_;  // the address the screen being written keeps its pages under, like /docs
 
         // Where generated lines come from. Files every app has, like package.json, come
         // from the project block; a screen's lines come from the screen and its items.
         std::string indexing_;           // the file being indexed
         code::source project_;           // the project block, or fixed without one
-        code::source docs_source_;       // the item that names the docs pages
         std::string icon_;               // the app's icon, an .svg file, when the project names one
         code::source icon_source_;       // the setting that names it
         std::string screen_path_;        // the file whose screens are being written
@@ -628,10 +633,12 @@ namespace one::generators {
                     out.line("<Markdown view={" + view_variable(parts, view) + "} field=" + web_detail::js_string(inside.substr(dot + 1)) + " />");
                     return;
                 }
-                docs_ = text.value;
-                docs_source_ = {screen_path_, item_line_};
+                // Named for where the pages live: /docs is docs, /guides/api is guides-api.
+                std::string name = docs_base_.empty() ? "pages" : docs_base_.substr(1);
+                std::replace(name.begin(), name.end(), '/', '-');
+                pages_.push_back({text.value, name, {screen_path_, item_line_}});
                 parts.optional_page = true;
-                parts.imports.push_back("import pages from \"../docs.generated\";");
+                parts.imports.push_back("import pages from \"../pages/" + name + ".generated\";");
                 parts.components.insert("Pages");
                 out.line("<Pages base=" + web_detail::js_string(docs_base_) + " pages={pages} />");
             }
@@ -891,13 +898,13 @@ namespace one::generators {
             return out;
         }
 
-        stream docs_module(const std::string& pattern) const {
+        stream pages_module(const page_set& pages) const {
             namespace fs = std::filesystem;
-            fs::path glob = platform::resolve(project_dir_, pattern);
+            fs::path glob = platform::resolve(project_dir_, pages.pattern);
             std::string extension = glob.extension().string();
             stream out;
-            auto from = out.from(docs_source_.path, docs_source_.line);
-            out.generated_from(pattern);
+            auto from = out.from(pages.source.path, pages.source.line);
+            out.generated_from(pages.pattern);
             out.line("import type { DocPage } from \"@uione/react\";");
             out.line();
             out.open("const pages: DocPage[] = [");

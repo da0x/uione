@@ -1,0 +1,14 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Releases: what each version of uione changed, the compiler and every library
+// together, since they share one number. One markdown file per release in
+// releases/, newest first, so /releases opens on the latest.
+
+namespace releases {
+
+	screen releases /:page {
+		markdown "releases/*.md"
+	}
+
+} // namespace releases

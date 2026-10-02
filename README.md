@@ -1,8 +1,8 @@
 # uione
 
-> **Preview.** The language is being designed in the open. The compiler checks
-> `.one` files and generates a project's React app, which runs with its data in
-> memory; the backend comes next. Nothing has been published yet.
+> **0.2.0.** The language is young and designed in the open. The compiler and its
+> libraries are released together; see [uione.io/releases](https://uione.io/releases)
+> and [getting started](https://uione.io/language/start).
 
 A way to write a whole application feature once: its data, rules, commands,
 events, live views, permissions and screens, in one short file. Today the same
@@ -31,7 +31,8 @@ everything they would repeat lives in those libraries.
 compiler/        one, the compiler, in C++23 (make -C compiler test)
 one/             the Go library generated backends are built on (go test, with the emulators)
 infrastructure/  the Go library generated Pulumi programs are built on (go test, with mocks)
-packages/        the libraries generated apps are built on: @uione/react and @uione/radix (yarn)
+packages/        the libraries generated apps are built on, @uione/react and @uione/radix, and
+                 the compiler in the browser, @uione/compiler and @uione/editor (yarn)
 examples/        features written in uione: library uses every part of the language,
                  tasks is the smallest that needs sign-in
 site/            uione.io, written in uione (see site/README.md)

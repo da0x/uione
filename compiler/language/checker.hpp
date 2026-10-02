@@ -128,6 +128,15 @@ namespace one::language {
             return route == "/" ? prefix : prefix + route;
         }
 
+        static bool has_pages(const std::vector<screen_item>& items) {
+            for (const auto& item : items) {
+                if (auto* block = std::get_if<content_block>(&item.node); block && has_pages(block->items)) return true;
+                auto* text = std::get_if<content_text>(&item.node);
+                if (text && text->type == content_text::kind::markdown && !text->value.starts_with("{")) return true;
+            }
+            return false;
+        }
+
         void collect(const std::string& ns, const std::vector<declaration>& declarations) {
             scope& here = scopes_[ns];
             for (const auto& d : declarations) {
@@ -151,10 +160,15 @@ namespace one::language {
                                            "; the first is at " + first_seen(it->second));
                     }
                 } else if (auto* s = std::get_if<screen_declaration>(&d.node)) {
-                    std::string route = full_route(ns, s->route);
-                    auto [it, inserted] = routes_.try_emplace(route, origin{path_, d.where});
-                    if (!inserted) {
-                        error(d.where, "two screens are at " + route + "; the other is at " + first_seen(it->second));
+                    std::vector<std::string> routes{full_route(ns, s->route)};
+                    // A screen of markdown pages, like /docs/:page, is at /docs too, where
+                    // it shows its first page.
+                    if (routes[0].ends_with("/:page") && has_pages(s->items)) routes.push_back(routes[0].substr(0, routes[0].size() - 6));
+                    for (const auto& route : routes) {
+                        auto [it, inserted] = routes_.try_emplace(route, origin{path_, d.where});
+                        if (!inserted) {
+                            error(d.where, "two screens are at " + route + "; the other is at " + first_seen(it->second));
+                        }
                     }
                 } else if (std::holds_alternative<project_declaration>(d.node)) {
                     if (project_) {

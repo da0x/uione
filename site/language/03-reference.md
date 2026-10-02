@@ -1,4 +1,4 @@
-# Language
+# Reference
 
 A `.one` file is a list of declarations. Blocks use `{ }`, and a declaration with
 nothing to add has no braces at all. There are no semicolons and no commas between
@@ -359,7 +359,7 @@ screen "Book" /books/:book {
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.
 - `link` says where it goes first and its text after: `link #waitlist "Join the
-  waitlist"`, `link /docs/language "Read the docs"`. `link namespace projects "See
+  waitlist"`, `link /language/reference "Read the reference"`. `link namespace projects "See
   the projects"` opens a namespace's own screen, at `/projects`, and
   `projects::archive` would be at `/projects/archive`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo

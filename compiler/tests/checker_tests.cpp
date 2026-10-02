@@ -619,6 +619,10 @@ TEST_CASE("a link opens a screen that's there") {
     CHECK(check_source(home("/projects/archive")).empty());
     CHECK(check_source(home("/projects/neotrac")).empty());  // :project stands for any one part
     CHECK(check_source(home("#top")).empty());
+    // A screen of markdown pages is at its namespace's address too.
+    CHECK(check_source("namespace guide {\nscreen guide /:page {\n\tmarkdown \"guide/*.md\"\n}\n}\n"
+                       "screen \"Home\" / {\n\tlink namespace guide \"Read the guide\"\n\tlink /guide/start \"Start\"\n}\n")
+              .empty());
 
     CHECK(only_error(home("namespace project")).message == "there's no namespace project for this link to open");
     CHECK(only_error(home("namespace empty")).message ==

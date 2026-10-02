@@ -55,7 +55,8 @@ namespace {
 TEST_CASE("the site is generated exactly as its targets say") {
     auto files = generate("/site");
     for (const char* path : {"package.json", "tsconfig.json", "vite.config.ts", "src/main.tsx", "src/app.tsx",
-                             "src/screens/home.tsx", "src/screens/studio.tsx", "src/screens/docs.tsx"}) {
+                             "src/screens/home.tsx", "src/screens/studio.tsx", "src/screens/language.tsx",
+                             "src/screens/releases.tsx", "src/screens/mission.tsx"}) {
         CAPTURE(path);
         auto target = platform::read_file(root + "/site/target/web/" + path);
         REQUIRE(target);
@@ -104,13 +105,17 @@ TEST_CASE("form fields get their input type from the entity") {
     CHECK(find(files, "src/screens/main.tsx")->content.find(R"({ name: "due_at", type: "date" })") != std::string::npos);
 }
 
-TEST_CASE("docs pages are turned into HTML when the site is built") {
+TEST_CASE("markdown pages are turned into HTML when the site is built, a set for each screen of them") {
     auto files = generate("/site");
-    const auto* docs = find(files, "src/docs.generated.ts");
-    REQUIRE(docs != nullptr);
-    CHECK(docs->content.find(R"(slug: "language",)") != std::string::npos);
-    CHECK(docs->content.find(R"(title: "Language",)") != std::string::npos);
-    CHECK(docs->content.find("<h2>entity</h2>") != std::string::npos);
+    const auto* language = find(files, "src/pages/language.generated.ts");
+    REQUIRE(language != nullptr);
+    CHECK(language->content.find(R"(slug: "reference",)") != std::string::npos);
+    CHECK(language->content.find(R"(title: "Reference",)") != std::string::npos);
+    CHECK(language->content.find("<h2>entity</h2>") != std::string::npos);
+    const auto* releases = find(files, "src/pages/releases.generated.ts");
+    REQUIRE(releases != nullptr);
+    CHECK(releases->content.find(R"(slug: "v0-2-0",)") != std::string::npos);
+    CHECK(releases->content.find("<h2>entity</h2>") == std::string::npos);
 }
 
 TEST_CASE("the app is told which views have one document per person, and only those") {
