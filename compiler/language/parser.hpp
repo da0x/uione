@@ -570,6 +570,12 @@ namespace one::language {
                 end_line();
                 return {where, std::move(link)};
             }
+            if (at_word("component") && peek(1).kind == token_kind::identifier) {
+                advance();
+                component_item component{advance().text};
+                end_line();
+                return {where, std::move(component)};
+            }
             if (at_word("table")) {
                 advance();
                 table_item table;

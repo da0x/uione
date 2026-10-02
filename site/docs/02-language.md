@@ -341,6 +341,11 @@ screen "Book" /books/:book {
   (`title = book.title`), so no field starts empty and gets saved empty. It can't
   ask for a key, which never changes.
 - `confirm` asks before a command runs.
+- `component opening_hours` draws a hand-written React component: the default
+  export of `components/opening_hours.tsx`, beside the `.one` file. It's for
+  anything the language doesn't say. It reads views and runs commands with
+  `@uione/react`'s hooks, like any screen, and the npm packages it needs go in
+  `components/package.json`, whose dependencies are added to the app.
 - `hero`, `section`, `text`, `link`, `code` and `markdown` are for pages that are
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.

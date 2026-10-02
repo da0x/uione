@@ -22,16 +22,18 @@ namespace {
 
     const std::string root = UIONE_ROOT;
 
-    std::vector<generators::output_file> generate(const std::string& project) {
+    std::vector<generators::output_file> generate_at(const std::string& dir) {
         language::diagnostics out;
         std::vector<language::file> files;
-        for (const auto& path : platform::find_one_files({root + project})) {
+        for (const auto& path : platform::find_one_files({dir})) {
             files.push_back(language::parse(path, *platform::read_file(path), out));
         }
         language::check(files, out);
         for (const auto& d : out) FAIL_CHECK(language::format(d));
-        return generators::generate_web(files, root + project, root + project + "/build/web");
+        return generators::generate_web(files, dir, dir + "/build/web");
     }
+
+    std::vector<generators::output_file> generate(const std::string& project) { return generate_at(root + project); }
 
     const generators::output_file* find(const std::vector<generators::output_file>& files, const std::string& path) {
         auto it = std::find_if(files.begin(), files.end(), [&](const auto& f) { return f.path == path; });
@@ -193,4 +195,32 @@ TEST_CASE("a create form takes what the screen's address names, without asking f
           std::string::npos);
     // On the list of every project, no project is named, so none is given.
     CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button />)") != std::string::npos);
+}
+
+TEST_CASE("a hand-written component is drawn, imported, and copied into the app as it is") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find("import OpeningHours from \"../components/opening_hours\";\n") != std::string::npos);
+    CHECK(screens->content.find("      <OpeningHours />\n") != std::string::npos);
+    const auto* copied = find(files, "src/components/opening_hours.tsx");
+    REQUIRE(copied != nullptr);
+    CHECK(copied->content == *platform::read_file(root + "/examples/library/components/opening_hours.tsx"));
+}
+
+TEST_CASE("what a project's components need is added to the app's dependencies") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "component-project";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "components");
+    REQUIRE(platform::write_file((dir / "main.one").string(), "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"));
+    REQUIRE(platform::write_file((dir / "components" / "workbench.tsx").string(), "export default function Workbench() { return null; }\n"));
+    REQUIRE(platform::write_file((dir / "components" / "package.json").string(),
+                                 "{\n  \"private\": true,\n  \"dependencies\": {\n    \"@uione/editor\": \"0.1.0\",\n    \"react\": \"^19.0.0\"\n  }\n}\n"));
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* manifest = find(files, "package.json");
+    REQUIRE(manifest != nullptr);
+    CHECK(manifest->content.find("\"@uione/editor\": \"0.1.0\",\n") != std::string::npos);
+    CHECK(manifest->content.find("\"react\": \"^19.3.0\",\n") != std::string::npos);  // the app's own version wins
 }

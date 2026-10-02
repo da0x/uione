@@ -150,6 +150,7 @@ namespace one::generators {
                 std::string stem = std::filesystem::path(f.path).stem().string();
                 out.push_back(file("src/screens/" + stem + ".tsx", screen_file(f, found, screens, stem)));
             }
+            for (auto& f : component_files()) out.push_back(std::move(f));
             out.push_back(file("package.json", package_json()));
             out.push_back(file("tsconfig.json", tsconfig_json()));
             out.push_back(file("index.html", index_html()));
@@ -186,6 +187,8 @@ namespace one::generators {
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
         int item_line_ = 0;              // the screen item being written
+        std::map<std::string, std::string> components_;    // hand-written components, by name, to their file
+        std::map<std::string, std::string> dependencies_;  // npm packages they need, from components/package.json
 
         struct found_screen {
             std::string ns;
@@ -338,6 +341,60 @@ namespace one::generators {
             auto commands = commands_.find(ns);
             if (commands == commands_.end() || !commands->second.contains(command)) return std::nullopt;
             return web_detail::join(ns, command);
+        }
+
+        // hand-written components
+
+        // A component's name in JSX, which starts with a capital: project_workbench is
+        // ProjectWorkbench.
+        static std::string component_tag(const std::string& name) {
+            std::string tag = web_detail::js_name(name);
+            if (!tag.empty() && tag[0] >= 'a' && tag[0] <= 'z') tag[0] = static_cast<char>(tag[0] - 'a' + 'A');
+            return tag;
+        }
+
+        void use_component(const std::string& name) {
+            std::string file = language::component_file(screen_path_, name);
+            components_.emplace(name, file);
+            auto manifest = platform::read_file((std::filesystem::path(file).parent_path() / "package.json").string());
+            if (manifest) {
+                for (const auto& [package, version] : dependencies_in(*manifest)) dependencies_.emplace(package, version);
+            }
+        }
+
+        // The "dependencies" of a package.json: each package's name and version. Only
+        // that one object is read, and only its strings, which is all it holds.
+        static std::vector<std::pair<std::string, std::string>> dependencies_in(const std::string& json) {
+            std::vector<std::pair<std::string, std::string>> found;
+            auto key = json.find("\"dependencies\"");
+            if (key == std::string::npos) return found;
+            auto open = json.find('{', key);
+            auto close = json.find('}', open);
+            if (open == std::string::npos || close == std::string::npos) return found;
+            std::vector<std::string> strings;
+            for (std::size_t at = open; at < close;) {
+                auto start = json.find('"', at);
+                if (start == std::string::npos || start > close) break;
+                auto end = json.find('"', start + 1);
+                if (end == std::string::npos || end > close) break;
+                strings.push_back(json.substr(start + 1, end - start - 1));
+                at = end + 1;
+            }
+            for (std::size_t i = 0; i + 1 < strings.size(); i += 2) found.emplace_back(strings[i], strings[i + 1]);
+            return found;
+        }
+
+        // A component's file, copied into the app as it is: it's the project's own code.
+        std::vector<output_file> component_files() const {
+            std::vector<output_file> out;
+            for (const auto& [name, path] : components_) {
+                auto content = platform::read_file(path);
+                if (!content) continue;  // the checker said so already
+                output_file f{"src/components/" + name + ".tsx", *content, false, {}};
+                f.sources.assign(static_cast<std::size_t>(std::count(content->begin(), content->end(), '\n')), code::source{});
+                out.push_back(std::move(f));
+            }
+            return out;
         }
 
         // one screen file
@@ -536,6 +593,12 @@ namespace one::generators {
                     if (has_form_for(screen, button->command)) continue;  // the form draws its own button
                     parts.components.insert("Command");
                     out.line("<Command name=" + web_detail::js_string(full_command(ns, button->command)) + " />");
+                } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
+                    std::string tag = component_tag(component->name);
+                    std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
+                    if (std::find(parts.imports.begin(), parts.imports.end(), line) == parts.imports.end()) parts.imports.push_back(line);
+                    use_component(component->name);
+                    out.line("<" + tag + " />");
                 }
             }
         }
@@ -673,13 +736,16 @@ namespace one::generators {
             out.line("\"build\": \"tsc --noEmit && vite build\",");
             out.line("\"preview\": \"vite preview\"");
             out.close("},");
+            // What every app needs, and what its hand-written components need besides.
+            std::map<std::string, std::string> dependencies{
+                {"@uione/" + ui_, std::string(version)}, {"@uione/react", std::string(version)}, {"firebase", "^12.19.0"},
+                {"react", "^19.3.0"},                    {"react-dom", "^19.3.0"},                 {"react-router", "^7.18.4"}};
+            for (const auto& [package, wanted] : dependencies_) dependencies.emplace(package, wanted);
             out.open("\"dependencies\": {");
-            out.line("\"@uione/" + ui_ + "\": \"" + std::string(version) + "\",");
-            out.line("\"@uione/react\": \"" + std::string(version) + "\",");
-            out.line("\"firebase\": \"^12.19.0\",");
-            out.line("\"react\": \"^19.3.0\",");
-            out.line("\"react-dom\": \"^19.3.0\",");
-            out.line("\"react-router\": \"^7.18.4\"");
+            std::size_t n = 0;
+            for (const auto& [package, wanted] : dependencies) {
+                out.line(web_detail::js_string(package) + ": " + web_detail::js_string(wanted) + (++n < dependencies.size() ? "," : ""));
+            }
             out.close("},");
             out.open("\"devDependencies\": {");
             out.line("\"@types/react\": \"^19.3.0\",");

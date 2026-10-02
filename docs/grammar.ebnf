@@ -117,6 +117,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
                  | "form" qualified+ "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
+                 | "component" NAME END
                  | NAME ("::" NAME)+ END
 column         ::= postfix STRING?
 form_line      ::= (NAME+ | NAME* NAME "=" expression hint?) END

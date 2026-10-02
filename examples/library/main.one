@@ -6,8 +6,8 @@
 // The example that uses every part of the language: two entities, one pointing at
 // the other, keys and numbers that name them, commands with and without bodies, a
 // command that changes two entities, a format, a function, a role, views across
-// both entities, a page per book, a private view per member, four screens and a
-// picker.
+// both entities, a page per book, a private view per member, four screens, a
+// hand-written component and a picker.
 
 namespace library {
 
@@ -103,6 +103,7 @@ namespace library {
 	}
 
 	screen "Shelf" /shelf {
+		component opening_hours
 		table shelf link /books/:book {
 			shelfmark
 			title

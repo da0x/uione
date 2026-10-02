@@ -453,3 +453,11 @@ webhook github /hooks/github {
     CHECK(std::holds_alternative<create_statement>(hook.handlers[0].body[0].node));
     CHECK(hook.handlers[1].event == "pull_request");
 }
+
+TEST_CASE("a screen draws a hand-written component by name") {
+    auto f = parse_ok("screen \"Editor\" /edit {\n\tcomponent workbench\n\tcomponent::create\n}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    REQUIRE(screen.items.size() == 2);
+    CHECK(std::get<component_item>(screen.items[0].node).name == "workbench");
+    CHECK(std::holds_alternative<button_item>(screen.items[1].node));
+}

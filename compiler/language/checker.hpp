@@ -25,9 +25,9 @@
 #include <vector>
 
 #include "language/ast.hpp"
-#include "platform/files.hpp"
 #include "language/diagnostics.hpp"
 #include "language/names.hpp"
+#include "platform/files.hpp"
 
 namespace one::language {
 
@@ -907,6 +907,13 @@ namespace one::language {
                     verify_command_use(ns, confirm->command);
                 } else if (auto* button = std::get_if<button_item>(&item.node)) {
                     verify_command_use(ns, button->command);
+                } else if (auto* component = std::get_if<component_item>(&item.node)) {
+                    snake(component->name, item.where);
+                    std::string file = component_file(path_, component->name);
+                    if (!platform::read_file(file)) {
+                        error(item.where, "component " + component->name + " is drawn by components/" + component->name +
+                                              ".tsx beside this file, which isn't there");
+                    }
                 }
             }
         }

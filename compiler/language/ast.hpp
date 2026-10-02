@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -291,10 +292,22 @@ namespace one::language {
         qualified_name command;
     };
 
+    // component workbench: a hand-written React component, components/workbench.tsx
+    // beside the .one file, drawn where the item is.
+    struct component_item {
+        std::string name;
+    };
+
+    // The file a component is written in, beside the .one file that draws it.
+    inline std::string component_file(const std::string& one_file, const std::string& name) {
+        auto folder = std::filesystem::path(one_file).parent_path();
+        return (folder / "components" / (name + ".tsx")).string();
+    }
+
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item>
+                     confirm_item, button_item, component_item>
             node;
     };
 

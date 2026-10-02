@@ -120,3 +120,4 @@ examples/tracker/main.one	webhook github /hooks/github {	/hooks/github	route
 examples/tracker/main.one	for project by repository	for	keyword
 examples/tracker/main.one	for project by repository	by	keyword
 examples/tracker/main.one	on commit {	on	keyword
+examples/library/main.one	component opening_hours	component	keyword

@@ -3,12 +3,14 @@
 
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "language/checker.hpp"
 #include "language/parser.hpp"
+#include "platform/files.hpp"
 
 using namespace one::language;
 
@@ -553,4 +555,20 @@ TEST_CASE("a project's webhook secret is shown only to its own people") {
     CHECK(e.message == "view settings shows a webhook secret, so only the project's people may read it: give it readers, and don't make it public");
     e = only_error(start + "view settings per project {\n\treaders member\n\tsecret = github_secret(project.slug)\n}\n");
     CHECK(e.message == "github_secret takes the id of the project a view is per, like github_secret(project.id)");
+}
+
+TEST_CASE("a component is a file beside the .one that draws it") {
+    namespace fs = std::filesystem;
+    namespace platform = one::platform;
+    fs::path dir = fs::temp_directory_path() / "uione-component";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "components");
+    REQUIRE(platform::write_file((dir / "components" / "workbench.tsx").string(), "export default function Workbench() { return null; }\n"));
+    std::string main = (dir / "main.one").string();
+    CHECK(check_files({{main, "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"}}).empty());
+    auto out = check_files({{main, "screen \"Editor\" /edit {\n\tcomponent sidebar\n}\n"}});
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "component sidebar is drawn by components/sidebar.tsx beside this file, which isn't there");
+    CHECK(out[0].where.line == 2);
+    fs::remove_all(dir);
 }
