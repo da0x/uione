@@ -215,6 +215,11 @@ view book_page per book {
   condition holds; it compares one field of the entity, or of what it points at,
   like `issue.project.visibility`, with a value. When people join a project, or it
   turns private, only that project's documents are rebuilt.
+- Another `readers` line names people in a field of the view's entity:
+  `readers report.author` lets whoever filed a report read it, even outside the
+  project, and `readers report.watchers` lets each person a list of them names.
+  A view can have these without `readers member`, and then only those people read
+  it.
 
 ```one
 view issue_page per issue {
@@ -329,7 +334,9 @@ screen "Book" /books/:book {
 - `table <view> link /books/:book` makes each row open that screen, with the row's
   id as the parameter, or the row's own `book` when it holds one, like a change of
   a book or a membership of a project. Parameters before the last, like the
-  project in `/projects/:project/issues/:issue`, come from the screen's own address.
+  project in `/projects/:project/issues/:issue`, come from the screen's own address,
+  or from the row when it holds them, like a list of one person's issues across
+  projects.
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks

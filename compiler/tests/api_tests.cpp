@@ -6,6 +6,7 @@
 #include <doctest/doctest.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -171,4 +172,37 @@ TEST_CASE("a view shows a project's webhook secret through the library") {
     const auto* file = find(generated.files, "tracker/tracker.go");
     REQUIRE(file != nullptr);
     CHECK(file->content.find("\tGitHubSecret(\"webhook_secret\")") != std::string::npos);
+}
+
+TEST_CASE("two entities whose fields share a name and a choice get constants of their own") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-shared-choices";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace desk {\n"
+                         "entity issue {\n\ttitle  text\n\tstatus  open | closed = open\n\tsize  small | large\n}\n"
+                         "entity report {\n\ttitle  text\n\tstatus  open | resolved = open\n}\n"
+                         "command issue::close {\n\trequire status == open  \"already closed\"\n\tstatus = closed\n}\n"
+                         "command report::resolve {\n\tstatus = resolved\n}\n"
+                         "}\n");
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse((dir / "main.one").string(), *platform::read_file((dir / "main.one").string()), out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, dir.string(), (dir / "build/api").string());
+    const auto* desk = find(generated.files, "desk/desk.go");
+    REQUIRE(desk != nullptr);
+    const auto& go = desk->content;
+    CHECK(go.find("IssueStatusOpen") != std::string::npos);
+    CHECK(go.find("ReportStatusOpen") != std::string::npos);
+    CHECK(go.find("ReportStatusResolved") != std::string::npos);
+    CHECK(go.find("if i.Status != IssueStatusOpen {") != std::string::npos);
+    CHECK(go.find("i.Status = IssueStatusClosed") != std::string::npos);
+    CHECK(go.find("r.Status = ReportStatusResolved") != std::string::npos);
+    // A field no other entity shares keeps its short names.
+    CHECK(go.find("SizeSmall") != std::string::npos);
+    CHECK(go.find("IssueSizeSmall") == std::string::npos);
+    fs::remove_all(dir);
 }

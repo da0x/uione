@@ -150,6 +150,7 @@ type ViewSpec struct {
 	copies  []copied
 	secrets []string     // values holding the document's project's GitHub webhook secret
 	readers reflect.Type // the entity whose people may read each document, like member
+	people  []string     // fields of the document's entity naming people who may read it, like author
 	open    *condition   // when a document is public, as a field of its entity, like project.visibility
 
 	scope *schema // what each document is held within, like a project, once it's known
@@ -187,6 +188,13 @@ func (v *ViewSpec) Per(kind Kind) *ViewSpec {
 // for a page per project, or an issue's project for a page per issue.
 func (v *ViewSpec) Readers(member Kind) *ViewSpec {
 	v.readers = member.typ
+	return v
+}
+
+// ReadersFrom lets the person a field of the document's entity names read it, like
+// a report's author, or each person a list of them names, like its assignees.
+func (v *ViewSpec) ReadersFrom(field string) *ViewSpec {
+	v.people = append(v.people, field)
 	return v
 }
 
@@ -319,7 +327,7 @@ func (v *ViewSpec) register(r *registry, ns string) {
 		v.reads[s.entity] = s
 	}
 	// Who reads a view with readers, or that's public when, is said by them alone.
-	if v.readers != nil || v.open != nil {
+	if v.readers != nil || len(v.people) > 0 || v.open != nil {
 		r.views = append(r.views, v)
 		return
 	}
@@ -370,13 +378,18 @@ func (v *ViewSpec) resolve(r *registry) error {
 // condition reads through, like an issue's project. Changes to that, or to who
 // belongs to it, rebuild only the documents held within it.
 func (v *ViewSpec) held(r *registry) error {
-	if v.readers == nil && v.open == nil {
+	if v.readers == nil && len(v.people) == 0 && v.open == nil {
 		return nil
 	}
 	if v.per == nil {
 		return fmt.Errorf("one: view %s has readers or is public when, so it needs a document per entity", v.full)
 	}
 	per := r.schemas[v.per]
+	for _, name := range v.people {
+		if f := per.field(name); f == nil || f.refers != "user" {
+			return fmt.Errorf("one: view %s is read by the people in %s, but a %s's %s isn't a person", v.full, name, per.name, name)
+		}
+	}
 	if v.readers != nil {
 		for _, ro := range r.scoped {
 			if ro.member == v.readers {
@@ -612,7 +625,7 @@ func same(stored, wanted any) bool {
 
 func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[string]any, error) {
 	data := map[string]any{}
-	if len(v.copies) > 0 || v.scope != nil {
+	if len(v.copies) > 0 || v.scope != nil || len(v.people) > 0 {
 		// The entity the view is for. Once it's gone, its fields read as none.
 		fields, err := a.stored(ctx, a.reg.schemas[v.per], subject)
 		if err != nil {
@@ -621,7 +634,7 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 		for _, c := range v.copies {
 			data[c.name] = fields[c.field]
 		}
-		if v.scope != nil {
+		if v.scope != nil || len(v.people) > 0 {
 			if err := a.access(ctx, v, subject, fields, data); err != nil {
 				return nil, err
 			}
@@ -760,6 +773,7 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 	per := a.reg.schemas[v.per]
 	within := ""
 	switch {
+	case v.scope == nil:
 	case v.scope == per:
 		within = subject
 	default:
@@ -790,9 +804,9 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 	}
 	data["within"] = within
 
+	readers := []string{}
 	if v.readers != nil {
 		member := a.reg.schemas[v.readers]
-		readers := []string{}
 		if within != "" {
 			var place, person string
 			for _, f := range member.fields {
@@ -812,8 +826,30 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 					readers = append(readers, id)
 				}
 			}
-			sort.Strings(readers)
 		}
+	}
+	for _, name := range v.people {
+		var named []string
+		switch value := fields[name].(type) {
+		case string:
+			named = []string{value}
+		case []string:
+			named = value
+		case []any:
+			for _, item := range value {
+				if id, ok := item.(string); ok {
+					named = append(named, id)
+				}
+			}
+		}
+		for _, id := range named {
+			if id != "" && !contains(readers, id) {
+				readers = append(readers, id)
+			}
+		}
+	}
+	if v.readers != nil || len(v.people) > 0 {
+		sort.Strings(readers)
 		data["readers"] = readers
 	}
 

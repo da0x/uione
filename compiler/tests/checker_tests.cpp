@@ -485,6 +485,24 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
     CHECK(e.message == "readers says who may read a view's document, so it can't name a value");
 }
 
+TEST_CASE("a view's readers can be the people a field of its entity names") {
+    const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
+                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  maintainer | reporter\n}\n"
+                              "entity report {\n\tproject  project  required\n\ttitle  text\n\tauthor  user = me\n\twatchers  list of user\n}\n"
+                              "role maintainer per project from member\n";
+    CHECK(check_source(start + "view page per report {\n\treaders member\n\treaders report.author\n\treaders report.watchers\n\ttitle = report.title\n}\n"
+                               "view card per report {\n\treaders report.author\n}\n")
+              .empty());
+    auto e = only_error(start + "view page per report {\n\treaders report.title\n}\n");
+    CHECK(e.message == "readers report.title needs a person, but a report's title isn't one");
+    e = only_error(start + "view page per report {\n\treaders report.writer\n}\n");
+    CHECK(e.message == "a report has no field writer for readers to name");
+    e = only_error(start + "view page per report {\n\treaders project.slug\n}\n");
+    CHECK(e.message == "readers names an entity, like readers member, or the people in a field of the report, like readers report.author");
+    e = only_error(start + "view reports {\n\treaders report.author\n}\n");
+    CHECK(e.message == "view reports says who may read it, so it needs a document per entity, like per project");
+}
+
 TEST_CASE("a list holds text, people or entities, changes by add and remove, and is asked with has") {
     const std::string start = "entity label {\n\tname  text  required  key\n}\n"
                               "entity issue {\n\ttitle  text\n\tlabels  list of label\n\ttags  list of text\n\tassignees  list of user\n}\n";
@@ -583,7 +601,11 @@ TEST_CASE("a table's link may name the screen's own parameters before the row's"
               .empty());
     auto e = only_error(start + "view all {\n\teach issue {\n\t\ttitle\n\t}\n}\n"
                                 "screen \"All\" /issues {\n\ttable all link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n");
-    CHECK(e.message == "this table's link needs :project, which this screen's address doesn't have");
+    CHECK(e.message == "this table's link needs :project, which neither this screen's address nor its rows have");
+    // A row holding the project fills it.
+    CHECK(check_source(start + "view all {\n\teach issue {\n\t\tproject  title\n\t}\n}\n"
+                               "screen \"All\" /issues {\n\ttable all link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n")
+              .empty());
 }
 
 TEST_CASE("a link opens a screen that's there") {

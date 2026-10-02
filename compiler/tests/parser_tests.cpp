@@ -374,12 +374,16 @@ TEST_CASE("a view says who reads it") {
     auto f = parse_ok(R"(
 view issue_page per issue {
 	readers member
+	readers issue.author
+	readers issue.assignees
 	public when issue.project.visibility == public
 	title = issue.title
 }
 )");
     const auto& page = std::get<view_declaration>(f.declarations[0].node);
     CHECK(page.readers == "member");
+    REQUIRE(page.reader_people.size() == 2);
+    CHECK(std::get<member_expression>(page.reader_people[1]->node).member == "assignees");
     REQUIRE(page.public_when != nullptr);
     CHECK(std::holds_alternative<binary_expression>(page.public_when->node));
     CHECK(page.values.size() == 1);
@@ -470,4 +474,10 @@ TEST_CASE("a link can open a namespace by name") {
     REQUIRE(link.namespace_name.has_value());
     CHECK(link.namespace_name->text() == "projects::archive");
     CHECK(link.target.empty());
+}
+
+TEST_CASE("a view's readers come from one entity") {
+    auto out = parse_errors("view page per issue {\n\treaders member\n\treaders person\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
 }

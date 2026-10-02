@@ -89,7 +89,7 @@ if             ::= "if" expression block ("else" (if | block))?
 
 view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? view_line* "}" END
 view_line      ::= (NAME "=")? each
-                 | "readers" NAME END
+                 | "readers" NAME ("." NAME)? END
                  | "public" "when" expression END
                  | NAME "=" expression END
 each           ::= "each" ("change" "of")? postfix ("where" expression)? ("{" NEWLINE? list_line* "}")? END

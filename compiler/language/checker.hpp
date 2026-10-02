@@ -540,7 +540,7 @@ namespace one::language {
                                        "give it readers, and don't make it public");
                 }
             }
-            if (v.readers || v.public_when) verify_access(ns, v, where, subject, plain);
+            if (v.readers || !v.reader_people.empty() || v.public_when) verify_access(ns, v, where, subject, plain);
             // A view has at most one list without a name, its rows, and any number
             // with names, each named once.
             std::set<std::string, std::less<>> names;
@@ -621,6 +621,24 @@ namespace one::language {
                 } else if (!held_within(ns, *subject, *scope)) {
                     error(v.readers_where, "readers " + *v.readers + " are people in a " + scope->name + ", but a " + subject->name +
                                                " isn't held within one");
+                }
+            }
+            // readers report.author: the person a field of the entity names, or each
+            // person a list of them names.
+            for (const auto& people : v.reader_people) {
+                auto* m = std::get_if<member_expression>(&people->node);
+                auto* object = m ? std::get_if<name_expression>(&m->object->node) : nullptr;
+                if (!object || object->name.parts.size() != 1 || object->name.parts[0] != subject->name) {
+                    error(people->where, "readers names an entity, like readers member, or the people in a field of the " +
+                                             subject->name + ", like readers " + subject->name + ".author");
+                    continue;
+                }
+                auto f = std::find_if(subject->fields.begin(), subject->fields.end(), [&](const field& f) { return f.name == m->member; });
+                if (f == subject->fields.end()) {
+                    error(people->where, "a " + subject->name + " has no field " + m->member + " for readers to name");
+                } else if (!f->type || f->type->text() != "user") {
+                    error(people->where, "readers " + subject->name + "." + m->member + " needs a person, but a " + subject->name + "'s " +
+                                             m->member + " isn't one");
                 }
             }
             if (v.public_when) {
@@ -904,14 +922,24 @@ namespace one::language {
                             std::size_t end = target.find('/', at + 1);
                             names.push_back(target.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2));
                         }
+                        // A row that holds the thing a parameter names, like a report's
+                        // project, fills it too.
+                        auto row_holds = [&](const std::string& name) {
+                            if (!list) return false;
+                            for (const auto& row : list->rows) {
+                                auto* plain = std::get_if<name_expression>(&row.value->node);
+                                if (row.name ? *row.name == name : plain && plain->name.text() == name) return true;
+                            }
+                            return false;
+                        };
                         std::string missing;
                         for (std::size_t i = 0; i + 1 < names.size(); ++i) {
-                            if (route.find("/:" + names[i]) == std::string::npos) missing = names[i];
+                            if (route.find("/:" + names[i]) == std::string::npos && !row_holds(names[i])) missing = names[i];
                         }
                         if (names.empty()) {
                             error(table->link_where, "a table's link ends with a :parameter, which each row's id fills, like /books/:book");
                         } else if (!missing.empty()) {
-                            error(table->link_where, "this table's link needs :" + missing + ", which this screen's address doesn't have");
+                            error(table->link_where, "this table's link needs :" + missing + ", which neither this screen's address nor its rows have");
                         } else if (!routes_.contains(target)) {
                             error(table->link_where, "there's no screen at " + target + " for this table's rows to open");
                         }

@@ -211,6 +211,28 @@ namespace one::generators {
             return nullptr;
         }
 
+        // A choice's constant: StatusOpen for open in status. When two entities in a
+        // package have a field of the same name sharing a choice, like an issue's and
+        // a report's status, each field's constants are named for its entity too:
+        // IssueStatusOpen and ReportStatusOpen.
+        std::string choice(const language::field& f, const std::string& value) const {
+            const language::entity_declaration* owner = nullptr;
+            bool shared = false;
+            for (auto* e : pkg_ ? pkg_->entities : std::vector<const language::entity_declaration*>{}) {
+                for (const auto& other : e->fields) {
+                    if (&other == &f) {
+                        owner = e;
+                    } else if (other.name == f.name) {
+                        for (const auto& c : f.choices) {
+                            if (std::find(other.choices.begin(), other.choices.end(), c) != other.choices.end()) shared = true;
+                        }
+                    }
+                }
+            }
+            std::string name = api_detail::go_name(f.name) + api_detail::go_name(value);
+            return shared && owner ? api_detail::go_name(owner->name) + name : name;
+        }
+
         static const language::function_declaration* function(const package& pkg, std::string_view name) {
             for (const auto& [function, _] : pkg.functions) {
                 if (function->name == name) return function;
@@ -352,7 +374,7 @@ namespace one::generators {
                         std::string choices;
                         for (const auto& c : f.choices) {
                             choices += (choices.empty() ? "" : "|") + c;
-                            constants.emplace_back(api_detail::go_name(f.name) + api_detail::go_name(c), c, f.where.line);
+                            constants.emplace_back(choice(f, c), c, f.where.line);
                         }
                         rules.push_back("choices=" + choices);
                     }
@@ -700,7 +722,7 @@ namespace one::generators {
                 if (name == "true" || name == "false") return name;
                 if (name == "none" && beside) return zero(*beside);
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
-                    return api_detail::go_name(beside->name) + api_detail::go_name(name);
+                    return choice(*beside, name);
                 }
                 if (field(e, name)) return me + "." + api_detail::go_name(name);
             }
@@ -810,7 +832,7 @@ namespace one::generators {
                 } else if (rn && (right == "true" || right == "false")) {
                     value = right;
                 } else if (rn && std::find(f->choices.begin(), f->choices.end(), right) != f->choices.end()) {
-                    value = api_detail::go_name(f->name) + api_detail::go_name(right);
+                    value = choice(*f, right);
                 } else {
                     unsupported(path_, part->where, "a view condition comparing with " + right);
                     return std::nullopt;
@@ -901,7 +923,7 @@ namespace one::generators {
         }
 
         // What a webhook's handler gives a field: what GitHub sent, a choice, or now.
-        static std::optional<std::string> mentioned(const language::expression& x, const language::field& target) {
+        std::optional<std::string> mentioned(const language::expression& x, const language::field& target) const {
             static const std::map<std::string, std::string> sent{
                 {"mentioned", "m.Issue"}, {"message", "m.Message"}, {"title", "m.Title"}, {"url", "m.URL"},
                 {"author", "m.Author"},   {"sha", "m.SHA"},         {"number", "m.Number"}};
@@ -911,7 +933,7 @@ namespace one::generators {
             if (auto it = sent.find(name); it != sent.end()) return it->second;
             if (name == "now") return std::string("c.Now()");
             if (std::find(target.choices.begin(), target.choices.end(), name) != target.choices.end()) {
-                return api_detail::go_name(target.name) + api_detail::go_name(name);
+                return choice(target, name);
             }
             return std::nullopt;
         }
@@ -1070,6 +1092,9 @@ namespace one::generators {
             std::vector<std::pair<std::string, int>> calls;  // each with the line it came from
             subject_ = v.per && *v.per != "user" ? *v.per : "";
             if (v.readers) head += ".Readers(one.Entity[" + api_detail::go_name(*v.readers) + "]())";
+            for (const auto& people : v.reader_people) {
+                if (auto* m = std::get_if<language::member_expression>(&people->node)) head += ".ReadersFrom(" + api_detail::go_string(m->member) + ")";
+            }
             if (v.public_when) {
                 // public when issue.project.visibility == public: the path below the
                 // view's own entity, and the value it's compared with.

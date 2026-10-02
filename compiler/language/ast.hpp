@@ -217,6 +217,7 @@ namespace one::language {
         bool is_public = false;
         std::optional<std::string> readers;  // readers member: the people a member names may read it
         location readers_where;
+        std::vector<expression_ptr> reader_people;  // readers report.author: who a field of the entity names
         expression_ptr public_when;          // public when project.visibility == public
         std::vector<view_value> values;
         std::vector<view_each> each;

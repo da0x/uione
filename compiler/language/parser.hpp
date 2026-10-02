@@ -356,8 +356,16 @@ namespace one::language {
                 if (at_word("order")) {
                     fail(peek().where, "order goes inside the list it sorts: each book { order title ... }");
                 } else if (at_word("readers") && peek(1).kind == token_kind::identifier) {
-                    view.readers_where = advance().where;
-                    view.readers = advance().text;
+                    location where = advance().where;
+                    expression_ptr readers = parse_postfix();
+                    auto* name = std::get_if<name_expression>(&readers->node);
+                    if (name && name->name.parts.size() == 1) {
+                        if (view.readers) fail(where, "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
+                        view.readers_where = where;
+                        view.readers = name->name.parts[0];
+                    } else {
+                        view.reader_people.push_back(std::move(readers));
+                    }
                     end_line();
                 } else if (at_word("public") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
                     advance();

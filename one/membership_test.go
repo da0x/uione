@@ -6,6 +6,7 @@ package one_test
 import (
 	"context"
 	"net/http"
+	"sort"
 	"testing"
 
 	"github.com/da0x/uione/one"
@@ -41,6 +42,16 @@ type Remark struct {
 	Text  string `firestore:"text" one:"required"`
 }
 
+// A report is filed by anyone signed in, even outside the team, and read by the
+// team and by whoever filed it and is watching it, never by anyone else.
+type Report struct {
+	one.Record
+	Team     string   `firestore:"team" one:"required,refers=team::team"`
+	Title    string   `firestore:"title" one:"required"`
+	Author   string   `firestore:"author" one:"default=me,refers=user"`
+	Watchers []string `firestore:"watchers" one:"refers=user"`
+}
+
 var teams = one.Module("team",
 	one.Command[Team]("team::create").Allow(one.SignedIn).Do(func(c *one.Ctx, t *Team) error {
 		return one.Create(c, &Seat{Team: t.ID, Person: c.Me(), Role: "lead"})
@@ -50,12 +61,16 @@ var teams = one.Module("team",
 	one.Command[Chore]("chore::update"),
 	one.Command[Remark]("remark::create"),
 	one.Command[Team]("team::update"),
+	one.Command[Report]("report::create").Allow(one.SignedIn),
 	one.Role("lead", "team:update", "seat:create", "chore:create", "chore:update", "remark:create").Per(one.Entity[Team](), one.Entity[Seat]()),
 	one.Role("helper", "chore:create", "remark:create").Per(one.Entity[Team](), one.Entity[Seat]()),
 	one.View("board").Per(one.Entity[Team]()).Readers(one.Entity[Seat]()).PublicWhen("visibility", "public").
 		Copy("slug", "slug").
 		List("chores", one.Where[Chore]("team", one.Subject)).Fields("title"),
 	one.View("chore_page").Per(one.Entity[Chore]()).Readers(one.Entity[Seat]()).PublicWhen("team.visibility", "public").
+		Copy("title", "title"),
+	one.View("report_card").Per(one.Entity[Report]()).ReadersFrom("author").Copy("title", "title"),
+	one.View("report_page").Per(one.Entity[Report]()).Readers(one.Entity[Seat]()).ReadersFrom("author").ReadersFrom("watchers").
 		Copy("title", "title"),
 )
 
@@ -172,4 +187,46 @@ func TestAnUpdateCantMoveAChoreIntoAnotherTeam(t *testing.T) {
 	chore := h.mustRun("team/chore/create", adaToken, map[string]any{"team": "engine", "title": "Oil the gears"})
 	h.expect("team/chore/update", adaToken, map[string]any{"id": chore, "team": "loom"}, http.StatusForbidden, "you don't have permission to do this")
 	h.mustRun("team/chore/update", adaToken, map[string]any{"id": chore, "title": "Oil every gear"})
+}
+
+func TestAReportIsReadByTheTeamAndWhoeverFiledItAndNobodyElse(t *testing.T) {
+	h := start(t)
+	ada, adaToken := h.signUp("ada@example.com")
+	grace, graceToken := h.signUp("grace@example.com")
+	linus, _ := h.signUp("linus@example.com")
+	alan, _ := h.signUp("alan@example.com")
+	h.mustRun("team/team/create", adaToken, map[string]any{"slug": "engine", "visibility": "private"})
+
+	// Grace isn't in the team, and Linus watches what she files.
+	report := h.mustRun("team/report/create", graceToken, map[string]any{"team": "engine", "title": "The gears slip", "watchers": []any{linus, grace}})
+	page := h.view("team::report_page:" + report)
+	readers, _ := page["readers"].([]any)
+	want := []string{ada, grace, linus}
+	sort.Strings(want)
+	if len(readers) != len(want) {
+		t.Fatalf("the report is read by %v, not %v", readers, want)
+	}
+	for i, id := range want {
+		if readers[i] != id {
+			t.Fatalf("the report is read by %v, not %v", readers, want)
+		}
+	}
+	if page["public"] == true || contains(readers, alan) {
+		t.Errorf("the report is open to someone who's neither in the team nor named on it: %v", page)
+	}
+
+	// A view read only by who filed it has nobody else, not even the team.
+	card := h.view("team::report_card:" + report)
+	if readers, _ := card["readers"].([]any); len(readers) != 1 || readers[0] != grace || card["title"] != "The gears slip" {
+		t.Errorf("the report's card is %v", card)
+	}
+}
+
+func contains(list []any, item string) bool {
+	for _, each := range list {
+		if each == item {
+			return true
+		}
+	}
+	return false
 }
