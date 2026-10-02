@@ -25,6 +25,8 @@ type Post struct {
 var forum = one.Module("forum",
 	one.Command[Post]("post::create").Allow(one.SignedIn),
 	one.View("posts").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "author.name", "author.picture"),
+	// Whoever made something is a person too, without a field naming them.
+	one.View("posted").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "created_by.name", "updated_by.picture"),
 )
 
 // rename gives a person a new name and picture, and signs them in again for an ID
@@ -66,6 +68,10 @@ func TestAPostShowsWhoWroteItByNameAndPicture(t *testing.T) {
 	}
 	if _, has := row["author"]; has {
 		t.Errorf("the post sends its author's id, which it doesn't list: %v", row)
+	}
+	made := rows(h.view("forum::posted"))[0]
+	if made["created_by.name"] != "Ada Lovelace" || made["updated_by.picture"] != "https://example.com/ada.png" {
+		t.Errorf("the post shows who made it as %v", made)
 	}
 
 	// A new name reaches every post the person wrote, the next time they do

@@ -183,6 +183,23 @@ func (s *schema) field(name string) *field {
 	return nil
 }
 
+// Who made and last changed something, which every entity holds.
+var stamps = []field{{name: "created_by", refers: "user"}, {name: "updated_by", refers: "user"}}
+
+// through is the field a view reads through, like the author in author.name: one of
+// the entity's own, or who made or last changed it, as in created_by.name.
+func (s *schema) through(name string) *field {
+	if f := s.field(name); f != nil {
+		return f
+	}
+	for i := range stamps {
+		if stamps[i].name == name {
+			return &stamps[i]
+		}
+	}
+	return nil
+}
+
 // label makes a readable name from a snake_case one: created_at becomes "Created at".
 // It's the same rule @uione/react uses, so messages match the form's labels.
 func label(name string) string {

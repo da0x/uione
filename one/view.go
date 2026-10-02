@@ -359,7 +359,7 @@ func (v *ViewSpec) resolve(r *registry) error {
 			if !ok {
 				continue
 			}
-			f := each.field(through)
+			f := each.through(through)
 			if f == nil || f.refers == "" {
 				return fmt.Errorf("one: view %s reads %s, but %s doesn't point at another entity", v.full, name, through)
 			}
@@ -703,7 +703,7 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 				row[name] = doc.Data()[name]
 				continue
 			}
-			target := a.reg.entity(each.field(through).refers)
+			target := a.reg.entity(each.through(through).refers)
 			read := func(id string) (any, error) {
 				key := target.collection + "/" + id
 				if _, read := pointed[key]; !read {
