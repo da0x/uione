@@ -38,7 +38,8 @@ TEST_CASE("every example and the site check without errors") {
 TEST_CASE("the libraries are released with the compiler, under its version") {
     std::string root = UIONE_ROOT;
     std::string wanted = "\"version\": \"" + std::string(one::version) + "\"";
-    for (const char* package : {"/packages/react/package.json", "/packages/radix/package.json", "/packages/compiler/package.json"}) {
+    for (const char* package : {"/packages/react/package.json", "/packages/radix/package.json", "/packages/compiler/package.json",
+                                "/packages/editor/package.json"}) {
         CAPTURE(package);
         auto manifest = one::platform::read_file(root + package);
         REQUIRE(manifest);

@@ -100,6 +100,12 @@ jobs:
           yarn workspace @uione/compiler test
           yarn workspace @uione/compiler build
 
+      - name: Type-check, test and build @uione/editor
+        run: |
+          yarn workspace @uione/editor typecheck
+          yarn workspace @uione/editor test
+          yarn workspace @uione/editor build
+
       - name: Type-check, test and build @uione/react
         run: |
           yarn workspace @uione/react typecheck

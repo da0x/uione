@@ -1,0 +1,59 @@
+{
+  "name": "@uione/editor",
+  "version": "0.1.0",
+  "description": "An editor for .one files, on CodeMirror: highlighting from uione's grammar, the compiler's problems as you type, tabs as wide as the reader likes, and the code each line becomes, side by side.",
+  "license": "AGPL-3.0-only",
+  "author": "Daher Alfawares",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/da0x/uione.git",
+    "directory": "packages/editor"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
+    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
+    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/",
+    "typecheck": "yarn grammar && tsc --noEmit",
+    "test": "yarn grammar && vitest run"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@shikijs/themes": "^4.4.3",
+    "shiki": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@uione/compiler": "^0.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@uione/compiler": "0.1.0",
+    "jsdom": "^26.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

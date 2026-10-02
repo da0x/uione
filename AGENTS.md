@@ -56,7 +56,9 @@ Treat every file as published, whatever the repository's visibility today.
   generated apps are built on, and `packages/compiler`, `@uione/compiler`, the
   compiler built for the browser by `tools/wasm/build` (Emscripten in Docker) and
   run in a Web Worker. `node tools/wasm/test.mjs` holds its output to the native
-  compiler's, byte for byte. `packages/react` is `@uione/react`: the runtime and the component
+  compiler's, byte for byte. `packages/editor`, `@uione/editor`, is the editor for
+  `.one` files on CodeMirror, with the compiler's problems inline and the code each
+  line becomes beside it; its tests run the browser build of the compiler. `packages/react` is `@uione/react`: the runtime and the component
   contract. `yarn install`, then `yarn workspace @uione/react test` (or `typecheck`,
   `build`). `@uione/react/firebase` is the data source a generated app uses: views
   read live from Firestore, commands sent to the Go backend, and Google sign-in. Its
