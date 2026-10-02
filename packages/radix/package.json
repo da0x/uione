@@ -1,0 +1,61 @@
+{
+  "name": "@uione/radix",
+  "version": "0.0.1",
+  "description": "A styled component set for uione apps, written for uione on Radix primitives, with its CSS prebuilt.",
+  "license": "LGPL-3.0-only",
+  "author": "Daher Alfawares",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/da0x/uione.git",
+    "directory": "packages/radix"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "COPYING"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
+    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && tailwindcss -i src/styles.css -o dist/styles.css --minify",
+    "typecheck": "yarn grammar && tsc --noEmit",
+    "test": "yarn grammar && vitest run"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@shikijs/themes": "^4.4.3",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "shiki": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@uione/react": "0.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@uione/react": "0.0.1",
+    "jsdom": "^26.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^7.18.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

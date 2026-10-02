@@ -1,0 +1,60 @@
+{
+  "name": "@uione/react",
+  "version": "0.0.1",
+  "description": "The runtime every uione screen is built on: routing, live views, commands, and the component contract.",
+  "license": "LGPL-3.0-only",
+  "author": "Daher Alfawares",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/da0x/uione.git",
+    "directory": "packages/react"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./plain": {
+      "types": "./dist/plain.d.ts",
+      "import": "./dist/plain.js"
+    },
+    "./firebase": {
+      "types": "./dist/firebase.d.ts",
+      "import": "./dist/firebase.js"
+    }
+  },
+  "files": [
+    "dist",
+    "COPYING"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^7.0.0",
+    "firebase": "^12.0.0"
+  },
+  "peerDependenciesMeta": {
+    "firebase": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "firebase": "^12.19.0",
+    "jsdom": "^26.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^7.18.4",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,112 @@
+/*
+ * Copyright 2026 Daher Alfawares
+ * SPDX-License-Identifier: LGPL-3.0-only
+ */
+
+/*
+ * The source of @uione/radix's stylesheet. Tailwind compiles it, with the classes
+ * the components use, into dist/styles.css, which apps import as it is.
+ */
+
+@import "tailwindcss";
+@source "./**/*.tsx";
+
+/* Neutral colors, named for what they're for rather than what they look like. */
+@theme {
+  --color-page: oklch(0.99 0 0);
+  --color-ink: oklch(0.21 0.01 260);
+  --color-muted: oklch(0.52 0.01 260);
+  --color-line: oklch(0.91 0.005 260);
+  --color-surface: oklch(0.97 0.003 260);
+  --color-accent: oklch(0.45 0.13 260);
+  --color-accent-ink: oklch(0.99 0 0);
+  --color-danger: oklch(0.55 0.2 25);
+  --radius-box: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-page: oklch(0.17 0.01 260);
+    --color-ink: oklch(0.93 0.005 260);
+    --color-muted: oklch(0.7 0.01 260);
+    --color-line: oklch(0.3 0.01 260);
+    --color-surface: oklch(0.22 0.01 260);
+    --color-accent: oklch(0.75 0.11 260);
+    --color-accent-ink: oklch(0.17 0.01 260);
+    --color-danger: oklch(0.7 0.17 25);
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-page);
+    color: var(--color-ink);
+    color-scheme: light dark;
+  }
+}
+
+/* Highlighted code carries both themes' colors; the dark ones apply in dark mode. */
+@media (prefers-color-scheme: dark) {
+  .one-code span {
+    color: var(--shiki-dark) !important;
+  }
+}
+
+/* Docs pages arrive as HTML, so they're styled by element rather than by class. */
+@layer components {
+  .one-prose {
+    line-height: 1.7;
+  }
+  .one-prose h1 {
+    font-size: 1.875rem;
+    font-weight: 700;
+    margin: 0 0 1rem;
+  }
+  .one-prose h2 {
+    font-size: 1.375rem;
+    font-weight: 650;
+    margin: 2rem 0 0.75rem;
+  }
+  .one-prose p,
+  .one-prose ul,
+  .one-prose ol,
+  .one-prose table {
+    margin: 0 0 1rem;
+  }
+  .one-prose ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+  }
+  .one-prose ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .one-prose a {
+    color: var(--color-accent);
+    text-decoration: underline;
+  }
+  .one-prose code {
+    font-size: 0.875em;
+    background: var(--color-surface);
+    border-radius: 0.25rem;
+    padding: 0.1em 0.3em;
+  }
+  .one-prose pre {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-box);
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0 0 1rem;
+  }
+  .one-prose pre code {
+    background: none;
+    padding: 0;
+  }
+  .one-prose th,
+  .one-prose td {
+    border-bottom: 1px solid var(--color-line);
+    padding: 0.4rem 0.75rem 0.4rem 0;
+    text-align: left;
+  }
+}

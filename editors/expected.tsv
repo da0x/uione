@@ -1,0 +1,122 @@
+# How each .one file must look, in both Vim and VS Code.
+# Columns (tab-separated): the file (from the repository root), a piece of a line,
+# the token within it, and its category. The first line containing the piece is
+# used, and the token is looked up from there.
+examples/library/main.one	// A lending library	lending	comment
+examples/library/main.one	namespace library {	namespace	declare
+examples/library/main.one	namespace library {	library	namespace
+examples/library/main.one	} // namespace library	namespace	comment
+examples/library/main.one	format shelfmark	format	declare
+examples/library/main.one	format shelfmark	shelfmark	name
+examples/library/main.one	format shelfmark	AAA	pattern
+examples/library/main.one	example HIS	example	keyword
+examples/library/main.one	example HIS	HIS	string
+examples/library/main.one	entity book {	entity	declare
+examples/library/main.one	entity book {	book	name
+examples/library/main.one	title      text       required	text	type
+examples/library/main.one	title      text       required	title	plain
+examples/library/main.one	title      text       required	required	modifier
+examples/library/main.one	shelfmark  shelfmark  required  unique	unique	modifier
+examples/library/main.one	status     on_shelf	on_shelf	plain
+examples/library/main.one	status     on_shelf	|	operator
+examples/library/main.one	book         book    required	book    required	plain
+examples/library/main.one	member       user    required	user	type
+examples/library/main.one	number       serial  per book	serial	type
+examples/library/main.one	serial  per book	per	keyword
+examples/library/main.one	lent_at      date    = now	date	type
+examples/library/main.one	lent_at      date    = now	now	constant
+examples/library/main.one	due_at       date    required  after lent_at	after	modifier
+examples/library/main.one	command book::withdraw	command	declare
+examples/library/main.one	command book::withdraw	book	namespace
+examples/library/main.one	command book::withdraw	withdraw	name
+examples/library/main.one	require status == on_shelf	require	keyword
+examples/library/main.one	require status == on_shelf	==	operator
+examples/library/main.one	require status == on_shelf	"only	string
+examples/library/main.one	require returned_at == none	none	constant
+examples/library/main.one	order sort_title(title)	order	keyword
+examples/library/main.one	order sort_title(title)	sort_title	function
+examples/library/main.one	each book where status	each	keyword
+examples/library/main.one	each book where status	where	keyword
+examples/library/main.one	first(loan where	first	function
+examples/library/main.one	view mine per user	mine	name
+examples/library/main.one	view mine per user	per	keyword
+examples/library/main.one	role librarian	role	declare
+examples/library/main.one	role librarian	librarian	name
+examples/library/main.one	role librarian	book::view	namespace
+examples/library/main.one	role librarian	::	punct
+examples/library/main.one	function sort_title	function	declare
+examples/library/main.one	function sort_title	sort_title	name
+examples/library/main.one	if starts_with(title, "The ")	if	keyword
+examples/library/main.one	if starts_with(title, "The ")	starts_with	function
+examples/library/main.one	if starts_with(title, "The ")	return	keyword
+examples/library/main.one	screen "Shelf" /shelf	screen	declare
+examples/library/main.one	screen "Shelf" /shelf	"Shelf	string
+examples/library/main.one	screen "Shelf" /shelf	/shelf	route
+examples/library/main.one	\t\t\tshelfmark	shelfmark	plain
+examples/library/main.one	form book::update	form	keyword
+examples/library/main.one	confirm book::withdraw	confirm	keyword
+examples/library/main.one	Withdraw {title}?	{title	interp
+examples/library/main.one	Withdraw {title}?	title}	plain
+examples/library/main.one	picker book from shelf	picker	declare
+examples/library/main.one	picker book from shelf	from	keyword
+examples/tasks/main.one	done   boolean  = false	boolean	type
+examples/tasks/main.one	done   boolean  = false	false	constant
+examples/tasks/main.one	permission owner	owner	constant
+examples/tasks/main.one	owner  user     = me	owner	plain
+examples/tasks/main.one	where owner == user.id	owner	plain
+examples/tasks/main.one	require !done	!	operator
+examples/tasks/main.one	order done  -created_at	-	operator
+examples/tasks/main.one	screen "Tasks" / {	/	route
+site/site.one	project uione {	project	declare
+site/site.one	project uione {	uione	name
+site/site.one	domain    "uione.io"	domain	keyword
+site/site.one	domain    "uione.io"	"uione	string
+site/site.one	ui        radix	ui	keyword
+site/site.one	ui        radix	radix	plain
+site/site.one	signin    google	signin	keyword
+site/waitlist.one	email  email  required  key	email  required	type
+site/waitlist.one	email  email  required  key	email	plain
+site/waitlist.one	email  email  required  key	key	modifier
+site/waitlist.one	permission anyone	anyone	constant
+site/waitlist.one	view signups public	public	modifier
+site/home.one	screen "uione" / {	/	route
+site/home.one	hero "Write	hero	keyword
+site/home.one	text "One short	text	keyword
+site/home.one	link "Join the waitlist" #waitlist	link	keyword
+site/home.one	link "Join the waitlist" #waitlist	#waitlist	route
+site/home.one	link "Read the docs" /docs/language	/docs	route
+site/home.one	section "A whole	section	keyword
+site/home.one	code "../examples	code	keyword
+site/home.one	form waitlist::signup::create	waitlist	namespace
+site/home.one	{waitlist::signups.total}	{waitlist	interp
+site/home.one	{waitlist::signups.total}	waitlist::	namespace
+site/docs.one	screen docs /:page {	/:page	route
+site/docs.one	markdown "docs	markdown	keyword
+site/studio.one	name   text  required	text	type
+site/studio.one	name   text  required	name	plain
+site/studio.one	owner  user  = me	user	type
+site/studio.one	owner  user  = me	me	constant
+site/studio.one	permission signed_in	signed_in	constant
+site/studio.one	view projects per user	user	plain
+site/studio.one	screen "Studio" / {	/	route
+examples/tracker/main.one	create member {	create	keyword
+examples/tracker/main.one	role maintainer per project from member	from	keyword
+examples/tracker/main.one	command project::create {	create	name
+examples/tracker/main.one	readers member	readers	keyword
+examples/tracker/main.one	public when project.visibility	when	keyword
+examples/tracker/main.one	labels     list of text	list	type
+examples/tracker/main.one	labels     list of text	of	keyword
+examples/tracker/main.one	add me to assignees	add	keyword
+examples/tracker/main.one	remove me from assignees	remove	keyword
+examples/tracker/main.one	where assignees has user.id	has	keyword
+examples/tasks/main.one	view list per user	list	name
+examples/tracker/main.one	entity issue history {	history	keyword
+examples/tracker/main.one	entity issue history {	issue	name
+examples/tracker/main.one	each change of issue where project	change	keyword
+examples/tracker/main.one	limit 50	limit	keyword
+examples/tracker/main.one	webhook github /hooks/github {	webhook	declare
+examples/tracker/main.one	webhook github /hooks/github {	github	name
+examples/tracker/main.one	webhook github /hooks/github {	/hooks/github	route
+examples/tracker/main.one	for project by repository	for	keyword
+examples/tracker/main.one	for project by repository	by	keyword
+examples/tracker/main.one	on commit {	on	keyword

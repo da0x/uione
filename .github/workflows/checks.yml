@@ -1,0 +1,112 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Every check, run on each push to main (decision 0007). The same steps pass locally,
+# from a clean clone, before a push.
+
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Every source file carries its copyright and license
+        run: tools/check-license
+
+      - name: Every file name is lowercase
+        run: tools/check-names
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install Vim
+        run: command -v vim || { sudo apt-get update && sudo apt-get install -y vim; }
+
+      - name: Vim and VS Code highlight every example the same way
+        run: node editors/test.mjs
+
+      - name: Build and test the compiler
+        run: |
+          command -v g++-14 || { sudo apt-get update && sudo apt-get install -y g++-14; }
+          CXX=g++-14 make -C compiler test
+
+      - name: Every project in the repository checks without errors
+        run: compiler/build/one check examples/library examples/tasks examples/tracker site
+
+      - uses: actions/setup-go@v7
+        with:
+          # infrastructure/ needs the newest Go of the modules here, and one/ runs on it too.
+          go-version-file: infrastructure/go.mod
+          cache-dependency-path: |
+            one/go.sum
+            infrastructure/go.sum
+
+      - name: Start the Firebase emulators
+        run: tools/emulators/run
+
+      - name: Vet and test the one library against the emulators
+        working-directory: one
+        run: |
+          go vet ./...
+          test -z "$(gofmt -l .)"
+          go test -race ./...
+
+      # The site's web app is a workspace, so it's generated before the install that
+      # checks the lockfile against it.
+      - name: Generate the site
+        run: compiler/build/one build site
+
+      # Each generated backend has to compile against the library, be vetted, and be
+      # formatted the way gofmt would write it. The examples are built too: tasks is
+      # the smallest project, library uses most of the language, and tracker has
+      # roles held within a project.
+      - name: Build the generated backends
+        run: |
+          compiler/build/one build examples/tasks
+          compiler/build/one build examples/library
+          compiler/build/one build examples/tracker
+          for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api; do
+            (cd "$api" && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
+          done
+
+      - name: Vet and test the infrastructure library, and build the site's Pulumi program
+        run: |
+          (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test ./...)
+          (cd site/build/infrastructure && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
+
+      - name: Install the JavaScript packages' dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Type-check, test and build @uione/react
+        run: |
+          yarn workspace @uione/react typecheck
+          yarn workspace @uione/react test
+          yarn workspace @uione/react build
+
+      - name: Type-check, build and test @uione/radix
+        run: |
+          yarn workspace @uione/radix typecheck
+          yarn workspace @uione/radix build
+          yarn workspace @uione/radix test
+
+      - name: Test the generated Firestore rules against the emulator
+        run: yarn workspace uione-rules-test test
+
+      - name: Build the generated site, and render every page
+        run: |
+          yarn workspace uione-web build
+          node tools/smoke-web.mjs
+
+      - name: Run the site end to end against the emulators
+        run: node tools/end-to-end.mjs

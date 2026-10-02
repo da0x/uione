@@ -1,0 +1,278 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "uione",
+  "scopeName": "source.uione",
+  "fileTypes": [
+    "one"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#routes"
+    },
+    {
+      "include": "#example"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#namespaces"
+    },
+    {
+      "include": "#calls"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.uione",
+          "begin": "//",
+          "end": "$",
+          "patterns": [
+            {
+              "include": "#todo"
+            }
+          ]
+        },
+        {
+          "name": "comment.block.uione",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "include": "#todo"
+            }
+          ]
+        }
+      ]
+    },
+    "todo": {
+      "match": "\\b(?:TODO|FIXME|XXX|NOTE)\\b",
+      "name": "keyword.other.todo.uione"
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "^\\s*(format)\\s+([A-Za-z_]\\w*)(?:\\s+([^\\s{]+))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "entity.name.type.uione"
+            },
+            "3": {
+              "name": "string.regexp.uione"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(namespace)\\b(?:\\s+([A-Za-z_]\\w*))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "entity.name.namespace.uione"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(command|function)\\b(?:\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "entity.name.namespace.uione"
+            },
+            "3": {
+              "name": "entity.name.function.uione"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(project|entity|view|role|screen|picker|webhook)\\b(?:\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "entity.name.namespace.uione"
+            },
+            "3": {
+              "name": "entity.name.type.uione"
+            }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.uione",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.uione"
+        },
+        {
+          "name": "meta.embedded.line.uione",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.embedded.begin.uione"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.embedded.end.uione"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#namespaces"
+            },
+            {
+              "include": "#calls"
+            },
+            {
+              "include": "#constants"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#operators"
+            }
+          ]
+        }
+      ]
+    },
+    "routes": {
+      "patterns": [
+        {
+          "name": "string.other.path.uione",
+          "begin": "(?<=^|\\s)/(?=[A-Za-z:]|[\\s{]|$)",
+          "end": "(?=[\\s{]|$)",
+          "patterns": [
+            {
+              "match": ":[A-Za-z_]\\w*",
+              "name": "variable.parameter.uione"
+            }
+          ]
+        },
+        {
+          "match": "(?<=^|\\s)#[A-Za-z_][\\w-]*",
+          "name": "string.other.path.uione"
+        }
+      ]
+    },
+    "example": {
+      "match": "\\b(example)\\s+(\\S.*?)\\s*$",
+      "captures": {
+        "1": {
+          "name": "keyword.other.uione"
+        },
+        "2": {
+          "name": "string.unquoted.uione"
+        }
+      }
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(permission)\\s+(anyone|signed_in|owner)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            },
+            "2": {
+              "name": "constant.language.uione"
+            }
+          }
+        },
+        {
+          "match": "\\b(?:if|else|return)\\b",
+          "name": "keyword.control.uione"
+        },
+        {
+          "match": "\\b(?:text|code)(?=\\s+\")",
+          "name": "keyword.other.uione"
+        },
+        {
+          "match": "\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|change|history|limit|for|by|on|order|each|per|where|from|table|form|confirm|hint|hero|section|link|markdown|domain|firebase|region|ui|signin|icon)\\b",
+          "name": "keyword.other.uione"
+        },
+        {
+          "match": "\\b(?:required|unique|after|key|public)\\b",
+          "name": "storage.modifier.uione"
+        },
+        {
+          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|date|number|serial|boolean|user|list)\\b",
+          "captures": {
+            "1": {
+              "name": "support.type.uione"
+            }
+          }
+        }
+      ]
+    },
+    "calls": {
+      "match": "\\b[A-Za-z_]\\w*(?=\\s*\\()",
+      "name": "entity.name.function.call.uione"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "match": "\\b(?:now|me|none|true|false)\\b",
+          "name": "constant.language.uione"
+        },
+        {
+          "match": "\\b[A-Z]\\w*\\b",
+          "name": "constant.other.uione"
+        }
+      ]
+    },
+    "numbers": {
+      "match": "\\b\\d+(?:\\.\\d+)?\\b",
+      "name": "constant.numeric.uione"
+    },
+    "operators": {
+      "match": "==|!=|<=|>=|&&|\\|\\||[-+*<>=!|]",
+      "name": "keyword.operator.uione"
+    },
+    "namespaces": {
+      "patterns": [
+        {
+          "match": "\\b[A-Za-z_]\\w*(?=::)",
+          "name": "entity.name.namespace.uione"
+        },
+        {
+          "match": "::",
+          "name": "punctuation.separator.namespace.uione"
+        }
+      ]
+    }
+  }
+}

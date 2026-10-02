@@ -1,0 +1,77 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Every source file starts with its copyright and license, after a shebang if it
+# has one: LGPL-3.0-only in the four libraries apps are built on, and
+# AGPL-3.0-only everywhere else. A file type with no rule below is an error, so a
+# new kind of file is a decision rather than an omission.
+#
+#   tools/check-license            every tracked file, as it is on disk
+#   tools/check-license --staged   the staged version of each staged file
+
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+license() {
+	case "$1" in
+		one/*|infrastructure/*|packages/react/*|packages/radix/*) echo LGPL-3.0-only ;;
+		*) echo AGPL-3.0-only ;;
+	esac
+}
+
+header() {
+	echo "Copyright YEAR Daher Alfawares"
+	echo "SPDX-License-Identifier: $(license "$1")"
+}
+lines=2
+
+if [ "${1:-}" = "--staged" ]; then
+	files=$(git diff --cached --name-only --diff-filter=ACMR)
+	content() { git show ":$1"; }
+else
+	files=$(git ls-files)
+	content() { cat "$1"; }
+fi
+
+# The comment marker a file's header is written with, "exempt", or nothing.
+# Judged by the file's own name, never its directory: .githooks/pre-commit has no
+# extension.
+marker() {
+	case "${1##*/}" in
+		# Legal texts and prose, formats that cannot hold a comment, build
+		# manifests and lockfiles, which tools rewrite, and images: an SVG is
+		# text, but a header in it would be downloaded with every page it's on.
+		LICENSE|COPYING|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg) echo exempt ;;
+		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.h|*.rules) echo '//' ;;
+		*.vim) echo '"' ;;
+		# CSS and the EBNF grammar have only block comments: the header sits inside
+		# /* ... */, each line starting with " *".
+		*.css|*.ebnf) echo ' *' ;;
+		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile) echo '#' ;;
+		*.*) ;;
+		*) content "$1" | head -1 | grep -q '^#!' && echo '#' ;;
+	esac
+}
+
+failed=0
+for f in $files; do
+	m=$(marker "$f")
+	[ "$m" = exempt ] && continue
+	if [ -z "$m" ]; then
+		echo "check-license: $f: no rule for this kind of file; add one to tools/check-license" >&2
+		failed=1
+		continue
+	fi
+	skip=0
+	content "$f" | head -1 | grep -q '^#!' && skip=1
+	[ "$m" = ' *' ] && content "$f" | head -1 | grep -qx '/\*' && skip=1
+	want=$(header "$f" | sed -e "s|^|$m |")
+	have=$(content "$f" | sed -n "$((skip + 1)),$((skip + lines))p" |
+		sed -E 's/Copyright 20[0-9]{2} Daher Alfawares/Copyright YEAR Daher Alfawares/')
+	if [ "$want" != "$have" ]; then
+		echo "check-license: $f: missing or altered header; it should say $(license "$f")" >&2
+		failed=1
+	fi
+done
+exit $failed

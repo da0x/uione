@@ -1,0 +1,933 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A recursive-descent parser for .one files. Each parse_ function reads one kind of
+// thing and leaves the parser just after it.
+//
+// When something is wrong, the parser reports it and skips to the next declaration,
+// so one mistake doesn't hide the rest of the file's errors.
+
+#pragma once
+
+#include <algorithm>
+#include <charconv>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "language/ast.hpp"
+#include "language/diagnostics.hpp"
+#include "language/lexer.hpp"
+
+namespace one::language {
+
+    class parser {
+    public:
+        parser(std::string path, std::string_view source, diagnostics& out)
+            : path_(std::move(path)), source_(source), out_(out),
+              tokens_(lexer(path_, source_, out_).tokens()) {
+            int depth = 0;
+            for (const auto& t : tokens_) {
+                depth_.push_back(depth);
+                if (t.kind == token_kind::left_brace) ++depth;
+                if (t.kind == token_kind::right_brace) depth = std::max(0, depth - 1);
+            }
+        }
+
+        file parse() {
+            file result;
+            result.path = path_;
+            result.declarations = parse_declarations(false);
+            return result;
+        }
+
+    private:
+        struct parse_error {};
+
+        std::string path_;
+        std::string_view source_;
+        diagnostics& out_;
+        std::vector<token> tokens_;
+        std::vector<int> depth_;  // how many braces are open before each token
+        std::size_t pos_ = 0;
+
+        // reading tokens
+
+        const token& peek(std::size_t ahead = 0) const {
+            return tokens_[std::min(pos_ + ahead, tokens_.size() - 1)];
+        }
+        bool at(token_kind kind) const { return peek().kind == kind; }
+        bool at_word(std::string_view word) const {
+            return at(token_kind::identifier) && peek().text == word;
+        }
+        bool at_line_end() const {
+            return at(token_kind::newline) || at(token_kind::right_brace) ||
+                   at(token_kind::end_of_file);
+        }
+
+        const token& advance() {
+            const token& t = tokens_[pos_];
+            if (pos_ + 1 < tokens_.size()) ++pos_;
+            return t;
+        }
+
+        static std::string found(const token& t) {
+            if (t.kind == token_kind::identifier) return "'" + t.text + "'";
+            return std::string(describe(t.kind));
+        }
+
+        [[noreturn]] void fail(location where, std::string message) {
+            out_.push_back({path_, where, std::move(message)});
+            throw parse_error{};
+        }
+
+        [[noreturn]] void fail_expecting(std::string_view what) {
+            fail(peek().where, "expected " + std::string(what) + ", found " + found(peek()));
+        }
+
+        const token& expect(token_kind kind, std::string_view what) {
+            if (!at(kind)) fail_expecting(what);
+            return advance();
+        }
+
+        void skip_newlines() {
+            while (at(token_kind::newline)) advance();
+        }
+
+        // For a loop over the lines of a { } block: true while there's another line
+        // to read, false at the closing brace. A file that ends first is an error,
+        // so no loop can run past the end of the file.
+        bool in_block() {
+            skip_newlines();
+            if (at(token_kind::right_brace)) return false;
+            if (at(token_kind::end_of_file)) fail_expecting("'}'");
+            return true;
+        }
+
+        // A line ends at a line break. A closing brace also ends it, which is what lets
+        // a short block sit on one line: if a { return b }.
+        void end_line() {
+            if (at(token_kind::right_brace) || at(token_kind::end_of_file)) return;
+            expect(token_kind::newline, "the end of the line");
+        }
+
+        // The source text from `from` up to the end of the line, or to a { if that
+        // comes first, trimmed. Used for a format's pattern and example, which aren't
+        // made of ordinary tokens. The tokens inside that text are skipped.
+        std::string raw_text(std::size_t from, bool stop_at_brace) {
+            std::size_t stop = from;
+            while (stop < source_.size() && source_[stop] != '\n' &&
+                   !(stop_at_brace && source_[stop] == '{') &&
+                   !(source_[stop] == '/' && stop + 1 < source_.size() && source_[stop + 1] == '/')) {
+                ++stop;
+            }
+            while (!at(token_kind::newline) && !at(token_kind::end_of_file) && peek().begin < stop) {
+                advance();
+            }
+            std::string_view text = source_.substr(from, stop - from);
+            auto first = text.find_first_not_of(" \t\r");
+            if (first == std::string_view::npos) return "";
+            auto last = text.find_last_not_of(" \t\r");
+            return std::string(text.substr(first, last - first + 1));
+        }
+
+        qualified_name parse_qualified_name(std::string_view what) {
+            qualified_name name;
+            const token& first = expect(token_kind::identifier, what);
+            name.where = first.where;
+            name.parts.push_back(first.text);
+            while (at(token_kind::scope)) {
+                advance();
+                name.parts.push_back(expect(token_kind::identifier, "a name after '::'").text);
+            }
+            return name;
+        }
+
+        // declarations
+
+        std::vector<declaration> parse_declarations(bool inside_block) {
+            std::vector<declaration> result;
+            for (;;) {
+                skip_newlines();
+                if (at(token_kind::end_of_file)) break;
+                if (inside_block && at(token_kind::right_brace)) break;
+                std::size_t start = pos_;
+                try {
+                    result.push_back(parse_declaration());
+                } catch (const parse_error&) {
+                    recover(start, inside_block);
+                }
+            }
+            return result;
+        }
+
+        // After an error, skip to the start of the next declaration at the same depth,
+        // or to the brace that closes the enclosing block.
+        void recover(std::size_t start, bool inside_block) {
+            int depth = depth_[start];
+            if (pos_ <= start) advance();
+            while (!at(token_kind::end_of_file)) {
+                if (inside_block && at(token_kind::right_brace) && depth_[pos_] == depth) return;
+                bool line_start = pos_ > 0 && tokens_[pos_ - 1].kind == token_kind::newline;
+                if (line_start && at(token_kind::identifier) && depth_[pos_] == depth) return;
+                advance();
+            }
+        }
+
+        declaration parse_declaration() {
+            if (!at(token_kind::identifier)) fail_expecting("a declaration");
+            location where = peek().where;
+            const std::string& word = peek().text;
+            if (word == "project") return {where, parse_project()};
+            if (word == "namespace") return {where, parse_namespace()};
+            if (word == "format") return {where, parse_format()};
+            if (word == "entity") return {where, parse_entity()};
+            if (word == "command") return {where, parse_command()};
+            if (word == "view") return {where, parse_view()};
+            if (word == "role") return {where, parse_role()};
+            if (word == "function") return {where, parse_function()};
+            if (word == "screen") return {where, parse_screen()};
+            if (word == "picker") return {where, parse_picker()};
+            if (word == "webhook") return {where, parse_webhook()};
+            if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
+            fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
+                        "format, entity, command, view, role, function, screen, picker or webhook");
+        }
+
+        project_declaration parse_project() {
+            advance();
+            project_declaration project;
+            project.name = expect(token_kind::identifier, "the project's name").text;
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                setting s;
+                const token& key = expect(token_kind::identifier, "a setting, like domain");
+                s.key = key.text;
+                s.where = key.where;
+                if (at(token_kind::string)) {
+                    s.value = advance().text;
+                    s.is_string = true;
+                } else {
+                    s.value = expect(token_kind::identifier, "the setting's value").text;
+                }
+                end_line();
+                project.settings.push_back(std::move(s));
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return project;
+        }
+
+        namespace_declaration parse_namespace() {
+            advance();
+            namespace_declaration ns;
+            ns.name = expect(token_kind::identifier, "the namespace's name").text;
+            expect(token_kind::left_brace, "'{'");
+            ns.declarations = parse_declarations(true);
+            expect(token_kind::right_brace, "'}' to close namespace " + ns.name);
+            end_line();
+            return ns;
+        }
+
+        format_declaration parse_format() {
+            advance();
+            format_declaration format;
+            const token& name = expect(token_kind::identifier, "the format's name");
+            format.name = name.text;
+            format.pattern = raw_text(name.end, true);
+            if (format.pattern.empty()) fail(name.where, "format " + format.name + " needs a pattern, like AAA-9999");
+            if (at(token_kind::left_brace)) {
+                advance();
+                while (in_block()) {
+                    if (!at_word("example")) fail_expecting("'example'");
+                    const token& word = advance();
+                    format.example = raw_text(word.end, false);
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+            }
+            end_line();
+            return format;
+        }
+
+        static bool is_field_rule(std::string_view word) {
+            return word == "required" || word == "unique" || word == "key" || word == "after";
+        }
+
+        entity_declaration parse_entity() {
+            advance();
+            entity_declaration entity;
+            entity.name = expect(token_kind::identifier, "the entity's name").text;
+            if (at_word("history")) {
+                advance();
+                entity.history = true;
+            }
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                entity.fields.push_back(parse_field());
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return entity;
+        }
+
+        field parse_field() {
+            field f;
+            const token& name = expect(token_kind::identifier, "a field's name");
+            f.name = name.text;
+            f.where = name.where;
+            if (at(token_kind::identifier) && !is_field_rule(peek().text)) {
+                if (peek(1).kind == token_kind::pipe) {
+                    f.choices.push_back(advance().text);
+                    while (at(token_kind::pipe)) {
+                        advance();
+                        f.choices.push_back(expect(token_kind::identifier, "a choice after '|'").text);
+                    }
+                } else {
+                    f.type = parse_qualified_name("the field's type");
+                    if (f.type->text() == "list" && at_word("of")) {
+                        advance();
+                        f.list = true;
+                        f.type = parse_qualified_name("what the list holds, like label or user");
+                    }
+                    if (f.type->text() == "serial" && at_word("per")) {
+                        advance();
+                        f.per = expect(token_kind::identifier, "what it's counted per, like book").text;
+                    }
+                }
+            }
+            while (at(token_kind::identifier)) {
+                const token& rule = peek();
+                if (rule.text == "required") {
+                    advance();
+                    f.required = true;
+                } else if (rule.text == "unique") {
+                    advance();
+                    f.unique = true;
+                } else if (rule.text == "key") {
+                    advance();
+                    f.key = true;
+                } else if (rule.text == "after") {
+                    advance();
+                    f.after = expect(token_kind::identifier, "the field it has to come after").text;
+                } else {
+                    fail(rule.where, "'" + rule.text + "' isn't a field rule; expected required, "
+                                     "unique, key or after");
+                }
+            }
+            if (at(token_kind::assign)) {
+                advance();
+                f.initial = parse_expression();
+            }
+            end_line();
+            return f;
+        }
+
+        command_declaration parse_command() {
+            advance();
+            command_declaration command;
+            command.name = parse_qualified_name("the command's name, like book::create");
+            if (at(token_kind::left_brace)) {
+                command.has_body = true;
+                command.body = parse_statement_block();
+            }
+            end_line();
+            return command;
+        }
+
+        view_declaration parse_view() {
+            advance();
+            view_declaration view;
+            view.name = expect(token_kind::identifier, "the view's name").text;
+            for (;;) {
+                if (at_word("per")) {
+                    advance();
+                    view.per = expect(token_kind::identifier, "what the view is per, like user").text;
+                } else if (at_word("public")) {
+                    advance();
+                    view.is_public = true;
+                } else {
+                    break;
+                }
+            }
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                if (at_word("order")) {
+                    fail(peek().where, "order goes inside the list it sorts: each book { order title ... }");
+                } else if (at_word("readers") && peek(1).kind == token_kind::identifier) {
+                    view.readers_where = advance().where;
+                    view.readers = advance().text;
+                    end_line();
+                } else if (at_word("public") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                    advance();
+                    advance();
+                    view.public_when = parse_expression();
+                    end_line();
+                } else if (at_word("each")) {
+                    view.each.push_back(parse_each());
+                } else {
+                    location where = peek().where;
+                    view_value value;
+                    value.where = where;
+                    value.name = expect(token_kind::identifier, "'each', or a value like total = count(...)").text;
+                    expect(token_kind::assign, "'='");
+                    if (at_word("each")) {
+                        view.each.push_back(parse_each());
+                        view.each.back().name = value.name;
+                        view.each.back().where = where;
+                        continue;
+                    }
+                    value.value = parse_expression();
+                    end_line();
+                    view.values.push_back(std::move(value));
+                }
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return view;
+        }
+
+        // A sort key: a value, or a value with - in front of it to sort in reverse.
+        // It stops before any operator, because order done -created_at is two keys,
+        // not a subtraction.
+        expression_ptr parse_order_key() {
+            if (at(token_kind::minus)) {
+                const token& op = advance();
+                auto e = std::make_unique<expression>();
+                e->where = op.where;
+                e->node = unary_expression{token_kind::minus, parse_postfix()};
+                return e;
+            }
+            return parse_postfix();
+        }
+
+        view_each parse_each() {
+            view_each each;
+            each.where = advance().where;
+            if (at_word("change") && peek(1).kind == token_kind::identifier && peek(1).text == "of") {
+                advance();
+                advance();
+                each.changes = true;
+            }
+            each.source = parse_postfix();
+            if (at_word("where")) {
+                advance();
+                each.condition = parse_expression();
+            }
+            if (at(token_kind::left_brace)) {
+                advance();
+                while (in_block()) {
+                    if (at_word("order")) {
+                        advance();
+                        do {
+                            each.order.push_back(parse_order_key());
+                        } while (!at_line_end());
+                        end_line();
+                        continue;
+                    }
+                    if (at_word("limit") && peek(1).kind == token_kind::number) {
+                        advance();
+                        const token& n = advance();
+                        int limit = 0;
+                        auto [end, failed] = std::from_chars(n.text.data(), n.text.data() + n.text.size(), limit);
+                        if (failed != std::errc{} || end != n.text.data() + n.text.size() || limit < 1) {
+                            fail(n.where, "limit is a whole number of rows, like limit 50");
+                        }
+                        each.limit = limit;
+                        end_line();
+                        continue;
+                    }
+                    parse_view_row_line(each.rows);
+                }
+                expect(token_kind::right_brace, "'}'");
+            }
+            end_line();
+            return each;
+        }
+
+        // A line of a view's rows: several values shown as they are (book.title
+        // due_at), or one name given a computed value (lent_to = first(...)).
+        void parse_view_row_line(std::vector<view_value>& rows) {
+            while (!at_line_end()) {
+                view_value row;
+                row.where = peek().where;
+                row.value = parse_postfix();
+                if (at(token_kind::assign)) {
+                    auto* name = std::get_if<name_expression>(&row.value->node);
+                    if (!name || name->name.parts.size() != 1) {
+                        fail(row.where, "only a plain name can be given a value here");
+                    }
+                    row.name = name->name.parts.front();
+                    advance();
+                    row.value = parse_expression();
+                    rows.push_back(std::move(row));
+                    break;
+                }
+                rows.push_back(std::move(row));
+            }
+            end_line();
+        }
+
+        role_declaration parse_role() {
+            advance();
+            role_declaration role;
+            role.name = expect(token_kind::identifier, "the role's name").text;
+            if (at_word("per")) {
+                role.per_where = advance().where;
+                role.per = expect(token_kind::identifier, "what the role is held within, like project").text;
+                if (!at_word("from")) fail_expecting("'from' and the entity that grants the role, like from member");
+                advance();
+                role.from = expect(token_kind::identifier, "the entity that grants the role, like member").text;
+            }
+            while (at(token_kind::identifier)) {
+                role.permissions.push_back(parse_qualified_name("a permission, like book::view"));
+            }
+            end_line();
+            return role;
+        }
+
+        function_declaration parse_function() {
+            advance();
+            function_declaration function;
+            function.name = expect(token_kind::identifier, "the function's name").text;
+            expect(token_kind::left_paren, "'('");
+            if (!at(token_kind::right_paren)) {
+                function.parameters.push_back(expect(token_kind::identifier, "a parameter's name").text);
+                while (at(token_kind::comma)) {
+                    advance();
+                    function.parameters.push_back(expect(token_kind::identifier, "a parameter's name").text);
+                }
+            }
+            expect(token_kind::right_paren, "')'");
+            function.body = parse_statement_block();
+            end_line();
+            return function;
+        }
+
+        screen_declaration parse_screen() {
+            advance();
+            screen_declaration screen;
+            if (at(token_kind::string)) {
+                screen.title = advance().text;
+            } else if (at(token_kind::identifier)) {
+                screen.title = advance().text;
+                screen.title_is_name = true;
+            } else {
+                fail_expecting("the screen's title, like \"Shelf\"");
+            }
+            screen.route = expect(token_kind::route, "the screen's route, like /shelf").text;
+            screen.items = parse_screen_block();
+            end_line();
+            return screen;
+        }
+
+        std::vector<screen_item> parse_screen_block() {
+            expect(token_kind::left_brace, "'{'");
+            std::vector<screen_item> items;
+            while (in_block()) {
+                items.push_back(parse_screen_item());
+            }
+            expect(token_kind::right_brace, "'}'");
+            return items;
+        }
+
+        screen_item parse_screen_item() {
+            location where = peek().where;
+            bool string_follows = peek(1).kind == token_kind::string;
+
+            if (at_word("hero") || at_word("section")) {
+                content_block block;
+                block.type = peek().text == "hero" ? content_block::kind::hero : content_block::kind::section;
+                advance();
+                block.title = expect(token_kind::string, "a title").text;
+                if (at(token_kind::anchor)) block.anchor = advance().text;
+                block.items = parse_screen_block();
+                end_line();
+                return {where, std::move(block)};
+            }
+            if (string_follows && (at_word("text") || at_word("code") || at_word("markdown"))) {
+                content_text text;
+                const std::string& word = advance().text;
+                text.type = word == "text"   ? content_text::kind::text
+                          : word == "code"   ? content_text::kind::code
+                                             : content_text::kind::markdown;
+                text.value = advance().text;
+                end_line();
+                return {where, std::move(text)};
+            }
+            if (at_word("link")) {
+                advance();
+                content_link link;
+                link.label = expect(token_kind::string, "the link's text").text;
+                if (at(token_kind::route)) {
+                    link.target = advance().text;
+                } else if (at(token_kind::anchor)) {
+                    link.target = "#" + advance().text;
+                } else {
+                    fail_expecting("where the link goes, like /docs or #waitlist");
+                }
+                end_line();
+                return {where, std::move(link)};
+            }
+            if (at_word("table")) {
+                advance();
+                table_item table;
+                table.view = parse_qualified_name("the view to list");
+                if (at(token_kind::dot)) {
+                    advance();
+                    table.list = expect(token_kind::identifier, "which of the view's lists, like comments").text;
+                }
+                if (at_word("link")) {
+                    advance();
+                    table.link_where = peek().where;
+                    table.link = expect(token_kind::route, "the screen each row opens, like /books/:book").text;
+                }
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            table.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(table)};
+            }
+            if (at_word("form")) {
+                advance();
+                form_item form;
+                do {
+                    form.commands.push_back(parse_qualified_name("a command, like book::create"));
+                } while (at(token_kind::identifier));
+                expect(token_kind::left_brace, "'{'");
+                while (in_block()) {
+                    parse_form_line(form.fields);
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(form)};
+            }
+            if (at_word("confirm")) {
+                advance();
+                confirm_item confirm;
+                confirm.command = parse_qualified_name("the command to confirm");
+                confirm.message = expect(token_kind::string, "the question to ask").text;
+                end_line();
+                return {where, std::move(confirm)};
+            }
+            if (at(token_kind::identifier)) {
+                qualified_name name = parse_qualified_name("a screen element");
+                if (name.parts.size() < 2) {
+                    fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
+                                "command in full, like book::create");
+                }
+                end_line();
+                return {where, button_item{std::move(name)}};
+            }
+            fail_expecting("a screen element");
+        }
+
+        // A line of a form: several fields (title author), or one field with a starting
+        // value, which can carry a hint: code = suggest(start) { hint "..." }.
+        void parse_form_line(std::vector<form_field>& fields) {
+            while (!at_line_end()) {
+                form_field f;
+                const token& name = expect(token_kind::identifier, "a field to ask for");
+                f.name = name.text;
+                f.where = name.where;
+                if (at(token_kind::assign)) {
+                    advance();
+                    f.value = parse_expression();
+                    if (at(token_kind::left_brace)) {
+                        advance();
+                        skip_newlines();
+                        if (!at_word("hint")) fail_expecting("'hint'");
+                        advance();
+                        f.hint = expect(token_kind::string, "the hint's text").text;
+                        end_line();
+                        skip_newlines();
+                        expect(token_kind::right_brace, "'}'");
+                    }
+                    fields.push_back(std::move(f));
+                    break;
+                }
+                fields.push_back(std::move(f));
+            }
+            end_line();
+        }
+
+        picker_declaration parse_picker() {
+            advance();
+            picker_declaration picker;
+            picker.entity = expect(token_kind::identifier, "the entity to pick").text;
+            if (!at_word("from")) fail_expecting("'from'");
+            advance();
+            picker.view = expect(token_kind::identifier, "the view to pick from").text;
+            end_line();
+            return picker;
+        }
+
+        webhook_declaration parse_webhook() {
+            advance();
+            webhook_declaration hook;
+            hook.provider_where = peek().where;
+            hook.provider = expect(token_kind::identifier, "who sends it, like github").text;
+            hook.route = expect(token_kind::route, "where it's received, like /hooks/github").text;
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                if (at_word("for")) {
+                    advance();
+                    hook.scope_where = peek().where;
+                    hook.scope = expect(token_kind::identifier, "what a repository belongs to, like project").text;
+                    if (!at_word("by")) fail_expecting("'by' and the field naming the repository, like by repository");
+                    advance();
+                    hook.repository = expect(token_kind::identifier, "the field naming the repository").text;
+                    end_line();
+                } else if (at_word("on")) {
+                    advance();
+                    webhook_handler handler;
+                    handler.where = peek().where;
+                    handler.event = expect(token_kind::identifier, "an event, commit or pull_request").text;
+                    handler.body = parse_statement_block();
+                    end_line();
+                    hook.handlers.push_back(std::move(handler));
+                } else {
+                    fail_expecting("'for' or 'on'");
+                }
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return hook;
+        }
+
+        // statements
+
+        std::vector<statement> parse_statement_block() {
+            expect(token_kind::left_brace, "'{'");
+            std::vector<statement> body;
+            while (in_block()) {
+                body.push_back(parse_statement());
+            }
+            expect(token_kind::right_brace, "'}'");
+            return body;
+        }
+
+        statement parse_statement() {
+            location where = peek().where;
+            if (at_word("require")) {
+                advance();
+                require_statement s;
+                s.condition = parse_expression();
+                s.message = expect(token_kind::string, "the message shown when it isn't met").text;
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("permission")) {
+                advance();
+                permission_statement s{parse_qualified_name("who may run it: anyone, signed_in, owner or a permission")};
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("clear")) {
+                advance();
+                clear_statement s;
+                do {
+                    s.fields.push_back(expect(token_kind::identifier, "a field to clear").text);
+                } while (at(token_kind::identifier));
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("return")) {
+                advance();
+                return_statement s{parse_expression()};
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("if")) {
+                statement s{where, parse_if()};
+                end_line();
+                return s;
+            }
+            if ((at_word("add") || at_word("remove")) && peek(1).kind != token_kind::assign && peek(1).kind != token_kind::dot) {
+                list_statement s;
+                s.adds = advance().text == "add";
+                s.value = parse_postfix();
+                const char* joiner = s.adds ? "to" : "from";
+                if (!at_word(joiner)) fail_expecting(std::string("'") + joiner + "' and the list, like " + (s.adds ? "add me to assignees" : "remove me from assignees"));
+                advance();
+                s.list_where = peek().where;
+                s.list = expect(token_kind::identifier, "the list, like assignees").text;
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("create") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace) {
+                advance();
+                create_statement s;
+                s.entity_where = peek().where;
+                s.entity = advance().text;
+                advance();
+                while (in_block()) {
+                    while (!at_line_end()) {
+                        field_value value;
+                        value.where = peek().where;
+                        value.name = expect(token_kind::identifier, "a field of what's made, like role").text;
+                        expect(token_kind::assign, "'='");
+                        value.value = parse_postfix();
+                        s.values.push_back(std::move(value));
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(s)};
+            }
+            assign_statement s;
+            s.target = parse_postfix();
+            expect(token_kind::assign, "'='");
+            s.value = parse_expression();
+            end_line();
+            return {where, std::move(s)};
+        }
+
+        if_statement parse_if() {
+            advance();
+            if_statement s;
+            s.condition = parse_expression();
+            s.then_body = parse_statement_block();
+            if (at_word("else")) {
+                advance();
+                if (at_word("if")) {
+                    location where = peek().where;
+                    s.else_body.push_back({where, parse_if()});
+                } else {
+                    s.else_body = parse_statement_block();
+                }
+            }
+            return s;
+        }
+
+        // expressions, loosest first: || then && then == != then < > <= >= then + -
+        // then *, then ! and unary -, then calls and members, then plain values.
+
+        static int precedence(token_kind kind) {
+            switch (kind) {
+                case token_kind::logical_or:    return 1;
+                case token_kind::logical_and:   return 2;
+                case token_kind::equal:
+                case token_kind::not_equal:     return 3;
+                case token_kind::less:
+                case token_kind::greater:
+                case token_kind::less_equal:
+                case token_kind::greater_equal: return 4;
+                case token_kind::plus:
+                case token_kind::minus:         return 5;
+                case token_kind::star:          return 6;
+                default:                        return 0;
+            }
+        }
+
+        expression_ptr parse_expression() { return parse_binary(0); }
+
+        expression_ptr parse_binary(int loosest) {
+            auto left = parse_unary();
+            for (;;) {
+                // labels has bug compares as tightly as ==.
+                bool has = at_word("has");
+                int p = has ? precedence(token_kind::equal) : precedence(peek().kind);
+                if (p == 0 || p <= loosest) return left;
+                const token& op = advance();
+                auto e = std::make_unique<expression>();
+                e->where = op.where;
+                e->node = binary_expression{has ? token_kind::has : op.kind, std::move(left), parse_binary(p)};
+                left = std::move(e);
+            }
+        }
+
+        expression_ptr parse_unary() {
+            if (at(token_kind::logical_not) || at(token_kind::minus)) {
+                const token& op = advance();
+                auto e = std::make_unique<expression>();
+                e->where = op.where;
+                e->node = unary_expression{op.kind, parse_unary()};
+                return e;
+            }
+            return parse_postfix();
+        }
+
+        expression_ptr parse_postfix() {
+            auto e = parse_primary();
+            for (;;) {
+                if (at(token_kind::left_paren)) {
+                    location where = advance().where;
+                    call_expression call;
+                    call.callee = std::move(e);
+                    if (!at(token_kind::right_paren)) {
+                        call.arguments.push_back(parse_argument());
+                        while (at(token_kind::comma)) {
+                            advance();
+                            call.arguments.push_back(parse_argument());
+                        }
+                    }
+                    expect(token_kind::right_paren, "')'");
+                    e = std::make_unique<expression>();
+                    e->where = where;
+                    e->node = std::move(call);
+                } else if (at(token_kind::dot)) {
+                    location where = advance().where;
+                    member_expression member;
+                    member.object = std::move(e);
+                    member.member = expect(token_kind::identifier, "a name after '.'").text;
+                    e = std::make_unique<expression>();
+                    e->where = where;
+                    e->node = std::move(member);
+                } else {
+                    return e;
+                }
+            }
+        }
+
+        // A call's argument can filter what it's given: count(loan where returned_at == none).
+        expression_ptr parse_argument() {
+            auto value = parse_expression();
+            if (!at_word("where")) return value;
+            location where = advance().where;
+            auto e = std::make_unique<expression>();
+            e->where = where;
+            e->node = where_expression{std::move(value), parse_expression()};
+            return e;
+        }
+
+        expression_ptr parse_primary() {
+            auto e = std::make_unique<expression>();
+            e->where = peek().where;
+            if (at(token_kind::string)) {
+                e->node = literal_expression{literal_expression::kind::string, advance().text};
+            } else if (at(token_kind::number)) {
+                e->node = literal_expression{literal_expression::kind::number, advance().text};
+            } else if (at(token_kind::identifier)) {
+                e->node = name_expression{parse_qualified_name("a name")};
+            } else if (at(token_kind::left_paren)) {
+                advance();
+                e = parse_expression();
+                expect(token_kind::right_paren, "')'");
+            } else {
+                fail_expecting("a value");
+            }
+            return e;
+        }
+    };
+
+    // Reads one .one file. Anything wrong is added to `out`; the tree holds whatever
+    // could be read.
+    inline file parse(std::string path, std::string_view source, diagnostics& out) {
+        return parser(std::move(path), source, out).parse();
+    }
+
+} // namespace one::language

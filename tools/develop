@@ -1,0 +1,28 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Runs the site locally, to try it by hand: the Firebase emulators, the generated Go
+# backend on port 8081, and Vite, which forwards /api to the backend. Open the
+# address Vite prints. Ctrl-C stops the backend and Vite. The emulators keep running,
+# so the next start is quick; tools/emulators/run stop stops them.
+#
+#   tools/develop
+
+set -eu
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+test -x compiler/build/one || make -C compiler
+tools/emulators/run
+compiler/build/one build site
+node tools/emulators/rules.mjs site/build/firestore.rules
+(cd site/build/api && go mod tidy && go build -o ../uione-api .)
+yarn install --silent
+yarn workspace @uione/react build
+yarn workspace @uione/radix build
+
+FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 PORT=8081 site/build/uione-api &
+api=$!
+trap 'kill "$api" 2>/dev/null' EXIT INT TERM
+yarn workspace uione-web dev

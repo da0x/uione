@@ -1,0 +1,22 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The waitlist: anyone can join, and all anyone can see is how many have.
+
+namespace waitlist {
+
+	// The normalized address is the id, so joining twice is joining once.
+	entity signup {
+		email  email  required  key
+	}
+
+	command signup::create {
+		permission anyone
+	}
+
+	// Public, and a number only: never an address.
+	view signups public {
+		total = count(signup)
+	}
+
+} // namespace waitlist

@@ -1,0 +1,257 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A project tracker: projects named by a short name, the people who belong to
+// each with a role in it, and issues numbered within each project.
+//
+// The example for roles held within something. Whoever makes a project
+// maintains it, maintainers add members, and what each person may do to a
+// project's issues and comments depends on their role in that project alone. A
+// private project's pages are read by its members and nobody else. Every change
+// to an issue is kept, and shown on its page and in its project's timeline.
+// Commits and pull requests on GitHub that mention #12 show on issue 12's page.
+
+namespace tracker {
+
+	entity project {
+		slug        text  required  unique  key
+		name        text  required
+		repository  text  unique
+		visibility  public | private = public
+	}
+
+	// A person's place in a project. Its id is the project and the person, so
+	// each person has one role in each project.
+	entity member {
+		project  project  required  key
+		person   user     required  key
+		role     maintainer | reporter = reporter
+	}
+
+	entity issue history {
+		project    project       required  key
+		number     serial        per project  key
+		title      text          required
+		body       markdown
+		labels     list of text
+		assignees  list of user
+		author     user          = me
+		status     open | closed = open
+	}
+
+	// A commit or pull request that mentions an issue. Its key is the issue and
+	// the address, so GitHub sending the same one again changes nothing.
+	entity mention {
+		issue   issue  required  key
+		url     text   required  key
+		kind    commit | pull_request
+		title   text
+		author  text
+	}
+
+	entity comment {
+		issue   issue     required
+		body    markdown  required
+		author  user      = me
+	}
+
+	// Whoever makes a project is its first maintainer.
+	command project::create {
+		permission signed_in
+		create member {
+			project = id  person = me  role = maintainer
+		}
+	}
+
+	command project::update
+	command member::create
+	command issue::create
+	command issue::update
+
+	// Taking an issue puts it among your own; dropping it takes it out.
+	command issue::take {
+		add me to assignees
+	}
+
+	command issue::drop {
+		remove me from assignees
+	}
+
+	command issue::close {
+		require status == open  "that issue is already closed"
+		status = closed
+	}
+
+	command comment::create
+
+	role maintainer per project from member  project::update  member::create  issue::create  issue::update  issue::take  issue::drop  issue::close  comment::create
+	role reporter per project from member  issue::create  issue::take  issue::drop  comment::create
+
+	// Every public project, newest first. A private one is listed nowhere.
+	webhook github /hooks/github {
+		for project by repository
+		on commit {
+			create mention {
+				issue = mentioned  url = url  kind = commit
+				title = message  author = author
+			}
+		}
+		on pull_request {
+			create mention {
+				issue = mentioned  url = url  kind = pull_request
+				title = title  author = author
+			}
+		}
+	}
+
+	view projects public {
+		each project where visibility == public {
+			order -created_at
+			slug  name
+		}
+	}
+
+	// A project's page: its issues, open ones first and newest first, and who
+	// belongs to it. Anyone may read a public project's page, and only its
+	// members a private one's.
+	view project_page per project {
+		readers member
+		public when project.visibility == public
+		name = project.name
+		repository = project.repository
+		visibility = project.visibility
+		issues = each issue where project == project.id {
+			order -status  -number
+			number  title  status  labels  assignees.name  author.picture  author.name
+		}
+		members = each member where project == project.id {
+			order role
+			person.picture  person.name  role
+		}
+		timeline = each change of issue where project == project.id {
+			order -created_at
+			limit 50
+			issue  field  after  created_by.name  created_at
+		}
+	}
+
+	// An issue's page, with its comments in the order they were written.
+	view issue_page per issue {
+		readers member
+		public when issue.project.visibility == public
+		title = issue.title
+		body = issue.body
+		labels = issue.labels
+		status = issue.status
+		comments = each comment where issue == issue.id {
+			order created_at
+			author.picture  author.name  body  created_at
+		}
+		mentions = each mention where issue == issue.id {
+			order created_at
+			kind  title  author  url
+		}
+		changes = each change of issue where issue == issue.id {
+			order created_at
+			field  before  after  created_by.name  created_at
+		}
+	}
+
+	// The open issues assigned to the person reading, in every project.
+	view mine per user {
+		each issue where assignees has user.id && status == open {
+			order project  number
+			project  number  title
+		}
+	}
+
+	screen "My issues" /mine {
+		table mine link /issues/:issue {
+			project
+			number "#"
+			title
+		}
+	}
+
+	screen "Projects" /projects {
+		table projects link /projects/:project {
+			slug "Project"
+			name
+		}
+		project::create
+		form project::create {
+			slug  name  repository
+		}
+	}
+
+	screen "Project" /projects/:project {
+		text "{project_page.name}"
+		project::update
+		form project::update {
+			name  repository  visibility
+		}
+		table project_page.issues link /issues/:issue {
+			number "#"
+			title
+			status
+			labels
+			assignees.name "Assigned"
+			author.picture ""
+			author.name "Author"
+			take  drop
+		}
+		issue::create
+		form issue::create {
+			title  body  labels
+		}
+		table project_page.members {
+			person.picture ""
+			person.name "Member"
+			role
+		}
+		member::create
+		form member::create {
+			person  role
+		}
+		table project_page.timeline {
+			issue
+			field "Changed"
+			after "To"
+			created_by.name "By"
+			created_at "When"
+		}
+	}
+
+	screen "Issue" /issues/:issue {
+		text "{issue_page.title}"
+		markdown "{issue_page.body}"
+		issue::update
+		form issue::update {
+			title  body  labels
+		}
+		table issue_page.comments {
+			author.picture ""
+			author.name "Author"
+			body
+			created_at "Written"
+		}
+		comment::create
+		form comment::create {
+			body
+		}
+		table issue_page.mentions {
+			kind
+			title
+			author
+			url "On GitHub"
+		}
+		table issue_page.changes {
+			field "Changed"
+			before "From"
+			after "To"
+			created_by.name "By"
+			created_at "When"
+		}
+	}
+
+} // namespace tracker

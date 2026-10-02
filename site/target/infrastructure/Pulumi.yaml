@@ -1,0 +1,14 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Generated from site/ by one. Do not edit.
+
+name: uione
+description: Where uione runs, in Google Cloud.
+runtime: go
+config:
+  gcp:project: ui-one
+  # Budgets are billed to a project, and with a person's credentials, rather than
+  # a service account's, the provider has to be told which one.
+  gcp:billingProject: ui-one
+  gcp:userProjectOverride: true

@@ -1,0 +1,55 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Every file and folder name is lowercase: makefile, dockerfile, uione.tmlanguage.json.
+# The only capitals allowed are in names that are conventional everywhere or that a
+# tool looks for by that exact name: README.md, AGENTS.md, LICENSE, COPYING (the
+# GPL beside each library's LGPL, under the name GNU gives it), CMakeLists.txt,
+# which is the only name CMake reads, and Pulumi.yaml, the only name Pulumi reads.
+#
+# Names are also whole words, because a clipped word is one more thing to decode:
+# generators, not gen; infrastructure, not infra. The clipped words below are the
+# ones to catch. Names a tool fixes, like src/ or vite.config.ts, aren't checked,
+# since they aren't ours to choose.
+#
+#   tools/check-names            every tracked file
+#   tools/check-names --staged   the files being added or renamed in this commit
+
+set -u
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if [ "${1:-}" = "--staged" ]; then
+	files=$(git diff --cached --name-only --diff-filter=ACR)
+else
+	files=$(git ls-files)
+fi
+
+failed=0
+for f in $files; do
+	old_ifs=$IFS
+	IFS=/
+	for part in $f; do
+		case "$part" in
+			README.md|AGENTS.md|LICENSE|COPYING|CMakeLists.txt|Pulumi.yaml) continue ;;
+		esac
+		case "$part" in
+			*[A-Z]*)
+				echo "check-names: $f: '$part' has capital letters; names are lowercase" >&2
+				failed=1
+				;;
+		esac
+		IFS=' '
+		for word in $(echo "$part" | tr -- '-_.' '   '); do
+			case "$word" in
+				gen|infra|lang|e2e|dev|util|utils|misc|tmp|impl|mgr|svc|ctrl|cfg|conf)
+					echo "check-names: $f: '$word' in '$part' is a clipped word; spell it out" >&2
+					failed=1
+					;;
+			esac
+		done
+		IFS=/
+	done
+	IFS=$old_ifs
+done
+exit $failed

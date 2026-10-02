@@ -1,0 +1,163 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: LGPL-3.0-only
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { App, Text, memorySource, screen as defineScreen, show } from "../src/index.js";
+import type { Person } from "../src/index.js";
+import { useConfirmContext } from "../src/app.js";
+import { withoutLicense } from "../src/components.js";
+import { plain } from "../src/plain.js";
+
+const home = defineScreen({ title: "uione", route: "/" }, () => <Text>Write the feature once.</Text>);
+const studio = defineScreen({ title: "Studio", route: "/studio", nav: "Studio" }, () => <Text>Your projects.</Text>);
+const docs = defineScreen({ title: "Docs", route: "/docs/:page?", nav: "Docs" }, () => <Text>The docs.</Text>);
+
+function renderAt(location: string) {
+  return render(<App name="uione" screens={[home, studio, docs]} ui={plain} data={memorySource()} location={location} />);
+}
+
+describe("an app built from screens", () => {
+  it("shows the screen whose route matches the address", () => {
+    renderAt("/studio");
+    expect(screen.getByRole("heading", { name: "Studio" })).toBeTruthy();
+    expect(screen.getByText("Your projects.")).toBeTruthy();
+  });
+
+  it("lists the screens with a nav label, and marks the current one", () => {
+    renderAt("/docs/language");
+    const nav = screen.getByRole("navigation");
+    const links = Array.from(nav.querySelectorAll("a")).map((a) => [a.textContent, a.getAttribute("href"), a.getAttribute("aria-current")]);
+    expect(links).toEqual([
+      ["Studio", "/studio", null],
+      ["Docs", "/docs", "page"],
+    ]);
+  });
+
+  it("follows a link inside the app without reloading", () => {
+    renderAt("/");
+    expect(screen.getByText("Write the feature once.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Studio" }));
+    expect(screen.getByText("Your projects.")).toBeTruthy();
+  });
+
+  it("names the page after the screen", () => {
+    renderAt("/studio");
+    expect(document.title).toBe("Studio · uione");
+  });
+
+  it("says so when nothing is at the address", () => {
+    renderAt("/nowhere");
+    expect(screen.getByText("There's nothing at this address.")).toBeTruthy();
+  });
+});
+
+describe("signing in", () => {
+  function renderWith(person?: Person | null) {
+    const source = memorySource(person === undefined ? {} : { person });
+    return { source, ...render(<App name="uione" screens={[home]} ui={plain} data={source} location="/" />) };
+  }
+
+  it("isn't offered by an app without it", () => {
+    renderWith();
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+  });
+
+  it("is offered to someone signed out, and shows who's signed in", async () => {
+    renderWith(null);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign in" })));
+    expect(screen.getByText("You")).toBeTruthy();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign out" })));
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+  });
+
+  it("shows nothing until it's known whether anyone is signed in", () => {
+    const person: Person | null | undefined = undefined;
+    const source = memorySource({ person: null });
+    source.auth!.person = () => person;
+    render(<App name="uione" screens={[home]} ui={plain} data={source} location="/" />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("values from a view", () => {
+  it("show a date as a date, and anything else as text", () => {
+    expect(show(new Date(2026, 8, 30))).toBe(new Date(2026, 8, 30).toLocaleDateString(undefined, { dateStyle: "medium" }));
+    expect(show(12)).toBe("12");
+    expect(show(undefined)).toBe("");
+  });
+});
+
+describe("signing in that doesn't work", () => {
+  function renderSignedOut(failure: unknown) {
+    const source = memorySource({ person: null });
+    source.auth!.signIn = async () => {
+      throw failure;
+    };
+    render(<App name="uione" screens={[home]} ui={plain} data={source} location="/" />);
+  }
+
+  it("says what to do when the browser blocks the sign-in window", async () => {
+    renderSignedOut({ code: "auth/popup-blocked" });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("allow pop-ups for this site");
+  });
+
+  it("says nothing when the person closes the sign-in window", async () => {
+    renderSignedOut({ code: "auth/popup-closed-by-user" });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign in" })));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("questions before a command", () => {
+  it("answers no to a question that a newer one replaces, so nothing waits on it forever", async () => {
+    const answers: boolean[] = [];
+    function Asker() {
+      const { ask } = useConfirmContext();
+      return (
+        <button type="button" onClick={() => void ask("first?").then((yes) => answers.push(yes))}>
+          ask
+        </button>
+      );
+    }
+    function Second() {
+      const { ask } = useConfirmContext();
+      return (
+        <button type="button" onClick={() => void ask("second?").then((yes) => answers.push(yes))}>
+          ask again
+        </button>
+      );
+    }
+    const page = defineScreen({ title: "Test", route: "/" }, () => (
+      <>
+        <Asker />
+        <Second />
+      </>
+    ));
+    render(<App name="uione" screens={[page]} ui={plain} data={memorySource()} location="/" />);
+    fireEvent.click(screen.getByRole("button", { name: "ask" }));
+    fireEvent.click(screen.getByRole("button", { name: "ask again" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Yes" })));
+    expect(answers).toEqual([false, true]);
+  });
+});
+
+describe("the app's icon", () => {
+  it("is shown beside its name, and only when it has one", () => {
+    const { unmount } = render(<App name="uione" icon="/icon.svg" screens={[home]} ui={plain} data={memorySource()} location="/" />);
+    expect(screen.getByRole("link", { name: "uione" }).querySelector("img")?.getAttribute("src")).toBe("/icon.svg");
+    unmount();
+    render(<App name="uione" screens={[home]} ui={plain} data={memorySource()} location="/" />);
+    expect(screen.getByRole("link", { name: "uione" }).querySelector("img")).toBeNull();
+  });
+});
+
+describe("code shown on a page", () => {
+  it("leaves out the license header of the file it comes from", () => {
+    const file = "// Copyright 2026 Someone\n// SPDX-License-Identifier: AGPL-3.0-only\n\nnamespace library {\n  entity book {}\n}\n";
+    expect(withoutLicense(file)).toBe("namespace library {\n  entity book {}\n}\n");
+    expect(withoutLicense("namespace library {}\n")).toBe("namespace library {}\n");
+    expect(withoutLicense("// Copyright, but no license after it\nx\n")).toBe("// Copyright, but no license after it\nx\n");
+  });
+});
+

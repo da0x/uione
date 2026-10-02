@@ -1,0 +1,25 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The Firebase emulators, for developing and testing uione apps without a cloud
+# project. Built from the official Node image, with Java from Debian, since the
+# emulators run on Java 21.
+
+FROM node:22-trixie-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-21-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --global firebase-tools@15.32.0
+
+WORKDIR /emulators
+COPY firebase.json .
+
+# Download the emulators now rather than on first start, so starting is quick.
+RUN firebase setup:emulators:firestore
+
+EXPOSE 8080 9099
+
+# demo- projects never touch a real Firebase project.
+CMD ["firebase", "emulators:start", "--project", "demo-uione", "--only", "firestore,auth"]

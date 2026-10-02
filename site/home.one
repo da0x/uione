@@ -1,0 +1,24 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The landing page. It is outside any namespace, so it is the site's root: /.
+
+screen "uione" / {
+	hero "Write the feature once." {
+		text "One short file describes a whole feature: its data, its rules, the commands that change it, the live views that show it, who may do what, and its screens. uione generates the React app, the Go backend and the Firestore rules from it."
+		link "Join the waitlist" #waitlist
+		link "Read the docs" /docs/language
+	}
+
+	section "A whole feature" {
+		text "A lending library: two entities, five commands, three live views, a role and three screens. This is all of it."
+		code "../examples/library/main.one"
+	}
+
+	section "Join the waitlist" #waitlist {
+		form waitlist::signup::create {
+			email
+		}
+		text "{waitlist::signups.total} people are waiting."
+	}
+}

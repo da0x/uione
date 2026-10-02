@@ -1,0 +1,41 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+rules_version = '2';
+
+// Generated from site/ by one. Do not edit.
+//
+// A browser reads views and nothing else, and never writes: every change goes
+// through a command on the server. Each view document says who may read it.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // A person's role is users/{id}.role_id, and roles/{role}.permissions lists what
+    // it grants. Read on every check, so a change of role takes effect at once.
+    function granted(permission) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role_id', '') != ''
+        && get(/databases/$(database)/documents/roles/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role_id)).data.permissions.hasAny([permission]);
+    }
+
+    match /views/{view} {
+      // A view that doesn't exist yet reads as empty, rather than as an error. A
+      // document of a private project lists its members as its readers.
+      allow read: if resource == null
+        || resource.data.public == true
+        || (signedIn() && resource.data.owner_uid == request.auth.uid)
+        || (signedIn() && request.auth.uid in resource.data.get('readers', []))
+        || (resource.data.required_permission != '' && granted(resource.data.required_permission));
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

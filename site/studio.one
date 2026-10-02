@@ -1,0 +1,37 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The studio, where uione projects will be written. For now it holds only a list of
+// your projects, which is enough to need sign-in, ownership and a private view.
+
+namespace studio {
+
+	entity project {
+		name   text  required
+		owner  user  = me
+	}
+
+	command project::create {
+		permission signed_in
+	}
+
+	// One document per person, readable only by that person. A screen that shows it
+	// asks for sign-in by itself: nothing on the screen says so.
+	view projects per user {
+		each project where owner == user.id {
+			name  created_at
+		}
+	}
+
+	screen "Studio" / {
+		table projects {
+			name
+			created_at "Created"
+		}
+		project::create
+		form project::create {
+			name
+		}
+	}
+
+} // namespace studio

@@ -1,0 +1,148 @@
+/*
+ * Copyright 2026 Daher Alfawares
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/*
+ * The grammar of uione: what a .one file can say, written in the EBNF that the
+ * XML specification uses. A rule is `name ::= what it is`; "quoted" text is
+ * written as it is; | separates choices; ? is optional, * is any number and + is
+ * one or more.
+ *
+ * It's the specification the hand-written parser in compiler/language/ is held
+ * to. compiler/tests/grammar_tests.cpp checks it both ways: every program made
+ * from these rules parses, and every .one file in the repository fits them.
+ * editors/test.mjs checks that both editor grammars know the same words.
+ *
+ * The words in capitals are the pieces a file is read in:
+ *
+ *   NAME     a word of letters, digits and _, starting with a letter or _
+ *   STRING   text in double quotes, on one line, where \" and \\ stand for " and \
+ *   NUMBER   digits, with a fractional part if it has one: 14, 2.5
+ *   WHOLE    digits alone, a number with no fractional part: 50
+ *   ROUTE    a page's address: /, /shelf, /docs/:page
+ *   ANCHOR   a place on a page: #waitlist
+ *   PATTERN  the rest of the line, up to a { if there is one, for a format
+ *   NEWLINE  the end of a line; blank lines and comments count as one
+ *   END      the end of a line, or nothing just before a }, which is what lets
+ *            a short block sit on one line: if done { return true }
+ *   EOF      the end of the file
+ *
+ * Comments are // to the end of the line, or run from slash-star to star-slash.
+ *
+ * Lines are indented with tabs, never spaces (decision 0011). Indentation carries
+ * no meaning to the grammar; the lexer refuses a line indented with spaces.
+ *
+ * Some places name exactly the words the language knows, like a field's type or
+ * a project's settings, where the parser itself accepts any NAME and leaves the
+ * checker to say it isn't one. This grammar is the language, so it names them.
+ */
+
+file           ::= declaration* EOF
+
+declaration    ::= project | namespace | format | entity | command | view | role
+                 | function | screen | picker | webhook
+
+/* project */
+
+project        ::= "project" NAME "{" NEWLINE? setting* "}" END
+setting        ::= setting_name (STRING | NAME) END
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon"
+
+/* namespace */
+
+namespace      ::= "namespace" NAME "{" NEWLINE? declaration* "}" END
+
+/* format */
+
+format         ::= "format" NAME PATTERN ("{" NEWLINE? example* "}")? END
+example        ::= "example" PATTERN END
+
+/* entity */
+
+entity         ::= "entity" NAME "history"? "{" NEWLINE? field* "}" END
+field          ::= NAME (choices | type) rule* ("=" expression)? END
+choices        ::= NAME ("|" NAME)+
+type           ::= "text" | "markdown" | "email" | "date" | "number" | serial | "boolean" | "user" | list | qualified
+list           ::= "list" "of" ("text" | "user" | qualified)
+serial         ::= "serial" ("per" NAME)?
+rule           ::= "required" | "unique" | "key" | "after" NAME
+
+/* command */
+
+command        ::= "command" qualified block? END
+block          ::= "{" NEWLINE? statement* "}"
+statement      ::= ( "require" expression STRING
+                   | "permission" (permission_word | qualified)
+                   | "clear" NAME+
+                   | "return" expression
+                   | if
+                   | create
+                   | "add" postfix "to" NAME
+                   | "remove" postfix "from" NAME
+                   | postfix "=" expression ) END
+create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
+permission_word ::= "anyone" | "signed_in" | "owner"
+if             ::= "if" expression block ("else" (if | block))?
+
+/* view */
+
+view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? view_line* "}" END
+view_line      ::= (NAME "=")? each
+                 | "readers" NAME END
+                 | "public" "when" expression END
+                 | NAME "=" expression END
+each           ::= "each" ("change" "of")? postfix ("where" expression)? ("{" NEWLINE? list_line* "}")? END
+list_line      ::= "order" order_key+ END
+                 | "limit" WHOLE END
+                 | row_line
+order_key      ::= "-"? postfix
+row_line       ::= (postfix+ | postfix* NAME "=" expression) END
+
+/* role */
+
+role           ::= "role" NAME ("per" NAME "from" NAME)? qualified* END
+
+/* function */
+
+function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
+
+/* screen */
+
+screen         ::= "screen" (STRING | NAME) ROUTE screen_block END
+screen_block   ::= "{" NEWLINE? screen_item* "}"
+screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
+                 | ("text" | "code" | "markdown") STRING END
+                 | "link" STRING (ROUTE | ANCHOR) END
+                 | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
+                 | "form" qualified+ "{" NEWLINE? form_line* "}" END
+                 | "confirm" qualified STRING END
+                 | NAME ("::" NAME)+ END
+column         ::= postfix STRING?
+form_line      ::= (NAME+ | NAME* NAME "=" expression hint?) END
+hint           ::= "{" NEWLINE? "hint" STRING END "}"
+
+/* picker */
+
+picker         ::= "picker" NAME "from" NAME END
+
+/* webhook */
+
+webhook        ::= "webhook" NAME ROUTE "{" NEWLINE? webhook_line* "}" END
+webhook_line   ::= "for" NAME "by" NAME END
+                 | "on" NAME block END
+
+/* expressions, loosest first */
+
+expression     ::= conjunction ("||" conjunction)*
+conjunction    ::= equality ("&&" equality)*
+equality       ::= comparison (("==" | "!=" | "has") comparison)*
+comparison     ::= sum (("<" | ">" | "<=" | ">=") sum)*
+sum            ::= product (("+" | "-") product)*
+product        ::= unary ("*" unary)*
+unary          ::= ("!" | "-") unary | postfix
+postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
+argument       ::= expression ("where" expression)?
+primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")"
+built_in       ::= "now" | "me" | "none" | "true" | "false"
+qualified      ::= NAME ("::" NAME)*

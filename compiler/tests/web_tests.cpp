@@ -1,0 +1,192 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The web generator is held to site/target/web: files written by hand, reviewed, and
+// kept as the specification of what it must produce.
+
+#include <doctest/doctest.h>
+
+#include <algorithm>
+#include <string>
+#include <vector>
+
+#include "generators/markdown.hpp"
+#include "generators/web.hpp"
+#include "language/checker.hpp"
+#include "language/parser.hpp"
+#include "platform/files.hpp"
+
+using namespace one;
+
+namespace {
+
+    const std::string root = UIONE_ROOT;
+
+    std::vector<generators::output_file> generate(const std::string& project) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        for (const auto& path : platform::find_one_files({root + project})) {
+            files.push_back(language::parse(path, *platform::read_file(path), out));
+        }
+        language::check(files, out);
+        for (const auto& d : out) FAIL_CHECK(language::format(d));
+        return generators::generate_web(files, root + project, root + project + "/build/web");
+    }
+
+    const generators::output_file* find(const std::vector<generators::output_file>& files, const std::string& path) {
+        auto it = std::find_if(files.begin(), files.end(), [&](const auto& f) { return f.path == path; });
+        return it == files.end() ? nullptr : &*it;
+    }
+
+    // A target without the license header it carries as a file in this repository.
+    // Generated code carries none, because it belongs to whoever generated it.
+    std::string without_license(const std::string& text) {
+        if (!text.starts_with("// Copyright")) return text;
+        auto end = text.find("\n\n");
+        return end == std::string::npos ? text : text.substr(end + 2);
+    }
+
+    std::size_t lines(const std::string& text) { return static_cast<std::size_t>(std::count(text.begin(), text.end(), '\n')); }
+
+} // namespace
+
+TEST_CASE("the site is generated exactly as its targets say") {
+    auto files = generate("/site");
+    for (const char* path : {"package.json", "tsconfig.json", "vite.config.ts", "src/main.tsx", "src/app.tsx",
+                             "src/screens/home.tsx", "src/screens/studio.tsx", "src/screens/docs.tsx"}) {
+        CAPTURE(path);
+        auto target = platform::read_file(root + "/site/target/web/" + path);
+        REQUIRE(target);
+        const auto* generated = find(files, path);
+        REQUIRE(generated != nullptr);
+        CHECK(generated->content == without_license(*target));
+    }
+}
+
+TEST_CASE("a generated screen is about as long as the .one it came from") {
+    for (const char* project : {"/site", "/examples/library", "/examples/tasks", "/examples/tracker"}) {
+        for (const auto& f : generate(project)) {
+            if (!f.path.starts_with("src/screens/")) continue;
+            CAPTURE(project);
+            CAPTURE(f.path);
+            CHECK(lines(f.content) <= 60);
+        }
+    }
+}
+
+TEST_CASE("table columns that name a command on the row become actions") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Table view={shelf} link="/library/books/:book" columns={{ shelfmark: "Shelfmark", title: "Title", author: "Author", status: "Status", lent_to: "Lent to" }} actions={["library::book::withdraw"]} />)") != std::string::npos);
+    // Several screens in one file are each named after their title.
+    CHECK(screens->content.find("export const shelf = screen(") != std::string::npos);
+    CHECK(screens->content.find("export const myLoans = screen(") != std::string::npos);
+    // A confirm is kept for the command it asks about.
+    CHECK(screens->content.find(R"(<Confirm command="library::book::withdraw" question="Withdraw {title}? It will not be lent again." />)") != std::string::npos);
+}
+
+TEST_CASE("a button for a command with a form becomes the form's own button") {
+    auto files = generate("/examples/library");
+    const auto& content = find(files, "src/screens/main.tsx")->content;
+    CHECK(content.find(R"(<Form command="library::book::create" fields={["title", "author", "shelfmark", { name: "summary", type: "markdown" }]} button />)") != std::string::npos);
+    CHECK(content.find("<Command name=\"library::book::create\"") == std::string::npos);
+}
+
+TEST_CASE("form fields get their input type from the entity") {
+    auto files = generate("/examples/library");
+    CHECK(find(files, "src/screens/main.tsx")->content.find(R"({ name: "due_at", type: "date" })") != std::string::npos);
+}
+
+TEST_CASE("docs pages are turned into HTML when the site is built") {
+    auto files = generate("/site");
+    const auto* docs = find(files, "src/docs.generated.ts");
+    REQUIRE(docs != nullptr);
+    CHECK(docs->content.find(R"(slug: "language",)") != std::string::npos);
+    CHECK(docs->content.find(R"(title: "Language",)") != std::string::npos);
+    CHECK(docs->content.find("<h2>entity</h2>") != std::string::npos);
+}
+
+TEST_CASE("the app is told which views have one document per person, and only those") {
+    auto app = find(generate("/examples/library"), "src/app.tsx");
+    REQUIRE(app != nullptr);
+    CHECK(app->content.find("personal: [\"library::mine\"] ") != std::string::npos);
+}
+
+TEST_CASE("markdown") {
+    CHECK(generators::markdown_to_html("# Title\n\nSome *words*.\n") == "<h1>Title</h1>\n<p>Some <em>words</em>.</p>\n");
+    CHECK(generators::markdown_to_html("| a | b |\n|---|---|\n| 1 | 2 |\n").find("<table>") != std::string::npos);
+    CHECK(generators::markdown_title("intro\n# Language\n", "fallback") == "Language");
+    CHECK(generators::markdown_title("no heading\n", "fallback") == "fallback");
+    CHECK(generators::markdown_slug("02-language") == "language");
+    CHECK(generators::markdown_slug("language") == "language");
+    CHECK(generators::markdown_slug("2026") == "2026");
+}
+
+TEST_CASE("names and text for JavaScript") {
+    CHECK(generators::web_detail::js_name("sort_title") == "sortTitle");
+    CHECK(generators::web_detail::js_name("My loans") == "myLoans");
+    CHECK(generators::web_detail::js_name("uione") == "uione");
+    CHECK(generators::web_detail::js_string("say \"hi\"\n") == R"("say \"hi\"\n")");
+    CHECK(generators::web_detail::jsx_text("a {b} <c>") == R"(a {"{"}b{"}"} {"<"}c{">"})");
+}
+
+TEST_CASE("the project's icon is copied into the app and linked from its page") {
+    auto files = generate("/site");
+    const auto* icon = find(files, "public/icon.svg");
+    REQUIRE(icon != nullptr);
+    CHECK(icon->content == *platform::read_file(root + "/site/assets/icon.svg"));
+    const auto* index = find(files, "index.html");
+    REQUIRE(index != nullptr);
+    CHECK(index->content.find("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/icon.svg\" />") != std::string::npos);
+    CHECK(find(generate("/examples/tasks"), "public/icon.svg") == nullptr);
+}
+
+TEST_CASE("a screen showing a view per entity reads it for the entity its address names") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find("export const book = screen({ title: \"Book\", route: \"/library/books/:book\" }, () => {\n"
+                                "  const bookId = useParam(\"book\");\n"
+                                "  const bookPage = useView(\"library::book_page\", bookId);") != std::string::npos);
+    // A screen that needs a parameter isn't listed in the navigation.
+    CHECK(screens->content.find("route: \"/library/books/:book\", nav:") == std::string::npos);
+}
+
+
+TEST_CASE("a markdown field is written with a preview, and shown rendered") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"({ name: "summary", type: "markdown" })") != std::string::npos);
+    CHECK(screens->content.find(R"(<Markdown view={bookPage} field="summary" />)") != std::string::npos);
+}
+
+TEST_CASE("an update form starts from the entity's page and acts on the entity its address names") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Form command="library::book::update" fields={["title", "author", { name: "summary", type: "markdown" }]} from={bookPage} id={bookId} button />)") !=
+          std::string::npos);
+}
+
+
+TEST_CASE("a table shows the list of a view it names") {
+    auto files = generate("/examples/library");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Table view={bookPage} list="loans" columns={{ number: "Loan", "member.picture": "", "member.name": "Member", lent_at: "Lent", returned_at: "Back" }} pictures={["member.picture"]} />)") !=
+          std::string::npos);
+}
+
+TEST_CASE("a create form takes what the screen's address names, without asking for it") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button />)") !=
+          std::string::npos);
+    CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button />)") !=
+          std::string::npos);
+    // On the list of every project, no project is named, so none is given.
+    CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button />)") != std::string::npos);
+}

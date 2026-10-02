@@ -1,0 +1,19 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Runs before every commit. Enable in a clone with:
+#   git config core.hooksPath .githooks
+
+root=$(git rev-parse --show-toplevel) || exit 1
+
+"$root/tools/check-license" --staged || exit 1
+"$root/tools/check-names" --staged || exit 1
+
+# The highlighting test runs when anything it covers is staged.
+if git diff --cached --name-only | grep -qE '\.one$|^editors/'; then
+	node "$root/editors/test.mjs" >/dev/null || {
+		echo "pre-commit: highlighting test failed; run node editors/test.mjs" >&2
+		exit 1
+	}
+fi

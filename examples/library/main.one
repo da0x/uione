@@ -1,0 +1,160 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A lending library: books on shelves, lent to members and brought back.
+//
+// The example that uses every part of the language: two entities, one pointing at
+// the other, keys and numbers that name them, commands with and without bodies, a
+// command that changes two entities, a format, a function, a role, views across
+// both entities, a page per book, a private view per member, four screens and a
+// picker.
+
+namespace library {
+
+	// A shelf mark is a subject and a number, such as HIS-0142.
+	format shelfmark AAA-9999 {
+		example HIS-0142
+	}
+
+	// A book is named by its shelf mark, so its page is /books/HIS-0142.
+	entity book {
+		title      text       required
+		author     text       required
+		shelfmark  shelfmark  required  unique  key
+		status     on_shelf | lent | withdrawn = on_shelf
+		summary    markdown
+	}
+
+	// Each book's loans are numbered from 1: its third loan is HIS-0142-3.
+	entity loan {
+		book         book    required  key
+		number       serial  per book  key
+		member       user    required
+		lent_at      date    = now
+		due_at       date    required  after lent_at
+		returned_at  date
+	}
+
+	command book::create
+	command book::update
+
+	command book::withdraw {
+		require status == on_shelf  "only a book on the shelf can be withdrawn"
+		status = withdrawn
+	}
+
+	// Lending takes the book off the shelf in the same step.
+	command loan::create {
+		require book.status == on_shelf  "that book is not on the shelf"
+		book.status = lent
+	}
+
+	command loan::checkin {
+		require returned_at == none  "that book is already back"
+		returned_at = now
+		book.status = on_shelf
+	}
+
+	// Every book still in the collection, by title as a reader says it.
+	view shelf {
+		each book where status != withdrawn {
+			order sort_title(title)
+			shelfmark  title  author  status
+			lent_to = first(loan where loan.book == book.id && returned_at == none).member
+		}
+	}
+
+	// What is out, soonest due first.
+	view desk {
+		each loan where returned_at == none {
+			order due_at
+			book.title  member.picture  member.name  due_at
+		}
+	}
+
+	// One page per book: what it is, and everyone who has borrowed it.
+	view book_page per book {
+		title = book.title
+		author = book.author
+		shelfmark = book.shelfmark
+		summary = book.summary
+		loans = each loan where book == book.id {
+			order -number
+			number  member.picture  member.name  lent_at  returned_at
+		}
+	}
+
+	// A member's own loans: one document per member, readable only by them.
+	view mine per user {
+		each loan where member == user.id && returned_at == none {
+			order due_at
+			book.title  due_at
+		}
+	}
+
+	role librarian  book::view  book::create  book::update  book::withdraw  loan::view  loan::create  loan::checkin
+
+	// "The Hobbit" is shelved under H.
+	function sort_title(title) {
+		if starts_with(title, "The ") { return drop(title, 4) }
+		if starts_with(title, "An ") { return drop(title, 3) }
+		if starts_with(title, "A ") { return drop(title, 2) }
+		return title
+	}
+
+	screen "Shelf" /shelf {
+		table shelf link /books/:book {
+			shelfmark
+			title
+			author
+			status
+			lent_to "Lent to"
+			withdraw
+		}
+		book::create
+		form book::create {
+			title  author  shelfmark  summary
+		}
+		confirm book::withdraw "Withdraw {title}? It will not be lent again."
+	}
+
+	screen "Book" /books/:book {
+		text "{book_page.title}, by {book_page.author}"
+		markdown "{book_page.summary}"
+		book::update
+		form book::update {
+			title  author  summary
+		}
+		table book_page.loans {
+			number "Loan"
+			member.picture ""
+			member.name "Member"
+			lent_at "Lent"
+			returned_at "Back"
+		}
+	}
+
+	screen "Desk" /desk {
+		table desk {
+			book.title "Book"
+			member.picture ""
+			member.name "Member"
+			due_at "Due"
+			checkin
+		}
+		loan::create
+		form loan::create {
+			book  member  due_at
+		}
+	}
+
+	screen "My loans" /mine {
+		table mine {
+			book.title "Book"
+			due_at "Due"
+		}
+	}
+
+	picker book from shelf
+
+} // namespace library

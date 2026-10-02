@@ -1,0 +1,47 @@
+{
+  "name": "uione",
+  "displayName": "uione",
+  "description": "Syntax highlighting for uione (.one) files",
+  "version": "0.0.1",
+  "publisher": "da0x",
+  "author": "Daher Alfawares",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/da0x/uione.git"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "uione",
+        "aliases": [
+          "uione"
+        ],
+        "extensions": [
+          ".one"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "uione",
+        "scopeName": "source.uione",
+        "path": "./syntaxes/uione.tmlanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[uione]": {
+        "editor.insertSpaces": false,
+        "editor.tabSize": 4,
+        "editor.detectIndentation": false
+      }
+    }
+  }
+}

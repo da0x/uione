@@ -1,0 +1,269 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: LGPL-3.0-only
+
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import type { ReactNode } from "react";
+import {
+  App,
+  Code,
+  Command,
+  Confirm,
+  Form,
+  Hero,
+  Link,
+  Live,
+  Pages,
+  Section,
+  Table,
+  Text,
+  memorySource,
+  screen as defineScreen,
+  useView,
+} from "@uione/react";
+import type { MemorySource } from "@uione/react";
+import { highlight } from "../src/highlight.js";
+import { restyle, setCodeDisplay } from "../src/display.js";
+import { MarkdownText } from "../src/markdown.js";
+import { radix } from "../src/index.js";
+
+function renderScreen(body: () => ReactNode, source: MemorySource = memorySource(), location = "/") {
+  const screens = [
+    defineScreen({ title: "uione", route: "/" }, body),
+    defineScreen({ title: "Docs", route: "/docs/:page?", nav: "Docs" }, body),
+  ];
+  return render(<App name="uione" screens={screens} ui={radix} data={source} location={location} />);
+}
+
+describe("the page", () => {
+  it("has the app's name linking home, and the navigation", () => {
+    renderScreen(() => <Text>hello</Text>, memorySource(), "/docs");
+    expect(screen.getByRole("link", { name: "uione" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Docs" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { level: 1, name: "Docs" })).toBeTruthy();
+  });
+});
+
+describe("content", () => {
+  it("draws a hero, a section with its anchor, text and a link", () => {
+    renderScreen(() => (
+      <>
+        <Hero title="Write the feature once.">
+          <Text>One short file.</Text>
+          <Link to="#waitlist">Join the waitlist</Link>
+        </Hero>
+        <Section title="Join the waitlist" id="waitlist">
+          <Text>Soon.</Text>
+        </Section>
+      </>
+    ));
+    expect(screen.getByRole("heading", { level: 1, name: "Write the feature once." })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Join the waitlist" }).closest("section")!.id).toBe("waitlist");
+    expect(screen.getByRole("link", { name: "Join the waitlist" }).getAttribute("href")).toBe("#waitlist");
+  });
+
+  it("draws docs pages beside their list", () => {
+    const pages = [
+      { slug: "overview", title: "Overview", html: "<h1>Overview</h1>" },
+      { slug: "language", title: "Language", html: "<h1>Language</h1><p>Blocks use braces.</p>" },
+    ];
+    renderScreen(() => <Pages base="/docs" pages={pages} />, memorySource(), "/docs/language");
+    expect(screen.getByText("Blocks use braces.")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Pages" })).toBeTruthy();
+  });
+});
+
+describe("code", () => {
+  const source = "namespace library {\n\nentity book {\n  title  text  required\n}\n\n}";
+
+  it("highlights .one code with the editors' grammar", () => {
+    const html = highlight(source, "uione")!;
+    expect(html).toContain('class="shiki');
+    // The declaration keyword and the type get colors of their own, different from
+    // plain text, in both themes.
+    const colored = (word: string) => new RegExp(`<span style="color:(#[0-9A-Fa-f]{6});--shiki-dark:(#[0-9A-Fa-f]{6})">${word}</span>`).exec(html);
+    const keyword = colored("entity");
+    const type = colored("text");
+    expect(keyword).not.toBeNull();
+    expect(type).not.toBeNull();
+    expect(keyword![1]).not.toBe(type![1]);
+  });
+
+  it("shows code in other languages plain", () => {
+    expect(highlight("let x = 1", "js")).toBeUndefined();
+    renderScreen(() => <Code lang="js" source="let x = 1" />);
+    expect(screen.getByText("let x = 1").tagName).toBe("CODE");
+  });
+
+  it("draws highlighted code on the first render", () => {
+    renderScreen(() => <Code lang="uione" source={source} />);
+    expect(document.querySelector(".one-code .shiki")).not.toBeNull();
+  });
+
+  it("highlights the .one code in a docs page, and leaves other languages plain", () => {
+    const html =
+      '<h1>Language</h1><pre><code class="language-one">entity book {\n  title  text  required\n  note   text = &quot;a &amp; b&quot;\n}\n</code></pre>' +
+      '<pre><code class="language-js">let x = 1\n</code></pre>';
+    renderScreen(() => <Pages base="/docs" pages={[{ slug: "language", title: "Language", html }]} />, memorySource(), "/docs/language");
+    const highlighted = document.querySelector("article .one-code .shiki");
+    expect(highlighted).not.toBeNull();
+    // What the markdown escaped is shown as written, once.
+    expect(highlighted!.textContent).toContain('"a & b"');
+    expect(document.querySelector("article code.language-js")?.textContent).toBe("let x = 1\n");
+  });
+});
+
+describe("forms", () => {
+  it("labels every field and describes it with its hint", () => {
+    renderScreen(() => <Form command="studio::project::create" fields={[{ name: "name", hint: "Shown in your list" }]} />);
+    const input = screen.getByLabelText("Name");
+    expect(input.tagName).toBe("INPUT");
+    const hint = document.getElementById(input.getAttribute("aria-describedby")!);
+    expect(hint!.textContent).toBe("Shown in your list");
+  });
+
+  it("shows a command's error as an alert", async () => {
+    const source = memorySource({ commands: { "a::b::create": () => Promise.reject(new Error("try again")) } });
+    renderScreen(() => <Form command="a::b::create" fields={["name"]} />, source);
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("try again");
+  });
+});
+
+describe("dialogs", () => {
+  it("moves focus into the dialog, and closes on Escape without running anything", async () => {
+    const source = memorySource();
+    renderScreen(
+      () => (
+        <>
+          <Command name="library::book::withdraw" />
+          <Confirm command="library::book::withdraw" question="Withdraw it?" />
+        </>
+      ),
+      source,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog", { name: "Are you sure?" });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(source.runs).toEqual([]);
+  });
+});
+
+describe("tables and live values", () => {
+  function Shelf() {
+    const shelf = useView("library::shelf");
+    return <Table view={shelf} columns={{ title: "Title" }} />;
+  }
+
+  it("says what's happening when a table has no rows", () => {
+    const source = memorySource();
+    renderScreen(() => <Shelf />, source);
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    act(() => source.set("library::shelf", { rows: [] }));
+    expect(screen.getByText("Nothing here yet.")).toBeTruthy();
+    act(() => source.status("library::shelf", "denied"));
+    expect(screen.getByText("You can't see this.")).toBeTruthy();
+  });
+
+  it("shows a placeholder instead of a value that isn't live", () => {
+    const source = memorySource();
+    function Count() {
+      return <Live view={useView("waitlist::signups")} field="total" />;
+    }
+    renderScreen(() => <Count />, source);
+    expect(screen.getByLabelText("not available right now")).toBeTruthy();
+    act(() => source.set("waitlist::signups", { total: 7 }));
+    expect(screen.getByText("7")).toBeTruthy();
+  });
+});
+
+describe("the stylesheet", () => {
+  it("is built, with the theme's colors and the components' classes in it", () => {
+    // A path rather than a URL: under jsdom, URL is jsdom's class, which Node's file
+    // functions don't accept. Tests run from the package's own folder.
+    const css = resolve(process.cwd(), "dist/styles.css");
+    expect(existsSync(css), "run yarn build first, which compiles dist/styles.css").toBe(true);
+    const text = readFileSync(css, "utf8");
+    expect(text).toContain("--color-accent");
+    expect(text).toContain("prefers-color-scheme:dark");
+    expect(text).toContain(".bg-accent");
+    expect(text).toContain(".one-prose");
+  });
+});
+
+describe("how code is shown", () => {
+  const code = "entity loan {\n\tdue_at  date  required\n}\nfunction sort_title(title) {\n\treturn title\n}";
+
+  afterEach(() => act(() => setCodeDisplay({ tabWidth: 4, names: "default" })));
+
+  it("writes names in the style the reader picks, and nothing else", () => {
+    expect(restyle("due_at", "camelCase")).toBe("dueAt");
+    expect(restyle("due_at", "PascalCase")).toBe("DueAt");
+    expect(restyle("due_at", "kebab-case")).toBe("due-at");
+    expect(restyle("library::book", "PascalCase")).toBe("Library::Book");
+    expect(restyle("due_at", "default")).toBe("due_at");
+
+    const text = (html: string) => html.replace(/<[^>]+>/g, "");
+    const camel = text(highlight(code, "uione", "camelCase")!);
+    expect(camel).toContain("dueAt");
+    expect(camel).toContain("sortTitle");
+    // Keywords and types keep their own spelling, even in PascalCase.
+    const pascal = text(highlight(code, "uione", "PascalCase")!);
+    expect(pascal).toContain("entity Loan");
+    expect(pascal).toContain("date");
+    expect(pascal).toContain("required");
+    expect(pascal).toContain("DueAt");
+  });
+
+  it("has a toolbar that sets the tab width and the names for every piece of code at once", () => {
+    renderScreen(() => (
+      <>
+        <Code lang="uione" source={code} />
+        <Code lang="uione" source={code} />
+      </>
+    ));
+    const boxes = () => Array.from(document.querySelectorAll<HTMLElement>(".one-code [style*='tab-size']"));
+    expect(boxes().map((b) => b.style.tabSize)).toEqual(["4", "4"]);
+    const [first] = screen.getAllByRole("group", { name: "Tab width" });
+    fireEvent.click(within(first!).getByRole("button", { name: "2" }));
+    expect(boxes().map((b) => b.style.tabSize)).toEqual(["2", "2"]);
+
+    const [names] = screen.getAllByLabelText("Names");
+    expect((names as HTMLSelectElement).value).toBe("default");
+    expect(screen.getAllByRole("option", { name: "Default" }).length).toBeGreaterThan(0);
+    fireEvent.change(names!, { target: { value: "camelCase" } });
+    expect(boxes().every((b) => b.textContent!.includes("dueAt"))).toBe(true);
+  });
+});
+
+describe("markdown someone wrote", () => {
+  it("is drawn with its structure, and can't add markup, scripts or images to the page", () => {
+    const { container } = render(
+      <MarkdownText
+        source={"# Dune\n\nA **classic**.\n\n<script>alert(1)</script><b>bold?</b>\n\n![cover](https://example.com/c.png)\n\n[home](javascript:alert(1)) and [site](https://example.com)\n\n| a | b |\n|---|---|\n| 1 | 2 |"}
+      />,
+    );
+    expect(container.querySelector("h1")?.textContent).toBe("Dune");
+    expect(container.querySelector("strong")?.textContent).toBe("classic");
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector("b")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector('a[href="https://example.com/c.png"]')?.textContent).toBe("cover");
+    expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+    expect(container.querySelector('a[href="https://example.com"]')?.getAttribute("rel")).toBe("noopener noreferrer nofollow");
+    expect(container.querySelector("table")).not.toBeNull();
+  });
+
+  it("is written in a form with a preview of how it will look", () => {
+    renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
+    fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "A **classic**." } });
+    fireEvent.click(screen.getByRole("tab", { name: "Preview" }));
+    expect(screen.getByText("classic").tagName).toBe("STRONG");
+    fireEvent.click(screen.getByRole("tab", { name: "Write" }));
+    expect((screen.getByLabelText("Summary") as HTMLTextAreaElement).value).toBe("A **classic**.");
+  });
+});
+

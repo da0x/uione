@@ -1,0 +1,18 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Generated from site/ by one. Do not edit.
+#
+# Builds the backend. The deploy puts the one library beside it, in one/, until
+# the library is published, so go.mod is pointed there first.
+FROM golang:1.26 AS build
+WORKDIR /src
+COPY one one
+COPY api api
+WORKDIR /src/api
+RUN go mod edit -replace github.com/da0x/uione/one=../one && go mod tidy \
+    && CGO_ENABLED=0 go build -o /backend .
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /backend /backend
+ENTRYPOINT ["/backend"]

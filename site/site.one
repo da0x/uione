@@ -1,0 +1,17 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// uione.io: what uione is, a waitlist, the docs, and the start of the studio.
+//
+// This folder is one uione project. `one build site` turns it into site/build/web
+// (React, yarn), site/build/api (Go), site/build/infrastructure (Pulumi) and the
+// Firestore rules, and nothing in site/build is edited by hand.
+
+project uione {
+	domain    "uione.io"
+	firebase  "ui-one"
+	region    "us-east4"
+	ui        radix
+	signin    google
+	icon      "assets/icon.svg"
+}

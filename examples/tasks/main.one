@@ -1,0 +1,47 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A personal task list: the smallest example that needs sign-in. Everything here
+// belongs to the person who made it, and nobody else can see it or change it.
+
+namespace tasks {
+
+	entity task {
+		title  text     required
+		done   boolean  = false
+		owner  user     = me
+	}
+
+	command task::create {
+		permission signed_in
+	}
+
+	command task::complete {
+		permission owner
+		require !done  "that task is already done"
+		done = true
+	}
+
+	command task::delete {
+		permission owner
+	}
+
+	view list per user {
+		each task where owner == user.id {
+			order done  -created_at
+			title  done
+		}
+	}
+
+	screen "Tasks" / {
+		table list {
+			title
+			done
+			complete  delete
+		}
+		form task::create {
+			title
+		}
+	}
+
+} // namespace tasks

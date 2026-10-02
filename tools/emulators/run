@@ -1,0 +1,37 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Starts the Firebase emulators in Docker and waits until they answer.
+#
+#   tools/emulators/run         start them (building the image the first time)
+#   tools/emulators/run stop    stop them
+#
+# Firestore is on localhost:8080 and Auth on localhost:9099, for project demo-uione.
+
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+name=uione-emulators
+image=uione-emulators:local
+
+if [ "${1:-}" = "stop" ]; then
+	docker rm -f "$name" >/dev/null 2>&1 || true
+	exit 0
+fi
+
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+	docker build --quiet --file "$here/dockerfile" --tag "$image" "$here" >/dev/null
+fi
+
+docker rm -f "$name" >/dev/null 2>&1 || true
+docker run --detach --name "$name" -p 8080:8080 -p 9099:9099 "$image" >/dev/null
+
+for _ in $(seq 1 60); do
+	if curl -sf http://localhost:8080 >/dev/null 2>&1 && curl -sf http://localhost:9099 >/dev/null 2>&1; then
+		echo "emulators ready: firestore localhost:8080, auth localhost:9099, project demo-uione"
+		exit 0
+	fi
+	sleep 1
+done
+echo "emulators didn't start; see: docker logs $name" >&2
+exit 1
