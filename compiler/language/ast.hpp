@@ -342,6 +342,18 @@ namespace one::language {
         std::vector<webhook_handler> handlers;
     };
 
+    // backend deploy: Go written by hand, backend/deploy.go beside the .one file, built
+    // into the namespace's package with the generated code.
+    struct backend_declaration {
+        std::string name;
+    };
+
+    // The file a backend is written in, beside the .one file that names it.
+    inline std::string backend_file(const std::string& one_file, const std::string& name) {
+        auto folder = std::filesystem::path(one_file).parent_path();
+        return (folder / "backend" / (name + ".go")).string();
+    }
+
     struct declaration;
 
     struct namespace_declaration {
@@ -354,7 +366,7 @@ namespace one::language {
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
-                     webhook_declaration>
+                     webhook_declaration, backend_declaration>
             node;
     };
 

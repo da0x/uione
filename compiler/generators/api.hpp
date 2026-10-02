@@ -94,6 +94,12 @@ namespace one::generators {
                 if (pkg.entities.empty() && pkg.commands.empty() && pkg.views.empty()) continue;
                 std::string name = package_name(ns);
                 out.files.push_back(file(name + "/" + name + ".go", package_file(ns, pkg)));
+                // Go written by hand, built into the same package as it is.
+                for (const auto& [backend, path] : pkg.backends) {
+                    output_file f{name + "/" + backend + ".go", platform::read_file(path).value_or(""), false, {}};
+                    f.sources.assign(static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n')), code::source{path, 1});
+                    out.files.push_back(std::move(f));
+                }
                 packages.push_back(name);
             }
             out.files.push_back(file("main.go", main_go(packages)));
@@ -117,6 +123,7 @@ namespace one::generators {
             std::vector<const language::format_declaration*> formats;
             std::vector<std::pair<const language::function_declaration*, language::location>> functions;
             std::vector<std::pair<const language::webhook_declaration*, language::location>> hooks;
+            std::vector<std::pair<std::string, std::string>> backends;  // each name, and the file it's written in
         };
 
         const std::vector<language::file>& files_;
@@ -192,6 +199,8 @@ namespace one::generators {
                     pkg.functions.emplace_back(function, d.where);
                 } else if (auto* hook = std::get_if<language::webhook_declaration>(&d.node)) {
                     pkg.hooks.emplace_back(hook, d.where);
+                } else if (auto* backend = std::get_if<language::backend_declaration>(&d.node)) {
+                    pkg.backends.emplace_back(backend->name, language::backend_file(f.path, backend->name));
                 }
             }
         }

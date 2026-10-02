@@ -18,6 +18,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -1048,6 +1049,39 @@ namespace one::language {
                 }
             }
             return nullptr;
+        }
+
+        // backend deploy: backend/deploy.go beside this file, Go in the namespace's
+        // package, built with the generated code beside it.
+        void verify(const std::string& ns, location where, const backend_declaration& b) {
+            snake(b.name, where);
+            if (ns.empty()) {
+                error(where, "backend " + b.name + " is Go in a namespace's package, so it goes inside a namespace");
+                return;
+            }
+            std::string package;
+            for (char c : ns) {
+                if (c != '_') package += c;
+            }
+            if (b.name == package) {
+                error(where, "backend " + b.name + " would be the same file as the code generated for namespace " + ns +
+                                 "; name it for what it does, like deploy");
+                return;
+            }
+            auto text = platform::read_file(backend_file(path_, b.name));
+            if (!text) {
+                error(where, "backend " + b.name + " is written in backend/" + b.name + ".go beside this file, which isn't there");
+                return;
+            }
+            // Its package clause, past any comments: package studio.
+            std::istringstream lines(*text);
+            for (std::string line; std::getline(lines, line);) {
+                if (line.empty() || line.starts_with("//")) continue;
+                if (line != "package " + package) {
+                    error(where, "backend/" + b.name + ".go has to start with package " + package + ", the package of namespace " + ns);
+                }
+                break;
+            }
         }
 
         void verify(const std::string& ns, location where, const webhook_declaration& w) {

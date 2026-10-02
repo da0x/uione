@@ -257,6 +257,13 @@ func (a *App) Handler() http.Handler {
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
 	}
+	routesMu.Lock()
+	defer routesMu.Unlock()
+	for _, r := range routes {
+		mux.HandleFunc(r.pattern, func(w http.ResponseWriter, req *http.Request) {
+			r.handle(&System{app: a, ctx: req.Context()}, w, req)
+		})
+	}
 	return mux
 }
 

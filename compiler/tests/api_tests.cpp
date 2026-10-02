@@ -206,3 +206,24 @@ TEST_CASE("two entities whose fields share a name and a choice get constants of 
     CHECK(go.find("IssueSizeSmall") == std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("Go written by hand beside a .one file is built into its namespace's package") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-backend";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "backend");
+    const std::string go = "// Written by hand.\n\npackage desk\n\nfunc init() {}\n";
+    platform::write_file((dir / "backend" / "deploy.go").string(), go);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace desk {\nentity ticket {\n\ttitle  text\n}\ncommand ticket::create\nbackend deploy\n}\n");
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse((dir / "main.one").string(), *platform::read_file((dir / "main.one").string()), out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, dir.string(), (dir / "build/api").string());
+    const auto* copied = find(generated.files, "desk/deploy.go");
+    REQUIRE(copied != nullptr);
+    CHECK(copied->content == go);
+    fs::remove_all(dir);
+}

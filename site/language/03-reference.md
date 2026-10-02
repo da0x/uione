@@ -433,3 +433,28 @@ view project_settings per project {
 - The deploy makes the master secret that every project's secret is derived
   from, keeps it in Secret Manager, and gives it only to the backend. It never
   goes into GitHub itself.
+
+## backend
+
+Go written by hand, for what the language doesn't say, the way `component` is for
+React. `backend deploy` in a namespace names `backend/deploy.go` beside the `.one`
+file. It's built into the namespace's Go package with the generated code, so it
+starts with that package's clause and can name the generated entities and commands.
+
+```one
+namespace studio {
+	backend deploy
+}
+```
+
+It uses three things from the `one` library:
+
+- `After`, on a command, runs a function once the command's change is saved, with
+  the entity as it was saved: `DeploymentCreate.After(start)`, from an `init`
+  function. It runs before the command answers, so it starts slow work elsewhere
+  rather than doing it.
+- `one.Route("POST /hooks/deploy", handle)` answers requests of its own, like a
+  build reporting back. Nobody is signed in on a route, so it checks the request
+  itself.
+- Both are given a `System`, the backend itself. `Run` runs any command, even one
+  no role grants, and `one.Fetch` and `one.FetchWhere` read what's stored.

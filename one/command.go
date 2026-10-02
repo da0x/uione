@@ -325,6 +325,7 @@ type Cmd[E any, P entityPointer[E]] struct {
 	action     string
 	permission Permission
 	do         func(*Ctx, *E) error
+	after      []func(*System, *E)
 }
 
 // Command declares a command on entity E, named after the entity and the action,
@@ -350,6 +351,20 @@ func (c *Cmd[E, P]) Do(body func(*Ctx, *E) error) *Cmd[E, P] {
 	return c
 }
 
+// After runs code of your own once the command's change is saved, with the entity
+// as it was saved: to start work elsewhere, like a build, when a deploy is asked
+// for. It runs before the command answers, so it should be quick; anything slow
+// belongs elsewhere, reporting back through a Route. What it returns is logged,
+// since the change it follows is already made.
+func (c *Cmd[E, P]) After(then func(*System, *E) error) *Cmd[E, P] {
+	c.after = append(c.after, func(s *System, e *E) {
+		if err := then(s, e); err != nil {
+			s.app.log.Printf("one: after %s::%s: %v", c.entity, c.action, err)
+		}
+	})
+	return c
+}
+
 func (c *Cmd[E, P]) register(r *registry, ns string) {
 	s := r.schema(reflect.TypeFor[E](), ns)
 	if c.entity != s.name && c.entity != s.entity {
@@ -360,17 +375,22 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 		permission = Permission(s.entity + ":" + c.action)
 	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
-		return run[E, P](a, call, s, c.action, permission, c.do)
+		return run[E, P](a, call, s, c.action, permission, c.do, c.after)
 	}
 }
 
 type call struct {
-	ctx   context.Context
-	me    string // the signed-in person's id, or empty
-	input map[string]any
+	ctx    context.Context
+	me     string // the signed-in person's id, or empty
+	input  map[string]any
+	system bool // run by the backend's own code, which may run any command
 }
 
-func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, do func(*Ctx, *E) error) (string, error) {
+func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
+	if c.system {
+		permission = Anyone
+	}
+	var saved *E
 	now := time.Now().UTC()
 	collection := a.store.Collection(s.collection)
 	var id string
@@ -467,6 +487,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 			pointed = append(changed, kept...)
+			saved = entity
 			return tx.Set(ref, after)
 		}
 
@@ -498,6 +519,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 			pointed = kept
+			saved = entity
 			return tx.Delete(ref)
 		}
 		if action == "update" {
@@ -538,6 +560,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			return err
 		}
 		pointed = append(changed, kept...)
+		saved = entity
 		return tx.Set(ref, after)
 	})
 	if err != nil {
@@ -554,6 +577,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	})
 	for _, ev := range pointed {
 		a.publish(c.ctx, ev)
+	}
+	for _, then := range afterwards {
+		then(&System{app: a, ctx: c.ctx}, saved)
 	}
 	return id, nil
 }

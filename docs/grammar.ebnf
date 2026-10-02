@@ -41,7 +41,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= project | namespace | format | entity | command | view | role
-                 | function | screen | picker | webhook
+                 | function | screen | picker | webhook | backend
 
 /* project */
 
@@ -67,6 +67,10 @@ type           ::= "text" | "markdown" | "email" | "date" | "number" | serial | 
 list           ::= "list" "of" ("text" | "user" | qualified)
 serial         ::= "serial" ("per" NAME)?
 rule           ::= "required" | "unique" | "key" | "after" NAME
+
+/* backend */
+
+backend        ::= "backend" NAME END
 
 /* command */
 

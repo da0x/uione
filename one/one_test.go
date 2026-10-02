@@ -81,6 +81,7 @@ var modules = []one.Item{
 	desk,
 	cases,
 	code,
+	builds,
 	one.Module("waitlist",
 		one.Command[Signup]("signup::create").Allow(one.Anyone),
 		one.View("signups").Public().Count("total", one.All[Signup]()),

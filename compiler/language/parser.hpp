@@ -190,9 +190,15 @@ namespace one::language {
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
             if (word == "webhook") return {where, parse_webhook()};
+            if (word == "backend") {
+                advance();
+                backend_declaration backend{expect(token_kind::identifier, "the backend's name, like deploy").text};
+                end_line();
+                return {where, std::move(backend)};
+            }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, entity, command, view, role, function, screen, picker or webhook");
+                        "format, entity, command, view, role, function, screen, picker, webhook or backend");
         }
 
         project_declaration parse_project() {

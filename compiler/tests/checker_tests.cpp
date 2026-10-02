@@ -652,3 +652,33 @@ TEST_CASE("a link is inside its namespace, its parameters from the page it's on"
                    "screen \"All\" /:projects {\n\tlink /:project/reports \"Reports\"\n}\n}\n");
     CHECK(e.message == "this link needs :project, which this screen's address doesn't have");
 }
+
+TEST_CASE("a backend is a Go file of the namespace's package, beside the .one file") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-backend-check";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "backend");
+    one::platform::write_file((dir / "backend" / "deploy.go").string(), "// Written by hand.\npackage desk\n");
+    one::platform::write_file((dir / "backend" / "other.go").string(), "package main\n");
+    auto errors = [&](const std::string& source) {
+        diagnostics out;
+        std::vector<file> files;
+        files.push_back(parse((dir / "main.one").string(), source, out));
+        check(files, out);
+        return out;
+    };
+    CHECK(errors("namespace desk {\nbackend deploy\n}\n").empty());
+    auto out = errors("namespace desk {\nbackend missing\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "backend missing is written in backend/missing.go beside this file, which isn't there");
+    out = errors("namespace desk {\nbackend other\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "backend/other.go has to start with package desk, the package of namespace desk");
+    out = errors("namespace desk {\nbackend desk\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message.starts_with("backend desk would be the same file as the code generated"));
+    out = errors("backend deploy\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "backend deploy is Go in a namespace's package, so it goes inside a namespace");
+    fs::remove_all(dir);
+}
