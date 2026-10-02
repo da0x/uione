@@ -74,6 +74,7 @@ site/site.one	domain    "uione.io"	"uione	string
 site/site.one	ui        radix	ui	keyword
 site/site.one	ui        radix	radix	plain
 site/site.one	signin    google	signin	keyword
+site/site.one	serve     "public"	serve	keyword
 site/waitlist.one	email  email  required  key	email  required	type
 site/waitlist.one	email  email  required  key	email	plain
 site/waitlist.one	email  email  required  key	key	modifier
@@ -87,7 +88,7 @@ site/home.one	link #waitlist "Join the studio's	#waitlist	route
 site/home.one	link namespace language "Learn	namespace	keyword
 site/home.one	link namespace language "Learn	language	namespace
 site/home.one	link namespace language "Learn	"Learn the language"	string
-site/home.one	link /language/start "Install	/language	route
+site/home.one	link namespace install "Install"	install	namespace
 site/home.one	section "A whole	section	keyword
 site/home.one	code "../examples	code	keyword
 site/home.one	form waitlist::signup::create	waitlist	namespace

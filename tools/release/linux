@@ -1,0 +1,21 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds the compiler for Linux as one static binary, with GCC in Alpine at a pinned
+# version, so it runs on any distribution and in an empty container. It builds for
+# the machine it runs on: x86_64 or aarch64.
+#
+#   tools/release/linux     writes compiler/build-release/one
+
+set -eu
+root=$(cd "$(dirname "$0")/../.." && pwd)
+image=alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+
+docker run --rm -v "$root:/src" -w /src "$image" sh -c "
+	apk add --no-cache g++ cmake make >/dev/null &&
+	cmake -S compiler -B compiler/build-release -DONE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_EXE_LINKER_FLAGS='-static -s' >/dev/null &&
+	cmake --build compiler/build-release --target one --parallel &&
+	chown -R $(id -u):$(id -g) compiler/build-release"
+file "$root/compiler/build-release/one" 2>/dev/null || ls -l "$root/compiler/build-release/one"

@@ -59,6 +59,18 @@ namespace one::platform {
         return found;
     }
 
+    // Every file inside `dir`, at any depth, relative to it and in order.
+    inline std::vector<std::string> files_under(const std::string& dir) {
+        namespace fs = std::filesystem;
+        std::vector<std::string> found;
+        std::error_code error;
+        for (fs::recursive_directory_iterator it(dir, error), end; !error && it != end; it.increment(error)) {
+            if (it->is_regular_file(error)) found.push_back(fs::relative(it->path(), dir).generic_string());
+        }
+        std::sort(found.begin(), found.end());
+        return found;
+    }
+
     // Writes a file, creating the folders it's in. Returns false when it can't.
     inline bool write_file(const std::string& path, const std::string& content) {
         namespace fs = std::filesystem;

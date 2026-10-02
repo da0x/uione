@@ -1,0 +1,23 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Packs a build of the compiler as a release file, one-<system>-<machine>.tar.gz,
+# holding one and its license, after checking it's the version being released.
+#
+#   tools/release/pack <one> <system>-<machine> <version> <folder>
+
+set -eu
+root=$(cd "$(dirname "$0")/../.." && pwd)
+one=$1 name=$2 version=$3 out=$4
+
+built=$("$one" --version)
+[ "$built" = "one $version" ] || { echo "the build says '$built', but the release is $version" >&2; exit 1; }
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+cp "$one" "$work/one"
+cp "$root/LICENSE" "$work/LICENSE"
+mkdir -p "$out"
+tar -czf "$out/one-$name.tar.gz" -C "$work" one LICENSE
+echo "$out/one-$name.tar.gz"

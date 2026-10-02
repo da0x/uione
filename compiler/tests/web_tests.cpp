@@ -56,7 +56,7 @@ TEST_CASE("the site is generated exactly as its targets say") {
     auto files = generate("/site");
     for (const char* path : {"package.json", "tsconfig.json", "vite.config.ts", "src/main.tsx", "src/app.tsx",
                              "src/screens/home.tsx", "src/screens/studio.tsx", "src/screens/language.tsx",
-                             "src/screens/releases.tsx", "src/screens/mission.tsx"}) {
+                             "src/screens/releases.tsx", "src/screens/mission.tsx", "src/screens/install.tsx"}) {
         CAPTURE(path);
         auto target = platform::read_file(root + "/site/target/web/" + path);
         REQUIRE(target);
@@ -243,4 +243,11 @@ TEST_CASE("a link to a namespace goes to its address") {
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(<Link to="/projects/archive">See the old projects</Link>)") != std::string::npos);
     fs::remove_all(dir);
+}
+
+TEST_CASE("a project can serve a folder's files as they are") {
+    auto files = generate("/site");
+    const auto* installer = find(files, "public/install.sh");
+    REQUIRE(installer != nullptr);
+    CHECK(installer->content == *platform::read_file(root + "/site/public/install.sh"));
 }

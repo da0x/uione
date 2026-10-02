@@ -1,0 +1,19 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The compiler in a container: the static Linux build on an empty base, so there's
+# nothing else in it to patch. Built by .github/workflows/release.yml from the
+# release's own binaries, for amd64 and arm64.
+#
+#   docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/da0x/uione check .
+
+FROM scratch
+ARG TARGETARCH
+COPY one-linux-${TARGETARCH} /one
+COPY LICENSE /LICENSE
+WORKDIR /work
+ENTRYPOINT ["/one"]
+LABEL org.opencontainers.image.title="one" \
+      org.opencontainers.image.description="The uione compiler" \
+      org.opencontainers.image.source="https://github.com/da0x/uione" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"

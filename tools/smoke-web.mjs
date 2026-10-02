@@ -33,9 +33,14 @@ const { App } = await import("@uione/react");
 const { site } = await import(pathToFileURL(join(web, "build-ssr/app.js")).href);
 
 const pages = {
-  "/": ['src="/icon.svg"', "Tab width", ">Default</option>", "Write the feature once.", 'class="shiki', "namespace library", "Join the waitlist", 'type="email"'],
-  "/docs": ["Overview", "One architecture"],
-  "/docs/language": ["Tab width", "Language", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
+  "/": ['src="/icon.svg"', "Tab width", ">Default</option>", "Write a whole app in your browser.", 'class="shiki', "namespace library", "Join the waitlist", 'type="email"'],
+  "/install": ["Install one", "curl -fsSL https://uione.io/install.sh | sh", "Select an editor"],
+  "/install/docker": ["ghcr.io/da0x/uione"],
+  "/language": ["Start", "Your first project"],
+  "/language/overview": ["Overview", "One architecture"],
+  "/language/reference": ["Tab width", "Reference", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
+  "/releases": ["0.2.0", "Changes that need an edit"],
+  "/mission": ["An application should be as short as what it does."],
   "/studio": ["Studio", "Loading…", ">Create<"],
 };
 

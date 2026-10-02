@@ -1,27 +1,16 @@
 # Start
 
 uione is a language for writing a whole application feature in one short file, and
-`one` is its compiler. This page installs it and builds a first project. The
-current release is [0.2.0](/releases/v0-2-0).
+`one` is its compiler. This page builds a first project with it. The current release
+is [0.2.0](/releases/v0-2-0).
 
 ## Install the compiler
 
-The compiler is built from source for now. It needs Git, CMake 3.25 or newer, and a
-C++23 compiler such as GCC 14.
-
 ```sh
-git clone https://github.com/da0x/uione.git
-cd uione
-git checkout v0.2.0
-make -C compiler
+curl -fsSL https://uione.io/install.sh | sh
 ```
 
-That writes the compiler to `compiler/build/one`. Put it on your path:
-
-```sh
-sudo install compiler/build/one /usr/local/bin/one
-one --version
-```
+[Install](/install) has the other ways: macOS, Docker, and building it from source.
 
 ## Your first project
 
@@ -92,21 +81,4 @@ go get github.com/da0x/uione/infrastructure@v0.2.0
 
 # the compiler in WebAssembly, and the editor the studio is built from
 npm install @uione/compiler @uione/editor
-```
-
-## Your editor
-
-Highlighting for Vim, Neovim and VS Code is in the repository's `editors/` folder.
-For Vim:
-
-```sh
-mkdir -p ~/.vim/pack/uione/start
-ln -s "$PWD/editors/vim" ~/.vim/pack/uione/start/uione
-```
-
-For VS Code:
-
-```sh
-editors/vscode/build
-code --install-extension editors/vscode/uione-*.vsix
 ```

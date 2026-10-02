@@ -14,4 +14,5 @@ project uione {
 	ui        radix
 	signin    google
 	icon      "assets/icon.svg"
+	serve     "public"
 }

@@ -47,7 +47,7 @@ declaration    ::= project | namespace | format | entity | command | view | role
 
 project        ::= "project" NAME "{" NEWLINE? setting* "}" END
 setting        ::= setting_name (STRING | NAME) END
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "serve"
 
 /* namespace */
 

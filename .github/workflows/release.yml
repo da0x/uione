@@ -1,0 +1,88 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds the compiler for each platform when a release is tagged, like v0.2.0, and
+# publishes it: the builds and their SHA256SUMS on the GitHub release, which
+# uione.io/install.sh downloads, and the container image on ghcr.io/da0x/uione.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            machine: x86_64
+          - runner: ubuntu-24.04-arm
+            machine: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build one as a static binary
+        run: tools/release/linux
+      - name: Pack it
+        run: tools/release/pack compiler/build-release/one linux-${{ matrix.machine }} "${GITHUB_REF_NAME#v}" release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-${{ matrix.machine }}
+          path: release/
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build one
+        run: |
+          cmake -S compiler -B compiler/build-release -DONE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build compiler/build-release --target one --parallel
+          strip compiler/build-release/one
+      - name: Pack it
+        run: tools/release/pack compiler/build-release/one macos-arm64 "${GITHUB_REF_NAME#v}" release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-arm64
+          path: release/
+
+  publish:
+    needs: [linux, macos]
+    # The Linux builds are enough to release; a Mac that didn't build is left out.
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+      - name: List the builds' checksums
+        working-directory: release
+        run: sha256sum one-*.tar.gz > SHA256SUMS && cat SHA256SUMS
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=$(ls site/releases/01-*.md)
+          gh release create "$GITHUB_REF_NAME" release/* --title "${GITHUB_REF_NAME#v}" --notes-file "$notes" --verify-tag
+      - name: Publish the container image
+        run: |
+          mkdir image
+          for machine in x86_64:amd64 aarch64:arm64; do
+            tar -xzf "release/one-linux-${machine%%:*}.tar.gz" -C image one
+            mv image/one "image/one-linux-${machine##*:}"
+          done
+          cp LICENSE image/
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker buildx create --use
+          docker buildx build image --file tools/release/dockerfile --platform linux/amd64,linux/arm64 --push \
+            --tag "ghcr.io/da0x/uione:${GITHUB_REF_NAME#v}" --tag ghcr.io/da0x/uione:latest

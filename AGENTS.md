@@ -114,6 +114,14 @@ under a different one.
   of the `checks` workflow passes from a clean clone. Commits are signed, `main` is
   never force-pushed, and messages carry no attribution lines.
 
+- **A release moves everything together.** `compiler/version.hpp`, the four
+  `packages/*/package.json` and the site's expected `go.mod` and `package.json`
+  files change in one commit, with a new page at the top of `site/releases/`. The
+  tags `v<version>`, `one/v<version>` and `infrastructure/v<version>` go on the
+  pushed commit; `v<version>` runs `.github/workflows/release.yml`, which publishes
+  the compiler's builds and its container. The npm packages are published by hand
+  after `tools/wasm/build`, in the order react, radix, compiler, editor.
+
 - **Highlighting moves with the language.** A change that adds, removes or renames a
   word in a `.one` file updates both grammars under `editors/` and `expected.tsv` in
   the same commit, and `node editors/test.mjs` passes. See `editors/README.md`.

@@ -1,0 +1,14 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Installing the compiler: a page for each way, Linux first. Every markdown file in
+// install/ is a page, so /install/macos is install/02-macos.md. The installer the
+// pages name is public/install.sh, served at /install.sh.
+
+namespace install {
+
+	screen install /:page {
+		markdown "install/*.md"
+	}
+
+} // namespace install

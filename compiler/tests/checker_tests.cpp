@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolor \"red\"\n}\n").message ==
-          "'color' isn't a project setting; expected domain, firebase, region, ui, signin or icon");
+          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon or serve");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
         "a project has one project block"));
 }
@@ -632,4 +632,9 @@ TEST_CASE("a link opens a screen that's there") {
     CHECK(e.where.line == 17);
     CHECK(only_error(home("/projects/neotrac/people")).message ==
           "there's no screen at /projects/neotrac/people for this link to open");
+}
+
+TEST_CASE("serve names a folder next to the project") {
+    CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
+          "there's no folder no-such-folder to serve; it's looked for next to this .one file");
 }

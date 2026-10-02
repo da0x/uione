@@ -19,6 +19,7 @@ change to what gets generated is reviewed as a diff of the generated code.
 | `language.one` | `src/screens/language.tsx` |
 | `releases.one` | `src/screens/releases.tsx` |
 | `mission.one` | `src/screens/mission.tsx` |
+| `install.one` | `src/screens/install.tsx` |
 | every file | `src/app.tsx`, `src/main.tsx`, `package.json`, `tsconfig.json`, `vite.config.ts` |
 
 `src/pages/*.generated.ts` and `index.html` are generated too but aren't kept here. They

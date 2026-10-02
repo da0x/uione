@@ -12,8 +12,10 @@ private per-person view.
 | `language.one` | `/language/:page`, one page per file in `language/`: starting, the overview, the reference |
 | `releases.one` | `/releases/:page`, one page per release in `releases/`, newest first |
 | `mission.one` | `/mission`: why uione exists |
+| `install.one` | `/install/:page`, one page per way to install the compiler, in `install/` |
 | `studio.one` | `/studio`: your projects, private to you |
-| `language/`, `releases/` | those pages, in markdown |
+| `language/`, `releases/`, `install/` | those pages, in markdown |
+| `public/` | files served as they are, like `install.sh` at `/install.sh` |
 | `target/` | hand-written examples of the code `one build` should generate, for review |
 
 `one build site` writes `site/build/`, which is never committed and never edited.

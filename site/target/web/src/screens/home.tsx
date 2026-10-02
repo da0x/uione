@@ -24,8 +24,8 @@ export const home = screen({ title: "uione", route: "/" }, () => {
         <Text>Every app works the same way: commands are the only writes, every write is an event, views are built from events, and every screen is live.</Text>
       </Section>
       <Section title="Install">
-        <Text>uione 0.2.0 is out: the compiler, and its libraries for Go and npm. The compiler builds from source with CMake and a C++23 compiler.</Text>
-        <Link to="/language/start">Install it and build a first project</Link>
+        <Text>uione 0.2.0 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh</Text>
+        <Link to="/install">Install</Link>
         <Link to="/releases">What's new in 0.2.0</Link>
       </Section>
       <Section title="Free software">

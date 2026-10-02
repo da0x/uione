@@ -23,8 +23,8 @@ screen "uione" / {
 	}
 
 	section "Install" {
-		text "uione 0.2.0 is out: the compiler, and its libraries for Go and npm. The compiler builds from source with CMake and a C++23 compiler."
-		link /language/start "Install it and build a first project"
+		text "uione 0.2.0 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh"
+		link namespace install "Install"
 		link namespace releases "What's new in 0.2.0"
 	}
 

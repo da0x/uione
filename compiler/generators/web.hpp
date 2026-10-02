@@ -159,6 +159,14 @@ namespace one::generators {
             out.push_back(file("src/app.tsx", app_tsx(screens)));
             for (const auto& pages : pages_) out.push_back(file("src/pages/" + pages.name + ".generated.ts", pages_module(pages)));
             if (!icon_.empty()) out.push_back(file("public/icon.svg", icon_svg()));
+            // Served as they are: Vite copies public/ into the site unchanged.
+            if (!served_.empty()) {
+                for (const auto& name : platform::files_under(served_)) {
+                    output_file f{"public/" + name, platform::read_file(served_ + "/" + name).value_or(""), false, {}};
+                    f.sources.assign(static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n')), served_source_);
+                    out.push_back(std::move(f));
+                }
+            }
             return out;
         }
 
@@ -189,6 +197,8 @@ namespace one::generators {
         code::source project_;           // the project block, or fixed without one
         std::string icon_;               // the app's icon, an .svg file, when the project names one
         code::source icon_source_;       // the setting that names it
+        std::string served_;             // a folder whose files are served as they are, when the project names one
+        code::source served_source_;     // the setting that names it
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
         int item_line_ = 0;              // the screen item being written
@@ -215,6 +225,11 @@ namespace one::generators {
                     project_ = {indexing_, d.where.line};
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
+                        if (s.key == "serve") {
+                            std::string dir = std::filesystem::path(indexing_).parent_path().string();
+                            served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
+                            served_source_ = {indexing_, s.where.line};
+                        }
                         if (s.key == "icon") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             icon_ = platform::resolve(dir.empty() ? "." : dir, s.value);
