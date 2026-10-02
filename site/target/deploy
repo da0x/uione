@@ -5,43 +5,13 @@
 # Generated from site/ by one. Do not edit.
 #
 # Deploys uione: everything in Google Cloud through Pulumi, then the web app
-# to Firebase Hosting. It asks before Pulumi changes anything, and it can be run
-# from any folder.
+# to Firebase Hosting, through the infrastructure library's deployer. It asks
+# before Pulumi changes anything, and it can be run from any folder. --yes deploys
+# without asking, and --json reports each step as a line of JSON.
 
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 
-(cd "$here/api" && go mod tidy)
 cd "$here/infrastructure"
 go mod tidy
-pulumi stack select --create production
-pulumi up
-
-# The web app's settings come from what Pulumi made. Each is read on its own
-# line, so a missing one stops the deploy rather than build an app without it.
-api_key=$(pulumi stack output firebase_api_key)
-app_id=$(pulumi stack output firebase_app_id)
-project_id=$(pulumi stack output firebase_project_id)
-auth_domain=$(pulumi stack output firebase_auth_domain)
-cat > "$here/web/.env.production" <<EOF
-VITE_FIREBASE_API_KEY=$api_key
-VITE_FIREBASE_APP_ID=$app_id
-VITE_FIREBASE_PROJECT_ID=$project_id
-VITE_FIREBASE_AUTH_DOMAIN=$auth_domain
-EOF
-(cd "$here/web" && yarn build)
-
-# firebase-tools uploads the app. It runs from the emulators' image, which pins
-# its version, using your gcloud sign-in, with its API calls billed to the project.
-image=uione-emulators:local
-docker image inspect "$image" >/dev/null 2>&1 ||
-	docker build --quiet --tag "$image" "$here/../../tools/emulators" >/dev/null
-docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
-	--env GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud/application_default_credentials.json \
-	--env GOOGLE_CLOUD_QUOTA_PROJECT=ui-one \
-	--volume "$HOME/.config/gcloud:/tmp/gcloud:ro" --volume "$here/web:/web" --workdir /web \
-	"$image" firebase deploy --only hosting --project ui-one --non-interactive
-
-echo
-echo "Changes uione.io needs at its DNS host, if any:"
-pulumi stack output dns_records
+GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack production --build "$here" "$@"

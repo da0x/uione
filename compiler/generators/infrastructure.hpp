@@ -107,8 +107,7 @@ namespace one::generators {
         const auto& s = *settings;
         // Until the libraries are published, a deploy builds them from this repository.
         auto library = infrastructure_detail::nearby(project_dir, out_dir + "/infrastructure", "infrastructure");
-        auto emulators = infrastructure_detail::nearby(project_dir, out_dir, "tools/emulators", "dockerfile");
-        if (!library || !emulators) {
+        if (!library) {
             return {{}, "no deploy was written: until uione's libraries are published, a project is deployed from "
                         "inside a clone of the uione repository"};
         }
@@ -213,46 +212,16 @@ namespace one::generators {
             sh.line(generated);
             sh.line("#");
             sh.line("# Deploys " + s.name + ": everything in Google Cloud through Pulumi, then the web app");
-            sh.line("# to Firebase Hosting. It asks before Pulumi changes anything, and it can be run");
-            sh.line("# from any folder.");
+            sh.line("# to Firebase Hosting, through the infrastructure library's deployer. It asks");
+            sh.line("# before Pulumi changes anything, and it can be run from any folder. --yes deploys");
+            sh.line("# without asking, and --json reports each step as a line of JSON.");
             sh.line();
             sh.line("set -eu");
             sh.line("here=$(cd \"$(dirname \"$0\")\" && pwd)");
             sh.line();
-            sh.line("(cd \"$here/api\" && go mod tidy)");
             sh.line("cd \"$here/infrastructure\"");
             sh.line("go mod tidy");
-            sh.line("pulumi stack select --create production");
-            sh.line("pulumi up");
-            sh.line();
-            sh.line("# The web app's settings come from what Pulumi made. Each is read on its own");
-            sh.line("# line, so a missing one stops the deploy rather than build an app without it.");
-            sh.line("api_key=$(pulumi stack output firebase_api_key)");
-            sh.line("app_id=$(pulumi stack output firebase_app_id)");
-            sh.line("project_id=$(pulumi stack output firebase_project_id)");
-            sh.line("auth_domain=$(pulumi stack output firebase_auth_domain)");
-            sh.line("cat > \"$here/web/.env.production\" <<EOF");
-            sh.line("VITE_FIREBASE_API_KEY=$api_key");
-            sh.line("VITE_FIREBASE_APP_ID=$app_id");
-            sh.line("VITE_FIREBASE_PROJECT_ID=$project_id");
-            sh.line("VITE_FIREBASE_AUTH_DOMAIN=$auth_domain");
-            sh.line("EOF");
-            sh.line("(cd \"$here/web\" && yarn build)");
-            sh.line();
-            sh.line("# firebase-tools uploads the app. It runs from the emulators' image, which pins");
-            sh.line("# its version, using your gcloud sign-in, with its API calls billed to the project.");
-            sh.line("image=uione-emulators:local");
-            sh.line("docker image inspect \"$image\" >/dev/null 2>&1 ||");
-            sh.line("\tdocker build --quiet --tag \"$image\" \"$here/" + *emulators + "\" >/dev/null");
-            sh.line("docker run --rm --user \"$(id -u):$(id -g)\" --env HOME=/tmp \\");
-            sh.line("\t--env GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcloud/application_default_credentials.json \\");
-            sh.line("\t--env GOOGLE_CLOUD_QUOTA_PROJECT=" + s.firebase + " \\");
-            sh.line("\t--volume \"$HOME/.config/gcloud:/tmp/gcloud:ro\" --volume \"$here/web:/web\" --workdir /web \\");
-            sh.line("\t\"$image\" firebase deploy --only hosting --project " + s.firebase + " --non-interactive");
-            sh.line();
-            sh.line("echo");
-            sh.line("echo \"Changes " + s.domain + " needs at its DNS host, if any:\"");
-            sh.line("pulumi stack output dns_records");
+            sh.line("GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack production --build \"$here\" \"$@\"");
             out.push_back(file("deploy", sh, true));
         }
         return {out, ""};

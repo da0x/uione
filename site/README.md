@@ -57,4 +57,5 @@ site/build/deploy
 ```
 
 The deploy shows Pulumi's preview and asks before changing anything. It needs
-Pulumi, gcloud (signed in, with application default credentials) and Docker.
+Pulumi and gcloud (signed in, with application default credentials). `--yes`
+deploys without asking, and `--json` reports each step as a line of JSON.

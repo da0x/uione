@@ -19,8 +19,11 @@ into `build/infrastructure` that holds only the project's settings; the
 - The backend's image is built by Cloud Build under its own service account, from
   a bucket the program declares, and tagged with a hash of its source so an
   unchanged backend isn't rebuilt.
-- `build/deploy` runs `pulumi up`, builds the web app, and uploads it to Hosting.
-  It's run by hand for now.
+- One deployer, `infrastructure/deploy`, does a whole deploy, for the command line
+  and for uione's hosting service alike: Pulumi through its Automation API, the
+  web app built with what Pulumi made, and an upload through Hosting's own API,
+  sending only the files Hosting doesn't have. It reports each step as a line of
+  JSON. `build/deploy` runs it, by hand for now.
 - Firebase makes a project's default Hosting site itself, so the program imports it
   and leaves it in place if the stack is destroyed.
 - Events are handled in the same request as the command that caused them, not
@@ -42,6 +45,6 @@ domain's host.
 A preview shows every change before it's made, and the program is the complete
 list of what a project runs on.
 
-A deploy needs a person at a terminal with Pulumi, gcloud and Docker. Until the
+A deploy needs a person at a terminal with Pulumi and gcloud. Until the
 libraries are published, generated `go.mod` files point into this repository, so a
 project can only be deployed from a clone of it.
