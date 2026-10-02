@@ -108,8 +108,8 @@ namespace one::generators {
         // Until the libraries are published, a deploy builds them from this repository.
         auto library = infrastructure_detail::nearby(project_dir, out_dir + "/infrastructure", "infrastructure");
         if (!library) {
-            return {{}, "no deploy was written: until uione's libraries are published, a project is deployed from "
-                        "inside a clone of the uione repository"};
+            return {{}, "no deploy was written: the deployer comes with uione's next release, and until then a "
+                        "project is deployed from inside a clone of the uione repository"};
         }
         std::string from = infrastructure_detail::source_name(project_dir);
         std::string generated = "# Generated from " + from + " by one. Do not edit.";

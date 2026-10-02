@@ -572,3 +572,16 @@ TEST_CASE("a component is a file beside the .one that draws it") {
     CHECK(out[0].where.line == 2);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a table's link may name the screen's own parameters before the row's") {
+    const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
+                              "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
+                              "view issues per project {\n\teach issue where project == project.id {\n\t\ttitle\n\t}\n}\n"
+                              "view issue_page per issue {\n\ttitle = issue.title\n}\n"
+                              "screen \"Issue\" /projects/:project/issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n";
+    CHECK(check_source(start + "screen \"Project\" /projects/:project {\n\ttable issues link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n")
+              .empty());
+    auto e = only_error(start + "view all {\n\teach issue {\n\t\ttitle\n\t}\n}\n"
+                                "screen \"All\" /issues {\n\ttable all link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n");
+    CHECK(e.message == "this table's link needs :project, which this screen's address doesn't have");
+}

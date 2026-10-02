@@ -328,7 +328,8 @@ screen "Book" /books/:book {
   `member.picture ""` and `member.name "Member"` put a face beside a name.
 - `table <view> link /books/:book` makes each row open that screen, with the row's
   id as the parameter, or the row's own `book` when it holds one, like a change of
-  a book or a membership of a project.
+  a book or a membership of a project. Parameters before the last, like the
+  project in `/projects/:project/issues/:issue`, come from the screen's own address.
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks

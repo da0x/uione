@@ -858,9 +858,22 @@ namespace one::language {
                     }
                     if (view) verify_shown(*view, table->view.text(), route, table->view.where);
                     if (table->link) {
+                        // The last :parameter is the row's own; any before it come from this
+                        // screen's address, like the project in /projects/:project/issues/:issue.
                         std::string target = full_route(ns, *table->link);
-                        if (std::count(target.begin(), target.end(), ':') != 1) {
-                            error(table->link_where, "a table's link has one :parameter, which each row's id fills, like /books/:book");
+                        std::vector<std::string> names;
+                        for (std::size_t at = target.find("/:"); at != std::string::npos; at = target.find("/:", at + 1)) {
+                            std::size_t end = target.find('/', at + 1);
+                            names.push_back(target.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2));
+                        }
+                        std::string missing;
+                        for (std::size_t i = 0; i + 1 < names.size(); ++i) {
+                            if (route.find("/:" + names[i]) == std::string::npos) missing = names[i];
+                        }
+                        if (names.empty()) {
+                            error(table->link_where, "a table's link ends with a :parameter, which each row's id fills, like /books/:book");
+                        } else if (!missing.empty()) {
+                            error(table->link_where, "this table's link needs :" + missing + ", which this screen's address doesn't have");
                         } else if (!routes_.contains(target)) {
                             error(table->link_where, "there's no screen at " + target + " for this table's rows to open");
                         }
