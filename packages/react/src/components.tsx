@@ -149,9 +149,12 @@ function rowsOf(value: unknown): Row[] {
 function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>): string {
   const parameter = /:([A-Za-z_]\w*)/g;
   let left = route.match(parameter)?.length ?? 0;
+  // A row that holds the thing a parameter names, like a membership's project or a
+  // change's issue, links to it; otherwise the last parameter is the row itself.
   return route.replace(parameter, (_, name: string) => {
     const field = row[name];
-    const value = --left === 0 ? row.id : (params[name] ?? (typeof field === "string" ? field : row.id));
+    const own = typeof field === "string" && field !== "" ? field : undefined;
+    const value = --left === 0 ? (own ?? row.id) : (params[name] ?? own ?? row.id);
     return encodeURIComponent(value);
   });
 }

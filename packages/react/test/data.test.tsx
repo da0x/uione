@@ -405,6 +405,14 @@ describe("a table whose rows open a page inside another", () => {
     expect(screen.getByRole("link", { name: "Keys" }).getAttribute("href")).toBe("/projects/uione/issues/i%201");
   });
 
+  it("links a row to what it holds, when it names it", () => {
+    const source = memorySource({
+      views: { "studio::mine": { rows: [{ id: "uione-ada", project: "uione", "project.name": "uione" }] } },
+    });
+    renderScreen(source, () => <Table view={useView("studio::mine")} link="/projects/:project" columns={{ "project.name": "Project" }} />);
+    expect(screen.getByRole("link", { name: "uione" }).getAttribute("href")).toBe("/projects/uione");
+  });
+
   it("links to another row's page from a row's page", () => {
     const source = memorySource({ views: { "library::related": { rows: [{ id: "b2", title: "Emma" }] } } });
     const page = defineScreen({ title: "Book", route: "/books/:book" }, () => (

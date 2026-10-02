@@ -23,9 +23,9 @@ service.
   carries the LGPL in `LICENSE` and the GPL it builds on in `COPYING`.
 - **Code uione generates belongs to whoever generated it.** The generators never
   add this repository's copyright or license to it.
-- **The studio and hosting are proprietary,** in separate private repositories.
-  Copyright is held by Daher Alfawares, who isn't bound by these licenses in his
-  own products.
+- **The studio and hosting are proprietary,** in a private repository of their own.
+  Copyright is held by Daher Alfawares, and a copyright holder isn't bound by these
+  licenses in their own products.
 
 Every source file starts with two lines, its copyright and its license:
 

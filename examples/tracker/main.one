@@ -221,7 +221,7 @@ namespace tracker {
 		form member::create {
 			person  role
 		}
-		table project_page.timeline {
+		table project_page.timeline link /issues/:issue {
 			issue
 			field "Changed"
 			after "To"
