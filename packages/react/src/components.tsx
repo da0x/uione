@@ -33,10 +33,17 @@ export function Text({ children }: { children: ReactNode }) {
   return <ui.Text>{children}</ui.Text>;
 }
 
+// A link's :parameters come from the page it's on: /projects/:project/reports on the
+// page /projects/uione goes to /projects/uione/reports.
 export function Link({ to, children }: { to: string; children: ReactNode }) {
   const ui = useUI();
   const link = useLinks();
-  return <ui.Link {...link(to)}>{children}</ui.Link>;
+  const params = useParams();
+  const filled = to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+    const value = params[name];
+    return value === undefined ? written : encodeURIComponent(value);
+  });
+  return <ui.Link {...link(filled)}>{children}</ui.Link>;
 }
 
 export function Code({ lang, source }: { lang: string; source: string }) {

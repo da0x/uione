@@ -799,7 +799,7 @@ namespace one::language {
         // A link opens a screen that's there: one written as an address matches a
         // screen's, with any :parameter standing for one part, and a namespace has a
         // screen at its own address.
-        void link(const content_link& link, location where) {
+        void link(const std::string& ns, const std::string& screen_route, const content_link& link, location where) {
             if (link.namespace_name) {
                 snake(*link.namespace_name);
                 std::string name = link.namespace_name->text();
@@ -812,6 +812,18 @@ namespace one::language {
                 return;
             }
             if (!link.target.starts_with("/")) return;
+            // Like a screen's address, it's inside the namespace it's written in.
+            std::string target = full_route(ns, link.target);
+            // Its :parameters are filled from this screen's address, like the project in
+            // /projects/:project/reports from the page /projects/:project.
+            for (std::size_t at = target.find("/:"); at != std::string::npos; at = target.find("/:", at + 1)) {
+                std::size_t end = target.find('/', at + 1);
+                std::string name = target.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
+                if ((screen_route + "/").find("/:" + name + "/") == std::string::npos) {
+                    error(where, "this link needs :" + name + ", which this screen's address doesn't have");
+                    return;
+                }
+            }
             auto parts = [](const std::string& route) {
                 std::vector<std::string> out;
                 for (std::size_t at = 1; at <= route.size();) {
@@ -821,7 +833,7 @@ namespace one::language {
                 }
                 return out;
             };
-            auto wanted = parts(link.target);
+            auto wanted = parts(target);
             for (const auto& [route, from] : routes_) {
                 auto screen = parts(route);
                 if (screen.size() != wanted.size()) continue;
@@ -831,7 +843,7 @@ namespace one::language {
                 }
                 if (same) return;
             }
-            error(where, "there's no screen at " + link.target + " for this link to open");
+            error(where, "there's no screen at " + target + " for this link to open");
         }
 
         void verify(const std::string& ns, location where, const screen_declaration& s) {
@@ -967,7 +979,7 @@ namespace one::language {
                         }
                     }
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
-                    this->link(*link, item.where);
+                    this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
                            text && (text->type == content_text::kind::text || text->value.starts_with("{"))) {
                     // A live value like {book_page.title} reads a view too.

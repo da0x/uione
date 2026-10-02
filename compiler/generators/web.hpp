@@ -600,7 +600,9 @@ namespace one::generators {
                     content(out, parts, ns, *text);
                 } else if (auto* link = std::get_if<language::content_link>(&item.node)) {
                     parts.components.insert("Link");
-                    std::string target = link->namespace_name ? full_route(link->namespace_name->text(), "/") : link->target;
+                    std::string target = link->namespace_name ? full_route(link->namespace_name->text(), "/")
+                                         : link->target.starts_with("/") ? full_route(ns, link->target)
+                                                                                         : link->target;
                     out.line("<Link to=" + web_detail::js_string(target) + ">" + web_detail::jsx_text(link->label) + "</Link>");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table);

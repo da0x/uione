@@ -26,6 +26,14 @@ describe("content", () => {
     expect(screen.getByRole("heading", { level: 2, name: "A whole feature" }).closest("section")!.id).toBe("example");
     expect(screen.getByText("entity book {}").getAttribute("data-lang")).toBe("uione");
   });
+
+  it("fills a link's parameters from the page it's on", () => {
+    const project = defineScreen({ title: "Project", route: "/projects/:project" }, () => (
+      <Link to="/projects/:project/reports">Reports</Link>
+    ));
+    render(<App name="neotrac" screens={[project]} ui={plain} data={memorySource()} location="/projects/my%20app" />);
+    expect(screen.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/projects/my%20app/reports");
+  });
 });
 
 describe("pages", () => {

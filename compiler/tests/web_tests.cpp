@@ -251,3 +251,18 @@ TEST_CASE("a project can serve a folder's files as they are") {
     REQUIRE(installer != nullptr);
     CHECK(installer->content == *platform::read_file(root + "/site/public/install.sh"));
 }
+
+TEST_CASE("a link goes inside its namespace") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-relative-link";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace projects {\nscreen \"Project\" /:project {\n\tlink /:project/reports \"Reports\"\n}\n"
+                         "screen \"Reports\" /:project/reports {\n\ttext \"r\"\n}\n}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Link to="/projects/:project/reports">Reports</Link>)") != std::string::npos);
+    fs::remove_all(dir);
+}

@@ -363,7 +363,12 @@ screen "Book" /books/:book {
 - `link` says where it goes first and its text after: `link #waitlist "Join the
   waitlist"`, `link /language/reference "Read the reference"`. `link namespace projects "See
   the projects"` opens a namespace's own screen, at `/projects`, and
-  `projects::archive` would be at `/projects/archive`. A link to an address or a
+  `projects::archive` would be at `/projects/archive`. An address is inside the
+  link's namespace, like a screen's: on the page `/:project` in `namespace
+  projects`, `link /:project/reports "Reports"` goes to `/projects/:project/reports`,
+  with the project filled in from the page's own address. A link's `:parameter`
+  always comes from the page it's on, so the page needs it too. To reach another
+  namespace, name it: `link namespace docs "Read the docs"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What

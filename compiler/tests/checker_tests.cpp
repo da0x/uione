@@ -638,3 +638,17 @@ TEST_CASE("serve names a folder next to the project") {
     CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
           "there's no folder no-such-folder to serve; it's looked for next to this .one file");
 }
+
+TEST_CASE("a link is inside its namespace, its parameters from the page it's on") {
+    const std::string screens = "namespace projects {\nscreen \"Project\" /:project {\n\tlink /:project/reports \"Reports\"\n}\n"
+                                "screen \"Reports\" /:project/reports {\n\ttext \"r\"\n}\n";
+    CHECK(check_source(screens + "}\n").empty());
+    auto e = only_error(screens + "screen \"All\" /all {\n\tlink /:project/reports \"Reports\"\n}\n}\n");
+    CHECK(e.message == "this link needs :project, which this screen's address doesn't have");
+    e = only_error(screens + "screen \"All\" /all {\n\tlink /all/reports/old \"Reports\"\n}\n}\n");
+    CHECK(e.message == "there's no screen at /projects/all/reports/old for this link to open");
+    // :projects isn't :project.
+    e = only_error("namespace projects {\nscreen \"Reports\" /:project/reports {\n\ttext \"r\"\n}\n"
+                   "screen \"All\" /:projects {\n\tlink /:project/reports \"Reports\"\n}\n}\n");
+    CHECK(e.message == "this link needs :project, which this screen's address doesn't have");
+}
