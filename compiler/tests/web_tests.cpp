@@ -114,7 +114,7 @@ TEST_CASE("markdown pages are turned into HTML when the site is built, a set for
     CHECK(language->content.find("<h2>entity</h2>") != std::string::npos);
     const auto* releases = find(files, "src/pages/releases.generated.ts");
     REQUIRE(releases != nullptr);
-    CHECK(releases->content.find(R"(slug: "v0-2-0",)") != std::string::npos);
+    CHECK(releases->content.find(R"(slug: "v0-3-0",)") != std::string::npos);
     CHECK(releases->content.find("<h2>entity</h2>") == std::string::npos);
 }
 

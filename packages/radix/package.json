@@ -1,6 +1,6 @@
 {
   "name": "@uione/radix",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A styled component set for uione apps, written for uione on Radix primitives, with its CSS prebuilt.",
   "license": "LGPL-3.0-only",
   "author": "Daher Alfawares",
@@ -43,7 +43,7 @@
     "shiki": "^4.4.3"
   },
   "peerDependencies": {
-    "@uione/react": "^0.2.0",
+    "@uione/react": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -54,7 +54,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@uione/react": "0.2.0",
+    "@uione/react": "0.3.0",
     "jsdom": "^26.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
