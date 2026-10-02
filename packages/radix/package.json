@@ -1,6 +1,6 @@
 {
   "name": "@uione/radix",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A styled component set for uione apps, written for uione on Radix primitives, with its CSS prebuilt.",
   "license": "LGPL-3.0-only",
   "author": "Daher Alfawares",
@@ -25,6 +25,7 @@
     "*.css"
   ],
   "scripts": {
+    "prepack": "yarn build",
     "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
     "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && tailwindcss -i src/styles.css -o dist/styles.css --minify",
     "typecheck": "yarn grammar && tsc --noEmit",
@@ -38,7 +39,7 @@
     "shiki": "^4.4.3"
   },
   "peerDependencies": {
-    "@uione/react": "0.0.1",
+    "@uione/react": "^0.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -49,7 +50,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@uione/react": "0.0.1",
+    "@uione/react": "0.1.0",
     "jsdom": "^26.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

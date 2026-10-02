@@ -28,6 +28,7 @@
 #include "language/ast.hpp"
 #include "language/names.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 namespace one::generators {
 
@@ -673,8 +674,8 @@ namespace one::generators {
             out.line("\"preview\": \"vite preview\"");
             out.close("},");
             out.open("\"dependencies\": {");
-            out.line("\"@uione/" + ui_ + "\": \"0.0.1\",");
-            out.line("\"@uione/react\": \"0.0.1\",");
+            out.line("\"@uione/" + ui_ + "\": \"" + std::string(version) + "\",");
+            out.line("\"@uione/react\": \"" + std::string(version) + "\",");
             out.line("\"firebase\": \"^12.19.0\",");
             out.line("\"react\": \"^19.3.0\",");
             out.line("\"react-dom\": \"^19.3.0\",");

@@ -27,6 +27,7 @@
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 namespace one::generators {
 
@@ -260,7 +261,7 @@ namespace one::generators {
             out.line();
             out.line("go 1.26");
             out.line();
-            out.line("require github.com/da0x/uione/one v0.0.0");
+            out.line("require github.com/da0x/uione/one v" + std::string(version));
             for (fs::path dir = fs::weakly_canonical(project_dir_); !dir.empty(); dir = dir.parent_path()) {
                 if (fs::exists(dir / "one" / "go.mod")) {
                     out.line();

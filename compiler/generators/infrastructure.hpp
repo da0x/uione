@@ -20,6 +20,7 @@
 #include "generators/web.hpp"
 #include "language/ast.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 namespace one::generators {
 
@@ -138,7 +139,7 @@ namespace one::generators {
             m.line();
             m.line("go 1.26");
             m.line();
-            m.line("require github.com/da0x/uione/infrastructure v0.0.0");
+            m.line("require github.com/da0x/uione/infrastructure v" + std::string(version));
             m.line();
             m.line("replace github.com/da0x/uione/infrastructure => " + *library);
             out.push_back(file("infrastructure/go.mod", m));

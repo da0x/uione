@@ -12,6 +12,7 @@
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 using namespace one::language;
 
@@ -31,5 +32,16 @@ TEST_CASE("every example and the site check without errors") {
         }
         if (out.empty()) check(files, out);
         for (const auto& d : out) FAIL_CHECK(format(d));
+    }
+}
+
+TEST_CASE("the libraries are released with the compiler, under its version") {
+    std::string root = UIONE_ROOT;
+    std::string wanted = "\"version\": \"" + std::string(one::version) + "\"";
+    for (const char* package : {"/packages/react/package.json", "/packages/radix/package.json"}) {
+        CAPTURE(package);
+        auto manifest = one::platform::read_file(root + package);
+        REQUIRE(manifest);
+        CHECK(manifest->find(wanted) != std::string::npos);
     }
 }

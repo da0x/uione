@@ -1,6 +1,6 @@
 {
   "name": "@uione/react",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "The runtime every uione screen is built on: routing, live views, commands, and the component contract.",
   "license": "LGPL-3.0-only",
   "author": "Daher Alfawares",
@@ -29,6 +29,7 @@
     "COPYING"
   ],
   "scripts": {
+    "prepack": "yarn build",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

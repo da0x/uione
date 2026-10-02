@@ -20,10 +20,9 @@
 #include "language/diagnostics.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 namespace {
-
-    constexpr std::string_view version = "0.0.1";
 
     int usage() {
         std::cerr << "usage: one check <path>...\n"
@@ -160,7 +159,7 @@ namespace {
 int main(int argc, char** argv) {
     std::vector<std::string> args(argv + 1, argv + argc);
     if (args.size() == 1 && args[0] == "--version") {
-        std::cout << "one " << version << "\n";
+        std::cout << "one " << one::version << "\n";
         return 0;
     }
     if (args.size() >= 2 && args[0] == "check") {
