@@ -34,6 +34,11 @@ namespace {
 
     std::vector<generators::output_file> generate(const std::string& project) { return generate_at(root + project).files; }
 
+    const generators::output_file* find(const std::vector<generators::output_file>& files, const std::string& path) {
+        auto it = std::find_if(files.begin(), files.end(), [&](const auto& f) { return f.path == path; });
+        return it == files.end() ? nullptr : &*it;
+    }
+
     // A target without the license header it carries as a file in this repository,
     // in whichever comment style the file uses, and after its shebang if it has one.
     std::string without_license(const std::string& text) {
@@ -75,15 +80,19 @@ TEST_CASE("a project that doesn't say where it runs gets no deploy") {
     CHECK(generate("/examples/library").empty());
 }
 
-TEST_CASE("a project outside this repository is told why it gets no deploy, rather than given one that can't work") {
+TEST_CASE("a project outside this repository deploys with the released library") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-outside-the-repository";
     fs::create_directories(dir);
     REQUIRE(platform::write_file((dir / "main.one").string(),
                                  "project p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"));
     auto generated = generate_at(dir.string());
-    CHECK(generated.files.empty());
-    CHECK(generated.skipped.find("inside a clone of the uione repository") != std::string::npos);
+    CHECK(generated.skipped.empty());
+    const auto* mod = find(generated.files, "infrastructure/go.mod");
+    REQUIRE(mod != nullptr);
+    CHECK(mod->content.find("require github.com/da0x/uione/infrastructure v" + std::string(version) + "\n") != std::string::npos);
+    CHECK(mod->content.find("replace") == std::string::npos);
+    CHECK(find(generated.files, "deploy") != nullptr);
     fs::remove_all(dir);
 }
 

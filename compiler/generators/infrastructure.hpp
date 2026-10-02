@@ -105,12 +105,9 @@ namespace one::generators {
         auto settings = deploy_settings_of(files);
         if (!settings) return {};
         const auto& s = *settings;
-        // Until the libraries are published, a deploy builds them from this repository.
+        // Inside a clone of the uione repository, a deploy builds the library from it;
+        // anywhere else, from the release the compiler belongs to.
         auto library = infrastructure_detail::nearby(project_dir, out_dir + "/infrastructure", "infrastructure");
-        if (!library) {
-            return {{}, "no deploy was written: the deployer comes with uione's next release, and until then a "
-                        "project is deployed from inside a clone of the uione repository"};
-        }
         std::string from = infrastructure_detail::source_name(project_dir);
         std::string generated = "# Generated from " + from + " by one. Do not edit.";
         std::vector<output_file> out;
@@ -139,8 +136,10 @@ namespace one::generators {
             m.line("go 1.26");
             m.line();
             m.line("require github.com/da0x/uione/infrastructure v" + std::string(version));
-            m.line();
-            m.line("replace github.com/da0x/uione/infrastructure => " + *library);
+            if (library) {
+                m.line();
+                m.line("replace github.com/da0x/uione/infrastructure => " + *library);
+            }
             out.push_back(file("infrastructure/go.mod", m));
         }
         {
