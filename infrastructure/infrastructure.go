@@ -43,12 +43,18 @@
 package infrastructure
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"golang.org/x/oauth2/google"
 
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/billing"
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/cloudrunv2"
@@ -141,7 +147,21 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		}
 		enabled = append(enabled, s)
 	}
-	after := opt(enabled...)
+	// Firebase itself: added to the project here, or taken over where it was added
+	// already, as it was in the console before uione could. It's never removed.
+	firebaseOptions := []pulumi.ResourceOption{opt(enabled...), pulumi.RetainOnDelete(true)}
+	added, err := firebaseAdded(ctx.Context(), p.Firebase)
+	if err != nil {
+		return err
+	}
+	if added {
+		firebaseOptions = append(firebaseOptions, pulumi.Import(pulumi.ID("projects/"+p.Firebase)))
+	}
+	fb, err := firebase.NewProject(ctx, "firebase", &firebase.ProjectArgs{Project: project}, firebaseOptions...)
+	if err != nil {
+		return err
+	}
+	after := opt(append(enabled, fb)...)
 
 	// The database, and the rules that decide what a browser may read.
 	db, err := firestore.NewDatabase(ctx, "database", &firestore.DatabaseArgs{
@@ -432,4 +452,32 @@ func (p Project) check() error {
 		return fmt.Errorf("infrastructure: GitHub's webhook route %q has to start with /", p.GitHub)
 	}
 	return nil
+}
+
+// firebaseAdded asks Firebase whether it has been added to a Google Cloud project.
+// A project whose Firebase API isn't on yet hasn't had it added. Tests replace it.
+var firebaseAdded = func(ctx context.Context, project string) (bool, error) {
+	client, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return false, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://firebase.googleapis.com/v1beta1/projects/"+url.PathEscape(project), nil)
+	if err != nil {
+		return false, err
+	}
+	request.Header.Set("X-Goog-User-Project", project)
+	response, err := client.Do(request)
+	if err != nil {
+		return false, err
+	}
+	defer response.Body.Close()
+	switch {
+	case response.StatusCode == http.StatusOK:
+		return true, nil
+	case response.StatusCode == http.StatusNotFound, response.StatusCode == http.StatusForbidden:
+		return false, nil
+	default:
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
+		return false, fmt.Errorf("infrastructure: asking Firebase about %s: %s %s", project, response.Status, body)
+	}
 }

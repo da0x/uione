@@ -4,6 +4,7 @@
 package infrastructure
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,9 +105,16 @@ func declareProject(t *testing.T, dir string, settings string, billing string, e
 
 // declareChanged declares uione's project with change made to its settings first.
 func declareChanged(t *testing.T, dir string, settings string, billing string, change func(*Project)) (*mocks, error) {
+	return declareIn(t, dir, settings, billing, false, change)
+}
+
+// declareIn declares uione's project in a Google Cloud project that has Firebase
+// added already, as ui-one does, or that's fresh.
+func declareIn(t *testing.T, dir string, settings string, billing string, fresh bool, change func(*Project)) (*mocks, error) {
 	t.Helper()
 	t.Setenv("PULUMI_CONFIG", settings)
 	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
+	firebaseAdded = func(context.Context, string) (bool, error) { return !fresh, nil }
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		p := Project{Name: "uione", Domain: "uione.io", Firebase: "ui-one", Region: "us-east4", Build: filepath.Join(dir, "build")}
 		change(&p)
@@ -643,5 +651,32 @@ func TestSymbolicLinksAreHashedNotFollowed(t *testing.T) {
 	direct, _ := hashTrees(api, one)
 	if got, err := hashTrees(through, one); err != nil || got != direct {
 		t.Errorf("the backend reached through a link hashed as %s (%v), not %s", got, err, direct)
+	}
+}
+
+func TestFirebaseIsAddedToAFreshProjectAndTakenOverWhereItWasAddedAlready(t *testing.T) {
+	const key = "gcp:firebase/project:Project::firebase"
+	m, err := declareIn(t, build(t), settings, "000000-000000-000000", true, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.resources[key]; !ok {
+		t.Fatal("a fresh project isn't given Firebase")
+	}
+	if got, ok := m.imports[key]; ok {
+		t.Errorf("a fresh project's Firebase is imported from %s rather than added", got)
+	}
+	m, err = declareIn(t, build(t), settings, "000000-000000-000000", false, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.imports[key]; got != "projects/ui-one" {
+		t.Errorf("Firebase added already is imported from %q", got)
+	}
+	// The database and the web app wait for Firebase.
+	for _, waiting := range []string{"gcp:firestore/database:Database::database", "gcp:firebase/webApp:WebApp::web"} {
+		if !strings.Contains(strings.Join(m.waits[waiting], " "), "gcp:firebase/project:Project::firebase") {
+			t.Errorf("%s doesn't wait for Firebase: %v", waiting, m.waits[waiting])
+		}
 	}
 }
