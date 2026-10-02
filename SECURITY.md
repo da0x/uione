@@ -6,7 +6,7 @@ Please report security problems privately, not in a public issue.
 
 Until neotrac.org is running, report them through GitHub: open the repository's
 **Security** tab and choose **Report a vulnerability**. Only the maintainer sees the
-report.
+report. You can also email security@uione.io.
 
 Once neotrac.org is running, reports go to uione's private security project there,
 where only its maintainers and the person who reported each issue can read it.
