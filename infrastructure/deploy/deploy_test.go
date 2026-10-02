@@ -48,7 +48,7 @@ func (w *world) tools() Tools {
 		},
 		Run: func(_ context.Context, dir string, _ io.Writer, name string, args ...string) error {
 			w.did = append(w.did, filepath.Base(dir)+": "+name+" "+strings.Join(args, " "))
-			if name == "yarn" {
+			if name == "yarn" && args[0] == "build" {
 				return w.fails("build")
 			}
 			return nil
@@ -98,7 +98,8 @@ func TestADeployRunsEveryStepInOrderAndReportsEach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"api: go mod tidy", "infrastructure: go mod tidy", "open infrastructure production", "preview", "up", "web: yarn build", "upload ui-one from web"}
+	want := []string{"api: go mod tidy", "infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
+		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
 	if !reflect.DeepEqual(w.did, want) {
 		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
 	}
@@ -161,6 +162,21 @@ func TestAStackWithoutTheWebAppsSettingsIsntBuilt(t *testing.T) {
 	for _, did := range w.did {
 		if strings.HasPrefix(did, "web:") {
 			t.Errorf("the app was built anyway")
+		}
+	}
+}
+
+func TestAWebAppWithItsPackagesInstalledIsntInstalledAgain(t *testing.T) {
+	dir := built(t)
+	os.MkdirAll(filepath.Join(dir, "web", "node_modules"), 0o755)
+	w := &world{outputs: outputs}
+	if _, err := Run(context.Background(), Options{Build: dir, Stack: "production", Progress: io.Discard,
+		Confirm: func(string) bool { return true }}, w.tools()); err != nil {
+		t.Fatal(err)
+	}
+	for _, did := range w.did {
+		if strings.Contains(did, "yarn install") {
+			t.Errorf("installed again: %v", w.did)
 		}
 	}
 }

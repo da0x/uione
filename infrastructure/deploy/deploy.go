@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -132,6 +133,13 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		}
 		if err := os.WriteFile(filepath.Join(web, ".env.production"), []byte(env), 0o644); err != nil {
 			return err
+		}
+		// A machine that builds only to deploy, like a Cloud Build, hasn't installed
+		// the web app's packages yet.
+		if _, err := os.Stat(filepath.Join(web, "node_modules")); errors.Is(err, fs.ErrNotExist) {
+			if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive"); err != nil {
+				return err
+			}
 		}
 		return tools.Run(ctx, web, log, "yarn", "build")
 	}); err != nil {

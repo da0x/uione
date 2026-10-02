@@ -3,7 +3,8 @@
 
 # Builds the compiler for each platform when a release is tagged, like v0.2.0, and
 # publishes it: the builds and their SHA256SUMS on the GitHub release, which
-# uione.io/install.sh downloads, and the container image on ghcr.io/da0x/uione.
+# uione.io/install.sh downloads, the container image on ghcr.io/da0x/uione, and the
+# image deploys are built in on ghcr.io/da0x/uione-builder.
 
 name: release
 
@@ -86,3 +87,8 @@ jobs:
           docker buildx create --use
           docker buildx build image --file tools/release/dockerfile --platform linux/amd64,linux/arm64 --push \
             --tag "ghcr.io/da0x/uione:${GITHUB_REF_NAME#v}" --tag ghcr.io/da0x/uione:latest
+      # Cloud Build runs on amd64, so the builder is built for it alone.
+      - name: Publish the builder image
+        run: |
+          docker buildx build image --file tools/release/builder/dockerfile --platform linux/amd64 --push \
+            --tag "ghcr.io/da0x/uione-builder:${GITHUB_REF_NAME#v}" --tag ghcr.io/da0x/uione-builder:latest

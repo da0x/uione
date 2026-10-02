@@ -1,0 +1,40 @@
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Where a project is built and deployed with nothing installed beforehand, like a
+# Cloud Build the studio starts: one, Go, Node with Yarn, Pulumi, and gcloud, which
+# the infrastructure library uses to build the backend's image. Published with each
+# release as ghcr.io/da0x/uione-builder, by .github/workflows/release.yml.
+#
+#   docker run --rm -v "$PWD:/work" -w /work ghcr.io/da0x/uione-builder \
+#     sh -c 'one build . && build/deploy --yes --json'
+
+FROM golang:1.26-bookworm@sha256:a688600ca24f8a4d3ca77f95b0dd40704a9fc787c826660eb7ba0b641b8b175d AS go
+FROM node:22-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS node
+
+FROM google/cloud-sdk:587.0.0-slim@sha256:7c2dbc4eeba1e500b788be19cae33599cefe3294949a62c034bd1c2002329f69
+COPY --from=go /usr/local/go /usr/local/go
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=node /opt /opt
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+	&& ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+	&& ln -s /opt/yarn-*/bin/yarn /usr/local/bin/yarn
+
+# Pulumi's command line, the version the infrastructure library is built with,
+# checked against the checksums Pulumi publishes.
+ARG PULUMI=3.266.0
+RUN cd /tmp \
+	&& curl -fsSLO "https://get.pulumi.com/releases/sdk/pulumi-v${PULUMI}-linux-x64.tar.gz" \
+	&& curl -fsSL "https://get.pulumi.com/releases/sdk/pulumi-${PULUMI}-checksums.txt" | grep " pulumi-v${PULUMI}-linux-x64.tar.gz$" | sha256sum -c - \
+	&& tar -xzf "pulumi-v${PULUMI}-linux-x64.tar.gz" -C /usr/local \
+	&& rm "pulumi-v${PULUMI}-linux-x64.tar.gz"
+
+COPY one-linux-amd64 /usr/local/bin/one
+ENV PATH=/usr/local/go/bin:/usr/local/pulumi:$PATH \
+	GOPATH=/go \
+	GOTOOLCHAIN=local
+LABEL org.opencontainers.image.title="uione builder" \
+      org.opencontainers.image.description="Builds and deploys uione projects" \
+      org.opencontainers.image.source="https://github.com/da0x/uione" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
