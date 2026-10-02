@@ -99,10 +99,14 @@ function useConfirmedRunner() {
   const { questions, ask } = useConfirmContext();
   const run = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
     const question = questions.get(command);
-    if (question !== undefined && !(await ask(fill(question, about)))) return false;
+    if (question !== undefined && !(await ask(fill(question, about)))) {
+      // Declining is a choice about this attempt, so the last one's failure goes.
+      runner.clear(command);
+      return false;
+    }
     return runner.run(command, input);
   };
-  return { run, busy: runner.busy, error: runner.error };
+  return { run, busy: runner.busy, error: runner.error, clear: runner.clear };
 }
 
 // Asks before `command` runs, wherever on the screen it's run from.
@@ -130,6 +134,28 @@ export function Command({ name }: { name: string }) {
 
 type Row = Record<string, unknown> & { id: string };
 
+// A view's data comes from outside the app, so a list that isn't a list, or a row
+// without an id to act on, is left out rather than break the screen.
+function rowsOf(value: unknown): Row[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (row): row is Row => row !== null && typeof row === "object" && !Array.isArray(row) && typeof (row as Row).id === "string",
+  );
+}
+
+// The address a row opens. The last parameter is the row; any before it, like the
+// project in /projects/:project/issues/:issue, are the ones this screen was opened
+// with, or the row's own field of that name.
+function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>): string {
+  const parameter = /:([A-Za-z_]\w*)/g;
+  let left = route.match(parameter)?.length ?? 0;
+  return route.replace(parameter, (_, name: string) => {
+    const field = row[name];
+    const value = --left === 0 ? row.id : (params[name] ?? (typeof field === "string" ? field : row.id));
+    return encodeURIComponent(value);
+  });
+}
+
 // A view's rows, or one of its named lists, one column per field. Each command in
 // `actions` becomes a button on every row, run with that row's id. A column in
 // `pictures`, like member.picture, shows the person's picture rather than its
@@ -151,7 +177,8 @@ export function Table({
 }) {
   const ui = useUI();
   const links = useLinks();
-  const rows = (view.data?.[list] as Row[] | undefined) ?? [];
+  const params = useParams();
+  const rows = rowsOf(view.data?.[list]);
   const runner = useConfirmedRunner();
   return (
     <ui.Table
@@ -160,7 +187,7 @@ export function Table({
       error={actions.map((name) => runner.error(name)).find((e) => e !== undefined)}
       rows={rows.map((row) => ({
         id: row.id,
-        link: link ? links(link.replace(/:[A-Za-z_]\w*/, encodeURIComponent(row.id))) : undefined,
+        link: link ? links(rowLink(link, row, params)) : undefined,
         cells: Object.keys(columns).map((key) => {
           if (!pictures.includes(key)) return show(row[key]);
           const source = row[key];
@@ -263,6 +290,7 @@ export function Form({
           value: values[f.name] ?? "",
           hint: f.hint,
           onChange: (value) => {
+            runner.clear(command);
             setTouched(true);
             setValues((current) => ({ ...current, [f.name]: value }));
           },
@@ -281,7 +309,14 @@ export function Form({
       <ui.Button kind="primary" onClick={() => setOpen(true)}>
         {label(action(command))}
       </ui.Button>
-      <ui.Dialog open={open} title={label(action(command))} onClose={() => setOpen(false)}>
+      <ui.Dialog
+        open={open}
+        title={label(action(command))}
+        onClose={() => {
+          setOpen(false);
+          runner.clear(command);
+        }}
+      >
         {form}
       </ui.Dialog>
     </>

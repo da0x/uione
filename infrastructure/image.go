@@ -4,7 +4,6 @@
 package infrastructure
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/serviceaccount"
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/storage"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"golang.org/x/mod/modfile"
 )
 
 // backend declares where the backend's image is built and kept, builds it, and
@@ -36,7 +36,11 @@ func backend(ctx *pulumi.Context, p Project, after pulumi.ResourceOption) (pulum
 	if err != nil {
 		return pulumi.StringOutput{}, err
 	}
-	hash, err := hashTrees(api, one)
+	trees := []string{api}
+	if one != "" {
+		trees = append(trees, one)
+	}
+	hash, err := hashTrees(trees...)
 	if err != nil {
 		return pulumi.StringOutput{}, err
 	}
@@ -66,11 +70,13 @@ func backend(ctx *pulumi.Context, p Project, after pulumi.ResourceOption) (pulum
 	}
 
 	// The build uploads its source to this bucket, which the build script names.
-	// Left to itself, gcloud would create a bucket of its own for them. Uploads are
-	// only needed while a build runs, so they're removed after a week.
+	// Left to itself, gcloud would create a bucket of its own for them, named
+	// <project>_cloudbuild, so this one's name is one only this library uses, and a
+	// project where gcloud already made that one still deploys. Uploads are only
+	// needed while a build runs, so they're removed after a week.
 	uploads, err := storage.NewBucket(ctx, "build-uploads", &storage.BucketArgs{
 		Project:                  project,
-		Name:                     pulumi.String(p.Firebase + "_cloudbuild"),
+		Name:                     pulumi.String(uploadsBucket(p.Firebase)),
 		Location:                 pulumi.String(strings.ToUpper(p.Region)),
 		UniformBucketLevelAccess: pulumi.Bool(true),
 		ForceDestroy:             pulumi.Bool(true),
@@ -119,8 +125,13 @@ func backend(ctx *pulumi.Context, p Project, after pulumi.ResourceOption) (pulum
 	grants = append(grants, g1, g2, g3)
 
 	image := pulumi.Sprintf("%s-docker.pkg.dev/%s/%s/%s:%s", p.Region, p.Firebase, repo.RepositoryId, Service, hash[:12])
+	// The environment holds this machine's paths, so a deploy from another machine
+	// changes the command's inputs without changing the image. That runs Update
+	// rather than Create, and Update builds only when the image isn't the one the
+	// last build made, so only the hash in Triggers, and in the tag, rebuilds.
 	build, err := local.NewCommand(ctx, "image", &local.CommandArgs{
 		Create:   pulumi.String(buildScript),
+		Update:   pulumi.String(unlessBuilt + buildScript),
 		Triggers: pulumi.Array{pulumi.String(hash)},
 		Environment: pulumi.StringMap{
 			"API":     pulumi.String(api),
@@ -139,13 +150,33 @@ func backend(ctx *pulumi.Context, p Project, after pulumi.ResourceOption) (pulum
 	return pulumi.All(image, build.Stdout).ApplyT(func(v []any) string { return v[0].(string) }).(pulumi.StringOutput), nil
 }
 
+// uploadsBucket is where a project's builds upload their source.
+func uploadsBucket(firebase string) string {
+	return firebase + "-uione-builds"
+}
+
+// unlessBuilt ends an update early when the last build, whose stdout ends with the
+// image it made, already made this image.
+const unlessBuilt = `if [ "$(printf '%s\n' "${PULUMI_COMMAND_STDOUT:-}" | tail -n 1)" = "$IMAGE" ]; then
+  echo "$IMAGE"
+  exit 0
+fi
+`
+
 // The build puts the backend and the one library side by side, as the dockerfile
-// expects, and has Cloud Build turn them into an image.
+// expects, and has Cloud Build turn them into an image. When the backend uses a
+// published one library rather than a folder, only the backend is staged.
+//
+// A build account and its roles can take a minute to be seen everywhere after
+// they're first made, so a build refused for permission is tried again before
+// giving up. Any other failure stops the deploy at once.
 const buildScript = `set -eu
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-cp -R "$API" "$stage/api"
-cp -R "$ONE" "$stage/one"
+cp -RH "$API" "$stage/api"
+if [ -n "$ONE" ]; then
+  cp -RH "$ONE" "$stage/one"
+fi
 cat > "$stage/cloudbuild.yaml" <<YAML
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -154,59 +185,73 @@ images: ["$IMAGE"]
 options:
   logging: CLOUD_LOGGING_ONLY
 YAML
-# A build account and its roles can take a minute to be seen everywhere after
-# they're first made, so a refused first build is tried again before giving up.
+exec 3>&1
 for attempt in 1 2 3 4; do
-  if gcloud builds submit "$stage" --quiet --project "$PROJECT" --region "$REGION" \
-    --config "$stage/cloudbuild.yaml" \
-    --gcs-source-staging-dir "gs://$UPLOADS/source" \
-    --service-account "projects/$PROJECT/serviceAccounts/$BUILDER"; then
+  # gcloud's errors are shown as they come and kept, to tell why it failed.
+  echo 1 > "$stage/status"
+  { status=0
+    gcloud builds submit "$stage" --quiet --project "$PROJECT" --region "$REGION" \
+      --config "$stage/cloudbuild.yaml" \
+      --gcs-source-staging-dir "gs://$UPLOADS/source" \
+      --service-account "projects/$PROJECT/serviceAccounts/$BUILDER" 2>&1 >&3 3>&- || status=$?
+    echo "$status" > "$stage/status"; } | tee "$stage/errors" >&2
+  if [ "$(cat "$stage/status")" = 0 ]; then
     echo "$IMAGE"
     exit 0
   fi
+  grep -qiE 'permission|forbidden|403|does not have|does not exist' "$stage/errors" || exit 1
   [ "$attempt" -lt 4 ] && sleep 30
 done
 exit 1
 `
 
-// library finds the one library the backend is built on, from the replace line
-// in its go.mod. Until the library is published, it's a folder in this repository.
+// libraryModule is the one library's module path.
+const libraryModule = "github.com/da0x/uione/one"
+
+// library finds the one library the backend is built on, from a replace of it with
+// a folder in the backend's go.mod. Until the library is published, it's a folder
+// in this repository. Without one, the backend uses a published version, and
+// library returns "".
 func library(api string) (string, error) {
-	f, err := os.Open(filepath.Join(api, "go.mod"))
+	path := filepath.Join(api, "go.mod")
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("infrastructure: the backend isn't there; run one build first: %w", err)
 	}
-	defer f.Close()
-	lines := bufio.NewScanner(f)
-	for lines.Scan() {
-		line := strings.TrimSpace(lines.Text())
-		if !strings.HasPrefix(line, "replace github.com/da0x/uione/one") {
+	file, err := modfile.Parse(path, data, nil)
+	if err != nil {
+		return "", fmt.Errorf("infrastructure: %w", err)
+	}
+	for _, r := range file.Replace {
+		if r.Old.Path != libraryModule || r.New.Version != "" {
 			continue
 		}
-		_, path, ok := strings.Cut(line, "=>")
-		if !ok {
-			break
+		if filepath.IsAbs(r.New.Path) {
+			return r.New.Path, nil
 		}
-		path = strings.TrimSpace(path)
-		if filepath.IsAbs(path) {
-			return path, nil
-		}
-		return filepath.Join(api, path), nil
+		return filepath.Join(api, r.New.Path), nil
 	}
-	return "", fmt.Errorf("infrastructure: %s/go.mod doesn't say where the one library is", api)
+	return "", nil
 }
 
 // hashTrees is a hash of every file in the folders, by path and content, so it
-// changes exactly when the source does, whichever machine computes it.
+// changes exactly when the source does, whichever machine computes it. A symbolic
+// link is hashed as where it points, the way the build copies it, rather than
+// followed. Anything that's neither a file nor a link, like a socket, is skipped.
 func hashTrees(roots ...string) (string, error) {
 	sum := sha256.New()
 	for i, root := range roots {
+		// The folder itself may be reached through a link, which the build follows.
+		root, err := filepath.EvalSymlinks(root)
+		if err != nil {
+			return "", err
+		}
 		var paths []string
-		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if !d.IsDir() {
+			if d.Type().IsRegular() || d.Type()&fs.ModeSymlink != 0 {
 				paths = append(paths, path)
 			}
 			return nil
@@ -217,6 +262,18 @@ func hashTrees(roots ...string) (string, error) {
 		sort.Strings(paths)
 		for _, path := range paths {
 			rel, _ := filepath.Rel(root, path)
+			info, err := os.Lstat(path)
+			if err != nil {
+				return "", err
+			}
+			if info.Mode()&fs.ModeSymlink != 0 {
+				target, err := os.Readlink(path)
+				if err != nil {
+					return "", err
+				}
+				fmt.Fprintf(sum, "%d/%s\x00link\x00%s\x00", i, filepath.ToSlash(rel), filepath.ToSlash(target))
+				continue
+			}
 			fmt.Fprintf(sum, "%d/%s\x00", i, filepath.ToSlash(rel))
 			f, err := os.Open(path)
 			if err != nil {

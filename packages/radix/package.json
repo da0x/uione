@@ -15,7 +15,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": "./dist/styles.css",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -25,11 +26,14 @@
     "*.css"
   ],
   "scripts": {
-    "prepack": "yarn build",
+    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
     "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
     "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && tailwindcss -i src/styles.css -o dist/styles.css --minify",
     "typecheck": "yarn grammar && tsc --noEmit",
     "test": "yarn grammar && vitest run"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

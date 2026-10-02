@@ -4,7 +4,7 @@
 // An app is a list of screens. Each screen knows its own title and route, so the
 // app can build the routes and the navigation without anyone writing them twice.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } from "react-router";
 import type { ComponentSet } from "./contract.js";
@@ -127,12 +127,37 @@ function signInMessage(e: unknown): string | undefined {
   return "couldn't sign you in; try again";
 }
 
+// Every route's element is a Page, so going from /books/a to /books/b keeps the
+// same one mounted. The body is keyed by the address, so what was typed about one
+// book, or why a command on it failed, is never shown or sent as another's.
 function Page({ name, icon, screen: Body, screens }: { name: string; icon: string | undefined; screen: Screen; screens: Screen[] }) {
+  const { pathname } = useLocation();
   return (
     <Shell name={name} icon={icon} title={Body.info.title} screens={screens}>
-      <Body />
+      <Contained key={pathname}>
+        <Body />
+      </Contained>
     </Shell>
   );
+}
+
+// A screen that throws while it's drawn takes down only itself, so the navigation
+// is still there to go somewhere else.
+class Contained extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? <Broken /> : this.props.children;
+  }
+}
+
+function Broken() {
+  const ui = useUI();
+  return <ui.Text>Something went wrong showing this page. Try reloading it.</ui.Text>;
 }
 
 function NotFound({ name, icon, screens }: { name: string; icon: string | undefined; screens: Screen[] }) {

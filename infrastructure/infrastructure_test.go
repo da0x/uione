@@ -5,7 +5,9 @@ package infrastructure
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -97,12 +99,17 @@ func declareBilled(t *testing.T, dir string, settings string, billing string) (*
 }
 
 func declareProject(t *testing.T, dir string, settings string, billing string, extra Project) (*mocks, error) {
+	return declareChanged(t, dir, settings, billing, func(p *Project) { p.GitHub = extra.GitHub })
+}
+
+// declareChanged declares uione's project with change made to its settings first.
+func declareChanged(t *testing.T, dir string, settings string, billing string, change func(*Project)) (*mocks, error) {
 	t.Helper()
 	t.Setenv("PULUMI_CONFIG", settings)
 	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		p := Project{Name: "uione", Domain: "uione.io", Firebase: "ui-one", Region: "us-east4", Build: filepath.Join(dir, "build")}
-		p.GitHub = extra.GitHub
+		change(&p)
 		return Declare(ctx, p)
 	}, pulumi.WithMocks("uione", "prod", m))
 	return m, err
@@ -186,8 +193,10 @@ func TestTheBuildUsesItsOwnUploadBucketAndAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	bucket := m.get(t, "gcp:storage/bucket:Bucket::build-uploads")
-	if got := bucket["name"].StringValue(); got != "ui-one_cloudbuild" {
-		t.Errorf("uploads go to %s, so gcloud would create a bucket of its own", got)
+	// gcloud makes ui-one_cloudbuild itself, so a project it already ran in would
+	// have that name taken.
+	if got := bucket["name"].StringValue(); got != "ui-one-uione-builds" {
+		t.Errorf("uploads go to %s", got)
 	}
 	env := m.get(t, "command:local:Command::image")["environment"].ObjectValue()
 	if got := env["BUILDER"].StringValue(); got != "uione-build@ui-one.iam.gserviceaccount.com" {
@@ -344,8 +353,12 @@ func TestGitHubsSecretIsMadeKeptAndReadableByTheBackendAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.get(t, "gcp:projects/service:Service::secretmanager.googleapis.com")
-	if got := m.get(t, "gcp:secretmanager/secret:Secret::github-webhook-secret")["secretId"].StringValue(); got != "github-webhook-secret" {
+	secret := m.get(t, "gcp:secretmanager/secret:Secret::github-webhook-secret")
+	if got := secret["secretId"].StringValue(); got != "github-webhook-secret" {
 		t.Errorf("the secret is called %s", got)
+	}
+	if !secret["deletionProtection"].BoolValue() {
+		t.Errorf("removing GitHub from the project would delete the master secret")
 	}
 	if got := m.get(t, "random:index/randomPassword:RandomPassword::github-webhook-secret")["length"].NumberValue(); got < 32 {
 		t.Errorf("the secret is %v characters long", got)
@@ -384,5 +397,251 @@ func TestWithoutGitHubThereIsNoSecret(t *testing.T) {
 		if strings.Contains(key, "secretmanager") || strings.Contains(key, "random:") {
 			t.Errorf("a project without GitHub's webhook declares %s", key)
 		}
+	}
+}
+
+func TestSettingsGoogleWouldRefuseAreRefusedBeforeAnythingIsDeclared(t *testing.T) {
+	for _, c := range []struct {
+		change func(*Project)
+		says   string
+	}{
+		{func(p *Project) { p.Name = "" }, "no name"},
+		{func(p *Project) { p.Name = "UiOne" }, "lowercase"},
+		{func(p *Project) { p.Name = "1uione" }, "starting with a letter"},
+		{func(p *Project) { p.Name = "ui_one" }, "lowercase"},
+		{func(p *Project) { p.Name = "u" }, "2 to 24"},
+		{func(p *Project) { p.Name = strings.Repeat("a", 25) }, "2 to 24"},
+		{func(p *Project) { p.Domain = "" }, "no domain"},
+		{func(p *Project) { p.Firebase = "" }, "no Firebase project"},
+		{func(p *Project) { p.Firebase = "ui1" }, "isn't a Firebase project id"},
+		{func(p *Project) { p.Firebase = "Ui-One" }, "isn't a Firebase project id"},
+		{func(p *Project) { p.Firebase = "1-ui-one" }, "isn't a Firebase project id"},
+		{func(p *Project) { p.Firebase = "ui-one-" }, "isn't a Firebase project id"},
+		{func(p *Project) { p.Firebase = strings.Repeat("a", 31) }, "isn't a Firebase project id"},
+		{func(p *Project) { p.Region = "" }, "no region"},
+		{func(p *Project) { p.GitHub = "hooks/github" }, "has to start with /"},
+	} {
+		m, err := declareChanged(t, build(t), settings, "000000-000000-000000", c.change)
+		if err == nil || !strings.Contains(err.Error(), "infrastructure: ") || !strings.Contains(err.Error(), c.says) {
+			t.Errorf("expected an error saying %q, got %v", c.says, err)
+		}
+		if len(m.resources) != 0 {
+			t.Errorf("%d resources were declared from settings that were refused", len(m.resources))
+		}
+	}
+	longest := strings.Repeat("a", 24)
+	if _, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) {
+		p.Name, p.Firebase = longest, "a"+strings.Repeat("-", 28)+"1"
+	}); err != nil {
+		t.Errorf("the longest settings allowed were refused: %v", err)
+	}
+}
+
+func TestABudgetIsOnlyEverAWholeAmountAboveZero(t *testing.T) {
+	m, err := declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.get(t, "gcp:billing/budget:Budget::budget")["amount"].ObjectValue()["specifiedAmount"].ObjectValue()["units"].StringValue(); got != "10" {
+		t.Errorf("the budget without a setting is %s", got)
+	}
+	for budget, says := range map[string]string{
+		"ten": "whole number",
+		"9.5": "whole number",
+		"0":   "more than 0",
+		"-5":  "more than 0",
+	} {
+		_, err := declare(t, build(t), `{"uione:budget": "`+budget+`"}`)
+		if err == nil || !strings.Contains(err.Error(), says) {
+			t.Errorf("a budget of %s gave %v", budget, err)
+		}
+	}
+}
+
+func TestCloudRunCantBeDeletedByAccident(t *testing.T) {
+	m, err := declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.get(t, "gcp:cloudrunv2/service:Service::backend")["deletionProtection"].BoolValue() {
+		t.Error("the backend's service can be deleted by a deploy")
+	}
+}
+
+func TestTheMasterSecretIsAnOutputUnderItsName(t *testing.T) {
+	var outputs map[string]pulumi.Input
+	m := &mocks{billing: "000000-000000-000000", resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
+	dir := build(t)
+	t.Setenv("PULUMI_CONFIG", settings)
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		p := Project{Name: "uione", Domain: "uione.io", Firebase: "ui-one", Region: "us-east4", GitHub: "/hooks/github", Build: filepath.Join(dir, "build")}
+		if err := Declare(ctx, p); err != nil {
+			return err
+		}
+		outputs = ctx.GetCurrentExportMap()
+		return nil
+	}, pulumi.WithMocks("uione", "prod", m))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"github_webhook_url", "github_webhook_master_secret"} {
+		if _, ok := outputs[name]; !ok {
+			t.Errorf("there's no %s output", name)
+		}
+	}
+	if _, ok := outputs["github_webhook_secret"]; ok {
+		t.Error("the master secret is still exported as github_webhook_secret")
+	}
+}
+
+func TestAnUnchangedImageIsntBuiltAgainFromAnotherMachine(t *testing.T) {
+	m, err := declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := m.get(t, "command:local:Command::image")
+	update := image["update"].StringValue()
+	if !strings.HasPrefix(update, unlessBuilt) || image["create"].StringValue() != buildScript {
+		t.Fatalf("the update is %q", update)
+	}
+	dir := t.TempDir()
+	run := func(previous, image string) string {
+		command := exec.Command("sh", "-c", unlessBuilt+"echo building\n")
+		command.Dir = dir
+		command.Env = append(os.Environ(), "PULUMI_COMMAND_STDOUT="+previous, "IMAGE="+image)
+		out, err := command.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if got := run("a log\nregistry/api:abc", "registry/api:abc"); got != "registry/api:abc" {
+		t.Errorf("an image that's already built was built again: %q", got)
+	}
+	if got := run("a log\nregistry/api:abc", "registry/api:def"); got != "building" {
+		t.Errorf("a changed image wasn't built: %q", got)
+	}
+}
+
+// fakeBuild runs the build script with a gcloud that fails the way it's told to,
+// the given number of times, and reports how many times it ran and whether the
+// build succeeded.
+func fakeBuild(t *testing.T, failure string, failures int) (int, bool) {
+	t.Helper()
+	dir := build(t)
+	bin := t.TempDir()
+	count := filepath.Join(bin, "count")
+	gcloud := "#!/bin/sh\necho x >> " + count + "\n" +
+		"if [ $(wc -l < " + count + ") -le " + strconv.Itoa(failures) + " ]; then echo '" + failure + "' >&2; exit 1; fi\n" +
+		"echo done\n"
+	for name, script := range map[string]string{"gcloud": gcloud, "sleep": "#!/bin/sh\n"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.Command("sh", "-c", buildScript)
+	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
+		"API="+filepath.Join(dir, "build/api"), "ONE="+filepath.Join(dir, "one"), "IMAGE=registry/api:abc",
+		"PROJECT=ui-one", "REGION=us-east4", "UPLOADS=ui-one-uione-builds", "BUILDER=uione-build@ui-one.iam.gserviceaccount.com")
+	out, err := command.Output()
+	data, _ := os.ReadFile(count)
+	runs := strings.Count(string(data), "x")
+	if err == nil && !strings.HasSuffix(strings.TrimSpace(string(out)), "registry/api:abc") {
+		t.Errorf("the build's output doesn't end with its image: %q", out)
+	}
+	return runs, err == nil
+}
+
+func TestOnlyABuildRefusedForPermissionIsTriedAgain(t *testing.T) {
+	runs, built := fakeBuild(t, "ERROR: (gcloud.builds.submit) PERMISSION_DENIED: The caller does not have permission", 2)
+	if !built || runs != 3 {
+		t.Errorf("a build refused twice for permission ran %d times, built: %v", runs, built)
+	}
+	runs, built = fakeBuild(t, "ERROR: build step 0 failed: step exited with non-zero status: 1", 1)
+	if built || runs != 1 {
+		t.Errorf("a build that failed on its own ran %d times, built: %v", runs, built)
+	}
+}
+
+func TestTheLibraryIsFoundOnlyByItsExactModulePath(t *testing.T) {
+	dir := build(t)
+	api := filepath.Join(dir, "build/api")
+	for gomod, want := range map[string]string{
+		"module uione.io/api\n\nreplace (\n\tgithub.com/da0x/uione/oneX => ../../other\n\tgithub.com/da0x/uione/one => ../../one\n)\n": filepath.Join(dir, "one"),
+		"module uione.io/api\n\nreplace github.com/da0x/uione/oneX => ../../other\n":                                                   "",
+		"module uione.io/api\n\nrequire github.com/da0x/uione/one v0.1.0\n":                                                            "",
+		"module uione.io/api\n\nreplace github.com/da0x/uione/one => github.com/someone/one v0.1.0\n":                                  "",
+	} {
+		if err := os.WriteFile(filepath.Join(api, "go.mod"), []byte(gomod), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := library(api)
+		if err != nil || got != want {
+			t.Errorf("from\n%s\nfound the library at %q (%v), not %q", gomod, got, err, want)
+		}
+	}
+}
+
+func TestAPublishedLibraryIsntStaged(t *testing.T) {
+	dir := build(t)
+	if err := os.WriteFile(filepath.Join(dir, "build/api/go.mod"), []byte("module uione.io/api\n\nrequire github.com/da0x/uione/one v0.1.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := declare(t, dir, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.get(t, "command:local:Command::image")["environment"].ObjectValue()["ONE"].StringValue(); got != "" {
+		t.Errorf("the build stages the library from %s", got)
+	}
+	// The fake gcloud succeeds only if what it's given to build has no one/.
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "gcloud"), []byte("#!/bin/sh\n[ -d \"$3/api\" ] && [ ! -e \"$3/one\" ]\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("sh", "-c", buildScript)
+	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "API="+filepath.Join(dir, "build/api"), "ONE=", "IMAGE=i",
+		"PROJECT=ui-one", "REGION=us-east4", "UPLOADS=ui-one-uione-builds", "BUILDER=uione-build@ui-one.iam.gserviceaccount.com")
+	if out, err := command.CombinedOutput(); err != nil {
+		t.Errorf("a build without a library folder failed, or staged one: %v\n%s", err, out)
+	}
+}
+
+func TestSymbolicLinksAreHashedNotFollowed(t *testing.T) {
+	dir := build(t)
+	api, one := filepath.Join(dir, "build/api"), filepath.Join(dir, "one")
+	before, err := hashTrees(api, one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(one, filepath.Join(api, "library")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("main.go", filepath.Join(api, "alias.go")); err != nil {
+		t.Fatal(err)
+	}
+	linked, err := hashTrees(api, one)
+	if err != nil {
+		t.Fatalf("links to a folder and a file couldn't be hashed: %v", err)
+	}
+	if linked == before {
+		t.Error("adding links didn't change the hash")
+	}
+	if err := os.Remove(filepath.Join(api, "alias.go")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("other.go", filepath.Join(api, "alias.go")); err != nil {
+		t.Fatal(err)
+	}
+	if moved, _ := hashTrees(api, one); moved == linked {
+		t.Error("pointing a link elsewhere didn't change the hash")
+	}
+	through := filepath.Join(dir, "through")
+	if err := os.Symlink(api, through); err != nil {
+		t.Fatal(err)
+	}
+	direct, _ := hashTrees(api, one)
+	if got, err := hashTrees(through, one); err != nil || got != direct {
+		t.Errorf("the backend reached through a link hashed as %s (%v), not %s", got, err, direct)
 	}
 }

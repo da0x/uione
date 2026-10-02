@@ -26,9 +26,11 @@ into `build/infrastructure` that holds only the project's settings; the
 - Events are handled in the same request as the command that caused them, not
   through Pub/Sub. With one small service nothing is lost: if a projection fails,
   the command fails and says so.
-- A project that takes GitHub's webhook gets a random secret, made by Pulumi, kept
-  in Secret Manager and readable only by the backend. One secret serves every
-  repository on a site; a GitHub App can replace it when projects need their own.
+- A site that takes GitHub's webhook gets a random master secret, made by Pulumi,
+  kept in Secret Manager and readable only by the backend. Each project's secret,
+  which its people paste into GitHub, is derived from it, so one project's secret
+  can't sign deliveries for another's repository. A GitHub App can replace this
+  when projects need more than mentions.
 
 What can't be declared is done by hand and listed in the project's README with the
 reason: linking billing, signing in to Pulumi Cloud, turning on Google sign-in,

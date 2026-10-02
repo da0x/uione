@@ -52,6 +52,14 @@ type Project struct {
 	Owner string `firestore:"owner" one:"default=me"`
 }
 
+// A handle someone claims by name, and owns.
+type Handle struct {
+	one.Record
+	Name  string   `firestore:"name" one:"required,key"`
+	Owner string   `firestore:"owner" one:"default=me"`
+	Tags  []string `firestore:"tags"`
+}
+
 type Note struct {
 	one.Record
 	Text string `firestore:"text" one:"required"`
@@ -80,6 +88,7 @@ var modules = []one.Item{
 	one.Module("studio",
 		one.Command[Project]("project::create").Allow(one.SignedIn),
 		one.Command[Project]("project::delete").Allow(one.Owner),
+		one.Command[Handle]("handle::create").Allow(one.SignedIn),
 		one.View("projects").PerUser().Each(one.Where[Project]("owner", one.Viewer)).Fields("name", "created_at"),
 	),
 	one.Module("notes",
@@ -331,4 +340,25 @@ func TestTheServiceAnswersAtHealth(t *testing.T) {
 	if response.StatusCode != http.StatusOK {
 		t.Errorf("GET /health gave %d", response.StatusCode)
 	}
+}
+
+func TestMakingAgainSomethingSomeoneElseOwnsIsRefused(t *testing.T) {
+	h := start(t)
+	_, ada := h.signUp("ada@example.com")
+	_, bob := h.signUp("bob@example.com")
+	h.mustRun("studio/handle/create", ada, map[string]any{"name": "ada"})
+	h.expect("studio/handle/create", bob, map[string]any{"name": "ada"}, http.StatusConflict, "that belongs to someone else")
+	h.mustRun("studio/handle/create", ada, map[string]any{"name": "ada", "tags": []any{"mine"}})
+}
+
+func TestARequestIsBounded(t *testing.T) {
+	h := start(t)
+	_, ada := h.signUp("ada@example.com")
+	many := make([]any, 1001)
+	for i := range many {
+		many[i] = fmt.Sprint(i)
+	}
+	h.expect("studio/handle/create", ada, map[string]any{"name": "ada", "tags": many}, http.StatusBadRequest, "Tags can hold at most 1000")
+	h.expect("studio/project/delete", ada, map[string]any{"id": "a/b"}, http.StatusNotFound, "that doesn't exist")
+	h.expect("studio/project/delete", ada, map[string]any{"id": "__name__"}, http.StatusNotFound, "that doesn't exist")
 }

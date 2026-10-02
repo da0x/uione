@@ -12,12 +12,43 @@
 // billing, turning on Google sign-in (which creates an OAuth client no resource can
 // manage), adding the site's domain to sign-in's authorized domains, and the DNS
 // records at the domain's registrar.
+//
+// A project's first deploy expects a Firebase project without a Firestore database
+// yet. Creating the database in the console first, or publishing rules there, makes
+// that deploy stop with "already exists". To keep a database that's already there,
+// adopt it and its rules release into the stack before the first pulumi up, from the
+// Pulumi program's folder, with the Firebase project in place of ui-one:
+//
+//	pulumi import --protect=false gcp:firestore/database:Database database 'projects/ui-one/databases/(default)'
+//	pulumi import --protect=false gcp:firebaserules/release:Release rules projects/ui-one/releases/cloud.firestore
+//
+// pulumi import prints code to add for each, which isn't needed, since the program
+// already declares both; the next pulumi up updates them to match it.
+//
+// The stack's outputs are what a deploy and its maintainers read from it:
+//
+//   - firebase_api_key, firebase_app_id, firebase_project_id and
+//     firebase_auth_domain: the web app's Firebase settings, which the web build
+//     needs.
+//   - backend_url: the address Cloud Run serves the backend at. The site calls it
+//     through Hosting, at /api/.
+//   - dns_records: the changes to make at the domain's registrar, one per line, like
+//     "add A uione.io 199.36.158.100".
+//   - github_webhook_url, when the project takes GitHub's webhook: the address
+//     each project's webhook is pointed at.
+//   - github_webhook_master_secret, when the project takes GitHub's webhook: the
+//     master secret each project's webhook secret is derived from, as a Pulumi
+//     secret. It's never pasted into GitHub itself; each project's maintainers see
+//     their own secret in the app.
 package infrastructure
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/billing"
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/cloudrunv2"
@@ -41,8 +72,10 @@ type Project struct {
 	Region   string // where the backend and the database live, like us-east4
 
 	// Where GitHub's webhook comes in, like /hooks/github, when the project takes
-	// it. The secret that signs it is made here, kept in Secret Manager, and given
-	// to the backend; the stack's outputs say what to paste into GitHub.
+	// it. A master secret is made here, kept in Secret Manager, and given to the
+	// backend, which derives each project's webhook secret from it. The master
+	// secret is never pasted into GitHub; each project's maintainers see their own
+	// secret in the app.
 	GitHub string
 
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
@@ -82,6 +115,9 @@ func Deploy(p Project) {
 // files is budget, the monthly amount in the billing account's currency, which is 10
 // unless the program's config sets it.
 func Declare(ctx *pulumi.Context, p Project) error {
+	if err := p.check(); err != nil {
+		return err
+	}
 	if p.Build == "" {
 		p.Build = ".."
 	}
@@ -182,6 +218,9 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		Project:  project,
 		Name:     pulumi.String(Service),
 		Location: pulumi.String(p.Region),
+		// Destroying the stack, or changing Region or Firebase (which replaces the
+		// service), needs this turned off first, in a deploy of its own.
+		DeletionProtection: pulumi.Bool(true),
 		// Anyone may call it, the same as locally: every command checks who's asking
 		// and whether they may, so a second gate in front would only duplicate that.
 		InvokerIamDisabled: pulumi.Bool(true),
@@ -245,9 +284,14 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		}
 		return account, nil
 	}).(pulumi.StringOutput)
-	amount := settings.GetInt("budget")
-	if amount == 0 {
+	amount, err := settings.TryInt("budget")
+	switch {
+	case errors.Is(err, config.ErrMissingVar):
 		amount = 10
+	case err != nil:
+		return fmt.Errorf("infrastructure: budget has to be a whole number: %w", err)
+	case amount <= 0:
+		return fmt.Errorf("infrastructure: budget is %d; it has to be more than 0", amount)
 	}
 	if _, err := billing.NewBudget(ctx, "budget", &billing.BudgetArgs{
 		BillingAccount: account,
@@ -303,9 +347,11 @@ func deref(s *string) string {
 	return *s
 }
 
-// githubSecret makes the secret GitHub signs its webhook with: a random value, kept
-// in Secret Manager, readable by the backend and nothing else. A maintainer reads
-// it with pulumi stack output github_webhook_secret --show-secrets.
+// githubSecret makes the master secret the backend derives each project's webhook
+// secret from: a random value, kept in Secret Manager, readable by the backend and
+// nothing else. It's never pasted into GitHub itself; each project's maintainers
+// see their own secret in the app. It's the stack output
+// github_webhook_master_secret, for recovering it.
 func githubSecret(ctx *pulumi.Context, p Project, project pulumi.StringInput, runtime *serviceaccount.Account,
 	after pulumi.ResourceOrInvokeOption) (*cloudrunv2.ServiceTemplateContainerEnvArgs, pulumi.Resource, error) {
 	value, err := random.NewRandomPassword(ctx, "github-webhook-secret", &random.RandomPasswordArgs{
@@ -319,6 +365,9 @@ func githubSecret(ctx *pulumi.Context, p Project, project pulumi.StringInput, ru
 		Project:     project,
 		SecretId:    pulumi.String("github-webhook-secret"),
 		Replication: &secretmanager.SecretReplicationArgs{Auto: &secretmanager.SecretReplicationAutoArgs{}},
+		// Every project's webhook secret is derived from this one, so removing GitHub
+		// from the project, or destroying the stack, needs this turned off first.
+		DeletionProtection: pulumi.Bool(true),
 	}, after)
 	if err != nil {
 		return nil, nil, err
@@ -340,7 +389,7 @@ func githubSecret(ctx *pulumi.Context, p Project, project pulumi.StringInput, ru
 		return nil, nil, err
 	}
 	ctx.Export("github_webhook_url", pulumi.Sprintf("https://%s%s", p.Domain, p.GitHub))
-	ctx.Export("github_webhook_secret", pulumi.ToSecret(value.Result))
+	ctx.Export("github_webhook_master_secret", pulumi.ToSecret(value.Result))
 	env := &cloudrunv2.ServiceTemplateContainerEnvArgs{
 		Name: pulumi.String("GITHUB_WEBHOOK_SECRET"),
 		ValueSource: &cloudrunv2.ServiceTemplateContainerEnvValueSourceArgs{
@@ -351,4 +400,36 @@ func githubSecret(ctx *pulumi.Context, p Project, project pulumi.StringInput, ru
 		},
 	}
 	return env, pulumi.Resource(access), nil
+}
+
+var (
+	projectNames = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	firebaseIds  = regexp.MustCompile(`^[a-z][a-z0-9-]{4,28}[a-z0-9]$`)
+)
+
+// check refuses settings Google Cloud would refuse partway through a deploy, so
+// nothing is declared from them.
+func (p Project) check() error {
+	switch {
+	case p.Name == "":
+		return errors.New("infrastructure: the project has no name")
+	case !projectNames.MatchString(p.Name):
+		return fmt.Errorf("infrastructure: the name %q has to be lowercase letters, digits and hyphens, starting with a letter", p.Name)
+	case len(p.Name) < 2 || len(p.Name) > 24:
+		// Its service accounts are the name and -api or -build, which Google
+		// allows from 6 to 30 characters.
+		return fmt.Errorf("infrastructure: the name %q has to be 2 to 24 characters long", p.Name)
+	case p.Domain == "":
+		return errors.New("infrastructure: the project has no domain")
+	case p.Firebase == "":
+		return errors.New("infrastructure: the project has no Firebase project")
+	case !firebaseIds.MatchString(p.Firebase):
+		return fmt.Errorf("infrastructure: %q isn't a Firebase project id, which is 6 to 30 lowercase letters, digits "+
+			"and hyphens, starting with a letter and not ending with a hyphen", p.Firebase)
+	case p.Region == "":
+		return errors.New("infrastructure: the project has no region")
+	case p.GitHub != "" && !strings.HasPrefix(p.GitHub, "/"):
+		return fmt.Errorf("infrastructure: GitHub's webhook route %q has to start with /", p.GitHub)
+	}
+	return nil
 }

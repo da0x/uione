@@ -82,6 +82,9 @@ func Create[E any, P entityPointer[E]](c *Ctx, entity *E) error {
 		if taken := s.uniqueKey(); taken != nil {
 			return invalid("%s is already taken", label(taken.name))
 		}
+		if err := s.ownedByAnother(snap.Data(), c.me); err != nil {
+			return err
+		}
 		before = snap.Data()
 		existing := new(E)
 		if err := snap.DataTo(existing); err != nil {
@@ -124,6 +127,9 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 	if id == "" {
 		return nil, invalid("%s is required", label(s.name))
 	}
+	if !validID(id) {
+		return nil, &Failure{Status: 404, Message: "that " + strings.ReplaceAll(s.name, "_", " ") + " doesn't exist"}
+	}
 	ref := c.app.store.Collection(s.collection).Doc(id)
 	for _, r := range c.reads {
 		if r.ref.Path == ref.Path {
@@ -149,8 +155,8 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 // save writes every entity the body made, and every one it read and changed, after
 // checking each against its rules, and returns the events to publish once the
 // transaction commits.
-func (c *Ctx) save() ([]Event, error) {
-	var events []Event
+func (c *Ctx) save() ([]event, error) {
+	var events []event
 	for _, n := range c.counters {
 		if err := c.tx.Set(n.ref, map[string]any{"last": n.value}); err != nil {
 			return nil, err
@@ -166,7 +172,7 @@ func (c *Ctx) save() ([]Event, error) {
 			return nil, err
 		}
 		events = append(events, kept...)
-		events = append(events, Event{
+		events = append(events, event{
 			Type:    m.schema.name + ".updated",
 			Entity:  m.schema.entity,
 			ID:      m.ref.ID,
@@ -193,7 +199,7 @@ func (c *Ctx) save() ([]Event, error) {
 			return nil, err
 		}
 		events = append(events, kept...)
-		events = append(events, Event{
+		events = append(events, event{
 			Type:    r.schema.name + ".updated",
 			Entity:  r.schema.entity,
 			ID:      r.ref.ID,
@@ -208,7 +214,7 @@ func (c *Ctx) save() ([]Event, error) {
 // keep writes the changes of an entity that keeps its history, in the command's
 // transaction, and returns their events. before is nil for something just made,
 // and after nil for something deleted; either way that's one change with no field.
-func (a *App) keep(tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]Event, error) {
+func (a *App) keep(tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
 	if s.history == nil {
 		return nil, nil
 	}
@@ -239,14 +245,14 @@ func (a *App) keep(tx *firestore.Transaction, s *schema, id string, before, afte
 		}
 	}
 	collection := a.store.Collection(s.history.collection)
-	var events []Event
+	var events []event
 	for _, doc := range entries {
 		ref := collection.NewDoc()
 		doc["id"] = ref.ID
 		if err := tx.Set(ref, doc); err != nil {
 			return nil, err
 		}
-		events = append(events, Event{Type: s.history.name + ".updated", Entity: s.history.entity, ID: ref.ID, Version: now.UnixNano(), After: doc})
+		events = append(events, event{Type: s.history.name + ".updated", Entity: s.history.entity, ID: ref.ID, Version: now.UnixNano(), After: doc})
 	}
 	return events, nil
 }
@@ -295,8 +301,18 @@ func Remove(list []string, value string) []string {
 	return kept
 }
 
+// Now is when the command runs: one moment for everything it does.
 func (c *Ctx) Now() time.Time { return c.now }
-func (c *Ctx) Me() string     { return c.me }
+
+// Me is the id of the person running the command, or empty when nobody is signed in.
+func (c *Ctx) Me() string { return c.me }
+
+// validID says whether an id a request names can be a document's id: Firestore
+// refuses ids with a slash, ".", "..", ids like __this__, and ids over 1500 bytes.
+func validID(id string) bool {
+	return id != "." && id != ".." && len(id) <= 1500 && !strings.Contains(id, "/") &&
+		!(strings.HasPrefix(id, "__") && strings.HasSuffix(id, "__"))
+}
 
 // Fail stops the command with a message for the person who ran it.
 func (c *Ctx) Fail(message string) error { return &Failure{Status: 400, Message: message} }
@@ -305,13 +321,20 @@ func (c *Ctx) Fail(message string) error { return &Failure{Status: 400, Message:
 // create, update and delete do what they say, using the entity's own rules. Any
 // other action loads the entity, runs Do, and saves it.
 type Cmd[E any, P entityPointer[E]] struct {
+	entity     string // as the command's name says, checked against E
 	action     string
 	permission Permission
 	do         func(*Ctx, *E) error
 }
 
+// Command declares a command on entity E, named after the entity and the action,
+// like book::create.
 func Command[E any, P entityPointer[E]](name string) *Cmd[E, P] {
-	return &Cmd[E, P]{action: name[strings.LastIndex(name, ":")+1:]}
+	at := strings.LastIndex(name, "::")
+	if at < 0 {
+		panic("one: a command is named after its entity, like book::create, not " + name)
+	}
+	return &Cmd[E, P]{entity: name[:at], action: name[at+2:]}
 }
 
 // Allow changes who may run the command. Without it, the command needs the
@@ -329,9 +352,12 @@ func (c *Cmd[E, P]) Do(body func(*Ctx, *E) error) *Cmd[E, P] {
 
 func (c *Cmd[E, P]) register(r *registry, ns string) {
 	s := r.schema(reflect.TypeFor[E](), ns)
-	permission := c.permission
+	if c.entity != s.name && c.entity != s.entity {
+		panic("one: command " + c.entity + "::" + c.action + " is on " + s.entity + "; name it " + s.name + "::" + c.action)
+	}
+	permission := qualified(ns, c.permission)
 	if permission == "" {
-		permission = Permission(s.name + ":" + c.action)
+		permission = Permission(s.entity + ":" + c.action)
 	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
 		return run[E, P](a, call, s, c.action, permission, c.do)
@@ -349,7 +375,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	collection := a.store.Collection(s.collection)
 	var id string
 	var before, after map[string]any
-	var pointed []Event // changes to entities the command points at
+	var pointed []event // changes to entities the command points at
 
 	// Creating is checked before anything is read, unless only a role within an
 	// entity, such as a project, could allow it: then it's checked once what's sent
@@ -411,6 +437,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				if taken := s.uniqueKey(); taken != nil {
 					return invalid("%s is already taken", label(taken.name))
 				}
+				if err := s.ownedByAnother(snap.Data(), c.me); err != nil {
+					return err
+				}
 				before = snap.Data()
 				existing := new(E)
 				if err := snap.DataTo(existing); err != nil {
@@ -445,6 +474,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if id == "" {
 			return invalid("the command needs the id of what it acts on")
 		}
+		if !validID(id) {
+			return &Failure{Status: 404, Message: "that doesn't exist"}
+		}
 		ref := collection.Doc(id)
 		snap, err := tx.Get(ref)
 		if status.Code(err) == codes.NotFound {
@@ -478,6 +510,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := s.decode(input, v); err != nil {
 				return err
 			}
+			s.normalize(v)
 		}
 		if do != nil {
 			if err := do(body, entity); err != nil {
@@ -485,6 +518,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 		}
 		if err := s.validate(v); err != nil {
+			return err
+		}
+		// Moving something into another project needs the same permission there.
+		if err := a.permittedWhereMoved(ctx, tx, c.me, permission, s, before, v); err != nil {
 			return err
 		}
 		if err := a.unique(tx, s, v, id); err != nil {
@@ -507,7 +544,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		return "", err
 	}
 
-	a.publish(c.ctx, Event{
+	a.publish(c.ctx, event{
 		Type:    s.name + ".updated",
 		Entity:  s.entity,
 		ID:      id,
@@ -550,6 +587,9 @@ func (a *App) serials(tx *firestore.Transaction, s *schema, v reflect.Value, cou
 			if id == "" {
 				return nil, invalid("%s is required", label(f.per))
 			}
+			if !validID(id) {
+				return nil, invalid("there's no such %s", strings.ToLower(label(f.per)))
+			}
 			name += "." + id
 		}
 		ref := a.store.Collection("serials").Doc(name)
@@ -576,6 +616,20 @@ func (a *App) serials(tx *firestore.Transaction, s *schema, v reflect.Value, cou
 	return numbered, nil
 }
 
+// ownedByAnother refuses to make again, under the same key, something that belongs
+// to someone else: making it again would replace it and make the caller its owner.
+func (s *schema) ownedByAnother(stored map[string]any, me string) error {
+	for _, f := range s.fields {
+		if f.initial != "me" {
+			continue
+		}
+		if owner, _ := stored[f.name].(string); owner != "" && owner != me {
+			return &Failure{Status: 409, Message: "that belongs to someone else"}
+		}
+	}
+	return nil
+}
+
 // uniqueKey is a key field that's also unique, if the entity has one: then the
 // same key can't be made twice.
 func (s *schema) uniqueKey() *field {
@@ -600,6 +654,9 @@ func (a *App) unique(tx *firestore.Transaction, s *schema, v reflect.Value, id s
 	for _, f := range s.fields {
 		if !f.unique {
 			continue
+		}
+		if v.FieldByIndex(f.index).IsZero() {
+			continue // an optional field left empty is never taken
 		}
 		value := v.FieldByIndex(f.index).Interface()
 		docs, err := tx.Documents(a.store.Collection(s.collection).Where(f.name, "==", value).Limit(2)).GetAll()
@@ -655,6 +712,38 @@ func (a *App) permitted(ctx context.Context, tx *firestore.Transaction, me strin
 		return a.permittedWithin(tx, me, p, entity)
 	}
 	return &Failure{Status: 403, Message: "you don't have permission to do this"}
+}
+
+// permittedWhereMoved checks a permission again when a change moves an entity into
+// another project, or whatever a role is held within.
+func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction, me string, p Permission, s *schema, before map[string]any, v reflect.Value) error {
+	if !a.scopes(p) {
+		return nil
+	}
+	for _, ro := range a.reg.scoped {
+		scope := a.reg.schemas[ro.scope]
+		after, err := a.within(tx, &owned{s, v}, scope)
+		if err != nil {
+			return err
+		}
+		was := reflect.New(s.typ).Elem()
+		was.Addr().Interface().(interface{ record() *Record }).record().ID = v.Addr().Interface().(interface{ record() *Record }).record().ID
+		for _, f := range s.fields {
+			if f.refers != "" {
+				if id, ok := before[f.name].(string); ok && was.FieldByIndex(f.index).Kind() == reflect.String {
+					was.FieldByIndex(f.index).SetString(id)
+				}
+			}
+		}
+		earlier, err := a.within(tx, &owned{s, was}, scope)
+		if err != nil {
+			return err
+		}
+		if after != earlier {
+			return a.permitted(ctx, tx, me, p, &owned{s, v})
+		}
+	}
+	return nil
 }
 
 // scopes says whether a role held within an entity grants a permission.

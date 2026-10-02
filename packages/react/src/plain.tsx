@@ -4,8 +4,60 @@
 // A component set that draws everything as plain, semantic HTML with no styling. The
 // tests use it, and it shows that nothing in @uione/react depends on any one look.
 
-import { useId } from "react";
-import type { ComponentSet } from "./contract.js";
+import { useEffect, useId, useRef } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import type { ComponentSet, DialogProps } from "./contract.js";
+
+// Read by screen readers, not shown.
+const hidden: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+};
+
+// What a row is called, for its buttons: the first cell that's text.
+function rowName(cells: ReactNode[]): string | undefined {
+  const cell = cells.find((c) => (typeof c === "string" && c !== "") || typeof c === "number");
+  return cell === undefined ? undefined : String(cell);
+}
+
+function PlainDialog({ open, title, onClose, children }: DialogProps) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const heading = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!open || !dialog) return;
+    const before = document.activeElement;
+    // showModal keeps focus inside and closes on Escape; jsdom doesn't have it.
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    return () => {
+      if (before instanceof HTMLElement && before.isConnected) before.focus();
+    };
+  }, [open]);
+  if (!open) return null;
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={heading}
+      onCancel={(event) => {
+        // Closing is the screen's decision, so Escape asks for it rather than closing.
+        event.preventDefault();
+        onClose();
+      }}
+      onClose={onClose}
+    >
+      <h2 id={heading}>{title}</h2>
+      {children}
+    </dialog>
+  );
+}
 
 export const plain: ComponentSet = {
   Page: ({ name, icon, home, nav, title, account, children }) => (
@@ -95,36 +147,49 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error }) => (
-    <>
-      <table aria-busy={status === "loading"}>
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {row.cells.map((cell, i) => (
-                <td key={i}>{i === 0 && row.link ? <a {...row.link}>{cell}</a> : cell}</td>
+  Table: ({ status, columns, rows, error }) => {
+    const actions = Math.max(0, ...rows.map((row) => row.actions.length));
+    return (
+      <>
+        <table aria-busy={status === "loading"}>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
               ))}
-              {row.actions.map((a) => (
-                <td key={a.label}>
-                  <button type="button" disabled={a.disabled} onClick={a.onClick}>
-                    {a.label}
-                  </button>
-                </td>
-              ))}
+              {actions > 0 && (
+                <th colSpan={actions}>
+                  <span style={hidden}>Actions</span>
+                </th>
+              )}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      {error && <p role="alert">{error}</p>}
-    </>
-  ),
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                {row.cells.map((cell, i) => (
+                  <td key={i}>{i === 0 && row.link ? <a {...row.link}>{cell}</a> : cell}</td>
+                ))}
+                {row.actions.map((a) => (
+                  <td key={a.label}>
+                    <button
+                      type="button"
+                      aria-label={[a.label, rowName(row.cells)].filter(Boolean).join(" ")}
+                      disabled={a.disabled}
+                      onClick={a.onClick}
+                    >
+                      {a.label}
+                    </button>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {error && <p role="alert">{error}</p>}
+      </>
+    );
+  },
 
   Form: function PlainForm({ fields, submit, busy, error, onSubmit }) {
     const id = useId();
@@ -135,30 +200,38 @@ export const plain: ComponentSet = {
           onSubmit();
         }}
       >
-        {fields.map((field) => (
-          <p key={field.name}>
-            <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
-            {field.type === "markdown" ? (
-              <textarea
-                id={`${id}-${field.name}`}
-                name={field.name}
-                value={field.value}
-                onChange={(event) => field.onChange(event.target.value)}
-              />
-            ) : (
-              <input
-                id={`${id}-${field.name}`}
-                name={field.name}
-                type={field.type === "list" ? "text" : field.type}
-                placeholder={field.type === "list" ? "separated by commas" : undefined}
-                value={field.value}
-                onChange={(event) => field.onChange(event.target.value)}
-              />
-            )}
-            {field.hint && <small>{field.hint}</small>}
+        {fields.map((field) => {
+          const hint = `${id}-${field.name}-hint`;
+          const described = [field.hint ? hint : "", error ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined;
+          const common = {
+            id: `${id}-${field.name}`,
+            name: field.name,
+            value: field.value,
+            "aria-describedby": described,
+            "aria-invalid": error ? true : undefined,
+          };
+          return (
+            <p key={field.name}>
+              <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
+              {field.type === "markdown" ? (
+                <textarea {...common} onChange={(event) => field.onChange(event.target.value)} />
+              ) : (
+                <input
+                  {...common}
+                  type={field.type === "list" ? "text" : field.type}
+                  placeholder={field.type === "list" ? "separated by commas" : undefined}
+                  onChange={(event) => field.onChange(event.target.value)}
+                />
+              )}
+              {field.hint && <small id={hint}>{field.hint}</small>}
+            </p>
+          );
+        })}
+        {error && (
+          <p role="alert" id={`${id}-error`}>
+            {error}
           </p>
-        ))}
-        {error && <p role="alert">{error}</p>}
+        )}
         <button type="submit" disabled={busy}>
           {submit}
         </button>
@@ -175,13 +248,7 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Dialog: ({ open, title, children }) =>
-    open ? (
-      <div role="dialog" aria-modal="true" aria-label={title}>
-        <h2>{title}</h2>
-        {children}
-      </div>
-    ) : null,
+  Dialog: PlainDialog,
 
   // The plain set has no Markdown renderer, so it shows what was written as it is.
   Markdown: ({ status, source }) =>
@@ -190,5 +257,11 @@ export const plain: ComponentSet = {
   Picture: ({ source }) => <img src={source} alt="" width={24} height={24} referrerPolicy="no-referrer" />,
 
   Live: ({ status, value }) =>
-    status === "live" ? <span>{value}</span> : <span aria-busy="true" aria-label="not available right now" />,
+    status === "live" ? (
+      <span>{value}</span>
+    ) : (
+      <span aria-busy="true">
+        <span style={hidden}>not available right now</span>
+      </span>
+    ),
 };

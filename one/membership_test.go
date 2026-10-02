@@ -149,3 +149,27 @@ func TestAPrivateTeamsPagesAreReadByItsPeopleUntilItsMadePublic(t *testing.T) {
 		}
 	}
 }
+
+func TestTwoSeatsInTwoTeamsNeverShareAnId(t *testing.T) {
+	h := start(t)
+	_, adaToken := h.signUp("ada@example.com")
+	grace, graceToken := h.signUp("grace@example.com")
+	h.mustRun("team/team/create", adaToken, map[string]any{"slug": "engine"})
+	h.mustRun("team/team/create", graceToken, map[string]any{"slug": "engine-x"})
+
+	// Seating "x-<grace>" in engine would once have been engine-x-<grace>: Grace's
+	// own seat as lead of engine-x.
+	h.mustRun("team/seat/create", adaToken, map[string]any{"team": "engine", "person": "x-" + grace})
+	h.mustRun("team/chore/create", graceToken, map[string]any{"team": "engine-x", "title": "Still hers"})
+}
+
+func TestAnUpdateCantMoveAChoreIntoAnotherTeam(t *testing.T) {
+	h := start(t)
+	_, adaToken := h.signUp("ada@example.com")
+	_, graceToken := h.signUp("grace@example.com")
+	h.mustRun("team/team/create", adaToken, map[string]any{"slug": "engine"})
+	h.mustRun("team/team/create", graceToken, map[string]any{"slug": "loom"})
+	chore := h.mustRun("team/chore/create", adaToken, map[string]any{"team": "engine", "title": "Oil the gears"})
+	h.expect("team/chore/update", adaToken, map[string]any{"id": chore, "team": "loom"}, http.StatusForbidden, "you don't have permission to do this")
+	h.mustRun("team/chore/update", adaToken, map[string]any{"id": chore, "title": "Oil every gear"})
+}

@@ -38,7 +38,7 @@ describe("live views", () => {
   it("shows a value only while its view is live", () => {
     const source = memorySource();
     renderScreen(source, () => <Count />);
-    const placeholder = () => screen.queryByLabelText("not available right now");
+    const placeholder = () => screen.queryByText("not available right now");
 
     expect(placeholder()).toBeTruthy(); // loading: nothing has arrived
 
@@ -156,7 +156,7 @@ describe("tables", () => {
     expect(screen.getAllByRole("row")).toHaveLength(3);
     expect(screen.getByText("Herbert")).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Withdraw" })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Dune" }));
     expect(screen.getByRole("dialog").textContent).toContain("Withdraw Dune?");
     fireEvent.click(screen.getByRole("button", { name: "Yes" }));
     await waitFor(() => expect(source.runs).toEqual([{ command: "library::book::withdraw", input: { id: "b2" } }]));
@@ -189,7 +189,7 @@ describe("when something fails, the person is told", () => {
     renderScreen(source, () => (
       <Table view={useView("library::shelf")} columns={{ title: "Title" }} actions={["library::book::withdraw"]} />
     ));
-    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Dune" }));
     expect((await screen.findByRole("alert")).textContent).toBe("that book is on loan");
   });
 });
@@ -338,5 +338,95 @@ describe("a form that changes something already stored", () => {
     // Once the view has a newer document, the form follows it again.
     act(() => source.set("library::book_page", { title: "Dune Messiah", author: "Frank Herbert", due_at: new Date(2026, 9, 30) }));
     expect((screen.getByLabelText("Author") as HTMLInputElement).value).toBe("Frank Herbert");
+  });
+});
+
+describe("why a command failed", () => {
+  const failing = () =>
+    memorySource({
+      commands: {
+        "studio::project::create": () => {
+          throw new Error("that name is taken");
+        },
+      },
+    });
+
+  it("goes once a field is edited", async () => {
+    renderScreen(failing(), () => <Form command="studio::project::create" fields={["name"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await screen.findByRole("alert");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "another" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("isn't there when a form's dialog is opened again", async () => {
+    renderScreen(failing(), () => <Form command="studio::project::create" fields={["name"]} button />);
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    fireEvent.submit(screen.getByLabelText("Name").closest("form")!);
+    await screen.findByRole("alert");
+    fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("goes when the person declines to run it again", async () => {
+    const source = memorySource({
+      commands: {
+        "library::book::withdraw": () => {
+          throw new Error("that book is on loan");
+        },
+      },
+    });
+    renderScreen(source, () => (
+      <>
+        <Command name="library::book::withdraw" />
+        <Confirm command="library::book::withdraw" question="Withdraw it?" />
+      </>
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("that book is on loan");
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
+});
+
+describe("a table whose rows open a page inside another", () => {
+  it("fills the row's parameter with its id, and the ones before it from the address", () => {
+    const source = memorySource({ views: { "tracker::issues": { rows: [{ id: "i 1", title: "Keys" }] } } });
+    function Issues() {
+      return <Table view={useView("tracker::issues")} link="/projects/:project/issues/:issue" columns={{ title: "Title" }} />;
+    }
+    const page = defineScreen({ title: "Project", route: "/projects/:project" }, () => <Issues />);
+    render(<App name="app" screens={[page]} ui={plain} data={source} location="/projects/uione" />);
+    expect(screen.getByRole("link", { name: "Keys" }).getAttribute("href")).toBe("/projects/uione/issues/i%201");
+  });
+
+  it("links to another row's page from a row's page", () => {
+    const source = memorySource({ views: { "library::related": { rows: [{ id: "b2", title: "Emma" }] } } });
+    const page = defineScreen({ title: "Book", route: "/books/:book" }, () => (
+      <Table view={useView("library::related")} link="/books/:book" columns={{ title: "Title" }} />
+    ));
+    render(<App name="app" screens={[page]} ui={plain} data={source} location="/books/b1" />);
+    expect(screen.getByRole("link", { name: "Emma" }).getAttribute("href")).toBe("/books/b2");
+  });
+});
+
+describe("a view whose data isn't what a table expects", () => {
+  it("shows a list that isn't a list as empty", () => {
+    const source = memorySource({ views: { "library::shelf": { rows: "nothing" } } });
+    renderScreen(source, () => <Table view={useView("library::shelf")} columns={{ title: "Title" }} />);
+    expect(screen.getAllByRole("row")).toHaveLength(1);
+  });
+
+  it("leaves out rows that aren't objects or have no id", () => {
+    const rows = [null, 5, "row", ["b0"], { title: "No id" }, { id: 3, title: "Number id" }, { id: "b1", title: "Kept" }];
+    const source = memorySource({ views: { "library::shelf": { rows } } });
+    renderScreen(source, () => <Table view={useView("library::shelf")} columns={{ title: "Title" }} actions={["library::book::withdraw"]} />);
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByText("Kept")).toBeTruthy();
   });
 });

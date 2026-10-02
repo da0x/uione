@@ -22,14 +22,19 @@
     "./firebase": {
       "types": "./dist/firebase.d.ts",
       "import": "./dist/firebase.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "COPYING"
   ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "prepack": "yarn build",
+    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

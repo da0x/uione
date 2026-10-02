@@ -164,3 +164,11 @@ TEST_CASE("a github webhook makes what each event's handler creates, and is part
           std::string::npos);
     CHECK(file->content.find(", WebhookGithub,") != std::string::npos);
 }
+
+TEST_CASE("a view shows a project's webhook secret through the library") {
+    auto generated = api("/examples/tracker");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    const auto* file = find(generated.files, "tracker/tracker.go");
+    REQUIRE(file != nullptr);
+    CHECK(file->content.find("\tGitHubSecret(\"webhook_secret\")") != std::string::npos);
+}

@@ -1100,6 +1100,10 @@ namespace one::generators {
                 }
                 auto* call = std::get_if<language::call_expression>(&value.value->node);
                 auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+                if (callee && callee->name.text() == "github_secret") {
+                    calls.push_back({"GitHubSecret(" + api_detail::go_string(*value.name) + ")", value.where.line});
+                    continue;
+                }
                 if (!callee || callee->name.text() != "count" || call->arguments.size() != 1) {
                     unsupported(path_, value.where, "a view value other than count(...), or a field of the entity a view per entity is for");
                     return false;

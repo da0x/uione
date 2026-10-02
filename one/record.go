@@ -77,6 +77,7 @@ type field struct {
 	key      bool
 	unique   bool
 	serial   bool   // counted up as each entity is made
+	lower    bool   // stored lowercase, like a GitHub repository's name
 	per      string // for a serial counted within another entity: the field pointing at it
 	email    bool
 	after    string
@@ -205,6 +206,12 @@ func invalid(format string, args ...any) *Failure {
 	return &Failure{Status: 400, Message: fmt.Sprintf(format, args...)}
 }
 
+// A list a command is sent is bounded, so one request can't hold the server up.
+const (
+	maxListItems      = 1000
+	maxListItemLength = 1000
+)
+
 // decode copies what a command was sent onto an entity. Only the fields sent are
 // changed. A field that starts as "me" can't be sent at all, since it's always the
 // person running the command, and neither can a serial, which is counted.
@@ -259,15 +266,26 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 				if !ok {
 					return invalid("%s should be a list", label(f.name))
 				}
+				if len(items) > maxListItems {
+					return invalid("%s can hold at most %d", label(f.name), maxListItems)
+				}
 				list := make([]string, 0, len(items))
+				seen := make(map[string]bool, len(items))
 				for _, item := range items {
 					text, ok := item.(string)
 					if !ok {
 						return invalid("%s should be a list of text", label(f.name))
 					}
-					if text = strings.TrimSpace(text); text != "" && !contains(list, text) {
+					if len(text) > maxListItemLength {
+						return invalid("each of %s can be at most %d characters", strings.ToLower(label(f.name)), maxListItemLength)
+					}
+					if text = strings.TrimSpace(text); text != "" && !seen[text] {
+						seen[text] = true
 						list = append(list, text)
 					}
+				}
+				if target.Type() != reflect.TypeOf(list) {
+					return invalid("%s can't be set this way", label(f.name))
 				}
 				target.Set(reflect.ValueOf(list))
 			default:
@@ -366,19 +384,27 @@ func (s *schema) id(v reflect.Value) (string, bool) {
 			return "", false
 		}
 		parts[i] = url.PathEscape(value)
+		// Parts are joined by dashes, so a dash in any part but the first is escaped:
+		// project engine with person x-1 is engine-x%2D1, never the same id as
+		// project engine-x with person 1.
+		if i > 0 {
+			parts[i] = strings.ReplaceAll(parts[i], "-", "%2D")
+		}
 	}
 	return strings.Join(parts, "-"), true
 }
 
-// normalize stores key fields in the same form the id is made from.
+// normalize stores key fields in the same form the id is made from, and lowercases
+// the fields that are compared without case.
 func (s *schema) normalize(v reflect.Value) {
-	for _, key := range s.keys {
-		if key.typ.Kind() != reflect.String {
+	for i := range s.fields {
+		f := &s.fields[i]
+		if f.typ.Kind() != reflect.String || !(f.key || f.lower) {
 			continue
 		}
-		target := v.FieldByIndex(key.index)
+		target := v.FieldByIndex(f.index)
 		value := strings.TrimSpace(target.String())
-		if key.email {
+		if f.email || f.lower {
 			value = strings.ToLower(value)
 		}
 		target.SetString(value)

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { App, Text, memorySource, screen as defineScreen, show } from "../src/index.js";
+import { vi } from "vitest";
+import { App, Form, Link, Text, memorySource, screen as defineScreen, show, useParam, useView } from "../src/index.js";
 import type { Person } from "../src/index.js";
 import { useConfirmContext } from "../src/app.js";
 import { withoutLicense } from "../src/components.js";
@@ -161,3 +162,41 @@ describe("code shown on a page", () => {
   });
 });
 
+
+describe("a screen for one thing, opened for another", () => {
+  it("starts over, so what was typed about one is never sent as the other's", async () => {
+    const source = memorySource();
+    source.set("library::book_page", { title: "Dune" }, "a");
+    source.set("library::book_page", { title: "Emma" }, "b");
+    function Book() {
+      const book = useParam("book");
+      return (
+        <>
+          <Form command="library::book::update" fields={["title"]} from={useView("library::book_page", book)} id={book} />
+          <Link to="/books/b">Next book</Link>
+        </>
+      );
+    }
+    const page = defineScreen({ title: "Book", route: "/books/:book" }, () => <Book />);
+    render(<App name="app" screens={[page]} ui={plain} data={source} location="/books/a" />);
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Dune, edited" } });
+    fireEvent.click(screen.getByRole("link", { name: "Next book" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Update" })));
+    expect(source.runs).toEqual([{ command: "library::book::update", input: { title: "Emma", id: "b" } }]);
+  });
+});
+
+describe("a screen that breaks while it's drawn", () => {
+  it("shows a short message, and leaves the rest of the app working", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    function Broken(): never {
+      throw new Error("a bug in the screen");
+    }
+    const broken = defineScreen({ title: "Broken", route: "/broken", nav: "Broken" }, () => <Broken />);
+    render(<App name="uione" screens={[home, studio, broken]} ui={plain} data={memorySource()} location="/broken" />);
+    expect(screen.getByText(/Something went wrong showing this page/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Studio" }));
+    expect(screen.getByText("Your projects.")).toBeTruthy();
+    vi.restoreAllMocks();
+  });
+});

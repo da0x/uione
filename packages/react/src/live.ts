@@ -53,6 +53,14 @@ export function backoff(attempt: number, first: number, most: number): number {
   return full / 2 + (Math.random() * full) / 2;
 }
 
+// A subject becomes part of a document's path, and the router decodes %2F in an
+// address, so one taken from the address could name a different document, or a path
+// Firestore refuses by throwing.
+export function safeSubject(subject: string): boolean {
+  if (subject === "" || subject === "." || subject === ".." || subject.includes("/")) return false;
+  return !(subject.startsWith("__") && subject.endsWith("__"));
+}
+
 function uidOf(auth: AuthSource): string | null | undefined {
   const person = auth.person();
   return person === undefined ? undefined : (person?.uid ?? null);
@@ -68,6 +76,10 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
     auth: backend.auth,
 
     subscribe(view, subject, emit) {
+      if (subject !== undefined && !safeSubject(subject)) {
+        emit({ status: "denied", data: undefined });
+        return () => {};
+      }
       const personal = options.personal?.includes(view) ?? false;
       let uid = uidOf(backend.auth);
       let last: ViewData | undefined;
@@ -119,24 +131,35 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
           last = undefined;
           send({ status: "loading", data: undefined });
         }
-        stop = backend.watch(
-          path,
-          (data, current) => {
-            last = data ?? {};
-            if (current) attempt = 0;
-            send({ status: current ? "live" : "stale", data: last });
-          },
-          (refused) => {
-            stop = undefined;
-            if (refused) {
-              denied = true;
-              last = undefined;
-              return send({ status: "denied", data: undefined });
-            }
-            fallBack();
-            retry = setTimeout(listen, backoff(attempt++, first, most));
-          },
-        );
+        const refuse = () => {
+          denied = true;
+          last = undefined;
+          send({ status: "denied", data: undefined });
+        };
+        try {
+          stop = backend.watch(
+            path,
+            (data, current) => {
+              // Opening offline with nothing saved isn't a document that doesn't exist:
+              // the server hasn't been asked yet.
+              if (data === undefined && !current && last === undefined) return fallBack();
+              last = data ?? {};
+              if (current) attempt = 0;
+              send({ status: current ? "live" : "stale", data: last });
+            },
+            (refused) => {
+              stop = undefined;
+              if (refused) return refuse();
+              fallBack();
+              retry = setTimeout(listen, backoff(attempt++, first, most));
+            },
+          );
+        } catch {
+          // A backend that throws rather than failing, like Firestore given a path it
+          // won't read, would throw the same way again, so it isn't retried on a timer.
+          stop = undefined;
+          refuse();
+        }
       };
 
       const onVisibility = () => {

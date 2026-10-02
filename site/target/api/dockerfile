@@ -3,15 +3,14 @@
 
 # Generated from site/ by one. Do not edit.
 #
-# Builds the backend. The deploy puts the one library beside it, in one/, until
-# the library is published, so go.mod is pointed there first.
+# Builds the backend. When its go.mod points the one library at a folder, the
+# deploy puts that folder beside it, in one/, and the build uses it.
 FROM golang:1.26 AS build
 WORKDIR /src
-COPY one one
-COPY api api
+COPY . .
 WORKDIR /src/api
-RUN go mod edit -replace github.com/da0x/uione/one=../one && go mod tidy \
-    && CGO_ENABLED=0 go build -o /backend .
+RUN if [ -d ../one ]; then go mod edit -replace github.com/da0x/uione/one=../one; fi \
+    && go mod tidy && CGO_ENABLED=0 go build -o /backend .
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /backend /backend

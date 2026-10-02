@@ -8,7 +8,11 @@
  * the components use, into dist/styles.css, which apps import as it is.
  */
 
-@import "tailwindcss";
+/* The minified file keeps only comments marked "!", so the copyright goes again as one. */
+/*! @uione/radix | Copyright 2026 Daher Alfawares | SPDX-License-Identifier: LGPL-3.0-only */
+
+/* Classes come only from the components, not from whatever other files sit beside them. */
+@import "tailwindcss" source(none);
 @source "./**/*.tsx";
 
 /* Neutral colors, named for what they're for rather than what they look like. */
@@ -17,6 +21,8 @@
   --color-ink: oklch(0.21 0.01 260);
   --color-muted: oklch(0.52 0.01 260);
   --color-line: oklch(0.91 0.005 260);
+  /* The edge of a form control, which has to stand out from the page by 3:1. */
+  --color-control-line: oklch(0.62 0.01 260);
   --color-surface: oklch(0.97 0.003 260);
   --color-accent: oklch(0.45 0.13 260);
   --color-accent-ink: oklch(0.99 0 0);
@@ -30,6 +36,7 @@
     --color-ink: oklch(0.93 0.005 260);
     --color-muted: oklch(0.7 0.01 260);
     --color-line: oklch(0.3 0.01 260);
+    --color-control-line: oklch(0.52 0.01 260);
     --color-surface: oklch(0.22 0.01 260);
     --color-accent: oklch(0.75 0.11 260);
     --color-accent-ink: oklch(0.17 0.01 260);

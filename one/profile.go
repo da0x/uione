@@ -62,5 +62,5 @@ func (a *App) remember(ctx context.Context, token *auth.Token) {
 	for k, v := range update {
 		after[k] = v
 	}
-	a.publish(ctx, Event{Type: "user.updated", Entity: "user", ID: token.UID, Version: now.UnixNano(), Before: before, After: after})
+	a.publish(ctx, event{Type: "user.updated", Entity: "user", ID: token.UID, Version: now.UnixNano(), Before: before, After: after})
 }

@@ -43,6 +43,7 @@ func (m *module) register(r *registry, ns string) {
 	}
 }
 
+// RoleSpec is a role, made with Role.
 type RoleSpec struct {
 	name        string
 	permissions []string
@@ -68,6 +69,9 @@ func (ro *RoleSpec) Per(scope, member Kind) *RoleSpec {
 }
 
 func (ro *RoleSpec) register(r *registry, ns string) {
+	for i, p := range ro.permissions {
+		ro.permissions[i] = string(qualified(ns, Permission(p)))
+	}
 	if ro.scope == nil {
 		r.roles[ro.name] = ro.permissions
 		return
@@ -115,6 +119,19 @@ func (r *registry) schema(t reflect.Type, ns string) *schema {
 	s := schemaOf(t, join(ns, snake(t.Name())))
 	r.schemas[t] = s
 	return s
+}
+
+// qualified names a permission within its module: book:withdraw in library is
+// library::book:withdraw, so a role in one module never grants another's.
+func qualified(ns string, p Permission) Permission {
+	switch p {
+	case "", Anyone, SignedIn, Owner:
+		return p
+	}
+	if strings.Contains(string(p), "::") {
+		return p
+	}
+	return Permission(join(ns, string(p)))
 }
 
 func join(ns, name string) string {
@@ -225,6 +242,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	return a, nil
 }
 
+// Close lets go of the app's connection to Firestore.
 func (a *App) Close() error { return a.store.Close() }
 
 // Handler serves commands at POST /api/<namespace>/<entity>/<action>, with a JSON
@@ -299,5 +317,13 @@ func Serve(items ...Item) {
 		port = "8081"
 	}
 	log.Printf("one: serving on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, app.Handler()))
+	server := &http.Server{
+		Addr:              ":" + port,
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       time.Minute,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
+	}
+	log.Fatal(server.ListenAndServe())
 }

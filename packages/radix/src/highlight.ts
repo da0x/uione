@@ -8,17 +8,31 @@
 import githubDark from "@shikijs/themes/github-dark";
 import githubLight from "@shikijs/themes/github-light";
 import { createHighlighterCoreSync } from "shiki/core";
-import type { LanguageRegistration } from "shiki/core";
+import type { HighlighterCore, LanguageRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import grammar from "./grammar/uione.json" with { type: "json" };
 import { restyle } from "./display.js";
 import type { NameStyle } from "./display.js";
 
-const highlighter = createHighlighterCoreSync({
-  themes: [githubLight, githubDark],
-  langs: [grammar as unknown as LanguageRegistration],
-  engine: createJavaScriptRegexEngine(),
-});
+// Built on first use rather than when the module loads, so a grammar that can't be
+// built leaves code plain instead of stopping the app from loading. null means not
+// tried yet; undefined means it failed.
+let highlighter: HighlighterCore | undefined | null = null;
+
+function highlighterOrNothing(): HighlighterCore | undefined {
+  if (highlighter === null) {
+    try {
+      highlighter = createHighlighterCoreSync({
+        themes: [githubLight, githubDark],
+        langs: [grammar as unknown as LanguageRegistration],
+        engine: createJavaScriptRegexEngine(),
+      });
+    } catch {
+      highlighter = undefined;
+    }
+  }
+  return highlighter;
+}
 
 // Whether a part of a line is a name: something the file declared or refers to,
 // rather than a keyword, a type, a value, a string or a comment.
@@ -26,11 +40,21 @@ function isName(scopes: string[]): boolean {
   return scopes.every((s) => s === "source.uione" || s.startsWith("entity.name.") || s.startsWith("variable.parameter."));
 }
 
-// The code as highlighted HTML, or nothing for a language this doesn't know, in
-// which case the code is shown plain. Names are shown in the style asked for; the
-// file itself is unchanged.
+// The code as highlighted HTML, or nothing for a language this doesn't know or when
+// highlighting fails, in which case the code is shown plain. Names are shown in the
+// style asked for; the file itself is unchanged.
 export function highlight(source: string, lang: string, names: NameStyle = "default"): string | undefined {
   if (lang !== "uione") return undefined;
+  const highlighter = highlighterOrNothing();
+  if (highlighter === undefined) return undefined;
+  try {
+    return highlighted(highlighter, source, names);
+  } catch {
+    return undefined;
+  }
+}
+
+function highlighted(highlighter: HighlighterCore, source: string, names: NameStyle): string {
   return highlighter.codeToHtml(source, {
     lang: "uione",
     themes: { light: "github-light", dark: "github-dark" },

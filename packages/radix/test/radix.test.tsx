@@ -150,6 +150,24 @@ describe("dialogs", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(source.runs).toEqual([]);
   });
+
+  it("has a labelled close button that closes it without running anything", async () => {
+    const source = memorySource();
+    renderScreen(
+      () => (
+        <>
+          <Command name="library::book::withdraw" />
+          <Confirm command="library::book::withdraw" question="Withdraw it?" />
+        </>
+      ),
+      source,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    const dialog = await screen.findByRole("dialog", { name: "Are you sure?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(source.runs).toEqual([]);
+  });
 });
 
 describe("tables and live values", () => {
@@ -168,13 +186,23 @@ describe("tables and live values", () => {
     expect(screen.getByText("You can't see this.")).toBeTruthy();
   });
 
+  it("names the column of row actions for screen readers", () => {
+    const source = memorySource();
+    function Books() {
+      return <Table view={useView("library::shelf")} columns={{ title: "Title" }} actions={["library::book::withdraw"]} />;
+    }
+    renderScreen(() => <Books />, source);
+    act(() => source.set("library::shelf", { rows: [{ id: "1", title: "Dune" }] }));
+    expect(screen.getByRole("columnheader", { name: "Actions" })).toBeTruthy();
+  });
+
   it("shows a placeholder instead of a value that isn't live", () => {
     const source = memorySource();
     function Count() {
       return <Live view={useView("waitlist::signups")} field="total" />;
     }
     renderScreen(() => <Count />, source);
-    expect(screen.getByLabelText("not available right now")).toBeTruthy();
+    expect(screen.getByText("not available right now").className).toBe("sr-only");
     act(() => source.set("waitlist::signups", { total: 7 }));
     expect(screen.getByText("7")).toBeTruthy();
   });
@@ -218,7 +246,27 @@ describe("how code is shown", () => {
     expect(pascal).toContain("DueAt");
   });
 
-  it("has a toolbar that sets the tab width and the names for every piece of code at once", () => {
+  it("shows code plain when the highlighter can't be built, rather than failing to load", async () => {
+    vi.resetModules();
+    vi.doMock("shiki/core", async (original) => ({
+      ...(await original<typeof import("shiki/core")>()),
+      createHighlighterCoreSync: () => {
+        throw new Error("broken grammar");
+      },
+    }));
+    try {
+      const fresh = await import("../src/highlight.js");
+      expect(fresh.highlight(code, "uione")).toBeUndefined();
+      expect(fresh.highlightCodeBlocks('<pre><code class="language-one">x</code></pre>', "box")).toBe(
+        '<pre><code class="language-one">x</code></pre>',
+      );
+    } finally {
+      vi.doUnmock("shiki/core");
+      vi.resetModules();
+    }
+  });
+
+    it("has a toolbar that sets the tab width and the names for every piece of code at once", () => {
     renderScreen(() => (
       <>
         <Code lang="uione" source={code} />
@@ -255,15 +303,43 @@ describe("markdown someone wrote", () => {
     expect(container.querySelector('a[href^="javascript"]')).toBeNull();
     expect(container.querySelector('a[href="https://example.com"]')?.getAttribute("rel")).toBe("noopener noreferrer nofollow");
     expect(container.querySelector("table")).not.toBeNull();
+    // The blocked link keeps its text, without an empty href that would reload the page.
+    expect(container.querySelector('a:not([href]), a[href=""]')).toBeNull();
+    expect(container.textContent).toContain("home");
   });
 
   it("is written in a form with a preview of how it will look", () => {
     renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
-    fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "A **classic**." } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Summary" }), { target: { value: "A **classic**." } });
     fireEvent.click(screen.getByRole("tab", { name: "Preview" }));
     expect(screen.getByText("classic").tagName).toBe("STRONG");
     fireEvent.click(screen.getByRole("tab", { name: "Write" }));
-    expect((screen.getByLabelText("Summary") as HTMLTextAreaElement).value).toBe("A **classic**.");
+    expect((screen.getByRole("textbox", { name: "Summary" }) as HTMLTextAreaElement).value).toBe("A **classic**.");
+  });
+
+  it("is a textbox inside the tab panels, and its tabs move with the arrow keys", () => {
+    renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
+    const textbox = screen.getByRole("textbox", { name: "Summary" });
+    expect(textbox.tagName).toBe("TEXTAREA");
+    const write = screen.getByRole("tab", { name: "Write" });
+    const preview = screen.getByRole("tab", { name: "Preview" });
+    const panel = screen.getByRole("tabpanel", { name: "Write" });
+    expect(panel.contains(textbox)).toBe(true);
+    expect(write.getAttribute("aria-controls")).toBe(panel.id);
+    expect([write.tabIndex, preview.tabIndex]).toEqual([0, -1]);
+
+    write.focus();
+    fireEvent.keyDown(write, { key: "ArrowRight" });
+    expect(preview.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(preview);
+    expect([write.tabIndex, preview.tabIndex]).toEqual([-1, 0]);
+    const previewPanel = screen.getByRole("tabpanel", { name: "Summary Preview" });
+    expect(preview.getAttribute("aria-controls")).toBe(previewPanel.id);
+    expect(screen.queryByRole("tabpanel", { name: "Write" })).toBeNull();
+
+    fireEvent.keyDown(preview, { key: "Home" });
+    expect(document.activeElement).toBe(write);
+    expect(screen.getByRole("textbox", { name: "Summary" })).toBe(textbox);
   });
 });
 

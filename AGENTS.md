@@ -119,7 +119,7 @@ under a different one.
   names are displayed is the reader's choice; how they're stored is not. See
   `docs/decisions/0006-names-are-snake-case.md`.
 - File and folder names are lowercase kebab-case: `makefile`, `dockerfile`. Only
-  README.md, AGENTS.md, LICENSE, COPYING, CMakeLists.txt (the one name CMake reads)
+  README.md, AGENTS.md, SECURITY.md, LICENSE, COPYING, CMakeLists.txt (the one name CMake reads)
   and Pulumi.yaml (the one name Pulumi reads) have capitals. `tools/check-names`
   enforces it, before each commit and in CI.
 - Names of folders, files, modules and namespaces are whole words, because a clipped

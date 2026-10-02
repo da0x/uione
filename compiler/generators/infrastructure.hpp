@@ -169,15 +169,14 @@ namespace one::generators {
             auto from_project = d.from(s.from.path, s.from.line);  // all of this is the project block's doing
             d.line(generated);
             d.line("#");
-            d.line("# Builds the backend. The deploy puts the one library beside it, in one/, until");
-            d.line("# the library is published, so go.mod is pointed there first.");
+            d.line("# Builds the backend. When its go.mod points the one library at a folder, the");
+            d.line("# deploy puts that folder beside it, in one/, and the build uses it.");
             d.line("FROM golang:1.26 AS build");
             d.line("WORKDIR /src");
-            d.line("COPY one one");
-            d.line("COPY api api");
+            d.line("COPY . .");
             d.line("WORKDIR /src/api");
-            d.line("RUN go mod edit -replace github.com/da0x/uione/one=../one && go mod tidy \\");
-            d.line("    && CGO_ENABLED=0 go build -o /backend .");
+            d.line("RUN if [ -d ../one ]; then go mod edit -replace github.com/da0x/uione/one=../one; fi \\");
+            d.line("    && go mod tidy && CGO_ENABLED=0 go build -o /backend .");
             d.line();
             d.line("FROM gcr.io/distroless/static-debian12:nonroot");
             d.line("COPY --from=build /backend /backend");

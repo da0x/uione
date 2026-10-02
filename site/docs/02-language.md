@@ -389,8 +389,20 @@ webhook github /hooks/github {
   handled when it's opened, edited, closed or reopened.
 - A handler only creates. Give what it makes a key, like the issue and the
   address, so a delivery GitHub sends twice is stored once.
-- Every delivery has to be signed with the project's secret. The deploy creates
-  the secret and keeps it in Secret Manager. To read it, with the address to
-  paste into GitHub:
-  `pulumi stack output github_webhook_url` and
-  `pulumi stack output github_webhook_secret --show-secrets`.
+- Every delivery has to be signed with its project's own secret, and one signed
+  with another project's is refused. A project's repository is stored in
+  lowercase, so two projects can't claim the same one. A delivery GitHub sends
+  twice is handled once.
+- A view per project shows its secret with `github_secret(project.id)`. Such a
+  view has `readers` and is never public:
+
+```one
+view project_settings per project {
+	readers member
+	webhook_secret = github_secret(project.id)
+}
+```
+
+- The deploy makes the master secret that every project's secret is derived
+  from, keeps it in Secret Manager, and gives it only to the backend. It never
+  goes into GitHub itself.

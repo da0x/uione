@@ -69,7 +69,11 @@ TEST_CASE("a generated screen is about as long as the .one it came from") {
             if (!f.path.starts_with("src/screens/")) continue;
             CAPTURE(project);
             CAPTURE(f.path);
-            CHECK(lines(f.content) <= 60);
+            std::string stem = f.path.substr(std::string("src/screens/").size());
+            stem = stem.substr(0, stem.rfind('.'));
+            auto source = platform::read_file(root + project + "/" + stem + ".one");
+            REQUIRE(source);
+            CHECK(lines(f.content) <= lines(*source) + 10);  // its imports
         }
     }
 }

@@ -533,6 +533,12 @@ namespace one::language {
                 if (*value.name == "public" || *value.name == "readers" || *value.name == "within") {
                     error(value.where, *value.name + " says who may read a view's document, so it can't name a value");
                 }
+                auto* call = std::get_if<call_expression>(&value.value->node);
+                auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+                if (callee && callee->name.text() == "github_secret" && (v.is_public || v.public_when || !v.readers)) {
+                    error(value.where, "view " + v.name + " shows a webhook secret, so only the project's people may read it: "
+                                       "give it readers, and don't make it public");
+                }
             }
             if (v.readers || v.public_when) verify_access(ns, v, where, subject, plain);
             // A view has at most one list without a name, its rows, and any number
@@ -1223,6 +1229,17 @@ namespace one::language {
                 if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");
                 return e;
             }
+            // github_secret(project.id): the secret a project pastes into GitHub for
+            // its webhook, shown only in a view per that project.
+            if (name == "github_secret") {
+                if (!arguments(1)) return nullptr;
+                auto* m = std::get_if<member_expression>(&call.arguments[0]->node);
+                auto* object = m ? std::get_if<name_expression>(&m->object->node) : nullptr;
+                if (!in.subject || !object || object->name.text() != in.subject->name || m->member != "id") {
+                    error(call.arguments[0]->where, "github_secret takes the id of the project a view is per, like github_secret(project.id)");
+                }
+                return nullptr;
+            }
             if (name == "starts_with" || name == "drop") {
                 if (arguments(2)) {
                     for (const auto& a : call.arguments) resolve(in, *a);
@@ -1235,7 +1252,7 @@ namespace one::language {
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "starts_with", "drop"};
+            std::vector<std::string> known{"count", "first", "starts_with", "drop", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;

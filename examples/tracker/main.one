@@ -135,6 +135,14 @@ namespace tracker {
 		}
 	}
 
+	// What a project's people need to connect its repository: the secret GitHub
+	// signs its deliveries with. Never public, whatever the project's visibility.
+	view project_settings per project {
+		readers member
+		repository = project.repository
+		webhook_secret = github_secret(project.id)
+	}
+
 	// An issue's page, with its comments in the order they were written.
 	view issue_page per issue {
 		readers member
@@ -220,6 +228,11 @@ namespace tracker {
 			created_by.name "By"
 			created_at "When"
 		}
+	}
+
+	screen "Project settings" /projects/:project/settings {
+		text "To show commits and pull requests on issues, add a webhook to {project_settings.repository} on GitHub, sending to /hooks/github."
+		text "Its secret: {project_settings.webhook_secret}"
 	}
 
 	screen "Issue" /issues/:issue {

@@ -8,9 +8,9 @@ import (
 	"fmt"
 )
 
-// Event says that an entity changed. Every command publishes one, and views are
+// event says that an entity changed. Every command publishes one, and views are
 // rebuilt from them.
-type Event struct {
+type event struct {
 	Type    string // like signup.updated
 	Entity  string // like waitlist::signup
 	ID      string
@@ -19,7 +19,7 @@ type Event struct {
 	After   map[string]any // the entity after, or nil if it was deleted
 }
 
-func (ev Event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, ev.Version) }
+func (ev event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, ev.Version) }
 
 // publish rebuilds every view that reads the changed entity, in this process.
 //
@@ -27,7 +27,7 @@ func (ev Event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, e
 // saying otherwise would be wrong. It's logged, and the view catches up on the next
 // event. Delivery through Pub/Sub, with a fallback for when publishing fails, comes
 // when the library runs in the cloud.
-func (a *App) publish(ctx context.Context, ev Event) {
+func (a *App) publish(ctx context.Context, ev event) {
 	for _, v := range a.reg.views {
 		if _, reads := v.reads[ev.Entity]; !reads {
 			continue

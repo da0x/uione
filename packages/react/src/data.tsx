@@ -106,20 +106,26 @@ export interface Runner {
   run: (command: string, input?: CommandInput) => Promise<boolean>;
   busy: (command: string) => boolean;
   error: (command: string) => string | undefined;
+  // Forgets why a command last failed, once that no longer describes what's on screen.
+  clear: (command: string) => void;
 }
 
 export function useRunner(): Runner {
   const source = useSource();
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
+  const clear = useCallback((command: string) => {
+    setErrors((current) => {
+      if (!Object.hasOwn(current, command)) return current;
+      const next = { ...current };
+      delete next[command];
+      return next;
+    });
+  }, []);
   const run = useCallback(
     async (command: string, input: CommandInput = {}) => {
       setRunning((current) => new Set(current).add(command));
-      setErrors((current) => {
-        const next = { ...current };
-        delete next[command];
-        return next;
-      });
+      clear(command);
       try {
         await source.run(command, input);
         return true;
@@ -135,9 +141,9 @@ export function useRunner(): Runner {
         });
       }
     },
-    [source],
+    [source, clear],
   );
-  return { run, busy: (command) => running.has(command), error: (command) => errors[command] };
+  return { run, busy: (command) => running.has(command), error: (command) => errors[command], clear };
 }
 
 export interface CommandState {

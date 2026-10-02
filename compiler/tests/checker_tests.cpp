@@ -543,3 +543,14 @@ TEST_CASE("a github webhook finds a project by its repository, and makes things 
     e = only_error("entity project {\n\tslug  text  required  key\n\trepository  text\n}\n" + hook + "}\n");
     CHECK(e.message == "webhook github reads #12 as a project's issue 12, so an entity needs keys project and a serial per project, like issue");
 }
+
+TEST_CASE("a project's webhook secret is shown only to its own people") {
+    const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
+                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  maintainer | reporter\n}\n"
+                              "role maintainer per project from member\n";
+    CHECK(check_source(start + "view settings per project {\n\treaders member\n\tsecret = github_secret(project.id)\n}\n").empty());
+    auto e = only_error(start + "view settings per project public {\n\tsecret = github_secret(project.id)\n}\n");
+    CHECK(e.message == "view settings shows a webhook secret, so only the project's people may read it: give it readers, and don't make it public");
+    e = only_error(start + "view settings per project {\n\treaders member\n\tsecret = github_secret(project.slug)\n}\n");
+    CHECK(e.message == "github_secret takes the id of the project a view is per, like github_secret(project.id)");
+}

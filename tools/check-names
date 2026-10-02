@@ -4,7 +4,8 @@
 
 # Every file and folder name is lowercase: makefile, dockerfile, uione.tmlanguage.json.
 # The only capitals allowed are in names that are conventional everywhere or that a
-# tool looks for by that exact name: README.md, AGENTS.md, LICENSE, COPYING (the
+# tool looks for by that exact name: README.md, AGENTS.md, SECURITY.md (which
+# GitHub shows as the security policy), LICENSE, COPYING (the
 # GPL beside each library's LGPL, under the name GNU gives it), CMakeLists.txt,
 # which is the only name CMake reads, and Pulumi.yaml, the only name Pulumi reads.
 #
@@ -31,7 +32,7 @@ for f in $files; do
 	IFS=/
 	for part in $f; do
 		case "$part" in
-			README.md|AGENTS.md|LICENSE|COPYING|CMakeLists.txt|Pulumi.yaml) continue ;;
+			README.md|AGENTS.md|SECURITY.md|LICENSE|COPYING|CMakeLists.txt|Pulumi.yaml) continue ;;
 		esac
 		case "$part" in
 			*[A-Z]*)

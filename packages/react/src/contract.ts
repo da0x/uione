@@ -69,7 +69,9 @@ export interface PageLink extends LinkProps {
 export interface PagesProps {
   pages: PageLink[];
   title: string | undefined;
-  html: string | undefined; // undefined when the address names no page
+  // Trusted: HTML made when the app was built, from the app's own docs, so it can
+  // be drawn as it is. Undefined when the address names no page.
+  html: string | undefined;
 }
 
 export interface RowAction {
@@ -132,7 +134,10 @@ export interface PictureProps {
 
 export interface MarkdownProps {
   status: ViewStatus;
-  source: string | undefined; // Markdown someone wrote, shown rendered once it's live
+  // Untrusted: Markdown someone wrote, shown rendered once it's live. A component
+  // set must render it without any raw HTML in it, and keep only links to safe
+  // protocols (https, http, mailto), never javascript: or data:.
+  source: string | undefined;
 }
 
 export interface LiveProps {

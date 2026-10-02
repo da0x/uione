@@ -41,6 +41,7 @@ var Subject = &marker{"subject"}
 // Kind names an entity type, for a view that has one document per entity of it.
 type Kind struct{ typ reflect.Type }
 
+// Entity names entity type E as a Kind, as in Per(Entity[Book]()).
 func Entity[E any, P entityPointer[E]]() Kind { return Kind{reflect.TypeFor[E]()} }
 
 // A field of the entity a view is for, copied into its document under a name.
@@ -65,6 +66,7 @@ type Query struct {
 	conditions []condition
 }
 
+// All picks every entity of type E.
 func All[E any, P entityPointer[E]]() Query { return Query{typ: reflect.TypeFor[E]()} }
 
 // Where picks the entities whose field has a value. A nil value means none.
@@ -137,6 +139,7 @@ type list struct {
 	limit  int // how many rows it keeps, once ordered; 0 keeps them all
 }
 
+// ViewSpec is a view, made with View and described by the calls that follow it.
 type ViewSpec struct {
 	name    string
 	public  bool
@@ -145,6 +148,7 @@ type ViewSpec struct {
 	counts  []count
 	lists   []*list
 	copies  []copied
+	secrets []string     // values holding the document's project's GitHub webhook secret
 	readers reflect.Type // the entity whose people may read each document, like member
 	open    *condition   // when a document is public, as a field of its entity, like project.visibility
 
@@ -155,6 +159,8 @@ type ViewSpec struct {
 	reads      map[string]*schema // the entities it reads, by full name
 }
 
+// View declares a view: a document prepared ahead of time for the screens that show
+// it, rebuilt whenever what it reads changes.
 func View(name string) *ViewSpec { return &ViewSpec{name: name} }
 
 // Public lets anyone read the view, signed in or not.
@@ -196,6 +202,14 @@ func (v *ViewSpec) PublicWhen(field string, value any) *ViewSpec {
 // "title") shows the book's title on the book's page.
 func (v *ViewSpec) Copy(name, field string) *ViewSpec {
 	v.copies = append(v.copies, copied{name, field})
+	return v
+}
+
+// GitHubSecret puts in each document of a view per project that project's secret
+// for GitHub's webhook, under a name. A view that does should be read only by the
+// project's people, never public.
+func (v *ViewSpec) GitHubSecret(name string) *ViewSpec {
+	v.secrets = append(v.secrets, name)
 	return v
 }
 
@@ -266,8 +280,31 @@ func (v *ViewSpec) Value(name string, q Query, field string) *ViewSpec {
 	return v
 }
 
+// What every view document holds to say what it is and who may read it, so no
+// value or list of a view may have one of these names.
+var reserved = []string{"type", "public", "owner_uid", "subject", "readers", "within",
+	"required_permission", "source_version", "content_hash", "last_event_id", "projected_at"}
+
 func (v *ViewSpec) register(r *registry, ns string) {
 	v.full = join(ns, v.name)
+	var names []string
+	for _, c := range v.copies {
+		names = append(names, c.name)
+	}
+	for _, c := range v.counts {
+		names = append(names, c.name)
+	}
+	names = append(names, v.secrets...)
+	for _, l := range v.lists {
+		if l.name != "rows" {
+			names = append(names, l.name)
+		}
+	}
+	for _, name := range names {
+		if contains(reserved, name) {
+			panic("one: view " + v.full + " has something called " + name + ", which every view document uses for itself; name it something else")
+		}
+	}
 	v.reads = map[string]*schema{}
 	for _, q := range v.queries() {
 		s := r.schema(q.typ, ns)
@@ -286,12 +323,16 @@ func (v *ViewSpec) register(r *registry, ns string) {
 		r.views = append(r.views, v)
 		return
 	}
-	if len(v.lists) > 0 && !v.public && !v.perUser {
-		v.permission = r.schema(v.lists[0].query.typ, ns).name + ":view"
-	}
-	if v.permission == "" && !v.public && !v.perUser {
-		for _, s := range v.reads {
-			v.permission = s.name + ":view"
+	// Who may read a view that isn't public or a person's own: the first entity it
+	// lists, or is per, or counts.
+	if !v.public && !v.perUser {
+		switch {
+		case len(v.lists) > 0:
+			v.permission = r.schema(v.lists[0].query.typ, ns).entity + ":view"
+		case v.per != nil:
+			v.permission = r.schema(v.per, ns).entity + ":view"
+		case len(v.counts) > 0:
+			v.permission = r.schema(v.counts[0].query.typ, ns).entity + ":view"
 		}
 	}
 	r.views = append(r.views, v)
@@ -392,7 +433,7 @@ func (v *ViewSpec) keyed() bool { return v.perUser || v.per != nil }
 // before and after. A change to another entity the view reads, such as the book
 // behind a loan's book.title, or to a list that isn't picked by whom or what it's
 // for, changes every document of the view, since any of them may show it.
-func (v *ViewSpec) subjects(ctx context.Context, a *App, ev Event) ([]string, error) {
+func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, error) {
 	if !v.keyed() {
 		return []string{""}, nil
 	}
@@ -585,6 +626,9 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 				return nil, err
 			}
 		}
+	}
+	for _, name := range v.secrets {
+		data[name] = GitHubSecret(subject)
 	}
 	for _, c := range v.counts {
 		n, err := a.count(ctx, c.query, subject)
@@ -825,7 +869,7 @@ func compare(a, b any) int {
 // write stores a view's document, unless a newer event already has, or the data
 // hasn't changed. Events can arrive late or twice, and neither may take a view
 // backwards. Returns whether it wrote.
-func (a *App) write(ctx context.Context, v *ViewSpec, subject string, data map[string]any, version int64, event string) (bool, error) {
+func (a *App) write(ctx context.Context, v *ViewSpec, subject string, data map[string]any, version int64, cause string) (bool, error) {
 	id := v.full
 	if subject != "" {
 		id += ":" + subject
@@ -870,7 +914,7 @@ func (a *App) write(ctx context.Context, v *ViewSpec, subject string, data map[s
 		doc["subject"] = subject
 		doc["required_permission"] = v.permission
 		doc["source_version"] = version
-		doc["last_event_id"] = event
+		doc["last_event_id"] = cause
 		doc["projected_at"] = time.Now().UTC()
 		doc["content_hash"] = hash
 		written = true
@@ -880,17 +924,21 @@ func (a *App) write(ctx context.Context, v *ViewSpec, subject string, data map[s
 }
 
 // project rebuilds the documents of one view that an event touches.
-func (a *App) project(ctx context.Context, v *ViewSpec, ev Event) error {
+func (a *App) project(ctx context.Context, v *ViewSpec, ev event) error {
 	subjects, err := v.subjects(ctx, a, ev)
 	if err != nil {
 		return err
 	}
 	for _, subject := range subjects {
+		// A document's version is when its data was read, not when the command that
+		// caused it began: of two rebuilds, the one that read later holds every
+		// change the other did, whichever command committed first.
+		version := time.Now().UnixNano()
 		data, err := a.compose(ctx, v, subject)
 		if err != nil {
 			return err
 		}
-		if _, err := a.write(ctx, v, subject, data, ev.Version, ev.id()); err != nil {
+		if _, err := a.write(ctx, v, subject, data, version, ev.id()); err != nil {
 			return err
 		}
 	}

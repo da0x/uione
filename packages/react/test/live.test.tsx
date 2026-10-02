@@ -314,3 +314,45 @@ describe("commands", () => {
     await expect(liveSource(backend, { fetch: reply(200, {}) }).run("a::b::c", {})).rejects.toThrow("couldn't reach the server");
   });
 });
+
+describe("a view opened offline", () => {
+  it("is still loading, not empty, when nothing was saved and the server hasn't answered", () => {
+    const { backend, watches } = fakeBackend();
+    const view = record();
+    liveSource(backend).subscribe("waitlist::signups", undefined, view.emit);
+    watches[0]!.next(undefined, false);
+    expect(view.last()).toEqual({ status: "loading", data: undefined });
+    watches[0]!.next(undefined, true);
+    expect(view.last()).toEqual({ status: "live", data: {} });
+  });
+});
+
+describe("a view's subject", () => {
+  it("is refused, without reading anything, when it would name some other document", () => {
+    for (const subject of ["a/b", "", ".", "..", "__name__"]) {
+      const { backend, watches } = fakeBackend();
+      const view = record();
+      liveSource(backend).subscribe("library::book_page", subject, view.emit);
+      expect(view.last()).toEqual({ status: "denied", data: undefined });
+      expect(watches.length).toBe(0);
+    }
+  });
+
+  it("is read when it's an ordinary id", () => {
+    const { backend, watches } = fakeBackend();
+    liveSource(backend).subscribe("library::book_page", "__b1", () => {});
+    expect(watches[0]!.path).toBe("views/library::book_page:__b1");
+  });
+});
+
+describe("a backend that throws rather than failing", () => {
+  it("leaves the view denied instead of throwing", () => {
+    const { backend } = fakeBackend();
+    backend.watch = () => {
+      throw new Error("Invalid document reference");
+    };
+    const view = record();
+    expect(() => liveSource(backend).subscribe("library::book_page", "b1", view.emit)).not.toThrow();
+    expect(view.last()).toEqual({ status: "denied", data: undefined });
+  });
+});

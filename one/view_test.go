@@ -101,7 +101,7 @@ func TestAChangeOfMembersRebuildsOnlyThatClubsPages(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	subjects, err := page.subjects(ctx, a, Event{Entity: "held::place", ID: "chess-ada", After: map[string]any{"club": "chess", "person": "ada"}})
+	subjects, err := page.subjects(ctx, a, event{Entity: "held::place", ID: "chess-ada", After: map[string]any{"club": "chess", "person": "ada"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,4 +127,18 @@ func TestAMentionIsAHashAndANumberStandingAlone(t *testing.T) {
 			t.Errorf("mentions(%q) = %v, want %v", text, got, want)
 		}
 	}
+}
+
+func TestMistakesInDeclaringAModuleStopItStarting(t *testing.T) {
+	refused := func(name string, item Item) {
+		t.Helper()
+		defer func() {
+			if recover() == nil {
+				t.Errorf("%s was accepted", name)
+			}
+		}()
+		item.register(&registry{commands: map[string]func(*App, *call) (string, error){}, roles: map[string][]string{}, schemas: map[reflect.Type]*schema{}}, "checks")
+	}
+	refused("a command named on another entity", Command[thing]("other::create"))
+	refused("a view with a value called public", View("page").Public().Count("public", All[thing]()))
 }

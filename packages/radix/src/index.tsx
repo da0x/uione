@@ -46,7 +46,7 @@ function CodeToolbar({ display }: { display: CodeDisplay }) {
           id={names}
           value={display.names}
           onChange={(event) => setCodeDisplay({ names: event.target.value as NameStyle })}
-          className="rounded border border-line bg-page px-1.5 py-0.5 text-ink"
+          className="rounded border border-control-line bg-page px-1.5 py-0.5 text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
         >
           {nameStyles.map((style) => (
             <option key={style} value={style}>
@@ -216,7 +216,11 @@ export const radix: ComponentSet = {
                 {column}
               </th>
             ))}
-            {rows.some((row) => row.actions.length > 0) && <th className="px-4 py-2" />}
+            {rows.some((row) => row.actions.length > 0) && (
+              <th className="px-4 py-2">
+                <span className="sr-only">Actions</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -277,7 +281,7 @@ export const radix: ComponentSet = {
       >
         {fields.map((field) => (
           <div key={field.name} className="flex flex-col gap-1.5">
-            <label htmlFor={`${id}-${field.name}`} className="text-sm font-medium">
+            <label id={`${id}-${field.name}-label`} htmlFor={`${id}-${field.name}`} className="text-sm font-medium">
               {field.label}
             </label>
             {field.type === "markdown" ? (
@@ -285,6 +289,7 @@ export const radix: ComponentSet = {
                 id={`${id}-${field.name}`}
                 name={field.name}
                 value={field.value}
+                labelledBy={`${id}-${field.name}-label`}
                 describedBy={field.hint ? `${id}-${field.name}-hint` : undefined}
                 onChange={field.onChange}
               />
@@ -297,7 +302,7 @@ export const radix: ComponentSet = {
                 value={field.value}
                 onChange={(event) => field.onChange(event.target.value)}
                 aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
-                className="rounded-box border border-line bg-page px-3 py-2 text-base outline-none focus:border-accent sm:text-sm"
+                className="rounded-box border border-control-line bg-page px-3 py-2 text-base focus:outline-hidden focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent sm:text-sm"
               />
             )}
             {field.hint && (
@@ -351,9 +356,14 @@ export const radix: ComponentSet = {
         <Dialog.Overlay className="fixed inset-0 bg-black/40" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 flex w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-box border border-line bg-page p-6 text-ink shadow-xl"
+          className="fixed top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-box border border-line bg-page p-6 text-ink shadow-xl"
         >
-          <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
+          <div className="flex items-start justify-between gap-4">
+            <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
+            <Dialog.Close aria-label="Close" className="-mt-1 -mr-2 rounded-box px-2 text-xl leading-8 text-muted hover:text-ink">
+              <span aria-hidden="true">×</span>
+            </Dialog.Close>
+          </div>
           <div className="flex flex-col gap-4 [&>button]:self-auto">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -381,10 +391,8 @@ export const radix: ComponentSet = {
     status === "live" ? (
       <span className="font-medium tabular-nums">{value}</span>
     ) : (
-      <span
-        aria-busy="true"
-        aria-label="not available right now"
-        className="inline-block h-[1em] w-8 animate-pulse rounded bg-surface align-middle"
-      />
+      <span aria-busy="true" className="inline-block h-[1em] w-8 animate-pulse rounded bg-surface align-middle">
+        <span className="sr-only">not available right now</span>
+      </span>
     ),
 };
