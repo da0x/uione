@@ -559,14 +559,17 @@ namespace one::language {
             if (at_word("link")) {
                 advance();
                 content_link link;
-                link.label = expect(token_kind::string, "the link's text").text;
                 if (at(token_kind::route)) {
                     link.target = advance().text;
                 } else if (at(token_kind::anchor)) {
                     link.target = "#" + advance().text;
+                } else if (at_word("namespace")) {
+                    advance();
+                    link.namespace_name = parse_qualified_name("the namespace the link opens, like namespace projects");
                 } else {
-                    fail_expecting("where the link goes, like /docs or #waitlist");
+                    fail_expecting("where the link goes, like /docs, #waitlist or namespace projects");
                 }
+                link.label = expect(token_kind::string, "the link's text").text;
                 end_line();
                 return {where, std::move(link)};
             }

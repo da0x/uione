@@ -113,7 +113,7 @@ screen         ::= "screen" (STRING | NAME) ROUTE screen_block END
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | ("text" | "code" | "markdown") STRING END
-                 | "link" STRING (ROUTE | ANCHOR) END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified) STRING END
                  | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
                  | "form" qualified+ "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END

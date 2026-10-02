@@ -177,8 +177,8 @@ TEST_CASE("a screen and everything that can go on it") {
 screen "Shelf" /shelf {
 	hero "Write it once." {
 		text "One file."
-		link "Join" #waitlist
-		link "Docs" /docs/language
+		link #waitlist "Join"
+		link /docs/language "Docs"
 	}
 	section "Example" #example {
 		code "../examples/library/main.one"
@@ -460,4 +460,14 @@ TEST_CASE("a screen draws a hand-written component by name") {
     REQUIRE(screen.items.size() == 2);
     CHECK(std::get<component_item>(screen.items[0].node).name == "workbench");
     CHECK(std::holds_alternative<button_item>(screen.items[1].node));
+}
+
+TEST_CASE("a link can open a namespace by name") {
+    auto f = parse_ok("screen \"Home\" / {\n\tlink namespace projects::archive \"See the projects\"\n}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    const auto& link = std::get<content_link>(screen.items[0].node);
+    CHECK(link.label == "See the projects");
+    REQUIRE(link.namespace_name.has_value());
+    CHECK(link.namespace_name->text() == "projects::archive");
+    CHECK(link.target.empty());
 }

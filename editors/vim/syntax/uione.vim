@@ -22,7 +22,7 @@ syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 syn match uioneDeclare "^\s*\zs\<\%(project\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\)\>" nextgroup=uioneQualifier,uioneName skipwhite
 syn match uioneDeclare "^\s*\zs\<namespace\>" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
-syn match uioneNamespaceName "\h\w*" contained
+syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
 syn match uioneName       "\h\w*" contained
 " Defined after uioneName: of two matches at one position, Vim takes the later.
 syn match uioneQualifier  "\%(\h\w*::\)\+" contained nextgroup=uioneName
@@ -49,6 +49,9 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
 syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|date\|number\|serial\|boolean\|user\|list\)\>"
+
+" link namespace projects "See the projects": the namespace a link opens.
+syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite
 
 " `text` and `code` are page content only when a string follows them.
 syn match uioneKeyword "\<\%(text\|code\)\ze\s\+\""

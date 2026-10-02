@@ -6,8 +6,8 @@
 screen "uione" / {
 	hero "Write the feature once." {
 		text "One short file describes a whole feature: its data, its rules, the commands that change it, the live views that show it, who may do what, and its screens. uione generates the React app, the Go backend and the Firestore rules from it."
-		link "Join the waitlist" #waitlist
-		link "Read the docs" /docs/language
+		link #waitlist "Join the waitlist"
+		link /docs/language "Read the docs"
 	}
 
 	section "A whole feature" {

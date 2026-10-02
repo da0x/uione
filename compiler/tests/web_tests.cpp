@@ -224,3 +224,18 @@ TEST_CASE("what a project's components need is added to the app's dependencies")
     CHECK(manifest->content.find("\"@uione/editor\": \"0.1.0\",\n") != std::string::npos);
     CHECK(manifest->content.find("\"react\": \"^19.3.0\",\n") != std::string::npos);  // the app's own version wins
 }
+
+TEST_CASE("a link to a namespace goes to its address") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-namespace-link";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace projects {\nnamespace archive {\nscreen \"Old\" / {\n\ttext \"a\"\n}\n}\n}\n"
+                         "screen \"Home\" / {\n\tlink namespace projects::archive \"See the old projects\"\n}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Link to="/projects/archive">See the old projects</Link>)") != std::string::npos);
+    fs::remove_all(dir);
+}

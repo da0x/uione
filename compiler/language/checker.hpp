@@ -756,6 +756,44 @@ namespace one::language {
             statements(ns, f.body, nullptr, context{ns, nullptr, nullptr, f.parameters, false});
         }
 
+        // A link opens a screen that's there: one written as an address matches a
+        // screen's, with any :parameter standing for one part, and a namespace has a
+        // screen at its own address.
+        void link(const content_link& link, location where) {
+            if (link.namespace_name) {
+                snake(*link.namespace_name);
+                std::string name = link.namespace_name->text();
+                if (!scopes_.contains(name)) {
+                    error(link.namespace_name->where, "there's no namespace " + name + " for this link to open");
+                } else if (!routes_.contains(full_route(name, "/"))) {
+                    error(link.namespace_name->where, "namespace " + name + " has no screen at its own address, " +
+                                                      full_route(name, "/") + ", for this link to open");
+                }
+                return;
+            }
+            if (!link.target.starts_with("/")) return;
+            auto parts = [](const std::string& route) {
+                std::vector<std::string> out;
+                for (std::size_t at = 1; at <= route.size();) {
+                    std::size_t next = std::min(route.find('/', at), route.size());
+                    if (next > at) out.push_back(route.substr(at, next - at));
+                    at = next + 1;
+                }
+                return out;
+            };
+            auto wanted = parts(link.target);
+            for (const auto& [route, from] : routes_) {
+                auto screen = parts(route);
+                if (screen.size() != wanted.size()) continue;
+                bool same = true;
+                for (std::size_t i = 0; same && i < screen.size(); ++i) {
+                    same = screen[i].starts_with(":") || screen[i] == wanted[i];
+                }
+                if (same) return;
+            }
+            error(where, "there's no screen at " + link.target + " for this link to open");
+        }
+
         void verify(const std::string& ns, location where, const screen_declaration& s) {
             if (s.title_is_name) snake(s.title, where);
             screen_items(ns, s.items, full_route(ns, s.route));
@@ -878,6 +916,8 @@ namespace one::language {
                             error(table->link_where, "there's no screen at " + target + " for this table's rows to open");
                         }
                     }
+                } else if (auto* link = std::get_if<content_link>(&item.node)) {
+                    this->link(*link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
                            text && (text->type == content_text::kind::text || text->value.starts_with("{"))) {
                     // A live value like {book_page.title} reads a view too.

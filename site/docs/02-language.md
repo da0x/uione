@@ -351,6 +351,12 @@ screen "Book" /books/:book {
 - `hero`, `section`, `text`, `link`, `code` and `markdown` are for pages that are
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.
+- `link` says where it goes first and its text after: `link #waitlist "Join the
+  waitlist"`, `link /docs/language "Read the docs"`. `link namespace projects "See
+  the projects"` opens a namespace's own screen, at `/projects`, and
+  `projects::archive` would be at `/projects/archive`. A link to an address or a
+  namespace has to reach a screen that's there, so a renamed namespace or a typo
+  is an error rather than a page that isn't found.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What
   people write is drawn safely: it can't add markup or scripts to the page, and
   images in it are shown as links.

@@ -82,9 +82,9 @@ site/waitlist.one	view signups public	public	modifier
 site/home.one	screen "uione" / {	/	route
 site/home.one	hero "Write	hero	keyword
 site/home.one	text "One short	text	keyword
-site/home.one	link "Join the waitlist" #waitlist	link	keyword
-site/home.one	link "Join the waitlist" #waitlist	#waitlist	route
-site/home.one	link "Read the docs" /docs/language	/docs	route
+site/home.one	link #waitlist "Join the waitlist"	link	keyword
+site/home.one	link #waitlist "Join the waitlist"	#waitlist	route
+site/home.one	link /docs/language "Read the docs"	/docs	route
 site/home.one	section "A whole	section	keyword
 site/home.one	code "../examples	code	keyword
 site/home.one	form waitlist::signup::create	waitlist	namespace

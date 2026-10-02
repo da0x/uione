@@ -254,7 +254,8 @@ namespace one::language {
 
     struct content_link {
         std::string label;
-        std::string target;  // a route, or #anchor
+        std::string target;                        // a route, or #anchor
+        std::optional<qualified_name> namespace_name;  // link "See the projects" namespace projects
     };
 
     struct table_column {

@@ -585,3 +585,25 @@ TEST_CASE("a table's link may name the screen's own parameters before the row's"
                                 "screen \"All\" /issues {\n\ttable all link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n");
     CHECK(e.message == "this table's link needs :project, which this screen's address doesn't have");
 }
+
+TEST_CASE("a link opens a screen that's there") {
+    const std::string projects = "namespace projects {\nscreen \"All\" / {\n\ttext \"a\"\n}\n"
+                                 "namespace archive {\nscreen \"Old\" / {\n\ttext \"b\"\n}\n}\n"
+                                 "screen \"Project\" /:project {\n\ttext \"c\"\n}\n}\n"
+                                 "namespace empty {\n}\n";
+    auto home = [&](const std::string& link) { return projects + "screen \"Home\" / {\n\tlink " + link + " \"Go\"\n}\n"; };
+    CHECK(check_source(home("namespace projects")).empty());
+    CHECK(check_source(home("namespace projects::archive")).empty());
+    CHECK(check_source(home("/projects/archive")).empty());
+    CHECK(check_source(home("/projects/neotrac")).empty());  // :project stands for any one part
+    CHECK(check_source(home("#top")).empty());
+
+    CHECK(only_error(home("namespace project")).message == "there's no namespace project for this link to open");
+    CHECK(only_error(home("namespace empty")).message ==
+          "namespace empty has no screen at its own address, /empty, for this link to open");
+    auto e = only_error(home("/project"));
+    CHECK(e.message == "there's no screen at /project for this link to open");
+    CHECK(e.where.line == 17);
+    CHECK(only_error(home("/projects/neotrac/people")).message ==
+          "there's no screen at /projects/neotrac/people for this link to open");
+}

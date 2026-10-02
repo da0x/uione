@@ -202,6 +202,28 @@
     "keywords": {
       "patterns": [
         {
+          "begin": "\\b(link)\\s+(namespace)\\b",
+          "end": "(?=\")|$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.other.uione"
+            },
+            "2": {
+              "name": "keyword.other.uione"
+            }
+          },
+          "patterns": [
+            {
+              "match": "::",
+              "name": "punctuation.separator.namespace.uione"
+            },
+            {
+              "match": "[A-Za-z_]\\w*",
+              "name": "entity.name.namespace.uione"
+            }
+          ]
+        },
+        {
           "match": "\\b(permission)\\s+(anyone|signed_in|owner)\\b",
           "captures": {
             "1": {
