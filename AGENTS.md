@@ -52,8 +52,11 @@ Treat every file as published, whatever the repository's visibility today.
   that touches the operating system only in `compiler/platform/`, so the compiler
   can later be built for the browser. Warnings are errors. Tests use doctest, which
   CMake downloads at a pinned version rather than keeping it in the repository.
-- `packages/` holds the JavaScript libraries that generated apps are built on, as
-  Yarn workspaces. `packages/react` is `@uione/react`: the runtime and the component
+- `packages/` holds the JavaScript packages, as Yarn workspaces: the libraries
+  generated apps are built on, and `packages/compiler`, `@uione/compiler`, the
+  compiler built for the browser by `tools/wasm/build` (Emscripten in Docker) and
+  run in a Web Worker. `node tools/wasm/test.mjs` holds its output to the native
+  compiler's, byte for byte. `packages/react` is `@uione/react`: the runtime and the component
   contract. `yarn install`, then `yarn workspace @uione/react test` (or `typecheck`,
   `build`). `@uione/react/firebase` is the data source a generated app uses: views
   read live from Firestore, commands sent to the Go backend, and Google sign-in. Its

@@ -41,6 +41,12 @@ jobs:
           command -v g++-14 || { sudo apt-get update && sudo apt-get install -y g++-14; }
           CXX=g++-14 make -C compiler test
 
+      # The compiler built for the browser has to say exactly what the native one does.
+      - name: Build the compiler for the browser, and hold it to the native one
+        run: |
+          tools/wasm/build
+          node tools/wasm/test.mjs
+
       - name: Every project in the repository checks without errors
         run: compiler/build/one check examples/library examples/tasks examples/tracker site
 
@@ -87,6 +93,12 @@ jobs:
 
       - name: Install the JavaScript packages' dependencies
         run: yarn install --frozen-lockfile
+
+      - name: Type-check, test and build @uione/compiler
+        run: |
+          yarn workspace @uione/compiler typecheck
+          yarn workspace @uione/compiler test
+          yarn workspace @uione/compiler build
 
       - name: Type-check, test and build @uione/react
         run: |

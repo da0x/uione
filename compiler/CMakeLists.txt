@@ -35,6 +35,27 @@ add_executable(one main.cpp)
 target_include_directories(one PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(one PRIVATE one_warnings md4c)
 
+# For the browser: the same compiler, called from JavaScript through wasm.cpp, with
+# a project's files in an in-memory file system. Built with Emscripten, through
+# tools/wasm/build.
+if(EMSCRIPTEN)
+    add_executable(one_wasm wasm.cpp)
+    target_include_directories(one_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(one_wasm PRIVATE one_warnings md4c)
+    set_target_properties(one_wasm PROPERTIES OUTPUT_NAME one SUFFIX .mjs)
+    # The parser stops at a mistake by throwing, so exceptions have to work, and
+    # WebAssembly's own are the fastest and smallest way.
+    target_compile_options(one_wasm PRIVATE -fwasm-exceptions)
+    target_link_options(one_wasm PRIVATE
+        -fwasm-exceptions
+        -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=load
+        -sENVIRONMENT=web,worker,node
+        -sALLOW_MEMORY_GROWTH=1
+        -sFORCE_FILESYSTEM=1 -lnodefs.js
+        -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString
+        -sEXPORTED_FUNCTIONS=_one_version,_one_check,_one_build,_one_show)
+endif()
+
 option(ONE_TESTS "Build the compiler's tests" ON)
 if(ONE_TESTS)
     # doctest is downloaded at a pinned version rather than kept in the repository,

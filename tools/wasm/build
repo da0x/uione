@@ -1,0 +1,18 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds the compiler for the browser, with Emscripten in Docker at a pinned
+# version, into compiler/build-wasm: one.mjs, which loads one.wasm beside it.
+#
+#   tools/wasm/build
+
+set -eu
+root=$(cd "$(dirname "$0")/../.." && pwd)
+image=emscripten/emsdk:6.0.10@sha256:e077d54e2b8970575ebc4f185ac1de0b95c05f2b266134d4ba27449af7aebf65
+
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e EM_CACHE=/src/compiler/build-wasm/cache \
+	-v "$root:/src" -w /src "$image" sh -c '
+		emcmake cmake -S compiler -B compiler/build-wasm -DONE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release >/dev/null &&
+		cmake --build compiler/build-wasm --target one_wasm --parallel'
+ls -l "$root/compiler/build-wasm/one.mjs" "$root/compiler/build-wasm/one.wasm"

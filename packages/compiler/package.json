@@ -1,0 +1,45 @@
+{
+  "name": "@uione/compiler",
+  "version": "0.1.0",
+  "description": "The uione compiler, built for the browser and run in a Web Worker: check a project, build it, and see what each line becomes.",
+  "license": "AGPL-3.0-only",
+  "author": "Daher Alfawares",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/da0x/uione.git",
+    "directory": "packages/compiler"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/worker.js"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "wasm": "node -e \"const fs=require('fs');for(const f of ['one.mjs','one.wasm']){const from='../../compiler/build-wasm/'+f;if(!fs.existsSync(from)){console.error('the browser build is missing; run tools/wasm/build first');process.exit(1)}fs.mkdirSync('dist',{recursive:true});fs.copyFileSync(from,'dist/'+f)}\"",
+    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
+    "build": "tsc -p tsconfig.build.json && yarn wasm",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -19,8 +19,10 @@ syntax node keeping its file, line and column. Generators write through
 from. It builds with CMake and is tested with doctest and golden files.
 
 Nothing that touches the operating system lives outside `compiler/platform/`, and
-there are no threads, so the same code builds for the browser. An Emscripten build
-has been tried: 885 KB, and output identical to the native build.
+there are no threads, so the same code builds for the browser. `tools/wasm/build`
+builds it with Emscripten at a pinned version, about 900 KB, and
+`tools/wasm/test.mjs` holds its output to the native build's, byte for byte,
+errors included. `@uione/compiler` runs it in a Web Worker.
 
 ## Consequences
 
