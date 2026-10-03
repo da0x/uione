@@ -30,8 +30,10 @@
   --radius-box: 0.5rem;
 }
 
+/* Dark follows the system unless the reader picked a theme with the toggle, which
+   sets data-theme on the page. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-page: oklch(0.17 0.01 260);
     --color-ink: oklch(0.93 0.005 260);
     --color-muted: oklch(0.7 0.01 260);
@@ -43,6 +45,17 @@
     --color-danger: oklch(0.7 0.17 25);
   }
 }
+:root[data-theme="dark"] {
+  --color-page: oklch(0.17 0.01 260);
+  --color-ink: oklch(0.93 0.005 260);
+  --color-muted: oklch(0.7 0.01 260);
+  --color-line: oklch(0.3 0.01 260);
+  --color-control-line: oklch(0.52 0.01 260);
+  --color-surface: oklch(0.22 0.01 260);
+  --color-accent: oklch(0.75 0.11 260);
+  --color-accent-ink: oklch(0.17 0.01 260);
+  --color-danger: oklch(0.7 0.17 25);
+}
 
 @layer base {
   html {
@@ -50,13 +63,22 @@
     color: var(--color-ink);
     color-scheme: light dark;
   }
+  html[data-theme="light"] {
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
 }
 
 /* Highlighted code carries both themes' colors; the dark ones apply in dark mode. */
 @media (prefers-color-scheme: dark) {
-  .one-code span {
+  :root:not([data-theme="light"]) .one-code span {
     color: var(--shiki-dark) !important;
   }
+}
+:root[data-theme="dark"] .one-code span {
+  color: var(--shiki-dark) !important;
 }
 
 /* Docs pages arrive as HTML, so they're styled by element rather than by class. */

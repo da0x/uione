@@ -15,6 +15,7 @@ import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
+import { ThemeToggle } from "./theme.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // The box code sits in, on its own or inside a page of docs.
@@ -88,7 +89,10 @@ export const radix: ComponentSet = {
               </a>
             ))}
           </nav>
-          <div className="ml-auto text-sm">{account}</div>
+          <div className="ml-auto flex items-center gap-3 text-sm">
+            <ThemeToggle />
+            {account}
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ReactNode } from "react";
@@ -42,6 +43,27 @@ describe("the page", () => {
     expect(screen.getByRole("link", { name: "uione" }).getAttribute("href")).toBe("/");
     expect(screen.getByRole("link", { name: "Docs" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("heading", { level: 1, name: "Docs" })).toBeTruthy();
+  });
+
+  it("switches between light and dark, and keeps the reader's pick", () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+      removeItem: (k: string) => void kept.delete(k),
+    });
+    delete document.documentElement.dataset.theme;
+    const { unmount } = renderScreen(() => <Text>hello</Text>);
+    fireEvent.click(screen.getByRole("button", { name: "Switch to dark mode" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("uione-theme")).toBe("dark");
+    fireEvent.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    unmount();
+    // A page opened later starts from the pick.
+    renderScreen(() => <Text>hello</Text>);
+    expect(screen.getByRole("button", { name: "Switch to dark mode" })).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });
 
