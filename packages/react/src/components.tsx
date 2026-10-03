@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useParams } from "react-router";
+import { partsOf } from "./keys.js";
 import { fill, useConfirmContext } from "./app.js";
 import type { FieldProps } from "./contract.js";
 import { useRunner } from "./data.js";
@@ -153,16 +154,27 @@ function rowsOf(value: unknown): Row[] {
 // The address a row opens. The last parameter is the row; any before it, like the
 // project in /projects/:project/issues/:issue, are the ones this screen was opened
 // with, or the row's own field of that name.
-function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>): string {
+//
+// When what it opens is named by its key's parts, like /:owner/:project for a
+// project keyed by its owner and its name, keyed lists the parts before the last,
+// and the row's id is split into them.
+function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>, keyed: readonly string[] = []): string {
   const parameter = /:([A-Za-z_]\w*)/g;
-  let left = route.match(parameter)?.length ?? 0;
+  const names = [...route.matchAll(parameter)].map((m) => m[1] as string);
+  const last = names[names.length - 1];
+  const own = (name: string) => {
+    const field = row[name];
+    return typeof field === "string" && field !== "" ? field : undefined;
+  };
   // A row that holds the thing a parameter names, like a membership's project or a
   // change's issue, links to it; otherwise the last parameter is the row itself.
+  const opened = (last ? own(last) : undefined) ?? row.id;
+  const parts = keyed.length > 0 ? partsOf(opened, keyed.length + 1) : undefined;
+  const values: Record<string, string> = {};
+  if (parts) keyed.forEach((name, i) => (values[name] = parts[i] as string));
   return route.replace(parameter, (_, name: string) => {
-    const field = row[name];
-    const own = typeof field === "string" && field !== "" ? field : undefined;
-    const value = --left === 0 ? (own ?? row.id) : (params[name] ?? own ?? row.id);
-    return encodeURIComponent(value);
+    if (name === last) return encodeURIComponent(parts ? (parts[parts.length - 1] as string) : opened);
+    return encodeURIComponent(values[name] ?? params[name] ?? own(name) ?? row.id);
   });
 }
 
@@ -176,6 +188,7 @@ export function Table({
   columns,
   actions = [],
   link,
+  keyed,
   pictures = [],
 }: {
   view: ViewState;
@@ -183,6 +196,7 @@ export function Table({
   columns: Record<string, string>;
   actions?: string[];
   link?: string; // a route like /books/:book, which each row's id fills
+  keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
   pictures?: string[];
 }) {
   const ui = useUI();
@@ -197,7 +211,7 @@ export function Table({
       error={actions.map((name) => runner.error(name)).find((e) => e !== undefined)}
       rows={rows.map((row) => ({
         id: row.id,
-        link: link ? links(rowLink(link, row, params)) : undefined,
+        link: link ? links(rowLink(link, row, params, keyed)) : undefined,
         cells: Object.keys(columns).map((key) => {
           if (!pictures.includes(key)) return show(row[key]);
           const source = row[key];

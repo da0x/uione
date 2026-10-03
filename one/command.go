@@ -62,7 +62,14 @@ func Create[E any, P entityPointer[E]](c *Ctx, entity *E) error {
 	}
 	v := reflect.ValueOf(entity).Elem()
 	record := P(entity).record()
-	s.start(v, c.me, c.now)
+	username := ""
+	if s.startsWithUsername() {
+		var err error
+		if username, err = c.app.usernameOf(c.Context, c.me); err != nil {
+			return err
+		}
+	}
+	s.start(v, c.me, username, c.now)
 	s.normalize(v)
 	if err := s.validate(v); err != nil {
 		return err
@@ -391,6 +398,15 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		permission = Anyone
 	}
 	var saved *E
+	// A field that starts as the person's username, like a project's owner, needs it
+	// read from their profile before anything is made.
+	username := ""
+	if action == "create" && s.startsWithUsername() {
+		var err error
+		if username, err = a.usernameOf(c.ctx, c.me); err != nil {
+			return "", err
+		}
+	}
 	now := time.Now().UTC()
 	collection := a.store.Collection(s.collection)
 	var id string
@@ -422,7 +438,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := s.decode(c.input, v); err != nil {
 				return err
 			}
-			s.start(v, c.me, now)
+			s.start(v, c.me, username, now)
 			s.normalize(v)
 			if within {
 				if err := a.permittedWithin(tx, c.me, permission, &owned{s, v}); err != nil {

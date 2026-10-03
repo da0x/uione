@@ -345,6 +345,7 @@ namespace one::generators {
             if (!f.initial) return std::string{};
             auto* name = std::get_if<language::name_expression>(&f.initial->node);
             if (name && name->name.parts.size() == 1) return "default=" + name->name.parts[0];
+            if (web_detail::text_of(*f.initial) == "me.username") return std::string("default=me.username");
             unsupported(path_, f.initial->where, "a starting value that's worked out, rather than me, now, true, false or a choice");
             return std::nullopt;
         }

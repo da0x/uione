@@ -220,6 +220,7 @@ namespace one::generators {
         void index(const std::string& ns, const std::vector<language::declaration>& declarations) {
             for (const auto& d : declarations) {
                 if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                    if (n->at) prefixes_[web_detail::join(ns, n->name)] = *n->at == "/" ? "" : *n->at;
                     index(web_detail::join(ns, n->name), n->declarations);
                 } else if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
                     name_ = p->name;
@@ -297,13 +298,20 @@ namespace one::generators {
             return name.find("::") == std::string::npos ? web_detail::join(ns, name) : name;
         }
 
-        static std::string full_route(const std::string& ns, const std::string& route) {
-            std::string prefix;
-            for (std::size_t at = 0; !ns.empty() && at != std::string::npos;) {
-                std::size_t next = ns.find("::", at);
-                prefix += "/" + ns.substr(at, next == std::string::npos ? std::string::npos : next - at);
-                at = next == std::string::npos ? next : next + 2;
-            }
+        // Where a namespace's screens are: under its name, like /docs, unless it says
+        // otherwise with at, like namespace studio at /.
+        std::map<std::string, std::string> prefixes_;
+
+        std::string prefix_of(const std::string& ns) const {
+            if (ns.empty()) return "";
+            if (auto it = prefixes_.find(ns); it != prefixes_.end()) return it->second;
+            std::size_t cut = ns.rfind("::");
+            std::string outer = cut == std::string::npos ? "" : ns.substr(0, cut);
+            return prefix_of(outer) + "/" + ns.substr(cut == std::string::npos ? 0 : cut + 2);
+        }
+
+        std::string full_route(const std::string& ns, const std::string& route) const {
+            std::string prefix = prefix_of(ns);
             if (prefix.empty()) return route;
             return route == "/" ? prefix : prefix + route;
         }
@@ -314,6 +322,24 @@ namespace one::generators {
         }
 
         // Whether a route has a parameter: /projects/:project has project.
+        // The key's parts before the last, when an address names an entity by them:
+        // owner, in /:owner/:project, for a project keyed owner and slug. Empty when
+        // the address names it by its whole id, or it has a key of one part.
+        std::vector<std::string> keyed_by(const std::string& ns, const std::string& entity, const std::string& route) const {
+            auto scope = entities_.find(ns);
+            if (scope == entities_.end() || !scope->second.contains(entity)) return {};
+            std::vector<std::string> keys;
+            for (const auto& f : scope->second.at(entity)->fields) {
+                if (f.key) keys.push_back(f.name);
+            }
+            if (keys.size() < 2) return {};
+            keys.pop_back();
+            for (const auto& key : keys) {
+                if (!names_parameter(route, key)) return {};
+            }
+            return keys;
+        }
+
         static bool names_parameter(const std::string& route, const std::string& name) {
             std::string wanted = "/:" + name;
             for (std::size_t at = route.find(wanted); at != std::string::npos; at = route.find(wanted, at + 1)) {
@@ -484,6 +510,17 @@ namespace one::generators {
                     // form can send it.
                     for (const auto& param : parts.params) {
                         components.insert("useParam");
+                        // An entity the address names by its key's parts, like
+                        // /:owner/:project, is read by the id those parts make.
+                        auto keyed = keyed_by(ns, param, route);
+                        if (!keyed.empty()) {
+                            components.insert("keyOf");
+                            std::string parts_list;
+                            for (const auto& key : keyed) parts_list += "useParam(" + web_detail::js_string(key) + "), ";
+                            bodies.line("const " + web_detail::js_name(param + "_id") + " = keyOf([" + parts_list + "useParam(" +
+                                        web_detail::js_string(param) + ")]);");
+                            continue;
+                        }
                         bodies.line("const " + web_detail::js_name(param + "_id") + " = useParam(" + web_detail::js_string(param) + ");");
                     }
                     for (const auto& [variable, view] : parts.views) {
@@ -693,7 +730,18 @@ namespace one::generators {
             }
             std::string line = "<Table view={" + view_variable(parts, view) + "}";
             if (table.list) line += " list=" + web_detail::js_string(*table.list);
-            if (table.link) line += " link=" + web_detail::js_string(full_route(ns, *table.link));
+            if (table.link) {
+                std::string target = full_route(ns, *table.link);
+                line += " link=" + web_detail::js_string(target);
+                // What it opens is named by its key's parts, like /:owner/:project.
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+            }
             line += " columns={{ " + columns + " }}";
             if (!actions.empty()) line += " actions={[" + actions + "]}";
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";

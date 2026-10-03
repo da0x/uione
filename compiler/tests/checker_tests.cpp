@@ -699,3 +699,17 @@ TEST_CASE("people sign in with Google or GitHub") {
     CHECK(check_source("project p {\n\tsignin github\n}\n").empty());
     CHECK(only_error("project p {\n\tsignin twitter\n}\n").message == "signin is google or github");
 }
+
+TEST_CASE("a field can start as the person's username") {
+    CHECK(check_source("namespace a {\nentity project {\n\towner  text  key  = me.username\n\tslug  text  key\n}\n}\n").empty());
+    CHECK(only_error("namespace a {\nentity project {\n\towner  user  = me.username\n}\n}\n").message == "owner starts as me.username, so it's text");
+    CHECK(only_error("namespace a {\nentity project {\n\towner  text  = me.name\n}\n}\n").message ==
+          "a field starts as a value, me, me.username or now, not me.name");
+}
+
+TEST_CASE("a namespace's screens can be at another address") {
+    CHECK(check_source("namespace studio at / {\nscreen \"Projects\" / {\n\ttext \"a\"\n}\n}\n"
+                       "screen \"Home\" /home {\n\tlink namespace studio \"Projects\"\n}\n").empty());
+    auto e = only_error("namespace studio at / {\nscreen \"Projects\" / {\n\ttext \"a\"\n}\n}\nscreen \"Home\" / {\n\ttext \"b\"\n}\n");
+    CHECK(e.message.starts_with("two screens are at /;"));
+}

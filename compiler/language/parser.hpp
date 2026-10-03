@@ -230,6 +230,10 @@ namespace one::language {
             advance();
             namespace_declaration ns;
             ns.name = expect(token_kind::identifier, "the namespace's name").text;
+            if (at_word("at")) {
+                advance();
+                ns.at = expect(token_kind::route, "where the namespace's screens are, like / or /docs").text;
+            }
             expect(token_kind::left_brace, "'{'");
             ns.declarations = parse_declarations(true);
             expect(token_kind::right_brace, "'}' to close namespace " + ns.name);

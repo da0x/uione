@@ -360,6 +360,7 @@ namespace one::language {
     struct namespace_declaration {
         std::string name;
         std::vector<declaration> declarations;
+        std::optional<std::string> at;  // namespace studio at /: where its screens are, rather than /studio
     };
 
     struct declaration {

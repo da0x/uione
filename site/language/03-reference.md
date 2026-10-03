@@ -58,6 +58,10 @@ navigation group of the screens inside it, so `screen "Shelf" /shelf` inside
 `namespace library` is served at `/library/shelf`. A screen outside any namespace
 is at the root.
 
+`namespace studio at /` puts the namespace's screens somewhere else, here at the
+site's root, so its `/:owner/:project` screen is at `/da0x/neotrac` rather than
+`/studio/da0x/neotrac`.
+
 `::` reaches into a namespace or an entity: `waitlist::signup::create`,
 `library::book`.
 
@@ -119,7 +123,10 @@ entity loan {
 - `key` makes the field the entity's id. A book with shelf mark HIS-0142 is
   `HIS-0142`, and its page is `/books/HIS-0142`. With several key fields their
   values are joined by dashes, so the third loan of that book is `HIS-0142-3`.
-  A key is never changed once the entity is made.
+  A key is never changed once the entity is made. An address can name an entity
+  by its key's parts rather than its id: a project keyed `owner slug` is at
+  `/:owner/:project`, so `/da0x/neotrac`, with a parameter named after each part
+  but the last, and the last named after the entity.
 - Making an entity whose key is already taken updates it, which suits a waitlist
   where signing up twice is still one signup. `unique key` refuses the second one
   instead, with "Shelfmark is already taken".
@@ -128,7 +135,9 @@ entity loan {
   Making an issue is one change with no field. The changes are kept in the same
   step as the change itself, so none is ever missed or made up.
 - `= value` sets the value a new entity starts with. `me` is the person running the
-  command, `now` is the time it runs, and `none` is no value.
+  command, `me.username` is their GitHub username, `now` is the time it runs, and
+  `none` is no value. A field that starts as `me` or `me.username` always does, so
+  nobody can make something in another's name.
 
 ## format
 

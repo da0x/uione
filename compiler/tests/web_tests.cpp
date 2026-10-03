@@ -278,3 +278,30 @@ TEST_CASE("an app whose people sign in with GitHub asks for GitHub") {
     CHECK(app->content.find(R"(signin: "github" as const)") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a namespace can put its screens at the root, and an address can name an entity by its key's parts") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-keyed-addresses";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace studio at / {\n"
+                         "entity project {\n\towner  text  key  = me.username\n\tslug  text  required  key\n\tname  text\n}\n"
+                         "command project::create {\n\tpermission signed_in\n}\n"
+                         "view all {\n\teach project {\n\t\tname\n\t}\n}\n"
+                         "view page per project {\n\tname = project.name\n}\n"
+                         "screen \"Projects\" / {\n\ttable all link /:owner/:project {\n\t\tname\n\t}\n}\n"
+                         "screen \"Project\" /:owner/:project {\n\ttext \"{page.name}\"\n\tlink /:owner/:project/more \"More\"\n}\n"
+                         "screen \"More\" /:owner/:project/more {\n\ttext \"{page.name}\"\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(route: "/", nav: "Projects")") != std::string::npos);
+    CHECK(tsx.find(R"(route: "/:owner/:project")") != std::string::npos);
+    CHECK(tsx.find(R"(const projectId = keyOf([useParam("owner"), useParam("project")]);)") != std::string::npos);
+    CHECK(tsx.find(R"(link="/:owner/:project" keyed={["owner"]})") != std::string::npos);
+    CHECK(tsx.find(R"(<Link to="/:owner/:project/more">)") != std::string::npos);
+    fs::remove_all(dir);
+}

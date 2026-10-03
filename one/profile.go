@@ -13,6 +13,8 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"firebase.google.com/go/v4/auth"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Profile is what a view can show about a person: the name and picture their
@@ -50,6 +52,26 @@ var githubLogin = func(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	return account.Login, nil
+}
+
+// usernameOf reads a person's username from their profile. Something that starts
+// with it, like a project named for its owner, can't be made without one.
+func (a *App) usernameOf(ctx context.Context, person string) (string, error) {
+	if person == "" {
+		return "", &Failure{Status: 401, Message: "sign in to do this"}
+	}
+	snap, err := a.store.Collection("users").Doc(person).Get(ctx)
+	if err != nil && status.Code(err) != codes.NotFound {
+		return "", err
+	}
+	username := ""
+	if snap != nil && snap.Exists() {
+		username, _ = snap.Data()["username"].(string)
+	}
+	if username == "" {
+		return "", &Failure{Status: 400, Message: "this needs your GitHub username; sign in with GitHub"}
+	}
+	return username, nil
 }
 
 // githubID is the numeric GitHub account a sign-in came from, if it came from GitHub.

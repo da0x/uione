@@ -117,14 +117,20 @@ namespace one::language {
             }
         }
 
-        static std::string full_route(const std::string& ns, const std::string& route) {
-            std::string prefix;
-            if (!ns.empty()) {
-                prefix = "/" + ns;
-                for (auto at = prefix.find("::"); at != std::string::npos; at = prefix.find("::")) {
-                    prefix.replace(at, 2, "/");
-                }
-            }
+        // Where a namespace's screens are: under its name, like /docs, unless it says
+        // otherwise with at, like namespace studio at /.
+        std::map<std::string, std::string> prefixes_;
+
+        std::string prefix_of(const std::string& ns) const {
+            if (ns.empty()) return "";
+            if (auto it = prefixes_.find(ns); it != prefixes_.end()) return it->second;
+            std::size_t cut = ns.rfind("::");
+            std::string outer = cut == std::string::npos ? "" : ns.substr(0, cut);
+            return prefix_of(outer) + "/" + ns.substr(cut == std::string::npos ? 0 : cut + 2);
+        }
+
+        std::string full_route(const std::string& ns, const std::string& route) const {
+            std::string prefix = prefix_of(ns);
             if (prefix.empty()) return route;
             return route == "/" ? prefix : prefix + route;
         }
@@ -142,6 +148,10 @@ namespace one::language {
             scope& here = scopes_[ns];
             for (const auto& d : declarations) {
                 if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
+                    if (n->at) {
+                        if (!n->at->starts_with("/")) error(d.where, "a namespace is at an address, like / or /docs");
+                        prefixes_[join(ns, n->name)] = *n->at == "/" ? "" : *n->at;
+                    }
                     collect(join(ns, n->name), n->declarations);
                 } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
                     add(here.entities, e->name, *e, d.where, "entity", ns);
@@ -364,6 +374,16 @@ namespace one::language {
                 }
                 if (f.initial) {
                     names_in(*f.initial);
+                    // me.username: the signed-in person's GitHub username, like da0x.
+                    if (auto* m = std::get_if<member_expression>(&f.initial->node)) {
+                        auto* object = std::get_if<name_expression>(&m->object->node);
+                        bool username = object && object->name.text() == "me" && m->member == "username";
+                        if (!username) {
+                            error(f.initial->where, "a field starts as a value, me, me.username or now, not " + written(*f.initial));
+                        } else if (!f.type || f.type->text() != "text") {
+                            error(f.initial->where, f.name + " starts as me.username, so it's text");
+                        }
+                    }
                     if (!f.choices.empty()) {
                         auto* start = std::get_if<name_expression>(&f.initial->node);
                         bool is_choice = start && start->name.parts.size() == 1 &&
@@ -991,9 +1011,22 @@ namespace one::language {
                             }
                             return false;
                         };
+                        // Or the key the last names it by, like owner in /:owner/:project
+                        // for a project keyed owner and slug.
+                        std::vector<std::string> keys;
+                        if (!names.empty()) {
+                            if (const entity_declaration* opened = find_entity(ns, qualified_name{{names.back()}, table->link_where})) {
+                                for (const auto& f : opened->fields) {
+                                    if (f.key) keys.push_back(f.name);
+                                }
+                            }
+                        }
+                        auto keyed = [&](const std::string& name) {
+                            return keys.size() > 1 && std::find(keys.begin(), keys.end() - 1, name) != keys.end() - 1;
+                        };
                         std::string missing;
                         for (std::size_t i = 0; i + 1 < names.size(); ++i) {
-                            if (route.find("/:" + names[i]) == std::string::npos && !row_holds(names[i])) missing = names[i];
+                            if (route.find("/:" + names[i]) == std::string::npos && !row_holds(names[i]) && !keyed(names[i])) missing = names[i];
                         }
                         if (names.empty()) {
                             error(table->link_where, "a table's link ends with a :parameter, which each row's id fills, like /books/:book");

@@ -174,6 +174,17 @@ func schemaOf(t reflect.Type, entity string) *schema {
 	return actual.(*schema)
 }
 
+// startsWithUsername says whether a field starts as the person's username, which
+// has to be read from their profile first.
+func (s *schema) startsWithUsername() bool {
+	for _, f := range s.fields {
+		if f.initial == "me.username" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *schema) field(name string) *field {
 	for i := range s.fields {
 		if s.fields[i].name == name {
@@ -315,18 +326,20 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 
 // start fills in what a new entity starts with: "me" is the person creating it,
 // "now" is the time, and anything else is a literal value, like a first choice.
-func (s *schema) start(v reflect.Value, me string, now time.Time) {
+func (s *schema) start(v reflect.Value, me, username string, now time.Time) {
 	for _, f := range s.fields {
 		if f.initial == "" {
 			continue
 		}
 		target := v.FieldByIndex(f.index)
-		if !target.IsZero() && f.initial != "me" {
+		if !target.IsZero() && f.initial != "me" && f.initial != "me.username" {
 			continue
 		}
 		switch {
 		case f.initial == "me" && target.Kind() == reflect.String:
 			target.SetString(me)
+		case f.initial == "me.username" && target.Kind() == reflect.String:
+			target.SetString(username)
 		case f.initial == "now" && f.typ == reflect.TypeOf(time.Time{}):
 			target.Set(reflect.ValueOf(now))
 		case f.initial == "false" && target.Kind() == reflect.Bool:

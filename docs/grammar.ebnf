@@ -52,7 +52,7 @@ setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" |
 
 /* namespace */
 
-namespace      ::= "namespace" NAME "{" NEWLINE? declaration* "}" END
+namespace      ::= "namespace" NAME ("at" ROUTE)? "{" NEWLINE? declaration* "}" END
 
 /* format */
 
