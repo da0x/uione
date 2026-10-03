@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 
 	"google.golang.org/grpc/codes"
@@ -23,6 +24,23 @@ type System struct {
 
 // Context is the request the system is working for.
 func (s *System) Context() context.Context { return s.ctx }
+
+// SignedIn says who sent a request to a Route, by the sign-in its Authorization
+// header carries, as commands are told: their uid, or "" when nobody signed in. A
+// sign-in that isn't valid, or has expired, is an error, so a route can't mistake it
+// for nobody.
+func (s *System) SignedIn(r *http.Request) (string, error) {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return "", nil
+	}
+	token, err := s.app.auth.VerifyIDToken(r.Context(), strings.TrimPrefix(header, "Bearer "))
+	if err != nil {
+		return "", &Failure{Status: http.StatusUnauthorized, Message: "your sign-in has expired; sign in again"}
+	}
+	s.app.remember(r.Context(), token)
+	return token.UID, nil
+}
 
 // Run runs a command as the backend itself, which may run any command: a deploy's
 // build reporting that it's done, say. It returns the id of what it changed.

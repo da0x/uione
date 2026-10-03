@@ -478,7 +478,7 @@ It uses three things from the `one` library:
   function. It runs before the command answers, so it starts slow work elsewhere
   rather than doing it.
 - `one.Route("POST /hooks/deploy", handle)` answers requests of its own, like a
-  build reporting back. Nobody is signed in on a route, so it checks the request
-  itself.
+  build reporting back. A route checks the request itself: `s.SignedIn(r)` says
+  who sent it, by the sign-in it carries, or `""` for nobody.
 - Both are given a `System`, the backend itself. `Run` runs any command, even one
   no role grants, and `one.Fetch` and `one.FetchWhere` read what's stored.

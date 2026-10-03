@@ -6,6 +6,7 @@ package one_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -83,6 +84,45 @@ func init() {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func init() {
+	one.Route("GET /hooks/who", func(s *one.System, w http.ResponseWriter, r *http.Request) {
+		uid, err := s.SignedIn(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte("uid:" + uid))
+	})
+}
+
+func TestARouteKnowsWhoSentIt(t *testing.T) {
+	h := start(t)
+	ada, token := h.signUp("ada@example.com")
+	ask := func(header string) (int, string) {
+		t.Helper()
+		request, _ := http.NewRequest(http.MethodGet, h.server.URL+"/hooks/who", nil)
+		if header != "" {
+			request.Header.Set("Authorization", header)
+		}
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		return response.StatusCode, string(body)
+	}
+	if status, body := ask("Bearer " + token); status != http.StatusOK || body != "uid:"+ada {
+		t.Errorf("signed in, the route heard %d %q", status, body)
+	}
+	if status, body := ask(""); status != http.StatusOK || body != "uid:" {
+		t.Errorf("signed out, the route heard %d %q", status, body)
+	}
+	if status, _ := ask("Bearer not-a-token"); status != http.StatusUnauthorized {
+		t.Errorf("with a made-up sign-in, the route answered %d", status)
+	}
 }
 
 // stored reads an entity as it's stored.
