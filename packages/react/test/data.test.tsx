@@ -475,4 +475,10 @@ describe("a form's button", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create" })).toBeTruthy();
   });
+
+  it("opens a form behind a button by what the form says it does", () => {
+    renderScreen(memorySource(), () => <Form command="studio::project::create" fields={["name"]} submit="Create project" button />);
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    expect(screen.getByRole("dialog", { name: "Create project" })).toBeTruthy();
+  });
 });

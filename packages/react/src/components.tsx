@@ -358,11 +358,11 @@ export function Form({
   return (
     <>
       <ui.Button kind="primary" onClick={() => setOpen(true)}>
-        {label(action(command))}
+        {says ?? label(action(command))}
       </ui.Button>
       <ui.Dialog
         open={open}
-        title={label(action(command))}
+        title={says ?? label(action(command))}
         onClose={() => {
           setOpen(false);
           runner.clear(command);
