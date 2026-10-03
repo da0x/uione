@@ -641,6 +641,7 @@ namespace one::language {
                 do {
                     form.commands.push_back(parse_qualified_name("a command, like book::create"));
                 } while (at(token_kind::identifier));
+                if (at(token_kind::string)) form.submit = advance().text;
                 expect(token_kind::left_brace, "'{'");
                 while (in_block()) {
                     parse_form_line(form.fields);

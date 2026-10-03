@@ -135,4 +135,15 @@ describe("a workbench, with the real compiler", async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(built).toBe(0);
   });
+
+  it("can be only read, by someone who can't change the file", () => {
+    let changed = false;
+    const { container } = render(
+      <Workbench compiler={compiler} files={{ "main.one": tasks }} path="main.one" onChange={() => (changed = true)} generated={false} readOnly />,
+    );
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.readOnly).toBe(true);
+    expect(container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
+    expect(changed).toBe(false);
+  });
 });

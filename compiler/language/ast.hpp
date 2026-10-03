@@ -285,6 +285,7 @@ namespace one::language {
     struct form_item {
         std::vector<qualified_name> commands;
         std::vector<form_field> fields;
+        std::optional<std::string> submit;  // form project::update "Save changes": what its button says
     };
 
     struct confirm_item {

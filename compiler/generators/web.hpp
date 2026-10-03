@@ -824,7 +824,8 @@ namespace one::generators {
                 }
             }
             if (!given.empty()) given = " given={{ " + given + " }}";
-            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + (button ? " button" : "") + " />");
+            std::string submit = form.submit ? " submit=" + web_detail::js_string(*form.submit) : "";
+            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + " />");
         }
 
         // the files around the screens

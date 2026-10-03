@@ -463,3 +463,16 @@ describe("choices", () => {
     expect([...pick.options].map((o) => o.textContent)).toEqual(["Choose one", "MIT", "Apache-2.0"]);
   });
 });
+
+describe("a form's button", () => {
+  it("says what the form says it does, or the command's name", () => {
+    renderScreen(memorySource(), () => (
+      <>
+        <Form command="studio::project::update" fields={["description"]} submit="Save changes" />
+        <Form command="studio::project::create" fields={["name"]} />
+      </>
+    ));
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create" })).toBeTruthy();
+  });
+});

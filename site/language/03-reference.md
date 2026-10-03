@@ -365,6 +365,8 @@ screen "Book" /books/:book {
   starts from what's stored: a view per book has to hold every field it asks for
   (`title = book.title`), so no field starts empty and gets saved empty. It can't
   ask for a key, which never changes.
+- `form project::update "Save changes" { ... }` names the form's button; without
+  it, the button is named after the command, like Update.
 - `confirm` asks before a command runs.
 - `component opening_hours` draws a hand-written React component: the default
   export of `components/opening_hours.tsx`, beside the `.one` file. It's for

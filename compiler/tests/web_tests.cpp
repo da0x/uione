@@ -314,10 +314,12 @@ TEST_CASE("a choice is picked from a list in a form, and shown by its label") {
     platform::write_file((dir / "main.one").string(),
                          "namespace studio {\nentity project {\n\tname  text\n\tlicense  mit \"MIT\" | apache_2_0 \"Apache-2.0\" | none = none\n}\n"
                          "command project::create\nview all {\n\teach project {\n\t\tname  license\n\t}\n}\n"
-                         "screen \"Projects\" / {\n\ttable all {\n\t\tname\n\t\tlicense\n\t}\n\tform project::create {\n\t\tname  license\n\t}\n}\n}\n");
+                         "screen \"Projects\" / {\n\ttable all {\n\t\tname\n\t\tlicense\n\t}\n\tform project::create \"Start a project\" {\n\t\tname  license\n\t}\n}\n}\n");
     auto files = generate_at(dir.string());
     const auto& tsx = find(files, "src/screens/main.tsx")->content;
     CHECK(tsx.find(R"({ name: "license", type: "choice", choices: [["mit", "MIT"], ["apache_2_0", "Apache-2.0"], ["none", "None"]], start: "none" })") != std::string::npos);
     CHECK(tsx.find(R"(choices={{ license: Object.fromEntries([["mit", "MIT"], ["apache_2_0", "Apache-2.0"], ["none", "None"]]) }})") != std::string::npos);
+    // A form can say what its button does.
+    CHECK(tsx.find(R"( submit="Start a project")") != std::string::npos);
     fs::remove_all(dir);
 }

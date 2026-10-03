@@ -271,6 +271,7 @@ export function Form({
   from,
   id,
   given = {},
+  submit: says,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -278,6 +279,7 @@ export function Form({
   from?: ViewState; // for an update: the view whose document the fields start from
   id?: string; // for an update: the entity it changes
   given?: Record<string, string | undefined>; // sent without being asked for, like the project an issue is made in
+  submit?: string; // what its button says, rather than the command's name, like Save changes
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -328,7 +330,7 @@ export function Form({
           },
         }),
       )}
-      submit={label(action(command))}
+      submit={says ?? label(action(command))}
       busy={runner.busy(command)}
       error={runner.error(command)}
       onSubmit={() => void submit()}

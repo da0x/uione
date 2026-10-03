@@ -120,7 +120,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | ("text" | "code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
                  | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
-                 | "form" qualified+ "{" NEWLINE? form_line* "}" END
+                 | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "component" NAME END
                  | NAME ("::" NAME)+ END

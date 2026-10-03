@@ -20,11 +20,12 @@ export interface EditorProps {
   compiler: Pick<Compiler, "check">;
   tabWidth?: TabWidth;
   onLine?: (line: number) => void; // the line the cursor is on, numbered from 1
+  readOnly?: boolean; // shown to be read, by someone who can't change it
 }
 
 // A .one file in CodeMirror. The editor owns its text while it's open; a value from
 // outside replaces it only when it's different, so typing is never undone by an echo.
-export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine }: EditorProps) {
+export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine, readOnly = false }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const latest = useRef({ onChange, onLine, files });
@@ -46,6 +47,9 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
           EditorView.lineWrapping,
+          // Someone who can't change the file can still select and copy it.
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
           EditorView.contentAttributes.of({ "aria-label": path }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) latest.current.onChange(update.state.doc.toString());
@@ -62,7 +66,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
       view.current = null;
     };
     // A new file or compiler is a new editor; the rest is followed below.
-  }, [path, compiler]);
+  }, [path, compiler, readOnly]);
 
   useEffect(() => {
     const editor = view.current;
@@ -140,11 +144,12 @@ export interface WorkbenchProps {
   tabWidth?: TabWidth;
   delay?: number; // milliseconds after the last change before building, 500 unless set
   generated?: boolean; // whether to show the code it becomes beside it; true unless set
+  readOnly?: boolean; // shown to be read, by someone who can't change it
 }
 
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
-export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true }: WorkbenchProps) {
+export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false }: WorkbenchProps) {
   const [line, setLine] = useState(1);
   const [built, setBuilt] = useState<Built | undefined>();
   useEffect(() => {
@@ -173,6 +178,7 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
         compiler={compiler}
         tabWidth={tabWidth}
         onLine={setLine}
+        readOnly={readOnly}
       />
       {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={tabWidth} />}
     </div>
