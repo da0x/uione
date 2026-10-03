@@ -15,46 +15,71 @@
 @import "tailwindcss" source(none);
 @source "./**/*.tsx";
 
-/* Neutral colors, named for what they're for rather than what they look like. */
+/*
+ * Colors, named for what they're for. A cool, exact palette: pages a breath off
+ * white, panels white so they sit crisply on them, a deep blue-black for text, and
+ * one accent, the logo's blue sharpened. Dark mode is navy-black, not gray.
+ */
 @theme {
-  --color-page: oklch(0.99 0 0);
-  --color-ink: oklch(0.21 0.01 260);
-  --color-muted: oklch(0.52 0.01 260);
-  --color-line: oklch(0.91 0.005 260);
+  --color-page: #f7f8fa;
+  --color-ink: #0e1726;
+  --color-muted: #5b6577;
+  --color-line: #dde2ea;
   /* The edge of a form control, which has to stand out from the page by 3:1. */
-  --color-control-line: oklch(0.62 0.01 260);
-  --color-surface: oklch(0.97 0.003 260);
-  --color-accent: oklch(0.45 0.13 260);
-  --color-accent-ink: oklch(0.99 0 0);
-  --color-danger: oklch(0.55 0.2 25);
-  --radius-box: 0.5rem;
+  --color-control-line: #8a94a6;
+  --color-surface: #ffffff;
+  --color-sunken: #eef1f5;
+  --color-accent: #2457d6;
+  --color-accent-hover: #1c47b8;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #e8eefc;
+  --color-danger: #c2312d;
+  --color-grid: rgba(36, 87, 214, 0.07);
+  --radius-box: 10px;
+  --radius-control: 8px;
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --shadow-panel: 0 1px 2px rgba(14, 23, 38, 0.05), 0 1px 1px rgba(14, 23, 38, 0.03);
+  --shadow-raised: 0 12px 32px -8px rgba(14, 23, 38, 0.18), 0 2px 6px rgba(14, 23, 38, 0.06);
 }
 
 /* Dark follows the system unless the reader picked a theme with the toggle, which
    sets data-theme on the page. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-page: oklch(0.17 0.01 260);
-    --color-ink: oklch(0.93 0.005 260);
-    --color-muted: oklch(0.7 0.01 260);
-    --color-line: oklch(0.3 0.01 260);
-    --color-control-line: oklch(0.52 0.01 260);
-    --color-surface: oklch(0.22 0.01 260);
-    --color-accent: oklch(0.75 0.11 260);
-    --color-accent-ink: oklch(0.17 0.01 260);
-    --color-danger: oklch(0.7 0.17 25);
+    --color-page: #0a101c;
+    --color-ink: #e6ebf3;
+    --color-muted: #94a0b4;
+    --color-line: #1f2a3d;
+    --color-control-line: #4a5872;
+    --color-surface: #111a2b;
+    --color-sunken: #0d1524;
+    --color-accent: #7ea6ff;
+    --color-accent-hover: #a3c0ff;
+    --color-accent-ink: #0a101c;
+    --color-accent-soft: #16244a;
+    --color-danger: #ff7b72;
+    --color-grid: rgba(126, 166, 255, 0.06);
+    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+    --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
   }
 }
 :root[data-theme="dark"] {
-  --color-page: oklch(0.17 0.01 260);
-  --color-ink: oklch(0.93 0.005 260);
-  --color-muted: oklch(0.7 0.01 260);
-  --color-line: oklch(0.3 0.01 260);
-  --color-control-line: oklch(0.52 0.01 260);
-  --color-surface: oklch(0.22 0.01 260);
-  --color-accent: oklch(0.75 0.11 260);
-  --color-accent-ink: oklch(0.17 0.01 260);
-  --color-danger: oklch(0.7 0.17 25);
+  --color-page: #0a101c;
+  --color-ink: #e6ebf3;
+  --color-muted: #94a0b4;
+  --color-line: #1f2a3d;
+  --color-control-line: #4a5872;
+  --color-surface: #111a2b;
+  --color-sunken: #0d1524;
+  --color-accent: #7ea6ff;
+  --color-accent-hover: #a3c0ff;
+  --color-accent-ink: #0a101c;
+  --color-accent-soft: #16244a;
+  --color-danger: #ff7b72;
+  --color-grid: rgba(126, 166, 255, 0.06);
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
 @layer base {
@@ -62,12 +87,50 @@
     background: var(--color-page);
     color: var(--color-ink);
     color-scheme: light dark;
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "ss02";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   html[data-theme="light"] {
     color-scheme: light;
   }
   html[data-theme="dark"] {
     color-scheme: dark;
+  }
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+  /* Keyboard focus is always visible, and drawn the same way everywhere. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* The one flourish: a fine blueprint grid behind a hero, fading out towards the
+   page. It says engineering without saying anything. */
+@layer components {
+  .one-blueprint {
+    position: relative;
+    isolation: isolate;
+  }
+  .one-blueprint::before {
+    content: "";
+    position: absolute;
+    inset: -2.5rem -100vw 0;
+    z-index: -1;
+    background-image: linear-gradient(var(--color-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: center top;
+    mask-image: radial-gradient(ellipse 60% 85% at 25% 20%, #000 30%, transparent 80%);
+    pointer-events: none;
   }
 }
 
@@ -88,14 +151,22 @@
     overflow-wrap: break-word;
   }
   .one-prose h1 {
-    font-size: 1.875rem;
-    font-weight: 700;
-    margin: 0 0 1rem;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin: 0 0 1.25rem;
   }
   .one-prose h2 {
     font-size: 1.375rem;
-    font-weight: 650;
-    margin: 2rem 0 0.75rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    margin: 2.5rem 0 0.75rem;
+  }
+  .one-prose h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.75rem 0 0.5rem;
   }
   .one-prose p,
   .one-prose ul,
@@ -114,20 +185,29 @@
   .one-prose a {
     color: var(--color-accent);
     text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+    text-underline-offset: 3px;
+  }
+  .one-prose a:hover {
+    text-decoration-color: var(--color-accent);
   }
   .one-prose code {
-    font-size: 0.875em;
-    background: var(--color-surface);
-    border-radius: 0.25rem;
-    padding: 0.1em 0.3em;
+    font-size: 0.86em;
+    background: var(--color-sunken);
+    border-radius: 0.3rem;
+    padding: 0.1em 0.35em;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
   }
   .one-prose pre {
     background: var(--color-surface);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-box);
-    padding: 1rem;
+    box-shadow: var(--shadow-panel);
+    padding: 1rem 1.1rem;
     overflow-x: auto;
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
+    font-size: 0.84rem;
   }
   .one-prose pre code {
     background: none;
@@ -142,7 +222,13 @@
   .one-prose th,
   .one-prose td {
     border-bottom: 1px solid var(--color-line);
-    padding: 0.4rem 0.75rem 0.4rem 0;
+    padding: 0.5rem 1rem 0.5rem 0;
     text-align: left;
+    vertical-align: top;
+  }
+  .one-prose th {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
   }
 }

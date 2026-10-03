@@ -9,6 +9,10 @@
 // Everything else is plain elements with Tailwind classes, compiled into
 // dist/styles.css so an app only has to import that one file.
 
+// IBM Plex: an engineering face, served with the app rather than from a font CDN.
+import "@fontsource-variable/ibm-plex-sans";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
@@ -19,7 +23,7 @@ import { ThemeToggle } from "./theme.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // The box code sits in, on its own or inside a page of docs.
-const box = "one-code overflow-x-auto rounded-box border border-line bg-surface p-4 text-sm leading-6 [&_pre]:!bg-transparent";
+const box = "one-code overflow-x-auto rounded-box border border-line bg-surface p-4 text-[0.84rem] leading-6 shadow-panel [&_pre]:!bg-transparent";
 
 // The reader's controls for how code looks: how wide a tab is, and how names are
 // written. One change applies to every piece of code on the page.
@@ -35,7 +39,7 @@ function CodeToolbar({ display }: { display: CodeDisplay }) {
             type="button"
             aria-pressed={display.tabWidth === width}
             onClick={() => setCodeDisplay({ tabWidth: width })}
-            className={`rounded px-1.5 py-0.5 tabular-nums ${display.tabWidth === width ? "bg-accent text-accent-ink" : "hover:text-ink"}`}
+            className={`rounded-md px-1.5 py-0.5 tabular-nums ${display.tabWidth === width ? "bg-accent-soft font-medium text-accent" : "hover:text-ink"}`}
           >
             {width}
           </button>
@@ -47,7 +51,7 @@ function CodeToolbar({ display }: { display: CodeDisplay }) {
           id={names}
           value={display.names}
           onChange={(event) => setCodeDisplay({ names: event.target.value as NameStyle })}
-          className="rounded border border-control-line bg-page px-1.5 py-0.5 text-ink focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+          className="rounded-md border border-line bg-surface px-1.5 py-0.5 text-ink"
         >
           {nameStyles.map((style) => (
             <option key={style} value={style}>
@@ -60,36 +64,41 @@ function CodeToolbar({ display }: { display: CodeDisplay }) {
   );
 }
 
+// Buttons have real presence: a solid accent for what the screen is for, an
+// outlined panel for the rest.
 const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
-  primary: "bg-accent text-accent-ink hover:opacity-90",
-  secondary: "border border-line bg-page text-ink hover:bg-surface",
-  danger: "bg-danger text-accent-ink hover:opacity-90",
+  primary: "bg-accent text-accent-ink shadow-panel hover:bg-accent-hover",
+  secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
+  danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
+const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
 
 export const radix: ComponentSet = {
   Page: ({ name, icon, home, nav, title, account, children }) => (
-    <div className="min-h-screen bg-page text-ink antialiased">
-      <header className="border-b border-line">
+    <div className="min-h-screen bg-page text-ink">
+      {/* The header stays in view, over a blur of the page as it scrolls. The page
+          you're on is underlined in the accent, along the header's edge. */}
+      <header className="sticky top-0 z-20 border-b border-line bg-page/80 backdrop-blur-md">
         {/* On a phone, the navigation takes a row of its own under the name. */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-6 lg:px-8">
-          <a {...home} className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
+        <div className="flex flex-wrap items-center gap-x-7 gap-y-1 px-4 pt-3 sm:px-6 sm:pt-0 lg:px-8">
+          <a {...home} className="flex shrink-0 items-center gap-2.5 py-0 text-[1.05rem] font-semibold tracking-[-0.01em] sm:py-3.5">
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
           </a>
-          <nav className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 text-sm sm:order-none sm:w-auto">
+          <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto">
             {nav.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
                 onClick={item.onClick}
                 aria-current={item.current ? "page" : undefined}
-                className={item.current ? "font-medium text-ink" : "text-muted hover:text-ink"}
+                className={`border-b-2 py-3 transition-colors sm:py-4 ${item.current ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
                 {item.label}
               </a>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-3 text-sm">
+          <div className="ml-auto flex items-center gap-2 text-sm">
             <ThemeToggle />
             {account}
           </div>
@@ -98,7 +107,7 @@ export const radix: ComponentSet = {
       {/* The page is as wide as the window, for tables, code and editors; text keeps
           its own reading width. */}
       <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        {title !== name && <h1 className="mb-6 text-3xl font-bold tracking-tight">{title}</h1>}
+        {title !== name && <h1 className="mb-8 text-[2rem] leading-tight font-semibold tracking-[-0.025em]">{title}</h1>}
         <div className="flex flex-col gap-10">{children}</div>
       </main>
     </div>
@@ -113,13 +122,13 @@ export const radix: ComponentSet = {
           </span>
         )}
         {name === undefined ? (
-          <button type="button" onClick={onSignIn} className={`rounded-box px-3 py-1.5 font-medium ${button.primary}`}>
+          <button type="button" onClick={onSignIn} className={`${pressable} px-3.5 py-1.5 ${button.primary}`}>
             Sign in
           </button>
         ) : (
           <>
             <span className="text-muted">{name}</span>
-            <button type="button" onClick={onSignOut} className="text-accent hover:underline">
+            <button type="button" onClick={onSignOut} className="text-muted hover:text-ink">
               Sign out
             </button>
           </>
@@ -128,23 +137,33 @@ export const radix: ComponentSet = {
     ),
 
   Hero: ({ title, children }) => (
-    <section className="flex flex-col gap-5 py-10">
-      <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">{title}</h1>
-      <div className="flex max-w-3xl flex-col gap-5 text-lg text-muted [&>a]:self-start">{children}</div>
+    // The hero's links become buttons in a row: the first is what the page is for.
+    <section className="one-blueprint flex flex-col gap-7 pt-10 pb-6 sm:pt-16 sm:pb-10">
+      <h1 className="max-w-4xl text-[2.6rem] leading-[1.04] font-semibold tracking-[-0.035em] sm:text-[3.75rem]">{title}</h1>
+      <div
+        className={[
+          "flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-4 text-[1.15rem] leading-relaxed text-muted [&>p]:basis-full",
+          "[&>a]:inline-flex [&>a]:items-center [&>a]:rounded-control [&>a]:border [&>a]:border-line [&>a]:bg-surface [&>a]:px-4 [&>a]:py-2.5",
+          "[&>a]:text-[0.95rem] [&>a]:text-ink [&>a]:shadow-panel [&>a:hover]:bg-sunken [&>a:hover]:no-underline",
+          "[&>a:first-of-type]:border-accent [&>a:first-of-type]:bg-accent [&>a:first-of-type]:text-accent-ink [&>a:first-of-type:hover]:bg-accent-hover",
+        ].join(" ")}
+      >
+        {children}
+      </div>
     </section>
   ),
 
   Section: ({ title, id, children }) => (
-    <section id={id} className="flex scroll-mt-8 flex-col gap-4">
-      <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+    <section id={id} className="flex scroll-mt-24 flex-col gap-4">
+      <h2 className="text-[1.5rem] font-semibold tracking-[-0.02em]">{title}</h2>
       {children}
     </section>
   ),
 
-  Text: ({ children }) => <p className="max-w-3xl leading-7">{children}</p>,
+  Text: ({ children }) => <p className="max-w-3xl leading-7 text-ink/90">{children}</p>,
 
   Link: ({ href, onClick, children }) => (
-    <a href={href} onClick={onClick} className="font-medium text-accent underline-offset-4 hover:underline">
+    <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline">
       {children}
     </a>
   ),
@@ -160,12 +179,12 @@ export const radix: ComponentSet = {
       );
     }
     return (
-      <div className="one-code rounded-box border border-line bg-surface">
-        <div className="border-b border-line">
+      <div className="one-code overflow-hidden rounded-box border border-line bg-surface shadow-panel">
+        <div className="border-b border-line bg-sunken">
           <CodeToolbar display={display} />
         </div>
         <div
-          className="overflow-x-auto p-4 text-sm leading-6 [&_pre]:!bg-transparent"
+          className="overflow-x-auto p-4 text-[0.84rem] leading-6 [&_pre]:!bg-transparent"
           style={{ tabSize: display.tabWidth }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
@@ -187,7 +206,7 @@ export const radix: ComponentSet = {
               href={page.href}
               onClick={page.onClick}
               aria-current={page.current ? "page" : undefined}
-              className={`rounded-box px-3 py-1.5 ${page.current ? "bg-surface font-medium" : "text-muted hover:text-ink"}`}
+              className={`rounded-control px-3 py-1.5 transition-colors ${page.current ? "bg-accent-soft font-medium text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
             >
               {page.title}
             </a>
@@ -198,7 +217,7 @@ export const radix: ComponentSet = {
         ) : (
           <div className="min-w-0 max-w-3xl">
             {hasCode && (
-              <div className="mb-6 rounded-box border border-line bg-surface">
+              <div className="mb-6 rounded-box border border-line bg-surface shadow-panel">
                 <CodeToolbar display={display} />
               </div>
             )}
@@ -215,12 +234,12 @@ export const radix: ComponentSet = {
   },
 
   Table: ({ status, columns, rows, error }) => (
-    <div className="overflow-x-auto rounded-box border border-line">
+    <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>
-        <thead className="bg-surface text-muted">
+        <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
           <tr>
             {columns.map((column) => (
-              <th key={column} className="px-4 py-2 font-medium">
+              <th key={column} className="px-4 py-2.5 font-medium">
                 {column}
               </th>
             ))}
@@ -233,9 +252,9 @@ export const radix: ComponentSet = {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-t border-line">
+            <tr key={row.id} className="border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60">
               {row.cells.map((cell, i) => (
-                <td key={i} className="px-4 py-2">
+                <td key={i} className="px-4 py-2.5">
                   {i === 0 && row.link ? (
                     <a {...row.link} className="font-medium text-accent hover:underline">
                       {cell}
@@ -246,14 +265,14 @@ export const radix: ComponentSet = {
                 </td>
               ))}
               {row.actions.length > 0 && (
-                <td className="px-4 py-2 text-right whitespace-nowrap">
+                <td className="px-4 py-2.5 text-right whitespace-nowrap">
                   {row.actions.map((a) => (
                     <button
                       key={a.label}
                       type="button"
                       disabled={a.disabled}
                       onClick={a.onClick}
-                      className="ml-3 text-accent hover:underline disabled:opacity-50"
+                      className="ml-3 font-medium text-accent hover:underline disabled:opacity-50"
                     >
                       {a.label}
                     </button>
@@ -281,7 +300,7 @@ export const radix: ComponentSet = {
     const id = useId();
     return (
       <form
-        className="flex max-w-md flex-col gap-4"
+        className="flex max-w-md flex-col gap-5"
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
@@ -310,7 +329,7 @@ export const radix: ComponentSet = {
                 value={field.value}
                 onChange={(event) => field.onChange(event.target.value)}
                 aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
-                className="rounded-box border border-control-line bg-page px-3 py-2 text-base focus:outline-hidden focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent sm:text-sm"
+                className="h-10 rounded-control border border-control-line/60 bg-surface px-3 text-base shadow-panel transition-colors hover:border-control-line focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none sm:text-sm"
               />
             )}
             {field.hint && (
@@ -328,7 +347,7 @@ export const radix: ComponentSet = {
         <button
           type="submit"
           disabled={busy}
-          className={`self-start rounded-box px-4 py-2 text-sm font-medium disabled:opacity-50 ${button.primary}`}
+          className={`self-start ${pressable} ${button.primary}`}
         >
           {submit}
         </button>
@@ -342,7 +361,7 @@ export const radix: ComponentSet = {
         type="button"
         disabled={disabled}
         onClick={onClick}
-        className={`self-start rounded-box px-4 py-2 text-sm font-medium disabled:opacity-50 ${button[kind]}`}
+        className={`self-start ${pressable} ${button[kind]}`}
       >
         {children}
       </button>
@@ -361,10 +380,10 @@ export const radix: ComponentSet = {
   Dialog: ({ open, title, onClose, children }) => (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40" />
+        <Dialog.Overlay className="fixed inset-0 bg-ink/30 backdrop-blur-[2px]" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-box border border-line bg-page p-6 text-ink shadow-xl"
+          className="fixed top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-box border border-line bg-surface p-6 text-ink shadow-raised"
         >
           <div className="flex items-start justify-between gap-4">
             <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
