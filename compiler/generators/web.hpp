@@ -178,6 +178,7 @@ namespace one::generators {
         std::string out_dir_;
         std::string name_ = "app";
         std::string ui_ = "radix";
+        std::string signin_;  // how people sign in, when the project says: google or github
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
@@ -225,6 +226,7 @@ namespace one::generators {
                     project_ = {indexing_, d.where.line};
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
+                        if (s.key == "signin") signin_ = s.value;
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
@@ -899,7 +901,9 @@ namespace one::generators {
                 for (const auto& v : personal_) list += (list.empty() ? "" : ", ") + web_detail::js_string(v);
                 personal = ", personal: [" + list + "]";
             }
-            out.line("const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud)" + personal + " });");
+            // Google is the default, so only another way of signing in is written down.
+            std::string signin = signin_ == "github" ? ", signin: \"github\" as const" : "";
+            out.line("const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud)" + personal + signin + " });");
             out.line();
             std::string icon;
             if (!icon_.empty()) icon = ", icon: \"/icon.svg\"";

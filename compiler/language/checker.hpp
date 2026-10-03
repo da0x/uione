@@ -290,6 +290,9 @@ namespace one::language {
                 if ((s.key == "firebase" || s.key == "region") && !only(s.value, id)) {
                     error(s.where, s.key + " has to be lowercase letters, digits and dashes, like ui-one or us-east4");
                 }
+                if (s.key == "signin" && s.value != "google" && s.value != "github") {
+                    error(s.where, "signin is google or github");
+                }
                 if (s.key == "domain" && (!only(s.value, host) || s.value.find('.') == std::string::npos)) {
                     error(s.where, "domain has to be a domain name, like uione.io");
                 }

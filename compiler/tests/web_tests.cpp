@@ -266,3 +266,15 @@ TEST_CASE("a link goes inside its namespace") {
     CHECK(screens->content.find(R"(<Link to="/projects/:project/reports">Reports</Link>)") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("an app whose people sign in with GitHub asks for GitHub") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-github-signin";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "project p {\n\tsignin github\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    auto app = find(generate_at(dir.string()), "src/app.tsx");
+    REQUIRE(app != nullptr);
+    CHECK(app->content.find(R"(signin: "github" as const)") != std::string::npos);
+    fs::remove_all(dir);
+}

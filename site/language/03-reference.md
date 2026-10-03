@@ -43,7 +43,8 @@ project uione {
 ```
 
 `ui` picks the component adapter that renders every screen. `signin` picks how
-people sign in. `icon` is the app's icon, an `.svg` file next to the project's
+people sign in: `google` or `github`, turned on for the project in the Firebase
+console. `icon` is the app's icon, an `.svg` file next to the project's
 `.one` files: it's the page's icon in the browser, and it's shown beside the
 app's name at the top of every page. `serve` names a folder whose files are served
 as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redirect "/install.sh"

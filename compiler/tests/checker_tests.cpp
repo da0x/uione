@@ -693,3 +693,9 @@ TEST_CASE("a project can redirect an address that moved, and a link can go to an
           "a link to another site is an https:// address, like \"https://uione.io/studio\"");
     CHECK(only_error("screen \"Home\" / {\n\tlink \"uione.io\" \"Open\"\n}\n").message.starts_with("a link goes to an address"));
 }
+
+TEST_CASE("people sign in with Google or GitHub") {
+    CHECK(check_source("project p {\n\tsignin google\n}\n").empty());
+    CHECK(check_source("project p {\n\tsignin github\n}\n").empty());
+    CHECK(only_error("project p {\n\tsignin twitter\n}\n").message == "signin is google or github");
+}

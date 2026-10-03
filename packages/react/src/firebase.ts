@@ -11,7 +11,7 @@
 
 import { initializeApp } from "firebase/app";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
-import { GoogleAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import { GithubAuthProvider, GoogleAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import type { Auth, User } from "firebase/auth";
 import { Timestamp, connectFirestoreEmulator, doc, getFirestore, onSnapshot } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
@@ -25,6 +25,8 @@ export interface FirebaseSourceOptions extends LiveOptions {
   app?: FirebaseApp;
   // The local emulators, as host:port, for working without the cloud.
   emulators?: { firestore: string; auth: string };
+  // How people sign in, as the project block's signin says: google, the default, or github.
+  signin?: "google" | "github";
 }
 
 // Firestore times become Dates, so a screen can show them like any other date.
@@ -77,7 +79,7 @@ export function firebaseSource(options: FirebaseSourceOptions): DataSource {
       };
     },
     async signIn() {
-      await signInWithPopup(connect().auth, new GoogleAuthProvider());
+      await signInWithPopup(connect().auth, options.signin === "github" ? new GithubAuthProvider() : new GoogleAuthProvider());
     },
     async signOut() {
       await signOut(connect().auth);
