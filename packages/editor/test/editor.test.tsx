@@ -12,6 +12,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Generated, Workbench, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
 
+// jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
+Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
+
 // Tests run from packages/editor.
 const repository = resolve(process.cwd(), "../..") + "/";
 const tasks = readFileSync(`${repository}examples/tasks/main.one`, "utf8");
@@ -118,5 +122,17 @@ describe("a workbench, with the real compiler", async () => {
     act(() => view.dispatch({ selection: { anchor: view.state.doc.line(line).from } }));
     await waitFor(() => expect(container.querySelector(".uione-from-here")?.textContent).toContain("t.Done = true"));
     expect((screen.getByLabelText("Generated file") as HTMLSelectElement).value).toBe("api/tasks/tasks.go");
+  });
+
+  it("can be the editor alone, with line numbers, and builds nothing then", async () => {
+    let built = 0;
+    const counting = { ...compiler, build: async (files: Files) => (built++, compiler.build(files)) };
+    const { container } = render(
+      <Workbench compiler={counting} files={{ "main.one": tasks }} path="main.one" onChange={() => {}} delay={0} generated={false} />,
+    );
+    expect(container.querySelector(".uione-generated")).toBeNull();
+    expect(container.querySelector(".cm-lineNumbers")).not.toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(built).toBe(0);
   });
 });

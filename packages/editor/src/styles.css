@@ -28,6 +28,14 @@
   overflow: hidden;
 }
 
+/* Without the code it becomes, the editor has the whole width. */
+.uione-workbench-alone {
+  grid-template-columns: minmax(0, 1fr);
+}
+.uione-workbench-alone .uione-editor {
+  border-right: 0;
+}
+
 /* The .one file being written. */
 .uione-editor {
   min-width: 0;
@@ -57,6 +65,25 @@
   background: var(--uione-surface);
   border-right: 1px solid var(--uione-line);
   color: var(--uione-muted);
+}
+.uione-editor .cm-lineNumbers .cm-gutterElement {
+  min-width: 2.75rem;
+  padding: 0 0.75rem 0 0.5rem;
+  opacity: 0.75;
+}
+.uione-editor .cm-activeLineGutter {
+  color: var(--uione-ink);
+}
+
+/* Each token carries its dark color too, used whenever the page is dark: by the
+   system's setting, unless the reader picked light, or by picking dark. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .uione-editor [style*="--one-dark"] {
+    color: var(--one-dark) !important;
+  }
+}
+:root[data-theme="dark"] .uione-editor [style*="--one-dark"] {
+  color: var(--one-dark) !important;
 }
 .uione-editor .cm-activeLine,
 .uione-editor .cm-activeLineGutter {

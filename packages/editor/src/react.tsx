@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
 import type { Built, Compiler, Files, GeneratedFile } from "@uione/compiler";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fromLine } from "./generated.js";
@@ -35,6 +36,12 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
       state: EditorState.create({
         doc: value,
         extensions: [
+          lineNumbers(),
+          highlightActiveLine(),
+          highlightActiveLineGutter(),
+          drawSelection(),
+          history(),
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           highlighting(),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
@@ -132,14 +139,16 @@ export interface WorkbenchProps {
   onChange: (path: string, value: string) => void;
   tabWidth?: TabWidth;
   delay?: number; // milliseconds after the last change before building, 500 unless set
+  generated?: boolean; // whether to show the code it becomes beside it; true unless set
 }
 
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
-export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500 }: WorkbenchProps) {
+export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true }: WorkbenchProps) {
   const [line, setLine] = useState(1);
   const [built, setBuilt] = useState<Built | undefined>();
   useEffect(() => {
+    if (!generated) return;
     let current = true;
     const timer = setTimeout(() => {
       compiler.build(files).then(
@@ -153,9 +162,9 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
       current = false;
       clearTimeout(timer);
     };
-  }, [compiler, files, delay]);
+  }, [compiler, files, delay, generated]);
   return (
-    <div className="uione-workbench">
+    <div className={generated ? "uione-workbench" : "uione-workbench uione-workbench-alone"}>
       <Editor
         path={path}
         value={files[path] ?? ""}
@@ -165,7 +174,7 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
         tabWidth={tabWidth}
         onLine={setLine}
       />
-      <Generated files={built?.files ?? []} path={path} line={line} tabWidth={tabWidth} />
+      {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={tabWidth} />}
     </div>
   );
 }
