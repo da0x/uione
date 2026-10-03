@@ -213,6 +213,29 @@ TEST_CASE("a hand-written component is drawn, imported, and copied into the app 
     CHECK(copied->content == *platform::read_file(root + "/examples/library/components/opening_hours.tsx"));
 }
 
+TEST_CASE("what components share comes along with them") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "shared-component-project";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "components" / "parts");
+    fs::create_directories(dir / "components" / "node_modules" / "left");
+    REQUIRE(platform::write_file((dir / "main.one").string(), "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"));
+    REQUIRE(platform::write_file((dir / "components" / "workbench.tsx").string(), "import { shared } from \"./commits\";\nexport default function Workbench() { return null; }\n"));
+    REQUIRE(platform::write_file((dir / "components" / "commits.ts").string(), "export const shared = 1;\n"));
+    REQUIRE(platform::write_file((dir / "components" / "parts" / "look.css").string(), ".a { color: red; }\n"));
+    REQUIRE(platform::write_file((dir / "components" / "notes.txt").string(), "not code\n"));
+    REQUIRE(platform::write_file((dir / "components" / "node_modules" / "left" / "index.ts").string(), "export {};\n"));
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* shared = find(files, "src/components/commits.ts");
+    REQUIRE(shared != nullptr);
+    CHECK(shared->content == "export const shared = 1;\n");
+    CHECK(find(files, "src/components/parts/look.css") != nullptr);
+    CHECK(find(files, "src/components/notes.txt") == nullptr);
+    CHECK(find(files, "src/components/node_modules/left/index.ts") == nullptr);
+    CHECK(find(files, "src/components/workbench.tsx") != nullptr);
+}
+
 TEST_CASE("what a project's components need is added to the app's dependencies") {
     namespace fs = std::filesystem;
     fs::path dir = fs::path(root) / "compiler" / "build" / "component-project";

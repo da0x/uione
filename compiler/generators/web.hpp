@@ -444,6 +444,37 @@ namespace one::generators {
                 f.sources.assign(static_cast<std::size_t>(std::count(content->begin(), content->end(), '\n')), code::source{});
                 out.push_back(std::move(f));
             }
+            // What the components share, like a module of hooks two of them import,
+            // comes along too: every other .ts, .tsx and .css file in their folder and
+            // the folders inside it.
+            std::set<std::string> copied;
+            for (const auto& f : out) copied.insert(f.path);
+            std::set<std::filesystem::path> folders;
+            for (const auto& [name, path] : components_) folders.insert(std::filesystem::path(path).parent_path());
+            for (const auto& folder : folders) {
+                std::error_code error;
+                std::vector<std::filesystem::path> found;
+                for (auto it = std::filesystem::recursive_directory_iterator(folder, error); !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error)) {
+                    if (it->is_directory() && (it->path().filename() == "node_modules" || it->path().filename().string().starts_with("."))) {
+                        it.disable_recursion_pending();
+                        continue;
+                    }
+                    auto extension = it->path().extension().string();
+                    if (it->is_regular_file() && (extension == ".ts" || extension == ".tsx" || extension == ".css")) found.push_back(it->path());
+                }
+                std::sort(found.begin(), found.end());
+                for (const auto& file : found) {
+                    std::string relative = std::filesystem::relative(file, folder).generic_string();
+                    std::string name = "src/components/" + relative;
+                    if (copied.contains(name)) continue;
+                    auto content = platform::read_file(file.string());
+                    if (!content) continue;
+                    output_file f{name, *content, false, {}};
+                    f.sources.assign(static_cast<std::size_t>(std::count(content->begin(), content->end(), '\n')), code::source{});
+                    copied.insert(name);
+                    out.push_back(std::move(f));
+                }
+            }
             return out;
         }
 

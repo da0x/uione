@@ -10,5 +10,5 @@ export { placed, problems } from "./problems.js";
 export type { ProblemsOptions } from "./problems.js";
 export { setTabWidth, tabs } from "./tabs.js";
 export type { TabWidth } from "./tabs.js";
-export { Editor, Generated, Workbench } from "./react.js";
-export type { EditorProps, GeneratedProps, WorkbenchProps } from "./react.js";
+export { Diff, Editor, Generated, Workbench } from "./react.js";
+export type { DiffProps, EditorProps, GeneratedProps, WorkbenchProps } from "./react.js";

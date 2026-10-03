@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { Built, Checked, Compiler, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Generated, Workbench, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
+import { Diff, Generated, Workbench, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
 
 // jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
 Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
@@ -145,5 +145,17 @@ describe("a workbench, with the real compiler", async () => {
     expect(view.state.readOnly).toBe(true);
     expect(container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
     expect(changed).toBe(false);
+  });
+});
+
+describe("diff", () => {
+  it("shows the text after, with what was taken away above what replaced it", () => {
+    render(<Diff path="main.one" before={"entity book {\n\ttitle  text\n}\n"} after={"entity book {\n\ttitle  text  required\n}\n"} />);
+    const shown = screen.getByLabelText("Changes to main.one");
+    expect(shown.textContent).toContain("title  text  required");
+    const removed = document.querySelector(".cm-deletedChunk");
+    expect(removed?.textContent).toContain("title  text");
+    expect(removed?.textContent).not.toContain("required");
+    expect(shown.getAttribute("contenteditable")).toBe("false");
   });
 });

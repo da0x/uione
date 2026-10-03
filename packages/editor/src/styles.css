@@ -7,7 +7,8 @@
  * does, so the editor matches its page in light and dark; plain grays otherwise.
  */
 
-.uione-workbench {
+.uione-workbench,
+.uione-diff {
   --uione-page: var(--color-page, #f7f8fa);
   --uione-surface: var(--color-surface, #ffffff);
   --uione-sunken: var(--color-sunken, #eef1f5);
@@ -17,7 +18,9 @@
   --uione-accent: var(--color-accent, #2457d6);
   --uione-accent-soft: var(--color-accent-soft, #e8eefc);
   --uione-mono: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+}
 
+.uione-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 32rem;
@@ -170,4 +173,47 @@
     border-right: 0;
     border-bottom: 1px solid var(--uione-line);
   }
+}
+
+/* A diff: as tall as what it shows, inside a border, with lines added in green and
+   lines taken away in red, soft enough to read the code through in either theme. */
+.uione-diff {
+  border: 1px solid var(--uione-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.uione-diff .cm-editor {
+  height: auto;
+}
+.uione-diff .cm-changedLine,
+.uione-diff .cm-insertedLine {
+  background: rgba(46, 160, 67, 0.12) !important;
+}
+.uione-diff .cm-changedText {
+  background: rgba(46, 160, 67, 0.3) !important;
+}
+.uione-diff .cm-deletedChunk {
+  background: rgba(248, 81, 73, 0.12) !important;
+}
+.uione-diff .cm-deletedChunk .cm-deletedText,
+.uione-diff .cm-deletedChunk del {
+  background: rgba(248, 81, 73, 0.3) !important;
+  text-decoration: none;
+}
+.uione-diff .cm-changeGutter {
+  width: 3px;
+  padding: 0;
+}
+.uione-diff .cm-changedLineGutter {
+  background: rgb(46, 160, 67);
+}
+.uione-diff .cm-deletedLineGutter {
+  background: rgb(248, 81, 73);
+}
+.uione-diff .cm-collapsedLines {
+  background: var(--uione-sunken, transparent);
+  color: var(--uione-muted);
+  font-family: var(--uione-sans, inherit);
+  font-size: 0.8rem;
+  padding: 0.3rem 1rem;
 }

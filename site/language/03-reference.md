@@ -372,7 +372,9 @@ screen "Book" /books/:book {
   export of `components/opening_hours.tsx`, beside the `.one` file. It's for
   anything the language doesn't say. It reads views and runs commands with
   `@uione/react`'s hooks, like any screen, and the npm packages it needs go in
-  `components/package.json`, whose dependencies are added to the app.
+  `components/package.json`, whose dependencies are added to the app. The other
+  `.ts`, `.tsx` and `.css` files in `components/` come along too, so components
+  can share a module, like `import { useHistory } from "./commits"`.
 - `hero`, `section`, `text`, `link`, `code` and `markdown` are for pages that are
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.

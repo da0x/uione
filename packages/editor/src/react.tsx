@@ -1,6 +1,7 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { unifiedMergeView } from "@codemirror/merge";
 import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
@@ -183,4 +184,39 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
       {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={tabWidth} />}
     </div>
   );
+}
+
+export interface DiffProps {
+  path: string; // the file, like main.one, which says how it's highlighted
+  before: string; // its text before, empty when it's new
+  after: string; // and after, empty when it's gone
+  tabWidth?: TabWidth;
+}
+
+// What changed in a file: the text after, with each line taken away shown above
+// what replaced it, and long stretches nothing changed in folded away. It's for
+// reading; the text after can be selected and copied, but not changed.
+export function Diff({ path, before, after, tabWidth = 4 }: DiffProps) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const editor = new EditorView({
+      parent: host.current!,
+      state: EditorState.create({
+        doc: after,
+        extensions: [
+          lineNumbers(),
+          drawSelection(),
+          ...(path.endsWith(".one") ? [highlighting()] : []),
+          tabs(tabWidth),
+          EditorView.lineWrapping,
+          EditorState.readOnly.of(true),
+          EditorView.editable.of(false),
+          EditorView.contentAttributes.of({ "aria-label": `Changes to ${path}` }),
+          unifiedMergeView({ original: before, mergeControls: false, highlightChanges: true, gutter: true, collapseUnchanged: { margin: 3, minSize: 6 } }),
+        ],
+      }),
+    });
+    return () => editor.destroy();
+  }, [path, before, after, tabWidth]);
+  return <div className="uione-editor uione-diff" ref={host} />;
 }
