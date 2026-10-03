@@ -283,7 +283,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -293,7 +293,7 @@ namespace one::language {
             for (const auto& s : p.settings) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon, serve or redirect");
+                                   "region, ui, signin, icon, serve, redirect or title");
                     continue;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") deploy.push_back(s.key);

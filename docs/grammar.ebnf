@@ -49,6 +49,7 @@ project        ::= "project" NAME "{" NEWLINE? setting* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "serve"
+                 | "title"
 
 /* namespace */
 

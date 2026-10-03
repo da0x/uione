@@ -314,6 +314,25 @@ TEST_CASE("a menu's links go down the side, with the rest of the screen beside t
     fs::remove_all(dir);
 }
 
+TEST_CASE("a project's title is the name at the top of its pages") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-title";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "project studio {\n\ttitle \"uione & co\"\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* app = find(files, "src/app.tsx");
+    const auto* page = find(files, "index.html");
+    const auto* manifest = find(files, "package.json");
+    REQUIRE(app != nullptr);
+    REQUIRE(page != nullptr);
+    REQUIRE(manifest != nullptr);
+    CHECK(app->content.find(R"(export const site = { name: "uione & co")") != std::string::npos);
+    CHECK(page->content.find("<title>uione &amp; co</title>") != std::string::npos);
+    CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
+}
+
 TEST_CASE("an app whose people sign in with GitHub asks for GitHub") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-github-signin";

@@ -45,6 +45,21 @@ namespace one::generators {
 
     namespace web_detail {
 
+        // Text as HTML, with what would be markup written as entities.
+        inline std::string html_escape(std::string_view text) {
+            std::string out;
+            for (char c : text) {
+                switch (c) {
+                    case '&': out += "&amp;"; break;
+                    case '<': out += "&lt;"; break;
+                    case '>': out += "&gt;"; break;
+                    case '"': out += "&quot;"; break;
+                    default: out += c;
+                }
+            }
+            return out;
+        }
+
         // A string as JavaScript source: "like this", with quotes and backslashes escaped.
         inline std::string js_string(std::string_view text) {
             std::string out = "\"";
@@ -177,6 +192,7 @@ namespace one::generators {
         std::string project_dir_;
         std::string out_dir_;
         std::string name_ = "app";
+        std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
         std::string signin_;  // how people sign in, when the project says: google or github
         bool has_project_ = false;  // a project block, which says whether people sign in at all
@@ -229,6 +245,7 @@ namespace one::generators {
                     project_ = {indexing_, d.where.line};
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
+                        if (s.key == "title") title_ = s.value;
                         if (s.key == "signin") signin_ = s.value;
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
@@ -965,7 +982,7 @@ namespace one::generators {
             out.open("<head>");
             out.line("<meta charset=\"utf-8\" />");
             out.line("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />");
-            out.line("<title>" + name_ + "</title>");
+            out.line("<title>" + web_detail::html_escape(title_.empty() ? name_ : title_) + "</title>");
             if (!icon_.empty()) {
                 auto from_icon = out.from(icon_source_.path, icon_source_.line);
                 out.line("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/icon.svg\" />");
@@ -1062,7 +1079,7 @@ namespace one::generators {
                 auto from_icon = icon_.empty() ? out.from(project_.path, project_.line) : out.from(icon_source_.path, icon_source_.line);
                 // A project that names no way of signing in offers none.
                 std::string offered = has_project_ && signin_.empty() ? ", signin: false" : "";
-                out.line("export const site = { name: " + web_detail::js_string(name_) + icon + ", screens: [" + names + "], ui: " + ui_ +
+                out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + " };");
             }
             out.line();
