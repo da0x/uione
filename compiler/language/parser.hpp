@@ -560,6 +560,15 @@ namespace one::language {
             location where = peek().where;
             bool string_follows = peek(1).kind == token_kind::string;
 
+            // menu { link /settings "General" ... }: links down the side of the screen.
+            if (at_word("menu") && peek(1).kind == token_kind::left_brace) {
+                advance();
+                content_block block;
+                block.type = content_block::kind::menu;
+                block.items = parse_screen_block();
+                end_line();
+                return {where, std::move(block)};
+            }
             if (at_word("hero") || at_word("section")) {
                 content_block block;
                 block.type = peek().text == "hero" ? content_block::kind::hero : content_block::kind::section;

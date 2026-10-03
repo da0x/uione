@@ -476,6 +476,15 @@ TEST_CASE("a link can open a namespace by name") {
     CHECK(link.target.empty());
 }
 
+TEST_CASE("a menu is a block of links") {
+    auto f = parse_ok("screen \"Home\" / {\n\tmenu {\n\t\tlink /a \"A\"\n\t\tlink /b \"B\"\n\t}\n}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    const auto& block = std::get<content_block>(screen.items[0].node);
+    CHECK(block.type == content_block::kind::menu);
+    REQUIRE(block.items.size() == 2);
+    CHECK(std::get<content_link>(block.items[1].node).label == "B");
+}
+
 TEST_CASE("a view's readers come from one entity") {
     auto out = parse_errors("view page per issue {\n\treaders member\n\treaders person\n}\n");
     REQUIRE(!out.empty());

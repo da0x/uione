@@ -253,6 +253,27 @@ export const radix: ComponentSet = {
     );
   },
 
+  // A menu down the side on a wide screen, like a project's settings; on a phone, a
+  // row of tabs above the page.
+  Menu: ({ links, children }) => (
+    <div className="grid gap-8 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-10">
+      <nav aria-label="Menu" className="flex flex-wrap gap-1 text-sm md:flex-col">
+        {links.map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            onClick={item.onClick}
+            aria-current={item.current ? "page" : undefined}
+            className={`rounded-control px-3 py-1.5 transition-colors ${item.current ? "bg-accent-soft font-medium text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
+          >
+            {item.title}
+          </a>
+        ))}
+      </nav>
+      <div className="flex min-w-0 flex-col gap-10">{children}</div>
+    </div>
+  ),
+
   Table: ({ status, columns, rows, error }) => (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>

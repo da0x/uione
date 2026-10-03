@@ -242,7 +242,7 @@ namespace one::language {
     struct screen_item;
 
     struct content_block {
-        enum class kind { hero, section };
+        enum class kind { hero, section, menu };  // a menu holds links, with the rest of the screen beside it
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;

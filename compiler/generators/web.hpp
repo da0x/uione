@@ -489,8 +489,29 @@ namespace one::generators {
                 info += " }";
 
                 // A file with one screen names it after the file (home.one gives home);
-                // with several, each is named after its title.
+                // with several, each is named after its title, or when they share it,
+                // like two titled after the app, after the last word of its address
+                // (/:project/settings/deployments gives deployments). A name another
+                // file's screen already has is numbered.
                 std::string name = web_detail::js_name(found.size() == 1 ? stem : s->title);
+                bool shared = std::count_if(found.begin(), found.end(), [&](const found_screen& other) {
+                                  return other.screen->title == s->title;
+                              }) > 1;
+                if (found.size() > 1 && shared) {
+                    std::string word = stem;
+                    for (std::size_t start = 0; start < route.size();) {
+                        std::size_t end = route.find('/', start + 1);
+                        std::string part = route.substr(start + 1, end == std::string::npos ? std::string::npos : end - start - 1);
+                        if (!part.empty() && part[0] != ':') word = part;
+                        start = end == std::string::npos ? route.size() : end;
+                    }
+                    name = web_detail::js_name(word);
+                }
+                auto taken = [&](const std::string& n) {
+                    return std::any_of(screens.begin(), screens.end(), [&](const screen_import& i) { return i.name == n; });
+                };
+                const std::string base = name;
+                for (int n = 2; taken(name); ++n) name = base + std::to_string(n);
                 screens.push_back({name, "./screens/" + stem, {f.path, where.line}});
                 components.insert(parts.components.begin(), parts.components.end());
                 for (const auto& line : parts.imports) {
@@ -625,10 +646,28 @@ namespace one::generators {
         }
 
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
-                          const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen) {
-            for (const auto& item : items) {
+                          const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
+                          std::size_t first = 0) {
+            for (std::size_t at = first; at < items.size(); ++at) {
+                const auto& item = items[at];
                 auto from_item = out.from(screen_path_, item.where.line);
                 item_line_ = item.where.line;
+                // A menu's links go down the side, with everything after it beside them.
+                if (auto* menu = std::get_if<language::content_block>(&item.node); menu && menu->type == language::content_block::kind::menu) {
+                    parts.components.insert("Menu");
+                    std::string links;
+                    for (const auto& inside : menu->items) {
+                        auto* link = std::get_if<language::content_link>(&inside.node);
+                        if (!link) continue;
+                        std::string target = link->target.starts_with("/") ? full_route(ns, link->target) : link->target;
+                        links += (links.empty() ? "" : ", ") + std::string("{ to: ") + web_detail::js_string(target) + ", label: " +
+                                 web_detail::js_string(link->label) + " }";
+                    }
+                    out.open("<Menu links={[" + links + "]}>");
+                    screen_items(out, parts, ns, items, screen, at + 1);
+                    out.close("</Menu>");
+                    return;
+                }
                 if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     bool hero = block->type == language::content_block::kind::hero;
                     std::string tag = hero ? "Hero" : "Section";

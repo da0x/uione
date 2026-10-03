@@ -31,7 +31,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
 syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section link markdown domain firebase region ui signin icon serve redirect at
+syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui signin icon serve redirect at
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite
 syn keyword uioneStatement if else return
 syn keyword uioneModifier  required unique after key public

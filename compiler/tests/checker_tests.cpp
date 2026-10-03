@@ -634,6 +634,15 @@ TEST_CASE("a link opens a screen that's there") {
           "there's no screen at /projects/neotrac/people for this link to open");
 }
 
+TEST_CASE("a menu holds links to screens that are there") {
+    const std::string screens = "screen \"General\" /settings {\n\ttext \"g\"\n}\n";
+    CHECK(check_source(screens + "screen \"Home\" / {\n\tmenu {\n\t\tlink /settings \"General\"\n\t}\n}\n").empty());
+    CHECK(only_error(screens + "screen \"Home\" / {\n\tmenu {\n\t\ttext \"no\"\n\t}\n}\n").message ==
+          "a menu holds links, like link /settings \"General\"");
+    CHECK(only_error(screens + "screen \"Home\" / {\n\tmenu {\n\t\tlink /nowhere \"Lost\"\n\t}\n}\n").message ==
+          "there's no screen at /nowhere for this link to open");
+}
+
 TEST_CASE("serve names a folder next to the project") {
     CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
           "there's no folder no-such-folder to serve; it's looked for next to this .one file");

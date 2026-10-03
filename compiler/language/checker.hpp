@@ -978,6 +978,13 @@ namespace one::language {
         void screen_items(const std::string& ns, const std::vector<screen_item>& items, const std::string& route) {
             for (const auto& item : items) {
                 if (auto* block = std::get_if<content_block>(&item.node)) {
+                    if (block->type == content_block::kind::menu) {
+                        for (const auto& inside : block->items) {
+                            if (!std::holds_alternative<content_link>(inside.node)) {
+                                error(inside.where, "a menu holds links, like link /settings \"General\"");
+                            }
+                        }
+                    }
                     screen_items(ns, block->items, route);
                 } else if (auto* table = std::get_if<table_item>(&item.node)) {
                     snake(table->view);

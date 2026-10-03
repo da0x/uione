@@ -388,6 +388,11 @@ screen "Book" /books/:book {
   its address: `link "https://uione.io/signin" "Open the studio"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
+- `menu { link /:project/settings "General"  link /:project/settings/deployments
+  "Deployments" }` puts its links down the side of the page, with everything after
+  it on the screen beside them, and marks the link to the page it's on. On a phone
+  the links are a row above the page. Each page the menu opens has the same menu,
+  like a project's settings, General and Deployments, each a screen of its own.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What
   people write is drawn safely: it can't add markup or scripts to the page, and
   images in it are shown as links.

@@ -147,6 +147,19 @@ export const plain: ComponentSet = {
     </>
   ),
 
+  Menu: ({ links, children }) => (
+    <>
+      <nav aria-label="Menu">
+        {links.map((item) => (
+          <a key={item.href} href={item.href} onClick={item.onClick} aria-current={item.current ? "page" : undefined}>
+            {item.title}
+          </a>
+        ))}
+      </nav>
+      <div>{children}</div>
+    </>
+  ),
+
   Table: ({ status, columns, rows, error }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (

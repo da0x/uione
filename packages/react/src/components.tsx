@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useParams } from "react-router";
+import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { fill, useConfirmContext } from "./app.js";
 import type { FieldProps } from "./contract.js";
@@ -84,6 +84,23 @@ export function Pages({ base, pages }: { base: string; pages: DocPage[] }) {
       html={current?.html}
     />
   );
+}
+
+// Links down the side of the screen, each filled from the page's address like any
+// link, the one for the page it's on marked, with the rest of the screen beside them.
+export function Menu({ links, children }: { links: { to: string; label: string }[]; children: ReactNode }) {
+  const ui = useUI();
+  const link = useLinks();
+  const params = useParams();
+  const { pathname } = useLocation();
+  const filled = links.map(({ to, label }) => {
+    const address = to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+      const value = params[name];
+      return value === undefined ? written : encodeURIComponent(value);
+    });
+    return { title: label, current: address === pathname, ...link(address) };
+  });
+  return <ui.Menu links={filled}>{children}</ui.Menu>;
 }
 
 // A Markdown field of a view, shown rendered by the component set.

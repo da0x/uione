@@ -267,6 +267,30 @@ TEST_CASE("a link goes inside its namespace") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("a menu's links go down the side, with the rest of the screen beside them") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-menu";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace projects {\nscreen \"General\" /:project/settings {\n\ttext \"before\"\n"
+                         "\tmenu {\n\t\tlink /:project/settings \"General\"\n\t\tlink /:project/settings/deployments \"Deployments\"\n\t}\n"
+                         "\ttext \"beside\"\n}\n"
+                         "screen \"Deployments\" /:project/settings/deployments {\n\ttext \"d\"\n}\n}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    auto menu = tsx.find(R"(<Menu links={[{ to: "/projects/:project/settings", label: "General" }, )"
+                         R"({ to: "/projects/:project/settings/deployments", label: "Deployments" }]}>)");
+    REQUIRE(menu != std::string::npos);
+    auto before = tsx.find("before"), beside = tsx.find("beside"), end = tsx.find("</Menu>");
+    CHECK(before < menu);
+    CHECK(menu < beside);
+    CHECK(beside < end);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("an app whose people sign in with GitHub asks for GitHub") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-github-signin";

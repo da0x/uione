@@ -66,6 +66,13 @@ export interface PageLink extends LinkProps {
   current: boolean;
 }
 
+// Links down the side of a screen, with the rest of the screen beside them, like a
+// project's settings: General, Deployments.
+export interface MenuProps {
+  links: PageLink[];
+  children: ReactNode;
+}
+
 export interface PagesProps {
   pages: PageLink[];
   title: string | undefined;
@@ -155,6 +162,7 @@ export interface ComponentSet {
   Link: ComponentType<LinkViewProps>;
   Code: ComponentType<CodeProps>;
   Pages: ComponentType<PagesProps>;
+  Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;

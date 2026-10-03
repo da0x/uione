@@ -370,13 +370,16 @@ describe("a choice of a few", () => {
   it("is a row of cards to pick from, starting on its own choice", () => {
     function Visibility() {
       const [value, setValue] = useState("private");
-      return radix.Form({
-        fields: [{ name: "visibility", label: "Visibility", type: "choice", choices: [["private", "Private"], ["public", "Public"]], value, onChange: setValue }],
-        submit: "Create",
-        busy: false,
-        error: undefined,
-        onSubmit: () => {},
-      });
+      const RadixForm = radix.Form;
+      return (
+        <RadixForm
+          fields={[{ name: "visibility", label: "Visibility", type: "choice", choices: [["private", "Private"], ["public", "Public"]], value, onChange: setValue }]}
+          submit="Create"
+          busy={false}
+          error={undefined}
+          onSubmit={() => {}}
+        />
+      );
     }
     render(<Visibility />);
     const group = screen.getByRole("radiogroup", { name: "Visibility" });

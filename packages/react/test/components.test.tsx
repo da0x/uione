@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 import { render, screen } from "@testing-library/react";
-import { App, Code, Hero, Link, Pages, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
+import { App, Code, Hero, Link, Menu, Pages, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
 import type { DocPage } from "../src/index.js";
 import { label } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -33,6 +33,25 @@ describe("content", () => {
     ));
     render(<App name="neotrac" screens={[project]} ui={plain} data={memorySource()} location="/projects/my%20app" />);
     expect(screen.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/projects/my%20app/reports");
+  });
+
+  it("puts a menu's links beside the page, filled from its address, the page it's on marked", () => {
+    const links = [
+      { to: "/projects/:project/settings", label: "General" },
+      { to: "/projects/:project/settings/deployments", label: "Deployments" },
+    ];
+    const settings = defineScreen({ title: "Settings", route: "/projects/:project/settings/deployments" }, () => (
+      <Menu links={links}>
+        <Text>Where it deploys.</Text>
+      </Menu>
+    ));
+    render(<App name="studio" screens={[settings]} ui={plain} data={memorySource()} location="/projects/my%20app/settings/deployments" />);
+    const general = screen.getByRole("link", { name: "General" });
+    const deployments = screen.getByRole("link", { name: "Deployments" });
+    expect(general.getAttribute("href")).toBe("/projects/my%20app/settings");
+    expect(general.getAttribute("aria-current")).toBeNull();
+    expect(deployments.getAttribute("aria-current")).toBe("page");
+    expect(screen.getByText("Where it deploys.")).toBeTruthy();
   });
 });
 
