@@ -14,11 +14,16 @@ curl -fsSL https://uione.io/install.sh | sh
 
 ## Your first project
 
-A project is a folder of `.one` files. Make one with a single feature:
+A project is a folder of `.one` files. Make a folder for one:
 
 ```sh
 mkdir notes
-cat > notes/main.one <<'END'
+```
+
+Then, in your editor, save this as `notes/main.one`. It's a whole feature: notes
+that each person writes and only they can read.
+
+```one
 namespace notes {
 
 	entity note {
@@ -48,7 +53,6 @@ namespace notes {
 	}
 
 } // namespace notes
-END
 ```
 
 Check it, then build it:
