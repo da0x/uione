@@ -63,6 +63,7 @@
 @layer components {
   .one-prose {
     line-height: 1.7;
+    overflow-wrap: break-word;
   }
   .one-prose h1 {
     font-size: 1.875rem;
@@ -109,6 +110,12 @@
   .one-prose pre code {
     background: none;
     padding: 0;
+  }
+  /* A table wider than a phone scrolls inside itself, rather than widening the page. */
+  .one-prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .one-prose th,
   .one-prose td {

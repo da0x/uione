@@ -69,12 +69,13 @@ export const radix: ComponentSet = {
   Page: ({ name, icon, home, nav, title, account, children }) => (
     <div className="min-h-screen bg-page text-ink antialiased">
       <header className="border-b border-line">
-        <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
-          <a {...home} className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+        {/* On a phone, the navigation takes a row of its own under the name. */}
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-6">
+          <a {...home} className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
           </a>
-          <nav className="flex gap-4 text-sm">
+          <nav className="order-last flex w-full flex-wrap gap-x-4 gap-y-1 text-sm sm:order-none sm:w-auto">
             {nav.map((item) => (
               <a
                 key={item.href}
@@ -90,7 +91,7 @@ export const radix: ComponentSet = {
           <div className="ml-auto text-sm">{account}</div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-10">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         {title !== name && <h1 className="mb-6 text-3xl font-bold tracking-tight">{title}</h1>}
         <div className="flex flex-col gap-10">{children}</div>
       </main>
@@ -171,8 +172,9 @@ export const radix: ComponentSet = {
     const body = useMemo(() => (html === undefined ? undefined : highlightCodeBlocks(html, box, display.names)), [html, display.names]);
     const hasCode = body?.includes("one-code") ?? false;
     return (
-      <div className="grid gap-10 md:grid-cols-[12rem_1fr]">
-        <nav aria-label="Pages" className="flex flex-col gap-1 text-sm">
+      <div className="grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-10">
+        {/* On a phone, the pages are a row of tabs above the page. */}
+        <nav aria-label="Pages" className="flex flex-wrap gap-1 text-sm md:flex-col">
           {pages.map((page) => (
             <a
               key={page.href}
@@ -188,7 +190,7 @@ export const radix: ComponentSet = {
         {body === undefined ? (
           <p className="text-muted">There's no page here.</p>
         ) : (
-          <div className="max-w-3xl">
+          <div className="min-w-0 max-w-3xl">
             {hasCode && (
               <div className="mb-6 rounded-box border border-line bg-surface">
                 <CodeToolbar display={display} />
