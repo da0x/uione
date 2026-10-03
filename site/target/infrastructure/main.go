@@ -12,7 +12,7 @@ func main() {
 	infrastructure.Deploy(infrastructure.Project{
 		Name:     "uione",
 		Domain:   "www.uione.io",
-		Firebase: "ui-one",
+		Firebase: "uione-web",
 		Region:   "us-east4",
 	})
 }

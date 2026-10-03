@@ -33,20 +33,15 @@ so no real account is involved.
 A few steps happen outside Pulumi, because no resource can do them or because
 they belong to another service:
 
-1. **Link billing to the `ui-one` project.** A project can't pay for itself, and
+1. **Link billing to the `uione-web` project.** A project can't pay for itself, and
    Cloud Run and Cloud Build don't run without billing.
 2. **Sign in to Pulumi Cloud** with `pulumi login`, where the stack's state is
    kept (decision 0009).
-3. **Turn on Google as a sign-in provider** in the Firebase console. Doing so
-   creates an OAuth client, and no Pulumi resource manages that client.
-4. **Add `uione.io` to sign-in's authorized domains**, in the same place, if it
-   isn't there already. The Pulumi resource that holds that list would also turn
-   the project's Firebase Auth into Identity Platform, which is priced and run
-   differently, so it's left to the console.
-5. **Change the DNS records at Squarespace** to the ones the deploy prints. This
-   replaces the Squarespace site the domain serves today.
-6. **Create the `uione` organization on npm**, before `@uione/react` and
-   `@uione/radix` are published.
+3. **Point `www` at the site at Squarespace**, with the CNAME the deploy prints.
+   uione.io itself is the studio's, from its own repository.
+
+The site has no sign-in, so there's nothing to turn on in the Firebase console;
+the deploy adds Firebase to the project itself.
 
 Everything else is declared by the generated Pulumi program.
 

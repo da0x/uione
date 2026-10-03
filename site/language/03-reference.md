@@ -33,7 +33,7 @@ One per project, naming where it runs and what it is built with.
 ```one
 project uione {
 	domain    "uione.io"
-	firebase  "ui-one"
+	firebase  "uione-web"
 	region    "us-east4"
 	ui        radix
 	signin    google

@@ -7,8 +7,8 @@ name: uione
 description: Where uione runs, in Google Cloud.
 runtime: go
 config:
-  gcp:project: ui-one
+  gcp:project: uione-web
   # Budgets are billed to a project, and with a person's credentials, rather than
   # a service account's, the provider has to be told which one.
-  gcp:billingProject: ui-one
+  gcp:billingProject: uione-web
   gcp:userProjectOverride: true

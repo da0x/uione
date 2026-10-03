@@ -9,7 +9,7 @@
 
 project uione {
 	domain    "www.uione.io"
-	firebase  "ui-one"
+	firebase  "uione-web"
 	region    "us-east4"
 	ui        radix
 	icon      "assets/icon.svg"
