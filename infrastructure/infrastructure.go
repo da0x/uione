@@ -271,12 +271,21 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	web := firebase.GetWebAppConfigOutput(ctx, firebase.GetWebAppConfigOutputArgs{Project: project, WebAppId: app.AppId})
 	// Firebase makes a project's default site itself, the way it makes the project,
 	// so it's imported rather than created, and left in place if the stack is ever
-	// destroyed.
+	// destroyed. In a fresh project's preview the Hosting API isn't on yet, so there's
+	// nothing to read; the deploy itself imports it once the API is on.
+	siteOptions := []pulumi.ResourceOption{after}
+	reachable, err := siteReachable(ctx.Context(), p.Firebase)
+	if err != nil {
+		return err
+	}
+	if reachable || !ctx.DryRun() {
+		siteOptions = append(siteOptions, pulumi.Import(pulumi.ID(fmt.Sprintf("projects/%s/sites/%s", p.Firebase, p.Firebase))))
+	}
 	site, err := firebase.NewHostingSite(ctx, "site", &firebase.HostingSiteArgs{
 		Project:        project,
 		SiteId:         project,
 		DeletionPolicy: pulumi.String("ABANDON"),
-	}, after, pulumi.Import(pulumi.ID(fmt.Sprintf("projects/%s/sites/%s", p.Firebase, p.Firebase))))
+	}, siteOptions...)
 	if err != nil {
 		return err
 	}
@@ -454,14 +463,26 @@ func (p Project) check() error {
 	return nil
 }
 
+// siteReachable asks Firebase Hosting whether a project's default site can be read
+// yet, which it can't before the Hosting API is on. Tests replace it.
+var siteReachable = func(ctx context.Context, project string) (bool, error) {
+	return answers(ctx, project, "https://firebasehosting.googleapis.com/v1beta1/projects/"+url.PathEscape(project)+"/sites/"+url.PathEscape(project))
+}
+
 // firebaseAdded asks Firebase whether it has been added to a Google Cloud project.
 // A project whose Firebase API isn't on yet hasn't had it added. Tests replace it.
 var firebaseAdded = func(ctx context.Context, project string) (bool, error) {
+	return answers(ctx, project, "https://firebase.googleapis.com/v1beta1/projects/"+url.PathEscape(project))
+}
+
+// answers reads something of a project's from a Google API: true when it's there,
+// false when it isn't, or when the API isn't on for the project yet.
+func answers(ctx context.Context, project, address string) (bool, error) {
 	client, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return false, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://firebase.googleapis.com/v1beta1/projects/"+url.PathEscape(project), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
 		return false, err
 	}
@@ -478,6 +499,6 @@ var firebaseAdded = func(ctx context.Context, project string) (bool, error) {
 		return false, nil
 	default:
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-		return false, fmt.Errorf("infrastructure: asking Firebase about %s: %s %s", project, response.Status, body)
+		return false, fmt.Errorf("infrastructure: asking about %s at %s: %s %s", project, address, response.Status, body)
 	}
 }

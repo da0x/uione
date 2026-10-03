@@ -115,6 +115,7 @@ func declareIn(t *testing.T, dir string, settings string, billing string, fresh 
 	t.Setenv("PULUMI_CONFIG", settings)
 	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
 	firebaseAdded = func(context.Context, string) (bool, error) { return !fresh, nil }
+	siteReachable = func(context.Context, string) (bool, error) { return !fresh, nil }
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		p := Project{Name: "uione", Domain: "uione.io", Firebase: "ui-one", Region: "us-east4", Build: filepath.Join(dir, "build")}
 		change(&p)
@@ -678,5 +679,25 @@ func TestFirebaseIsAddedToAFreshProjectAndTakenOverWhereItWasAddedAlready(t *tes
 		if !strings.Contains(strings.Join(m.waits[waiting], " "), "gcp:firebase/project:Project::firebase") {
 			t.Errorf("%s doesn't wait for Firebase: %v", waiting, m.waits[waiting])
 		}
+	}
+}
+
+func TestAFreshProjectsPreviewDoesntReadItsSiteBeforeHostingIsOn(t *testing.T) {
+	const key = "gcp:firebase/hostingSite:HostingSite::site"
+	t.Setenv("PULUMI_DRY_RUN", "true")
+	m, err := declareIn(t, build(t), settings, "000000-000000-000000", true, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := m.imports[key]; ok {
+		t.Errorf("a fresh project's preview imports its site from %s", got)
+	}
+	t.Setenv("PULUMI_DRY_RUN", "false")
+	m, err = declareIn(t, build(t), settings, "000000-000000-000000", true, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.imports[key]; got != "projects/ui-one/sites/ui-one" {
+		t.Errorf("a fresh project's deploy imports its site from %q", got)
 	}
 }
