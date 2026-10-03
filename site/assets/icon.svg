@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- uione: a u whose right stroke rises into a 1. -->
-  <rect width="64" height="64" rx="14" fill="#26529c"/>
-  <path d="M21 25v13a11 11 0 0 0 22 0V14l-8 7" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- uione: a u whose right stroke rises into a 1, cut square, with a bevelled head. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c64ea"/>
+      <stop offset="1" stop-color="#1d4bc4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#tile)"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#fff" stroke-opacity="0.14" stroke-width="1.5"/>
+  <path transform="translate(32 33.5) scale(1.1) translate(-32 -29)" d="M22.5 25V37a9.5 9.5 0 0 0 19 0V15l-8 6.5" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="bevel"/>
 </svg>
