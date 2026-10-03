@@ -179,6 +179,7 @@ namespace one::generators {
         std::string name_ = "app";
         std::string ui_ = "radix";
         std::string signin_;  // how people sign in, when the project says: google or github
+        bool has_project_ = false;  // a project block, which says whether people sign in at all
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
@@ -224,6 +225,7 @@ namespace one::generators {
                     index(web_detail::join(ns, n->name), n->declarations);
                 } else if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
                     name_ = p->name;
+                    has_project_ = true;
                     project_ = {indexing_, d.where.line};
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
@@ -957,8 +959,10 @@ namespace one::generators {
             if (!icon_.empty()) icon = ", icon: \"/icon.svg\"";
             {
                 auto from_icon = icon_.empty() ? out.from(project_.path, project_.line) : out.from(icon_source_.path, icon_source_.line);
+                // A project that names no way of signing in offers none.
+                std::string offered = has_project_ && signin_.empty() ? ", signin: false" : "";
                 out.line("export const site = { name: " + web_detail::js_string(name_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data };");
+                         ", data" + offered + " };");
             }
             out.line();
             out.open("export default function Site() {");

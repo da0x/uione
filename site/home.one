@@ -8,7 +8,7 @@
 screen "uione" / {
 	hero "Write a whole app in your browser." {
 		text "The uione studio is where you describe a feature in one short file: its data, its rules, who may do what, and its screens. It checks every line as you type, shows the React, Go and Firestore rules each line becomes, and deploys to your own Google Cloud project. There's nothing to install."
-		link "https://uione.io/studio" "Open the studio"
+		link "https://uione.io/signin" "Open the studio"
 		link namespace language "Learn the language"
 	}
 

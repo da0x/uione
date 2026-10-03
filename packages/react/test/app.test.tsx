@@ -199,4 +199,13 @@ describe("a screen that breaks while it's drawn", () => {
     expect(screen.getByText("Your projects.")).toBeTruthy();
     vi.restoreAllMocks();
   });
+
+  it("offers no sign-in when the project names no way of signing in", () => {
+    const home = defineScreen({ title: "Home", route: "/" }, () => <Text>hello</Text>);
+    const { unmount } = render(<App name="site" screens={[home]} ui={plain} data={memorySource({ person: null })} location="/" />);
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    unmount();
+    render(<App name="site" screens={[home]} ui={plain} data={memorySource({ person: null })} location="/" signin={false} />);
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+  });
 });

@@ -381,7 +381,7 @@ screen "Book" /books/:book {
   with the project filled in from the page's own address. A link's `:parameter`
   always comes from the page it's on, so the page needs it too. To reach another
   namespace, name it: `link namespace docs "Read the docs"`, and another site, give
-  its address: `link "https://uione.io/studio" "Open the studio"`. A link to an address or a
+  its address: `link "https://uione.io/signin" "Open the studio"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What

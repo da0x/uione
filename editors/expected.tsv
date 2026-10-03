@@ -82,8 +82,8 @@ site/waitlist.one	view signups public	public	modifier
 site/home.one	screen "uione" / {	/	route
 site/home.one	hero "Write	hero	keyword
 site/home.one	text "The uione studio	text	keyword
-site/home.one	link "https://uione.io/studio"	link	keyword
-site/home.one	link "https://uione.io/studio"	"https	string
+site/home.one	link "https://uione.io/signin"	link	keyword
+site/home.one	link "https://uione.io/signin"	"https	string
 site/home.one	section "Join the waitlist" #waitlist	#waitlist	route
 site/home.one	link namespace language "Learn	namespace	keyword
 site/home.one	link namespace language "Learn	language	namespace

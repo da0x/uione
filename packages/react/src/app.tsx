@@ -34,9 +34,14 @@ export interface AppProps {
   data: DataSource;
   icon?: string; // the address of the app's icon, shown beside its name
   location?: string; // start at this address, in memory rather than the browser's
+  signin?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
 }
 
-export function App({ name, icon, screens, ui, data, location }: AppProps) {
+// Whether the page offers signing in. An app whose project names no way of signing
+// in doesn't, so it never shows a button that can't work.
+const SignInOffered = createContext(true);
+
+export function App({ name, icon, screens, ui, data, location, signin = true }: AppProps) {
   const routes = (
     <Routes>
       {screens.map((s) => (
@@ -47,13 +52,15 @@ export function App({ name, icon, screens, ui, data, location }: AppProps) {
   );
   return (
     <UIContext.Provider value={ui}>
-      <DataProvider source={data}>
-        {location === undefined ? (
-          <BrowserRouter>{routes}</BrowserRouter>
-        ) : (
-          <MemoryRouter initialEntries={[location]}>{routes}</MemoryRouter>
-        )}
-      </DataProvider>
+      <SignInOffered.Provider value={signin}>
+        <DataProvider source={data}>
+          {location === undefined ? (
+            <BrowserRouter>{routes}</BrowserRouter>
+          ) : (
+            <MemoryRouter initialEntries={[location]}>{routes}</MemoryRouter>
+          )}
+        </DataProvider>
+      </SignInOffered.Provider>
     </UIContext.Provider>
   );
 }
@@ -75,6 +82,7 @@ function Shell({
   const link = useLinks();
   const { pathname } = useLocation();
   const auth = useAuth();
+  const offered = useContext(SignInOffered);
   const [signInError, setSignInError] = useState<string | undefined>();
   useEffect(() => {
     document.title = title === name ? name : `${title} · ${name}`;
@@ -96,6 +104,7 @@ function Shell({
       nav={nav}
       title={title}
       account={
+        offered &&
         auth && (
           <ui.Account
             name={auth.person?.name}

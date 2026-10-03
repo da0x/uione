@@ -12,7 +12,7 @@ export const home = screen({ title: "uione", route: "/" }, () => {
     <>
       <Hero title="Write a whole app in your browser.">
         <Text>The uione studio is where you describe a feature in one short file: its data, its rules, who may do what, and its screens. It checks every line as you type, shows the React, Go and Firestore rules each line becomes, and deploys to your own Google Cloud project. There's nothing to install.</Text>
-        <Link to="https://uione.io/studio">Open the studio</Link>
+        <Link to="https://uione.io/signin">Open the studio</Link>
         <Link to="/language">Learn the language</Link>
       </Hero>
       <Section title="A whole feature">
