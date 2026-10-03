@@ -42,6 +42,13 @@
   overflow: auto;
   border-right: 1px solid var(--uione-line);
 }
+/* Scrollbars in the page's own colors, so a dark page has no light strip. */
+.uione-editor,
+.uione-editor .cm-scroller,
+.uione-generated > pre {
+  scrollbar-color: var(--uione-line) transparent;
+  scrollbar-width: thin;
+}
 .uione-editor .cm-editor {
   height: 100%;
   background: var(--uione-surface);
