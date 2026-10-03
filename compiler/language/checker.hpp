@@ -431,7 +431,7 @@ namespace one::language {
         }
 
         void verify_type(const std::string& ns, const qualified_name& type) {
-            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "date", "number", "serial", "boolean", "user"};
+            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user"};
             snake(type);
             if (type.parts.size() == 1 && built_in.contains(type.parts[0])) return;
             if (find(ns, type, &scope::formats) || find_entity(ns, type)) return;

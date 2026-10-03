@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,6 +81,7 @@ type field struct {
 	lower    bool   // stored lowercase, like a GitHub repository's name
 	per      string // for a serial counted within another entity: the field pointing at it
 	email    bool
+	slug     bool // a name like my-app: lowercase letters and digits, joined by single dashes
 	after    string
 	choices  []string
 	initial  string // the value a new entity starts with; "me" and "now" are special
@@ -139,6 +141,8 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.serial, fd.per = true, value
 			case "email":
 				fd.email = true
+			case "slug":
+				fd.slug, fd.lower = true, true
 			case "after":
 				fd.after = value
 			case "choices":
@@ -363,6 +367,9 @@ func (s *schema) validate(v reflect.Value) error {
 		if f.email && value.Kind() == reflect.String && value.String() != "" && !looksLikeEmail(value.String()) {
 			return invalid("%s isn't an email address", label(f.name))
 		}
+		if f.slug && value.Kind() == reflect.String && value.String() != "" && !slugPattern.MatchString(value.String()) {
+			return invalid("%s is lowercase letters, digits and dashes, like my-app", label(f.name))
+		}
 		if len(f.choices) > 0 && value.Kind() == reflect.String && value.String() != "" && !contains(f.choices, value.String()) {
 			return invalid("%s has to be one of %s", label(f.name), strings.Join(f.choices, ", "))
 		}
@@ -461,3 +468,7 @@ func (s *schema) data(v reflect.Value) map[string]any {
 	}
 	return out
 }
+
+// slugPattern is a name like my-app or neotrac: lowercase letters and digits,
+// joined by single dashes, at most 100 characters.
+var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9]|-[a-z0-9]){0,99}$`)

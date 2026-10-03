@@ -48,7 +48,7 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
-syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|date\|number\|serial\|boolean\|user\|list\)\>"
+syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\)\>"
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

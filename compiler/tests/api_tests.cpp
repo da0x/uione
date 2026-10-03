@@ -234,7 +234,7 @@ TEST_CASE("a field starting as the person's username tells the library so") {
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "namespace studio {\nentity project {\n\towner  text  key  = me.username\n\tslug  text  key\n}\ncommand project::create\n}\n");
+                         "namespace studio {\nentity project {\n\towner  text  key  = me.username\n\tname  slug  key\n}\ncommand project::create\n}\n");
     language::diagnostics out;
     std::vector<language::file> files;
     files.push_back(language::parse((dir / "main.one").string(), *platform::read_file((dir / "main.one").string()), out));
@@ -244,5 +244,6 @@ TEST_CASE("a field starting as the person's username tells the library so") {
     const auto* go = find(generated.files, "studio/studio.go");
     REQUIRE(go != nullptr);
     CHECK(go->content.find(R"(one:"key,default=me.username")") != std::string::npos);
+    CHECK(go->content.find(R"(one:"key,slug")") != std::string::npos);
     fs::remove_all(dir);
 }

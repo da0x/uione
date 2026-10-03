@@ -104,7 +104,9 @@ entity loan {
 
 - Every field has a type, so what it holds is never worked out from how it's used.
 - Types: `text`, `markdown` (text written in Markdown, shown rendered), `email`,
-  `date`, `number`, `serial`, `boolean`, `user`, a list of choices
+  `slug` (a name like `my-app`: lowercase letters and digits joined by single
+  dashes, lowered as it's saved), `date`, `number`, `serial`, `boolean`, `user`, a
+  list of choices
   (`on_shelf | lent | withdrawn`), a `format` declared in the file, or another
   entity (`book`), which stores its id and reads through it (`book.title`).
 - `user` is a person, stored as their id. A view can show their name and picture

@@ -16,7 +16,7 @@ import (
 type Repository struct {
 	one.Record
 	Owner string `firestore:"owner" one:"key,default=me.username"`
-	Slug  string `firestore:"slug" one:"required,key"`
+	Slug  string `firestore:"slug" one:"required,key,slug"`
 }
 
 var repositories = one.Module("repos",
@@ -38,5 +38,20 @@ func TestAnEntityKeyedByItsOwnersUsernameIsMadeInTheirNameOnly(t *testing.T) {
 	}
 	if stored := h.stored("repos_repository", id); stored["owner"] != "da0x" {
 		t.Errorf("the repository is owned by %v", stored["owner"])
+	}
+}
+
+func TestASlugIsLoweredAndRefusedWhenItIsntOne(t *testing.T) {
+	h := start(t)
+	ada, token := h.signUp("ada@example.com")
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "da0x"}); err != nil {
+		t.Fatal(err)
+	}
+	if id := h.mustRun("repos/repository/create", token, map[string]any{"slug": " My-App2 "}); id != "da0x-my%2Dapp2" {
+		t.Fatalf("the repository is %s", id)
+	}
+	for _, bad := range []string{"my app", "my--app", "-app", "app-", "my_app", "app.io"} {
+		h.expect("repos/repository/create", token, map[string]any{"slug": bad}, http.StatusBadRequest,
+			"Slug is lowercase letters, digits and dashes, like my-app")
 	}
 }

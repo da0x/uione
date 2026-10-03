@@ -64,7 +64,7 @@ example        ::= "example" PATTERN END
 entity         ::= "entity" NAME "history"? "{" NEWLINE? field* "}" END
 field          ::= NAME (choices | type) rule* ("=" expression)? END
 choices        ::= NAME ("|" NAME)+
-type           ::= "text" | "markdown" | "email" | "date" | "number" | serial | "boolean" | "user" | list | qualified
+type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | serial | "boolean" | "user" | list | qualified
 list           ::= "list" "of" ("text" | "user" | qualified)
 serial         ::= "serial" ("per" NAME)?
 rule           ::= "required" | "unique" | "key" | "after" NAME

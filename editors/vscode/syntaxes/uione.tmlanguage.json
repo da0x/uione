@@ -251,7 +251,7 @@
           "name": "storage.modifier.uione"
         },
         {
-          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|date|number|serial|boolean|user|list)\\b",
+          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|slug|date|number|serial|boolean|user|list)\\b",
           "captures": {
             "1": {
               "name": "support.type.uione"
