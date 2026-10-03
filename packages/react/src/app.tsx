@@ -124,7 +124,13 @@ function signInMessage(e: unknown): string | undefined {
   const code = (e as { code?: unknown } | null)?.code;
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return undefined;
   if (code === "auth/popup-blocked") return "your browser blocked the sign-in window; allow pop-ups for this site and try again";
-  return "couldn't sign you in; try again";
+  if (code === "auth/account-exists-with-different-credential") {
+    return "that email already signs in another way here; sign in that way";
+  }
+  if (code === "auth/unauthorized-domain") return "sign-in isn't allowed on this address yet";
+  if (code === "auth/operation-not-allowed") return "this way of signing in isn't turned on for this site";
+  // Anything else names Firebase's reason, so a problem can be found from it.
+  return typeof code === "string" ? `couldn't sign you in (${code.replace(/^auth\//, "")}); try again` : "couldn't sign you in; try again";
 }
 
 // Every route's element is a Page, so going from /books/a to /books/b keeps the
