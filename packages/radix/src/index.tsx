@@ -71,7 +71,7 @@ export const radix: ComponentSet = {
     <div className="min-h-screen bg-page text-ink antialiased">
       <header className="border-b border-line">
         {/* On a phone, the navigation takes a row of its own under the name. */}
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-4 sm:px-6 lg:px-8">
           <a {...home} className="flex shrink-0 items-center gap-2 text-lg font-semibold tracking-tight">
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
@@ -95,7 +95,9 @@ export const radix: ComponentSet = {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      {/* The page is as wide as the window, for tables, code and editors; text keeps
+          its own reading width. */}
+      <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
         {title !== name && <h1 className="mb-6 text-3xl font-bold tracking-tight">{title}</h1>}
         <div className="flex flex-col gap-10">{children}</div>
       </main>
