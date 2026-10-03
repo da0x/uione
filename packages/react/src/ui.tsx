@@ -52,6 +52,12 @@ export function action(command: string): string {
 
 // A parameter of the screen's route: on /books/:book, useParam("book") is the book's
 // id, which is what a view with one document per book is read with.
+// The name of the screen's last parameter when it takes the rest of the address,
+// like file in /code/:file*.
+export const Rest = createContext<string | undefined>(undefined);
+
 export function useParam(name: string): string | undefined {
-  return useParams()[name];
+  const params = useParams();
+  const rest = useContext(Rest);
+  return params[name] ?? (name === rest ? params["*"] : undefined);
 }

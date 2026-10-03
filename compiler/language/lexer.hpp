@@ -228,11 +228,13 @@ namespace one::language {
         }
 
         // A route starts with / and is followed by its path, a parameter like :page,
-        // or nothing at all when it's the root.
+        // or nothing at all when it's the root. Its last parameter may take the rest
+        // of the address, slashes and all, like :file* in /code/:file*, and a link's
+        // address can name a file, like /code/components/chart.tsx.
         token route(location where, std::size_t begin) {
             step();
             while (is_letter(current()) || is_digit(current()) || current() == '/' ||
-                   current() == ':' || current() == '-') {
+                   current() == ':' || current() == '-' || current() == '*' || current() == '.') {
                 step();
             }
             return make(token_kind::route, std::string(source_.substr(begin, pos_ - begin)), where, begin);

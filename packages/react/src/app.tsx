@@ -10,7 +10,7 @@ import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } fr
 import type { ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
 import type { CommandInput, DataSource } from "./data.js";
-import { UIContext, useLinks, useUI } from "./ui.js";
+import { Rest, UIContext, useLinks, useUI } from "./ui.js";
 
 export interface ScreenInfo {
   title: string;
@@ -45,7 +45,7 @@ export function App({ name, icon, screens, ui, data, location, signin = true }: 
   const routes = (
     <Routes>
       {screens.map((s) => (
-        <Route key={s.info.route} path={s.info.route} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
+        <Route key={s.info.route} path={routerPath(s.info.route)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
       ))}
       <Route path="*" element={<NotFound name={name} icon={icon} screens={screens} />} />
     </Routes>
@@ -142,16 +142,31 @@ function signInMessage(e: unknown): string | undefined {
   return typeof code === "string" ? `couldn't sign you in (${code.replace(/^auth\//, "")}); try again` : "couldn't sign you in; try again";
 }
 
+// A route's last parameter may take the rest of the address, like :file* in
+// /code/:file*, which the router writes as *.
+const restOf = /\/:([A-Za-z_]\w*)\*$/;
+
+function routerPath(route: string): string {
+  return route.replace(restOf, "/*");
+}
+
 // Every route's element is a Page, so going from /books/a to /books/b keeps the
 // same one mounted. The body is keyed by the address, so what was typed about one
-// book, or why a command on it failed, is never shown or sent as another's.
+// book, or why a command on it failed, is never shown or sent as another's. What a
+// last parameter like :file* takes isn't part of the key: going from one file to
+// another is the same page, as an editor keeps its place moving between files.
 function Page({ name, icon, screen: Body, screens }: { name: string; icon: string | undefined; screen: Screen; screens: Screen[] }) {
   const { pathname } = useLocation();
+  const rest = restOf.exec(Body.info.route)?.[1];
+  const taken = rest ? matchPath(routerPath(Body.info.route), pathname)?.params["*"] : undefined;
+  const key = taken ? pathname.split("/").slice(0, -taken.split("/").length).join("/") : pathname;
   return (
     <Shell name={name} icon={icon} title={Body.info.title} screens={screens}>
-      <Contained key={pathname}>
-        <Body />
-      </Contained>
+      <Rest.Provider value={rest}>
+        <Contained key={key}>
+          <Body />
+        </Contained>
+      </Rest.Provider>
     </Shell>
   );
 }

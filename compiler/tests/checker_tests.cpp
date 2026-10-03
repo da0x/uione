@@ -643,6 +643,17 @@ TEST_CASE("a menu holds links to screens that are there") {
           "there's no screen at /nowhere for this link to open");
 }
 
+TEST_CASE("an address's last parameter can take the rest of it") {
+    const std::string code = "screen \"Code\" /code/:file* {\n\ttext \"x\"\n}\n";
+    CHECK(check_source(code).empty());
+    CHECK(check_source(code + "screen \"Home\" / {\n\tlink /code/components/chart.tsx \"The chart\"\n}\n").empty());
+    CHECK(only_error(code + "screen \"Home\" / {\n\tlink /code \"Nothing\"\n}\n").message == "there's no screen at /code for this link to open");
+    for (const char* route : {"/code/*", "/code/:file*/more", "/:a*b"}) {
+        CHECK(only_error(std::string("screen \"Code\" ") + route + " {\n\ttext \"x\"\n}\n").message ==
+              "a * ends the last parameter of an address, taking the rest of it, like /code/:file*");
+    }
+}
+
 TEST_CASE("serve names a folder next to the project") {
     CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
           "there's no folder no-such-folder to serve; it's looked for next to this .one file");

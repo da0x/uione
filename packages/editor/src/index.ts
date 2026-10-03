@@ -8,6 +8,8 @@ export { fromLine } from "./generated.js";
 export { highlighting } from "./highlight.js";
 export { placed, problems } from "./problems.js";
 export type { ProblemsOptions } from "./problems.js";
+export { place, readSpot, spotOf, writeSpot } from "./spot.js";
+export type { Point, Spot } from "./spot.js";
 export { setTabWidth, tabs } from "./tabs.js";
 export type { TabWidth } from "./tabs.js";
 export { Diff, Editor, Generated, Workbench } from "./react.js";

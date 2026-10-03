@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { Built, Checked, Compiler, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Diff, Generated, Workbench, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
+import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
 
 // jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
 Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
@@ -157,5 +157,55 @@ describe("diff", () => {
     expect(removed?.textContent).toContain("title  text");
     expect(removed?.textContent).not.toContain("required");
     expect(shown.getAttribute("contenteditable")).toBe("false");
+  });
+});
+
+describe("spots", () => {
+  it("reads and writes the place an address names, the way GitHub's do", () => {
+    expect(readSpot("#L12")).toEqual({ from: { line: 12 } });
+    expect(readSpot("L12C5")).toEqual({ from: { line: 12, column: 5 } });
+    expect(readSpot("#L12-L20")).toEqual({ from: { line: 12 }, to: { line: 20 } });
+    expect(readSpot("#L12C5-L14C2")).toEqual({ from: { line: 12, column: 5 }, to: { line: 14, column: 2 } });
+    for (const nonsense of ["", "#", "#top", "#L0", "#L3C0", "#L1-L2-L3", "#L4-x"]) expect(readSpot(nonsense)).toBeUndefined();
+    for (const written of ["L12", "L12C5", "L12-L20", "L12C5-L14C2"]) expect(writeSpot(readSpot(written)!)).toBe(written);
+  });
+
+  it("puts the cursor where the address says, marks its lines, and says where it moves", () => {
+    const text = "entity book {\n\ttitle  text\n\tauthor  text\n}\n";
+    const moved: string[] = [];
+    const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
+    render(
+      <Editor
+        path="main.one"
+        value={text}
+        onChange={() => {}}
+        files={{ "main.one": text }}
+        compiler={checker}
+        at={{ from: { line: 2 }, to: { line: 3 } }}
+        onSelect={(spot) => moved.push(writeSpot(spot))}
+      />,
+    );
+    const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.lineAt(view.state.selection.main.from).number).toBe(2);
+    expect(view.state.doc.lineAt(view.state.selection.main.to).number).toBe(3);
+    expect(document.querySelectorAll(".uione-marked").length).toBe(2);
+    expect(moved).toEqual([]); // putting it there isn't the person moving it
+    act(() => view.dispatch({ selection: { anchor: view.state.doc.line(4).from } }));
+    expect(moved).toEqual(["L4C1"]);
+    expect(document.querySelectorAll(".uione-marked").length).toBe(0);
+  });
+
+  it("puts the cursor where the address says once the file's text arrives", () => {
+    const text = "one\ntwo\nthree\nfour\n";
+    const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
+    const at = { from: { line: 3 }, to: { line: 4 } };
+    const shown = (value: string) => (
+      <Editor path="main.one" value={value} onChange={() => {}} files={{ "main.one": value }} compiler={checker} at={at} />
+    );
+    const { rerender } = render(shown(""));
+    rerender(shown(text));
+    const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement)!;
+    expect(view.state.doc.lineAt(view.state.selection.main.from).number).toBe(3);
+    expect(document.querySelectorAll(".uione-marked").length).toBe(2);
   });
 });

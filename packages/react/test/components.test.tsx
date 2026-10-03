@@ -1,8 +1,9 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import { render, screen } from "@testing-library/react";
-import { App, Code, Hero, Link, Menu, Pages, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { App, Code, Hero, Link, Menu, Pages, useParam, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
 import type { DocPage } from "../src/index.js";
 import { label } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -33,6 +34,25 @@ describe("content", () => {
     ));
     render(<App name="neotrac" screens={[project]} ui={plain} data={memorySource()} location="/projects/my%20app" />);
     expect(screen.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/projects/my%20app/reports");
+  });
+
+  it("gives a last parameter like :file* the rest of the address, and keeps the page across it", () => {
+    let mounted = 0;
+    function Code() {
+      useState(() => ++mounted);
+      return (
+        <>
+          <Text>{`file ${useParam("file")} of ${useParam("project")}`}</Text>
+          <Link to="/:project/code/components/chart.tsx">Chart</Link>
+        </>
+      );
+    }
+    const code = defineScreen({ title: "Code", route: "/:project/code/:file*" }, () => <Code />);
+    render(<App name="studio" screens={[code]} ui={plain} data={memorySource()} location="/neotrac/code/issues.one" />);
+    expect(screen.getByText("file issues.one of neotrac")).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Chart" }));
+    expect(screen.getByText("file components/chart.tsx of neotrac")).toBeTruthy();
+    expect(mounted).toBe(1);
   });
 
   it("puts a menu's links beside the page, filled from its address, the page it's on marked", () => {

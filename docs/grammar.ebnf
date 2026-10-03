@@ -20,7 +20,8 @@
  *   STRING   text in double quotes, on one line, where \" and \\ stand for " and \
  *   NUMBER   digits, with a fractional part if it has one: 14, 2.5
  *   WHOLE    digits alone, a number with no fractional part: 50
- *   ROUTE    a page's address: /, /shelf, /docs/:page
+ *   ROUTE    a page's address: /, /shelf, /docs/:page, /code/:file*, whose last
+ *            parameter may end in * to take the rest of the address
  *   ANCHOR   a place on a page: #waitlist
  *   PATTERN  the rest of the line, up to a { if there is one, for a format
  *   NEWLINE  the end of a line; blank lines and comments count as one

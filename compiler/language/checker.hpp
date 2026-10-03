@@ -881,7 +881,9 @@ namespace one::language {
             auto wanted = parts(target);
             for (const auto& [route, from] : routes_) {
                 auto screen = parts(route);
-                if (screen.size() != wanted.size()) continue;
+                // A last parameter like :file* takes one part or more: /code/a/b.one.
+                bool rest = !screen.empty() && screen.back().starts_with(":") && screen.back().ends_with("*");
+                if (rest ? wanted.size() < screen.size() : screen.size() != wanted.size()) continue;
                 bool same = true;
                 for (std::size_t i = 0; same && i < screen.size(); ++i) {
                     same = screen[i].starts_with(":") || screen[i] == wanted[i];
@@ -893,6 +895,12 @@ namespace one::language {
 
         void verify(const std::string& ns, location where, const screen_declaration& s) {
             if (s.title_is_name) snake(s.title, where);
+            if (auto star = s.route.find('*'); star != std::string::npos) {
+                auto last = s.route.rfind('/');
+                if (star != s.route.size() - 1 || s.route.compare(last, 2, "/:") != 0 || star == last + 2) {
+                    error(where, "a * ends the last parameter of an address, taking the rest of it, like /code/:file*");
+                }
+            }
             screen_items(ns, s.items, full_route(ns, s.route));
         }
 

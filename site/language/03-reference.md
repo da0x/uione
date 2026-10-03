@@ -350,6 +350,11 @@ screen "Book" /books/:book {
 
 - A column like `member.picture` shows the person's picture, small and round, so
   `member.picture ""` and `member.name "Member"` put a face beside a name.
+- A route's last parameter can take the rest of the address, slashes and all:
+  `screen "Code" /:project/code/:file*` is at `/neotrac/code/components/chart.tsx`,
+  where `useParam("file")` is `components/chart.tsx`. Going from one such address to
+  another keeps the page as it is, the way an editor keeps its place moving between
+  files.
 - `table <view> link /books/:book` makes each row open that screen, with the row's
   id as the parameter, or the row's own `book` when it holds one, like a change of
   a book or a membership of a project. Parameters before the last, like the

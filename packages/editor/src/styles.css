@@ -217,3 +217,12 @@
   font-size: 0.8rem;
   padding: 0.3rem 1rem;
 }
+
+/* The lines an address points at, like L12-L20, marked as GitHub marks them, in a
+   yellow that reads in light and dark. */
+.uione-editor .uione-marked {
+  background: rgba(234, 179, 8, 0.18);
+}
+.uione-editor .cm-activeLine.uione-marked {
+  background: rgba(234, 179, 8, 0.24);
+}
