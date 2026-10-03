@@ -6,7 +6,7 @@
   "author": "Daher Alfawares",
   "repository": {
     "type": "git",
-    "url": "https://github.com/da0x/uione.git",
+    "url": "git+https://github.com/da0x/uione.git",
     "directory": "packages/radix"
   },
   "type": "module",
