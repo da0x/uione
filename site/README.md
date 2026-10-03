@@ -7,13 +7,13 @@ private per-person view.
 | File | What it is |
 |---|---|
 | `site.one` | the project: domain, Firebase project, region, component adapter, sign-in |
-| `home.one` | the front page at `/`: the studio first, then the compiler, installing it, and the waitlist |
+| `home.one` | the front page of www.uione.io: the studio first, then the compiler, installing it, and the waitlist |
 | `waitlist.one` | the waitlist: an entity, a public command, and a public count |
 | `language.one` | `/language/:page`, one page per file in `language/`: starting, the overview, the reference |
 | `releases.one` | `/releases/:page`, one page per release in `releases/`, newest first |
 | `mission.one` | `/mission`: why uione exists |
 | `install.one` | `/install/:page`, one page per way to install the compiler, in `install/` |
-| `studio.one` | `/studio`: your projects, private to you |
+| `studio.one` | a person's projects, private to them, kept to test sign-in end to end; the studio itself runs at uione.io |
 | `language/`, `releases/`, `install/` | those pages, in markdown |
 | `public/` | files served as they are, like `install.sh` at `/install.sh` |
 | `target/` | hand-written examples of the code `one build` should generate, for review |

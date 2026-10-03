@@ -46,7 +46,9 @@ project uione {
 people sign in. `icon` is the app's icon, an `.svg` file next to the project's
 `.one` files: it's the page's icon in the browser, and it's shown beside the
 app's name at the top of every page. `serve` names a folder whose files are served
-as they are, at the site's root: `public/install.sh` is at `/install.sh`.
+as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redirect "/install.sh"
+"https://www.uione.io/install.sh"` sends whoever asks for an address that has
+moved on to where it is now, and a project can have as many as it needs.
 
 ## namespace
 
@@ -368,7 +370,8 @@ screen "Book" /books/:book {
   projects`, `link /:project/reports "Reports"` goes to `/projects/:project/reports`,
   with the project filled in from the page's own address. A link's `:parameter`
   always comes from the page it's on, so the page needs it too. To reach another
-  namespace, name it: `link namespace docs "Read the docs"`. A link to an address or a
+  namespace, name it: `link namespace docs "Read the docs"`, and another site, give
+  its address: `link "https://uione.io/studio" "Open the studio"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
 - `markdown "{book_page.summary}"` shows a view's Markdown field, rendered. What

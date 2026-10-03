@@ -273,7 +273,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -283,7 +283,7 @@ namespace one::language {
             for (const auto& s : p.settings) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon or serve");
+                                   "region, ui, signin, icon, serve or redirect");
                     continue;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") deploy.push_back(s.key);
@@ -297,6 +297,17 @@ namespace one::language {
                 // sharp at any size and part of the project like everything else.
                 // Files served as they are, at the site's root: serve "public" puts
                 // public/install.sh at /install.sh.
+                // redirect "/install.sh" "https://www.uione.io/install.sh": an address of
+                // this site that sends whoever asks for it somewhere else.
+                if (s.key == "redirect") {
+                    if (!s.value.starts_with("/") || s.to.empty() ||
+                        !(s.to.starts_with("https://") || s.to.starts_with("/")) ||
+                        s.to.find_first_of("\" \\") != std::string::npos || s.value.find_first_of("\" \\") != std::string::npos) {
+                        error(s.where, "redirect takes an address of this site and where it goes, like redirect \"/install.sh\" \"https://www.uione.io/install.sh\"");
+                    }
+                } else if (!s.to.empty()) {
+                    error(s.where, s.key + " takes one value");
+                }
                 if (s.key == "serve") {
                     std::string dir = path_.substr(0, path_.find_last_of('/') == std::string::npos ? 0 : path_.find_last_of('/'));
                     if (!std::filesystem::is_directory(platform::resolve(dir.empty() ? "." : dir, s.value))) {
@@ -810,6 +821,16 @@ namespace one::language {
                     error(link.namespace_name->where, "namespace " + name + " has no screen at its own address, " +
                                                       full_route(name, "/") + ", for this link to open");
                 }
+                return;
+            }
+            if (link.target.starts_with("https://") || link.target.starts_with("http://")) {
+                if (!link.target.starts_with("https://") || link.target.find_first_of("\" \\") != std::string::npos) {
+                    error(where, "a link to another site is an https:// address, like \"https://uione.io/studio\"");
+                }
+                return;
+            }
+            if (!link.target.starts_with("/") && !link.target.starts_with("#")) {
+                error(where, "a link goes to an address, like /docs, a place on the page, like #top, or another site, like \"https://uione.io\"");
                 return;
             }
             if (!link.target.starts_with("/")) return;

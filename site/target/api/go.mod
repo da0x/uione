@@ -1,4 +1,4 @@
-module uione.io/api
+module www.uione.io/api
 
 go 1.26
 

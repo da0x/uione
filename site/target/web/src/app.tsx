@@ -11,7 +11,6 @@ import { install } from "./screens/install";
 import { language } from "./screens/language";
 import { mission } from "./screens/mission";
 import { releases } from "./screens/releases";
-import { studio } from "./screens/studio";
 
 // Views are read live from Firestore, and commands go to the Go backend. While
 // developing, both are the local emulators. A production build uses the real
@@ -30,7 +29,7 @@ const cloud = {
 };
 const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud), personal: ["studio::projects"] });
 
-export const site = { name: "uione", icon: "/icon.svg", screens: [home, install, language, mission, releases, studio], ui: radix, data };
+export const site = { name: "uione", icon: "/icon.svg", screens: [home, install, language, mission, releases], ui: radix, data };
 
 export default function Site() {
   return <App {...site} />;

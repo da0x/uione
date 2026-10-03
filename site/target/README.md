@@ -15,7 +15,6 @@ change to what gets generated is reviewed as a diff of the generated code.
 | `.one` | React (`web/`) |
 |---|---|
 | `home.one` | `src/screens/home.tsx` |
-| `studio.one` | `src/screens/studio.tsx` |
 | `language.one` | `src/screens/language.tsx` |
 | `releases.one` | `src/screens/releases.tsx` |
 | `mission.one` | `src/screens/mission.tsx` |

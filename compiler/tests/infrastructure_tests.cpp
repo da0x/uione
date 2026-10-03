@@ -130,3 +130,18 @@ TEST_CASE("a project that takes GitHub's webhook routes it to the backend and is
     CHECK(hosting->content.find(R"({ "source": "/hooks/**", "run": { "serviceId": "api", "region": "us-east4" } },)") != std::string::npos);
     CHECK(program->content.find("\t\tGitHub:   \"/hooks/github\",\n") != std::string::npos);
 }
+
+TEST_CASE("a redirect goes into Hosting's settings") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-redirect";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    REQUIRE(platform::write_file((dir / "main.one").string(),
+                                 "project p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n"
+                                 "\tredirect \"/install.sh\" \"https://www.p.io/install.sh\"\n}\n"));
+    auto generated = generate_at(dir.string());
+    const auto* hosting = find(generated.files, "web/firebase.json");
+    REQUIRE(hosting != nullptr);
+    CHECK(hosting->content.find(R"({ "source": "/install.sh", "destination": "https://www.p.io/install.sh", "type": 301 })") != std::string::npos);
+    fs::remove_all(dir);
+}

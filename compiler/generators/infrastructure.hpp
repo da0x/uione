@@ -31,6 +31,7 @@ namespace one::generators {
         std::string region;
         code::source from;  // the project block they're written in
         std::string github;  // where GitHub's webhook comes in, which needs a secret
+        std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
     static std::string github_route(const std::vector<language::declaration>& declarations) {
@@ -56,6 +57,7 @@ namespace one::generators {
                     if (setting.key == "domain") s.domain = setting.value;
                     if (setting.key == "firebase") s.firebase = setting.value;
                     if (setting.key == "region") s.region = setting.value;
+                    if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
                 }
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
                 for (const auto& other : files) {
@@ -195,6 +197,15 @@ namespace one::generators {
             j.line("{ \"source\": \"**\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"no-cache\" }] },");
             j.line("{ \"source\": \"/assets/**\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"public, max-age=31536000, immutable\" }] }");
             j.close("],");
+            // An address that has moved, like the installer, sends whoever asks for it on.
+            if (!s.redirects.empty()) {
+                j.open("\"redirects\": [");
+                for (std::size_t i = 0; i < s.redirects.size(); ++i) {
+                    j.line("{ \"source\": " + quoted(s.redirects[i].first) + ", \"destination\": " + quoted(s.redirects[i].second) +
+                           ", \"type\": 301 }" + (i + 1 < s.redirects.size() ? "," : ""));
+                }
+                j.close("],");
+            }
             j.open("\"rewrites\": [");
             j.line("{ \"source\": \"/api/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
             if (!s.github.empty()) j.line("{ \"source\": \"/hooks/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");

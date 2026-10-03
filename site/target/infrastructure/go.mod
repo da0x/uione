@@ -1,4 +1,4 @@
-module uione.io/infrastructure
+module www.uione.io/infrastructure
 
 go 1.26
 

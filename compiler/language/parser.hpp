@@ -214,6 +214,7 @@ namespace one::language {
                 if (at(token_kind::string)) {
                     s.value = advance().text;
                     s.is_string = true;
+                    if (at(token_kind::string)) s.to = advance().text;  // redirect "/from" "to"
                 } else {
                     s.value = expect(token_kind::identifier, "the setting's value").text;
                 }
@@ -580,8 +581,10 @@ namespace one::language {
                 } else if (at_word("namespace")) {
                     advance();
                     link.namespace_name = parse_qualified_name("the namespace the link opens, like namespace projects");
+                } else if (at(token_kind::string)) {
+                    link.target = advance().text;  // another site: link "https://uione.io/studio" "Open the studio"
                 } else {
-                    fail_expecting("where the link goes, like /docs, #waitlist or namespace projects");
+                    fail_expecting("where the link goes, like /docs, #waitlist, namespace projects or \"https://example.com\"");
                 }
                 link.label = expect(token_kind::string, "the link's text").text;
                 end_line();

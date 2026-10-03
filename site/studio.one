@@ -1,8 +1,9 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The studio, where uione projects will be written. For now it holds only a list of
-// your projects, which is enough to need sign-in, ownership and a private view.
+// A list of a person's projects, kept to prove sign-in, ownership and a private view
+// end to end (tools/end-to-end.mjs). It has no screen: the studio itself runs at
+// uione.io, from its own repository.
 
 namespace studio {
 
@@ -20,17 +21,6 @@ namespace studio {
 	view projects per user {
 		each project where owner == user.id {
 			name  created_at
-		}
-	}
-
-	screen "Studio" / {
-		table projects {
-			name
-			created_at "Created"
-		}
-		project::create
-		form project::create {
-			name
 		}
 	}
 

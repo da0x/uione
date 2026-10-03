@@ -55,7 +55,7 @@ namespace {
 TEST_CASE("the site is generated exactly as its targets say") {
     auto files = generate("/site");
     for (const char* path : {"package.json", "tsconfig.json", "vite.config.ts", "src/main.tsx", "src/app.tsx",
-                             "src/screens/home.tsx", "src/screens/studio.tsx", "src/screens/language.tsx",
+                             "src/screens/home.tsx", "src/screens/language.tsx",
                              "src/screens/releases.tsx", "src/screens/mission.tsx", "src/screens/install.tsx"}) {
         CAPTURE(path);
         auto target = platform::read_file(root + "/site/target/web/" + path);

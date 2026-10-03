@@ -69,11 +69,10 @@ examples/tasks/main.one	order done  -created_at	-	operator
 examples/tasks/main.one	screen "Tasks" / {	/	route
 site/site.one	project uione {	project	declare
 site/site.one	project uione {	uione	name
-site/site.one	domain    "uione.io"	domain	keyword
-site/site.one	domain    "uione.io"	"uione	string
+site/site.one	domain    "www.uione.io"	domain	keyword
+site/site.one	domain    "www.uione.io"	"www	string
 site/site.one	ui        radix	ui	keyword
 site/site.one	ui        radix	radix	plain
-site/site.one	signin    google	signin	keyword
 site/site.one	serve     "public"	serve	keyword
 site/waitlist.one	email  email  required  key	email  required	type
 site/waitlist.one	email  email  required  key	email	plain
@@ -83,8 +82,9 @@ site/waitlist.one	view signups public	public	modifier
 site/home.one	screen "uione" / {	/	route
 site/home.one	hero "Write	hero	keyword
 site/home.one	text "The uione studio	text	keyword
-site/home.one	link #waitlist "Join the studio's	link	keyword
-site/home.one	link #waitlist "Join the studio's	#waitlist	route
+site/home.one	link "https://uione.io/studio"	link	keyword
+site/home.one	link "https://uione.io/studio"	"https	string
+site/home.one	section "Join the waitlist" #waitlist	#waitlist	route
 site/home.one	link namespace language "Learn	namespace	keyword
 site/home.one	link namespace language "Learn	language	namespace
 site/home.one	link namespace language "Learn	"Learn the language"	string
@@ -102,7 +102,6 @@ site/studio.one	owner  user  = me	user	type
 site/studio.one	owner  user  = me	me	constant
 site/studio.one	permission signed_in	signed_in	constant
 site/studio.one	view projects per user	user	plain
-site/studio.one	screen "Studio" / {	/	route
 examples/tracker/main.one	create member {	create	keyword
 examples/tracker/main.one	role maintainer per project from member	from	keyword
 examples/tracker/main.one	command project::create {	create	name

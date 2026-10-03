@@ -11,7 +11,7 @@ import "github.com/da0x/uione/infrastructure"
 func main() {
 	infrastructure.Deploy(infrastructure.Project{
 		Name:     "uione",
-		Domain:   "uione.io",
+		Domain:   "www.uione.io",
 		Firebase: "ui-one",
 		Region:   "us-east4",
 	})

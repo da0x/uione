@@ -4,7 +4,7 @@
 
 # Installs one, the uione compiler, from its release on GitHub:
 #
-#   curl -fsSL https://uione.io/install.sh | sh
+#   curl -fsSL https://www.uione.io/install.sh | sh
 #
 # It picks the build for this machine, checks it against the release's SHA256SUMS,
 # and puts it in ~/.local/bin. Nothing else is changed: no profile is edited, and
@@ -24,15 +24,15 @@ fail() {
 case "$(uname -s)" in
 Linux) system=linux ;;
 Darwin) system=macos ;;
-*) fail "there's no build of one for $(uname -s) yet; see https://uione.io/install/source to build it" ;;
+*) fail "there's no build of one for $(uname -s) yet; see https://www.uione.io/install/source to build it" ;;
 esac
 case "$(uname -m)" in
 x86_64 | amd64) machine=x86_64 ;;
 aarch64 | arm64) machine=$([ "$system" = macos ] && echo arm64 || echo aarch64) ;;
-*) fail "there's no build of one for $(uname -m) yet; see https://uione.io/install/source to build it" ;;
+*) fail "there's no build of one for $(uname -m) yet; see https://www.uione.io/install/source to build it" ;;
 esac
 if [ "$system-$machine" = macos-x86_64 ]; then
-	fail "one is built for Apple silicon only; see https://uione.io/install/source to build it on this Mac"
+	fail "one is built for Apple silicon only; see https://www.uione.io/install/source to build it on this Mac"
 fi
 
 if [ -n "${UIONE_VERSION:-}" ]; then

@@ -201,3 +201,21 @@ func TestADomainsRecordsAreReadFromHosting(t *testing.T) {
 		t.Errorf("the domain needs %v", got)
 	}
 }
+
+func TestARedirectReachesHostingAsAMovedAddress(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "firebase.json")
+	os.WriteFile(path, []byte(`{"hosting":{"public":"dist","redirects":[{"source":"/install.sh","destination":"https://www.uione.io/install.sh","type":301}],"rewrites":[{"source":"**","destination":"/index.html"}]}}`), 0o644)
+	settings, err := ReadSettings(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(settings.config()["redirects"])
+	if string(got) != `[{"glob":"/install.sh","location":"https://www.uione.io/install.sh","statusCode":301}]` {
+		t.Errorf("Hosting is sent %s", got)
+	}
+	settings.Redirects = nil
+	if _, has := settings.config()["redirects"]; has {
+		t.Error("a site without redirects sends an empty list of them")
+	}
+}

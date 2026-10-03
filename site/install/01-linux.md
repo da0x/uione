@@ -6,7 +6,7 @@ One command installs the latest release of `one`, the uione compiler, for x86_64
 ARM:
 
 ```sh
-curl -fsSL https://uione.io/install.sh | sh
+curl -fsSL https://www.uione.io/install.sh | sh
 ```
 
 The installer picks the build for your machine, checks it against the release's
@@ -28,7 +28,7 @@ its `SHA256SUMS`, and in a [container](/install/docker).
 
 Highlighting for Vim, Neovim and VS Code is in the repository's
 [`editors/`](https://github.com/da0x/uione/tree/main/editors) folder. Or write
-uione in [the studio](/), in your browser, with every line checked as you type.
+uione in [the studio](https://uione.io/studio), in your browser, with every line checked as you type.
 
 ## Build a project
 

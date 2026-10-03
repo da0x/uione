@@ -8,8 +8,8 @@ package main
 import (
 	"github.com/da0x/uione/one"
 
-	"uione.io/api/studio"
-	"uione.io/api/waitlist"
+	"www.uione.io/api/studio"
+	"www.uione.io/api/waitlist"
 )
 
 func main() {

@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolor \"red\"\n}\n").message ==
-          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon or serve");
+          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon, serve or redirect");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
         "a project has one project block"));
 }
@@ -681,4 +681,15 @@ TEST_CASE("a backend is a Go file of the namespace's package, beside the .one fi
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "backend deploy is Go in a namespace's package, so it goes inside a namespace");
     fs::remove_all(dir);
+}
+
+TEST_CASE("a project can redirect an address that moved, and a link can go to another site") {
+    CHECK(check_source("project p {\n\tredirect \"/install.sh\" \"https://www.uione.io/install.sh\"\n}\n").empty());
+    CHECK(only_error("project p {\n\tredirect \"install.sh\" \"https://www.uione.io/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
+    CHECK(only_error("project p {\n\tredirect \"/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
+    CHECK(only_error("project p {\n\tdomain \"a.io\" \"b.io\"\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n}\n").message == "domain takes one value");
+    CHECK(check_source("screen \"Home\" / {\n\tlink \"https://uione.io/studio\" \"Open the studio\"\n}\n").empty());
+    CHECK(only_error("screen \"Home\" / {\n\tlink \"http://uione.io\" \"Open\"\n}\n").message ==
+          "a link to another site is an https:// address, like \"https://uione.io/studio\"");
+    CHECK(only_error("screen \"Home\" / {\n\tlink \"uione.io\" \"Open\"\n}\n").message.starts_with("a link goes to an address"));
 }

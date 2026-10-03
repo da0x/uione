@@ -8,11 +8,10 @@
 // Firestore rules, and nothing in site/build is edited by hand.
 
 project uione {
-	domain    "uione.io"
+	domain    "www.uione.io"
 	firebase  "ui-one"
 	region    "us-east4"
 	ui        radix
-	signin    google
 	icon      "assets/icon.svg"
 	serve     "public"
 }

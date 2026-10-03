@@ -29,11 +29,19 @@ import (
 const API = "https://firebasehosting.googleapis.com/v1beta1"
 
 // Settings are firebase.json's "hosting" block: which folder holds the app, and its
-// headers and rewrites.
+// headers, redirects and rewrites.
 type Settings struct {
-	Public   string    `json:"public"`
-	Headers  []header  `json:"headers"`
-	Rewrites []rewrite `json:"rewrites"`
+	Public    string     `json:"public"`
+	Headers   []header   `json:"headers"`
+	Redirects []redirect `json:"redirects"`
+	Rewrites  []rewrite  `json:"rewrites"`
+}
+
+// A redirect sends whoever asks for an address that has moved on to where it is now.
+type redirect struct {
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	Type        int    `json:"type"`
 }
 
 type header struct {
@@ -91,7 +99,19 @@ func (s Settings) config() map[string]any {
 		}
 		rewrites = append(rewrites, entry)
 	}
-	return map[string]any{"headers": headers, "rewrites": rewrites}
+	var redirects []map[string]any
+	for _, r := range s.Redirects {
+		status := r.Type
+		if status == 0 {
+			status = 301
+		}
+		redirects = append(redirects, map[string]any{"glob": r.Source, "location": r.Destination, "statusCode": status})
+	}
+	config := map[string]any{"headers": headers, "rewrites": rewrites}
+	if len(redirects) > 0 {
+		config["redirects"] = redirects
+	}
+	return config
 }
 
 // A Step is how far a deploy has got, for showing progress.

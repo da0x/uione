@@ -151,6 +151,7 @@ namespace one::language {
         std::string value;
         bool is_string = false;
         location where;
+        std::string to;  // redirect "/install.sh" "https://www.uione.io/install.sh": where it goes
     };
 
     struct project_declaration {
@@ -255,7 +256,7 @@ namespace one::language {
 
     struct content_link {
         std::string label;
-        std::string target;                            // a route inside the link's namespace, or #anchor
+        std::string target;                            // a route inside the link's namespace, #anchor, or https:// address
         std::optional<qualified_name> namespace_name;  // link namespace projects "See the projects"
     };
 
