@@ -14,9 +14,10 @@ import { build } from "vite";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const web = join(root, "site/build/web");
 
-// The @uione packages stay ordinary imports, as they would be when published. If
-// they were bundled in, the app would get its own copy of @uione/react, and its
-// screens couldn't see the App rendered here.
+// @uione/react stays an ordinary import, as it would be when published. If it were
+// bundled in, the app would get its own copy, and its screens couldn't see the App
+// rendered here. @uione/radix is bundled, since it imports its fonts' stylesheets,
+// which only a bundler reads.
 // Built in development mode, so the app uses the emulators' settings and never a real
 // project's, even after a deploy has written .env.production next to it.
 await build({
@@ -24,7 +25,7 @@ await build({
   mode: "development",
   logLevel: "warn",
   build: { ssr: "src/app.tsx", outDir: "build-ssr" },
-  ssr: { external: ["@uione/react", "@uione/radix"] },
+  ssr: { external: ["@uione/react"], noExternal: ["@uione/radix"] },
 });
 
 const { createElement } = await import("react");
