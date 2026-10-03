@@ -15,7 +15,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./styles.css": "./dist/styles.css"
   },
   "files": [
     "dist"
@@ -27,7 +28,7 @@
   "scripts": {
     "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
     "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
-    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/",
+    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && cp src/styles.css dist/styles.css",
     "typecheck": "yarn grammar && tsc --noEmit",
     "test": "yarn grammar && vitest run"
   },

@@ -1,0 +1,139 @@
+/*
+ * Copyright 2026 Daher Alfawares
+ * SPDX-License-Identifier: AGPL-3.0-only
+ *
+ * The look of @uione/editor: a .one file beside the code it becomes, like an IDE's
+ * two panes. Colors come from the app's own tokens when it has them, as @uione/radix
+ * does, so the editor matches its page in light and dark; plain grays otherwise.
+ */
+
+.uione-workbench {
+  --uione-page: var(--color-page, #f7f8fa);
+  --uione-surface: var(--color-surface, #ffffff);
+  --uione-sunken: var(--color-sunken, #eef1f5);
+  --uione-line: var(--color-line, #dde2ea);
+  --uione-ink: var(--color-ink, #0e1726);
+  --uione-muted: var(--color-muted, #5b6577);
+  --uione-accent: var(--color-accent, #2457d6);
+  --uione-accent-soft: var(--color-accent-soft, #e8eefc);
+  --uione-mono: var(--font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 32rem;
+  height: 100%;
+  border: 1px solid var(--uione-line);
+  border-radius: var(--radius-box, 10px);
+  background: var(--uione-surface);
+  overflow: hidden;
+}
+
+/* The .one file being written. */
+.uione-editor {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--uione-line);
+}
+.uione-editor .cm-editor {
+  height: 100%;
+  background: var(--uione-surface);
+  color: var(--uione-ink);
+  font-size: 0.86rem;
+}
+.uione-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.uione-editor .cm-scroller {
+  font-family: var(--uione-mono);
+  line-height: 1.6;
+}
+.uione-editor .cm-content {
+  padding: 0.75rem 0;
+}
+.uione-editor .cm-line {
+  padding: 0 1rem;
+}
+.uione-editor .cm-gutters {
+  background: var(--uione-surface);
+  border-right: 1px solid var(--uione-line);
+  color: var(--uione-muted);
+}
+.uione-editor .cm-activeLine,
+.uione-editor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--uione-accent) 6%, transparent);
+}
+.uione-editor .cm-cursor {
+  border-left-color: var(--uione-accent);
+}
+.uione-editor .cm-selectionBackground,
+.uione-editor .cm-editor.cm-focused .cm-selectionBackground {
+  background: var(--uione-accent-soft) !important;
+}
+
+/* What it becomes, one generated file at a time. */
+.uione-generated {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  background: var(--uione-sunken);
+}
+.uione-generated > label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--uione-line);
+  background: var(--uione-surface);
+  color: var(--uione-muted);
+  font-size: 0.8rem;
+}
+.uione-generated > label > select {
+  min-width: 0;
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--uione-line);
+  border-radius: 6px;
+  background: var(--uione-surface);
+  color: var(--uione-ink);
+  font-family: var(--uione-mono);
+  font-size: 0.8rem;
+}
+.uione-generated > pre {
+  flex: 1;
+  margin: 0;
+  padding: 0.75rem 0;
+  overflow: auto;
+  color: var(--uione-ink);
+  font-family: var(--uione-mono);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+.uione-generated > pre > div {
+  padding: 0 1rem 0 0;
+  white-space: pre;
+}
+/* Every line that came from the line the cursor is on. */
+.uione-generated > pre > div.uione-from-here {
+  background: color-mix(in srgb, var(--uione-accent) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--uione-accent);
+}
+.uione-line-number {
+  display: inline-block;
+  width: 3.5rem;
+  padding-right: 1rem;
+  color: var(--uione-muted);
+  opacity: 0.7;
+  text-align: right;
+  user-select: none;
+}
+
+@media (max-width: 900px) {
+  .uione-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .uione-editor {
+    min-height: 20rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--uione-line);
+  }
+}
