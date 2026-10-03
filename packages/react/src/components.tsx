@@ -190,6 +190,7 @@ export function Table({
   link,
   keyed,
   pictures = [],
+  choices = {},
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -198,6 +199,7 @@ export function Table({
   link?: string; // a route like /books/:book, which each row's id fills
   keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
   pictures?: string[];
+  choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -213,7 +215,10 @@ export function Table({
         id: row.id,
         link: link ? links(rowLink(link, row, params, keyed)) : undefined,
         cells: Object.keys(columns).map((key) => {
-          if (!pictures.includes(key)) return show(row[key]);
+          const value = row[key];
+          const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
+          if (shown !== undefined) return shown;
+          if (!pictures.includes(key)) return show(value);
           const source = row[key];
           return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
         }),
@@ -232,6 +237,7 @@ export interface FieldSpec {
   label?: string;
   type?: string;
   hint?: string;
+  choices?: [string, string][]; // for a choice: each one, and how it's shown
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
@@ -311,6 +317,7 @@ export function Form({
           name: f.name,
           label: f.label ?? label(f.name),
           type: f.type ?? "text",
+          choices: f.choices,
           value: values[f.name] ?? "",
           hint: f.hint,
           onChange: (value) => {

@@ -708,6 +708,7 @@ namespace one::generators {
             std::string columns;
             std::string actions;
             std::string pictures;
+            std::string shown;  // a choice column's values, as they're shown
             const language::entity_declaration* entity = listed(ns, table.view.text(), table.list);
             for (const auto& column : table.columns) {
                 std::string key = web_detail::text_of(*column.value);
@@ -724,6 +725,14 @@ namespace one::generators {
                     if (auto command = row_command(ns, table.view.text(), table.list, key)) {
                         actions += (actions.empty() ? "" : ", ") + web_detail::js_string(*command);
                         continue;
+                    }
+                }
+                if (entity && key.find('.') == std::string::npos) {
+                    for (const auto& f : entity->fields) {
+                        if (f.name == key && !f.choices.empty()) {
+                            shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) +
+                                     ": Object.fromEntries(" + choice_options(f) + ")";
+                        }
                     }
                 }
                 std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
@@ -747,7 +756,18 @@ namespace one::generators {
             line += " columns={{ " + columns + " }}";
             if (!actions.empty()) line += " actions={[" + actions + "]}";
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!shown.empty()) line += " choices={{ " + shown + " }}";
             out.line(line + " />");
+        }
+
+        // A choice field's choices, each with how it's shown: [["mit", "MIT"], ...].
+        static std::string choice_options(const language::field& f) {
+            std::string options;
+            for (std::size_t i = 0; i < f.choices.size(); ++i) {
+                std::string shown = i < f.choice_labels.size() && !f.choice_labels[i].empty() ? f.choice_labels[i] : web_detail::label(f.choices[i]);
+                options += (options.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(f.choices[i]) + ", " + web_detail::js_string(shown) + "]";
+            }
+            return "[" + options + "]";
         }
 
         void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, bool button) {
@@ -757,6 +777,7 @@ namespace one::generators {
             std::string fields;
             for (const auto& f : form.fields) {
                 std::string type = "text";
+                std::string choices;
                 if (entity) {
                     for (const auto& field : entity->fields) {
                         if (field.name == f.name && field.type && field.type->parts.size() == 1) {
@@ -764,11 +785,16 @@ namespace one::generators {
                             if (t == "email" || t == "date" || t == "number" || t == "markdown") type = t;
                             if (field.list) type = "list";
                         }
+                        // A choice is picked from its choices, not typed.
+                        if (field.name == f.name && !field.choices.empty()) {
+                            type = "choice";
+                            choices = ", choices: " + choice_options(field);
+                        }
                     }
                 }
                 std::string spec = type == "text" && !f.hint
                     ? web_detail::js_string(f.name)
-                    : "{ name: " + web_detail::js_string(f.name) + (type == "text" ? "" : ", type: " + web_detail::js_string(type)) +
+                    : "{ name: " + web_detail::js_string(f.name) + (type == "text" ? "" : ", type: " + web_detail::js_string(type)) + choices +
                           (f.hint ? ", hint: " + web_detail::js_string(*f.hint) : "") + " }";
                 fields += (fields.empty() ? "" : ", ") + spec;
             }

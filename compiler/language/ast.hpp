@@ -170,6 +170,7 @@ namespace one::language {
         location where;
         std::optional<qualified_name> type;  // none when the field has choices, or no type
         std::vector<std::string> choices;    // on_shelf | lent | withdrawn
+        std::vector<std::string> choice_labels;  // mit "MIT": how each choice is shown, or empty for its name
         bool list = false;                   // labels  list of label: several, each a label
         bool required = false;
         bool unique = false;

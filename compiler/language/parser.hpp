@@ -289,11 +289,16 @@ namespace one::language {
             f.name = name.text;
             f.where = name.where;
             if (at(token_kind::identifier) && !is_field_rule(peek().text)) {
-                if (peek(1).kind == token_kind::pipe) {
-                    f.choices.push_back(advance().text);
+                if (peek(1).kind == token_kind::pipe || (peek(1).kind == token_kind::string && peek(2).kind == token_kind::pipe)) {
+                    // Each choice may say how it's shown: mit "MIT" | apache_2_0 "Apache-2.0".
+                    auto choice = [&](const token& name) {
+                        f.choices.push_back(name.text);
+                        f.choice_labels.push_back(at(token_kind::string) ? advance().text : "");
+                    };
+                    choice(advance());
                     while (at(token_kind::pipe)) {
                         advance();
-                        f.choices.push_back(expect(token_kind::identifier, "a choice after '|'").text);
+                        choice(expect(token_kind::identifier, "a choice after '|'"));
                     }
                 } else {
                     f.type = parse_qualified_name("the field's type");

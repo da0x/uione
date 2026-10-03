@@ -215,6 +215,15 @@ export const plain: ComponentSet = {
               <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
               {field.type === "markdown" ? (
                 <textarea {...common} onChange={(event) => field.onChange(event.target.value)} />
+              ) : field.choices ? (
+                <select {...common} onChange={(event) => field.onChange(event.target.value)}>
+                  <option value="">Choose one</option>
+                  {field.choices.map(([value, shown]) => (
+                    <option key={value} value={value}>
+                      {shown}
+                    </option>
+                  ))}
+                </select>
               ) : (
                 <input
                   {...common}

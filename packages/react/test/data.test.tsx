@@ -448,3 +448,18 @@ describe("a view whose data isn't what a table expects", () => {
     expect(screen.getByText("Kept")).toBeTruthy();
   });
 });
+
+describe("choices", () => {
+  it("are picked from a list in a form, and shown by their labels in a table", () => {
+    const source = memorySource({ views: { "studio::all": { rows: [{ id: "a", name: "neotrac", license: "apache_2_0" }] } } });
+    renderScreen(source, () => (
+      <>
+        <Table view={useView("studio::all")} columns={{ name: "Name", license: "License" }} choices={{ license: { mit: "MIT", apache_2_0: "Apache-2.0" } }} />
+        <Form command="studio::project::create" fields={["name", { name: "license", type: "choice", choices: [["mit", "MIT"], ["apache_2_0", "Apache-2.0"]] }]} />
+      </>
+    ));
+    expect(screen.getByRole("cell", { name: "Apache-2.0" })).toBeTruthy();
+    const pick = screen.getByRole("combobox", { name: "License" }) as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.textContent)).toEqual(["Choose one", "MIT", "Apache-2.0"]);
+  });
+});

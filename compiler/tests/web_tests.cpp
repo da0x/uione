@@ -85,7 +85,7 @@ TEST_CASE("table columns that name a command on the row become actions") {
     auto files = generate("/examples/library");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Table view={shelf} link="/library/books/:book" columns={{ shelfmark: "Shelfmark", title: "Title", author: "Author", status: "Status", lent_to: "Lent to" }} actions={["library::book::withdraw"]} />)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Table view={shelf} link="/library/books/:book" columns={{ shelfmark: "Shelfmark", title: "Title", author: "Author", status: "Status", lent_to: "Lent to" }} actions={["library::book::withdraw"]} choices={{ status: Object.fromEntries([["on_shelf", "On shelf"], ["lent", "Lent"], ["withdrawn", "Withdrawn"]]) }} />)") != std::string::npos);
     // Several screens in one file are each named after their title.
     CHECK(screens->content.find("export const shelf = screen(") != std::string::npos);
     CHECK(screens->content.find("export const myLoans = screen(") != std::string::npos);
@@ -303,5 +303,21 @@ TEST_CASE("a namespace can put its screens at the root, and an address can name 
     CHECK(tsx.find(R"(const projectId = keyOf([useParam("owner"), useParam("project")]);)") != std::string::npos);
     CHECK(tsx.find(R"(link="/:owner/:project" keyed={["owner"]})") != std::string::npos);
     CHECK(tsx.find(R"(<Link to="/:owner/:project/more">)") != std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("a choice is picked from a list in a form, and shown by its label") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-choice-labels";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace studio {\nentity project {\n\tname  text\n\tlicense  mit \"MIT\" | apache_2_0 \"Apache-2.0\" | none = none\n}\n"
+                         "command project::create\nview all {\n\teach project {\n\t\tname  license\n\t}\n}\n"
+                         "screen \"Projects\" / {\n\ttable all {\n\t\tname\n\t\tlicense\n\t}\n\tform project::create {\n\t\tname  license\n\t}\n}\n}\n");
+    auto files = generate_at(dir.string());
+    const auto& tsx = find(files, "src/screens/main.tsx")->content;
+    CHECK(tsx.find(R"({ name: "license", type: "choice", choices: [["mit", "MIT"], ["apache_2_0", "Apache-2.0"], ["none", "None"]] })") != std::string::npos);
+    CHECK(tsx.find(R"(choices={{ license: Object.fromEntries([["mit", "MIT"], ["apache_2_0", "Apache-2.0"], ["none", "None"]]) }})") != std::string::npos);
     fs::remove_all(dir);
 }

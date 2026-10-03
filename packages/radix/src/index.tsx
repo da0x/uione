@@ -320,6 +320,22 @@ export const radix: ComponentSet = {
                 describedBy={field.hint ? `${id}-${field.name}-hint` : undefined}
                 onChange={field.onChange}
               />
+            ) : field.choices ? (
+              <select
+                id={`${id}-${field.name}`}
+                name={field.name}
+                value={field.value}
+                onChange={(event) => field.onChange(event.target.value)}
+                aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                className="h-10 rounded-control border border-control-line/60 bg-surface px-3 text-base shadow-panel transition-colors hover:border-control-line focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none sm:text-sm"
+              >
+                <option value="">Choose one</option>
+                {field.choices.map(([value, shown]) => (
+                  <option key={value} value={value}>
+                    {shown}
+                  </option>
+                ))}
+              </select>
             ) : (
               <input
                 id={`${id}-${field.name}`}
