@@ -181,3 +181,23 @@ func TestAnErrorFromHostingStopsTheDeployAndSaysWhere(t *testing.T) {
 		t.Errorf("an empty folder said %v", err)
 	}
 }
+
+func TestADomainsRecordsAreReadFromHosting(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/uione-cloud/sites/uione-cloud/customDomains/studio.uione.io" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`{"requiredDnsUpdates":{"desired":[{"records":[
+			{"domainName":"studio.uione.io","type":"CNAME","rdata":"uione-cloud.web.app","requiredAction":"ADD"},
+			{"domainName":"studio.uione.io","type":"TXT","rdata":"kept","requiredAction":"NONE"}]}]}}`))
+	}))
+	defer server.Close()
+	got, err := Records(context.Background(), server.Client(), server.URL, "uione-cloud", "uione-cloud", "studio.uione.io")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "add CNAME studio.uione.io uione-cloud.web.app" {
+		t.Errorf("the domain needs %v", got)
+	}
+}

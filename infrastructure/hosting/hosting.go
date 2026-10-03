@@ -207,6 +207,45 @@ func gather(dir string) ([]file, error) {
 	return files, err
 }
 
+// Records reads what a site's custom domain still needs at its DNS host, one change
+// per line, like "add CNAME studio.uione.io uione-cloud.web.app". Firebase works
+// these out a while after the domain is first added, so a deploy asks again here
+// rather than trust what it was told when the domain was made.
+func Records(ctx context.Context, client *http.Client, api, project, site, domain string) ([]string, error) {
+	var found struct {
+		RequiredDNSUpdates struct {
+			Desired []struct {
+				Records []struct {
+					DomainName     string `json:"domainName"`
+					Type           string `json:"type"`
+					Rdata          string `json:"rdata"`
+					RequiredAction string `json:"requiredAction"`
+				} `json:"records"`
+			} `json:"desired"`
+		} `json:"requiredDnsUpdates"`
+	}
+	address := api + "/projects/" + url.PathEscape(project) + "/sites/" + url.PathEscape(site) + "/customDomains/" + url.PathEscape(domain)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := send(client, request, &found); err != nil {
+		return nil, fmt.Errorf("hosting: reading %s: %w", domain, err)
+	}
+	out := []string{}
+	for _, desired := range found.RequiredDNSUpdates.Desired {
+		for _, r := range desired.Records {
+			action := map[string]string{"ADD": "add", "DELETE": "remove"}[r.RequiredAction]
+			if action == "" {
+				continue
+			}
+			out = append(out, fmt.Sprintf("%s %s %s %s", action, r.Type, r.DomainName, r.Rdata))
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func call(ctx context.Context, client *http.Client, method, address string, body, into any) error {
 	encoded, err := json.Marshal(body)
 	if err != nil {

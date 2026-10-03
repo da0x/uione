@@ -49,6 +49,8 @@ type Tools struct {
 	Program func(dir, stack string) (Program, error)
 	Run     func(ctx context.Context, dir string, log io.Writer, name string, args ...string) error // a command, like yarn build
 	Upload  func(ctx context.Context, project, web string, progress func(name, message string)) error
+	// Records asks Hosting what the domain still needs at its DNS host.
+	Records func(ctx context.Context, project, domain string) ([]string, error)
 }
 
 // A Line is one line of progress.
@@ -151,6 +153,15 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		return "", err
 	}
 	needed := records(outputs)
+	// Firebase works out what a new domain needs a while after it's made, so what
+	// Pulumi was told may be nothing yet.
+	if domain := text(outputs, "domain"); needed == "" && domain != "" && tools.Records != nil {
+		asked, err := tools.Records(ctx, project, domain)
+		if err != nil {
+			say("done", "progress", "couldn't ask Hosting what "+domain+" needs: "+err.Error())
+		}
+		needed = strings.Join(asked, "\n")
+	}
 	say("done", "finished", needed)
 	return needed, nil
 }

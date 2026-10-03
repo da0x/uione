@@ -180,3 +180,23 @@ func TestAWebAppWithItsPackagesInstalledIsntInstalledAgain(t *testing.T) {
 		}
 	}
 }
+
+func TestADomainFirebaseHasntWorkedOutYetIsAskedAboutAgain(t *testing.T) {
+	dir := built(t)
+	w := &world{outputs: map[string]any{
+		"firebase_api_key": "key", "firebase_app_id": "1:2:web:3", "firebase_project_id": "uione-cloud",
+		"firebase_auth_domain": "uione-cloud.firebaseapp.com", "dns_records": []any{}, "domain": "studio.uione.io",
+	}}
+	tools := w.tools()
+	tools.Records = func(_ context.Context, project, domain string) ([]string, error) {
+		return []string{"add CNAME " + domain + " " + project + ".web.app"}, nil
+	}
+	needed, err := Run(context.Background(), Options{Build: dir, Stack: "production", Progress: io.Discard,
+		Confirm: func(string) bool { return true }}, tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if needed != "add CNAME studio.uione.io uione-cloud.web.app" {
+		t.Errorf("the domain needs %q", needed)
+	}
+}

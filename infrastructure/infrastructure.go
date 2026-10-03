@@ -347,6 +347,7 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	ctx.Export("firebase_auth_domain", web.AuthDomain())
 	ctx.Export("backend_url", run.Uri)
 	ctx.Export("dns_records", domain.RequiredDnsUpdates.ApplyT(records))
+	ctx.Export("domain", pulumi.String(p.Domain))
 	return nil
 }
 

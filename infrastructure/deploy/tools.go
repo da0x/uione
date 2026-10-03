@@ -22,7 +22,7 @@ import (
 // commands on this machine, and Firebase Hosting with the Google sign-in that gcloud
 // set up (application default credentials).
 func Real() Tools {
-	return Tools{Program: automation, Run: command, Upload: upload}
+	return Tools{Program: automation, Run: command, Upload: upload, Records: domainRecords}
 }
 
 type stack struct{ s auto.Stack }
@@ -85,6 +85,15 @@ func upload(ctx context.Context, project, web string, progress func(name, messag
 		progress(s.Name, s.Message)
 	})
 	return err
+}
+
+func domainRecords(ctx context.Context, project, domain string) ([]string, error) {
+	client, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/firebase.hosting", "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return nil, err
+	}
+	client.Transport = billed{project: project, next: client.Transport}
+	return hosting.Records(ctx, client, hosting.API, project, project, domain)
 }
 
 type billed struct {
