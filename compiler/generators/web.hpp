@@ -789,6 +789,10 @@ namespace one::generators {
                         if (field.name == f.name && !field.choices.empty()) {
                             type = "choice";
                             choices = ", choices: " + choice_options(field);
+                            // A new one starts on the field's own starting choice.
+                            if (auto* start = field.initial ? std::get_if<language::name_expression>(&field.initial->node) : nullptr) {
+                                choices += ", start: " + web_detail::js_string(start->name.text());
+                            }
                         }
                     }
                 }

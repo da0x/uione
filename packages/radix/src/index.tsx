@@ -15,6 +15,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo } from "react";
+import type { ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
@@ -66,6 +67,25 @@ function CodeToolbar({ display }: { display: CodeDisplay }) {
 
 // Buttons have real presence: a solid accent for what the screen is for, an
 // outlined panel for the rest.
+// Icons for choices whose names say what they are, drawn in the text's own color.
+const choiceIcons: Record<string, ReactNode> = {
+  private: (
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+    </svg>
+  ),
+  public: (
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+    </svg>
+  ),
+};
+
+// A choice of a few is a row of cards to pick from; more than that is a list.
+const fewChoices = 3;
+
 const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   primary: "bg-accent text-accent-ink shadow-panel hover:bg-accent-hover",
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
@@ -320,6 +340,36 @@ export const radix: ComponentSet = {
                 describedBy={field.hint ? `${id}-${field.name}-hint` : undefined}
                 onChange={field.onChange}
               />
+            ) : field.choices && field.choices.length <= fewChoices ? (
+              <div
+                role="radiogroup"
+                aria-labelledby={`${id}-${field.name}-label`}
+                aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+              >
+                {field.choices.map(([value, shown]) => {
+                  const picked = field.value === value;
+                  return (
+                    <label
+                      key={value}
+                      className={`flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-2.5 rounded-box border bg-surface p-3 text-sm font-medium shadow-panel transition-colors has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-accent-soft ${
+                        picked ? "border-accent text-ink ring-2 ring-accent/30" : "border-line text-muted hover:border-control-line hover:text-ink"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${id}-${field.name}`}
+                        value={value}
+                        checked={picked}
+                        onChange={() => field.onChange(value)}
+                        className="sr-only"
+                      />
+                      {choiceIcons[value]}
+                      {shown}
+                    </label>
+                  );
+                })}
+              </div>
             ) : field.choices ? (
               <select
                 id={`${id}-${field.name}`}

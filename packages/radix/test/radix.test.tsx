@@ -6,6 +6,7 @@ import { vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import {
   App,
   Code,
@@ -365,3 +366,24 @@ describe("markdown someone wrote", () => {
   });
 });
 
+describe("a choice of a few", () => {
+  it("is a row of cards to pick from, starting on its own choice", () => {
+    function Visibility() {
+      const [value, setValue] = useState("private");
+      return radix.Form({
+        fields: [{ name: "visibility", label: "Visibility", type: "choice", choices: [["private", "Private"], ["public", "Public"]], value, onChange: setValue }],
+        submit: "Create",
+        busy: false,
+        error: undefined,
+        onSubmit: () => {},
+      });
+    }
+    render(<Visibility />);
+    const group = screen.getByRole("radiogroup", { name: "Visibility" });
+    const cards = within(group).getAllByRole("radio") as HTMLInputElement[];
+    expect(cards.map((c) => c.value)).toEqual(["private", "public"]);
+    expect(cards[0]!.checked).toBe(true);
+    fireEvent.click(screen.getByLabelText("Public"));
+    expect((screen.getByLabelText("Public") as HTMLInputElement).checked).toBe(true);
+  });
+});

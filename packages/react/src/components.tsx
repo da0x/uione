@@ -238,6 +238,7 @@ export interface FieldSpec {
   type?: string;
   hint?: string;
   choices?: [string, string][]; // for a choice: each one, and how it's shown
+  start?: string; // what a new one starts as, like the field's starting choice
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
@@ -281,7 +282,7 @@ export function Form({
   const ui = useUI();
   const runner = useConfirmedRunner();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
-  const empty = () => Object.fromEntries(specs.map((f) => [f.name, ""]));
+  const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
   const [values, setValues] = useState<Record<string, string>>(empty);
   const [open, setOpen] = useState(false);
   // An update form starts from what's stored, and follows it until someone types.
