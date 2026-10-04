@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { unifiedMergeView } from "@codemirror/merge";
-import { EditorState, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
+import { Compartment, EditorState, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
@@ -65,6 +65,14 @@ function go(view: EditorView, spot: Spot) {
   });
 }
 
+// Lines wrap when there's room for wrapping to help, and scroll sideways when the
+// editor is narrow, as on a phone, where wrapping would break code a few words to a
+// line.
+const wideEnough = 560;
+function wrapping(width: number) {
+  return width >= wideEnough ? EditorView.lineWrapping : [];
+}
+
 function same(a: Spot | undefined, b: Spot | undefined) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -82,8 +90,10 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
   const moved = useRef(false);
   const latestAt = useRef(at);
   latestAt.current = at;
+  const wraps = useRef(new Compartment());
 
   useEffect(() => {
+    const wrap = wraps.current;
     const editor = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -98,7 +108,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           highlighting(),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
-          EditorView.lineWrapping,
+          wrap.of(wrapping(host.current!.clientWidth || wideEnough)),
           // Someone who can't change the file can still select and copy it.
           EditorState.readOnly.of(readOnly),
           EditorView.editable.of(!readOnly),
@@ -122,12 +132,22 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
     });
     view.current = editor;
     moved.current = false;
+    // Wrapping follows the editor's width as the window changes.
+    let wide = (host.current!.clientWidth || wideEnough) >= wideEnough;
+    const watch = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(([entry]) => {
+      const now = entry.contentRect.width >= wideEnough;
+      if (now === wide) return;
+      wide = now;
+      editor.dispatch({ effects: wrap.reconfigure(wrapping(entry.contentRect.width)) });
+    });
+    watch?.observe(host.current!);
     if (at) {
       placing.current = true;
       go(editor, at);
       placing.current = false;
     }
     return () => {
+      watch?.disconnect();
       editor.destroy();
       view.current = null;
     };

@@ -346,3 +346,31 @@
 :root[data-theme="dark"] .uione-legend-sample[style*="--one-dark"] {
   color: var(--one-dark) !important;
 }
+
+/* On a phone: the controls' labels are read aloud but not shown, so the controls
+   fit beside each other, and the font menu is as wide as the room there is. */
+@media (max-width: 640px) {
+  .uione-look {
+    gap: 0.4rem 0.6rem;
+  }
+  .uione-look-group > span:first-child:not(:only-child) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .uione-look select {
+    max-width: 9.5rem;
+  }
+  .uione-legend {
+    position: fixed;
+    top: 15vh;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+}
