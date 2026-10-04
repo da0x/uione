@@ -315,12 +315,19 @@
   padding: 0;
   list-style: none;
 }
-.uione-legend li {
+.uione-legend li > a {
   display: grid;
   grid-template-columns: 6.5rem minmax(0, 1fr);
   align-items: baseline;
   gap: 0.75rem;
   padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.uione-legend li > a:hover,
+.uione-legend li > a:focus-visible {
+  background: var(--uione-sunken);
 }
 .uione-legend-sample {
   font-family: var(--uione-code-font, var(--uione-mono));
@@ -330,10 +337,6 @@
 }
 .uione-legend-says {
   color: var(--uione-muted);
-}
-.uione-legend a {
-  margin-left: 0.4rem;
-  color: var(--uione-accent);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .uione-legend-sample[style*="--one-dark"] {

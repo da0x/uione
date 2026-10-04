@@ -58,23 +58,24 @@ export function fontFamily(look: Look): string {
 }
 
 // What each color means: a kind of word, a piece of .one where it's that kind, and
-// the word, so its colors are read from the highlighter itself.
+// the word, so its colors are read from the highlighter itself, and the section of
+// the language reference that says what that kind of word is.
 const reference = "https://www.uione.io/language/reference";
-const kinds: { kind: string; says: string; code: string; word: string; nth?: number; more?: string }[] = [
-  { kind: "Declarations", says: "start what a file declares", code: "entity book {\n}\n", word: "entity" },
-  { kind: "Declared names", says: "what's declared", code: "entity book {\n}\n", word: "book" },
-  { kind: "Fields", says: "an entity's fields, by name", code: "entity book {\n\ttitle  text  required\n}\n", word: "title" },
-  { kind: "Built-in types", says: "what a field holds", code: "entity book {\n\ttitle  text  required\n}\n", word: "text", more: `${reference}#built-in-types` },
-  { kind: "Entities as types", says: "a field holding another entity", code: "entity loan {\n\tbook  book  required\n}\n", word: "book", nth: 1 },
-  { kind: "Rules", says: "what a field must be", code: "entity book {\n\ttitle  text  required\n}\n", word: "required" },
-  { kind: "Keywords", says: "the language's own words", code: "view shelf {\n\teach book where title != none {\n\t}\n}\n", word: "where" },
-  { kind: "Values", says: "built-in values", code: "command loan::checkin {\n\treturned_at = now\n}\n", word: "now" },
-  { kind: "Qualifiers", says: "what a name belongs to", code: "view shelf {\n\teach library::book {\n\t}\n}\n", word: "library" },
-  { kind: "Strings", says: "text as written", code: 'screen "Shelf" /shelf {\n}\n', word: '"Shelf"' },
-  { kind: "Addresses", says: "where a screen is", code: 'screen "Shelf" /shelf {\n}\n', word: "/shelf" },
-  { kind: "Numbers", says: "", code: "view shelf {\n\teach book {\n\t\tlimit 20\n\t}\n}\n", word: "20" },
-  { kind: "Operators", says: "", code: "view shelf {\n\teach book where title != none {\n\t}\n}\n", word: "!=" },
-  { kind: "Comments", says: "notes for people", code: "// A note\n", word: "// A note" },
+const kinds: { kind: string; says: string; code: string; word: string; nth?: number; section: string }[] = [
+  { kind: "Declarations", says: "start what a file declares", code: "entity book {\n}\n", word: "entity", section: "declarations" },
+  { kind: "Declared names", says: "what's declared", code: "entity book {\n}\n", word: "book", section: "names" },
+  { kind: "Fields", says: "an entity's fields, by name", code: "entity book {\n\ttitle  text  required\n}\n", word: "title", section: "entity" },
+  { kind: "Built-in types", says: "what a field holds", code: "entity book {\n\ttitle  text  required\n}\n", word: "text", section: "built-in-types" },
+  { kind: "Entities as types", says: "a field holding another entity", code: "entity loan {\n\tbook  book  required\n}\n", word: "book", nth: 1, section: "built-in-types" },
+  { kind: "Rules", says: "what a field must be", code: "entity book {\n\ttitle  text  required\n}\n", word: "required", section: "field-rules" },
+  { kind: "Keywords", says: "the language's own words", code: "view shelf {\n\teach book where title != none {\n\t}\n}\n", word: "where", section: "keywords" },
+  { kind: "Values", says: "built-in values", code: "command loan::checkin {\n\treturned_at = now\n}\n", word: "now", section: "built-in-values" },
+  { kind: "Qualifiers", says: "what a name belongs to", code: "view shelf {\n\teach library::book {\n\t}\n}\n", word: "library", section: "namespace" },
+  { kind: "Strings", says: "text as written", code: 'screen "Shelf" /shelf {\n}\n', word: '"Shelf"', section: "strings" },
+  { kind: "Addresses", says: "where a screen is", code: 'screen "Shelf" /shelf {\n}\n', word: "/shelf", section: "screen" },
+  { kind: "Numbers", says: "", code: "view shelf {\n\teach book {\n\t\tlimit 20\n\t}\n}\n", word: "20", section: "numbers-and-operators" },
+  { kind: "Operators", says: "", code: "view shelf {\n\teach book where title != none {\n\t}\n}\n", word: "!=", section: "numbers-and-operators" },
+  { kind: "Comments", says: "notes for people", code: "// A note\n", word: "// A note", section: "comments" },
 ];
 
 // The reader's look, from their last visit, and a way to change it that keeps it.
@@ -165,18 +166,15 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
                 const colors = colorsOf(k.code, k.word, k.nth ?? 0);
                 return (
                   <li key={k.kind}>
-                    <span className="uione-legend-sample" style={colors ? { color: colors.light, ["--one-dark" as string]: colors.dark } : undefined}>
-                      {k.word.startsWith("//") ? "//" : k.word}
-                    </span>
-                    <span>
-                      <strong>{k.kind}</strong>
-                      {k.says && <span className="uione-legend-says">, {k.says}</span>}
-                      {k.more && (
-                        <a href={k.more} target="_blank" rel="noreferrer">
-                          all of them
-                        </a>
-                      )}
-                    </span>
+                    <a href={`${reference}#${k.section}`} target="_blank" rel="noreferrer" title={`${k.kind} in the language reference`}>
+                      <span className="uione-legend-sample" style={colors ? { color: colors.light, ["--one-dark" as string]: colors.dark } : undefined}>
+                        {k.word.startsWith("//") ? "//" : k.word}
+                      </span>
+                      <span>
+                        <strong>{k.kind}</strong>
+                        {k.says && <span className="uione-legend-says">, {k.says}</span>}
+                      </span>
+                    </a>
                   </li>
                 );
               })}

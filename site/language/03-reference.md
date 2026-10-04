@@ -26,6 +26,66 @@ looks is up to you, the same as how names look: your editor, or the code on this
 site, draws it as deep as you like. Spaces after a line's first word, to line
 things up, are fine.
 
+## Declarations
+
+Each declaration starts a line with the word for what it declares, then its name.
+
+| Declaration | Declares |
+|---|---|
+| [`project`](#project) | where the app runs and what it's built with |
+| [`namespace`](#namespace) | a group of declarations, and the address its screens are at |
+| [`entity`](#entity) | something the app keeps, with its fields |
+| [`format`](#format) | a pattern a text field holds to |
+| [`command`](#command) | a way to change an entity |
+| [`view`](#view) | a document built ahead of time for a screen |
+| [`role`](#role) | permissions a person can be given |
+| [`function`](#function) | a value worked out from others |
+| [`screen`](#screen) | a page, at an address |
+| [`picker`](#picker) | how an entity is chosen in a form |
+| [`webhook`](#webhook) | what's done when another service sends an event |
+| [`backend`](#backend) | Go written by hand beside what's generated |
+
+## Comments
+
+`//` starts a comment that runs to the end of the line, and `/* */` holds one that
+spans lines. Comments are for people: the compiler reads past them.
+
+## Strings
+
+Text written as it is, in double quotes: `"Shelf"`, `"that book is not on the
+shelf"`. In a screen's text, `{...}` shows a live value: `"{book_page.title}, by
+{book_page.author}"`. A backslash writes a quote or a backslash inside one: `\"`.
+
+## Numbers and operators
+
+Numbers are written as they are, `20` or `1.5`. Values are compared with `==`, `!=`,
+`<`, `<=`, `>` and `>=`, joined with `&&` (and) and `||` (or), and turned around with
+`!`. `+`, `-` and `*` work them out, `=` gives a field a value, and `has` asks
+whether a list holds something: `where labels has label.id`.
+
+## Built-in values
+
+Words for values that aren't written out:
+
+- `now`, the moment a command runs;
+- `me`, the person running it, and `me.username`, their GitHub username;
+- `none`, no value, as an empty field holds;
+- `true` and `false`.
+
+## Keywords
+
+The language's own words, inside what a declaration says:
+
+- in a field: `enum`, `list of`, `serial per`;
+- in a command: `require`, `permission`, `create`, `clear`, `add … to`, `remove … from`;
+- in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `limit`,
+  `readers`, `public when`;
+- in a role: `per`, `from`, and in a picker, `from`;
+- on a screen: `table`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+  `code`, `link`, `menu`, `markdown`, `hint`;
+- in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`, `signin`,
+  `icon`, `serve`, `redirect`.
+
 ## project
 
 One per project, naming where it runs and what it is built with.
@@ -174,6 +234,17 @@ What a field can hold, written after its name: `title  text  required`.
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
 
 A field's type can also be another entity, holding its id (`book`), or a `format`.
+
+## Field rules
+
+What a field must be, written after its type: `shelfmark  shelfmark  required  unique  key`.
+
+- `required`: it always has a value; a form can't leave it empty.
+- `unique`: no two of the entity have the same one.
+- `key`: it names the entity, so its id is made from its key fields, like a book's
+  shelfmark, or a project's owner and slug.
+- `after lent_at`: a date that has to come after another field's.
+- `= value`: what it starts as, like `= now`, `= me` or `= status::open`.
 
 ## format
 
