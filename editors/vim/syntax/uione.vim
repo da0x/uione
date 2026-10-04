@@ -37,7 +37,10 @@ syn match   uioneKeyword   /\<title\>\ze\s\+"/
 syn match   uioneKeyword   /\<one\>\ze\s\+"/
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite
 syn keyword uioneStatement if else return
-syn keyword uioneModifier  required unique after key public
+syn keyword uioneModifier  required unique after key
+" public is a view's modifier, before its block or when, and otherwise a choice's
+" name, as in visibility enum public | private, which stays plain.
+syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$\|when\>\)\)\@=/
 syn keyword uioneBuiltin   now me none true false
 " Who may run a command: words only after `permission`, so a field called owner
 " stays a name.

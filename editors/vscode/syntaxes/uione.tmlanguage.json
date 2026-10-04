@@ -247,7 +247,11 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "\\b(?:required|unique|after|key|public)\\b",
+          "match": "\\b(?:required|unique|after|key)\\b",
+          "name": "storage.modifier.uione"
+        },
+        {
+          "match": "(?<!::)(?<!\\|)(?<!\\| )(?<!enum )\\b(?:public)\\b(?=\\s*(?:\\{|$|when\\b))",
           "name": "storage.modifier.uione"
         },
         {
