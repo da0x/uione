@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <regex>
 #include <tuple>
 #include <string>
@@ -23,10 +24,51 @@
 
 namespace one::driver {
 
+    // Where a project block's parts are, for an editor that changes them: each
+    // setting's line, and each environment's first and last, by the block's file.
+    struct outline {
+        struct setting {
+            std::string key;
+            std::string value;
+            int line = 0;
+        };
+        struct environment {
+            std::string name;
+            int line = 0;
+            int end = 0;  // the line of its closing brace
+            std::vector<setting> settings;
+        };
+        std::string path;
+        std::string name;
+        int line = 0;
+        int end = 0;
+        std::vector<setting> settings;
+        std::vector<environment> environments;
+    };
+
     struct checked {
         language::diagnostics problems;
         std::size_t files = 0;
+        std::optional<driver::outline> project;  // when a project block parsed
     };
+
+    inline std::optional<outline> outline_of(const std::vector<language::file>& files) {
+        for (const auto& f : files) {
+            for (const auto& d : f.declarations) {
+                auto* p = std::get_if<language::project_declaration>(&d.node);
+                if (!p) continue;
+                auto settings = [](const std::vector<language::setting>& from) {
+                    std::vector<outline::setting> out;
+                    for (const auto& s : from) out.push_back({s.key, s.value, s.where.line});
+                    return out;
+                };
+                outline o{f.path, p->name, d.where.line, p->end.line, settings(p->settings), {}};
+                for (const auto& e : p->environments) o.environments.push_back({e.name, e.where.line, e.end.line, settings(e.settings)});
+                return o;
+            }
+        }
+        return std::nullopt;
+    }
 
     // A project's .one files, by path, as text.
     using sources = std::map<std::string, std::string>;
@@ -175,7 +217,11 @@ namespace one::driver {
     // Each root is a project, checked on its own.
     inline checked check(const std::vector<std::string>& roots) {
         checked out;
-        for (const auto& root : roots) out.files += check_project(root, out.problems);
+        for (const auto& root : roots) {
+            std::vector<language::file> files;
+            out.files += check_project(root, out.problems, &files);
+            if (!out.project) out.project = outline_of(files);
+        }
         return out;
     }
 
@@ -184,16 +230,59 @@ namespace one::driver {
         std::string refusal;             // the same, in a sentence
         std::vector<generators::output_file> files;
         std::string note;
+        std::string environment;         // the one it's built for, when the project has them
     };
 
-    // Checks a project, and only when it's clean, generates everything it becomes.
-    // Nothing is written; that's up to the caller.
-    inline built build(const std::string& project, const std::string& out) {
+    // Chooses the environment a project is built for: the one named, or with none
+    // named, the first. Its settings take the place of the shared ones they name, so
+    // what's generated is for that one place. Says what's wrong, or "" when nothing is.
+    inline std::string choose_environment(std::vector<language::file>& files, const std::string& wanted, std::string& chosen) {
+        for (auto& f : files) {
+            for (auto& d : f.declarations) {
+                auto* p = std::get_if<language::project_declaration>(&d.node);
+                if (!p) continue;
+                if (p->environments.empty()) {
+                    if (!wanted.empty()) return "this project has no environments, so it's built without --for";
+                    return "";
+                }
+                const language::environment_block* environment = &p->environments.front();
+                if (!wanted.empty()) {
+                    environment = nullptr;
+                    std::string names;
+                    for (const auto& e : p->environments) {
+                        if (e.name == wanted) environment = &e;
+                        names += (names.empty() ? "" : ", ") + e.name;
+                    }
+                    if (!environment) return "there's no environment " + wanted + "; this project has " + names;
+                }
+                for (const auto& own : environment->settings) {
+                    auto shared = std::find_if(p->settings.begin(), p->settings.end(), [&](const auto& s) { return s.key == own.key; });
+                    if (shared != p->settings.end()) *shared = own;
+                    else p->settings.push_back(own);
+                }
+                p->environment = environment->name;
+                chosen = environment->name;
+                return "";
+            }
+        }
+        if (!wanted.empty()) return "this project has no project block, so it has no environments";
+        return "";
+    }
+
+    // Checks a project, and only when it's clean, generates everything it becomes,
+    // for the environment named, or the first. Nothing is written; that's up to the
+    // caller.
+    inline built build(const std::string& project, const std::string& out, const std::string& environment = "") {
         built result;
         std::vector<language::file> files;
         std::size_t count = check_project(project, result.problems, &files);
         if (!result.problems.empty() || count == 0) {
             result.refusal = "nothing was built, because the project has errors";
+            return result;
+        }
+        std::string chosen;
+        if (auto wrong = choose_environment(files, environment, chosen); !wrong.empty()) {
+            result.refusal = wrong;
             return result;
         }
         auto generated = generators::generate_project(files, project, out);
@@ -204,6 +293,10 @@ namespace one::driver {
         }
         result.files = std::move(generated.files);
         result.note = std::move(generated.note);
+        if (!chosen.empty() && environment.empty()) {
+            result.note = (result.note.empty() ? "" : result.note + "; ") + "built for environment " + chosen + ", the first; --for names another";
+        }
+        result.environment = chosen;
         return result;
     }
 

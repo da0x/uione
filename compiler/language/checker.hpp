@@ -300,13 +300,13 @@ namespace one::language {
             static constexpr std::string_view id = "abcdefghijklmnopqrstuvwxyz0123456789-";
             static constexpr std::string_view host = "abcdefghijklmnopqrstuvwxyz0123456789-.";
             std::vector<std::string> deploy;
-            for (const auto& s : p.settings) {
+            auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
                                    "region, ui, signin, icon, serve, redirect, title or one");
-                    continue;
+                    return;
                 }
-                if (s.key == "firebase" || s.key == "region" || s.key == "domain") deploy.push_back(s.key);
+                if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
                 // The compiler the project was last checked clean with: one "0.4.0".
                 if (s.key == "one" && !std::regex_match(s.value, std::regex(R"(\d+\.\d+\.\d+)"))) {
                     error(s.where, "one names the compiler's version, like one \"0.4.0\"");
@@ -349,15 +349,42 @@ namespace one::language {
                         error(s.where, "there's no icon file at " + s.value + "; it's looked for next to this .one file");
                     }
                 }
-            }
-            if (!deploy.empty() && deploy.size() < 3) {
+            };
+            for (const auto& s : p.settings) check_setting(s, deploy);
+            auto missing_from = [](const std::vector<std::string>& have) {
                 std::string missing;
                 for (const char* key : {"firebase", "region", "domain"}) {
-                    if (std::find(deploy.begin(), deploy.end(), key) == deploy.end()) {
-                        missing += (missing.empty() ? "" : " and ") + std::string(key);
-                    }
+                    if (std::find(have.begin(), have.end(), key) == have.end()) missing += (missing.empty() ? "" : " and ") + std::string(key);
                 }
-                error(where, "a project that says where it runs needs firebase, region and domain; this one has no " + missing);
+                return missing;
+            };
+            if (p.environments.empty()) {
+                if (!deploy.empty() && deploy.size() < 3) {
+                    error(where, "a project that says where it runs needs firebase, region and domain; this one has no " + missing_from(deploy));
+                }
+                return;
+            }
+            // Each environment is a place the project runs: its own domain, Firebase
+            // project and region, or the ones shared outside the environments.
+            std::set<std::string> named;
+            for (const auto& environment : p.environments) {
+                snake(environment.name, environment.where);
+                if (!named.insert(environment.name).second) {
+                    error(environment.where, "there are two environments called " + environment.name);
+                }
+                std::vector<std::string> runs = deploy;
+                for (const auto& s : environment.settings) {
+                    if (s.key != "domain" && s.key != "firebase" && s.key != "region") {
+                        error(s.where, s.key + " is the same in every environment, so it goes outside them; an environment has its own domain, firebase and region");
+                        continue;
+                    }
+                    check_setting(s, runs);
+                }
+                std::sort(runs.begin(), runs.end());
+                runs.erase(std::unique(runs.begin(), runs.end()), runs.end());
+                if (runs.size() < 3) {
+                    error(environment.where, "environment " + environment.name + " needs firebase, region and domain, its own or shared; it has no " + missing_from(runs));
+                }
             }
         }
 

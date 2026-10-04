@@ -206,7 +206,7 @@ namespace one::language {
             project_declaration project;
             project.name = expect(token_kind::identifier, "the project's name").text;
             expect(token_kind::left_brace, "'{'");
-            while (in_block()) {
+            auto one_setting = [&]() {
                 setting s;
                 const token& key = expect(token_kind::identifier, "a setting, like domain");
                 s.key = key.text;
@@ -219,9 +219,24 @@ namespace one::language {
                     s.value = expect(token_kind::identifier, "the setting's value").text;
                 }
                 end_line();
-                project.settings.push_back(std::move(s));
+                return s;
+            };
+            while (in_block()) {
+                // environment staging { ... }: a place the project runs, and what's its own there.
+                if (at_word("environment") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace) {
+                    environment_block environment;
+                    environment.where = advance().where;
+                    environment.name = advance().text;
+                    advance();
+                    while (in_block()) environment.settings.push_back(one_setting());
+                    environment.end = expect(token_kind::right_brace, "'}'").where;
+                    end_line();
+                    project.environments.push_back(std::move(environment));
+                    continue;
+                }
+                project.settings.push_back(one_setting());
             }
-            expect(token_kind::right_brace, "'}'");
+            project.end = expect(token_kind::right_brace, "'}'").where;
             end_line();
             return project;
         }

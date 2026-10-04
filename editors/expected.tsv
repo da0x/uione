@@ -137,3 +137,7 @@ examples/tracker/main.one	role     enum maintainer	maintainer	plain
 examples/tracker/main.one	= role::reporter	role	namespace
 examples/tracker/main.one	number     serial        per project	per	keyword
 examples/tracker/main.one	labels     list of text	of	keyword
+editors/fixtures/environments.one	environment production {	environment	declare
+editors/fixtures/environments.one	environment production {	production	name
+editors/fixtures/environments.one	firebase  "shop-staging"	firebase	keyword
+editors/fixtures/environments.one	environment  text  required	environment	variable

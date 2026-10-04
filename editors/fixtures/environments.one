@@ -1,0 +1,25 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A project that runs in two places, for the highlighting test.
+
+project shop {
+	region  "us-east4"
+	ui      radix
+	environment production {
+		domain    "shop.example"
+		firebase  "shop-production"
+	}
+	environment staging {
+		domain    "staging.shop.example"
+		firebase  "shop-staging"
+	}
+}
+
+namespace shop {
+
+	entity deploy {
+		environment  text  required
+	}
+
+} // namespace shop

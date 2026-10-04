@@ -122,6 +122,36 @@ as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redir
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
 
+### environment
+
+A project can run in more than one place, each deployed on its own: production
+for everyone, staging to try a change first. Each `environment` is one of them,
+with what's its own there: `domain`, `firebase` and `region`. Each is its own
+Firebase project, so their data never mixes. Settings outside the environments are
+shared by all of them, and one inside takes the place of a shared one.
+
+```one
+project shop {
+	region  "us-east4"
+	ui      radix
+	environment production {
+		domain    "shop.example"
+		firebase  "shop-production"
+	}
+	environment staging {
+		domain    "staging.shop.example"
+		firebase  "shop-staging"
+		region    "europe-west1"
+	}
+}
+```
+
+`one build shop --for staging` builds for staging, and its `deploy` deploys
+there, as the Pulumi stack named after it. Without `--for`, a project is built for
+its first environment, and says so. Every environment needs a domain, a Firebase
+project and a region, its own or shared; anything else is the same everywhere, so
+it goes outside them.
+
 ## namespace
 
 Groups related declarations. A namespace is also the route prefix and the

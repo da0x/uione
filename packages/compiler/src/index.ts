@@ -6,12 +6,13 @@
 
 import type { Built, Checked, Files, Request, Shown } from "./project.js";
 
-export type { Built, Checked, Files, GeneratedFile, Problem, Shown, ShownFile, Source } from "./project.js";
+export type { Built, Checked, Files, GeneratedFile, Outline, OutlinedEnvironment, OutlinedSetting, Problem, Shown, ShownFile, Source } from "./project.js";
 
 export interface Compiler {
   version(): Promise<string>;
   check(files: Files): Promise<Checked>;
-  build(files: Files): Promise<Built>;
+  // Builds for the environment named, or the first.
+  build(files: Files, environment?: string): Promise<Built>;
   // The generated lines that came from a line, or lines from to to, of one file.
   show(files: Files, path: string, from: number, to?: number): Promise<Shown>;
   stop(): void;
@@ -44,7 +45,7 @@ export function createCompiler(port: Port = new Worker(new URL("./worker.js", im
   return {
     version: () => ask<string>({ kind: "version" }),
     check: (files) => ask<Checked>({ kind: "check", files }),
-    build: (files) => ask<Built>({ kind: "build", files }),
+    build: (files, environment) => ask<Built>({ kind: "build", files, ...(environment === undefined ? {} : { environment }) }),
     show: (files, path, from, to) => ask<Shown>({ kind: "show", files, path, from, ...(to === undefined ? {} : { to }) }),
     stop: () => {
       port.terminate?.();

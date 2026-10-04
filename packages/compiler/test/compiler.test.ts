@@ -17,7 +17,7 @@ const tasks = { "main.one": readFileSync(`${repository}examples/tasks/main.one`,
 
 describe("the compiler in the browser", () => {
   it("checks a project and finds nothing wrong", () => {
-    expect(run(one, { kind: "check", files: tasks })).toEqual({ problems: [], files: 1 });
+    expect(run(one, { kind: "check", files: tasks })).toEqual({ problems: [], files: 1, project: null });
   });
 
   it("says what's wrong, where, within the project", () => {
@@ -55,6 +55,31 @@ describe("the compiler in the browser", () => {
   it("forgets a project's files when it's given another's", () => {
     run(one, { kind: "check", files: { "old.one": "entity broken {\n" } });
     expect((run(one, { kind: "check", files: tasks }) as Checked).problems).toEqual([]);
+  });
+
+  it("outlines the project block, and builds for the environment named", () => {
+    const shop =
+      'project shop {\n\tregion "us-east4"\n' +
+      '\tenvironment production {\n\t\tdomain "shop.example"\n\t\tfirebase "shop"\n\t}\n' +
+      '\tenvironment staging {\n\t\tdomain "staging.shop.example"\n\t\tfirebase "shop-staging"\n\t}\n}\n' +
+      "namespace shop {\n\tentity order {\n\t\ttotal  number\n\t}\n}\n";
+    const checked = run(one, { kind: "check", files: { "shop.one": shop } }) as Checked;
+    expect(checked.project).toEqual({
+      path: "shop.one",
+      name: "shop",
+      line: 1,
+      end: 11,
+      settings: [{ key: "region", value: "us-east4", line: 2 }],
+      environments: [
+        { name: "production", line: 3, end: 6, settings: [{ key: "domain", value: "shop.example", line: 4 }, { key: "firebase", value: "shop", line: 5 }] },
+        { name: "staging", line: 7, end: 10, settings: [{ key: "domain", value: "staging.shop.example", line: 8 }, { key: "firebase", value: "shop-staging", line: 9 }] },
+      ],
+    });
+    expect((run(one, { kind: "check", files: tasks }) as Checked).project).toBeNull();
+    const staging = run(one, { kind: "build", files: { "shop.one": shop }, environment: "staging" }) as Built;
+    expect(staging.environment).toBe("staging");
+    expect(staging.files.find((f) => f.path === "deploy")?.content).toContain("--stack staging ");
+    expect((run(one, { kind: "build", files: { "shop.one": shop } }) as Built).environment).toBe("production");
   });
 
   it("keeps a project's files inside it", () => {

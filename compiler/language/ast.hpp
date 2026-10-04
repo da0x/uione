@@ -155,9 +155,21 @@ namespace one::language {
         std::string to;  // redirect "/install.sh" "https://www.uione.io/install.sh": where it goes
     };
 
+    // A place the project runs, with what's its own there: environment staging {
+    // domain "staging.neotrac.org" ... }.
+    struct environment_block {
+        std::string name;
+        location where;
+        location end;  // its closing brace
+        std::vector<setting> settings;
+    };
+
     struct project_declaration {
         std::string name;
-        std::vector<setting> settings;
+        std::vector<setting> settings;          // shared by every environment
+        std::vector<environment_block> environments;
+        std::string environment;                // the one being built, once chosen; empty with none
+        location end;                           // its closing brace
     };
 
     struct format_declaration {

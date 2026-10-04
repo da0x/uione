@@ -46,11 +46,16 @@ declaration    ::= project | namespace | format | entity | command | view | role
 
 /* project */
 
-project        ::= "project" NAME "{" NEWLINE? setting* "}" END
+project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "serve"
                  | "title" | "one"
+
+/* A place the project runs: its own domain, Firebase project and region, which take
+ * the place of the shared ones. `one build --for staging` builds for it. */
+environment    ::= "environment" NAME "{" NEWLINE? place* "}" END
+place          ::= ("domain" | "firebase" | "region") STRING END
 
 /* namespace */
 

@@ -31,7 +31,7 @@ namespace {
 
     int usage() {
         std::cerr << "usage: one check <path>...\n"
-                     "       one build <project> [--out <folder>]\n"
+                     "       one build <project> [--out <folder>] [--for <environment>]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one --version\n";
@@ -54,9 +54,9 @@ namespace {
         return 0;
     }
 
-    int build(const std::string& project, std::string out) {
+    int build(const std::string& project, std::string out, const std::string& environment) {
         if (out.empty()) out = project + "/build";
-        auto built = one::driver::build(project, out);
+        auto built = one::driver::build(project, out, environment);
         report(built.problems);
         if (!built.refusal.empty()) {
             std::cerr << "one: " << built.refusal << "\n";
@@ -155,8 +155,15 @@ int main(int argc, char** argv) {
     if (args.size() >= 2 && args[0] == "check") {
         return check({args.begin() + 1, args.end()});
     }
-    if (args.size() == 2 && args[0] == "build") return build(args[1], "");
-    if (args.size() == 4 && args[0] == "build" && args[2] == "--out") return build(args[1], args[3]);
+    if (args.size() >= 2 && args.size() % 2 == 0 && args[0] == "build") {
+        std::string out, environment;
+        for (std::size_t i = 2; i < args.size(); i += 2) {
+            std::string& value = args[i] == "--out" ? out : args[i] == "--for" ? environment : out;
+            if ((args[i] != "--out" && args[i] != "--for") || !value.empty() || args[i + 1].empty()) return usage();
+            value = args[i + 1];
+        }
+        return build(args[1], out, environment);
+    }
     if (args.size() == 2 && args[0] == "show") return show(args[1]);
     return usage();
 }

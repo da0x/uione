@@ -71,6 +71,42 @@ namespace {
         }
     }
 
+    void settings(std::string& out, const std::vector<one::driver::outline::setting>& list) {
+        out += "[";
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            out += i ? ",{\"key\":" : "{\"key\":";
+            text(out, list[i].key);
+            out += ",\"value\":";
+            text(out, list[i].value);
+            out += ",\"line\":" + std::to_string(list[i].line) + "}";
+        }
+        out += "]";
+    }
+
+    // The project block's outline, or null when there's none.
+    void outline(std::string& out, const std::optional<one::driver::outline>& o) {
+        if (!o) {
+            out += "null";
+            return;
+        }
+        out += "{\"path\":";
+        text(out, o->path);
+        out += ",\"name\":";
+        text(out, o->name);
+        out += ",\"line\":" + std::to_string(o->line) + ",\"end\":" + std::to_string(o->end) + ",\"settings\":";
+        settings(out, o->settings);
+        out += ",\"environments\":[";
+        for (std::size_t i = 0; i < o->environments.size(); ++i) {
+            const auto& e = o->environments[i];
+            out += i ? ",{\"name\":" : "{\"name\":";
+            text(out, e.name);
+            out += ",\"line\":" + std::to_string(e.line) + ",\"end\":" + std::to_string(e.end) + ",\"settings\":";
+            settings(out, e.settings);
+            out += "}";
+        }
+        out += "]}";
+    }
+
 } // namespace
 
 extern "C" {
@@ -85,18 +121,23 @@ EMSCRIPTEN_KEEPALIVE const char* one_check(const char* project) {
     auto checked = one::driver::check({project});
     answer = "{";
     problems(answer, checked.problems);
-    answer += ",\"files\":" + std::to_string(checked.files) + "}";
+    answer += ",\"files\":" + std::to_string(checked.files) + ",\"project\":";
+    outline(answer, checked.project);
+    answer += "}";
     return answer.c_str();
 }
 
-EMSCRIPTEN_KEEPALIVE const char* one_build(const char* project, const char* out) {
-    auto built = one::driver::build(project, out);
+// environment names the one to build for, or is empty for the first.
+EMSCRIPTEN_KEEPALIVE const char* one_build(const char* project, const char* out, const char* environment) {
+    auto built = one::driver::build(project, out, environment);
     answer = "{";
     problems(answer, built.problems);
     answer += ",\"refusal\":";
     text(answer, built.refusal);
     answer += ",\"note\":";
     text(answer, built.note);
+    answer += ",\"environment\":";
+    text(answer, built.environment);
     answer += ",\"files\":[";
     for (std::size_t i = 0; i < built.files.size(); ++i) {
         const auto& f = built.files[i];

@@ -26,15 +26,41 @@ export interface GeneratedFile {
   sources: Source[]; // one per line of content
 }
 
+// Where a project block's parts are, by line, so an editor can change them: each
+// setting, and each environment from its first line to its closing brace's.
+export interface OutlinedSetting {
+  key: string;
+  value: string;
+  line: number;
+}
+
+export interface OutlinedEnvironment {
+  name: string;
+  line: number;
+  end: number;
+  settings: OutlinedSetting[];
+}
+
+export interface Outline {
+  path: string; // the file the project block is in
+  name: string;
+  line: number;
+  end: number;
+  settings: OutlinedSetting[]; // shared by every environment
+  environments: OutlinedEnvironment[];
+}
+
 export interface Checked {
   problems: Problem[];
   files: number;
+  project: Outline | null; // when a project block parsed
 }
 
 export interface Built {
   problems: Problem[];
   refusal: string; // why nothing was built, or empty
   note: string;
+  environment: string; // the one built for, when the project has them
   files: GeneratedFile[];
 }
 
@@ -51,7 +77,7 @@ export interface Shown {
 export type Request =
   | { kind: "version" }
   | { kind: "check"; files: Files }
-  | { kind: "build"; files: Files }
+  | { kind: "build"; files: Files; environment?: string }
   | { kind: "show"; files: Files; path: string; from: number; to?: number };
 
 export type Answer = string | Checked | Built | Shown;
@@ -76,9 +102,13 @@ export function run(one: Module, request: Request): Answer {
   if (request.kind === "version") return one.ccall("one_version", "string", [], []);
   place(one, request.files);
   const call = (name: string, ...args: string[]) => JSON.parse(one.ccall(name, "string", args.map(() => "string"), args));
-  if (request.kind === "check") return within(call("one_check", project));
+  if (request.kind === "check") {
+    const checked = within(call("one_check", project)) as Checked;
+    if (checked.project) checked.project.path = inside(checked.project.path);
+    return checked;
+  }
   if (request.kind === "build") {
-    const built = within(call("one_build", project, `${project}/build`)) as Built;
+    const built = within(call("one_build", project, `${project}/build`, request.environment ?? "")) as Built;
     for (const file of built.files) {
       file.sources = file.sources.map((s) => (s && s !== "same" ? { path: inside(s.path), line: s.line } : s));
     }
