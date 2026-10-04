@@ -30,7 +30,7 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint enum
+syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint
 syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui signin icon serve redirect at
 " title and one are project settings when a string follows them, and fields' names otherwise.
 syn match   uioneKeyword   /\<title\>\ze\s\+"/
@@ -51,7 +51,7 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
-syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\)\>"
+syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\|enum\)\>"
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

@@ -243,7 +243,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|change|history|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|enum|hero|section|menu|link|markdown|domain|firebase|region|ui|signin|icon|serve|redirect|title|one|at)\\b",
+          "match": "\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|change|history|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|link|markdown|domain|firebase|region|ui|signin|icon|serve|redirect|title|one|at)\\b",
           "name": "keyword.other.uione"
         },
         {
@@ -251,7 +251,7 @@
           "name": "storage.modifier.uione"
         },
         {
-          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|slug|date|number|serial|boolean|user|list)\\b",
+          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b",
           "captures": {
             "1": {
               "name": "support.type.uione"

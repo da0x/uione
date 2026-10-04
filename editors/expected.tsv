@@ -17,7 +17,7 @@ examples/library/main.one	title      text       required	text	type
 examples/library/main.one	title      text       required	title	plain
 examples/library/main.one	title      text       required	required	modifier
 examples/library/main.one	shelfmark  shelfmark  required  unique	unique	modifier
-examples/library/main.one	status     enum on_shelf	enum	keyword
+examples/library/main.one	status     enum on_shelf	enum	type
 examples/library/main.one	status     enum on_shelf	on_shelf	plain
 examples/library/main.one	status     enum on_shelf	|	operator
 examples/library/main.one	book         book    required	book    required	plain
