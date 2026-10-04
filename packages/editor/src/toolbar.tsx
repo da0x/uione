@@ -77,7 +77,31 @@ const kinds: { kind: string; says: string; code: string; word: string; nth?: num
   { kind: "Comments", says: "notes for people", code: "// A note\n", word: "// A note" },
 ];
 
+// The reader's look, from their last visit, and a way to change it that keeps it.
+export function useLook(tabWidth: TabWidth = 4): [Look, (look: Look) => void] {
+  const [look, setLook] = useState<Look>(() => savedLook(tabWidth));
+  return [
+    look,
+    (next: Look) => {
+      save(next);
+      setLook(next);
+    },
+  ];
+}
+
+// The editor's toolbar, for an app with no bar of its own to put the controls in.
 export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => void }) {
+  return (
+    <div className="uione-toolbar" role="toolbar" aria-label="Editor">
+      <LookControls look={look} onLook={onLook} />
+    </div>
+  );
+}
+
+// The controls themselves, for an app to put in a bar of its own: the text's size,
+// as a word processor sizes it, with a large and a small A, the font, the tab width,
+// and the legend.
+export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look) => void }) {
   const [legend, setLegend] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const change = (next: Partial<Look>) => {
@@ -85,6 +109,8 @@ export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => 
     save(changed);
     onLook(changed);
   };
+  const larger = Math.min(sizes.most, look.size + 1);
+  const smaller = Math.max(sizes.least, look.size - 1);
   useEffect(() => {
     if (!legend) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -99,19 +125,16 @@ export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => 
   }, [legend]);
 
   return (
-    <div className="uione-toolbar" role="toolbar" aria-label="Editor">
-      <span className="uione-toolbar-group" role="group" aria-label="Text size">
-        <button type="button" onClick={() => change({ size: Math.max(sizes.least, look.size - 1) })} disabled={look.size <= sizes.least} aria-label="Smaller text" title="Smaller text">
-          −
+    <div className="uione-look">
+      <span className="uione-look-group" role="group" aria-label="Text size">
+        <button type="button" className="uione-look-grow" onClick={() => change({ size: larger })} disabled={look.size >= sizes.most} aria-label="Larger text" title={`Larger text (${look.size}px)`}>
+          A
         </button>
-        <span className="uione-toolbar-value" aria-live="polite">
-          {look.size}
-        </span>
-        <button type="button" onClick={() => change({ size: Math.min(sizes.most, look.size + 1) })} disabled={look.size >= sizes.most} aria-label="Larger text" title="Larger text">
-          +
+        <button type="button" className="uione-look-shrink" onClick={() => change({ size: smaller })} disabled={look.size <= sizes.least} aria-label="Smaller text" title={`Smaller text (${look.size}px)`}>
+          A
         </button>
       </span>
-      <label className="uione-toolbar-group">
+      <label className="uione-look-group">
         <span>Font</span>
         <select value={look.font} onChange={(e) => change({ font: e.target.value })}>
           {fonts.map((f) => (
@@ -121,7 +144,7 @@ export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => 
           ))}
         </select>
       </label>
-      <label className="uione-toolbar-group">
+      <label className="uione-look-group">
         <span>Tab width</span>
         <select value={look.tabWidth} onChange={(e) => change({ tabWidth: Number(e.target.value) as TabWidth })}>
           {[2, 4, 6, 8].map((w) => (
@@ -131,7 +154,7 @@ export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => 
           ))}
         </select>
       </label>
-      <div ref={box} className="uione-toolbar-legend">
+      <div ref={box} className="uione-look-legend">
         <button type="button" aria-expanded={legend} onClick={() => setLegend(!legend)}>
           Legend
         </button>

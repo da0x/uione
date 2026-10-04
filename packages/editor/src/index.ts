@@ -13,6 +13,6 @@ export type { Point, Spot } from "./spot.js";
 export { setTabWidth, tabs } from "./tabs.js";
 export type { TabWidth } from "./tabs.js";
 export { Diff, Editor, Generated, Workbench } from "./react.js";
-export { Toolbar, fonts } from "./toolbar.js";
+export { LookControls, Toolbar, fonts, useLook } from "./toolbar.js";
 export type { Look } from "./toolbar.js";
 export type { DiffProps, EditorProps, GeneratedProps, WorkbenchProps } from "./react.js";

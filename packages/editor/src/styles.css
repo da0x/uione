@@ -8,7 +8,8 @@
  */
 
 .uione-workbench,
-.uione-diff {
+.uione-diff,
+.uione-look {
   --uione-page: var(--color-page, #f7f8fa);
   --uione-surface: var(--color-surface, #ffffff);
   --uione-sunken: var(--color-sunken, #eef1f5);
@@ -244,13 +245,21 @@
   color: var(--uione-muted);
   font-size: 0.78rem;
 }
-.uione-toolbar-group {
+.uione-look {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.1rem;
+  color: var(--uione-muted);
+  font-size: 0.78rem;
+}
+.uione-look-group {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
 }
-.uione-toolbar button,
-.uione-toolbar select {
+.uione-look button,
+.uione-look select {
   height: 1.6rem;
   padding: 0 0.5rem;
   border: 1px solid var(--uione-line);
@@ -260,22 +269,31 @@
   font: inherit;
   cursor: pointer;
 }
-.uione-toolbar button:disabled {
+.uione-look button:disabled {
   opacity: 0.45;
   cursor: default;
 }
-.uione-toolbar-group button {
-  width: 1.6rem;
+/* A large A and a small A, as a word processor grows and shrinks text. */
+.uione-look-group .uione-look-grow,
+.uione-look-group .uione-look-shrink {
+  width: 1.7rem;
   padding: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1;
 }
-.uione-toolbar-value {
-  min-width: 1.4rem;
-  color: var(--uione-ink);
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+.uione-look-group .uione-look-grow {
+  font-size: 1.05rem;
 }
-.uione-toolbar-legend {
+.uione-look-group .uione-look-shrink {
+  font-size: 0.72rem;
+}
+.uione-look-legend {
   position: relative;
+}
+.uione-toolbar .uione-look {
+  flex: 1;
+}
+.uione-toolbar .uione-look-legend {
   margin-left: auto;
 }
 .uione-legend {

@@ -246,6 +246,16 @@ describe("toolbar", () => {
     expect((screen.getByRole("combobox", { name: "Tab width" }) as HTMLSelectElement).value).toBe("2");
   });
 
+  it("takes its look from the app, with no toolbar, when the app shows the controls itself", () => {
+    render(
+      <Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} look={{ size: 18, font: "Fira Code", tabWidth: 8 }} />,
+    );
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    const workbench = document.querySelector(".uione-workbench") as HTMLElement;
+    expect(workbench.style.getPropertyValue("--uione-code-size")).toBe("18px");
+    expect(workbench.style.getPropertyValue("--uione-code-font")).toContain('"Fira Code"');
+  });
+
   it("keeps the text between its smallest and largest", () => {
     localStorage.setItem("uione-editor-look", JSON.stringify({ size: 24 }));
     render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);

@@ -231,14 +231,19 @@ export interface WorkbenchProps {
   at?: Spot; // where the cursor is in the file, as an address says
   onSelect?: (spot: Spot) => void; // where the cursor or selection moved to
   toolbar?: boolean; // the text's size, font, tab width and a legend of colors above it; true unless set
+  look?: Look; // the text's look, when the app shows LookControls in a bar of its own, with no toolbar here
 }
 
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
-export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true }: WorkbenchProps) {
+export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true, look: given }: WorkbenchProps) {
   const [line, setLine] = useState(1);
-  // How the reader likes the text: size, font and tab width, from their last visit.
-  const [look, setLook] = useState<Look>(() => savedLook(tabWidth));
+  // How the reader likes the text: size, font and tab width, from their last visit,
+  // or as the app's own bar sets it.
+  const [kept, setLook] = useState<Look>(() => savedLook(tabWidth));
+  const look = given ?? kept;
+  const styled = toolbar || given !== undefined;
+  const shown = toolbar && given === undefined;
   const [built, setBuilt] = useState<Built | undefined>();
   useEffect(() => {
     if (!generated) return;
@@ -258,23 +263,23 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
   }, [compiler, files, delay, generated]);
   return (
     <div
-      className={`uione-workbench${generated ? "" : " uione-workbench-alone"}${toolbar ? " uione-workbench-tools" : ""}`}
-      style={toolbar ? ({ "--uione-code-size": `${look.size}px`, "--uione-code-font": fontFamily(look) } as CSSProperties) : undefined}
+      className={`uione-workbench${generated ? "" : " uione-workbench-alone"}${shown ? " uione-workbench-tools" : ""}`}
+      style={styled ? ({ "--uione-code-size": `${look.size}px`, "--uione-code-font": fontFamily(look) } as CSSProperties) : undefined}
     >
-      {toolbar && <Toolbar look={look} onLook={setLook} />}
+      {shown && <Toolbar look={look} onLook={setLook} />}
       <Editor
         path={path}
         value={files[path] ?? ""}
         onChange={(value) => onChange(path, value)}
         files={files}
         compiler={compiler}
-        tabWidth={toolbar ? look.tabWidth : tabWidth}
+        tabWidth={styled ? look.tabWidth : tabWidth}
         onLine={setLine}
         readOnly={readOnly}
         at={at}
         onSelect={onSelect}
       />
-      {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={toolbar ? look.tabWidth : tabWidth} />}
+      {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={styled ? look.tabWidth : tabWidth} />}
     </div>
   );
 }
