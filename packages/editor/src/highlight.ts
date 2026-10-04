@@ -90,3 +90,22 @@ const dark = EditorView.baseTheme({
 export function highlighting(): Extension {
   return [plugin, dark];
 }
+
+// The colors a token gets, in light and dark: the nth piece of `code` reading
+// `token`, highlighted as any .one file is. It's how the legend shows each kind of
+// word in exactly the colors the editor gives it.
+export function colorsOf(code: string, token: string, nth = 0): { light: string; dark: string } | undefined {
+  const h = highlighterOrNothing();
+  if (!h) return undefined;
+  let seen = 0;
+  for (const line of h.codeToTokens(code, { lang: "uione", themes: { light: "github-light", dark: "github-dark" } }).tokens) {
+    for (const piece of line) {
+      if (piece.content.trim() !== token) continue;
+      if (seen++ < nth) continue;
+      const style = (piece.htmlStyle ?? {}) as Record<string, string>;
+      if (!style.color) return undefined;
+      return { light: style.color, dark: style["--shiki-dark"] ?? style.color };
+    }
+  }
+  return undefined;
+}

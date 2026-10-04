@@ -111,7 +111,7 @@ TEST_CASE("markdown pages are turned into HTML when the site is built, a set for
     REQUIRE(language != nullptr);
     CHECK(language->content.find(R"(slug: "reference",)") != std::string::npos);
     CHECK(language->content.find(R"(title: "Reference",)") != std::string::npos);
-    CHECK(language->content.find("<h2>entity</h2>") != std::string::npos);
+    CHECK(language->content.find(R"(<h2 id=\"entity\">entity</h2>)") != std::string::npos);
     const auto* releases = find(files, "src/pages/releases.generated.ts");
     REQUIRE(releases != nullptr);
     CHECK(releases->content.find(R"(slug: "v0-4-0",)") != std::string::npos);
@@ -125,7 +125,7 @@ TEST_CASE("the app is told which views have one document per person, and only th
 }
 
 TEST_CASE("markdown") {
-    CHECK(generators::markdown_to_html("# Title\n\nSome *words*.\n") == "<h1>Title</h1>\n<p>Some <em>words</em>.</p>\n");
+    CHECK(generators::markdown_to_html("# Title\n\nSome *words*.\n") == "<h1 id=\"title\">Title</h1>\n<p>Some <em>words</em>.</p>\n");
     CHECK(generators::markdown_to_html("| a | b |\n|---|---|\n| 1 | 2 |\n").find("<table>") != std::string::npos);
     CHECK(generators::markdown_title("intro\n# Language\n", "fallback") == "Language");
     CHECK(generators::markdown_title("no heading\n", "fallback") == "fallback");
@@ -266,6 +266,15 @@ TEST_CASE("a link to a namespace goes to its address") {
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(<Link to="/projects/archive">See the old projects</Link>)") != std::string::npos);
     fs::remove_all(dir);
+}
+
+TEST_CASE("a page's headings can be linked to") {
+    auto html = generators::markdown_to_html("# Reference\n\n## Built-in types\n\ntext\n\n## `entity`\n\n### Built-in types\n");
+    CHECK(html.find(R"(<h1 id="reference">Reference</h1>)") != std::string::npos);
+    CHECK(html.find(R"(<h2 id="built-in-types">Built-in types</h2>)") != std::string::npos);
+    CHECK(html.find(R"(<h2 id="entity"><code>entity</code></h2>)") != std::string::npos);
+    CHECK(html.find(R"(<h3 id="built-in-types-1">Built-in types</h3>)") != std::string::npos);
+    CHECK(html.find("<hr") == std::string::npos);
 }
 
 TEST_CASE("a project can serve a folder's files as they are") {

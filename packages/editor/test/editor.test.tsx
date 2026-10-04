@@ -209,3 +209,61 @@ describe("spots", () => {
     expect(document.querySelectorAll(".uione-marked").length).toBe(2);
   });
 });
+
+describe("toolbar", () => {
+  // The reader's choices are kept in localStorage, which this test environment lacks.
+  const kept = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+      removeItem: (k: string) => void kept.delete(k),
+      clear: () => kept.clear(),
+    },
+  });
+  const compiler = {
+    check: async () => ({ problems: [] }),
+    build: async () => ({ problems: [], files: [] }),
+  } as unknown as Pick<Compiler, "check" | "build">;
+  const files = { "main.one": "entity book {\n\ttitle  text  required\n}\n" };
+
+  it("sizes the text, picks a font and a tab width, and remembers them", () => {
+    localStorage.clear();
+    const { unmount } = render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
+    const workbench = document.querySelector(".uione-workbench") as HTMLElement;
+    expect(workbench.style.getPropertyValue("--uione-code-size")).toBe("14px");
+    fireEvent.click(screen.getByRole("button", { name: "Larger text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Larger text" }));
+    expect(workbench.style.getPropertyValue("--uione-code-size")).toBe("16px");
+    fireEvent.change(screen.getByRole("combobox", { name: "Font" }), { target: { value: "JetBrains Mono" } });
+    expect(workbench.style.getPropertyValue("--uione-code-font")).toContain('"JetBrains Mono"');
+    fireEvent.change(screen.getByRole("combobox", { name: "Tab width" }), { target: { value: "2" } });
+    unmount();
+    render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
+    expect((document.querySelector(".uione-workbench") as HTMLElement).style.getPropertyValue("--uione-code-size")).toBe("16px");
+    expect((screen.getByRole("combobox", { name: "Font" }) as HTMLSelectElement).value).toBe("JetBrains Mono");
+    expect((screen.getByRole("combobox", { name: "Tab width" }) as HTMLSelectElement).value).toBe("2");
+  });
+
+  it("keeps the text between its smallest and largest", () => {
+    localStorage.setItem("uione-editor-look", JSON.stringify({ size: 24 }));
+    render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
+    expect((screen.getByRole("button", { name: "Larger text" }) as HTMLButtonElement).disabled).toBe(true);
+    localStorage.clear();
+  });
+
+  it("says what each color means, in the editor's own colors, with the built-in types in the reference", () => {
+    render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Legend" }));
+    const legend = screen.getByRole("dialog", { name: "What the colors mean" });
+    expect(legend.textContent).toContain("Built-in types");
+    expect(legend.textContent).toContain("Entities as types");
+    const link = screen.getByRole("link", { name: "all of them" });
+    expect(link.getAttribute("href")).toBe("https://www.uione.io/language/reference#built-in-types");
+    const samples = [...legend.querySelectorAll(".uione-legend-sample")] as HTMLElement[];
+    expect(samples.every((sample) => sample.style.color !== "")).toBe(true);
+    const color = (word: string) => samples.find((sample) => sample.textContent === word)!.style.color;
+    expect(color("text")).not.toBe(color("title")); // a type isn't colored as a field
+  });
+});

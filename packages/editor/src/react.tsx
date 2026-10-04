@@ -8,12 +8,15 @@ import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightAc
 import type { DecorationSet } from "@codemirror/view";
 import type { Built, Compiler, Files, GeneratedFile } from "@uione/compiler";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { fromLine } from "./generated.js";
 import { highlighting } from "./highlight.js";
 import { problems } from "./problems.js";
 import { place, spotOf } from "./spot.js";
 import type { Spot } from "./spot.js";
 import { setTabWidth, tabs } from "./tabs.js";
+import { Toolbar, fontFamily, savedLook } from "./toolbar.js";
+import type { Look } from "./toolbar.js";
 import type { TabWidth } from "./tabs.js";
 
 export interface EditorProps {
@@ -227,12 +230,15 @@ export interface WorkbenchProps {
   readOnly?: boolean; // shown to be read, by someone who can't change it
   at?: Spot; // where the cursor is in the file, as an address says
   onSelect?: (spot: Spot) => void; // where the cursor or selection moved to
+  toolbar?: boolean; // the text's size, font, tab width and a legend of colors above it; true unless set
 }
 
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
-export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect }: WorkbenchProps) {
+export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true }: WorkbenchProps) {
   const [line, setLine] = useState(1);
+  // How the reader likes the text: size, font and tab width, from their last visit.
+  const [look, setLook] = useState<Look>(() => savedLook(tabWidth));
   const [built, setBuilt] = useState<Built | undefined>();
   useEffect(() => {
     if (!generated) return;
@@ -251,20 +257,24 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
     };
   }, [compiler, files, delay, generated]);
   return (
-    <div className={generated ? "uione-workbench" : "uione-workbench uione-workbench-alone"}>
+    <div
+      className={`uione-workbench${generated ? "" : " uione-workbench-alone"}${toolbar ? " uione-workbench-tools" : ""}`}
+      style={toolbar ? ({ "--uione-code-size": `${look.size}px`, "--uione-code-font": fontFamily(look) } as CSSProperties) : undefined}
+    >
+      {toolbar && <Toolbar look={look} onLook={setLook} />}
       <Editor
         path={path}
         value={files[path] ?? ""}
         onChange={(value) => onChange(path, value)}
         files={files}
         compiler={compiler}
-        tabWidth={tabWidth}
+        tabWidth={toolbar ? look.tabWidth : tabWidth}
         onLine={setLine}
         readOnly={readOnly}
         at={at}
         onSelect={onSelect}
       />
-      {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={tabWidth} />}
+      {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={toolbar ? look.tabWidth : tabWidth} />}
     </div>
   );
 }

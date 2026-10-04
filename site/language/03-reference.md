@@ -114,11 +114,9 @@ entity loan {
 ```
 
 - Every field has a type, so what it holds is never worked out from how it's used.
-- Types: `text`, `markdown` (text written in Markdown, shown rendered), `email`,
-  `slug` (a name like `my-app`: lowercase letters and digits joined by single
-  dashes, lowered as it's saved), `date`, `number`, `serial`, `boolean`, `user`, an
-  `enum` (`enum on_shelf | lent | withdrawn`), a `format` declared in the file, or
-  another entity (`book`), which stores its id and reads through it (`book.title`).
+- A field's type is one of the [built-in types](#built-in-types), a `format`
+  declared in the file, or another entity (`book`), which stores its id and reads
+  through it (`book.title`).
 - An enum's choices are always written with its name, the field's:
   `status::on_shelf`, never `on_shelf` alone, wherever one is used, as a starting
   value, in a command, a comparison, a view's condition or what a command creates.
@@ -156,6 +154,26 @@ entity loan {
   command, `me.username` is their GitHub username, `now` is the time it runs, and
   `none` is no value. A field that starts as `me` or `me.username` always does, so
   nobody can make something in another's name.
+
+## Built-in types
+
+What a field can hold, written after its name: `title  text  required`.
+
+| Type | Holds | Shown as |
+|---|---|---|
+| `text` | a line of text | a text box |
+| `markdown` | text written in Markdown, which can't add markup or scripts to a page | a box to write in, and rendered where it's shown |
+| `email` | an email address, checked as one and compared without case | an email box |
+| `slug` | a name like `my-app`: lowercase letters and digits joined by single dashes, lowered as it's saved | a text box |
+| `date` | a moment, to the second | a date |
+| `number` | a number, whole or not | a number box |
+| `serial` | a whole number counted up as each entity is made, 1, 2, 3, and never typed; `serial per project` counts within each project | a number |
+| `boolean` | true or false | a checkbox |
+| `user` | a person who has signed in, by their id; a view can show their name and picture | their name |
+| `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
+| `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
+
+A field's type can also be another entity, holding its id (`book`), or a `format`.
 
 ## format
 

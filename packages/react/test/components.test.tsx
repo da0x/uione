@@ -90,6 +90,17 @@ describe("pages", () => {
     expect(screen.getByRole("link", { name: "Language" }).getAttribute("aria-current")).toBe("page");
   });
 
+  it("goes to the section the address names", () => {
+    const sections: DocPage[] = [{ slug: "reference", title: "Reference", html: '<h1 id="reference">Reference</h1><h2 id="built-in-types">Built-in types</h2>' }];
+    const reference = defineScreen({ title: "Docs", route: "/docs/:page?", nav: "Docs" }, () => <Pages base="/docs" pages={sections} />);
+    const went: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      went.push(this.id);
+    };
+    render(<App name="uione" screens={[reference]} ui={plain} data={memorySource()} location="/docs/reference#built-in-types" />);
+    expect(went).toEqual(["built-in-types"]);
+  });
+
   it("shows the first page when the address names none", () => {
     renderAt("/docs");
     expect(screen.getByRole("article", { name: "Overview" })).toBeTruthy();

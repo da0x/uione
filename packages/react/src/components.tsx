@@ -76,7 +76,15 @@ export function Pages({ base, pages }: { base: string; pages: DocPage[] }) {
   const ui = useUI();
   const link = useLinks();
   const { page } = useParams();
+  const { hash } = useLocation();
   const current = page === undefined ? pages[0] : pages.find((p) => p.slug === page);
+  // An address naming a section of the page, like /language/reference#built-in-types,
+  // goes to it once the page is drawn, since the browser looked for it before.
+  useEffect(() => {
+    if (!hash) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    target?.scrollIntoView?.({ block: "start" });
+  }, [hash, current?.slug]);
   return (
     <ui.Pages
       pages={pages.map((p) => ({ title: p.title, current: p === current, ...link(`${base}/${p.slug}`) }))}
