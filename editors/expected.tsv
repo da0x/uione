@@ -145,3 +145,4 @@ editors/fixtures/roles.one	project::update  member::create	project	namespace
 editors/fixtures/roles.one	project::update  member::create	update	plain
 editors/fixtures/roles.one	project::update  member::create	create	plain
 editors/fixtures/roles.one	command project::update	command	declare
+examples/tracker/main.one	project = id  person = me	project	plain

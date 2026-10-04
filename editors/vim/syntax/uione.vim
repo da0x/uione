@@ -19,8 +19,8 @@ syn match   uioneComment "//.*$" contains=uioneTodo,@Spell
 syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
-syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
-syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\)\@!" nextgroup=uioneNamespaceName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\|\s*=\)\@!" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
 syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
 syn match uioneName       "\h\w*" contained
