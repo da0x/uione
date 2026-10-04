@@ -2,7 +2,7 @@
 
 uione is a language for writing a whole application feature in one short file, and
 `one` is its compiler. This page builds a first project with it. The current release
-is [0.3.0](/releases/v0-3-0).
+is [0.4.0](/releases/v0-4-0).
 
 ## Install the compiler
 
@@ -80,8 +80,8 @@ them. To use them in code of your own:
 npm install @uione/react @uione/radix
 
 # the Go backend's library, and the one its Pulumi program is built on
-go get github.com/da0x/uione/one@v0.3.0
-go get github.com/da0x/uione/infrastructure@v0.3.0
+go get github.com/da0x/uione/one@v0.4.0
+go get github.com/da0x/uione/infrastructure@v0.4.0
 
 # the compiler in WebAssembly, and the editor the studio is built from
 npm install @uione/compiler @uione/editor
