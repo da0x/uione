@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <variant>
@@ -378,5 +379,16 @@ namespace one::language {
         std::string path;
         std::vector<declaration> declarations;
     };
+
+    // The choice a name stands for, when it's one of a field's: written with the
+    // field's enum, as it has to be, like visibility::public, or plainly, as public.
+    inline std::optional<std::string> choice_of(const qualified_name& name, const field& f) {
+        if (f.choices.empty()) return std::nullopt;
+        const std::string* value = nullptr;
+        if (name.parts.size() == 1) value = &name.parts[0];
+        if (name.parts.size() == 2 && name.parts[0] == f.name) value = &name.parts[1];
+        if (!value || std::find(f.choices.begin(), f.choices.end(), *value) == f.choices.end()) return std::nullopt;
+        return *value;
+    }
 
 } // namespace one::language

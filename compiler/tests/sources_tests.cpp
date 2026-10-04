@@ -72,7 +72,7 @@ TEST_CASE("a command's lines lead to the Go they became") {
     // The line of main.one that says it, found rather than counted, so editing the
     // example elsewhere doesn't move it.
     auto source = *platform::read_file(root + "/examples/library/main.one");
-    int lending = 1 + static_cast<int>(std::count(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(source.find("book.status = lent")), '\n'));
+    int lending = 1 + static_cast<int>(std::count(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(source.find("book.status = status::lent")), '\n'));
     std::vector<std::string> from;
     std::size_t at = 0, n = 0;
     while (at < go->content.size()) {

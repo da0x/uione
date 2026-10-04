@@ -395,10 +395,13 @@ namespace one::language {
                     }
                     if (!f.choices.empty()) {
                         auto* start = std::get_if<name_expression>(&f.initial->node);
-                        bool is_choice = start && start->name.parts.size() == 1 &&
-                                         std::find(f.choices.begin(), f.choices.end(), start->name.parts[0]) != f.choices.end();
-                        if (!is_choice) {
-                            error(f.initial->where, "field " + f.name + " has to start as one of its choices");
+                        if (start && start->name.parts.size() == 2) {
+                            choice_named(*start, f);
+                        } else if (start && start->name.parts.size() == 1 &&
+                                   std::find(f.choices.begin(), f.choices.end(), start->name.parts[0]) != f.choices.end()) {
+                            error(f.initial->where, "write " + f.name + "::" + start->name.parts[0] + "; an enum's choices are named with it");
+                        } else {
+                            error(f.initial->where, "field " + f.name + " has to start as one of its choices, like " + f.name + "::" + f.choices[0]);
                         }
                     }
                 }
@@ -814,7 +817,7 @@ namespace one::language {
             }
             if (!named) {
                 error(r.per_where, "role " + r.name + " comes from " + member->name + ", so " + member->name + " needs a field role " +
-                                       "with " + r.name + " among its choices, like role  " + r.name + " | reader");
+                                       "with " + r.name + " among its choices, like role  enum " + r.name + " | reader");
             }
             for (const auto& p : r.permissions) {
                 if (p.parts.size() < 2) continue;
@@ -1309,6 +1312,23 @@ namespace one::language {
             return find_field(e, name);
         }
 
+        // An enum's choice, written with the enum's name, like visibility::public, where
+        // the enum is a field's: the name has to be that field's, and the choice one of
+        // its choices.
+        void choice_named(const name_expression& n, const field& f) {
+            const auto& written = n.name.parts;
+            if (written[0] != f.name) {
+                error(n.name.where, n.name.text() + " isn't one of " + f.name + "'s choices; they're written " + f.name + "::" +
+                                        f.choices[0] + " and so on");
+                return;
+            }
+            if (std::find(f.choices.begin(), f.choices.end(), written[1]) == f.choices.end()) {
+                std::string choices;
+                for (const auto& c : f.choices) choices += (choices.empty() ? "" : ", ") + f.name + "::" + c;
+                error(n.name.where, written[1] + " isn't one of " + f.name + "'s choices, " + choices + nearest(written[1], f.choices));
+            }
+        }
+
         // Checks every name in an expression against what it can mean here, and
         // returns the field it stands for, if it's one, so a choice compared with it
         // or assigned to it can be checked too.
@@ -1316,18 +1336,26 @@ namespace one::language {
             static const std::set<std::string, std::less<>> plain{"now", "me", "none", "true", "false"};
             if (auto* n = std::get_if<name_expression>(&e.node)) {
                 snake(n->name);
+                // An enum's choice, named with its enum: visibility::public.
+                if (n->name.parts.size() == 2 && beside && !beside->choices.empty()) {
+                    choice_named(*n, *beside);
+                    return nullptr;
+                }
                 if (n->name.parts.size() != 1) return nullptr;
                 const std::string& name = n->name.parts[0];
                 if (!is_snake_case(name)) return nullptr;  // that error says what's wrong already
                 if (plain.contains(name)) return nullptr;
                 if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
-                if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) return nullptr;
+                if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
+                    error(n->name.where, "write " + beside->name + "::" + name + "; an enum's choices are named with it");
+                    return nullptr;
+                }
                 if (in.entity) {
                     if (const field* f = field_or_id(*in.entity, name)) return f;
                 }
                 if (beside && !beside->choices.empty()) {
                     std::string choices;
-                    for (const auto& c : beside->choices) choices += (choices.empty() ? "" : ", ") + c;
+                    for (const auto& c : beside->choices) choices += (choices.empty() ? "" : ", ") + beside->name + "::" + c;
                     error(n->name.where, name + " isn't one of " + beside->name + "'s choices, " + choices +
                                              nearest(name, beside->choices));
                     return nullptr;

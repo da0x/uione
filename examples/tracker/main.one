@@ -17,7 +17,7 @@ namespace tracker {
 		slug        text  required  unique  key
 		name        text  required
 		repository  text  unique
-		visibility  public | private = public
+		visibility  enum public | private = visibility::public
 	}
 
 	// A person's place in a project. Its id is the project and the person, so
@@ -25,7 +25,7 @@ namespace tracker {
 	entity member {
 		project  project  required  key
 		person   user     required  key
-		role     maintainer | reporter = reporter
+		role     enum maintainer | reporter = role::reporter
 	}
 
 	entity issue history {
@@ -36,7 +36,7 @@ namespace tracker {
 		labels     list of text
 		assignees  list of user
 		author     user          = me
-		status     open | closed = open
+		status     enum open | closed = status::open
 	}
 
 	// A commit or pull request that mentions an issue. Its key is the issue and
@@ -44,7 +44,7 @@ namespace tracker {
 	entity mention {
 		issue   issue  required  key
 		url     text   required  key
-		kind    commit | pull_request
+		kind    enum commit | pull_request
 		title   text
 		author  text
 	}
@@ -59,7 +59,7 @@ namespace tracker {
 	command project::create {
 		permission signed_in
 		create member {
-			project = id  person = me  role = maintainer
+			project = id  person = me  role = role::maintainer
 		}
 	}
 
@@ -78,8 +78,8 @@ namespace tracker {
 	}
 
 	command issue::close {
-		require status == open  "that issue is already closed"
-		status = closed
+		require status == status::open  "that issue is already closed"
+		status = status::closed
 	}
 
 	command comment::create
@@ -92,20 +92,20 @@ namespace tracker {
 		for project by repository
 		on commit {
 			create mention {
-				issue = mentioned  url = url  kind = commit
+				issue = mentioned  url = url  kind = kind::commit
 				title = message  author = author
 			}
 		}
 		on pull_request {
 			create mention {
-				issue = mentioned  url = url  kind = pull_request
+				issue = mentioned  url = url  kind = kind::pull_request
 				title = title  author = author
 			}
 		}
 	}
 
 	view projects public {
-		each project where visibility == public {
+		each project where visibility == visibility::public {
 			order -created_at
 			slug  name
 		}
@@ -116,7 +116,7 @@ namespace tracker {
 	// members a private one's.
 	view project_page per project {
 		readers member
-		public when project.visibility == public
+		public when project.visibility == visibility::public
 		name = project.name
 		repository = project.repository
 		visibility = project.visibility
@@ -146,7 +146,7 @@ namespace tracker {
 	// An issue's page, with its comments in the order they were written.
 	view issue_page per issue {
 		readers member
-		public when issue.project.visibility == public
+		public when issue.project.visibility == visibility::public
 		title = issue.title
 		body = issue.body
 		labels = issue.labels
@@ -167,7 +167,7 @@ namespace tracker {
 
 	// The open issues assigned to the person reading, in every project.
 	view mine per user {
-		each issue where assignees has user.id && status == open {
+		each issue where assignees has user.id && status == status::open {
 			order project  number
 			project  number  title
 		}

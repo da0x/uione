@@ -21,7 +21,7 @@ namespace library {
 		title      text       required
 		author     text       required
 		shelfmark  shelfmark  required  unique  key
-		status     on_shelf | lent | withdrawn = on_shelf
+		status     enum on_shelf | lent | withdrawn = status::on_shelf
 		summary    markdown
 	}
 
@@ -39,25 +39,25 @@ namespace library {
 	command book::update
 
 	command book::withdraw {
-		require status == on_shelf  "only a book on the shelf can be withdrawn"
-		status = withdrawn
+		require status == status::on_shelf  "only a book on the shelf can be withdrawn"
+		status = status::withdrawn
 	}
 
 	// Lending takes the book off the shelf in the same step.
 	command loan::create {
-		require book.status == on_shelf  "that book is not on the shelf"
-		book.status = lent
+		require book.status == status::on_shelf  "that book is not on the shelf"
+		book.status = status::lent
 	}
 
 	command loan::checkin {
 		require returned_at == none  "that book is already back"
 		returned_at = now
-		book.status = on_shelf
+		book.status = status::on_shelf
 	}
 
 	// Every book still in the collection, by title as a reader says it.
 	view shelf {
-		each book where status != withdrawn {
+		each book where status != status::withdrawn {
 			order sort_title(title)
 			shelfmark  title  author  status
 			lent_to = first(loan where loan.book == book.id && returned_at == none).member

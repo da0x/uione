@@ -181,10 +181,10 @@ TEST_CASE("two entities whose fields share a name and a choice get constants of 
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "namespace desk {\n"
-                         "entity issue {\n\ttitle  text\n\tstatus  open | closed = open\n\tsize  small | large\n}\n"
-                         "entity report {\n\ttitle  text\n\tstatus  open | resolved = open\n}\n"
-                         "command issue::close {\n\trequire status == open  \"already closed\"\n\tstatus = closed\n}\n"
-                         "command report::resolve {\n\tstatus = resolved\n}\n"
+                         "entity issue {\n\ttitle  text\n\tstatus  enum open | closed = status::open\n\tsize  enum small | large\n}\n"
+                         "entity report {\n\ttitle  text\n\tstatus  enum open | resolved = status::open\n}\n"
+                         "command issue::close {\n\trequire status == status::open  \"already closed\"\n\tstatus = status::closed\n}\n"
+                         "command report::resolve {\n\tstatus = status::resolved\n}\n"
                          "}\n");
     language::diagnostics out;
     std::vector<language::file> files;

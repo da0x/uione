@@ -30,7 +30,7 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint
+syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint enum
 syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui signin icon serve redirect at
 " title is a project setting when a string follows it, and a field's name otherwise.
 syn match   uioneKeyword   /\<title\>\ze\s\+"/

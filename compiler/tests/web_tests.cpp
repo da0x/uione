@@ -378,7 +378,7 @@ TEST_CASE("a choice is picked from a list in a form, and shown by its label") {
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "namespace studio {\nentity project {\n\tname  text\n\tlicense  mit \"MIT\" | apache_2_0 \"Apache-2.0\" | none = none\n}\n"
+                         "namespace studio {\nentity project {\n\tname  text\n\tlicense  enum mit \"MIT\" | apache_2_0 \"Apache-2.0\" | none = license::none\n}\n"
                          "command project::create\nview all {\n\teach project {\n\t\tname  license\n\t}\n}\n"
                          "screen \"Projects\" / {\n\ttable all {\n\t\tname\n\t\tlicense\n\t}\n\tform project::create \"Start a project\" {\n\t\tname  license\n\t}\n}\n}\n");
     auto files = generate_at(dir.string());

@@ -47,7 +47,7 @@ format shelfmark AAA-9999
 entity book {
 	title      text       required
 	shelfmark  shelfmark  unique
-	status     on_shelf | lent = on_shelf
+	status     enum on_shelf | lent = status::on_shelf
 }
 
 entity loan {
@@ -59,13 +59,13 @@ entity loan {
 
 command book::create
 command loan::checkin {
-	require book.status == lent  "that book is on the shelf"
-	book.status = on_shelf
+	require book.status == status::lent  "that book is on the shelf"
+	book.status = status::on_shelf
 	clear due_at
 }
 
 view shelf {
-	each book where status != lent {
+	each book where status != status::lent {
 		order title
 		title  shelfmark
 	}
@@ -99,7 +99,7 @@ TEST_CASE("names that aren't snake_case, with the fix") {
     CHECK(e.where.line == 2);
     CHECK(e.where.column == 2);
 
-    CHECK(only_error("entity book {\n\tstatus OnShelf | lent = lent\n}\n").message ==
+    CHECK(only_error("entity book {\n\tstatus enum OnShelf | lent = status::lent\n}\n").message ==
           "'OnShelf' isn't snake_case; write it as on_shelf");
     CHECK(only_error("function sortTitle(title) {\n\treturn title\n}\n").message ==
           "'sortTitle' isn't snake_case; write it as sort_title");
@@ -132,8 +132,8 @@ TEST_CASE("after names a field of the same entity") {
 }
 
 TEST_CASE("a field with choices starts on one of them") {
-    CHECK(only_error("entity book {\n\tstatus on_shelf | lent = lost\n}\n").message ==
-          "field status has to start as one of its choices");
+    CHECK(only_error("entity book {\n\tstatus enum on_shelf | lent = status::lost\n}\n").message ==
+          "lost isn't one of status's choices, status::on_shelf, status::lent; did you mean lent?");
 }
 
 TEST_CASE("each field is declared once") {
@@ -242,7 +242,7 @@ TEST_CASE("every field says what it holds") {
     auto e = only_error("entity loan {\n\tdue_at  date\n\treturned_at\n}\n");
     CHECK(e.message == "returned_at needs a type, like date or text");
     CHECK(e.where.line == 3);
-    CHECK(check_source("entity book {\n\tstatus  on_shelf | lent\n}\n").empty());
+    CHECK(check_source("entity book {\n\tstatus  enum on_shelf | lent\n}\n").empty());
 }
 
 TEST_CASE("a table shows only what its view's rows hold, or commands on the row") {
@@ -274,7 +274,7 @@ TEST_CASE("names inside expressions are looked up where they're written, with th
     const std::string project = R"(namespace library {
 entity book {
 	title   text
-	status  on_shelf | lent | withdrawn
+	status  enum on_shelf | lent | withdrawn
 }
 entity loan {
 	book         book
@@ -311,7 +311,7 @@ function sort_title(title) {
     for (const auto& d : out) messages.push_back(std::to_string(d.where.line) + ": " + d.message);
     CHECK(messages == std::vector<std::string>{
                           "11: entity book has no field statuss; did you mean status?",
-                          "12: lnt isn't one of status's choices, on_shelf, lent, withdrawn; did you mean lent?",
+                          "12: lnt isn't one of status's choices, status::on_shelf, status::lent, status::withdrawn; did you mean lent?",
                           "15: entity book has no field statuss; did you mean status?",
                           "19: entity book has no field statu; did you mean status?",
                           "20: entity book has no field titel; did you mean title?",
@@ -331,7 +331,7 @@ TEST_CASE("an unknown function is reported, with the nearest one suggested") {
 }
 
 TEST_CASE("a wrong name is reported once, not again in what it's compared with or given") {
-    auto e = only_error("entity book {\n\tstatus  on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = lent\n}\n");
+    auto e = only_error("entity book {\n\tstatus  enum on_shelf | lent\n}\ncommand book::lend {\n\tstatuss = status::lent\n}\n");
     CHECK(e.message == "entity book has no field statuss; did you mean status?");
 }
 
@@ -426,17 +426,17 @@ TEST_CASE("a role held within something names the entity that grants it, which p
                               "entity comment {\n\tissue  issue  required\n}\n"
                               "entity note {\n\ttext  text\n}\n"
                               "command issue::create\ncommand comment::create\ncommand note::create\n";
-    const std::string member = "entity member {\n\tproject  project  required\n\tperson  user  required\n\trole  maintainer | reporter\n}\n";
+    const std::string member = "entity member {\n\tproject  project  required\n\tperson  user  required\n\trole  enum maintainer | reporter\n}\n";
     CHECK(check_source(start + member + "role maintainer per project from member  issue::create  comment::create\n").empty());
 
     auto e = only_error(start + member + "role maintainer per project from member  note::create\n");
     CHECK(e.message == "role maintainer is held within a project, but note doesn't point at one, so there's no project to look in for note::create");
     e = only_error(start + member + "role owner per project from member  issue::create\n");
-    CHECK(e.message == "role owner comes from member, so member needs a field role with owner among its choices, like role  owner | reader");
-    e = only_error(start + "entity member {\n\tproject  project\n\tperson  user  required\n\trole  maintainer | reporter\n}\n" +
+    CHECK(e.message == "role owner comes from member, so member needs a field role with owner among its choices, like role  enum owner | reader");
+    e = only_error(start + "entity member {\n\tproject  project\n\tperson  user  required\n\trole  enum maintainer | reporter\n}\n" +
                    "role maintainer per project from member  issue::create\n");
     CHECK(e.message == "role maintainer comes from member, so member needs a required field pointing at project, like project  project  required");
-    e = only_error(start + "entity member {\n\tproject  project  required\n\trole  maintainer | reporter\n}\n" +
+    e = only_error(start + "entity member {\n\tproject  project  required\n\trole  enum maintainer | reporter\n}\n" +
                    "role maintainer per project from member  issue::create\n");
     CHECK(e.message == "role maintainer comes from member, so member needs a required field holding the person, like person  user  required");
     e = only_error(start + member + "role maintainer per team from member  issue::create\n");
@@ -446,8 +446,8 @@ TEST_CASE("a role held within something names the entity that grants it, which p
 TEST_CASE("a command can create another entity, giving it what it needs") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n"
-                              "\trole  maintainer | reporter = reporter\n\tseat  serial  per project\n}\n";
-    CHECK(check_source(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  role = maintainer\n\t}\n}\n").empty());
+                              "\trole  enum maintainer | reporter = role::reporter\n\tseat  serial  per project\n}\n";
+    CHECK(check_source(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  role = role::maintainer\n\t}\n}\n").empty());
     auto e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id\n\t}\n}\n");
     CHECK(e.message == "create member needs a value for person, which is required");
     e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  role = owner\n\t}\n}\n");
@@ -461,13 +461,13 @@ TEST_CASE("a command can create another entity, giving it what it needs") {
 }
 
 TEST_CASE("a view per entity can say who reads each document: the people of its project, and everyone when it's public") {
-    const std::string start = "entity project {\n\tslug  text  required  key\n\tvisibility  public | private = public\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  maintainer | reporter\n}\n"
+    const std::string start = "entity project {\n\tslug  text  required  key\n\tvisibility  enum public | private = visibility::public\n}\n"
+                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity note {\n\ttext  text\n}\n"
                               "role maintainer per project from member\n";
-    CHECK(check_source(start + "view page per project {\n\treaders member\n\tpublic when project.visibility == public\n\tslug = project.slug\n}\n"
-                               "view issue_page per issue {\n\treaders member\n\tpublic when issue.project.visibility == public\n}\n")
+    CHECK(check_source(start + "view page per project {\n\treaders member\n\tpublic when project.visibility == visibility::public\n\tslug = project.slug\n}\n"
+                               "view issue_page per issue {\n\treaders member\n\tpublic when issue.project.visibility == visibility::public\n}\n")
               .empty());
     auto e = only_error(start + "view notes {\n\treaders member\n}\n");
     CHECK(e.message == "view notes says who may read it, so it needs a document per entity, like per project");
@@ -475,7 +475,7 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
     CHECK(e.message == "readers member are people in a project, but a note isn't held within one");
     e = only_error(start + "view page per project {\n\treaders project\n}\n");
     CHECK(e.message == "readers project needs a role that comes from project, like role maintainer per project from project");
-    e = only_error(start + "view page per project public {\n\tpublic when project.visibility == public\n}\n");
+    e = only_error(start + "view page per project public {\n\tpublic when project.visibility == visibility::public\n}\n");
     CHECK(e.message == "view page is public, so it can't also be public when something holds");
     e = only_error(start + "view page per issue {\n\tpublic when issue.project.visibilty == public\n}\n");
     CHECK(e.message == "entity project has no field visibilty; did you mean visibility?");
@@ -487,7 +487,7 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
 
 TEST_CASE("a view's readers can be the people a field of its entity names") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  maintainer | reporter\n}\n"
+                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
                               "entity report {\n\tproject  project  required\n\ttitle  text\n\tauthor  user = me\n\twatchers  list of user\n}\n"
                               "role maintainer per project from member\n";
     CHECK(check_source(start + "view page per report {\n\treaders member\n\treaders report.author\n\treaders report.watchers\n\ttitle = report.title\n}\n"
@@ -542,9 +542,9 @@ TEST_CASE("a github webhook finds a project by its repository, and makes things 
     const std::string start = "entity project {\n\tslug  text  required  key\n\trepository  text  unique\n}\n"
                               "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n}\n"
                               "entity mention {\n\tissue  issue  required  key\n\turl  text  required  key\n"
-                              "\tkind  commit | pull_request\n\ttitle  text\n}\n";
+                              "\tkind  enum commit | pull_request\n\ttitle  text\n}\n";
     const std::string hook = "webhook github /hooks/github {\n\tfor project by repository\n";
-    CHECK(check_source(start + hook + "\ton commit {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  kind = commit  title = message\n"
+    CHECK(check_source(start + hook + "\ton commit {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  kind = kind::commit  title = message\n"
                                       "\t\t}\n\t}\n\ton pull_request {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  title = title\n\t\t}\n\t}\n}\n")
               .empty());
 
@@ -566,7 +566,7 @@ TEST_CASE("a github webhook finds a project by its repository, and makes things 
 
 TEST_CASE("a project's webhook secret is shown only to its own people") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  maintainer | reporter\n}\n"
+                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
                               "role maintainer per project from member\n";
     CHECK(check_source(start + "view settings per project {\n\treaders member\n\tsecret = github_secret(project.id)\n}\n").empty());
     auto e = only_error(start + "view settings per project public {\n\tsecret = github_secret(project.id)\n}\n");
@@ -660,6 +660,17 @@ TEST_CASE("a role is declared once") {
     auto e = only_error(book + "role librarian  book::create\nrole librarian  book::update\n");
     CHECK(e.message.starts_with("role librarian is declared twice"));
     CHECK(e.message.ends_with("lists them in a block, like role librarian { ... }"));
+}
+
+TEST_CASE("an enum says so, and its choices are named with it") {
+    const std::string issue = "entity issue {\n\tstatus  enum open | closed = status::open\n\tsize  enum small | large\n}\n";
+    CHECK(check_source(issue + "command issue::close {\n\trequire status == status::open  \"closed already\"\n\tstatus = status::closed\n}\n").empty());
+    CHECK(only_error(issue + "command issue::close {\n\tstatus = closed\n}\n").message == "write status::closed; an enum's choices are named with it");
+    CHECK(only_error("entity issue {\n\tstatus  enum open | closed = open\n}\n").message == "write status::open; an enum's choices are named with it");
+    CHECK(only_error(issue + "command issue::close {\n\tstatus = size::large\n}\n").message ==
+          "size::large isn't one of status's choices; they're written status::open and so on");
+    CHECK(only_error(issue + "command issue::close {\n\tstatus = status::shut\n}\n").message ==
+          "shut isn't one of status's choices, status::open, status::closed");
 }
 
 TEST_CASE("serve names a folder next to the project") {

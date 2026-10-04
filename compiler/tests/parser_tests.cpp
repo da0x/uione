@@ -56,7 +56,7 @@ TEST_CASE("an entity's fields: types, choices, rules and starting values") {
 entity loan {
 	book         book  required
 	due_at       date  required  after lent_at
-	status       on_shelf | lent = on_shelf
+	status       enum on_shelf | lent = status::on_shelf
 	returned_at
 }
 )");
@@ -71,7 +71,7 @@ entity loan {
 
     CHECK_FALSE(entity.fields[2].type);
     CHECK(entity.fields[2].choices == std::vector<std::string>{"on_shelf", "lent"});
-    CHECK(name_of(entity.fields[2].initial) == "on_shelf");
+    CHECK(name_of(entity.fields[2].initial) == "status::on_shelf");
 
     CHECK(entity.fields[3].name == "returned_at");
     CHECK_FALSE(entity.fields[3].type);
@@ -488,6 +488,16 @@ TEST_CASE("a role's permissions can be a block, as many to a line as reads well"
     CHECK(std::get<role_declaration>(f.declarations[1].node).permissions.size() == 1);
     auto out = parse_errors("role maintainer {\n\t\"issue::create\"\n}\n");
     REQUIRE(!out.empty());
+}
+
+TEST_CASE("a field's choices are an enum, and say so") {
+    auto out = parse_errors("entity issue {\n\tstatus  open | closed\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "write enum before a field's choices, like status enum open | ...");
+    auto f = parse_ok("entity issue {\n\tstatus  enum open | closed = status::open\n\tkind  enum only\n}\n");
+    const auto& entity = std::get<entity_declaration>(f.declarations[0].node);
+    CHECK(entity.fields[0].choices == std::vector<std::string>{"open", "closed"});
+    CHECK(entity.fields[1].choices == std::vector<std::string>{"only"});
 }
 
 TEST_CASE("a menu is a block of links") {

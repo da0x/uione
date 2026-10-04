@@ -17,8 +17,9 @@ examples/library/main.one	title      text       required	text	type
 examples/library/main.one	title      text       required	title	plain
 examples/library/main.one	title      text       required	required	modifier
 examples/library/main.one	shelfmark  shelfmark  required  unique	unique	modifier
-examples/library/main.one	status     on_shelf	on_shelf	plain
-examples/library/main.one	status     on_shelf	|	operator
+examples/library/main.one	status     enum on_shelf	enum	keyword
+examples/library/main.one	status     enum on_shelf	on_shelf	plain
+examples/library/main.one	status     enum on_shelf	|	operator
 examples/library/main.one	book         book    required	book    required	plain
 examples/library/main.one	member       user    required	user	type
 examples/library/main.one	number       serial  per book	serial	type
@@ -29,9 +30,9 @@ examples/library/main.one	due_at       date    required  after lent_at	after	mod
 examples/library/main.one	command book::withdraw	command	declare
 examples/library/main.one	command book::withdraw	book	namespace
 examples/library/main.one	command book::withdraw	withdraw	name
-examples/library/main.one	require status == on_shelf	require	keyword
-examples/library/main.one	require status == on_shelf	==	operator
-examples/library/main.one	require status == on_shelf	"only	string
+examples/library/main.one	require status == status::on_shelf	require	keyword
+examples/library/main.one	require status == status::on_shelf	==	operator
+examples/library/main.one	require status == status::on_shelf	"only	string
 examples/library/main.one	require returned_at == none	none	constant
 examples/library/main.one	order sort_title(title)	order	keyword
 examples/library/main.one	order sort_title(title)	sort_title	function

@@ -344,6 +344,9 @@ namespace one::generators {
         std::optional<std::string> initial_value(const language::field& f) {
             if (!f.initial) return std::string{};
             auto* name = std::get_if<language::name_expression>(&f.initial->node);
+            if (name) {
+                if (auto c = language::choice_of(name->name, f)) return "default=" + *c;  // status::open
+            }
             if (name && name->name.parts.size() == 1) return "default=" + name->name.parts[0];
             if (web_detail::text_of(*f.initial) == "me.username") return std::string("default=me.username");
             unsupported(path_, f.initial->where, "a starting value that's worked out, rather than me, now, true, false or a choice");
@@ -725,6 +728,10 @@ namespace one::generators {
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
                 return lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
             }
+            // A choice of the field it's beside: status::closed.
+            if (auto* n = std::get_if<language::name_expression>(&x.node); n && beside) {
+                if (auto c = language::choice_of(n->name, *beside)) return choice(*beside, *c);
+            }
             if (auto* n = std::get_if<language::name_expression>(&x.node); n && n->name.parts.size() == 1) {
                 const auto& name = n->name.parts[0];
                 if (name == "now") return std::string("c.Now()");
@@ -842,8 +849,8 @@ namespace one::generators {
                     value = lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
                 } else if (rn && (right == "true" || right == "false")) {
                     value = right;
-                } else if (rn && std::find(f->choices.begin(), f->choices.end(), right) != f->choices.end()) {
-                    value = choice(*f, right);
+                } else if (rn && language::choice_of(rn->name, *f)) {
+                    value = choice(*f, *language::choice_of(rn->name, *f));
                 } else {
                     unsupported(path_, part->where, "a view condition comparing with " + right);
                     return std::nullopt;
@@ -939,6 +946,9 @@ namespace one::generators {
                 {"mentioned", "m.Issue"}, {"message", "m.Message"}, {"title", "m.Title"}, {"url", "m.URL"},
                 {"author", "m.Author"},   {"sha", "m.SHA"},         {"number", "m.Number"}};
             auto* n = std::get_if<language::name_expression>(&x.node);
+            if (n) {
+                if (auto c = language::choice_of(n->name, target)) return choice(target, *c);
+            }
             if (!n || n->name.parts.size() != 1) return std::nullopt;
             const auto& name = n->name.parts[0];
             if (auto it = sent.find(name); it != sent.end()) return it->second;
@@ -1113,8 +1123,9 @@ namespace one::generators {
                 std::string path = b ? web_detail::text_of(*b->left) : "";
                 std::string value;
                 if (b) {
-                    if (auto* n = std::get_if<language::name_expression>(&b->right->node); n && n->name.parts.size() == 1) {
-                        value = api_detail::go_string(n->name.parts[0]);
+                    // The value is a choice, written with its enum: visibility::public.
+                    if (auto* n = std::get_if<language::name_expression>(&b->right->node); n && n->name.parts.size() <= 2) {
+                        value = api_detail::go_string(n->name.parts.back());
                     } else if (auto* lit = std::get_if<language::literal_expression>(&b->right->node)) {
                         value = lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
                     }

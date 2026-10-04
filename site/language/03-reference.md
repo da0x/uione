@@ -92,7 +92,7 @@ entity book {
 	title      text       required
 	author     text       required
 	shelfmark  shelfmark  required  unique  key
-	status     on_shelf | lent | withdrawn = on_shelf
+	status     enum on_shelf | lent | withdrawn = status::on_shelf
 }
 
 entity loan {
@@ -108,10 +108,15 @@ entity loan {
 - Every field has a type, so what it holds is never worked out from how it's used.
 - Types: `text`, `markdown` (text written in Markdown, shown rendered), `email`,
   `slug` (a name like `my-app`: lowercase letters and digits joined by single
-  dashes, lowered as it's saved), `date`, `number`, `serial`, `boolean`, `user`, a
-  list of choices
-  (`on_shelf | lent | withdrawn`), a `format` declared in the file, or another
-  entity (`book`), which stores its id and reads through it (`book.title`).
+  dashes, lowered as it's saved), `date`, `number`, `serial`, `boolean`, `user`, an
+  `enum` (`enum on_shelf | lent | withdrawn`), a `format` declared in the file, or
+  another entity (`book`), which stores its id and reads through it (`book.title`).
+- An enum's choices are always written with its name, the field's:
+  `status::on_shelf`, never `on_shelf` alone, wherever one is used, as a starting
+  value, in a command, a comparison, a view's condition or what a command creates.
+  So a choice reads as what it is, and two enums that share a choice, like an
+  issue's `status::open` and a report's, are never mixed up. A choice may say how
+  it's shown: `license  enum mit "MIT" | apache_2_0 "Apache-2.0"`.
 - `user` is a person, stored as their id. A view can show their name and picture
   (`member.name`, `member.picture`), which come from how they signed in and are
   kept up to date each time they do something. Nothing else about them, such as
@@ -165,7 +170,7 @@ command book::create
 command loan::checkin {
 	require returned_at == none  "that book is already back"
 	returned_at = now
-	book.status = on_shelf
+	book.status = status::on_shelf
 }
 ```
 
@@ -187,7 +192,7 @@ command loan::checkin {
 command project::create {
 	permission signed_in
 	create member {
-		project = id  person = me  role = maintainer
+		project = id  person = me  role = role::maintainer
 	}
 }
 ```
@@ -230,7 +235,7 @@ view book_page per book {
 - `public` lets anyone read it, signed in or not.
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public
-  when project.visibility == public` opens a document to everyone while the
+  when project.visibility == visibility::public` opens a document to everyone while the
   condition holds; it compares one field of the entity, or of what it points at,
   like `issue.project.visibility`, with a value. When people join a project, or it
   turns private, only that project's documents are rebuilt.
@@ -243,7 +248,7 @@ view book_page per book {
 ```one
 view issue_page per issue {
 	readers member
-	public when issue.project.visibility == public
+	public when issue.project.visibility == visibility::public
 	title = issue.title
 }
 ```
@@ -267,7 +272,7 @@ view project_page per project {
 ```
 
 - A list of every project would name private ones too, so it picks the public
-  ones: `each project where visibility == public`.
+  ones: `each project where visibility == visibility::public`.
 - `order` goes inside the list it sorts, and `-` sorts in reverse.
 - A view has at most one list without a name, its rows. Any others have names,
   like `loans = each loan ...`, so one page can hold a book's details and several
@@ -293,7 +298,7 @@ entity that grants it:
 entity member {
 	project  project  required  key
 	person   user     required  key
-	role     maintainer | reporter = reporter
+	role     enum maintainer | reporter = role::reporter
 }
 
 role maintainer per project from member {

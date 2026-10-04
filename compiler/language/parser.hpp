@@ -290,12 +290,17 @@ namespace one::language {
             f.where = name.where;
             if (at(token_kind::identifier) && !is_field_rule(peek().text)) {
                 if (peek(1).kind == token_kind::pipe || (peek(1).kind == token_kind::string && peek(2).kind == token_kind::pipe)) {
+                    // Choices are an enum, and say so: status enum open | closed.
+                    fail(peek().where, "write enum before a field's choices, like " + f.name + " enum " + peek().text + " | ...");
+                }
+                if (at_word("enum")) {
+                    advance();
                     // Each choice may say how it's shown: mit "MIT" | apache_2_0 "Apache-2.0".
                     auto choice = [&](const token& name) {
                         f.choices.push_back(name.text);
                         f.choice_labels.push_back(at(token_kind::string) ? advance().text : "");
                     };
-                    choice(advance());
+                    choice(expect(token_kind::identifier, "the enum's first choice, like open"));
                     while (at(token_kind::pipe)) {
                         advance();
                         choice(expect(token_kind::identifier, "a choice after '|'"));
