@@ -37,7 +37,14 @@ function highlighterOrNothing(): HighlighterCore | undefined {
 // Whether a part of a line is a name: something the file declared or refers to,
 // rather than a keyword, a type, a value, a string or a comment.
 function isName(scopes: string[]): boolean {
-  return scopes.every((s) => s === "source.uione" || s.startsWith("entity.name.") || s.startsWith("variable.parameter."));
+  return scopes.every(
+    (s) =>
+      s === "source.uione" ||
+      s.startsWith("entity.name.") ||
+      s.startsWith("variable.parameter.") ||
+      s.startsWith("variable.other.") || // an entity's fields, by name
+      s.startsWith("support.type.user."), // another entity, as a field's type
+  );
 }
 
 // The code as highlighted HTML, or nothing for a language this doesn't know or when
