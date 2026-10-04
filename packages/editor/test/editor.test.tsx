@@ -160,6 +160,22 @@ describe("diff", () => {
   });
 });
 
+describe("changes", () => {
+  it("reports what's typed, and not the text it's handed", () => {
+    const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
+    const changed: string[] = [];
+    const shown = (value: string) => (
+      <Editor path="main.one" value={value} onChange={(text) => changed.push(text)} files={{ "main.one": value }} compiler={checker} />
+    );
+    const { rerender } = render(shown(""));
+    rerender(shown("entity book {\n}\n"));
+    expect(changed).toEqual([]); // the file arriving isn't anyone changing it
+    const view = EditorView.findFromDOM(document.querySelector(".cm-editor") as HTMLElement)!;
+    act(() => view.dispatch({ changes: { from: 0, insert: "// A note\n" } }));
+    expect(changed).toEqual(["// A note\nentity book {\n}\n"]);
+  });
+});
+
 describe("spots", () => {
   it("reads and writes the place an address names, the way GitHub's do", () => {
     expect(readSpot("#L12")).toEqual({ from: { line: 12 } });

@@ -115,7 +115,8 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           EditorView.contentAttributes.of({ "aria-label": path }),
           marked,
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) latest.current.onChange(update.state.doc.toString());
+            // Only what's typed is a change; text the editor is handed is already the value.
+            if (update.docChanged && !placing.current) latest.current.onChange(update.state.doc.toString());
             if (update.docChanged || update.selectionSet) {
               latest.current.onLine?.(update.state.doc.lineAt(update.state.selection.main.head).number);
             }
