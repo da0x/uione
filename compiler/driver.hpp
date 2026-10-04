@@ -66,7 +66,7 @@ namespace one::driver {
 
     // Applies fixes to a project's files: each once, the later ones in a file first,
     // so the earlier ones' places stay where they were.
-    inline std::size_t apply(sources& files, const language::diagnostics& found) {
+    inline std::size_t apply_fixes(sources& files, const language::diagnostics& found) {
         std::map<std::string, std::vector<const language::diagnostic*>> by_file;
         for (const auto& d : found) {
             if (d.fix && files.contains(d.path)) by_file[d.path].push_back(&d);
@@ -150,7 +150,7 @@ namespace one::driver {
         for (int round = 0; round < 100; ++round) {
             language::diagnostics found;
             check_sources(files, found);
-            std::size_t applied = apply(files, found);
+            std::size_t applied = apply_fixes(files, found);
             out.fixes += applied;
             if (applied == 0) {
                 out.problems = std::move(found);
