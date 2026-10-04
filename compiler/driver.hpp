@@ -174,6 +174,53 @@ namespace one::driver {
         return false;
     }
 
+    // An entity's choices written as an enum by an upgrade start in the column the
+    // block's rules do, as they'd have been written, so the line still reads as name,
+    // type and rules:
+    //     person   user     required  key
+    //     role     enum     maintainer | reporter = role::reporter
+    // Only lines that became enums are moved; the rules' column is the one most fields
+    // whose type starts where the enum's does use.
+    inline std::string align_choices(const std::string& before, const std::string& after) {
+        auto split = [](const std::string& text) {
+            std::vector<std::string> lines;
+            std::size_t at = 0;
+            for (std::size_t end; (end = text.find('\n', at)) != std::string::npos; at = end + 1) lines.push_back(text.substr(at, end - at));
+            lines.push_back(text.substr(at));
+            return lines;
+        };
+        auto was = split(before);
+        auto lines = split(after);
+        if (was.size() != lines.size()) return after;  // fixes never add lines
+        static const std::regex enum_field(R"(^(\s+\w+\s+)enum\s+(.*)$)");
+        static const std::regex field(R"(^(\s+\w+\s+)(list of \w+|[\w:]+)(\s+)\S.*$)");
+        static const std::regex opens(R"(^\s*entity\s+\w+.*\{\s*$)");
+        static const std::regex closes(R"(^\s*\}.*$)");
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            std::smatch m;
+            if (!std::regex_match(lines[i], m, enum_field) || std::regex_search(was[i], std::regex(R"(\benum\b)"))) continue;
+            std::string head = m[1], rest = m[2];
+            std::size_t first = i, last = i;
+            while (first > 0 && !std::regex_match(lines[first], opens)) --first;
+            while (last + 1 < lines.size() && !std::regex_match(lines[last], closes)) ++last;
+            std::map<std::size_t, int> rules;  // where rules start, among fields typed in the enum's column
+            for (std::size_t k = first + 1; k < last; ++k) {
+                std::smatch f;
+                if (k == i || !std::regex_match(lines[k], f, field) || f[2] == "enum" || static_cast<std::size_t>(f[1].length()) != head.size()) continue;
+                ++rules[head.size() + static_cast<std::size_t>(f[2].length() + f[3].length())];
+            }
+            std::size_t column = head.size() + 6;  // "enum" and two spaces, with nothing to line up with
+            int most = 0;
+            for (const auto& [at, count] : rules) {
+                if (count > most) most = count, column = std::max(at, head.size() + 6);
+            }
+            lines[i] = head + "enum" + std::string(column - head.size() - 4, ' ') + rest;
+        }
+        std::string out;
+        for (std::size_t i = 0; i < lines.size(); ++i) out += (i ? "\n" : "") + lines[i];
+        return out;
+    }
+
     struct upgraded {
         sources changed;                 // the files it changed, as they are now
         language::diagnostics problems;  // what's left that has no fix; nothing is changed while there's any
@@ -200,6 +247,7 @@ namespace one::driver {
             }
         }
         if (!out.problems.empty()) return out;
+        for (auto& [path, text] : files) text = align_choices(original[path], text);
         out.recorded = record_version(files, version);
         language::diagnostics after;
         check_sources(files, after);

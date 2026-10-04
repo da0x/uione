@@ -17,9 +17,9 @@ examples/library/main.one	title      text       required	text	type
 examples/library/main.one	title      text       required	title	variable
 examples/library/main.one	title      text       required	required	modifier
 examples/library/main.one	shelfmark  shelfmark  required  unique	unique	modifier
-examples/library/main.one	status     enum on_shelf	enum	type
-examples/library/main.one	status     enum on_shelf	on_shelf	plain
-examples/library/main.one	status     enum on_shelf	|	operator
+examples/library/main.one	status     enum       on_shelf	enum	type
+examples/library/main.one	status     enum       on_shelf	on_shelf	plain
+examples/library/main.one	status     enum       on_shelf	|	operator
 examples/library/main.one	book         book    required	book    required	type
 examples/library/main.one	member       user    required	user	type
 examples/library/main.one	number       serial  per book	serial	type
@@ -126,14 +126,14 @@ examples/tracker/main.one	for project by repository	by	keyword
 examples/tracker/main.one	on commit {	on	keyword
 examples/library/main.one	component opening_hours	component	keyword
 site/site.one	one       "0.5.0"	one	keyword
-examples/tracker/main.one	visibility  enum public	public	plain
+examples/tracker/main.one	visibility  enum  public	public	plain
 examples/tracker/main.one	= visibility::public	public	plain
 examples/tracker/main.one	view projects public	public	modifier
 examples/tracker/main.one	public when project.visibility	public	modifier
 examples/tracker/main.one	project  project  required  key	project	variable
 examples/tracker/main.one	project  project  required  key	project  required	type
-examples/tracker/main.one	role     enum maintainer	role	variable
-examples/tracker/main.one	role     enum maintainer	maintainer	plain
+examples/tracker/main.one	role     enum     maintainer	role	variable
+examples/tracker/main.one	role     enum     maintainer	maintainer	plain
 examples/tracker/main.one	= role::reporter	role	namespace
 examples/tracker/main.one	number     serial        per project	per	keyword
 examples/tracker/main.one	labels     list of text	of	keyword

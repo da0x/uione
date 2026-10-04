@@ -21,7 +21,7 @@ namespace library {
 		title      text       required
 		author     text       required
 		shelfmark  shelfmark  required  unique  key
-		status     enum on_shelf | lent | withdrawn = status::on_shelf
+		status     enum       on_shelf | lent | withdrawn = status::on_shelf
 		summary    markdown
 	}
 

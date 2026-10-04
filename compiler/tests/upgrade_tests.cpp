@@ -37,11 +37,29 @@ TEST_CASE("an upgrade applies the fixes, records the version, and checks clean")
     REQUIRE(done.changed.size() == 1);
     const auto& text = done.changed.begin()->second;
     CHECK(text.find("\tone     \"9.9.9\"\n\tsignin  google") != std::string::npos);  // lined up with signin
-    CHECK(text.find("status  enum open | shipped = status::open") != std::string::npos);
+    CHECK(text.find("status  enum  open | shipped = status::open") != std::string::npos);
     CHECK(text.find("require status == status::open") != std::string::npos);
     CHECK(text.find("status = status::shipped") != std::string::npos);
     // The upgrade didn't write anything; the command line does.
     CHECK(platform::read_file((dir / "main.one").string())->find("enum") == std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("an upgrade lines an enum's choices up with the other fields' rules") {
+    auto dir = project("uione-upgrade-align", "namespace tracker {\n"
+                                              "\tentity project {\n\t\tname  text  required\n\t}\n"
+                                              "\tentity member {\n"
+                                              "\t\tproject  project  required  key\n"
+                                              "\t\tperson   user     required  key\n"
+                                              "\t\trole     maintainer | reporter = reporter\n"
+                                              "\t}\n"
+                                              "}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\t\tperson   user     required  key\n"
+                    "\t\trole     enum     maintainer | reporter = role::reporter\n") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
 

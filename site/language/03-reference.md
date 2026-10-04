@@ -190,7 +190,7 @@ entity book {
 	title      text       required
 	author     text       required
 	shelfmark  shelfmark  required  unique  key
-	status     enum on_shelf | lent | withdrawn = status::on_shelf
+	status     enum       on_shelf | lent | withdrawn = status::on_shelf
 }
 
 entity loan {
@@ -425,7 +425,7 @@ entity that grants it:
 entity member {
 	project  project  required  key
 	person   user     required  key
-	role     enum maintainer | reporter = role::reporter
+	role     enum     maintainer | reporter = role::reporter
 }
 
 role maintainer per project from member {
