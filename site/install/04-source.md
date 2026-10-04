@@ -6,7 +6,7 @@ C++23 compiler, such as GCC 14 or a recent Clang:
 ```sh
 git clone https://github.com/da0x/uione.git
 cd uione
-git checkout v0.4.0
+git checkout v0.4.1
 make -C compiler
 ```
 
