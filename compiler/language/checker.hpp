@@ -67,6 +67,7 @@ namespace one::language {
             std::map<std::string, declared<function_declaration>> functions;
             std::map<std::string, origin> commands;  // entity::command
             std::vector<const role_declaration*> roles;
+            std::map<std::string, origin> role_names;  // so a role is declared once
         };
 
         // What a name can mean where it's written.
@@ -161,6 +162,14 @@ namespace one::language {
                     add(here.formats, f->name, *f, d.where, "format", ns);
                 } else if (auto* r = std::get_if<role_declaration>(&d.node)) {
                     here.roles.push_back(r);
+                    // A second role of the same name would replace the first, dropping its
+                    // permissions, so a role's permissions are all in one place.
+                    auto [it, inserted] = here.role_names.try_emplace(r->name, origin{path_, d.where});
+                    if (!inserted) {
+                        error(d.where, "role " + r->name + " is declared twice " + in_namespace(ns) + "; the first is at " +
+                                           first_seen(it->second) + ". A role with many permissions lists them in a block, like role " +
+                                           r->name + " { ... }");
+                    }
                 } else if (auto* function = std::get_if<function_declaration>(&d.node)) {
                     add(here.functions, function->name, *function, d.where, "function", ns);
                 } else if (auto* c = std::get_if<command_declaration>(&d.node)) {

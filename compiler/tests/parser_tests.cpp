@@ -476,6 +476,20 @@ TEST_CASE("a link can open a namespace by name") {
     CHECK(link.target.empty());
 }
 
+TEST_CASE("a role's permissions can be a block, as many to a line as reads well") {
+    auto f = parse_ok("role maintainer per project from member  project::update {\n\tissue::create  issue::close\n\n\tcomment::create\n}\n"
+                      "role reporter per project from member  issue::create\n");
+    const auto& maintainer = std::get<role_declaration>(f.declarations[0].node);
+    CHECK(maintainer.per == "project");
+    CHECK(maintainer.from == "member");
+    REQUIRE(maintainer.permissions.size() == 4);
+    CHECK(maintainer.permissions[0].text() == "project::update");
+    CHECK(maintainer.permissions[3].text() == "comment::create");
+    CHECK(std::get<role_declaration>(f.declarations[1].node).permissions.size() == 1);
+    auto out = parse_errors("role maintainer {\n\t\"issue::create\"\n}\n");
+    REQUIRE(!out.empty());
+}
+
 TEST_CASE("a menu is a block of links") {
     auto f = parse_ok("screen \"Home\" / {\n\tmenu {\n\t\tlink /a \"A\"\n\t\tlink /b \"B\"\n\t}\n}\n");
     const auto& screen = std::get<screen_declaration>(f.declarations[0].node);

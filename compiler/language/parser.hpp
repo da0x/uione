@@ -507,6 +507,19 @@ namespace one::language {
             while (at(token_kind::identifier)) {
                 role.permissions.push_back(parse_qualified_name("a permission, like book::view"));
             }
+            // A role with many permissions lists them in a block, as many to a line as
+            // reads well: role maintainer per project from member { issue::create ... }.
+            if (at(token_kind::left_brace)) {
+                advance();
+                while (in_block()) {
+                    if (!at(token_kind::identifier)) fail_expecting("a permission, like issue::create");
+                    while (at(token_kind::identifier)) {
+                        role.permissions.push_back(parse_qualified_name("a permission, like issue::create"));
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+            }
             end_line();
             return role;
         }

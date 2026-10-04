@@ -125,6 +125,17 @@ func TestARouteKnowsWhoSentIt(t *testing.T) {
 	}
 }
 
+func TestARoleGivenTwiceIsRefused(t *testing.T) {
+	_, err := one.New(context.Background(), one.Module("twice",
+		one.Command[Note]("note::create"),
+		one.Role("writer", "note:create"),
+		one.Role("writer", "note:create"),
+	))
+	if err == nil || !strings.Contains(err.Error(), "role twice::writer is given more than once") {
+		t.Fatalf("a role given twice was taken: %v", err)
+	}
+}
+
 // stored reads an entity as it's stored.
 func (h *harness) stored(collection, id string) map[string]any {
 	h.t.Helper()

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -69,6 +70,13 @@ func (ro *RoleSpec) Per(scope, member Kind) *RoleSpec {
 }
 
 func (ro *RoleSpec) register(r *registry, ns string) {
+	// A role given twice would have its second permissions replace its first, so
+	// it's refused rather than half kept.
+	if key := join(ns, ro.name); r.named[key] {
+		r.twice = append(r.twice, key)
+	} else {
+		r.named[key] = true
+	}
 	for i, p := range ro.permissions {
 		ro.permissions[i] = string(qualified(ns, Permission(p)))
 	}
@@ -86,6 +94,8 @@ type registry struct {
 	views    []*ViewSpec
 	roles    map[string][]string
 	scoped   []*RoleSpec // roles held within an entity, like a project
+	named    map[string]bool
+	twice    []string // roles given more than once, which is a mistake
 	hooks    []*GitHubSpec
 	schemas  map[reflect.Type]*schema
 }
@@ -202,10 +212,14 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	reg := &registry{
 		commands: map[string]func(*App, *call) (string, error){},
 		roles:    map[string][]string{},
+		named:    map[string]bool{},
 		schemas:  map[reflect.Type]*schema{reflect.TypeFor[Profile](): profiles()},
 	}
 	for _, item := range items {
 		item.register(reg, "")
+	}
+	if len(reg.twice) > 0 {
+		return nil, fmt.Errorf("one: role %s is given more than once; give it every permission in one Role", reg.twice[0])
 	}
 	for _, v := range reg.views {
 		if err := v.resolve(reg); err != nil {

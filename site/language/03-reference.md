@@ -296,9 +296,18 @@ entity member {
 	role     maintainer | reporter = reporter
 }
 
-role maintainer per project from member  member::create  issue::create  issue::update
+role maintainer per project from member {
+	project::update  member::create
+	issue::create  issue::update  issue::close  issue::reopen
+	comment::create
+}
+
 role reporter per project from member  issue::create  comment::create
 ```
+
+- A role with many permissions lists them in a block, as many to a line as reads
+  well; a short one keeps them on its line. Either way a role is declared once,
+  with all its permissions, so none is ever lost to a second declaration.
 
 - A member grants its role to its person, within its project. Its id is the
   project and the person, so each person has one role in each project.

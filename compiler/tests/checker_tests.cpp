@@ -654,6 +654,14 @@ TEST_CASE("an address's last parameter can take the rest of it") {
     }
 }
 
+TEST_CASE("a role is declared once") {
+    const std::string book = "entity book {\n\ttitle  text\n}\ncommand book::create\ncommand book::update\n";
+    CHECK(check_source(book + "role librarian {\n\tbook::create\n\tbook::update\n}\n").empty());
+    auto e = only_error(book + "role librarian  book::create\nrole librarian  book::update\n");
+    CHECK(e.message.starts_with("role librarian is declared twice"));
+    CHECK(e.message.ends_with("lists them in a block, like role librarian { ... }"));
+}
+
 TEST_CASE("serve names a folder next to the project") {
     CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
           "there's no folder no-such-folder to serve; it's looked for next to this .one file");

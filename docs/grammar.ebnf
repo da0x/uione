@@ -108,7 +108,8 @@ row_line       ::= (postfix+ | postfix* NAME "=" expression) END
 
 /* role */
 
-role           ::= "role" NAME ("per" NAME "from" NAME)? qualified* END
+role           ::= "role" NAME ("per" NAME "from" NAME)? qualified*
+                   ("{" NEWLINE? (qualified+ END)* "}")? END
 
 /* function */
 
