@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -10,10 +11,20 @@
 
 namespace one::language {
 
+    // An exact edit that resolves a mistake, for a mistake the compiler can see the
+    // one answer to: replace `length` characters at `where` with `text`. `one upgrade`
+    // applies these, so a change to the language comes with its own fix.
+    struct fix {
+        location where;
+        std::size_t length = 0;
+        std::string text;
+    };
+
     struct diagnostic {
         std::string path;
         location where;
         std::string message;
+        std::optional<language::fix> fix = {};
     };
 
     using diagnostics = std::vector<diagnostic>;

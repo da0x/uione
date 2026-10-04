@@ -42,6 +42,14 @@ project uione {
 }
 ```
 
+`one "0.4.0"` is the compiler the project is for, the last version it was checked
+clean with. Any `one` run on the project hands the work to that version, fetching
+it once from its release, so a project is always built by the compiler it was
+written for, by everyone and by its deploys. `one upgrade` moves it to a newer
+one: it applies the fixes that come with each change to the language, checks
+again, and records the new version only once the project is clean, changing
+nothing otherwise. `UIONE_TOOLCHAIN=local` keeps the `one` you ran.
+
 `title "uione"` is the name at the top of every page and in the browser's tab, when
 it isn't the project's own: the studio's project is `studio`, which names what it
 runs on in Google Cloud, and its pages say uione. `ui` picks the component adapter

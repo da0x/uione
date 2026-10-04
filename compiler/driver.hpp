@@ -9,6 +9,9 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <map>
+#include <regex>
+#include <tuple>
 #include <string>
 #include <vector>
 
@@ -25,28 +28,148 @@ namespace one::driver {
         std::size_t files = 0;
     };
 
-    // Reads one project's files and checks them together. The checker only runs when
-    // everything parsed, since a half-read file would only cause follow-on errors.
-    inline std::size_t check_project(const std::string& root, language::diagnostics& found,
-                                     std::vector<language::file>* kept = nullptr) {
-        auto paths = platform::find_one_files({root});
-        if (paths.empty()) {
-            found.push_back({root, {}, "there are no .one files here"});
-            return 0;
-        }
+    // A project's .one files, by path, as text.
+    using sources = std::map<std::string, std::string>;
+
+    // Checks a project's files as given, which may be edits not yet written, all
+    // together. The checker only runs when everything parsed, since a half-read file
+    // would only cause follow-on errors.
+    inline void check_sources(const sources& given, language::diagnostics& found, std::vector<language::file>* kept = nullptr) {
         std::size_t errors_before = found.size();
         std::vector<language::file> files;
-        for (const auto& path : paths) {
-            auto source = platform::read_file(path);
-            if (!source) {
-                found.push_back({path, {}, "can't read this file"});
-                continue;
-            }
-            files.push_back(language::parse(path, *source, found));
-        }
+        for (const auto& [path, source] : given) files.push_back(language::parse(path, source, found));
         if (found.size() == errors_before) language::check(files, found);
         if (kept) *kept = std::move(files);
-        return paths.size();
+    }
+
+    // Reads a project's .one files, saying which can't be read.
+    inline sources read_sources(const std::string& root, language::diagnostics& found) {
+        sources read;
+        auto paths = platform::find_one_files({root});
+        if (paths.empty()) found.push_back({root, {}, "there are no .one files here"});
+        for (const auto& path : paths) {
+            if (auto source = platform::read_file(path)) read[path] = *source;
+            else found.push_back({path, {}, "can't read this file"});
+        }
+        return read;
+    }
+
+    // Reads one project's files and checks them together.
+    inline std::size_t check_project(const std::string& root, language::diagnostics& found,
+                                     std::vector<language::file>* kept = nullptr) {
+        std::size_t errors_before = found.size();
+        auto read = read_sources(root, found);
+        if (read.empty()) return 0;
+        if (found.size() == errors_before) check_sources(read, found, kept);
+        return platform::find_one_files({root}).size();
+    }
+
+    // Applies fixes to a project's files: each once, the later ones in a file first,
+    // so the earlier ones' places stay where they were.
+    inline std::size_t apply(sources& files, const language::diagnostics& found) {
+        std::map<std::string, std::vector<const language::diagnostic*>> by_file;
+        for (const auto& d : found) {
+            if (d.fix && files.contains(d.path)) by_file[d.path].push_back(&d);
+        }
+        std::size_t applied = 0;
+        for (auto& [path, list] : by_file) {
+            std::sort(list.begin(), list.end(), [](auto* a, auto* b) {
+                return std::tie(b->fix->where.line, b->fix->where.column) < std::tie(a->fix->where.line, a->fix->where.column);
+            });
+            std::string& text = files[path];
+            std::pair<std::size_t, std::size_t> last{0, 0};
+            for (auto* d : list) {
+                std::pair<std::size_t, std::size_t> at{d->fix->where.line, d->fix->where.column};
+                if (at == last) continue;
+                last = at;
+                // From line and column, both counted from 1, to a place in the text.
+                std::size_t offset = 0;
+                for (std::size_t line = 1; line < at.first && offset != std::string::npos; ++line) {
+                    offset = text.find('\n', offset);
+                    if (offset != std::string::npos) ++offset;
+                }
+                if (offset == std::string::npos) continue;
+                offset += at.second - 1;
+                if (offset + d->fix->length > text.size()) continue;
+                text.replace(offset, d->fix->length, d->fix->text);
+                ++applied;
+            }
+        }
+        return applied;
+    }
+
+    // Says in a project's block which compiler it's for, `one "0.4.0"`: changing the
+    // line when there is one, and adding it under the block's first line when there
+    // isn't, lined up with the settings beside it. False when there's no project block.
+    inline bool record_version(sources& files, std::string_view version) {
+        static const std::regex block(R"re((^|\n)[ \t]*project[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*\{[^\n]*\n)re");
+        static const std::regex existing(R"re((^|\n)([ \t]*one[ \t]+)"[^"\n]*")re");
+        static const std::regex setting(R"re(^([ \t]+)([a-z_]+)([ \t]+)\S)re");
+        for (auto& [path, text] : files) {
+            std::smatch found;
+            if (!std::regex_search(text, found, block)) continue;
+            std::size_t start = static_cast<std::size_t>(found.position(0) + found.length(0));
+            std::size_t end = text.find("\n}", start);
+            std::string inside = text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            std::smatch line;
+            if (std::regex_search(inside, line, existing)) {
+                std::size_t at = start + static_cast<std::size_t>(line.position(2) + line.length(2));
+                std::size_t close = text.find('"', at + 1);
+                text.replace(at, close + 1 - at, "\"" + std::string(version) + "\"");
+                return true;
+            }
+            std::string first = inside.substr(0, inside.find('\n'));
+            std::smatch beside;
+            std::string indent = "\t", gap = "  ";
+            if (std::regex_search(first, beside, setting)) {
+                indent = beside[1];
+                std::size_t width = beside[2].length() + beside[3].length();
+                gap = std::string(width > 3 ? width - 3 : 2, ' ');
+            }
+            text.insert(start, indent + "one" + gap + "\"" + std::string(version) + "\"\n");
+            return true;
+        }
+        return false;
+    }
+
+    struct upgraded {
+        sources changed;                 // the files it changed, as they are now
+        language::diagnostics problems;  // what's left that has no fix; nothing is changed while there's any
+        std::size_t fixes = 0;
+        bool recorded = false;           // whether the project block now names this compiler
+    };
+
+    // Brings a project to this compiler: applies the fixes its mistakes come with, and
+    // checks again, until it's clean, then records this compiler's version in its
+    // project block. It changes nothing unless it ends clean.
+    inline upgraded upgrade(const std::string& root, std::string_view version) {
+        upgraded out;
+        auto files = read_sources(root, out.problems);
+        if (!out.problems.empty()) return out;
+        auto original = files;
+        for (int round = 0; round < 100; ++round) {
+            language::diagnostics found;
+            check_sources(files, found);
+            std::size_t applied = apply(files, found);
+            out.fixes += applied;
+            if (applied == 0) {
+                out.problems = std::move(found);
+                break;
+            }
+        }
+        if (!out.problems.empty()) return out;
+        out.recorded = record_version(files, version);
+        language::diagnostics after;
+        check_sources(files, after);
+        if (!after.empty()) {
+            out.problems = std::move(after);
+            out.recorded = false;
+            return out;
+        }
+        for (const auto& [path, text] : files) {
+            if (original[path] != text) out.changed[path] = text;
+        }
+        return out;
     }
 
     // Each root is a project, checked on its own.

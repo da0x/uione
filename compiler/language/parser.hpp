@@ -77,8 +77,8 @@ namespace one::language {
             return std::string(describe(t.kind));
         }
 
-        [[noreturn]] void fail(location where, std::string message) {
-            out_.push_back({path_, where, std::move(message)});
+        [[noreturn]] void fail(location where, std::string message, std::optional<fix> resolved = std::nullopt) {
+            out_.push_back({path_, where, std::move(message), std::move(resolved)});
             throw parse_error{};
         }
 
@@ -291,7 +291,8 @@ namespace one::language {
             if (at(token_kind::identifier) && !is_field_rule(peek().text)) {
                 if (peek(1).kind == token_kind::pipe || (peek(1).kind == token_kind::string && peek(2).kind == token_kind::pipe)) {
                     // Choices are an enum, and say so: status enum open | closed.
-                    fail(peek().where, "write enum before a field's choices, like " + f.name + " enum " + peek().text + " | ...");
+                    fail(peek().where, "write enum before a field's choices, like " + f.name + " enum " + peek().text + " | ...",
+                         fix{peek().where, 0, "enum "});
                 }
                 if (at_word("enum")) {
                     advance();

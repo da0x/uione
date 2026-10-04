@@ -8,6 +8,7 @@
 // Firestore rules, and nothing in site/build is edited by hand.
 
 project uione {
+	one       "0.4.0"
 	domain    "www.uione.io"
 	firebase  "uione-web"
 	region    "us-east4"

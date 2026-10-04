@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <map>
 #include <optional>
+#include <regex>
 #include <set>
 #include <sstream>
 #include <string>
@@ -88,8 +89,8 @@ namespace one::language {
         std::map<const entity_declaration*, entity_declaration> changes_;  // what each history holds
         std::optional<origin> project_;
 
-        void error(location where, std::string message) {
-            out_.push_back({path_, where, std::move(message)});
+        void error(location where, std::string message, std::optional<fix> resolved = std::nullopt) {
+            out_.push_back({path_, where, std::move(message), std::move(resolved)});
         }
 
         static std::string join(const std::string& ns, const std::string& name) {
@@ -292,7 +293,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title", "one"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -302,10 +303,14 @@ namespace one::language {
             for (const auto& s : p.settings) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon, serve, redirect or title");
+                                   "region, ui, signin, icon, serve, redirect, title or one");
                     continue;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") deploy.push_back(s.key);
+                // The compiler the project was last checked clean with: one "0.4.0".
+                if (s.key == "one" && !std::regex_match(s.value, std::regex(R"(\d+\.\d+\.\d+)"))) {
+                    error(s.where, "one names the compiler's version, like one \"0.4.0\"");
+                }
                 if ((s.key == "firebase" || s.key == "region") && !only(s.value, id)) {
                     error(s.where, s.key + " has to be lowercase letters, digits and dashes, like ui-one or us-east4");
                 }
@@ -399,7 +404,8 @@ namespace one::language {
                             choice_named(*start, f);
                         } else if (start && start->name.parts.size() == 1 &&
                                    std::find(f.choices.begin(), f.choices.end(), start->name.parts[0]) != f.choices.end()) {
-                            error(f.initial->where, "write " + f.name + "::" + start->name.parts[0] + "; an enum's choices are named with it");
+                            error(f.initial->where, "write " + f.name + "::" + start->name.parts[0] + "; an enum's choices are named with it",
+                                  fix{start->name.where, start->name.parts[0].size(), f.name + "::" + start->name.parts[0]});
                         } else {
                             error(f.initial->where, "field " + f.name + " has to start as one of its choices, like " + f.name + "::" + f.choices[0]);
                         }
@@ -1347,7 +1353,8 @@ namespace one::language {
                 if (plain.contains(name)) return nullptr;
                 if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
-                    error(n->name.where, "write " + beside->name + "::" + name + "; an enum's choices are named with it");
+                    error(n->name.where, "write " + beside->name + "::" + name + "; an enum's choices are named with it",
+                          fix{n->name.where, name.size(), beside->name + "::" + name});
                     return nullptr;
                 }
                 if (in.entity) {
