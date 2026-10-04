@@ -14,13 +14,13 @@ examples/library/main.one	example HIS	HIS	string
 examples/library/main.one	entity book {	entity	declare
 examples/library/main.one	entity book {	book	name
 examples/library/main.one	title      text       required	text	type
-examples/library/main.one	title      text       required	title	plain
+examples/library/main.one	title      text       required	title	variable
 examples/library/main.one	title      text       required	required	modifier
 examples/library/main.one	shelfmark  shelfmark  required  unique	unique	modifier
 examples/library/main.one	status     enum on_shelf	enum	type
 examples/library/main.one	status     enum on_shelf	on_shelf	plain
 examples/library/main.one	status     enum on_shelf	|	operator
-examples/library/main.one	book         book    required	book    required	plain
+examples/library/main.one	book         book    required	book    required	type
 examples/library/main.one	member       user    required	user	type
 examples/library/main.one	number       serial  per book	serial	type
 examples/library/main.one	serial  per book	per	keyword
@@ -63,7 +63,7 @@ examples/library/main.one	picker book from shelf	from	keyword
 examples/tasks/main.one	done   boolean  = false	boolean	type
 examples/tasks/main.one	done   boolean  = false	false	constant
 examples/tasks/main.one	permission owner	owner	constant
-examples/tasks/main.one	owner  user     = me	owner	plain
+examples/tasks/main.one	owner  user     = me	owner	variable
 examples/tasks/main.one	where owner == user.id	owner	plain
 examples/tasks/main.one	require !done	!	operator
 examples/tasks/main.one	order done  -created_at	-	operator
@@ -76,7 +76,7 @@ site/site.one	ui        radix	ui	keyword
 site/site.one	ui        radix	radix	plain
 site/site.one	serve     "public"	serve	keyword
 site/waitlist.one	email  email  required  key	email  required	type
-site/waitlist.one	email  email  required  key	email	plain
+site/waitlist.one	email  email  required  key	email	variable
 site/waitlist.one	email  email  required  key	key	modifier
 site/waitlist.one	permission anyone	anyone	constant
 site/waitlist.one	view signups public	public	modifier
@@ -98,7 +98,7 @@ site/home.one	{waitlist::signups.total}	waitlist::	namespace
 site/language.one	screen language /:page {	/:page	route
 site/language.one	markdown "language	markdown	keyword
 site/studio.one	name   text  required	text	type
-site/studio.one	name   text  required	name	plain
+site/studio.one	name   text  required	name	variable
 site/studio.one	owner  user  = me	user	type
 site/studio.one	owner  user  = me	me	constant
 site/studio.one	permission signed_in	signed_in	constant
@@ -130,3 +130,10 @@ examples/tracker/main.one	visibility  enum public	public	plain
 examples/tracker/main.one	= visibility::public	public	plain
 examples/tracker/main.one	view projects public	public	modifier
 examples/tracker/main.one	public when project.visibility	public	modifier
+examples/tracker/main.one	project  project  required  key	project	variable
+examples/tracker/main.one	project  project  required  key	project  required	type
+examples/tracker/main.one	role     enum maintainer	role	variable
+examples/tracker/main.one	role     enum maintainer	maintainer	plain
+examples/tracker/main.one	= role::reporter	role	namespace
+examples/tracker/main.one	number     serial        per project	per	keyword
+examples/tracker/main.one	labels     list of text	of	keyword

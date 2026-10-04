@@ -52,6 +52,15 @@ syn match uioneConstant "\<\u\w*\>"
 syn match uioneNumber   "\<\d\+\%(\.\d\+\)\=\>"
 syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 
+" An entity's block: each line is a field, its name first, then its type, built in
+" or another entity, so `project  project  required  key` is a field named project
+" holding a project, not a declaration. Inside it, words that start declarations
+" elsewhere are names.
+syn region uioneFields start="\%(^\s*entity\s\+\h\w*\%(\s\+history\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord
+syn match   uioneFieldName "^\s*\zs\h\w*" contained nextgroup=uioneUserType,uioneType skipwhite
+syn match   uioneUserType  "\h\w*\%(::\h\w*\)*" contained
+syn match   uioneFieldWord "\<\%(per\|of\)\>" contained
+
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
 syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\|enum\)\>"
@@ -89,6 +98,9 @@ hi def link uioneKeyword     Statement
 hi def link uioneStatement   Statement
 hi def link uioneModifier    StorageClass
 hi def link uioneType        Type
+hi def link uioneUserType    Type
+hi def link uioneFieldName   Identifier
+hi def link uioneFieldWord   Statement
 hi def link uioneBuiltin     Constant
 hi def link uioneLiteral     String
 hi def link uioneCall        Function

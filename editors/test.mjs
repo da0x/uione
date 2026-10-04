@@ -42,7 +42,8 @@ const vimGroups = {
   uioneConstant: "constant", uioneLiteral: "string", uioneCall: "function",
   uioneNumber: "number", uioneOperator: "operator", uioneRoute: "route",
   uioneParam: "param", uioneString: "string", uioneInterpDelim: "interp",
-  uioneInterp: "plain", "": "plain",
+  uioneInterp: "plain", uioneFieldName: "variable", uioneUserType: "type", uioneFieldWord: "keyword",
+  uioneFields: "plain", "": "plain",
 };
 
 function vim(file, specs) {
@@ -78,7 +79,7 @@ const scopeCategories = [
   ["entity.name.function.call", "function"], ["entity.name", "name"],
   ["string.regexp", "pattern"], ["variable.parameter", "param"],
   ["string.other.path", "route"], ["string", "string"], ["constant.numeric", "number"],
-  ["constant", "constant"], ["source", "plain"],
+  ["constant", "constant"], ["variable.other", "variable"], ["source", "plain"],
 ];
 
 function tokenize(grammar, lines) {

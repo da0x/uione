@@ -10,6 +10,9 @@
       "include": "#comments"
     },
     {
+      "include": "#entity"
+    },
+    {
       "include": "#declarations"
     },
     {
@@ -297,6 +300,64 @@
         {
           "match": "::",
           "name": "punctuation.separator.namespace.uione"
+        }
+      ]
+    },
+    "entity": {
+      "comment": "An entity's block: each line is a field, its name first, then its type, built in or another entity, so `project  project  required  key` is a field named project holding a project. Inside it, words that start declarations elsewhere are names.",
+      "begin": "^\\s*(entity)\\s+([A-Za-z_]\\w*)(?:\\s+(history))?\\s*(\\{)",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.uione"
+        },
+        "2": {
+          "name": "entity.name.type.uione"
+        },
+        "3": {
+          "name": "keyword.other.uione"
+        }
+      },
+      "end": "^\\s*(\\})",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "match": "^\\s*([A-Za-z_]\\w*)\\s+(?:(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b|([A-Za-z_]\\w*(?:::[A-Za-z_]\\w*)*))",
+          "captures": {
+            "1": {
+              "name": "variable.other.field.uione"
+            },
+            "2": {
+              "name": "support.type.uione"
+            },
+            "3": {
+              "name": "support.type.user.uione"
+            }
+          }
+        },
+        {
+          "match": "\\b(?:per|of)\\b",
+          "name": "keyword.other.uione"
+        },
+        {
+          "match": "\\b(?:required|unique|after|key)\\b",
+          "name": "storage.modifier.uione"
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#namespaces"
+        },
+        {
+          "include": "#operators"
         }
       ]
     }
