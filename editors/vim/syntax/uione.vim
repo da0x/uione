@@ -19,8 +19,8 @@ syn match   uioneComment "//.*$" contains=uioneTodo,@Spell
 syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
-syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>" nextgroup=uioneQualifier,uioneName skipwhite
-syn match uioneDeclare "^\s*\zs\<namespace\>" nextgroup=uioneNamespaceName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\)\@!" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
 syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
 syn match uioneName       "\h\w*" contained
@@ -73,7 +73,10 @@ syn match uioneKeyword "\<\%(text\|code\)\ze\s\+\""
 
 " library::book, waitlist::signup::create
 syn match uioneNamespace "\<\h\w*\ze::"
-syn match uioneScope     "::"
+syn match uioneScope     "::" nextgroup=uioneMember
+" What follows a qualifier is a name, even a word that's a keyword elsewhere, like
+" create in member::create.
+syn match uioneMember    "\h\w*" contained
 
 " Routes: /, /docs/:page, and #places on a page
 syn match uioneRoute "\%(^\|\s\)\zs/\%([A-Za-z:][A-Za-z0-9_:/-]*\)\=\ze\%(\s\|{\|$\)" contains=uioneParam

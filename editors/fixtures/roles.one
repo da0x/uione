@@ -1,0 +1,26 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A role written as a block, for the highlighting test: each line names commands
+// by the entity they're on, so project:: and member:: are names, not declarations.
+
+namespace tracker {
+
+	entity project {
+		name  text  required
+	}
+
+	entity member {
+		project  project  required  key
+		person   user     required  key
+		role     enum     maintainer | reporter = role::reporter
+	}
+
+	command project::update
+	command member::create
+
+	role maintainer per project from member {
+		project::update  member::create
+	}
+
+} // namespace tracker
