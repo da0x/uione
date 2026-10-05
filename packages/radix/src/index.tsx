@@ -514,6 +514,25 @@ export const radix: ComponentSet = {
       <div aria-busy={status === "loading"} className="h-6" />
     ),
 
+  // Asking whether visits may be counted with cookies: a small card at the foot of
+  // the page, out of the way of what's on it, until it's answered.
+  Consent: ({ onAnswer }) => (
+    <aside
+      aria-label="Counting visits"
+      className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-wrap items-center gap-3 rounded-box border border-line bg-surface p-4 text-sm shadow-panel sm:flex-nowrap"
+    >
+      <p className="m-0 flex-1 leading-6 text-ink/90">This site counts its visits with Google Analytics, to see how it's used. May it use cookies to do that?</p>
+      <div className="flex shrink-0 gap-2">
+        <button type="button" onClick={() => onAnswer(false)} className={`${pressable} ${button.secondary}`}>
+          No thanks
+        </button>
+        <button type="button" onClick={() => onAnswer(true)} className={`${pressable} ${button.primary}`}>
+          Allow
+        </button>
+      </div>
+    </aside>
+  ),
+
   Picture: ({ source }) => (
     <img
       src={source}

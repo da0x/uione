@@ -144,3 +144,27 @@ TEST_CASE("a project without environments is built as it always was, and --for i
     CHECK(driver::build(dir.string(), (dir / "build").string(), "staging").refusal == "this project has no environments, so it's built without --for");
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("a project counts its visitors with Firebase Analytics only when it says so") {
+    auto app = [](const std::string& settings) {
+        auto dir = project("uione-analytics", "project shop {\n\tdomain \"shop.example\"\n\tfirebase \"shop\"\n\tregion \"us-east4\"\n" + settings +
+                                                  "}\nnamespace shop {\n\tentity order {\n\t\ttotal  number\n\t}\n}\nscreen \"Shop\" / {\n\ttext \"Welcome\"\n}\n");
+        auto built = driver::build(dir.string(), (dir / "build").string());
+        for (const auto& d : built.problems) CAPTURE(language::format(d));
+        REQUIRE(built.refusal.empty());
+        const auto* file = find(built.files, "web/src/app.tsx");
+        REQUIRE(file);
+        std::string content = file->content;
+        std::filesystem::remove_all(dir);
+        return content;
+    };
+    auto counted = app("\tanalytics google\n");
+    CHECK(counted.find("import { firebaseAnalytics, firebaseSource } from \"@uione/react/firebase\";") != std::string::npos);
+    CHECK(counted.find("measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,") != std::string::npos);
+    CHECK(counted.find("const analytics = !import.meta.env.DEV && cloud.config.measurementId ? firebaseAnalytics(cloud.config) : undefined;") != std::string::npos);
+    CHECK(counted.find(", analytics };") != std::string::npos);
+    auto quiet = app("");
+    CHECK(quiet.find("firebaseAnalytics") == std::string::npos);
+    CHECK(quiet.find(", analytics") == std::string::npos);
+    CHECK(quiet.find("measurementId") == std::string::npos);
+}

@@ -185,6 +185,11 @@ func settings(outputs map[string]any) (string, error) {
 		}
 		fmt.Fprintf(&env, "%s=%s\n", pair[0], value)
 	}
+	// Counting visitors, for an app that does, once the project is linked to Google
+	// Analytics; until then there's none, and the app counts no one.
+	if id := text(outputs, "firebase_measurement_id"); id != "" {
+		fmt.Fprintf(&env, "VITE_FIREBASE_MEASUREMENT_ID=%s\n", id)
+	}
 	return env.String(), nil
 }
 

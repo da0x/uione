@@ -195,6 +195,7 @@ namespace one::generators {
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
         std::string signin_;  // how people sign in, when the project says: google or github
+        bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
@@ -247,6 +248,7 @@ namespace one::generators {
                         if (s.key == "ui") ui_ = s.value;
                         if (s.key == "title") title_ = s.value;
                         if (s.key == "signin") signin_ = s.value;
+                        if (s.key == "analytics") analytics_ = s.value == "google";
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
@@ -1039,7 +1041,8 @@ namespace one::generators {
             auto from = out.from(project_.path, project_.line);
             out.generated_from(source_name());
             out.line("import { App } from \"@uione/react\";");
-            out.line("import { firebaseSource } from \"@uione/react/firebase\";");
+            out.line(analytics_ ? "import { firebaseAnalytics, firebaseSource } from \"@uione/react/firebase\";"
+                                : "import { firebaseSource } from \"@uione/react/firebase\";");
             out.line("import { " + ui_ + " } from \"@uione/" + ui_ + "\";");
             std::string names;
             for (const auto& screen : screens) {
@@ -1061,6 +1064,7 @@ namespace one::generators {
             out.line("apiKey: import.meta.env.VITE_FIREBASE_API_KEY,");
             out.line("appId: import.meta.env.VITE_FIREBASE_APP_ID,");
             out.line("authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,");
+            if (analytics_) out.line("measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,");
             out.close("},");
             out.close("};");
             std::string personal;
@@ -1072,6 +1076,11 @@ namespace one::generators {
             // Google is the default, so only another way of signing in is written down.
             std::string signin = signin_ == "github" ? ", signin: \"github\" as const" : "";
             out.line("const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud)" + personal + signin + " });");
+            if (analytics_) {
+                out.line("// Visitors are counted once they agree, and only where the deploy found the");
+                out.line("// project linked to Google Analytics, which gives it a measurement ID.");
+                out.line("const analytics = !import.meta.env.DEV && cloud.config.measurementId ? firebaseAnalytics(cloud.config) : undefined;");
+            }
             out.line();
             std::string icon;
             if (!icon_.empty()) icon = ", icon: \"/icon.svg\"";
@@ -1080,7 +1089,7 @@ namespace one::generators {
                 // A project that names no way of signing in offers none.
                 std::string offered = has_project_ && signin_.empty() ? ", signin: false" : "";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + " };");
+                         ", data" + offered + (analytics_ ? ", analytics" : "") + " };");
             }
             out.line();
             out.open("export default function Site() {");

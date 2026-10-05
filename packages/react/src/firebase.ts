@@ -9,12 +9,15 @@
 // there. In a browser it connects as soon as the page asks who's signed in, which
 // every page does to draw its account area.
 
+import { initializeAnalytics, isSupported, logEvent, setConsent } from "firebase/analytics";
+import type { Analytics as FirebaseAnalytics } from "firebase/analytics";
 import { initializeApp } from "firebase/app";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
 import { GithubAuthProvider, GoogleAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import type { Auth, User } from "firebase/auth";
 import { Timestamp, connectFirestoreEmulator, doc, getFirestore, onSnapshot } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
+import type { Analytics } from "./contract.js";
 import type { AuthSource, DataSource, Person, ViewData } from "./data.js";
 import { liveSource } from "./live.js";
 import type { LiveOptions } from "./live.js";
@@ -41,6 +44,26 @@ function plain(value: unknown): unknown {
 
 function personOf(user: User | null): Person | null {
   return user ? { uid: user.uid, name: user.displayName ?? user.email ?? "Signed in" } : null;
+}
+
+// Counting visitors with Firebase Analytics, which is Google Analytics underneath,
+// in the same Firebase app the data comes from, as its settings name it, measurement
+// ID included. It starts in Google's consent mode with everything refused, so a
+// visitor is counted without cookies until they agree, and records each screen
+// itself rather than only the first page load.
+export function firebaseAnalytics(config: FirebaseOptions): Analytics {
+  let started: Promise<FirebaseAnalytics | undefined> | undefined;
+  const start = () =>
+    (started ??= (async () => {
+      if (!(await isSupported().catch(() => false))) return undefined;
+      setConsent({ analytics_storage: "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+      return initializeAnalytics(initializeApp(config), { config: { send_page_view: false } });
+    })());
+  return {
+    consent: (agreed) => void start().then((a) => a && setConsent({ analytics_storage: agreed ? "granted" : "denied" })),
+    page: (path, title) =>
+      void start().then((a) => a && logEvent(a, "page_view", { page_path: path, page_title: title, page_location: window.location.href })),
+  };
 }
 
 export function firebaseSource(options: FirebaseSourceOptions): DataSource {

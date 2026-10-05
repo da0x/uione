@@ -156,6 +156,13 @@ as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redir
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
 
+`analytics google` counts the site's visitors with Firebase Analytics, which is
+Google Analytics underneath, once its Firebase project is linked to a Google
+Analytics account of the owner's. It records each screen as it's opened. A visitor
+is asked once whether it may use cookies, and until they agree, they're counted
+without them, as Google's consent mode does; their answer is kept in their browser.
+A project without the setting counts no one and asks no one.
+
 ### environment
 
 A project can run in more than one place, each deployed on its own: production

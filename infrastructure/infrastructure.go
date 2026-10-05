@@ -29,7 +29,8 @@
 //
 //   - firebase_api_key, firebase_app_id, firebase_project_id and
 //     firebase_auth_domain: the web app's Firebase settings, which the web build
-//     needs.
+//     needs, and firebase_measurement_id, once the Firebase project is linked to
+//     Google Analytics, for an app that counts its visitors.
 //   - backend_url: the address Cloud Run serves the backend at. The site calls it
 //     through Hosting, at /api/.
 //   - dns_records: the changes to make at the domain's registrar, one per line, like
@@ -359,6 +360,8 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	ctx.Export("firebase_app_id", app.AppId)
 	ctx.Export("firebase_project_id", project)
 	ctx.Export("firebase_auth_domain", web.AuthDomain())
+	// Only once the Firebase project is linked to Google Analytics; empty before.
+	ctx.Export("firebase_measurement_id", web.MeasurementId())
 	ctx.Export("backend_url", run.Uri)
 	ctx.Export("dns_records", domain.RequiredDnsUpdates.ApplyT(records))
 	ctx.Export("domain", pulumi.String(p.Domain))

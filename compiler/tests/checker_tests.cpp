@@ -200,7 +200,9 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolor \"red\"\n}\n").message ==
-          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon, serve, redirect, title or one");
+          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon, serve, redirect, title, one or analytics");
+    CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
+    CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
         "a project has one project block"));
 }

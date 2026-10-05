@@ -366,7 +366,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title", "one"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title", "one", "analytics"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -376,7 +376,7 @@ namespace one::language {
             auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon, serve, redirect, title or one");
+                                   "region, ui, signin, icon, serve, redirect, title, one or analytics");
                     return;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
@@ -389,6 +389,10 @@ namespace one::language {
                 }
                 if (s.key == "signin" && s.value != "google" && s.value != "github") {
                     error(s.where, "signin is google or github");
+                }
+                // Visitors counted with Firebase Analytics, once they agree to it.
+                if (s.key == "analytics" && s.value != "google") {
+                    error(s.where, "analytics is google, for Firebase Analytics");
                 }
                 if (s.key == "domain" && (!only(s.value, host) || s.value.find('.') == std::string::npos)) {
                     error(s.where, "domain has to be a domain name, like uione.io");

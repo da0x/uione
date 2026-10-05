@@ -289,3 +289,23 @@ func TestANewStackTakesOverTheOneManagingItsProject(t *testing.T) {
 		t.Errorf("two stacks managing one project gave %v", err)
 	}
 }
+
+// A project linked to Google Analytics has a measurement ID, which its web app is
+// built with to count visitors; one that isn't, or doesn't count them, has none.
+func TestTheWebAppIsBuiltWithItsMeasurementIDOnlyWhenThereIsOne(t *testing.T) {
+	outputs := map[string]any{"firebase_api_key": "key", "firebase_app_id": "1:2:web:3", "firebase_project_id": "ui-one",
+		"firebase_auth_domain": "ui-one.firebaseapp.com"}
+	without, err := settings(outputs)
+	if err != nil || strings.Contains(without, "MEASUREMENT") {
+		t.Errorf("without a measurement ID, the settings are %q, %v", without, err)
+	}
+	outputs["firebase_measurement_id"] = "G-ABC123"
+	with, err := settings(outputs)
+	if err != nil || !strings.HasSuffix(with, "VITE_FIREBASE_MEASUREMENT_ID=G-ABC123\n") {
+		t.Errorf("with a measurement ID, the settings are %q, %v", with, err)
+	}
+	outputs["firebase_measurement_id"] = ""
+	if empty, _ := settings(outputs); strings.Contains(empty, "MEASUREMENT") {
+		t.Errorf("an empty measurement ID is written: %q", empty)
+	}
+}

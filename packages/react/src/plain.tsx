@@ -118,6 +118,18 @@ export const plain: ComponentSet = {
 
   Text: ({ children }) => <p>{children}</p>,
 
+  Consent: ({ onAnswer }) => (
+    <aside aria-label="Counting visits">
+      <p>This site counts its visits with Google Analytics, to see how it's used. May it use cookies to do that?</p>
+      <button type="button" onClick={() => onAnswer(true)}>
+        Allow
+      </button>
+      <button type="button" onClick={() => onAnswer(false)}>
+        No thanks
+      </button>
+    </aside>
+  ),
+
   Link: ({ href, onClick, external, children }) =>
     external ? (
       <a href={href} target="_blank" rel="noreferrer" title="Opens in a new tab">

@@ -156,6 +156,19 @@ export interface LiveProps {
   value: string;
 }
 
+// Counting visitors, like Firebase Analytics: told each screen the app shows, and
+// whether the visitor agreed to be counted with cookies. Until they do, it counts
+// without them, as Google's consent mode does.
+export interface Analytics {
+  consent(agreed: boolean): void;
+  page(path: string, title: string): void;
+}
+
+// Asking a visitor whether they may be counted, once; their answer is kept.
+export interface ConsentProps {
+  onAnswer: (agreed: boolean) => void;
+}
+
 export interface ComponentSet {
   Page: ComponentType<PageProps>;
   Account: ComponentType<AccountProps>;
@@ -173,4 +186,5 @@ export interface ComponentSet {
   Live: ComponentType<LiveProps>;
   Markdown: ComponentType<MarkdownProps>;
   Picture: ComponentType<PictureProps>;
+  Consent: ComponentType<ConsentProps>;
 }

@@ -209,3 +209,50 @@ describe("a screen that breaks while it's drawn", () => {
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
   });
 });
+
+describe("counting visitors", () => {
+  // The browser's storage, where the visitor's answer is kept.
+  const kept = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => kept.get(k) ?? null,
+    setItem: (k: string, v: string) => void kept.set(k, v),
+    removeItem: (k: string) => void kept.delete(k),
+    clear: () => kept.clear(),
+  });
+
+  function counter() {
+    const told: string[] = [];
+    return { told, analytics: { consent: (agreed: boolean) => told.push(`consent ${agreed}`), page: (path: string) => told.push(`page ${path}`) } };
+  }
+
+  it("counts each screen, asks once whether it may use cookies, and keeps the answer", async () => {
+    localStorage.clear();
+    const { told, analytics } = counter();
+    const first = render(<App name="uione" screens={[home, studio, docs]} ui={plain} data={memorySource()} location="/" analytics={analytics} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(told).toEqual(["page /"]); // counted without cookies, before any answer
+    fireEvent.click(screen.getByRole("link", { name: "Studio" }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    expect(told).toEqual(["page /", "page /studio"]);
+    fireEvent.click(screen.getByRole("button", { name: "Allow" }));
+    expect(told).toContain("consent true");
+    expect(screen.queryByRole("complementary", { name: "Counting visits" })).toBeNull();
+    first.unmount();
+
+    // The next visit isn't asked again, and starts with the answer it gave.
+    const again = counter();
+    render(<App name="uione" screens={[home]} ui={plain} data={memorySource()} location="/" analytics={again.analytics} />);
+    expect(screen.queryByRole("complementary", { name: "Counting visits" })).toBeNull();
+    expect(again.told[0]).toBe("consent true");
+  });
+
+  it("asks no one, and counts no one, without analytics", () => {
+    localStorage.clear();
+    render(<App name="uione" screens={[home]} ui={plain} data={memorySource()} location="/" />);
+    expect(screen.queryByRole("complementary", { name: "Counting visits" })).toBeNull();
+  });
+});

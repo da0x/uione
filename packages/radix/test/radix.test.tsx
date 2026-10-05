@@ -409,3 +409,15 @@ describe("a link to another site", () => {
     expect(home.querySelector("svg")).toBeNull();
   });
 });
+
+describe("asking to count visits", () => {
+  it("asks once, at the foot of the page, and says what the visitor answered", () => {
+    const answers: boolean[] = [];
+    render(<radix.Consent onAnswer={(agreed) => answers.push(agreed)} />);
+    const ask = screen.getByRole("complementary", { name: "Counting visits" });
+    expect(ask.textContent).toContain("Google Analytics");
+    fireEvent.click(within(ask).getByRole("button", { name: "No thanks" }));
+    fireEvent.click(within(ask).getByRole("button", { name: "Allow" }));
+    expect(answers).toEqual([false, true]);
+  });
+});

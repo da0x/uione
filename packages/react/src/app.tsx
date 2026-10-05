@@ -7,7 +7,7 @@
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } from "react-router";
-import type { ComponentSet } from "./contract.js";
+import type { Analytics, ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
 import type { CommandInput, DataSource } from "./data.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
@@ -35,20 +35,66 @@ export interface AppProps {
   icon?: string; // the address of the app's icon, shown beside its name
   location?: string; // start at this address, in memory rather than the browser's
   signin?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
+  analytics?: Analytics; // counting visitors, once they agree; none counts no one, and asks no one
+}
+
+// The visitor's answer to being counted, kept in their browser: agreed, refused, or
+// not asked yet.
+const consentKey = "uione-analytics-consent";
+
+function storedConsent(): boolean | undefined {
+  try {
+    const answer = localStorage.getItem(consentKey);
+    return answer === "agreed" ? true : answer === "refused" ? false : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Counts each screen the visitor sees, and asks them once whether they may be
+// counted with cookies; until they agree, they're counted without.
+function Counting({ analytics }: { analytics: Analytics }) {
+  const ui = useUI();
+  const { pathname } = useLocation();
+  const [answer, setAnswer] = useState(storedConsent);
+  useEffect(() => {
+    if (answer !== undefined) analytics.consent(answer);
+  }, [analytics, answer]);
+  useEffect(() => {
+    // After the screen has set its title.
+    const timer = setTimeout(() => analytics.page(pathname, document.title), 0);
+    return () => clearTimeout(timer);
+  }, [analytics, pathname]);
+  if (answer !== undefined) return null;
+  return (
+    <ui.Consent
+      onAnswer={(agreed) => {
+        try {
+          localStorage.setItem(consentKey, agreed ? "agreed" : "refused");
+        } catch {
+          // Without storage, they're asked again next time.
+        }
+        setAnswer(agreed);
+      }}
+    />
+  );
 }
 
 // Whether the page offers signing in. An app whose project names no way of signing
 // in doesn't, so it never shows a button that can't work.
 const SignInOffered = createContext(true);
 
-export function App({ name, icon, screens, ui, data, location, signin = true }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, signin = true, analytics }: AppProps) {
   const routes = (
-    <Routes>
+    <>
+      {analytics && <Counting analytics={analytics} />}
+      <Routes>
       {screens.map((s) => (
         <Route key={s.info.route} path={routerPath(s.info.route)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
       ))}
       <Route path="*" element={<NotFound name={name} icon={icon} screens={screens} />} />
-    </Routes>
+      </Routes>
+    </>
   );
   return (
     <UIContext.Provider value={ui}>
