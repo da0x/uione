@@ -12,8 +12,12 @@ vi.mock("firebase/firestore", () => ({ Timestamp: class {}, connectFirestoreEmul
 vi.mock("firebase/analytics", () => ({}));
 vi.mock("firebase/auth", () => {
   class Provider {
+    scopes: string[] = [];
     constructor(public providerId: string) {}
     setCustomParameters() {}
+    addScope(scope: string) {
+      this.scopes.push(scope);
+    }
   }
   const refused = (id: string) => (e: { credential?: string }) => (e.credential ? { providerId: id, token: e.credential } : null);
   return {
@@ -44,7 +48,7 @@ describe("signing in with Firebase", () => {
     await source.auth!.signIn("microsoft");
     expect((popup.mock.calls[0]![1] as { providerId: string }).providerId).toBe("microsoft.com");
     await source.auth!.signIn();
-    expect((popup.mock.calls[1]![1] as { providerId: string }).providerId).toBe("github.com");
+    expect(popup.mock.calls[1]![1]).toMatchObject({ providerId: "github.com", scopes: ["user:email"] }); // their email, even a private one
   });
 
   it("is Google when the project doesn't say", () => {

@@ -20,6 +20,12 @@ export const github: FirebaseAuthenticationMethod = {
   id: "github",
   name: "GitHub",
   Mark: GitHubMark,
-  provider: () => new GithubAuthProvider(),
+  // Their email too, even one kept private on GitHub, so the account has it, and
+  // signing in another way with the same email finds the same account.
+  provider: () => {
+    const provider = new GithubAuthProvider();
+    provider.addScope("user:email");
+    return provider;
+  },
   credentialFrom: (refused) => GithubAuthProvider.credentialFromError(refused as FirebaseError),
 };
