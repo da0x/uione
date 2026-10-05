@@ -28,6 +28,9 @@ import (
 type Options struct {
 	Build string // the folder `one build` wrote, holding infrastructure/, api/ and web/
 	Stack string // the Pulumi stack, like production
+	// The Google Cloud project it deploys to. A new stack takes over the stack that
+	// already manages it, as after its environment is renamed.
+	Project string
 
 	// Confirm is shown what the deploy will change and says whether to go ahead.
 	// Without it, nothing is asked.
@@ -46,7 +49,7 @@ type Program interface {
 
 // Tools are what a deploy runs besides Pulumi.
 type Tools struct {
-	Program func(dir, stack string) (Program, error)
+	Program func(dir, stack, project string) (Program, error)
 	Run     func(ctx context.Context, dir string, log io.Writer, name string, args ...string) error // a command, like yarn build
 	Upload  func(ctx context.Context, project, web string, progress func(name, message string)) error
 	// Records asks Hosting what the domain still needs at its DNS host.
@@ -102,7 +105,7 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 			}
 		}
 		var err error
-		program, err = tools.Program(infrastructure, o.Stack)
+		program, err = tools.Program(infrastructure, o.Stack, o.Project)
 		return err
 	}); err != nil {
 		return "", err

@@ -29,7 +29,10 @@ namespace one::generators {
         std::string domain;
         std::string firebase;
         std::string region;
-        std::string stack = "production";  // the Pulumi stack: the environment's name, when it has one
+        // The Pulumi stack: an environment's is its Google Cloud project, which is what
+        // it is, whatever it's called, so renaming it keeps its stack; a project
+        // without environments has one, production.
+        std::string stack = "production";
         code::source from;  // the project block they're written in
         std::string github;  // where GitHub's webhook comes in, which needs a secret
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
@@ -54,7 +57,6 @@ namespace one::generators {
                 deploy_settings s;
                 s.name = p->name;
                 s.from = {f.path, d.where.line};
-                if (!p->environment.empty()) s.stack = p->environment;
                 for (const auto& setting : p->settings) {
                     if (setting.key == "domain") s.domain = setting.value;
                     if (setting.key == "firebase") s.firebase = setting.value;
@@ -62,6 +64,7 @@ namespace one::generators {
                     if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
                 }
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
+                if (!p->environment.empty()) s.stack = s.firebase;
                 for (const auto& other : files) {
                     if (s.github.empty()) s.github = github_route(other.declarations);
                 }
@@ -233,7 +236,7 @@ namespace one::generators {
             sh.line();
             sh.line("cd \"$here/infrastructure\"");
             sh.line("go mod tidy");
-            sh.line("GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack " + s.stack + " --build \"$here\" \"$@\"");
+            sh.line("GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack " + s.stack + " --project " + s.firebase + " --build \"$here\" \"$@\"");
             out.push_back(file("deploy", sh, true));
         }
         return {out, ""};

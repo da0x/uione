@@ -14,4 +14,4 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 cd "$here/infrastructure"
 go mod tidy
-GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack production --build "$here" "$@"
+GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack production --project uione-web --build "$here" "$@"

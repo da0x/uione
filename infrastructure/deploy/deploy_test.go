@@ -8,12 +8,18 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
+
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 )
 
 // world is a deploy's surroundings, recorded: what ran, in what order.
@@ -42,7 +48,7 @@ func (w *world) fails(step string) error {
 
 func (w *world) tools() Tools {
 	return Tools{
-		Program: func(dir, stack string) (Program, error) {
+		Program: func(dir, stack, project string) (Program, error) {
 			w.did = append(w.did, "open "+filepath.Base(dir)+" "+stack)
 			return w, nil
 		},
@@ -198,5 +204,88 @@ func TestADomainFirebaseHasntWorkedOutYetIsAskedAboutAgain(t *testing.T) {
 	}
 	if needed != "add CNAME studio.uione.io uione-cloud.web.app" {
 		t.Errorf("the domain needs %q", needed)
+	}
+}
+
+// Only the stack holding a Google Cloud project's Firebase project manages it, so
+// only that one is taken over by a renamed environment's new stack.
+func TestAStackManagesTheProjectWhoseFirebaseItHolds(t *testing.T) {
+	state := []byte(`{"resources":[{"type":"pulumi:pulumi:Stack","id":""},` +
+		`{"type":"gcp:firebase/project:Project","id":"projects/neotrac"},` +
+		`{"type":"gcp:firestore/database:Database","id":"projects/neotrac-staging/databases/(default)"}]}`)
+	if !manages(state, "neotrac") {
+		t.Error("a stack holding projects/neotrac doesn't manage neotrac")
+	}
+	if manages(state, "neotrac-staging") {
+		t.Error("a stack is said to manage a project it only mentions")
+	}
+	if manages([]byte(`not json`), "neotrac") {
+		t.Error("a state that can't be read manages a project")
+	}
+}
+
+// A renamed environment's new stack takes over the stack that manages its Google
+// Cloud project, with what it holds, on a real Pulumi with a file backend.
+func TestANewStackTakesOverTheOneManagingItsProject(t *testing.T) {
+	if _, err := exec.LookPath("pulumi"); err != nil {
+		t.Skip("pulumi isn't installed")
+	}
+	dir := t.TempDir()
+	t.Setenv("PULUMI_BACKEND_URL", "file://"+t.TempDir())
+	t.Setenv("PULUMI_CONFIG_PASSPHRASE", "test")
+	t.Setenv("PULUMI_SKIP_UPDATE_CHECK", "true")
+	if err := os.WriteFile(filepath.Join(dir, "Pulumi.yaml"), []byte("name: shop\nruntime: go\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	made := func(name, project string) {
+		t.Helper()
+		ws, err := auto.NewLocalWorkspace(ctx, auto.WorkDir(dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := ws.CreateStack(ctx, name); err != nil {
+			t.Fatal(err)
+		}
+		urn := "urn:pulumi:" + name + "::shop::"
+		deployment := fmt.Sprintf(`{"manifest":{"time":"2026-10-05T00:00:00Z","magic":"","version":""},"resources":[`+
+			`{"urn":"%spulumi:pulumi:Stack::shop-%s","custom":false,"type":"pulumi:pulumi:Stack"},`+
+			`{"urn":"%sgcp:firebase/project:Project::firebase","custom":true,"id":"projects/%s","type":"gcp:firebase/project:Project"}]}`,
+			urn, name, urn, project)
+		if err := ws.ImportStack(ctx, name, apitype.UntypedDeployment{Version: 3, Deployment: json.RawMessage(deployment)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	made("neotrac", "neotrac")
+	made("staging", "neotrac-staging")
+
+	if err := adopt(ctx, dir, "production", "neotrac"); err != nil {
+		t.Fatal(err)
+	}
+	ws, _ := auto.NewLocalWorkspace(ctx, auto.WorkDir(dir))
+	stacks, err := ws.ListStacks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, s := range stacks {
+		names = append(names, s.Name)
+	}
+	sort.Strings(names)
+	if strings.Join(names, " ") != "production staging" {
+		t.Errorf("after taking over neotrac's stack, the stacks are %v", names)
+	}
+	state, err := ws.ExportStack(ctx, "production")
+	if err != nil || !manages(state.Deployment, "neotrac") {
+		t.Errorf("the new stack doesn't hold what the old one did: %v", err)
+	}
+
+	// A stack that's there already is used as it is, and a second claim is refused.
+	if err := adopt(ctx, dir, "production", "neotrac"); err != nil {
+		t.Errorf("deploying an existing stack again: %v", err)
+	}
+	made("copy", "neotrac")
+	if err := adopt(ctx, dir, "live", "neotrac"); err == nil || !strings.Contains(err.Error(), "can't be told which") {
+		t.Errorf("two stacks managing one project gave %v", err)
 	}
 }

@@ -181,10 +181,12 @@ project shop {
 ```
 
 `one build shop --for staging` builds for staging, and its `deploy` deploys
-there, as the Pulumi stack named after it. Without `--for`, a project is built for
-its first environment, and says so. Every environment needs a domain, a Firebase
-project and a region, its own or shared; anything else is the same everywhere, so
-it goes outside them.
+there, as a Pulumi stack named after its Google Cloud project, `shop-staging`. An
+environment is where it runs, whatever it's called, so renaming one keeps its stack
+and everything it made. Without `--for`, a project is built for its first
+environment, and says so. Every environment needs a domain, a Firebase project and a
+region, its own or shared, and each its own Google Cloud project; anything else is
+the same everywhere, so it goes outside them.
 
 ## namespace
 

@@ -78,7 +78,7 @@ describe("the compiler in the browser", () => {
     expect((run(one, { kind: "check", files: tasks }) as Checked).project).toBeNull();
     const staging = run(one, { kind: "build", files: { "shop.one": shop }, environment: "staging" }) as Built;
     expect(staging.environment).toBe("staging");
-    expect(staging.files.find((f) => f.path === "deploy")?.content).toContain("--stack staging ");
+    expect(staging.files.find((f) => f.path === "deploy")?.content).toContain("--stack shop-staging --project shop-staging ");
     expect((run(one, { kind: "build", files: { "shop.one": shop } }) as Built).environment).toBe("production");
   });
 

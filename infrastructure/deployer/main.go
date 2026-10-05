@@ -30,6 +30,7 @@ func main() {
 	// deployer's are kept apart from them.
 	flags := flag.NewFlagSet("deployer", flag.ExitOnError)
 	stack := flags.String("stack", "production", "the Pulumi stack")
+	project := flags.String("project", "", "the Google Cloud project it deploys to, whose stack a new one takes over")
 	build := flags.String("build", "..", "the folder one build wrote")
 	yes := flags.Bool("yes", false, "deploy without asking")
 	asJSON := flags.Bool("json", false, "print progress as JSON lines")
@@ -42,7 +43,7 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	o := deploy.Options{Build: dir, Stack: *stack, Log: os.Stdout}
+	o := deploy.Options{Build: dir, Stack: *stack, Project: *project, Log: os.Stdout}
 	if *asJSON {
 		o.Progress, o.Log = os.Stdout, os.Stderr
 	}

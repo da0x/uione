@@ -89,6 +89,11 @@ TEST_CASE("an environment has only its own place, and all of it, its own or shar
     CHECK(only_error("project shop {\n\tregion \"us-east4\"\n"
                      "\tenvironment staging {\n\t\tdomain \"a.example\"\n\t\tfirebase \"a\"\n\t}\n"
                      "\tenvironment staging {\n\t\tdomain \"b.example\"\n\t\tfirebase \"b\"\n\t}\n}\n") == "there are two environments called staging");
+    // Two environments in one Google Cloud project would deploy over each other.
+    CHECK(only_error("project shop {\n\tregion \"us-east4\"\n\tfirebase \"shop\"\n"
+                     "\tenvironment production {\n\t\tdomain \"shop.example\"\n\t}\n"
+                     "\tenvironment staging {\n\t\tdomain \"staging.shop.example\"\n\t}\n}\n") ==
+          "environments production and staging both run in the Google Cloud project shop; each needs its own, so their data and deploys never mix");
     // What's checked of a setting outside an environment is checked inside one too.
     CHECK(only_error("project shop {\n\tregion \"us-east4\"\n\tenvironment staging {\n\t\tdomain \"a.example\"\n\t\tfirebase \"a; rm -rf ~\"\n\t}\n}\n") ==
           "firebase has to be lowercase letters, digits and dashes, like ui-one or us-east4");
@@ -102,7 +107,8 @@ TEST_CASE("a build is for one environment: the one named, or the first") {
     CHECK(first.note.find("built for environment production, the first; --for names another") != std::string::npos);
     const auto* deploy = find(first.files, "deploy");
     REQUIRE(deploy);
-    CHECK(deploy->content.find("--stack production ") != std::string::npos);
+    // An environment's stack is its Google Cloud project, so renaming it keeps its stack.
+    CHECK(deploy->content.find("--stack shop-production --project shop-production ") != std::string::npos);
 
     auto staging = driver::build(dir.string(), (dir / "build").string(), "staging");
     REQUIRE(staging.refusal.empty());
@@ -110,7 +116,7 @@ TEST_CASE("a build is for one environment: the one named, or the first") {
     CHECK(staging.note.find("--for") == std::string::npos);
     deploy = find(staging.files, "deploy");
     REQUIRE(deploy);
-    CHECK(deploy->content.find("--stack staging ") != std::string::npos);
+    CHECK(deploy->content.find("--stack shop-staging --project shop-staging ") != std::string::npos);
     // Everything built is for staging's place: its Firebase project and its region,
     // which takes the place of the shared one.
     const auto* program = find(staging.files, "infrastructure/main.go");
@@ -134,7 +140,7 @@ TEST_CASE("a project without environments is built as it always was, and --for i
     CHECK(built.environment.empty());
     const auto* deploy = find(built.files, "deploy");
     REQUIRE(deploy);
-    CHECK(deploy->content.find("--stack production ") != std::string::npos);
+    CHECK(deploy->content.find("--stack production --project shop ") != std::string::npos);
     CHECK(driver::build(dir.string(), (dir / "build").string(), "staging").refusal == "this project has no environments, so it's built without --for");
     std::filesystem::remove_all(dir);
 }

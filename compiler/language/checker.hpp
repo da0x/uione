@@ -440,7 +440,25 @@ namespace one::language {
             // Each environment is a place the project runs: its own domain, Firebase
             // project and region, or the ones shared outside the environments.
             std::set<std::string> named;
+            std::map<std::string, std::string> places;  // each Google Cloud project, and the environment that has it
+            auto shared_firebase = [&]() -> std::string {
+                for (const auto& s : p.settings) {
+                    if (s.key == "firebase") return s.value;
+                }
+                return "";
+            }();
             for (const auto& environment : p.environments) {
+                std::string firebase = shared_firebase;
+                for (const auto& s : environment.settings) {
+                    if (s.key == "firebase") firebase = s.value;
+                }
+                if (!firebase.empty()) {
+                    auto [it, first] = places.emplace(firebase, environment.name);
+                    if (!first && it->second != environment.name) {
+                        error(environment.where, "environments " + it->second + " and " + environment.name + " both run in the Google Cloud project " +
+                                                     firebase + "; each needs its own, so their data and deploys never mix");
+                    }
+                }
                 snake(environment.name, environment.where);
                 if (!named.insert(environment.name).second) {
                     error(environment.where, "there are two environments called " + environment.name);
