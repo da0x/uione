@@ -291,6 +291,36 @@ export interface WorkbenchProps {
   onGo?: (path: string, line: number, column: number) => void; // going to a definition, as the Editor's
 }
 
+// While the workbench fills the window, the page beneath holds still, and Escape
+// puts it back.
+function useFullWindow(full: boolean, leave: () => void) {
+  useEffect(() => {
+    if (!full) return;
+    const root = document.documentElement;
+    const was = root.style.overflow;
+    root.style.overflow = "hidden";
+    const escape = (e: KeyboardEvent) => e.key === "Escape" && leave();
+    document.addEventListener("keydown", escape);
+    return () => {
+      root.style.overflow = was;
+      document.removeEventListener("keydown", escape);
+    };
+  }, [full]);
+}
+
+// In the workbench's top right corner: fill the window with it, or put it back,
+// with the arrows pointing out or in.
+function FullWindowButton({ full, onChange }: { full: boolean; onChange: (full: boolean) => void }) {
+  const label = full ? "Exit full screen" : "Full screen";
+  return (
+    <button type="button" className="uione-full-window" aria-label={label} title={label} aria-pressed={full} onClick={() => onChange(!full)}>
+      <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {full ? <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /> : <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" />}
+      </svg>
+    </button>
+  );
+}
+
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
 export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true, look: given, onGo }: WorkbenchProps) {
@@ -302,6 +332,35 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
   const styled = toolbar || given !== undefined;
   const shown = toolbar && given === undefined;
   const [built, setBuilt] = useState<Built | undefined>();
+  const [full, setFull] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useFullWindow(full, () => setFull(false));
+  // On a phone, tapping the code fills the screen with it first, rather than
+  // opening the keyboard over a page zoomed in on it; a tap there then edits. A
+  // finger that moves is scrolling the page, and goes on doing that.
+  useEffect(() => {
+    const element = box.current;
+    if (!element || full || typeof matchMedia === "undefined" || !matchMedia("(pointer: coarse)").matches) return;
+    let start: { x: number; y: number } | undefined;
+    const began = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      start = e.touches.length === 1 && touch ? { x: touch.clientX, y: touch.clientY } : undefined;
+    };
+    const ended = (e: TouchEvent) => {
+      const touch = e.changedTouches[0];
+      const target = e.target as HTMLElement | null;
+      if (!start || !touch || !target?.closest(".uione-editor")) return;
+      if (Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10) return;
+      e.preventDefault();
+      setFull(true);
+    };
+    element.addEventListener("touchstart", began, { passive: true });
+    element.addEventListener("touchend", ended, { passive: false });
+    return () => {
+      element.removeEventListener("touchstart", began);
+      element.removeEventListener("touchend", ended);
+    };
+  }, [full]);
   useEffect(() => {
     if (!generated) return;
     let current = true;
@@ -320,10 +379,12 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
   }, [compiler, files, delay, generated]);
   return (
     <div
-      className={`uione-workbench${generated ? "" : " uione-workbench-alone"}${shown ? " uione-workbench-tools" : ""}`}
+      ref={box}
+      className={`uione-workbench${generated ? "" : " uione-workbench-alone"}${shown ? " uione-workbench-tools" : ""}${full ? " uione-workbench-full" : ""}`}
       style={styled ? ({ "--uione-code-size": `${look.size}px`, "--uione-code-font": fontFamily(look) } as CSSProperties) : undefined}
     >
       {shown && <Toolbar look={look} onLook={setLook} />}
+      <FullWindowButton full={full} onChange={setFull} />
       <Editor
         path={path}
         value={files[path] ?? ""}

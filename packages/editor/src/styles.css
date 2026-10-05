@@ -37,6 +37,57 @@
 .uione-workbench-alone {
   grid-template-columns: minmax(0, 1fr);
 }
+.uione-workbench {
+  position: relative;
+}
+
+/* Full screen: the workbench fills the window, over the page, which holds still.
+   Its button, in the top right corner, puts it back. */
+.uione-full-window {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.55rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border: 1px solid var(--uione-line);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--uione-surface) 88%, transparent);
+  color: var(--uione-muted);
+  cursor: pointer;
+}
+.uione-full-window:hover {
+  color: var(--uione-ink);
+  background: var(--uione-sunken);
+}
+.uione-workbench:not(.uione-workbench-tools) .uione-generated > label,
+.uione-workbench-alone:not(.uione-workbench-tools) .uione-editor .cm-content {
+  padding-right: 2.9rem;
+}
+.uione-workbench.uione-workbench-full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  height: 100dvh;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+}
+/* The code can be tapped and scrolled on a phone without the page zooming in on
+   it, and filling the screen there it's large enough that starting to type doesn't
+   zoom either, as phones do for text smaller than 16px. */
+.uione-editor {
+  touch-action: manipulation;
+}
+@media (pointer: coarse) {
+  .uione-workbench-full .uione-editor .cm-editor {
+    font-size: max(16px, var(--uione-code-size, 16px));
+  }
+}
 .uione-workbench-alone .uione-editor {
   border-right: 0;
 }
@@ -175,6 +226,19 @@
     border-right: 0;
     border-bottom: 1px solid var(--uione-line);
   }
+  /* Filling a phone's screen, it's the code alone. */
+  .uione-workbench-full {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .uione-workbench-full.uione-workbench-tools {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .uione-workbench-full .uione-generated {
+    display: none;
+  }
+  .uione-workbench-full .uione-editor {
+    border-bottom: 0;
+  }
 }
 
 /* A diff: as tall as what it shows, inside a border, with lines added in green and
@@ -244,7 +308,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 1.1rem;
-  padding: 0.35rem 0.75rem;
+  padding: 0.35rem 3rem 0.35rem 0.75rem;
   border-bottom: 1px solid var(--uione-line);
   background: var(--uione-sunken);
   color: var(--uione-muted);
@@ -514,13 +578,17 @@
   align-items: center;
   gap: 0.45rem;
 }
-.uione-theme-swatch {
-  display: inline-block;
-  width: 2.2rem;
-  height: 1.15rem;
+/* The theme's button is its preview, to the button's own border. */
+.uione-look .uione-look-themes > button {
+  width: 2.4rem;
+  padding: 0;
   overflow: hidden;
-  border-radius: 4px;
-  border: 1px solid var(--uione-line);
+}
+.uione-theme-swatch {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 .uione-theme-swatch pre,
 .uione-theme-preview pre {
@@ -541,15 +609,6 @@
 }
 .uione-theme-gallery .uione-popover-body {
   padding: 0.75rem;
-}
-.uione-popover-sheet .uione-theme-gallery-heading {
-  display: none;
-}
-.uione-theme-gallery-heading {
-  margin: 0 0 0.6rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--uione-muted);
 }
 .uione-theme-grid {
   display: grid;

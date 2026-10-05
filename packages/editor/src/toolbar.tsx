@@ -316,8 +316,7 @@ function ThemePicker({ look, onPick }: { look: Look; onPick: (theme: CodeTheme) 
         <span className="uione-theme-swatch" aria-hidden="true" dangerouslySetInnerHTML={swatch ? { __html: swatch } : undefined} />
       </button>
       {open && (
-        <Popover anchor={button} label={dark ? "Dark themes" : "Light themes"} className="uione-theme-gallery" onClose={close}>
-          <p className="uione-theme-gallery-heading">{dark ? "Dark themes" : "Light themes"}</p>
+        <Popover anchor={button} label="Themes" className="uione-theme-gallery" onClose={close}>
           <div className="uione-theme-grid" role="radiogroup" aria-label={kind}>
             {list.map((theme) => {
               const shown = previewOf(theme, sample);

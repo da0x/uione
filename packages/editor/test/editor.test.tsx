@@ -329,6 +329,20 @@ describe("toolbar", () => {
   } as unknown as Pick<Compiler, "check" | "build">;
   const files = { "main.one": "entity book {\n\ttitle  text  required\n}\n" };
 
+  it("fills the window from its corner, and Escape or the same button puts it back", () => {
+    render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
+    const workbench = document.querySelector(".uione-workbench") as HTMLElement;
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    expect(workbench.classList.contains("uione-workbench-full")).toBe(true);
+    expect(document.documentElement.style.overflow).toBe("hidden");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(workbench.classList.contains("uione-workbench-full")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Exit full screen" }));
+    expect(workbench.classList.contains("uione-workbench-full")).toBe(false);
+    expect(document.documentElement.style.overflow).toBe("");
+  });
+
   it("sizes the text, picks a font and a tab width, and remembers them", () => {
     localStorage.clear();
     const { unmount } = render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
