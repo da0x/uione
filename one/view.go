@@ -959,6 +959,99 @@ func (a *App) write(ctx context.Context, v *ViewSpec, subject string, data map[s
 	return written, err
 }
 
+// definition writes out what a view reads and how, the same from one start of the
+// backend to the next, so a view whose definition changed can be told from one that
+// didn't: entities by name, and a function, which can't be compared, by its place
+// in the view.
+func (v *ViewSpec) definition() string {
+	var out strings.Builder
+	typeName := func(t reflect.Type) string {
+		if t == nil {
+			return ""
+		}
+		return t.PkgPath() + "." + t.Name()
+	}
+	val := func(x any) string {
+		switch m := x.(type) {
+		case *marker:
+			return "<" + m.name + ">"
+		case nil:
+			return "<none>"
+		}
+		return fmt.Sprintf("%T:%v", x, x)
+	}
+	query := func(q Query) string {
+		s := typeName(q.typ) + "("
+		for _, c := range q.conditions {
+			s += fmt.Sprintf("%s=%s,except=%t,has=%t;", c.field, val(c.value), c.except, c.has)
+		}
+		return s + ")"
+	}
+	fmt.Fprintf(&out, "view %s public=%t per_user=%t per=%s readers=%s people=%q permission=%q secrets=%q\n",
+		v.full, v.public, v.perUser, typeName(v.per), typeName(v.readers), v.people, v.permission, v.secrets)
+	if v.open != nil {
+		fmt.Fprintf(&out, "open %s=%s,except=%t\n", v.open.field, val(v.open.value), v.open.except)
+	}
+	for _, c := range v.counts {
+		fmt.Fprintf(&out, "count %s %s\n", c.name, query(c.query))
+	}
+	for _, c := range v.copies {
+		fmt.Fprintf(&out, "copy %s %s\n", c.name, c.field)
+	}
+	for _, l := range v.lists {
+		fmt.Fprintf(&out, "list %s %s fields=%q limit=%d\n", l.name, query(l.query), l.fields, l.limit)
+		for _, x := range l.values {
+			fmt.Fprintf(&out, "  value %s %s %s\n", x.name, query(x.query), x.field)
+		}
+		for i, o := range l.order {
+			fmt.Fprintf(&out, "  order %s reverse=%t through=%t #%d\n", o.field, o.reverse, o.through != nil, i)
+		}
+	}
+	sum := sha256.Sum256([]byte(out.String()))
+	return hex.EncodeToString(sum[:])
+}
+
+// rebuildChanged rebuilds the stored documents of every view whose definition
+// changed since the backend last started, as when a deploy adds a field to a view,
+// so they hold what it shows now rather than waiting for something they show to
+// change. Each view's definition is kept in view_definitions once its documents are
+// rebuilt, so later starts leave it alone.
+func (a *App) rebuildChanged(ctx context.Context) error {
+	for _, v := range a.reg.views {
+		if !v.keyed() {
+			continue // composed afresh at every start already
+		}
+		definition := v.definition()
+		kept := a.store.Collection("view_definitions").Doc(strings.ReplaceAll(v.full, "/", "_"))
+		snap, err := kept.Get(ctx)
+		if err != nil && status.Code(err) != codes.NotFound {
+			return err
+		}
+		if err == nil && snap.Data()["definition"] == definition {
+			continue
+		}
+		docs, err := a.store.Collection("views").Where("type", "==", v.full).Documents(ctx).GetAll()
+		if err != nil {
+			return err
+		}
+		version := time.Now().UnixNano()
+		for _, doc := range docs {
+			subject := strings.TrimPrefix(doc.Ref.ID, v.full+":")
+			data, err := a.compose(ctx, v, subject)
+			if err != nil {
+				return err
+			}
+			if _, err := a.write(ctx, v, subject, data, version, "definition"); err != nil {
+				return err
+			}
+		}
+		if _, err := kept.Set(ctx, map[string]any{"definition": definition, "view": v.full, "rebuilt": len(docs), "at": time.Now()}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // project rebuilds the documents of one view that an event touches.
 func (a *App) project(ctx context.Context, v *ViewSpec, ev event) error {
 	subjects, err := v.subjects(ctx, a, ev)

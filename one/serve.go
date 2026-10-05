@@ -253,6 +253,11 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 			return nil, err
 		}
 	}
+	// A view with a document per person or per entity is rebuilt where its
+	// definition changed, so a deploy that changes it reaches every document.
+	if err := a.rebuildChanged(ctx); err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
