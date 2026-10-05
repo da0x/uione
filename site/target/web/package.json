@@ -10,8 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@uione/radix": "0.5.6",
-    "@uione/react": "0.5.6",
+    "@uione/radix": "0.5.7",
+    "@uione/react": "0.5.7",
     "firebase": "^12.19.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
