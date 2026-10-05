@@ -223,13 +223,25 @@ describe("themes", () => {
   it("offers only the themes for the page as it is, and keeps the other page's choice", async () => {
     document.documentElement.setAttribute("data-theme", "light");
     const looks: unknown[] = [];
-    const { container } = render(<LookControls look={{ size: 14, font: "IBM Plex Mono", tabWidth: 4, darkTheme: "Nord" }} onLook={(l) => looks.push(l)} />);
+    render(<LookControls look={{ size: 14, font: "IBM Plex Mono", tabWidth: 4, darkTheme: "Nord" }} onLook={(l) => looks.push(l)} />);
     fireEvent.click(screen.getByRole("button", { name: /Light theme/ }));
-    const offered = Array.from(container.querySelectorAll(".uione-theme-card .uione-theme-name")).map((c) => c.textContent);
+    const offered = Array.from(document.querySelectorAll(".uione-theme-card .uione-theme-name")).map((c) => c.textContent);
     expect(offered).toEqual(lightThemes.map((t) => t.name));
     fireEvent.click(screen.getByRole("radio", { name: /One Light/ }));
     expect(looks.at(-1)).toMatchObject({ lightTheme: "One Light", darkTheme: "Nord" });
     document.documentElement.removeAttribute("data-theme");
+  });
+
+  it("shows the font as an icon, and names the fonts once it's opened", () => {
+    const looks: unknown[] = [];
+    render(<LookControls look={{ size: 14, font: "IBM Plex Mono", tabWidth: 4 }} onLook={(l) => looks.push(l)} />);
+    const button = screen.getByRole("button", { name: "Font: IBM Plex Mono" });
+    expect(button.textContent).toBe("");
+    expect(screen.queryByRole("radio", { name: "Fira Code" })).toBeNull();
+    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("radio", { name: "Fira Code" }));
+    expect(looks.at(-1)).toMatchObject({ font: "Fira Code" });
+    expect(screen.queryByRole("radio", { name: "Fira Code" })).toBeNull();
   });
 });
 
@@ -325,13 +337,14 @@ describe("toolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Larger text" }));
     fireEvent.click(screen.getByRole("button", { name: "Larger text" }));
     expect(workbench.style.getPropertyValue("--uione-code-size")).toBe("16px");
-    fireEvent.change(screen.getByRole("combobox", { name: "Font" }), { target: { value: "JetBrains Mono" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Font:/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "JetBrains Mono" }));
     expect(workbench.style.getPropertyValue("--uione-code-font")).toContain('"JetBrains Mono"');
     fireEvent.change(screen.getByRole("combobox", { name: "Tab width" }), { target: { value: "2" } });
     unmount();
     render(<Workbench compiler={compiler} files={files} path="main.one" onChange={() => {}} generated={false} />);
     expect((document.querySelector(".uione-workbench") as HTMLElement).style.getPropertyValue("--uione-code-size")).toBe("16px");
-    expect((screen.getByRole("combobox", { name: "Font" }) as HTMLSelectElement).value).toBe("JetBrains Mono");
+    expect(screen.getByRole("button", { name: "Font: JetBrains Mono" })).toBeTruthy();
     expect((screen.getByRole("combobox", { name: "Tab width" }) as HTMLSelectElement).value).toBe("2");
   });
 

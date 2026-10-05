@@ -18,7 +18,7 @@ import {
   useParam,
   useView,
 } from "../src/index.js";
-import type { MemorySource } from "../src/index.js";
+import type { DataSource, MemorySource, Person, ViewState } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
 function renderScreen(source: MemorySource, body: () => ReactNode) {
@@ -69,6 +69,35 @@ describe("live views", () => {
     expect(screen.queryByText("2")).toBeNull();
     act(() => source.set("library::mine", { count: 3 }, "reader-1"));
     expect(screen.getByText("3")).toBeTruthy();
+  });
+
+  it("starts a view opened again from what it last showed, for the same person only", () => {
+    // A source whose views answer only when told to, as a network does.
+    let person: Person | null = { uid: "ada", name: "Ada" };
+    const answers: ((state: ViewState) => void)[] = [];
+    const slow: DataSource = {
+      subscribe(_view, _subject, emit) {
+        answers.push(emit);
+        return () => {};
+      },
+      run: async () => {},
+      auth: { person: () => person, watch: () => () => {}, signIn: async () => {}, signOut: async () => {} },
+    };
+    const first = renderScreen(slow as MemorySource, () => <Count />);
+    expect(screen.queryByText("12")).toBeNull();
+    act(() => answers.at(-1)!({ status: "live", data: { total: 12 } }));
+    expect(screen.getByText("12")).toBeTruthy();
+    first.unmount();
+
+    const again = renderScreen(slow as MemorySource, () => <Count />);
+    expect(screen.getByText("12")).toBeTruthy(); // before the view answers again
+    act(() => answers.at(-1)!({ status: "live", data: { total: 13 } }));
+    expect(screen.getByText("13")).toBeTruthy();
+    again.unmount();
+
+    person = { uid: "grace", name: "Grace" };
+    renderScreen(slow as MemorySource, () => <Count />);
+    expect(screen.queryByText("13")).toBeNull(); // what Ada saw isn't Grace's
   });
 });
 

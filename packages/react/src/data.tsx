@@ -66,19 +66,46 @@ function useSource(): DataSource {
 
 const loading: ViewState = { status: "loading", data: undefined };
 
+// What each view last was, for each data source, so a screen opened again, like a
+// page's header on each of its tabs, starts from what it showed rather than from
+// nothing, and the view's next state replaces it. It's kept for whoever's signed in
+// at the time, so what one person saw never shows once someone else signs in, and
+// only the latest few views are kept.
+const remembered = new WeakMap<DataSource, Map<string, ViewState>>();
+const remembers = 64;
+
+function memoryOf(source: DataSource): Map<string, ViewState> {
+  let memory = remembered.get(source);
+  if (!memory) remembered.set(source, (memory = new Map()));
+  return memory;
+}
+
+function remember(source: DataSource, key: string, state: ViewState) {
+  const memory = memoryOf(source);
+  memory.delete(key);
+  if (state.status !== "live") return;
+  memory.set(key, state);
+  if (memory.size > remembers) memory.delete(memory.keys().next().value!);
+}
+
 // The live state of a view. `subject` picks one document of a view that has one per
 // entity or per person, like a member's loans.
 export function useView(view: string, subject?: string): ViewState {
   const source = useSource();
   // The state remembers which view it's for, so the render right after switching,
-  // say from one member's loans to another's, shows loading rather than the old rows.
-  const key = `${view}:${subject ?? ""}`;
-  const [state, setState] = useState<{ key: string; view: ViewState }>({ key, view: loading });
+  // say from one member's loans to another's, never shows the old one's rows.
+  const reader = source.auth?.person()?.uid ?? "";
+  const key = `${reader}:${view}:${subject ?? ""}`;
+  const start = () => memoryOf(source).get(key) ?? loading;
+  const [state, setState] = useState<{ key: string; view: ViewState }>(() => ({ key, view: start() }));
   useEffect(() => {
-    setState({ key, view: loading });
-    return source.subscribe(view, subject, (next) => setState({ key, view: next }));
+    setState({ key, view: start() });
+    return source.subscribe(view, subject, (next) => {
+      remember(source, key, next);
+      setState({ key, view: next });
+    });
   }, [source, view, subject, key]);
-  return state.key === key ? state.view : loading;
+  return state.key === key ? state.view : start();
 }
 
 export interface AuthState {

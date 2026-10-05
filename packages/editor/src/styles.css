@@ -9,7 +9,8 @@
 
 .uione-workbench,
 .uione-diff,
-.uione-look {
+.uione-look,
+.uione-popover {
   --uione-page: var(--color-page, #f7f8fa);
   --uione-surface: var(--color-surface, #ffffff);
   --uione-sunken: var(--color-sunken, #eef1f5);
@@ -300,19 +301,99 @@
 .uione-toolbar .uione-look-legend {
   margin-left: auto;
 }
-.uione-legend {
-  position: absolute;
-  top: calc(100% + 0.4rem);
-  right: 0;
-  z-index: 20;
-  width: min(24rem, 85vw);
-  padding: 0.5rem 0.25rem;
+/* The font and the theme, shown by what they look like. */
+.uione-look .uione-look-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9rem;
+  padding: 0 0.3rem;
+}
+/* What a control opens; see popover.tsx. On a phone it's the whole screen. */
+.uione-popover {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--uione-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--uione-surface);
-  box-shadow: 0 12px 32px rgba(14, 23, 38, 0.18);
+  box-shadow: 0 16px 40px rgba(14, 23, 38, 0.18);
   color: var(--uione-ink);
   font-size: 0.82rem;
+}
+.uione-popover.uione-popover-sheet {
+  inset: 0;
+  width: auto;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.uione-popover-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  border-bottom: 1px solid var(--uione-line);
+  background: var(--uione-surface);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.uione-popover-close {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--uione-ink);
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.uione-popover-close:hover {
+  background: var(--uione-sunken);
+}
+.uione-font-list {
+  width: 14rem;
+}
+.uione-font-list .uione-popover-body {
+  padding: 0.3rem;
+}
+.uione-font-choice {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--uione-ink);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.uione-font-choice:hover {
+  background: var(--uione-sunken);
+}
+.uione-font-choice[aria-checked="true"] {
+  background: var(--uione-accent-soft);
+  font-weight: 600;
+}
+.uione-popover-sheet .uione-font-choice {
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+}
+.uione-legend {
+  width: 24rem;
+}
+.uione-legend .uione-popover-body {
+  padding: 0.5rem 0.25rem;
 }
 .uione-legend ul {
   margin: 0;
@@ -352,7 +433,7 @@
 }
 
 /* On a phone: the controls' labels are read aloud but not shown, so the controls
-   fit beside each other, and the font menu is as wide as the room there is. */
+   fit beside each other. */
 @media (max-width: 640px) {
   .uione-look {
     gap: 0.4rem 0.6rem;
@@ -367,15 +448,6 @@
   }
   .uione-look select {
     max-width: 9.5rem;
-  }
-  .uione-legend {
-    position: fixed;
-    top: 15vh;
-    left: 1rem;
-    right: 1rem;
-    width: auto;
-    max-height: 70vh;
-    overflow-y: auto;
   }
 }
 
@@ -445,7 +517,7 @@
 .uione-theme-swatch {
   display: inline-block;
   width: 2.2rem;
-  height: 1.3rem;
+  height: 1.15rem;
   overflow: hidden;
   border-radius: 4px;
   border: 1px solid var(--uione-line);
@@ -465,19 +537,13 @@
   line-height: 1.5;
 }
 .uione-theme-gallery {
-  position: absolute;
-  top: calc(100% + 0.4rem);
-  left: 0;
-  z-index: 30;
-  width: min(38rem, 90vw);
-  max-height: min(34rem, 75vh);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  width: 38rem;
+}
+.uione-theme-gallery .uione-popover-body {
   padding: 0.75rem;
-  border: 1px solid var(--uione-line);
-  border-radius: 12px;
-  background: var(--uione-surface);
-  box-shadow: 0 16px 40px rgba(14, 23, 38, 0.18);
+}
+.uione-popover-sheet .uione-theme-gallery-heading {
+  display: none;
 }
 .uione-theme-gallery-heading {
   margin: 0 0 0.6rem;
@@ -490,7 +556,7 @@
   grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
   gap: 0.6rem;
 }
-.uione-look .uione-theme-card {
+.uione-popover .uione-theme-card {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -517,15 +583,15 @@
   font-size: 0.62rem;
   line-height: 1.45;
 }
-.uione-look .uione-theme-card:hover .uione-theme-preview {
+.uione-popover .uione-theme-card:hover .uione-theme-preview {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(14, 23, 38, 0.14);
 }
-.uione-look .uione-theme-card[aria-checked="true"] .uione-theme-preview {
+.uione-popover .uione-theme-card[aria-checked="true"] .uione-theme-preview {
   outline: 2px solid var(--uione-accent);
   outline-offset: 2px;
 }
-.uione-look .uione-theme-card[aria-checked="true"] .uione-theme-name {
+.uione-popover .uione-theme-card[aria-checked="true"] .uione-theme-name {
   color: var(--uione-ink);
   font-weight: 600;
 }

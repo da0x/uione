@@ -5,8 +5,9 @@
 // light page and a dark one, how wide a tab is, and a legend of what each color in the highlighting means. The choices are the
 // reader's, kept in their browser, so the editor looks the way they left it.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { colorsOf, loadTheme, loadThemes, previewOf } from "./highlight.js";
+import { Popover } from "./popover.js";
 import { darkThemes, fromOneChoice, lightThemes, themesOf } from "./themes.js";
 import type { CodeTheme } from "./themes.js";
 import type { TabWidth } from "./tabs.js";
@@ -109,11 +110,10 @@ export function Toolbar({ look, onLook }: { look: Look; onLook: (look: Look) => 
 }
 
 // The controls themselves, for an app to put in a bar of its own: the text's size,
-// as a word processor sizes it, with a large and a small A, the font, the tab width,
-// and the legend.
+// as a word processor sizes it, with a large and a small A, the font, the theme, the
+// tab width, and the legend. The font and the theme are shown by what they look like,
+// and named once they're opened.
 export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look) => void }) {
-  const [legend, setLegend] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
   const change = (next: Partial<Look>) => {
     const changed = { ...look, ...next };
     save(changed);
@@ -121,18 +121,6 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
   };
   const larger = Math.min(sizes.most, look.size + 1);
   const smaller = Math.max(sizes.least, look.size - 1);
-  useEffect(() => {
-    if (!legend) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setLegend(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, [legend]);
 
   return (
     <div className="uione-look">
@@ -144,16 +132,7 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           A
         </button>
       </span>
-      <label className="uione-look-group">
-        <span>Font</span>
-        <select value={look.font} onChange={(e) => change({ font: e.target.value })}>
-          {fonts.map((f) => (
-            <option key={f.name} value={f.name}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <FontPicker look={look} onPick={(font) => change({ font })} />
       <ThemePicker
         look={look}
         onPick={(theme) => change(theme.dark ? { darkTheme: theme.name } : { lightTheme: theme.name })}
@@ -168,34 +147,95 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           ))}
         </select>
       </label>
-      <div ref={box} className="uione-look-legend">
-        <button type="button" aria-expanded={legend} onClick={() => setLegend(!legend)}>
-          Legend
-        </button>
-        {legend && (
-          <div role="dialog" aria-label="What the colors mean" className="uione-legend">
-            <ul>
-              {kinds.map((k) => {
-                const colors = colorsOf(k.code, k.word, k.nth ?? 0, themesOf(look.lightTheme, look.darkTheme));
-                return (
-                  <li key={k.kind}>
-                    <a href={`${reference}#${k.section}`} target="_blank" rel="noreferrer" title={`${k.kind} in the language reference`}>
-                      <span className="uione-legend-sample" style={colors ? { color: colors.light, ["--one-dark" as string]: colors.dark } : undefined}>
-                        {k.word.startsWith("//") ? "//" : k.word}
-                      </span>
-                      <span>
-                        <strong>{k.kind}</strong>
-                        {k.says && <span className="uione-legend-says">, {k.says}</span>}
-                      </span>
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
+      <Legend look={look} />
     </div>
+  );
+}
+
+// Choosing the font from a list of them, each written in itself; the button shows a
+// T, as editors show the font control.
+function FontPicker({ look, onPick }: { look: Look; onPick: (font: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useEffect(() => {
+    if (open) for (const f of fonts) void f.load?.().catch(() => {});
+  }, [open]);
+  return (
+    <span className="uione-look-font">
+      <button
+        ref={button}
+        type="button"
+        className="uione-look-icon"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Font: ${look.font}`}
+        title={`Font: ${look.font}`}
+        onClick={() => setOpen(!open)}
+      >
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 7V5h14v2M12 5v14M9 19h6" />
+        </svg>
+      </button>
+      {open && (
+        <Popover anchor={button} label="Font" className="uione-font-list" onClose={close}>
+          <div role="radiogroup" aria-label="Font">
+            {fonts.map((f) => (
+              <button
+                key={f.name}
+                type="button"
+                role="radio"
+                aria-checked={f.name === look.font}
+                className="uione-font-choice"
+                style={{ fontFamily: `${f.family}, ui-monospace, monospace` }}
+                onClick={() => {
+                  onPick(f.name);
+                  setOpen(false);
+                }}
+              >
+                {f.name}
+              </button>
+            ))}
+          </div>
+        </Popover>
+      )}
+    </span>
+  );
+}
+
+// What each color means, each kind of word in the colors of the theme shown now.
+function Legend({ look }: { look: Look }) {
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <span className="uione-look-legend">
+      <button ref={button} type="button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>
+        Legend
+      </button>
+      {open && (
+        <Popover anchor={button} label="What the colors mean" className="uione-legend" onClose={close}>
+          <ul>
+            {kinds.map((k) => {
+              const colors = colorsOf(k.code, k.word, k.nth ?? 0, themesOf(look.lightTheme, look.darkTheme));
+              return (
+                <li key={k.kind}>
+                  <a href={`${reference}#${k.section}`} target="_blank" rel="noreferrer" title={`${k.kind} in the language reference`}>
+                    <span className="uione-legend-sample" style={colors ? { color: colors.light, ["--one-dark" as string]: colors.dark } : undefined}>
+                      {k.word.startsWith("//") ? "//" : k.word}
+                    </span>
+                    <span>
+                      <strong>{k.kind}</strong>
+                      {k.says && <span className="uione-legend-says">, {k.says}</span>}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </Popover>
+      )}
+    </span>
   );
 }
 
@@ -241,7 +281,9 @@ function ThemePicker({ look, onPick }: { look: Look; onPick: (theme: CodeTheme) 
   const current = dark ? themes.dark : themes.light;
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(0);
-  const box = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const kind = dark ? "Dark theme" : "Light theme";
   // The current theme's swatch, and every theme of the list once the gallery opens.
   useEffect(() => {
     let live = true;
@@ -254,28 +296,29 @@ function ThemePicker({ look, onPick }: { look: Look; onPick: (theme: CodeTheme) 
     if (!open) return;
     let live = true;
     void Promise.all(list.map((t) => loadTheme(t))).then(() => live && setReady((n) => n + 1));
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
     return () => {
       live = false;
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", close);
     };
   }, [open, dark]);
   const swatch = previewOf(current, sample);
   return (
-    <div ref={box} className="uione-look-themes" data-ready={ready}>
-      <button type="button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} title={`${current.name}; choose the ${dark ? "dark" : "light"} theme`}>
+    <span className="uione-look-themes" data-ready={ready}>
+      <button
+        ref={button}
+        type="button"
+        className="uione-look-icon"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`${kind}: ${current.name}`}
+        title={`${kind}: ${current.name}`}
+        onClick={() => setOpen(!open)}
+      >
         <span className="uione-theme-swatch" aria-hidden="true" dangerouslySetInnerHTML={swatch ? { __html: swatch } : undefined} />
-        <span>{dark ? "Dark theme" : "Light theme"}</span>
       </button>
       {open && (
-        <div role="dialog" aria-label={dark ? "Dark themes" : "Light themes"} className="uione-theme-gallery">
+        <Popover anchor={button} label={dark ? "Dark themes" : "Light themes"} className="uione-theme-gallery" onClose={close}>
           <p className="uione-theme-gallery-heading">{dark ? "Dark themes" : "Light themes"}</p>
-          <div className="uione-theme-grid" role="radiogroup" aria-label={dark ? "Dark theme" : "Light theme"}>
+          <div className="uione-theme-grid" role="radiogroup" aria-label={kind}>
             {list.map((theme) => {
               const shown = previewOf(theme, sample);
               return (
@@ -296,8 +339,8 @@ function ThemePicker({ look, onPick }: { look: Look; onPick: (theme: CodeTheme) 
               );
             })}
           </div>
-        </div>
+        </Popover>
       )}
-    </div>
+    </span>
   );
 }
