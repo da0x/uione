@@ -26,6 +26,7 @@ type mocks struct {
 	resources map[string]resource.PropertyMap // by type and name, like gcp:firestore/database:Database::database
 	imports   map[string]string               // the ID each imported resource was imported from
 	waits     map[string][]string             // the resources each one waits for, by URN
+	hosting   []string                        // the projects whose Hosting API was waited for
 }
 
 func (m *mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
@@ -116,6 +117,12 @@ func declareIn(t *testing.T, dir string, settings string, billing string, fresh 
 	m := &mocks{billing: billing, resources: map[string]resource.PropertyMap{}, imports: map[string]string{}, waits: map[string][]string{}}
 	firebaseAdded = func(context.Context, string) (bool, error) { return !fresh, nil }
 	siteReachable = func(context.Context, string) (bool, error) { return !fresh, nil }
+	waitForHosting = func(_ context.Context, project string) error {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		m.hosting = append(m.hosting, project)
+		return nil
+	}
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
 		p := Project{Name: "uione", Domain: "uione.io", Firebase: "ui-one", Region: "us-east4", Build: filepath.Join(dir, "build")}
 		change(&p)
@@ -699,5 +706,27 @@ func TestAFreshProjectsPreviewDoesntReadItsSiteBeforeHostingIsOn(t *testing.T) {
 	}
 	if got := m.imports[key]; got != "projects/ui-one/sites/ui-one" {
 		t.Errorf("a fresh project's deploy imports its site from %q", got)
+	}
+}
+
+// Turning the Hosting API on returns before it answers, so a fresh project's deploy
+// waits for it before importing the site, and its preview, which reads nothing,
+// doesn't.
+func TestTheSiteWaitsForHostingToAnswer(t *testing.T) {
+	t.Setenv("PULUMI_DRY_RUN", "false")
+	m, err := declareIn(t, build(t), settings, "000000-000000-000000", true, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.hosting) != 1 || m.hosting[0] != "ui-one" {
+		t.Errorf("a deploy waits for Firebase Hosting in %v", m.hosting)
+	}
+	t.Setenv("PULUMI_DRY_RUN", "true")
+	m, err = declareIn(t, build(t), settings, "000000-000000-000000", true, func(*Project) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.hosting) != 0 {
+		t.Errorf("a preview waits for Firebase Hosting in %v", m.hosting)
 	}
 }

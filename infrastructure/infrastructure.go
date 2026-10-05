@@ -53,6 +53,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2/google"
 
@@ -136,6 +137,7 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		needed = append(append([]string(nil), apis...), "secretmanager.googleapis.com")
 	}
 	var enabled []pulumi.Resource
+	var hosting *projects.Service
 	for _, api := range needed {
 		s, err := projects.NewService(ctx, api, &projects.ServiceArgs{
 			Project:          project,
@@ -146,6 +148,9 @@ func Declare(ctx *pulumi.Context, p Project) error {
 			return err
 		}
 		enabled = append(enabled, s)
+		if api == "firebasehosting.googleapis.com" {
+			hosting = s
+		}
 	}
 	// Firebase itself: added to the project here, or taken over where it was added
 	// already, as it was in the console before uione could. It's never removed.
@@ -281,9 +286,18 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	if reachable || !ctx.DryRun() {
 		siteOptions = append(siteOptions, pulumi.Import(pulumi.ID(fmt.Sprintf("projects/%s/sites/%s", p.Firebase, p.Firebase))))
 	}
+	// Turning an API on returns before Google has spread the word, so the site's
+	// import waits until the Hosting API answers for the project, which it does at
+	// once when it was on already.
+	siteID := hosting.Service.ApplyTWithContext(ctx.Context(), func(c context.Context, _ string) (string, error) {
+		if ctx.DryRun() {
+			return p.Firebase, nil
+		}
+		return p.Firebase, waitForHosting(c, p.Firebase)
+	}).(pulumi.StringOutput)
 	site, err := firebase.NewHostingSite(ctx, "site", &firebase.HostingSiteArgs{
 		Project:        project,
-		SiteId:         project,
+		SiteId:         siteID,
 		DeletionPolicy: pulumi.String("ABANDON"),
 	}, siteOptions...)
 	if err != nil {
@@ -468,6 +482,29 @@ func (p Project) check() error {
 // yet, which it can't before the Hosting API is on. Tests replace it.
 var siteReachable = func(ctx context.Context, project string) (bool, error) {
 	return answers(ctx, project, "https://firebasehosting.googleapis.com/v1beta1/projects/"+url.PathEscape(project)+"/sites/"+url.PathEscape(project))
+}
+
+// waitForHosting asks Firebase Hosting about a project's default site until it
+// answers, for up to ten minutes. Tests replace it.
+var waitForHosting = func(ctx context.Context, project string) error {
+	deadline := time.Now().Add(10 * time.Minute)
+	for {
+		reachable, err := siteReachable(ctx, project)
+		if err != nil {
+			return err
+		}
+		if reachable {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("infrastructure: Firebase Hosting still isn't answering for %s ten minutes after its API was turned on", project)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
 }
 
 // firebaseAdded asks Firebase whether it has been added to a Google Cloud project.
