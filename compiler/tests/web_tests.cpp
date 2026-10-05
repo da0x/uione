@@ -96,7 +96,7 @@ TEST_CASE("table columns that name a command on the row become actions") {
 TEST_CASE("a button for a command with a form becomes the form's own button") {
     auto files = generate("/examples/library");
     const auto& content = find(files, "src/screens/main.tsx")->content;
-    CHECK(content.find(R"(<Form command="library::book::create" fields={["title", "author", "shelfmark", { name: "summary", type: "markdown" }]} button />)") != std::string::npos);
+    CHECK(content.find(R"(<Form command="library::book::create" fields={["title", "author", "shelfmark", { name: "summary", type: "markdown" }]} button signin />)") != std::string::npos);
     CHECK(content.find("<Command name=\"library::book::create\"") == std::string::npos);
 }
 
@@ -177,7 +177,7 @@ TEST_CASE("an update form starts from the entity's page and acts on the entity i
     auto files = generate("/examples/library");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="library::book::update" fields={["title", "author", { name: "summary", type: "markdown" }]} from={bookPage} id={bookId} button />)") !=
+    CHECK(screens->content.find(R"(<Form command="library::book::update" fields={["title", "author", { name: "summary", type: "markdown" }]} from={bookPage} id={bookId} button signin />)") !=
           std::string::npos);
 }
 
@@ -194,12 +194,12 @@ TEST_CASE("a create form takes what the screen's address names, without asking f
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button signin />)") !=
           std::string::npos);
-    CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button signin />)") !=
           std::string::npos);
     // On the list of every project, no project is named, so none is given.
-    CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button />)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button signin />)") != std::string::npos);
 }
 
 TEST_CASE("a hand-written component is drawn, imported, and copied into the app as it is") {

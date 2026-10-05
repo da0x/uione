@@ -11,7 +11,7 @@ import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { fill, useConfirmContext } from "./app.js";
 import type { FieldProps } from "./contract.js";
-import { useRunner } from "./data.js";
+import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, label, shortAddress, show, useLinks, useUI } from "./ui.js";
 
@@ -227,10 +227,14 @@ export function Table({
   choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
 }) {
   const ui = useUI();
+  const auth = useAuth();
   const links = useLinks();
   const params = useParams();
   const rows = rowsOf(view.data?.[list]);
   const runner = useConfirmedRunner();
+  // What's refused to someone signed out, like their own projects, means nothing to
+  // them, so it isn't drawn; signing in shows it.
+  if (view.status === "denied" && auth && !auth.person) return null;
   return (
     <ui.Table
       status={view.status}
@@ -305,6 +309,7 @@ export function Form({
   id,
   given = {},
   submit: says,
+  signin = false,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -313,8 +318,10 @@ export function Form({
   id?: string; // for an update: the entity it changes
   given?: Record<string, string | undefined>; // sent without being asked for, like the project an issue is made in
   submit?: string; // what its button says, rather than the command's name, like Save changes
+  signin?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
 }) {
   const ui = useUI();
+  const auth = useAuth();
   const runner = useConfirmedRunner();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
@@ -370,6 +377,16 @@ export function Form({
     />
   );
 
+  // Someone signed out is asked to sign in, rather than shown what they couldn't
+  // send; while it isn't known yet whether they are, nothing is shown.
+  if (signin && auth && !auth.person) {
+    if (auth.person === undefined) return null;
+    return (
+      <ui.Button kind="secondary" onClick={() => void auth.signIn()}>
+        Sign in to {(says ?? label(action(command))).toLowerCase()}
+      </ui.Button>
+    );
+  }
   if (!button) return form;
   return (
     <>

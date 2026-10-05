@@ -516,3 +516,30 @@ describe("a form's button", () => {
     expect(screen.getByRole("dialog", { name: "Create project" })).toBeTruthy();
   });
 });
+
+describe("what needs someone signed in", () => {
+  it("asks someone signed out to sign in instead of showing a form, and shows it once they have", async () => {
+    const source = memorySource({ person: null });
+    renderScreen(source, () => <Form command="tracker::project::create" fields={["name"]} signin />);
+    expect(screen.queryByLabelText("Name")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to create" }));
+    await waitFor(() => expect(screen.getByLabelText("Name")).toBeTruthy());
+  });
+
+  it("shows a form anyone may send to everyone", () => {
+    renderScreen(memorySource({ person: null }), () => <Form command="waitlist::signup::create" fields={["email"]} />);
+    expect(screen.getByLabelText("Email")).toBeTruthy();
+  });
+
+  it("leaves out what's refused to someone signed out, and shows it refused to someone signed in", () => {
+    const signedOut = renderScreen(memorySource({ person: null, views: {} }), () => (
+      <Table view={{ status: "denied", data: undefined }} columns={{ name: "Name" }} />
+    ));
+    expect(signedOut.container.querySelector("table")).toBeNull();
+    signedOut.unmount();
+    const signedIn = renderScreen(memorySource({ person: { uid: "ada", name: "Ada" } }), () => (
+      <Table view={{ status: "denied", data: undefined }} columns={{ name: "Name" }} />
+    ));
+    expect(signedIn.container.querySelector("table")).not.toBeNull();
+  });
+});

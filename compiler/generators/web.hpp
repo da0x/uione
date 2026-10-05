@@ -200,6 +200,7 @@ namespace one::generators {
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
+        std::set<std::string> open_;  // commands anyone may run, signed in or not, in full
         std::vector<std::string> personal_;  // views with one document per person
         // A set of markdown pages, one per file, shown by a screen like /docs/:page.
         struct page_set {
@@ -267,6 +268,10 @@ namespace one::generators {
                     if (v->per == "user") personal_.push_back(web_detail::join(ns, v->name));
                 } else if (auto* c = std::get_if<language::command_declaration>(&d.node)) {
                     commands_[ns].insert(c->name.text());
+                    for (const auto& s : c->body) {
+                        auto* p = std::get_if<language::permission_statement>(&s.node);
+                        if (p && p->permission.text() == "anyone") open_.insert(web_detail::join(ns, c->name.text()));
+                    }
                 }
             }
         }
@@ -914,7 +919,11 @@ namespace one::generators {
             }
             if (!given.empty()) given = " given={{ " + given + " }}";
             std::string submit = form.submit ? " submit=" + web_detail::js_string(*form.submit) : "";
-            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + " />");
+            // Everything but a command anyone may run needs its person signed in, so a
+            // form asks someone who isn't to sign in, rather than taking what they type.
+            std::string signin = open_.contains(command) ? "" : " signin";
+            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + signin +
+                     " />");
         }
 
         // the files around the screens
