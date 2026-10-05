@@ -289,9 +289,10 @@ function asField(value: unknown): string {
   return value === null || value === undefined ? "" : String(value);
 }
 
-// What a form sends for a field: a list is written separated by commas, and sent
-// as the list of what's between them.
+// What a form sends for a field: a yes or no as true or false, and a list, written
+// separated by commas, as the list of what's between them.
 function asInput(value: string, type: string | undefined): unknown {
+  if (type === "boolean") return value === "true";
   if (type !== "list") return value;
   return value
     .split(",")

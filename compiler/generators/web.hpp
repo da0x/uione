@@ -876,7 +876,7 @@ namespace one::generators {
                     for (const auto& field : entity->fields) {
                         if (field.name == f.name && field.type && field.type->parts.size() == 1) {
                             const auto& t = field.type->parts[0];
-                            if (t == "email" || t == "date" || t == "number" || t == "markdown") type = t;
+                            if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") type = t;
                             if (field.list) type = "list";
                         }
                         // A choice is picked from its choices, not typed.

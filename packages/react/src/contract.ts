@@ -107,7 +107,7 @@ export interface TableProps {
 export interface FieldProps {
   name: string;
   label: string;
-  type: string; // text, markdown, email, date, number, list (written separated by commas), or choice
+  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), or choice
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   value: string;
   hint?: string;

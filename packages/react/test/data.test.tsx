@@ -543,3 +543,16 @@ describe("what needs someone signed in", () => {
     expect(signedIn.container.querySelector("table")).not.toBeNull();
   });
 });
+
+describe("a yes or no", () => {
+  it("is a box to tick, sent as true or false", async () => {
+    const source = memorySource();
+    renderScreen(source, () => <Form command="projects::project::update" fields={[{ name: "takes_reports", type: "boolean" }]} id="p1" />);
+    const box = screen.getByLabelText("Takes reports") as HTMLInputElement;
+    expect(box.type).toBe("checkbox");
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() => expect(source.runs).toEqual([{ command: "projects::project::update", input: { takes_reports: true, id: "p1" } }]));
+  });
+});

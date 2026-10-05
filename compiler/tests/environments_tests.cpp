@@ -168,3 +168,17 @@ TEST_CASE("a project counts its visitors with Firebase Analytics only when it sa
     CHECK(quiet.find(", analytics") == std::string::npos);
     CHECK(quiet.find("measurementId") == std::string::npos);
 }
+
+TEST_CASE("a form asks for a yes or no with a box to tick") {
+    auto dir = project("uione-boolean-form", "namespace shop {\n\tentity store {\n\t\tname  text  required\n\t\topen  boolean = false\n\t}\n"
+                                              "\tcommand store::create\n}\nscreen \"Shop\" / {\n\tform shop::store::create {\n\t\tname  open\n\t}\n}\n");
+    auto built = driver::build(dir.string(), (dir / "build").string());
+    for (const auto& d : built.problems) CAPTURE(language::format(d));
+    REQUIRE(built.refusal.empty());
+    bool found = false;
+    for (const auto& f : built.files) {
+        if (f.content.find(R"(fields={["name", { name: "open", type: "boolean" }]})") != std::string::npos) found = true;
+    }
+    CHECK(found);
+    std::filesystem::remove_all(dir);
+}

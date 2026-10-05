@@ -245,6 +245,14 @@ export const plain: ComponentSet = {
               <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
               {field.type === "markdown" ? (
                 <textarea {...common} onChange={(event) => field.onChange(event.target.value)} />
+              ) : field.type === "boolean" ? (
+                <input
+                  {...common}
+                  type="checkbox"
+                  value={undefined}
+                  checked={field.value === "true"}
+                  onChange={(event) => field.onChange(event.target.checked ? "true" : "false")}
+                />
               ) : field.choices ? (
                 <select {...common} onChange={(event) => field.onChange(event.target.value)}>
                   <option value="">Choose one</option>

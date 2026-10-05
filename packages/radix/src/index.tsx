@@ -375,7 +375,21 @@ export const radix: ComponentSet = {
             <label id={`${id}-${field.name}-label`} htmlFor={`${id}-${field.name}`} className="text-sm font-medium">
               {field.label}
             </label>
-            {field.type === "markdown" ? (
+            {field.type === "boolean" ? (
+              // A yes or no: a box to tick, beside what it asks.
+              <label className="flex w-fit cursor-pointer items-center gap-2.5 text-sm text-ink/90">
+                <input
+                  id={`${id}-${field.name}`}
+                  name={field.name}
+                  type="checkbox"
+                  checked={field.value === "true"}
+                  onChange={(event) => field.onChange(event.target.checked ? "true" : "false")}
+                  aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                  className="size-4 rounded border-control-line accent-accent"
+                />
+                Yes
+              </label>
+            ) : field.type === "markdown" ? (
               <MarkdownField
                 id={`${id}-${field.name}`}
                 name={field.name}
