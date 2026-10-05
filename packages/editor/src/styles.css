@@ -578,6 +578,14 @@
   align-items: center;
   gap: 0.45rem;
 }
+/* Each control's wrapper centers its button, rather than putting it on the line's
+   baseline, which for the theme's button is the preview's tiny last line. */
+.uione-look-font,
+.uione-look-themes,
+.uione-look-legend {
+  display: inline-flex;
+  align-items: center;
+}
 /* The theme's button is its preview, to the button's own border. */
 .uione-look .uione-look-themes > button {
   width: 2.4rem;
