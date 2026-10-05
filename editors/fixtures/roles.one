@@ -6,8 +6,13 @@
 
 namespace tracker {
 
-	entity project {
+	entity label {
 		name  text  required
+	}
+
+	entity project {
+		name    text           required
+		tags    list of label
 	}
 
 	entity member {

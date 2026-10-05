@@ -109,7 +109,7 @@ examples/tracker/main.one	command project::create {	create	name
 examples/tracker/main.one	readers member	readers	keyword
 examples/tracker/main.one	public when project.visibility	when	keyword
 examples/tracker/main.one	labels     list of text	list	type
-examples/tracker/main.one	labels     list of text	of	keyword
+examples/tracker/main.one	labels     list of text	of	type
 examples/tracker/main.one	add me to assignees	add	keyword
 examples/tracker/main.one	remove me from assignees	remove	keyword
 examples/tracker/main.one	where assignees has user.id	has	keyword
@@ -136,7 +136,7 @@ examples/tracker/main.one	role     enum     maintainer	role	variable
 examples/tracker/main.one	role     enum     maintainer	maintainer	plain
 examples/tracker/main.one	= role::reporter	role	namespace
 examples/tracker/main.one	number     serial        per project	per	keyword
-examples/tracker/main.one	labels     list of text	of	keyword
+examples/tracker/main.one	labels     list of text	of	type
 editors/fixtures/environments.one	environment production {	environment	declare
 editors/fixtures/environments.one	environment production {	production	name
 editors/fixtures/environments.one	firebase  "shop-staging"	firebase	keyword
@@ -146,3 +146,8 @@ editors/fixtures/roles.one	project::update  member::create	update	plain
 editors/fixtures/roles.one	project::update  member::create	create	plain
 editors/fixtures/roles.one	command project::update	command	declare
 examples/tracker/main.one	project = id  person = me	project	plain
+examples/tracker/main.one	labels     list of text	text	type
+examples/tracker/main.one	assignees  list of user	user	type
+editors/fixtures/roles.one	tags    list of label	list	type
+editors/fixtures/roles.one	tags    list of label	of	type
+editors/fixtures/roles.one	tags    list of label	label	type

@@ -326,6 +326,27 @@
           "include": "#strings"
         },
         {
+          "comment": "A list's type is one type, read as a unit: list of text, list of label.",
+          "match": "^\\s*([A-Za-z_]\\w*)\\s+(list)\\s+(of)\\s+(?:(text|markdown|email|slug|date|number|serial|boolean|user)\\b|([A-Za-z_]\\w*(?:::[A-Za-z_]\\w*)*))",
+          "captures": {
+            "1": {
+              "name": "variable.other.field.uione"
+            },
+            "2": {
+              "name": "support.type.uione"
+            },
+            "3": {
+              "name": "support.type.uione"
+            },
+            "4": {
+              "name": "support.type.uione"
+            },
+            "5": {
+              "name": "support.type.user.uione"
+            }
+          }
+        },
+        {
           "match": "^\\s*([A-Za-z_]\\w*)\\s+(?:(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b|([A-Za-z_]\\w*(?:::[A-Za-z_]\\w*)*))",
           "captures": {
             "1": {

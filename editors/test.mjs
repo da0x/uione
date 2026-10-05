@@ -43,7 +43,7 @@ const vimGroups = {
   uioneNumber: "number", uioneOperator: "operator", uioneRoute: "route",
   uioneParam: "param", uioneString: "string", uioneInterpDelim: "interp",
   uioneInterp: "plain", uioneFieldName: "variable", uioneUserType: "type", uioneFieldWord: "keyword",
-  uioneFields: "plain", uioneMember: "plain", "": "plain",
+  uioneFields: "plain", uioneMember: "plain", uioneListOf: "type", uioneListType: "type", "": "plain",
 };
 
 function vim(file, specs) {
