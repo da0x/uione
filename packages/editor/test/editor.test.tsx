@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { Built, Checked, Compiler, Definition, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs, codeTheme, codeThemes, loadTheme } from "../src/index.js";
+import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs, themesOf, lightThemes, darkThemes, loadThemes, LookControls } from "../src/index.js";
 import { colorsOf } from "../src/highlight.js";
 
 // jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
@@ -190,32 +190,46 @@ describe("diff", () => {
 });
 
 describe("themes", () => {
-  it("colors each kind of word in the theme chosen, once it's loaded", async () => {
+  it("colors each kind of word in the light and the dark theme chosen, once they're loaded", async () => {
     const code = "entity book {\n}\n";
     const github = colorsOf(code, "entity");
     expect(github).toBeDefined();
-    const nord = codeTheme("Nord");
-    expect(colorsOf(code, "entity", 0, nord)).toEqual(github); // not loaded yet, so GitHub
-    await loadTheme(nord);
-    const colored = colorsOf(code, "entity", 0, nord);
-    expect(colored).not.toEqual(github);
-    expect(colored?.light).toBe(colored?.dark); // Nord has one side
-    await loadTheme(codeTheme("PaperColor"));
-    expect(colorsOf(code, "entity", 0, codeTheme("PaperColor"))).toEqual({ light: "#D70087", dark: "#FF5FAF" });
+    const chosen = themesOf("PaperColor Light", "Nord");
+    expect(colorsOf(code, "entity", 0, chosen)).toEqual(github); // not loaded yet, so GitHub's
+    await loadThemes(chosen);
+    const colored = colorsOf(code, "entity", 0, chosen);
+    expect(colored?.light).toBe("#D70087"); // PaperColor Light's keyword
+    expect(colored?.dark).not.toBe(github?.dark); // Nord's
   });
 
-  it("offers the most used themes, and GitHub for one it doesn't know", () => {
-    expect(codeThemes.map((t) => t.name)).toEqual(["GitHub", "One Dark Pro", "Dracula", "Catppuccin", "Tokyo Night", "Nord", "PaperColor", "Solarized", "Gruvbox", "Monokai"]);
-    expect(codeTheme("Lime").name).toBe("GitHub");
+  it("keeps a list of themes for a light page and one for a dark page, and GitHub's for a name it doesn't know", () => {
+    expect(lightThemes.every((t) => !t.dark)).toBe(true);
+    expect(darkThemes.every((t) => t.dark)).toBe(true);
+    expect(lightThemes.map((t) => t.name)).toContain("PaperColor Light");
+    expect(darkThemes.map((t) => t.name)).toContain("Monokai");
+    // A dark theme isn't a light page's, and the other way around.
+    expect(themesOf("Monokai", "GitHub Light")).toEqual({ light: lightThemes[0], dark: darkThemes[0] });
   });
 
-  it("gives the editor the theme's own background", async () => {
+  it("gives the editor its themes' own backgrounds", async () => {
     const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
     const text = "entity book {\n}\n";
-    const { container } = render(<Editor path="main.one" value={text} onChange={() => {}} files={{ "main.one": text }} compiler={checker} theme="Dracula" />);
+    const { container } = render(<Editor path="main.one" value={text} onChange={() => {}} files={{ "main.one": text }} compiler={checker} themes={{ dark: "Dracula" }} />);
     await waitFor(() => expect(container.querySelector(".cm-editor.uione-themed")).not.toBeNull());
-    const style = container.querySelector(".cm-editor")!.getAttribute("style") ?? "";
-    expect(style.replace(/\s/g, "").toLowerCase()).toContain("--one-bg:#282a36");
+    const style = (container.querySelector(".cm-editor")!.getAttribute("style") ?? "").replace(/\s/g, "").toLowerCase();
+    expect(style).toContain("--one-bg-dark:#282a36");
+  });
+
+  it("offers only the themes for the page as it is, and keeps the other page's choice", async () => {
+    document.documentElement.setAttribute("data-theme", "light");
+    const looks: unknown[] = [];
+    const { container } = render(<LookControls look={{ size: 14, font: "IBM Plex Mono", tabWidth: 4, darkTheme: "Nord" }} onLook={(l) => looks.push(l)} />);
+    fireEvent.click(screen.getByRole("button", { name: /Light theme/ }));
+    const offered = Array.from(container.querySelectorAll(".uione-theme-card .uione-theme-name")).map((c) => c.textContent);
+    expect(offered).toEqual(lightThemes.map((t) => t.name));
+    fireEvent.click(screen.getByRole("radio", { name: /One Light/ }));
+    expect(looks.at(-1)).toMatchObject({ lightTheme: "One Light", darkTheme: "Nord" });
+    document.documentElement.removeAttribute("data-theme");
   });
 });
 

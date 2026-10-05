@@ -1,41 +1,85 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The color themes code can be shown in: the most used ones, each with its light and
-// dark side where it has both, so it follows the page; a theme with one side is that
-// side on either. All come with shiki but PaperColor, whose palette, from its Vim
-// theme, is written out here for the kinds of words .one has. A theme is loaded the
-// first time it's chosen.
+// The color themes code can be shown in, in two lists: themes for a light page and
+// themes for a dark one. A reader chooses one of each, and the code is shown in
+// whichever suits the page now, so switching the page's mode switches the theme
+// back to the one chosen for it. All come with shiki but PaperColor, whose palette,
+// from its Vim theme, is written out here for the kinds of words .one has. A theme
+// is loaded the first time it's shown.
 
 import type { ThemeRegistration } from "shiki/core";
 
 export interface CodeTheme {
   name: string; // as it's offered, like One Dark Pro
-  light: string; // the theme shown on a light page, by its id
-  dark: string; // and on a dark one
-  load: () => Promise<ThemeRegistration[]>;
+  id: string; // shiki's name for it
+  dark: boolean; // for a dark page, or a light one
+  load: () => Promise<ThemeRegistration>;
 }
 
-const shiki = (...loads: (() => Promise<{ default: unknown }>)[]) => async () =>
-  (await Promise.all(loads.map((load) => load()))).map((m) => m.default as ThemeRegistration);
+const shiki = (load: () => Promise<{ default: unknown }>) => async () => (await load()).default as ThemeRegistration;
 
-export const codeThemes: CodeTheme[] = [
-  { name: "GitHub", light: "github-light", dark: "github-dark", load: shiki(() => import("@shikijs/themes/github-light"), () => import("@shikijs/themes/github-dark")) },
-  { name: "One Dark Pro", light: "one-light", dark: "one-dark-pro", load: shiki(() => import("@shikijs/themes/one-light"), () => import("@shikijs/themes/one-dark-pro")) },
-  { name: "Dracula", light: "dracula", dark: "dracula", load: shiki(() => import("@shikijs/themes/dracula")) },
-  { name: "Catppuccin", light: "catppuccin-latte", dark: "catppuccin-mocha", load: shiki(() => import("@shikijs/themes/catppuccin-latte"), () => import("@shikijs/themes/catppuccin-mocha")) },
-  { name: "Tokyo Night", light: "tokyo-night", dark: "tokyo-night", load: shiki(() => import("@shikijs/themes/tokyo-night")) },
-  { name: "Nord", light: "nord", dark: "nord", load: shiki(() => import("@shikijs/themes/nord")) },
-  { name: "PaperColor", light: "papercolor-light", dark: "papercolor-dark", load: async () => [paperColor("light"), paperColor("dark")] },
-  { name: "Solarized", light: "solarized-light", dark: "solarized-dark", load: shiki(() => import("@shikijs/themes/solarized-light"), () => import("@shikijs/themes/solarized-dark")) },
-  { name: "Gruvbox", light: "gruvbox-light-medium", dark: "gruvbox-dark-medium", load: shiki(() => import("@shikijs/themes/gruvbox-light-medium"), () => import("@shikijs/themes/gruvbox-dark-medium")) },
-  { name: "Monokai", light: "monokai", dark: "monokai", load: shiki(() => import("@shikijs/themes/monokai")) },
+export const lightThemes: CodeTheme[] = [
+  { name: "GitHub Light", id: "github-light", dark: false, load: shiki(() => import("@shikijs/themes/github-light")) },
+  { name: "One Light", id: "one-light", dark: false, load: shiki(() => import("@shikijs/themes/one-light")) },
+  { name: "Catppuccin Latte", id: "catppuccin-latte", dark: false, load: shiki(() => import("@shikijs/themes/catppuccin-latte")) },
+  { name: "Solarized Light", id: "solarized-light", dark: false, load: shiki(() => import("@shikijs/themes/solarized-light")) },
+  { name: "Gruvbox Light", id: "gruvbox-light-medium", dark: false, load: shiki(() => import("@shikijs/themes/gruvbox-light-medium")) },
+  { name: "PaperColor Light", id: "papercolor-light", dark: false, load: async () => paperColor("light") },
 ];
 
-export const defaultTheme = codeThemes[0];
+export const darkThemes: CodeTheme[] = [
+  { name: "GitHub Dark", id: "github-dark", dark: true, load: shiki(() => import("@shikijs/themes/github-dark")) },
+  { name: "One Dark Pro", id: "one-dark-pro", dark: true, load: shiki(() => import("@shikijs/themes/one-dark-pro")) },
+  { name: "Dracula", id: "dracula", dark: true, load: shiki(() => import("@shikijs/themes/dracula")) },
+  { name: "Catppuccin Mocha", id: "catppuccin-mocha", dark: true, load: shiki(() => import("@shikijs/themes/catppuccin-mocha")) },
+  { name: "Tokyo Night", id: "tokyo-night", dark: true, load: shiki(() => import("@shikijs/themes/tokyo-night")) },
+  { name: "Nord", id: "nord", dark: true, load: shiki(() => import("@shikijs/themes/nord")) },
+  { name: "PaperColor Dark", id: "papercolor-dark", dark: true, load: async () => paperColor("dark") },
+  { name: "Solarized Dark", id: "solarized-dark", dark: true, load: shiki(() => import("@shikijs/themes/solarized-dark")) },
+  { name: "Gruvbox Dark", id: "gruvbox-dark-medium", dark: true, load: shiki(() => import("@shikijs/themes/gruvbox-dark-medium")) },
+  { name: "Monokai", id: "monokai", dark: true, load: shiki(() => import("@shikijs/themes/monokai")) },
+];
 
-export function codeTheme(name: string | undefined): CodeTheme {
-  return codeThemes.find((t) => t.name === name) ?? defaultTheme;
+// The themes code is shown in: one for a light page and one for a dark one.
+export interface Themes {
+  light: CodeTheme;
+  dark: CodeTheme;
+}
+
+export const defaultThemes: Themes = { light: lightThemes[0], dark: darkThemes[0] };
+
+// The themes chosen, by name, each of its own list, or the default for its page.
+export function themesOf(light?: string, dark?: string): Themes {
+  return {
+    light: lightThemes.find((t) => t.name === light) ?? defaultThemes.light,
+    dark: darkThemes.find((t) => t.name === dark) ?? defaultThemes.dark,
+  };
+}
+
+// What a single choice of earlier versions, one name for both pages, becomes.
+export function fromOneChoice(name: string | undefined): { light?: string; dark?: string } {
+  switch (name) {
+    case "GitHub":
+      return {};
+    case "One Dark Pro":
+      return { light: "One Light", dark: "One Dark Pro" };
+    case "Catppuccin":
+      return { light: "Catppuccin Latte", dark: "Catppuccin Mocha" };
+    case "Solarized":
+      return { light: "Solarized Light", dark: "Solarized Dark" };
+    case "Gruvbox":
+      return { light: "Gruvbox Light", dark: "Gruvbox Dark" };
+    case "PaperColor":
+      return { light: "PaperColor Light", dark: "PaperColor Dark" };
+    case "Dracula":
+    case "Tokyo Night":
+    case "Nord":
+    case "Monokai":
+      return { dark: name };
+    default:
+      return {};
+  }
 }
 
 // PaperColor, by Nikyle Nguyen (MIT), as its Vim theme colors each kind of word.

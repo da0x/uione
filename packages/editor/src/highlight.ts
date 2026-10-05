@@ -16,8 +16,8 @@ import { createHighlighterCoreSync } from "shiki/core";
 import type { HighlighterCore, LanguageRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import grammar from "./grammar/uione.json" with { type: "json" };
-import { defaultTheme } from "./themes.js";
-import type { CodeTheme } from "./themes.js";
+import { defaultThemes } from "./themes.js";
+import type { CodeTheme, Themes } from "./themes.js";
 
 // Built on first use; undefined when it can't be, and the code is then left plain.
 let highlighter: HighlighterCore | undefined | null = null;
@@ -37,25 +37,23 @@ function highlighterOrNothing(): HighlighterCore | undefined {
   return highlighter;
 }
 
-// Whether a theme's two sides are loaded, so it can be shown.
+// Whether a theme is loaded, so it can be shown.
 function loaded(theme: CodeTheme): boolean {
-  const h = highlighterOrNothing();
-  if (!h) return false;
-  const have = h.getLoadedThemes();
-  return have.includes(theme.light) && have.includes(theme.dark);
+  return highlighterOrNothing()?.getLoadedThemes().includes(theme.id) ?? false;
 }
 
-// Loads a theme the first time it's chosen. Showing it before then shows GitHub.
-export async function loadTheme(theme: CodeTheme): Promise<void> {
+// Loads the themes the first time they're chosen. Showing one before then shows
+// GitHub's for its page.
+export async function loadThemes(themes: Themes): Promise<void> {
   const h = highlighterOrNothing();
-  if (!h || loaded(theme)) return;
-  for (const registration of await theme.load()) {
-    if (!h.getLoadedThemes().includes(registration.name ?? "")) h.loadThemeSync(registration);
+  if (!h) return;
+  for (const theme of [themes.light, themes.dark]) {
+    if (!loaded(theme)) h.loadThemeSync(await theme.load());
   }
 }
 
-function shown(theme: CodeTheme): CodeTheme {
-  return loaded(theme) ? theme : defaultTheme;
+function shown(themes: Themes): Themes {
+  return { light: loaded(themes.light) ? themes.light : defaultThemes.light, dark: loaded(themes.dark) ? themes.dark : defaultThemes.dark };
 }
 
 const marks = new Map<string, Decoration>();
@@ -69,14 +67,14 @@ function mark(light: string, dark: string): Decoration {
   return m;
 }
 
-function decorate(view: EditorView, theme: CodeTheme): DecorationSet {
+function decorate(view: EditorView, themes: Themes): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const text = view.state.doc.toString();
   const h = highlighterOrNothing();
   if (!h) return builder.finish();
   let tokens;
   try {
-    tokens = h.codeToTokens(text, { lang: "uione", themes: { light: theme.light, dark: theme.dark } }).tokens;
+    tokens = h.codeToTokens(text, { lang: "uione", themes: { light: themes.light.id, dark: themes.dark.id } }).tokens;
   } catch {
     return builder.finish();
   }
@@ -94,27 +92,33 @@ function decorate(view: EditorView, theme: CodeTheme): DecorationSet {
   return builder.finish();
 }
 
-function plugin(theme: CodeTheme) {
+function plugin(themes: Themes) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
       constructor(view: EditorView) {
-        this.decorations = decorate(view, theme);
+        this.decorations = decorate(view, themes);
       }
       update(update: ViewUpdate) {
-        if (update.docChanged) this.decorations = decorate(update.view, theme);
+        if (update.docChanged) this.decorations = decorate(update.view, themes);
       }
     },
     { decorations: (v) => v.decorations },
   );
 }
 
-// A theme's own background and text color, light and dark, for the editor to use.
-function surface(theme: CodeTheme): Extension {
+// The themes' own background and text color, for the editor to use; GitHub's are
+// the page's own.
+function surface(themes: Themes): Extension {
   const h = highlighterOrNothing();
-  if (!h || theme === defaultTheme) return [];
-  const light = h.getTheme(theme.light);
-  const dark = h.getTheme(theme.dark);
+  if (!h || (themes.light === defaultThemes.light && themes.dark === defaultThemes.dark)) return [];
+  const colors = (theme: CodeTheme, page: string, ink: string) => {
+    if (theme === defaultThemes.light || theme === defaultThemes.dark) return { bg: page, fg: ink };
+    const registered = h.getTheme(theme.id);
+    return { bg: registered.bg, fg: registered.fg };
+  };
+  const light = colors(themes.light, "var(--uione-surface)", "var(--uione-ink)");
+  const dark = colors(themes.dark, "var(--uione-surface)", "var(--uione-ink)");
   return EditorView.editorAttributes.of({
     class: "uione-themed",
     style: `--one-bg:${light.bg};--one-fg:${light.fg};--one-bg-dark:${dark.bg};--one-fg-dark:${dark.fg}`,
@@ -125,22 +129,23 @@ const dark = EditorView.baseTheme({
   "&dark .cm-content [style*='--one-dark']": { color: "var(--one-dark) !important" },
 });
 
-// Highlighting in a theme, GitHub's unless another is given. A theme not yet loaded
-// shows as GitHub; load it with loadTheme, and highlight again.
-export function highlighting(theme: CodeTheme = defaultTheme): Extension {
-  const showing = shown(theme);
+// Highlighting in a light and a dark theme, each shown on its page, GitHub's unless
+// others are given. One not yet loaded shows as GitHub's; load it with loadThemes,
+// and highlight again.
+export function highlighting(themes: Themes = defaultThemes): Extension {
+  const showing = shown(themes);
   return [plugin(showing), surface(showing), dark];
 }
 
 // The colors a token gets, in light and dark: the nth piece of `code` reading
 // `token`, highlighted as any .one file is. It's how the legend shows each kind of
 // word in exactly the colors the editor gives it.
-export function colorsOf(code: string, token: string, nth = 0, theme: CodeTheme = defaultTheme): { light: string; dark: string } | undefined {
+export function colorsOf(code: string, token: string, nth = 0, themes: Themes = defaultThemes): { light: string; dark: string } | undefined {
   const h = highlighterOrNothing();
   if (!h) return undefined;
-  const showing = shown(theme);
+  const showing = shown(themes);
   let seen = 0;
-  for (const line of h.codeToTokens(code, { lang: "uione", themes: { light: showing.light, dark: showing.dark } }).tokens) {
+  for (const line of h.codeToTokens(code, { lang: "uione", themes: { light: showing.light.id, dark: showing.dark.id } }).tokens) {
     for (const piece of line) {
       if (piece.content.trim() !== token) continue;
       if (seen++ < nth) continue;
@@ -150,4 +155,22 @@ export function colorsOf(code: string, token: string, nth = 0, theme: CodeTheme 
     }
   }
   return undefined;
+}
+
+// Loads one theme, as a gallery of them does to show each.
+export async function loadTheme(theme: CodeTheme): Promise<void> {
+  const h = highlighterOrNothing();
+  if (h && !loaded(theme)) h.loadThemeSync(await theme.load());
+}
+
+// A piece of .one drawn in a theme, as HTML with the theme's own background, for a
+// preview of it; nothing until it's loaded.
+export function previewOf(theme: CodeTheme, code: string): string | undefined {
+  const h = highlighterOrNothing();
+  if (!h || !loaded(theme)) return undefined;
+  try {
+    return h.codeToHtml(code, { lang: "uione", theme: theme.id });
+  } catch {
+    return undefined;
+  }
 }

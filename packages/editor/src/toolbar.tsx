@@ -1,20 +1,22 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The editor's toolbar: the text's size, a font made for code, a color theme, how
-// wide a tab is, and a legend of what each color in the highlighting means. The choices are the
+// The editor's toolbar: the text's size, a font made for code, color themes for a
+// light page and a dark one, how wide a tab is, and a legend of what each color in the highlighting means. The choices are the
 // reader's, kept in their browser, so the editor looks the way they left it.
 
 import { useEffect, useRef, useState } from "react";
-import { colorsOf, loadTheme } from "./highlight.js";
-import { codeTheme, codeThemes } from "./themes.js";
+import { colorsOf, loadTheme, loadThemes, previewOf } from "./highlight.js";
+import { darkThemes, fromOneChoice, lightThemes, themesOf } from "./themes.js";
+import type { CodeTheme } from "./themes.js";
 import type { TabWidth } from "./tabs.js";
 
 export interface Look {
   size: number; // the text's size, in pixels
   font: string; // one of fonts' names
   tabWidth: TabWidth;
-  theme?: string; // one of codeThemes' names; GitHub when it's none
+  lightTheme?: string; // the theme for a light page, one of lightThemes' names; GitHub Light when none
+  darkTheme?: string; // and for a dark page, one of darkThemes'; GitHub Dark when none
 }
 
 // Fonts drawn for code, each loaded the first time it's chosen.
@@ -30,15 +32,19 @@ const sizes = { least: 10, most: 24, start: 14 };
 const key = "uione-editor-look";
 
 export function savedLook(tabWidth: TabWidth): Look {
-  const fallback: Look = { size: sizes.start, font: fonts[0].name, tabWidth, theme: codeThemes[0].name };
+  const fallback: Look = { size: sizes.start, font: fonts[0].name, tabWidth };
   try {
-    const saved = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<Look> | null;
+    const saved = JSON.parse(localStorage.getItem(key) ?? "null") as (Partial<Look> & { theme?: string }) | null;
     if (!saved) return fallback;
+    // One theme for both pages, as earlier versions kept it, becomes one of each.
+    const earlier = fromOneChoice(saved.theme);
+    const themes = themesOf(saved.lightTheme ?? earlier.light, saved.darkTheme ?? earlier.dark);
     return {
       size: typeof saved.size === "number" ? Math.min(sizes.most, Math.max(sizes.least, saved.size)) : fallback.size,
       font: fonts.some((f) => f.name === saved.font) ? saved.font! : fallback.font,
       tabWidth: [2, 4, 6, 8].includes(saved.tabWidth as number) ? (saved.tabWidth as TabWidth) : tabWidth,
-      theme: codeTheme(saved.theme).name,
+      lightTheme: themes.light.name,
+      darkTheme: themes.dark.name,
     };
   } catch {
     return fallback;
@@ -148,23 +154,10 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           ))}
         </select>
       </label>
-      <label className="uione-look-group">
-        <span>Theme</span>
-        <select
-          value={codeTheme(look.theme).name}
-          onChange={(e) => {
-            const chosen = codeTheme(e.target.value);
-            // Loaded before it's chosen, so the legend has its colors at once.
-            void loadTheme(chosen).then(() => change({ theme: chosen.name }));
-          }}
-        >
-          {codeThemes.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <ThemePicker
+        look={look}
+        onPick={(theme) => change(theme.dark ? { darkTheme: theme.name } : { lightTheme: theme.name })}
+      />
       <label className="uione-look-group">
         <span>Tab width</span>
         <select value={look.tabWidth} onChange={(e) => change({ tabWidth: Number(e.target.value) as TabWidth })}>
@@ -183,7 +176,7 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           <div role="dialog" aria-label="What the colors mean" className="uione-legend">
             <ul>
               {kinds.map((k) => {
-                const colors = colorsOf(k.code, k.word, k.nth ?? 0, codeTheme(look.theme));
+                const colors = colorsOf(k.code, k.word, k.nth ?? 0, themesOf(look.lightTheme, look.darkTheme));
                 return (
                   <li key={k.kind}>
                     <a href={`${reference}#${k.section}`} target="_blank" rel="noreferrer" title={`${k.kind} in the language reference`}>
@@ -202,6 +195,109 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Whether the page is dark now: as the reader picked it, or as their system says
+// when they didn't, followed as either changes.
+export function usePageDark(): boolean {
+  const read = () => {
+    if (typeof document === "undefined") return false;
+    const picked = document.documentElement.getAttribute("data-theme");
+    if (picked === "dark" || picked === "light") return picked === "dark";
+    return typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    const update = () => setDark(read());
+    const watcher = typeof MutationObserver !== "undefined" ? new MutationObserver(update) : undefined;
+    watcher?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    const query = typeof matchMedia !== "undefined" ? matchMedia("(prefers-color-scheme: dark)") : undefined;
+    query?.addEventListener("change", update);
+    return () => {
+      watcher?.disconnect();
+      query?.removeEventListener("change", update);
+    };
+  }, []);
+  return dark;
+}
+
+// A few lines of .one that show each kind of word, for a theme's preview.
+const sample = `entity book {
+	title   text  required
+	status  enum  on_shelf | lent
+}
+command book::lend
+`;
+
+// Choosing the theme for the page as it is now, light or dark, from a gallery of
+// them, each shown in its own colors; the theme for the other is kept as it was,
+// and comes back when the page does.
+function ThemePicker({ look, onPick }: { look: Look; onPick: (theme: CodeTheme) => void }) {
+  const dark = usePageDark();
+  const list = dark ? darkThemes : lightThemes;
+  const themes = themesOf(look.lightTheme, look.darkTheme);
+  const current = dark ? themes.dark : themes.light;
+  const [open, setOpen] = useState(false);
+  const [ready, setReady] = useState(0);
+  const box = useRef<HTMLDivElement>(null);
+  // The current theme's swatch, and every theme of the list once the gallery opens.
+  useEffect(() => {
+    let live = true;
+    void loadThemes(themes).then(() => live && setReady((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [look.lightTheme, look.darkTheme]);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    void Promise.all(list.map((t) => loadTheme(t))).then(() => live && setReady((n) => n + 1));
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      live = false;
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open, dark]);
+  const swatch = previewOf(current, sample);
+  return (
+    <div ref={box} className="uione-look-themes" data-ready={ready}>
+      <button type="button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)} title={`${current.name}; choose the ${dark ? "dark" : "light"} theme`}>
+        <span className="uione-theme-swatch" aria-hidden="true" dangerouslySetInnerHTML={swatch ? { __html: swatch } : undefined} />
+        <span>{dark ? "Dark theme" : "Light theme"}</span>
+      </button>
+      {open && (
+        <div role="dialog" aria-label={dark ? "Dark themes" : "Light themes"} className="uione-theme-gallery">
+          <p className="uione-theme-gallery-heading">{dark ? "Dark themes" : "Light themes"}</p>
+          <div className="uione-theme-grid" role="radiogroup" aria-label={dark ? "Dark theme" : "Light theme"}>
+            {list.map((theme) => {
+              const shown = previewOf(theme, sample);
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === current}
+                  className="uione-theme-card"
+                  onClick={() => {
+                    onPick(theme);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="uione-theme-preview" aria-hidden="true" dangerouslySetInnerHTML={shown ? { __html: shown } : undefined} />
+                  <span className="uione-theme-name">{theme.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
