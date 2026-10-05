@@ -7,7 +7,9 @@
 export { definitions, reference } from "./definitions.js";
 export type { DefinitionsOptions } from "./definitions.js";
 export { fromLine } from "./generated.js";
-export { highlighting } from "./highlight.js";
+export { highlighting, loadTheme } from "./highlight.js";
+export { codeTheme, codeThemes, defaultTheme } from "./themes.js";
+export type { CodeTheme } from "./themes.js";
 export { placed, problems } from "./problems.js";
 export type { ProblemsOptions } from "./problems.js";
 export { place, readSpot, spotOf, writeSpot } from "./spot.js";

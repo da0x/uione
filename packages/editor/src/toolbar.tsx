@@ -1,18 +1,20 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The editor's toolbar: the text's size, a font made for code, how wide a tab is,
-// and a legend of what each color in the highlighting means. The choices are the
+// The editor's toolbar: the text's size, a font made for code, a color theme, how
+// wide a tab is, and a legend of what each color in the highlighting means. The choices are the
 // reader's, kept in their browser, so the editor looks the way they left it.
 
 import { useEffect, useRef, useState } from "react";
-import { colorsOf } from "./highlight.js";
+import { colorsOf, loadTheme } from "./highlight.js";
+import { codeTheme, codeThemes } from "./themes.js";
 import type { TabWidth } from "./tabs.js";
 
 export interface Look {
   size: number; // the text's size, in pixels
   font: string; // one of fonts' names
   tabWidth: TabWidth;
+  theme?: string; // one of codeThemes' names; GitHub when it's none
 }
 
 // Fonts drawn for code, each loaded the first time it's chosen.
@@ -28,7 +30,7 @@ const sizes = { least: 10, most: 24, start: 14 };
 const key = "uione-editor-look";
 
 export function savedLook(tabWidth: TabWidth): Look {
-  const fallback: Look = { size: sizes.start, font: fonts[0].name, tabWidth };
+  const fallback: Look = { size: sizes.start, font: fonts[0].name, tabWidth, theme: codeThemes[0].name };
   try {
     const saved = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<Look> | null;
     if (!saved) return fallback;
@@ -36,6 +38,7 @@ export function savedLook(tabWidth: TabWidth): Look {
       size: typeof saved.size === "number" ? Math.min(sizes.most, Math.max(sizes.least, saved.size)) : fallback.size,
       font: fonts.some((f) => f.name === saved.font) ? saved.font! : fallback.font,
       tabWidth: [2, 4, 6, 8].includes(saved.tabWidth as number) ? (saved.tabWidth as TabWidth) : tabWidth,
+      theme: codeTheme(saved.theme).name,
     };
   } catch {
     return fallback;
@@ -146,6 +149,23 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
         </select>
       </label>
       <label className="uione-look-group">
+        <span>Theme</span>
+        <select
+          value={codeTheme(look.theme).name}
+          onChange={(e) => {
+            const chosen = codeTheme(e.target.value);
+            // Loaded before it's chosen, so the legend has its colors at once.
+            void loadTheme(chosen).then(() => change({ theme: chosen.name }));
+          }}
+        >
+          {codeThemes.map((t) => (
+            <option key={t.name} value={t.name}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="uione-look-group">
         <span>Tab width</span>
         <select value={look.tabWidth} onChange={(e) => change({ tabWidth: Number(e.target.value) as TabWidth })}>
           {[2, 4, 6, 8].map((w) => (
@@ -163,7 +183,7 @@ export function LookControls({ look, onLook }: { look: Look; onLook: (look: Look
           <div role="dialog" aria-label="What the colors mean" className="uione-legend">
             <ul>
               {kinds.map((k) => {
-                const colors = colorsOf(k.code, k.word, k.nth ?? 0);
+                const colors = colorsOf(k.code, k.word, k.nth ?? 0, codeTheme(look.theme));
                 return (
                   <li key={k.kind}>
                     <a href={`${reference}#${k.section}`} target="_blank" rel="noreferrer" title={`${k.kind} in the language reference`}>

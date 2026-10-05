@@ -10,7 +10,8 @@ import type { Built, Compiler, Files, GeneratedFile } from "@uione/compiler";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { fromLine } from "./generated.js";
-import { highlighting } from "./highlight.js";
+import { highlighting, loadTheme } from "./highlight.js";
+import { codeTheme } from "./themes.js";
 import { definitions } from "./definitions.js";
 import { problems } from "./problems.js";
 import { place, spotOf } from "./spot.js";
@@ -36,6 +37,7 @@ export interface EditorProps {
   readOnly?: boolean; // shown to be read, by someone who can't change it
   at?: Spot; // where the cursor is, or what's selected, as an address says; its lines are marked
   onSelect?: (spot: Spot) => void; // where the cursor or selection moved to
+  theme?: string; // the color theme, by name, like Nord; GitHub unless set
 }
 
 // The lines an address points at, marked the way GitHub marks them.
@@ -85,7 +87,7 @@ function same(a: Spot | undefined, b: Spot | undefined) {
 
 // A .one file in CodeMirror. The editor owns its text while it's open; a value from
 // outside replaces it only when it's different, so typing is never undone by an echo.
-export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine, readOnly = false, at, onSelect, onGo }: EditorProps) {
+export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine, readOnly = false, at, onSelect, onGo, theme }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const latest = useRef({ onChange, onLine, files, onSelect, onGo });
@@ -97,6 +99,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
   const latestAt = useRef(at);
   latestAt.current = at;
   const wraps = useRef(new Compartment());
+  const colors = useRef(new Compartment());
 
   useEffect(() => {
     const wrap = wraps.current;
@@ -111,7 +114,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           drawSelection(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          highlighting(),
+          colors.current.of(highlighting(codeTheme(theme))),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
           ...(compiler.define
@@ -190,6 +193,18 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
   useEffect(() => {
     if (view.current) setTabWidth(view.current, tabWidth);
   }, [tabWidth]);
+
+  // A theme is shown once it's loaded, the first time it's chosen.
+  useEffect(() => {
+    let current = true;
+    const chosen = codeTheme(theme);
+    void loadTheme(chosen).then(() => {
+      if (current && view.current) view.current.dispatch({ effects: colors.current.reconfigure(highlighting(chosen)) });
+    });
+    return () => {
+      current = false;
+    };
+  }, [theme, path, compiler, readOnly]);
 
   // An address naming another place, like going back, moves the cursor there; the
   // address following the cursor, as it does, moves nothing.
@@ -321,6 +336,7 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
         at={at}
         onSelect={onSelect}
         onGo={onGo}
+        theme={styled ? look.theme : undefined}
       />
       {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={styled ? look.tabWidth : tabWidth} />}
     </div>

@@ -10,7 +10,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { Built, Checked, Compiler, Definition, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
+import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs, codeTheme, codeThemes, loadTheme } from "../src/index.js";
+import { colorsOf } from "../src/highlight.js";
 
 // jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
 Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
@@ -185,6 +186,36 @@ describe("diff", () => {
     expect(removed?.textContent).toContain("title  text");
     expect(removed?.textContent).not.toContain("required");
     expect(shown.getAttribute("contenteditable")).toBe("false");
+  });
+});
+
+describe("themes", () => {
+  it("colors each kind of word in the theme chosen, once it's loaded", async () => {
+    const code = "entity book {\n}\n";
+    const github = colorsOf(code, "entity");
+    expect(github).toBeDefined();
+    const nord = codeTheme("Nord");
+    expect(colorsOf(code, "entity", 0, nord)).toEqual(github); // not loaded yet, so GitHub
+    await loadTheme(nord);
+    const colored = colorsOf(code, "entity", 0, nord);
+    expect(colored).not.toEqual(github);
+    expect(colored?.light).toBe(colored?.dark); // Nord has one side
+    await loadTheme(codeTheme("PaperColor"));
+    expect(colorsOf(code, "entity", 0, codeTheme("PaperColor"))).toEqual({ light: "#D70087", dark: "#FF5FAF" });
+  });
+
+  it("offers the most used themes, and GitHub for one it doesn't know", () => {
+    expect(codeThemes.map((t) => t.name)).toEqual(["GitHub", "One Dark Pro", "Dracula", "Catppuccin", "Tokyo Night", "Nord", "PaperColor", "Solarized", "Gruvbox", "Monokai"]);
+    expect(codeTheme("Lime").name).toBe("GitHub");
+  });
+
+  it("gives the editor the theme's own background", async () => {
+    const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
+    const text = "entity book {\n}\n";
+    const { container } = render(<Editor path="main.one" value={text} onChange={() => {}} files={{ "main.one": text }} compiler={checker} theme="Dracula" />);
+    await waitFor(() => expect(container.querySelector(".cm-editor.uione-themed")).not.toBeNull());
+    const style = container.querySelector(".cm-editor")!.getAttribute("style") ?? "";
+    expect(style.replace(/\s/g, "").toLowerCase()).toContain("--one-bg:#282a36");
   });
 });
 

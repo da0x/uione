@@ -395,3 +395,35 @@
 .uione-definition a:hover {
   text-decoration: underline;
 }
+
+/* A theme other than GitHub brings its own background and text color, light and
+   dark, which follow the page the way the tokens' colors do. */
+.uione-editor .cm-editor.uione-themed,
+.uione-editor .cm-editor.uione-themed .cm-gutters {
+  background: var(--one-bg);
+  color: var(--one-fg);
+}
+.uione-editor .cm-editor.uione-themed .cm-gutters {
+  color: color-mix(in srgb, var(--one-fg) 55%, transparent);
+  border-right-color: color-mix(in srgb, var(--one-fg) 15%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .uione-editor .cm-editor.uione-themed,
+  :root:not([data-theme="light"]) .uione-editor .cm-editor.uione-themed .cm-gutters {
+    background: var(--one-bg-dark);
+    color: var(--one-fg-dark);
+  }
+  :root:not([data-theme="light"]) .uione-editor .cm-editor.uione-themed .cm-gutters {
+    color: color-mix(in srgb, var(--one-fg-dark) 55%, transparent);
+    border-right-color: color-mix(in srgb, var(--one-fg-dark) 15%, transparent);
+  }
+}
+:root[data-theme="dark"] .uione-editor .cm-editor.uione-themed,
+:root[data-theme="dark"] .uione-editor .cm-editor.uione-themed .cm-gutters {
+  background: var(--one-bg-dark);
+  color: var(--one-fg-dark);
+}
+:root[data-theme="dark"] .uione-editor .cm-editor.uione-themed .cm-gutters {
+  color: color-mix(in srgb, var(--one-fg-dark) 55%, transparent);
+  border-right-color: color-mix(in srgb, var(--one-fg-dark) 15%, transparent);
+}
