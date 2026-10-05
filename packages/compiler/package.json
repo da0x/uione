@@ -1,6 +1,6 @@
 {
   "name": "@uione/compiler",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "The uione compiler, built for the browser and run in a Web Worker: check a project, build it, and see what each line becomes.",
   "license": "AGPL-3.0-only",
   "author": "Daher Alfawares",
