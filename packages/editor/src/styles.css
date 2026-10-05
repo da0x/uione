@@ -193,8 +193,12 @@
 .uione-diff .cm-changedText {
   background: rgba(46, 160, 67, 0.3) !important;
 }
+/* Lines taken away are drawn in a block of their own, which CodeMirror pads less
+   than a line; it's padded as the lines are, so they start where the others do. */
 .uione-diff .cm-deletedChunk {
   background: rgba(248, 81, 73, 0.12) !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
 }
 .uione-diff .cm-deletedChunk .cm-deletedText,
 .uione-diff .cm-deletedChunk del {
