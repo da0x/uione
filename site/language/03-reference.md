@@ -18,6 +18,40 @@ you prefer, while the file itself stays snake_case. snake_case is the one style 
 other style can be produced from without guessing, which is why it's the one that's
 stored.
 
+## Names and scope
+
+A namespace is a module. Its entities, commands, views, roles and functions can be
+spread over any of the project's `.one` files, and each sees all the others by name,
+with nothing imported: the whole project is checked together, so a file is only how
+the namespace is split up. A name from another namespace is always written with
+that namespace, like `library::book`, so whatever comes from elsewhere says where,
+right where it's used.
+
+What a name means depends on where it's written:
+
+- **In an entity**, a field's type is a [built-in type](#built-in-types), an entity
+  of the same namespace, or another namespace's, qualified.
+- **In a command**, the entity it's on is in scope: its fields by name, like
+  `status`, or with the entity's name, like `report.status`, which mean the same.
+  `id` is the entity's own id. A field that points at another entity reads that
+  entity's fields through it: in `command report::create`,
+  `project.takes_reports` is the takes_reports of the report's project. When a
+  field is named for its type, as `project  project  required` is, writing
+  `report.project.takes_reports` says plainly that it's the field.
+- **In a view**, each row's fields are named by the entity it comes from, like
+  `book.title`, and in `each book where ...` plainly. A view per entity names that
+  entity, like `project.name`, and `user.id` is whoever is reading it.
+- **Everywhere**, `me`, `now`, `none`, `true` and `false` are the language's own
+  [values](#built-in-values). A choice is named with its enum, like
+  `status::open`. `permission` takes one of the language's own words: `anyone`,
+  `signed_in` or `owner`.
+
+A name that means nothing where it's written is an error that says what's in scope
+there, and suggests the nearest name that is.
+
+In the editor, resting the pointer on a name says what it means there, like
+"field project of report, a project", and Ctrl or Cmd and a click, or F12, goes to
+where it's declared, or to this reference for one of the language's own words.
 
 ## Indentation
 
