@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { fromLine } from "./generated.js";
 import { highlighting } from "./highlight.js";
+import { definitions } from "./definitions.js";
 import { problems } from "./problems.js";
 import { place, spotOf } from "./spot.js";
 import type { Spot } from "./spot.js";
@@ -24,9 +25,14 @@ export interface EditorProps {
   value: string;
   onChange: (value: string) => void;
   files: Files; // the whole project, this file included
-  compiler: Pick<Compiler, "check">;
+  // With define, hovering over a name says what it is, and Ctrl or Cmd and a click,
+  // or F12, goes to it.
+  compiler: Pick<Compiler, "check"> & Partial<Pick<Compiler, "define">>;
   tabWidth?: TabWidth;
   onLine?: (line: number) => void; // the line the cursor is on, numbered from 1
+  // Going to a definition in another file, or this one: its path, line and column.
+  // Without it, one in this file moves the cursor there.
+  onGo?: (path: string, line: number, column: number) => void;
   readOnly?: boolean; // shown to be read, by someone who can't change it
   at?: Spot; // where the cursor is, or what's selected, as an address says; its lines are marked
   onSelect?: (spot: Spot) => void; // where the cursor or selection moved to
@@ -79,11 +85,11 @@ function same(a: Spot | undefined, b: Spot | undefined) {
 
 // A .one file in CodeMirror. The editor owns its text while it's open; a value from
 // outside replaces it only when it's different, so typing is never undone by an echo.
-export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine, readOnly = false, at, onSelect }: EditorProps) {
+export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, onLine, readOnly = false, at, onSelect, onGo }: EditorProps) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const latest = useRef({ onChange, onLine, files, onSelect });
-  latest.current = { onChange, onLine, files, onSelect };
+  const latest = useRef({ onChange, onLine, files, onSelect, onGo });
+  latest.current = { onChange, onLine, files, onSelect, onGo };
   // Whether the selection is being put where `at` says, which isn't the person moving
   // it, and whether the person has moved it since the editor opened.
   const placing = useRef(false);
@@ -108,6 +114,20 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           highlighting(),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
+          ...(compiler.define
+            ? [
+                definitions({
+                  compiler: compiler as Pick<Compiler, "define">,
+                  path,
+                  files: () => latest.current.files,
+                  onGo: (to, line, column) => {
+                    const goes = latest.current.onGo;
+                    if (!goes) return false;
+                    goes(to, line, column);
+                  },
+                }),
+              ]
+            : []),
           wrap.of(wrapping(host.current!.clientWidth || wideEnough)),
           // Someone who can't change the file can still select and copy it.
           EditorState.readOnly.of(readOnly),
@@ -241,7 +261,7 @@ export function Generated({ files, path, line, tabWidth = 4 }: GeneratedProps) {
 }
 
 export interface WorkbenchProps {
-  compiler: Pick<Compiler, "check" | "build">;
+  compiler: Pick<Compiler, "check" | "build"> & Partial<Pick<Compiler, "define">>;
   files: Files;
   path: string;
   onChange: (path: string, value: string) => void;
@@ -253,11 +273,12 @@ export interface WorkbenchProps {
   onSelect?: (spot: Spot) => void; // where the cursor or selection moved to
   toolbar?: boolean; // the text's size, font, tab width and a legend of colors above it; true unless set
   look?: Look; // the text's look, when the app shows LookControls in a bar of its own, with no toolbar here
+  onGo?: (path: string, line: number, column: number) => void; // going to a definition, as the Editor's
 }
 
 // A .one file beside what it becomes. The project is built a moment after typing
 // stops; the code from the last build that worked stays up while a mistake is fixed.
-export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true, look: given }: WorkbenchProps) {
+export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay = 500, generated = true, readOnly = false, at, onSelect, toolbar = true, look: given, onGo }: WorkbenchProps) {
   const [line, setLine] = useState(1);
   // How the reader likes the text: size, font and tab width, from their last visit,
   // or as the app's own bar sets it.
@@ -299,6 +320,7 @@ export function Workbench({ compiler, files, path, onChange, tabWidth = 4, delay
         readOnly={readOnly}
         at={at}
         onSelect={onSelect}
+        onGo={onGo}
       />
       {generated && <Generated files={built?.files ?? []} path={path} line={line} tabWidth={styled ? look.tabWidth : tabWidth} />}
     </div>

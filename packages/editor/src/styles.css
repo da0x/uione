@@ -374,3 +374,24 @@
     overflow-y: auto;
   }
 }
+
+/* What a name means, when the pointer rests on it, and where it's declared. */
+.uione-definition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  max-width: min(28rem, 85vw);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--uione-ui-font, system-ui, sans-serif);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.uione-definition a {
+  color: var(--uione-accent, #1f6feb);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.uione-definition a:hover {
+  text-decoration: underline;
+}

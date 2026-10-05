@@ -158,6 +158,24 @@ EMSCRIPTEN_KEEPALIVE const char* one_build(const char* project, const char* out,
     return answer.c_str();
 }
 
+// What the name at a line and column of a file means: {"found":false}, or what it
+// says, and where it's declared, or the reference's section for the language's own.
+EMSCRIPTEN_KEEPALIVE const char* one_define(const char* project, const char* path, int line, int column) {
+    auto d = one::driver::define(std::string(project), std::string(path), line, column);
+    if (!d.found) {
+        answer = "{\"found\":false}";
+        return answer.c_str();
+    }
+    answer = "{\"found\":true,\"says\":";
+    text(answer, d.says);
+    answer += ",\"path\":";
+    text(answer, d.path);
+    answer += ",\"line\":" + std::to_string(d.line) + ",\"column\":" + std::to_string(d.column) + ",\"section\":";
+    text(answer, d.section);
+    answer += ",\"from\":" + std::to_string(d.from) + ",\"to\":" + std::to_string(d.to) + "}";
+    return answer.c_str();
+}
+
 // where is file:line or file:line-line, the way `one show` takes it.
 EMSCRIPTEN_KEEPALIVE const char* one_show(const char* where) {
     auto shown = one::driver::show(where);

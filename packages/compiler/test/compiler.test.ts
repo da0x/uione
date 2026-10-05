@@ -82,6 +82,20 @@ describe("the compiler in the browser", () => {
     expect((run(one, { kind: "build", files: { "shop.one": shop } }) as Built).environment).toBe("production");
   });
 
+  it("says what a name means, and where it's declared, in another file", () => {
+    const files = {
+      "projects.one": "namespace tracker {\n\tentity project {\n\t\ttakes_reports  boolean = false\n\t}\n}\n",
+      "reports.one":
+        "namespace tracker {\n\tentity report {\n\t\tproject  project  required\n\t}\n" +
+        '\tcommand report::create {\n\t\tpermission signed_in\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
+    };
+    const through = run(one, { kind: "define", files, path: "reports.one", line: 7, column: 20 });
+    expect(through).toEqual({ found: true, says: "field takes_reports of project, a boolean", path: "projects.one", line: 3, column: 3, section: "", from: 19, to: 32 });
+    const built = run(one, { kind: "define", files, path: "reports.one", line: 6, column: 15 });
+    expect(built).toMatchObject({ found: true, says: "built-in permission signed_in: any signed-in person", path: "", section: "command" });
+    expect(run(one, { kind: "define", files, path: "reports.one", line: 1, column: 1 })).toEqual({ found: false });
+  });
+
   it("keeps a project's files inside it", () => {
     expect(() => run(one, { kind: "check", files: { "../escape.one": "" } })).toThrow();
   });

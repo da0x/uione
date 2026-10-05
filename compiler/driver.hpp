@@ -262,6 +262,46 @@ namespace one::driver {
         return out;
     }
 
+    // What the name at a place in a project's file means, for an editor's hover and
+    // its going to a definition: said in words, and where it's declared, or the
+    // reference's section for one of the language's own. Nothing, when no name is
+    // there, or the project doesn't parse.
+    struct definition {
+        bool found = false;
+        std::string says;
+        std::string path;     // where it's declared; empty for the language's own
+        int line = 0;
+        int column = 0;
+        std::string section;  // the reference's section, like built-in-values
+        int from = 0;         // the column the name starts at, and the one after it
+        int to = 0;
+    };
+
+    inline definition define(const sources& given, const std::string& path, int line, int column) {
+        language::diagnostics found;
+        std::vector<language::file> files;
+        for (const auto& [file, source] : given) files.push_back(language::parse(file, source, found));
+        if (!found.empty()) return {};
+        language::meanings meant;
+        language::check(files, found, meant);
+        const language::meaning* best = nullptr;
+        for (const auto& m : meant) {
+            int start = m.where.column, end = m.where.column + static_cast<int>(m.length);
+            if (m.path != path || m.where.line != line || column < start || column >= end) continue;
+            if (!best || m.length < best->length) best = &m;
+        }
+        if (!best) return {};
+        return {true, best->says, best->to_path, best->to.line, best->to.column, best->section, best->where.column,
+                best->where.column + static_cast<int>(best->length)};
+    }
+
+    inline definition define(const std::string& root, const std::string& path, int line, int column) {
+        language::diagnostics found;
+        auto read = read_sources(root, found);
+        if (!found.empty()) return {};
+        return define(read, path, line, column);
+    }
+
     // Each root is a project, checked on its own.
     inline checked check(const std::vector<std::string>& roots) {
         checked out;

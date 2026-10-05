@@ -7,7 +7,7 @@ import { EditorState, Text } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { Built, Checked, Compiler, Files } from "@uione/compiler";
+import type { Built, Checked, Compiler, Definition, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs } from "../src/index.js";
@@ -111,9 +111,10 @@ describe("a workbench, with the real compiler", async () => {
       return {};
     },
   });
-  const compiler: Pick<Compiler, "check" | "build"> = {
+  const compiler: Pick<Compiler, "check" | "build" | "define"> = {
     check: async (files) => run(one, { kind: "check", files }) as Checked,
     build: async (files) => run(one, { kind: "build", files }) as Built,
+    define: async (files, path, line, column) => run(one, { kind: "define", files, path, line, column }) as Definition,
   };
 
   it("marks the code a line becomes, once the project is built", async () => {
@@ -135,6 +136,32 @@ describe("a workbench, with the real compiler", async () => {
     expect(container.querySelector(".cm-lineNumbers")).not.toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(built).toBe(0);
+  });
+
+  it("goes to where a name is declared, in another file or this one", async () => {
+    const files = {
+      "projects.one": "namespace tracker {\n\tentity project {\n\t\ttakes_reports  boolean = false\n\t}\n}\n",
+      "reports.one":
+        "namespace tracker {\n\tentity report {\n\t\tproject  project  required\n\t}\n" +
+        '\tcommand report::create {\n\t\tpermission signed_in\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
+    };
+    const went: [string, number, number][] = [];
+    const { container, unmount } = render(
+      <Workbench compiler={compiler} files={files} path="reports.one" onChange={() => {}} generated={false} onGo={(...to) => went.push(to)} />,
+    );
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor") as HTMLElement)!;
+    const line7 = view.state.doc.line(7);
+    act(() => view.dispatch({ selection: { anchor: line7.from + line7.text.indexOf("takes_reports") + 2 } }));
+    fireEvent.keyDown(container.querySelector(".cm-content")!, { key: "F12" });
+    await waitFor(() => expect(went).toEqual([["projects.one", 3, 3]]));
+    unmount();
+
+    // With nowhere to go but this file, the cursor goes there itself.
+    const alone = render(<Workbench compiler={compiler} files={files} path="reports.one" onChange={() => {}} generated={false} />);
+    const editor = EditorView.findFromDOM(alone.container.querySelector(".cm-editor") as HTMLElement)!;
+    act(() => editor.dispatch({ selection: { anchor: line7.from + line7.text.indexOf("project") + 1 } }));
+    fireEvent.keyDown(alone.container.querySelector(".cm-content")!, { key: "F12" });
+    await waitFor(() => expect(editor.state.doc.lineAt(editor.state.selection.main.head).number).toBe(3));
   });
 
   it("can be only read, by someone who can't change the file", () => {

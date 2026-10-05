@@ -53,7 +53,7 @@ if(EMSCRIPTEN)
         -sALLOW_MEMORY_GROWTH=1
         -sFORCE_FILESYSTEM=1 -lnodefs.js
         -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString
-        -sEXPORTED_FUNCTIONS=_one_version,_one_check,_one_build,_one_show)
+        -sEXPORTED_FUNCTIONS=_one_version,_one_check,_one_build,_one_show,_one_define)
 endif()
 
 option(ONE_TESTS "Build the compiler's tests" ON)
@@ -80,7 +80,8 @@ if(ONE_TESTS)
         tests/grammar_tests.cpp
         tests/examples_tests.cpp
         tests/upgrade_tests.cpp
-        tests/environments_tests.cpp)
+        tests/environments_tests.cpp
+        tests/define_tests.cpp)
     target_include_directories(one_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_include_directories(one_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR})
     target_compile_definitions(one_tests PRIVATE UIONE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")

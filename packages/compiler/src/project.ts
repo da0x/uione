@@ -50,6 +50,21 @@ export interface Outline {
   environments: OutlinedEnvironment[];
 }
 
+// What the name at a place in a file means: what it says, and where it's declared,
+// or the language reference's section for one of the language's own words.
+export type Definition =
+  | { found: false }
+  | {
+      found: true;
+      says: string; // field project of report, a project
+      path: string; // the file it's declared in; empty for the language's own
+      line: number;
+      column: number;
+      section: string; // the reference's section, like built-in-values
+      from: number; // the columns the name spans on its line, the end not included
+      to: number;
+    };
+
 export interface Checked {
   problems: Problem[];
   files: number;
@@ -78,9 +93,10 @@ export type Request =
   | { kind: "version" }
   | { kind: "check"; files: Files }
   | { kind: "build"; files: Files; environment?: string }
+  | { kind: "define"; files: Files; path: string; line: number; column: number }
   | { kind: "show"; files: Files; path: string; from: number; to?: number };
 
-export type Answer = string | Checked | Built | Shown;
+export type Answer = string | Checked | Built | Shown | Definition;
 
 // The parts of the Emscripten module this uses.
 export interface Module {
@@ -93,7 +109,7 @@ export interface Module {
     unlink(path: string): void;
     rmdir(path: string): void;
   };
-  ccall(name: string, returns: "string", types: string[], args: string[]): string;
+  ccall(name: string, returns: "string", types: ("string" | "number")[], args: (string | number)[]): string;
 }
 
 const project = "/project";
@@ -106,6 +122,13 @@ export function run(one: Module, request: Request): Answer {
     const checked = within(call("one_check", project)) as Checked;
     if (checked.project) checked.project.path = inside(checked.project.path);
     return checked;
+  }
+  if (request.kind === "define") {
+    const defined = JSON.parse(
+      one.ccall("one_define", "string", ["string", "string", "number", "number"], [project, `${project}/${request.path}`, request.line, request.column]),
+    ) as Definition;
+    if (defined.found && defined.path) defined.path = inside(defined.path);
+    return defined;
   }
   if (request.kind === "build") {
     const built = within(call("one_build", project, `${project}/build`, request.environment ?? "")) as Built;

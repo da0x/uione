@@ -33,9 +33,23 @@
 
 namespace one::language {
 
+    // What a name written in a file means: what it names, said in words, and where
+    // that's declared, or the reference's section for one of the language's own.
+    // An editor shows it on hover, and goes to it.
+    struct meaning {
+        std::string path;        // the file the name is written in
+        location where;          // where it starts
+        std::size_t length = 0;
+        std::string says;        // field project of report, a project
+        std::string to_path;     // the file it's declared in; empty for the language's own
+        location to;
+        std::string section;     // the reference's section, like built-in-values
+    };
+    using meanings = std::vector<meaning>;
+
     class checker {
     public:
-        explicit checker(diagnostics& out) : out_(out) {}
+        explicit checker(diagnostics& out, meanings* meant = nullptr) : out_(out), meant_(meant) {}
 
         void check(const std::vector<file>& files) {
             for (const auto& f : files) {
@@ -83,6 +97,7 @@ namespace one::language {
         };
 
         diagnostics& out_;
+        meanings* meant_ = nullptr;
         std::string path_;
         std::map<std::string, scope> scopes_;  // by namespace, "" is the top level
         std::map<std::string, origin> routes_;
@@ -235,6 +250,64 @@ namespace one::language {
 
         const entity_declaration* find_entity(const std::string& ns, const qualified_name& name) const {
             return find(ns, name, &scope::entities);
+        }
+
+        // Says what the name written at `where` means, for an editor.
+        void mean(location where, std::size_t length, std::string says, const std::optional<origin>& to = std::nullopt, std::string section = "") {
+            if (!meant_ || length == 0) return;
+            meant_->push_back({path_, where, length, std::move(says), to ? to->path : "", to ? to->where : location{}, std::move(section)});
+        }
+
+        // Where a declaration is, by the table its kind is kept in.
+        template <typename T>
+        std::optional<origin> origin_of(const T* declaration, std::map<std::string, declared<T>> scope::*table) const {
+            for (const auto& [ns, s] : scopes_) {
+                for (const auto& [name, d] : s.*table) {
+                    if (d.node == declaration) return d.from;
+                }
+            }
+            return std::nullopt;
+        }
+        std::optional<origin> origin_of(const entity_declaration* e) const { return origin_of(e, &scope::entities); }
+
+        // The entity a field is declared in, and where, or none for one every entity
+        // has, like id.
+        std::optional<std::pair<const entity_declaration*, origin>> owner_of(const field* f) const {
+            for (const auto& [ns, s] : scopes_) {
+                for (const auto& [name, d] : s.entities) {
+                    for (const auto& g : d.node->fields) {
+                        if (&g == f) return std::pair{d.node, origin{d.from.path, g.where}};
+                    }
+                }
+            }
+            return std::nullopt;
+        }
+
+        void mean_field(location where, const field* f) {
+            if (!meant_ || !f) return;
+            auto owner = owner_of(f);
+            if (!owner) {
+                static const std::map<std::string, std::string, std::less<>> kept{
+                    {"id", "its id"}, {"created_at", "when it was made"}, {"created_by", "who made it"},
+                    {"updated_at", "when it last changed"}, {"updated_by", "who last changed it"}};
+                auto it = kept.find(f->name);
+                mean(where, f->name.size(), f->name + ", " + (it == kept.end() ? "kept for every entity" : it->second) + ", which every entity has",
+                     std::nullopt, "built-in-values");
+                return;
+            }
+            std::string kind;
+            if (!f->choices.empty()) {
+                for (std::size_t i = 0; i < f->choices.size(); ++i) {
+                    kind += (i == 0 ? "" : i + 1 == f->choices.size() ? " or " : ", ") + f->name + "::" + f->choices[i];
+                }
+            } else if (f->type) {
+                kind = (f->list ? "a list of " : "a ") + f->type->text();
+            }
+            mean(where, f->name.size(), "field " + f->name + " of " + owner->first->name + (kind.empty() ? "" : ", " + kind), owner->second);
+        }
+
+        void mean_entity(location where, std::size_t length, const entity_declaration* e) {
+            if (e) mean(where, length, "entity " + e->name, origin_of(e));
         }
 
         // A command is named after its entity (book::create), possibly inside a
@@ -478,8 +551,18 @@ namespace one::language {
         void verify_type(const std::string& ns, const qualified_name& type) {
             static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user"};
             snake(type);
-            if (type.parts.size() == 1 && built_in.contains(type.parts[0])) return;
-            if (find(ns, type, &scope::formats) || find_entity(ns, type)) return;
+            if (type.parts.size() == 1 && built_in.contains(type.parts[0])) {
+                mean(type.where, type.parts[0].size(), "built-in type " + type.parts[0], std::nullopt, "built-in-types");
+                return;
+            }
+            if (auto* f = find(ns, type, &scope::formats)) {
+                mean(type.where, type.text().size(), "format " + type.text(), origin_of(f, &scope::formats));
+                return;
+            }
+            if (auto* e = find_entity(ns, type)) {
+                mean_entity(type.where, type.text().size(), e);
+                return;
+            }
             if (type.text() == "bool") {
                 error(type.where, "the type is the whole word: boolean, not bool");
                 return;
@@ -495,6 +578,7 @@ namespace one::language {
                 return;
             }
             const entity_declaration* entity = find_entity(ns, qualified_name{{c.name.parts[0]}, where});
+            mean_entity(c.name.where, c.name.parts[0].size(), entity);
             if (!entity) {
                 error(c.name.where, "command " + c.name.text() + " is on entity " + c.name.parts[0] +
                                         ", which isn't declared " + in_namespace(ns));
@@ -595,6 +679,12 @@ namespace one::language {
             snake(p);
             if (p.parts.size() == 1) {
                 const auto& word = p.parts[0];
+                static const std::map<std::string, std::string, std::less<>> says{
+                    {"anyone", "anyone, signed in or not"}, {"signed_in", "any signed-in person"},
+                    {"owner", "the person in the entity's owner field"}};
+                if (auto it = says.find(word); it != says.end()) {
+                    mean(p.where, word.size(), "built-in permission " + word + ": " + it->second, std::nullopt, "command");
+                }
                 if (word == "anyone" || word == "signed_in") return;
                 if (word == "owner") {
                     const field* owner = entity ? find_field(*entity, "owner") : nullptr;
@@ -1372,12 +1462,22 @@ namespace one::language {
                 // An enum's choice, named with its enum: visibility::public.
                 if (n->name.parts.size() == 2 && beside && !beside->choices.empty()) {
                     choice_named(*n, *beside);
+                    if (auto owner = owner_of(beside)) {
+                        mean(n->name.where, n->name.text().size(), "choice " + n->name.parts[1] + " of " + beside->name + ", in " + owner->first->name,
+                             owner->second);
+                    }
                     return nullptr;
                 }
                 if (n->name.parts.size() != 1) return nullptr;
                 const std::string& name = n->name.parts[0];
                 if (!is_snake_case(name)) return nullptr;  // that error says what's wrong already
-                if (plain.contains(name)) return nullptr;
+                if (plain.contains(name)) {
+                    static const std::map<std::string, std::string, std::less<>> says{
+                        {"now", "now, the time it runs"}, {"me", "me, the person doing it"}, {"none", "none, no value"},
+                        {"true", "true"}, {"false", "false"}};
+                    mean(n->name.where, name.size(), "built-in value " + says.at(name), std::nullopt, "built-in-values");
+                    return nullptr;
+                }
                 if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
                     error(n->name.where, "write " + beside->name + "::" + name + "; an enum's choices are named with it",
@@ -1385,7 +1485,10 @@ namespace one::language {
                     return nullptr;
                 }
                 if (in.entity) {
-                    if (const field* f = field_or_id(*in.entity, name)) return f;
+                    if (const field* f = field_or_id(*in.entity, name)) {
+                        mean_field(n->name.where, f);
+                        return f;
+                    }
                 }
                 if (beside && !beside->choices.empty()) {
                     std::string choices;
@@ -1405,6 +1508,21 @@ namespace one::language {
                 return nullptr;
             }
             if (auto* m = std::get_if<member_expression>(&e.node)) {
+                const field* read = resolve_member(in, e, *m);
+                mean_field({e.where.line, e.where.column + 1}, read);  // the member's name starts after its dot
+                return read;
+            }
+            if (auto* call = std::get_if<call_expression>(&e.node)) {
+                called(in, *call);
+                return nullptr;
+            }
+            return resolve_rest(in, e);
+        }
+
+        // book.title, loan.book.status, first(loan).book: the field a member reads.
+        const field* resolve_member(const context& in, const expression& e, const member_expression& member) {
+            const member_expression* m = &member;
+            {
                 location where{e.where.line, e.where.column};
                 snake(m->member, where);
                 if (!is_snake_case(m->member)) return nullptr;
@@ -1443,8 +1561,10 @@ namespace one::language {
                 if (in.entity && name == in.entity->name) through = in.entity;            // loan.book, in a where on loan
                 else if (in.row && name == in.row->name) through = in.row;                // book.id, the row's own
                 else if (in.subject && name == in.subject->name) through = in.subject;    // book.title, the view's own book
+                if (through) mean_entity(object->name.where, name.size(), through);
                 else if (in.entity) {
                     if (const field* f = field_or_id(*in.entity, name)) {
+                        mean_field(object->name.where, f);
                         if (f->type && f->type->text() == "user") return profile_field(in, *f, m->member, where);  // member.name
                         through = pointed(in.ns, *f);                                    // book.status, through a loan's book
                         if (!through) {
@@ -1464,10 +1584,10 @@ namespace one::language {
                 if (!f) error(where, "entity " + through->name + " has no field " + m->member + nearest(m->member, field_names(*through)));
                 return f;
             }
-            if (auto* call = std::get_if<call_expression>(&e.node)) {
-                called(in, *call);
-                return nullptr;
-            }
+        }
+
+        // Conditions, comparisons and the rest, which read fields without being one.
+        const field* resolve_rest(const context& in, const expression& e) {
             if (auto* w = std::get_if<where_expression>(&e.node)) {
                 where_of(in, *w);
                 return nullptr;
@@ -1591,6 +1711,11 @@ namespace one::language {
     // without errors, since a half-read file would only produce follow-on errors.
     inline void check(const std::vector<file>& files, diagnostics& out) {
         checker(out).check(files);
+    }
+
+    // Checks, and says what each name means where it's written.
+    inline void check(const std::vector<file>& files, diagnostics& out, meanings& meant) {
+        checker(out, &meant).check(files);
     }
 
 } // namespace one::language
