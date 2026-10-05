@@ -118,11 +118,16 @@ export const plain: ComponentSet = {
 
   Text: ({ children }) => <p>{children}</p>,
 
-  Link: ({ href, onClick, children }) => (
-    <a href={href} onClick={onClick}>
-      {children}
-    </a>
-  ),
+  Link: ({ href, onClick, external, children }) =>
+    external ? (
+      <a href={href} target="_blank" rel="noreferrer" title="Opens in a new tab">
+        {children} <span aria-hidden="true">↗</span>
+      </a>
+    ) : (
+      <a href={href} onClick={onClick}>
+        {children}
+      </a>
+    ),
 
   Code: ({ lang, source }) => (
     <pre>

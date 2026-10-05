@@ -13,6 +13,7 @@ import {
   Table,
   Text,
   memorySource,
+  shortAddress,
   screen as defineScreen,
   useParam,
   useView,
@@ -276,6 +277,39 @@ describe("a table with people in it", () => {
     expect(pictures).toHaveLength(1);
     expect(pictures[0].getAttribute("src")).toBe("https://example.com/ada.png");
     expect(screen.queryByText("javascript:alert(1)")).toBeNull();
+  });
+});
+
+describe("a web address in a table", () => {
+  it("is a link to wherever it is, which says it leaves the app, with the address shortened", () => {
+    const log = "https://console.cloud.google.com/cloud-build/builds/a2d3012f-883f-4aef-b810-5e9611c75899?project=39906949747";
+    const source = memorySource({
+      views: {
+        "studio::history": {
+          rows: [
+            { id: "d1", status: "live", log_url: log },
+            { id: "d2", status: "failed", log_url: `${window.location.origin}/logs/d2` },
+            { id: "d3", status: "queued", log_url: "not an address" },
+          ],
+        },
+      },
+    });
+    const { container } = renderScreen(source, () => <Table view={useView("studio::history")} columns={{ status: "Status", log_url: "Log" }} />);
+    const links = container.querySelectorAll("td a");
+    expect(links).toHaveLength(2);
+    expect(links[0].getAttribute("href")).toBe(log);
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    expect(links[0].getAttribute("rel")).toBe("noreferrer");
+    expect(links[0].textContent).toContain("console.cloud.google.com/…");
+    expect(links[0].textContent).toContain("↗");
+    // The app's own address is a link like any other, in the same tab.
+    expect(links[1].getAttribute("target")).toBeNull();
+    expect(screen.getByText("not an address")).toBeTruthy();
+  });
+
+  it("keeps a short address whole, and a long one's host and end", () => {
+    expect(shortAddress("https://neotrac.org/")).toBe("neotrac.org");
+    expect(shortAddress("https://example.com/a/very/long/path/that/goes/on/and/on/to/the/end.html")).toBe("example.com/…/on/and/on/to/the/end.html");
   });
 });
 

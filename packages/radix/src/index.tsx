@@ -28,6 +28,15 @@ const box = "one-code overflow-x-auto rounded-box border border-line bg-surface 
 
 // The reader's controls for how code looks: how wide a tab is, and how names are
 // written. One change applies to every piece of code on the page.
+// Octicons' link-external (MIT): the link leaves the app, for another site.
+function ExternalMark() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" className="shrink-0 opacity-70">
+      <path d="M3.75 2h3.5a.75.75 0 0 1 0 1.5h-3.5a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-3.5a.75.75 0 0 1 1.5 0v3.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5C2 2.784 2.784 2 3.75 2Zm6.854-1h4.146a.25.25 0 0 1 .25.25v4.146a.25.25 0 0 1-.427.177L13.03 4.03 9.28 7.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.75-3.75-1.543-1.543A.25.25 0 0 1 10.604 1Z" />
+    </svg>
+  );
+}
+
 function CodeToolbar({ display }: { display: CodeDisplay }) {
   const names = useId();
   return (
@@ -184,11 +193,23 @@ export const radix: ComponentSet = {
 
   Text: ({ children }) => <p className="max-w-3xl leading-7 text-ink/90">{children}</p>,
 
-  Link: ({ href, onClick, children }) => (
-    <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline">
-      {children}
-    </a>
-  ),
+  Link: ({ href, onClick, external, children }) =>
+    external ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title="Opens in a new tab"
+        className="inline-flex items-center gap-1 font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline"
+      >
+        {children}
+        <ExternalMark />
+      </a>
+    ) : (
+      <a href={href} onClick={onClick} className="font-medium text-accent decoration-accent/40 underline-offset-4 hover:underline">
+        {children}
+      </a>
+    ),
 
   Code: function RadixCode({ lang, source }) {
     const display = useCodeDisplay();

@@ -390,3 +390,22 @@ describe("a choice of a few", () => {
     expect((screen.getByLabelText("Public") as HTMLInputElement).checked).toBe(true);
   });
 });
+
+describe("a link to another site", () => {
+  it("opens in a new tab and carries the link-external mark; one of the app's own doesn't", () => {
+    const { container } = render(
+      <>
+        <radix.Link href="https://github.com/da0x/neotrac" external>
+          da0x/neotrac
+        </radix.Link>
+        <radix.Link href="/da0x">da0x</radix.Link>
+      </>,
+    );
+    const [away, home] = Array.from(container.querySelectorAll("a"));
+    expect(away.getAttribute("target")).toBe("_blank");
+    expect(away.getAttribute("rel")).toBe("noreferrer");
+    expect(away.querySelector("svg")).not.toBeNull();
+    expect(home.getAttribute("target")).toBeNull();
+    expect(home.querySelector("svg")).toBeNull();
+  });
+});

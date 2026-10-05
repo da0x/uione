@@ -12,6 +12,9 @@ import type { ViewStatus } from "./data.js";
 export interface LinkProps {
   href: string;
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  // It leaves the app, for another site: it opens in a new tab, and says so with
+  // the link-external mark.
+  external?: boolean;
 }
 
 export interface NavItem extends LinkProps {

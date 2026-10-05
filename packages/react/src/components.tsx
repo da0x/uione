@@ -13,7 +13,7 @@ import { fill, useConfirmContext } from "./app.js";
 import type { FieldProps } from "./contract.js";
 import { useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
-import { action, label, show, useLinks, useUI } from "./ui.js";
+import { action, label, shortAddress, show, useLinks, useUI } from "./ui.js";
 
 export function Hero({ title, children }: { title: string; children: ReactNode }) {
   const ui = useUI();
@@ -243,6 +243,14 @@ export function Table({
           const value = row[key];
           const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
           if (shown !== undefined) return shown;
+          // A web address is a link, to wherever it is, shown shortened.
+          if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
+            return (
+              <ui.Link {...links(value)}>
+                <span title={value}>{shortAddress(value)}</span>
+              </ui.Link>
+            );
+          }
           if (!pictures.includes(key)) return show(value);
           const source = row[key];
           return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";

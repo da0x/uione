@@ -26,7 +26,7 @@ export type {
 export { memorySource } from "./memory.js";
 export type { MemoryOptions, MemorySource } from "./memory.js";
 
-export { label, show, useLinks, useParam, useUI } from "./ui.js";
+export { label, shortAddress, show, useLinks, useParam, useUI } from "./ui.js";
 export { keyOf, partsOf } from "./keys.js";
 
 export type * from "./contract.js";

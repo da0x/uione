@@ -17,9 +17,33 @@ export function useUI(): ComponentSet {
 // The href and click handler for a link. A route inside the app is followed without
 // reloading the page; anything else, like #waitlist or another site, is left to the
 // browser. A click with a modifier key still opens a new tab, as people expect.
+// Whether an address is this app's own, written out in full.
+function sameSite(to: string): boolean {
+  try {
+    return typeof window !== "undefined" && new URL(to).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+// A web address as a table shows it: its host and path, without the scheme, and
+// shortened in the middle when it's long, at a slash, like
+// console.cloud.google.com/…/builds/a2d3.
+export function shortAddress(address: string, most = 42): string {
+  const plain = address.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  if (plain.length <= most) return plain;
+  const host = plain.split("/")[0];
+  let tail = plain.slice(-Math.max(8, most - host.length - 3));
+  // From a whole path segment, so no part of a name is shown cut.
+  const slash = tail.indexOf("/");
+  if (slash > 0) tail = tail.slice(slash);
+  return host.length + tail.length + 2 >= plain.length ? plain : `${host}/…${tail.startsWith("/") ? "" : "/"}${tail}`;
+}
+
 export function useLinks(): (to: string) => LinkProps {
   const navigate = useNavigate();
   return (to: string) => {
+    if (/^https?:\/\//i.test(to)) return { href: to, external: !sameSite(to) };
     if (!to.startsWith("/")) return { href: to };
     return {
       href: to,
