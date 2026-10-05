@@ -361,6 +361,7 @@ namespace one::generators {
 
             for (auto* e : pkg.entities) {
                 auto from_entity = in(body, at(e), at(e).line);
+                path_ = at(e).path.empty() ? pkg.path : at(e).path;
                 struct line {
                     std::string name, type, tag;
                     int from;  // the field's line in the .one file
@@ -444,6 +445,7 @@ namespace one::generators {
                 if (actions[c->name.parts[1]] > 1) var = api_detail::go_name(e->name) + var;
                 members.push_back(var);
                 auto from_command = in(body, at(c), where.line);
+                path_ = at(c).path.empty() ? pkg.path : at(c).path;  // what's unsupported is said where it's written
                 command(body, *e, *c, var, uses_time);
                 body.line();
             }
@@ -573,10 +575,22 @@ namespace one::generators {
             return entity(*pkg_, f.type->parts[0]);
         }
 
+        // report.project, in a command on report: the entity's own field, named with
+        // the entity, the same as project alone. Returns the field's name.
+        static std::optional<std::string> own(const language::entity_declaration& e, const language::expression& x) {
+            auto* m = std::get_if<language::member_expression>(&x.node);
+            if (!m) return std::nullopt;
+            auto* object = std::get_if<language::name_expression>(&m->object->node);
+            if (!object || object->name.parts.size() != 1 || object->name.parts[0] != e.name) return std::nullopt;
+            return m->member;
+        }
+
         void find_pointed(const language::entity_declaration& e, const language::expression& x) {
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);
-                const language::field* f = object && object->name.parts.size() == 1 ? field(e, object->name.parts[0]) : nullptr;
+                auto through = own(e, *m->object);  // report.project.takes_reports
+                const language::field* f = through ? field(e, *through)
+                                         : object && object->name.parts.size() == 1 ? field(e, object->name.parts[0]) : nullptr;
                 const language::entity_declaration* target = f ? target_of(*f) : nullptr;
                 if (target && std::none_of(pointed_.begin(), pointed_.end(), [&](const auto& p) { return p.first == f->name; })) {
                     pointed_.emplace_back(f->name, target);
@@ -609,11 +623,16 @@ namespace one::generators {
             if (auto* n = std::get_if<language::name_expression>(&x.node); n && n->name.parts.size() == 1) {
                 if (const auto* f = field(e, n->name.parts[0])) return std::pair{me + "." + api_detail::go_name(f->name), f};
             }
+            if (auto name = own(e, x)) {  // report.title, the entity's own
+                if (const auto* f = field(e, *name)) return std::pair{me + "." + api_detail::go_name(f->name), f};
+            }
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);
-                if (!object || object->name.parts.size() != 1) return std::nullopt;
+                auto through = own(e, *m->object);  // report.project.takes_reports
+                if (!through && (!object || object->name.parts.size() != 1)) return std::nullopt;
+                const std::string& via = through ? *through : object->name.parts[0];
                 for (const auto& [name, target] : pointed_) {
-                    if (name != object->name.parts[0]) continue;
+                    if (name != via) continue;
                     if (const auto* f = field(*target, m->member)) {
                         return std::pair{local_name(name) + "." + api_detail::go_name(f->name), f};
                     }

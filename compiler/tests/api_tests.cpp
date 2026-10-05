@@ -121,6 +121,42 @@ view orders {
     CHECK(generated.errors[0].where.line == 6);
 }
 
+TEST_CASE("what can't be done yet is said in the file it's written in") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("orders.one", "namespace shop {\nentity order {\n\ttotal  number\n}\n}\n", out));
+    files.push_back(language::parse("closing.one", "namespace shop {\n\ncommand order::close {\n"
+                                                   "\trequire first(order).total == 0  \"not yet\"\n}\n}\n", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.size() == 1);
+    CHECK(generated.errors[0].path == "closing.one");
+    CHECK(generated.errors[0].where.line == 4);
+}
+
+TEST_CASE("a command names its entity's fields plainly, or with the entity's name, alike") {
+    auto backend = [](const std::string& condition) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", "namespace tracker {\n"
+                                                    "entity project {\n\tname  text  required\n\ttakes_reports  boolean = false\n}\n"
+                                                    "entity report {\n\tproject  project  required\n\ttitle  text  required\n}\n"
+                                                    "command report::create {\n\tpermission signed_in\n"
+                                                    "\trequire " + condition + "  \"this project doesn't take reports\"\n}\n}\n", out));
+        language::check(files, out);
+        for (const auto& d : out) FAIL_CHECK(language::format(d));
+        auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+        for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+        std::string all;
+        for (const auto& f : generated.files) all += f.content;
+        return all;
+    };
+    auto plain = backend("project.takes_reports");
+    CHECK(plain.find("TakesReports") != std::string::npos);
+    CHECK(backend("report.project.takes_reports") == plain);
+}
+
 TEST_CASE("generated Go is about as long as the .one it came from") {
     for (const char* project : {"/site", "/examples/tasks", "/examples/library", "/examples/tracker"}) {
         std::size_t source = 0;
