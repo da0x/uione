@@ -142,7 +142,7 @@ TEST_CASE("a command names its entity's fields plainly, or with the entity's nam
         files.push_back(language::parse("main.one", "namespace tracker {\n"
                                                     "entity project {\n\tname  text  required\n\ttakes_reports  boolean = false\n}\n"
                                                     "entity report {\n\tproject  project  required\n\ttitle  text  required\n}\n"
-                                                    "command report::create {\n\tpermission signed_in\n"
+                                                    "command report::create {\n\tpermission authenticated\n"
                                                     "\trequire " + condition + "  \"this project doesn't take reports\"\n}\n}\n", out));
         language::check(files, out);
         for (const auto& d : out) FAIL_CHECK(language::format(d));

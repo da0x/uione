@@ -53,7 +53,7 @@ type Report struct {
 }
 
 var teams = one.Module("team",
-	one.Command[Team]("team::create").Allow(one.SignedIn).Do(func(c *one.Ctx, t *Team) error {
+	one.Command[Team]("team::create").Allow(one.Authenticated).Do(func(c *one.Ctx, t *Team) error {
 		return one.Create(c, &Seat{Team: t.ID, Person: c.Me(), Role: "lead"})
 	}),
 	one.Command[Seat]("seat::create"),
@@ -61,7 +61,7 @@ var teams = one.Module("team",
 	one.Command[Chore]("chore::update"),
 	one.Command[Remark]("remark::create"),
 	one.Command[Team]("team::update"),
-	one.Command[Report]("report::create").Allow(one.SignedIn),
+	one.Command[Report]("report::create").Allow(one.Authenticated),
 	one.Role("lead", "team:update", "seat:create", "chore:create", "chore:update", "remark:create").Per(one.Entity[Team](), one.Entity[Seat]()),
 	one.Role("helper", "chore:create", "remark:create").Per(one.Entity[Team](), one.Entity[Seat]()),
 	one.View("board").Per(one.Entity[Team]()).Readers(one.Entity[Seat]()).PublicWhen("visibility", "public").

@@ -167,6 +167,29 @@ export const radix: ComponentSet = {
       </span>
     ),
 
+  // A button for each way, its mark before its name, as wide as the dialog.
+  SignIn: ({ methods, busy, error, onChoose }) => (
+    <div className="flex flex-col gap-2.5">
+      {methods.map(({ id, name, Mark }) => (
+        <button
+          key={id}
+          type="button"
+          disabled={busy !== undefined}
+          onClick={() => onChoose(id)}
+          className={`${pressable} w-full justify-start gap-3 py-2.5 ${button.secondary}`}
+        >
+          {Mark && <Mark />}
+          {busy === id ? `Signing in with ${name}…` : `Continue with ${name}`}
+        </button>
+      ))}
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  ),
+
   Hero: ({ title, children }) => (
     // The hero's links become buttons in a row: the first is what the page is for.
     <section className="one-blueprint flex flex-col gap-7 pt-10 pb-6 sm:pt-16 sm:pb-10">

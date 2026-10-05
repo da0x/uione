@@ -144,7 +144,7 @@ describe("a workbench, with the real compiler", async () => {
       "projects.one": "namespace tracker {\n\tentity project {\n\t\ttakes_reports  boolean = false\n\t}\n}\n",
       "reports.one":
         "namespace tracker {\n\tentity report {\n\t\tproject  project  required\n\t}\n" +
-        '\tcommand report::create {\n\t\tpermission signed_in\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
+        '\tcommand report::create {\n\t\tpermission authenticated\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
     };
     const went: [string, number, number][] = [];
     const { container, unmount } = render(

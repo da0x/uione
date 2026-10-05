@@ -28,7 +28,7 @@ namespace {
                         "\t\tstatus   enum     open | resolved = status::open\n"
                         "\t}\n"
                         "\tcommand report::create {\n"
-                        "\t\tpermission signed_in\n"
+                        "\t\tpermission authenticated\n"
                         "\t\trequire report.project.takes_reports  \"this project doesn't take reports\"\n"
                         "\t}\n"
                         "\tcommand report::resolve {\n"
@@ -89,9 +89,9 @@ TEST_CASE("the entity's name, its field, and a field read through it, each mean 
 }
 
 TEST_CASE("the language's own words say what they are, and where the reference says so") {
-    auto permission = at(7, "signed_in");
+    auto permission = at(7, "authenticated");
     REQUIRE(permission.found);
-    CHECK(permission.says == "built-in permission signed_in: any signed-in person");
+    CHECK(permission.says == "built-in permission authenticated: anyone signed in");
     CHECK(permission.path.empty());
     CHECK(permission.section == "command");
     auto type = at(3, "required");

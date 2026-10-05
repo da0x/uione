@@ -94,6 +94,14 @@ namespace one::generators {
 
         // A JavaScript name from a .one name or a title: sort_title and "Sort title"
         // both become sortTitle.
+        // What a way of signing in is called in an app: signInWithGitHub for github.
+        inline std::string sign_in_with(std::string_view method) {
+            if (method == "github") return "signInWithGitHub";
+            std::string name(method);
+            name[0] = static_cast<char>(name[0] - 'a' + 'A');
+            return "signInWith" + name;
+        }
+
         inline std::string js_name(std::string_view name) {
             std::string snake = language::to_snake_case(name);
             std::string out;
@@ -194,7 +202,7 @@ namespace one::generators {
         std::string name_ = "app";
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
-        std::string signin_;  // how people sign in, when the project says: google or github
+        std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
@@ -248,7 +256,7 @@ namespace one::generators {
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
                         if (s.key == "title") title_ = s.value;
-                        if (s.key == "signin") signin_ = s.value;
+                        if (s.key == "authentication") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
@@ -921,8 +929,8 @@ namespace one::generators {
             std::string submit = form.submit ? " submit=" + web_detail::js_string(*form.submit) : "";
             // Everything but a command anyone may run needs its person signed in, so a
             // form asks someone who isn't to sign in, rather than taking what they type.
-            std::string signin = open_.contains(command) ? "" : " signin";
-            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + signin +
+            std::string authenticated = open_.contains(command) ? "" : " authenticated";
+            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + authenticated +
                      " />");
         }
 
@@ -1050,8 +1058,19 @@ namespace one::generators {
             auto from = out.from(project_.path, project_.line);
             out.generated_from(source_name());
             out.line("import { App } from \"@uione/react\";");
-            out.line(analytics_ ? "import { firebaseAnalytics, firebaseSource } from \"@uione/react/firebase\";"
-                                : "import { firebaseSource } from \"@uione/react/firebase\";");
+            {
+                // Each way of signing in is its own module, so the app has only the ones
+                // the project names, each named for what it does, so no screen's name
+                // takes it.
+                std::vector<std::string> imported;
+                for (const auto& method : authentication_) imported.push_back(method + " as " + web_detail::sign_in_with(method));
+                if (analytics_) imported.push_back("firebaseAnalytics");
+                imported.push_back("firebaseSource");
+                std::sort(imported.begin(), imported.end());
+                std::string list;
+                for (const auto& name : imported) list += (list.empty() ? "" : ", ") + name;
+                out.line("import { " + list + " } from \"@uione/react/firebase\";");
+            }
             out.line("import { " + ui_ + " } from \"@uione/" + ui_ + "\";");
             std::string names;
             for (const auto& screen : screens) {
@@ -1082,9 +1101,12 @@ namespace one::generators {
                 for (const auto& v : personal_) list += (list.empty() ? "" : ", ") + web_detail::js_string(v);
                 personal = ", personal: [" + list + "]";
             }
-            // Google is the default, so only another way of signing in is written down.
-            std::string signin = signin_ == "github" ? ", signin: \"github\" as const" : "";
-            out.line("const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud)" + personal + signin + " });");
+            // The ways people sign in, in the order the project names them; Google when
+            // it doesn't say.
+            std::string authentication;
+            for (const auto& method : authentication_) authentication += (authentication.empty() ? "" : ", ") + web_detail::sign_in_with(method);
+            if (!authentication.empty()) authentication = ", authentication: [" + authentication + "]";
+            out.line("const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud)" + personal + authentication + " });");
             if (analytics_) {
                 out.line("// Visitors are counted once they agree, and only where the deploy found the");
                 out.line("// project linked to Google Analytics, which gives it a measurement ID.");
@@ -1096,7 +1118,7 @@ namespace one::generators {
             {
                 auto from_icon = icon_.empty() ? out.from(project_.path, project_.line) : out.from(icon_source_.path, icon_source_.line);
                 // A project that names no way of signing in offers none.
-                std::string offered = has_project_ && signin_.empty() ? ", signin: false" : "";
+                std::string offered = has_project_ && authentication_.empty() ? ", authentication: false" : "";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + (analytics_ ? ", analytics" : "") + " };");
             }

@@ -366,17 +366,18 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "signin", "icon", "serve", "redirect", "title", "one", "analytics"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "serve", "redirect", "title", "one", "analytics"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
             static constexpr std::string_view id = "abcdefghijklmnopqrstuvwxyz0123456789-";
             static constexpr std::string_view host = "abcdefghijklmnopqrstuvwxyz0123456789-.";
             std::vector<std::string> deploy;
+            std::set<std::string> methods;  // the ways people sign in, each named once
             auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon, serve, redirect, title, one or analytics");
+                                   "region, ui, authentication, icon, serve, redirect, title, one or analytics");
                     return;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
@@ -387,8 +388,17 @@ namespace one::language {
                 if ((s.key == "firebase" || s.key == "region") && !only(s.value, id)) {
                     error(s.where, s.key + " has to be lowercase letters, digits and dashes, like ui-one or us-east4");
                 }
-                if (s.key == "signin" && s.value != "google" && s.value != "github") {
-                    error(s.where, "signin is google or github");
+                // How people sign in, one way to a line: authentication google, then
+                // authentication github. Earlier versions called it signin, with one way.
+                if (s.key == "signin") {
+                    error(s.where, "signin is called authentication now, like authentication " + s.value, fix{s.where, s.key.size(), "authentication"});
+                }
+                if (s.key == "authentication") {
+                    if (s.value != "google" && s.value != "github" && s.value != "microsoft") {
+                        error(s.where, "authentication is google, github or microsoft, one to a line");
+                    } else if (!methods.insert(s.value).second) {
+                        error(s.where, "authentication " + s.value + " is named twice");
+                    }
                 }
                 // Visitors counted with Firebase Analytics, once they agree to it.
                 if (s.key == "analytics" && s.value != "google") {
@@ -694,20 +704,24 @@ namespace one::language {
             }
         }
 
-        // Who may do something: anyone, signed_in, owner, or a permission named on an
+        // Who may do something: anyone, authenticated, owner, or a permission named on an
         // entity, like book::view. owner only makes sense for a command whose entity
-        // has an owner field.
+        // has an owner field. Earlier versions called authenticated signed_in.
         void verify_permission(const std::string& ns, const qualified_name& p, const entity_declaration* entity) {
             snake(p);
             if (p.parts.size() == 1) {
                 const auto& word = p.parts[0];
                 static const std::map<std::string, std::string, std::less<>> says{
-                    {"anyone", "anyone, signed in or not"}, {"signed_in", "any signed-in person"},
+                    {"anyone", "anyone, signed in or not"}, {"authenticated", "anyone signed in"},
                     {"owner", "the person in the entity's owner field"}};
                 if (auto it = says.find(word); it != says.end()) {
                     mean(p.where, word.size(), "built-in permission " + word + ": " + it->second, std::nullopt, "command");
                 }
-                if (word == "anyone" || word == "signed_in") return;
+                if (word == "signed_in") {
+                    error(p.where, "signed_in is called authenticated now", fix{p.where, word.size(), "authenticated"});
+                    return;
+                }
+                if (word == "anyone" || word == "authenticated") return;
                 if (word == "owner") {
                     const field* owner = entity ? find_field(*entity, "owner") : nullptr;
                     bool is_user = owner && owner->type && owner->type->text() == "user";
@@ -718,7 +732,7 @@ namespace one::language {
                     }
                     return;
                 }
-                error(p.where, "'" + word + "' isn't a permission; use anyone, signed_in, owner, or one "
+                error(p.where, "'" + word + "' isn't a permission; use anyone, authenticated, owner, or one "
                                "named on an entity, like book::view");
                 return;
             }

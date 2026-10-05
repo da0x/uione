@@ -3,7 +3,7 @@
 
 // @uione/react: the runtime every uione screen is built on.
 
-export { App, screen } from "./app.js";
+export { App, screen, useSignIn } from "./app.js";
 export type { AppProps, Screen, ScreenInfo } from "./app.js";
 
 export { Code, Command, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Table, Text } from "./components.js";
@@ -13,6 +13,7 @@ export { useAuth, useCommand, useRunner, useView } from "./data.js";
 export type {
   AuthSource,
   AuthState,
+  AuthenticationMethod,
   CommandInput,
   CommandState,
   DataSource,

@@ -7,7 +7,7 @@
 // functions to call. A component set never fetches, routes or runs commands itself.
 
 import type { ComponentType, MouseEvent, ReactNode } from "react";
-import type { ViewStatus } from "./data.js";
+import type { AuthenticationMethod, ViewStatus } from "./data.js";
 
 export interface LinkProps {
   href: string;
@@ -38,6 +38,15 @@ export interface AccountProps {
   error?: string; // why signing in or out just failed
   onSignIn: () => void;
   onSignOut: () => void;
+}
+
+// Choosing how to sign in, when a site offers more than one way: a button for each,
+// with its mark, like Continue with Google.
+export interface SignInProps {
+  methods: AuthenticationMethod[];
+  busy?: string; // the way being signed in with now, by its id
+  error?: string; // why signing in just failed
+  onChoose: (method: string) => void;
 }
 
 export interface HeroProps {
@@ -172,6 +181,7 @@ export interface ConsentProps {
 export interface ComponentSet {
   Page: ComponentType<PageProps>;
   Account: ComponentType<AccountProps>;
+  SignIn: ComponentType<SignInProps>;
   Hero: ComponentType<HeroProps>;
   Section: ComponentType<SectionProps>;
   Text: ComponentType<TextProps>;

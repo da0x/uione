@@ -31,7 +31,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
 syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui signin icon serve redirect analytics at
+syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui authentication icon serve redirect analytics at
 " title and one are project settings when a string follows them, and fields' names otherwise.
 syn match   uioneKeyword   /\<title\>\ze\s\+"/
 syn match   uioneKeyword   /\<one\>\ze\s\+"/
@@ -44,7 +44,7 @@ syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$
 syn keyword uioneBuiltin   now me none true false
 " Who may run a command: words only after `permission`, so a field called owner
 " stays a name.
-syn match   uioneBuiltin   "\%(\<permission\s\+\)\@<=\%(anyone\|signed_in\|owner\)\>"
+syn match   uioneBuiltin   "\%(\<permission\s\+\)\@<=\%(anyone\|authenticated\|owner\)\>"
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("

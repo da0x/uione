@@ -12,7 +12,7 @@
 //   denied   the person isn't allowed to see it
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export type ViewStatus = "loading" | "live" | "stale" | "denied";
 
@@ -41,14 +41,25 @@ export interface Person {
   name: string;
 }
 
+// A way of signing in, as a page offers it: by its name, like Google, and its mark.
+export interface AuthenticationMethod {
+  id: string; // as the project names it: google, github or microsoft
+  name: string;
+  Mark?: ComponentType;
+}
+
 // Sign-in. Until the source knows whether anyone is signed in, person is undefined;
 // once it knows, it's the person or null.
 export interface AuthSource {
   person(): Person | null | undefined;
+  // The ways people sign in, in the order the project names them. With none, or
+  // one, signing in starts at once; with more, the person chooses.
+  methods?: AuthenticationMethod[];
   // Calls emit whenever the signed-in person changes. Returns the function that
   // stops listening.
   watch(emit: (person: Person | null) => void): () => void;
-  signIn(): Promise<void>;
+  // Signs in the given way, by its id, or the only one.
+  signIn(method?: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -110,7 +121,8 @@ export function useView(view: string, subject?: string): ViewState {
 
 export interface AuthState {
   person: Person | null | undefined;
-  signIn: () => Promise<void>;
+  methods: AuthenticationMethod[];
+  signIn: (method?: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -124,7 +136,7 @@ export function useAuth(): AuthState | undefined {
     return auth.watch(setPerson);
   }, [auth]);
   if (!auth) return undefined;
-  return { person, signIn: () => auth.signIn(), signOut: () => auth.signOut() };
+  return { person, methods: auth.methods ?? [], signIn: (method) => auth.signIn(method), signOut: () => auth.signOut() };
 }
 
 // Runs commands by name, and keeps track of which are running and which failed. One

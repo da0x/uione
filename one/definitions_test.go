@@ -13,7 +13,7 @@ import (
 // tasks, as the next deploy has them: the list shows each task's owner too.
 func tasksShowingOwners() one.Item {
 	return one.Module("tasks",
-		one.Command[Task]("task::create").Allow(one.SignedIn),
+		one.Command[Task]("task::create").Allow(one.Authenticated),
 		one.View("list").PerUser().Each(one.Where[Task]("owner", one.Viewer)).Order("done", "-created_at").Fields("title", "done", "owner"),
 	)
 }

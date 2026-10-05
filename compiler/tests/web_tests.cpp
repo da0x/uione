@@ -96,7 +96,7 @@ TEST_CASE("table columns that name a command on the row become actions") {
 TEST_CASE("a button for a command with a form becomes the form's own button") {
     auto files = generate("/examples/library");
     const auto& content = find(files, "src/screens/main.tsx")->content;
-    CHECK(content.find(R"(<Form command="library::book::create" fields={["title", "author", "shelfmark", { name: "summary", type: "markdown" }]} button signin />)") != std::string::npos);
+    CHECK(content.find(R"(<Form command="library::book::create" fields={["title", "author", "shelfmark", { name: "summary", type: "markdown" }]} button authenticated />)") != std::string::npos);
     CHECK(content.find("<Command name=\"library::book::create\"") == std::string::npos);
 }
 
@@ -177,7 +177,7 @@ TEST_CASE("an update form starts from the entity's page and acts on the entity i
     auto files = generate("/examples/library");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="library::book::update" fields={["title", "author", { name: "summary", type: "markdown" }]} from={bookPage} id={bookId} button signin />)") !=
+    CHECK(screens->content.find(R"(<Form command="library::book::update" fields={["title", "author", { name: "summary", type: "markdown" }]} from={bookPage} id={bookId} button authenticated />)") !=
           std::string::npos);
 }
 
@@ -194,12 +194,12 @@ TEST_CASE("a create form takes what the screen's address names, without asking f
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button signin />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button authenticated />)") !=
           std::string::npos);
-    CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button signin />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button authenticated />)") !=
           std::string::npos);
     // On the list of every project, no project is named, so none is given.
-    CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button signin />)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Form command="tracker::project::create" fields={["slug", "name", "repository"]} button authenticated />)") != std::string::npos);
 }
 
 TEST_CASE("a hand-written component is drawn, imported, and copied into the app as it is") {
@@ -342,15 +342,29 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
 }
 
-TEST_CASE("an app whose people sign in with GitHub asks for GitHub") {
+TEST_CASE("an app offers the ways of signing in its project names, in its order, and only those") {
     namespace fs = std::filesystem;
-    fs::path dir = fs::temp_directory_path() / "uione-github-signin";
+    fs::path dir = fs::temp_directory_path() / "uione-authentication";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "project p {\n\tsignin github\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(),
+                         "project p {\n\tauthentication github\n\tauthentication microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto app = find(generate_at(dir.string()), "src/app.tsx");
     REQUIRE(app != nullptr);
-    CHECK(app->content.find(R"(signin: "github" as const)") != std::string::npos);
+    CHECK(app->content.find(R"(import { firebaseSource, github as signInWithGitHub, microsoft as signInWithMicrosoft } from "@uione/react/firebase";)") !=
+          std::string::npos);
+    CHECK(app->content.find("authentication: [signInWithGitHub, signInWithMicrosoft] });") != std::string::npos);
+    CHECK(app->content.find("google") == std::string::npos);
+    CHECK(app->content.find("authentication: false") == std::string::npos);
+    fs::remove_all(dir);
+
+    // A project that names no way offers none.
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "project p {\n\tui radix\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    auto none = find(generate_at(dir.string()), "src/app.tsx");
+    REQUIRE(none != nullptr);
+    CHECK(none->content.find(", authentication: false") != std::string::npos);
+    CHECK(none->content.find("import { firebaseSource } from") != std::string::npos);
     fs::remove_all(dir);
 }
 
@@ -362,7 +376,7 @@ TEST_CASE("a namespace can put its screens at the root, and an address can name 
     platform::write_file((dir / "main.one").string(),
                          "namespace studio at / {\n"
                          "entity project {\n\towner  text  key  = me.username\n\tslug  text  required  key\n\tname  text\n}\n"
-                         "command project::create {\n\tpermission signed_in\n}\n"
+                         "command project::create {\n\tpermission authenticated\n}\n"
                          "view all {\n\teach project {\n\t\tname\n\t}\n}\n"
                          "view page per project {\n\tname = project.name\n}\n"
                          "screen \"Projects\" / {\n\ttable all link /:owner/:project {\n\t\tname\n\t}\n}\n"

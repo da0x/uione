@@ -810,7 +810,7 @@ namespace one::language {
             }
             if (at_word("permission")) {
                 advance();
-                permission_statement s{parse_qualified_name("who may run it: anyone, signed_in, owner or a permission")};
+                permission_statement s{parse_qualified_name("who may run it: anyone, authenticated, owner or a permission")};
                 end_line();
                 return {where, std::move(s)};
             }

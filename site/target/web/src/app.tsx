@@ -29,7 +29,7 @@ const cloud = {
 };
 const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud), personal: ["studio::projects"] });
 
-export const site = { name: "uione", icon: "/icon.svg", screens: [home, install, language, mission, releases], ui: radix, data, signin: false };
+export const site = { name: "uione", icon: "/icon.svg", screens: [home, install, language, mission, releases], ui: radix, data, authentication: false };
 
 export default function Site() {
   return <App {...site} />;

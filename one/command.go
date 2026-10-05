@@ -15,14 +15,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Permission is who may run a command: Anyone, SignedIn, Owner (the person in the
-// entity's owner field), or a permission a role grants, like "book:withdraw".
+// Permission is who may run a command: Anyone, Authenticated, Owner (the person in
+// the entity's owner field), or a permission a role grants, like "book:withdraw".
 type Permission string
 
 const (
-	Anyone   Permission = "anyone"
-	SignedIn Permission = "signed_in"
-	Owner    Permission = "owner"
+	Anyone        Permission = "anyone"
+	Authenticated Permission = "authenticated"
+	Owner         Permission = "owner"
+
+	// Deprecated: SignedIn is Authenticated's earlier name.
+	SignedIn = Authenticated
 )
 
 // Ctx is what a command's body can see: the time it runs and who's running it. It
@@ -727,7 +730,7 @@ func (a *App) permitted(ctx context.Context, tx *firestore.Transaction, me strin
 	switch p {
 	case Anyone:
 		return nil
-	case SignedIn:
+	case Authenticated:
 		if me == "" {
 			return &Failure{Status: 401, Message: "sign in to do this"}
 		}

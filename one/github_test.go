@@ -42,8 +42,8 @@ type Link struct {
 }
 
 var code = one.Module("code",
-	one.Command[Repo]("repo::create").Allow(one.SignedIn),
-	one.Command[Bug]("bug::create").Allow(one.SignedIn),
+	one.Command[Repo]("repo::create").Allow(one.Authenticated),
+	one.Command[Bug]("bug::create").Allow(one.Authenticated),
 	one.GitHub("/hooks/github").For(one.Entity[Repo](), "repository").Mentions(one.Entity[Bug]()).
 		OnCommit(func(c *one.Ctx, m one.Mention) error {
 			return one.Create(c, &Link{Bug: m.Issue, URL: m.URL, Kind: "commit", Title: m.Message, Author: m.Author})

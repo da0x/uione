@@ -128,7 +128,7 @@ under a different one.
 - **Every example stays true.** An example `.one` file is only changed together with
   anything that quotes it: the pages under `site/language/`, the landing page, and
   `editors/expected.tsv`.
-- **Every name in a `.one` file is snake_case**, keywords included (`signed_in`). How
+- **Every name in a `.one` file is snake_case**, keywords included. How
   names are displayed is the reader's choice; how they're stored is not. See
   `docs/decisions/0006-names-are-snake-case.md`.
 - File and folder names are lowercase kebab-case: `makefile`, `dockerfile`. Only

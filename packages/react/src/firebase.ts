@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 
 // @uione/react/firebase: views read live from Firestore, commands sent to the Go
-// backend, and Google sign-in. Firebase is a peer dependency, so an app that doesn't
+// backend, and signing in the ways the project names. Firebase is a peer dependency, so an app that doesn't
 // use this never loads it.
 //
 // Nothing connects while a page is rendered on a server, since nothing listens
@@ -13,12 +13,14 @@ import { initializeAnalytics, isSupported, logEvent, setConsent } from "firebase
 import type { Analytics as FirebaseAnalytics } from "firebase/analytics";
 import { initializeApp } from "firebase/app";
 import type { FirebaseApp, FirebaseOptions } from "firebase/app";
-import { GithubAuthProvider, GoogleAuthProvider, connectAuthEmulator, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import type { Auth, User } from "firebase/auth";
+import { connectAuthEmulator, getAuth, linkWithCredential, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+import type { Auth, AuthCredential, User } from "firebase/auth";
 import { Timestamp, connectFirestoreEmulator, doc, getFirestore, onSnapshot } from "firebase/firestore";
 import type { Firestore } from "firebase/firestore";
 import type { Analytics } from "./contract.js";
 import type { AuthSource, DataSource, Person, ViewData } from "./data.js";
+import { google } from "./authentication/google.js";
+import type { FirebaseAuthenticationMethod } from "./authentication/method.js";
 import { liveSource } from "./live.js";
 import type { LiveOptions } from "./live.js";
 
@@ -28,9 +30,15 @@ export interface FirebaseSourceOptions extends LiveOptions {
   app?: FirebaseApp;
   // The local emulators, as host:port, for working without the cloud.
   emulators?: { firestore: string; auth: string };
-  // How people sign in, as the project block's signin says: google, the default, or github.
-  signin?: "google" | "github";
+  // The ways people sign in, as the project block's authentication lines name them;
+  // Google when it doesn't say.
+  authentication?: FirebaseAuthenticationMethod[];
 }
+
+export { google } from "./authentication/google.js";
+export { github } from "./authentication/github.js";
+export { microsoft } from "./authentication/microsoft.js";
+export type { FirebaseAuthenticationMethod } from "./authentication/method.js";
 
 // Firestore times become Dates, so a screen can show them like any other date.
 function plain(value: unknown): unknown {
@@ -70,6 +78,11 @@ export function firebaseSource(options: FirebaseSourceOptions): DataSource {
   let connected: { db: Firestore; auth: Auth } | undefined;
   let person: Person | null | undefined;
   const watchers = new Set<(person: Person | null) => void>();
+  const methods = options.authentication?.length ? options.authentication : [google];
+  // A sign-in refused because its email already has an account here, another way:
+  // once the person signs in that way, this way is added to the account, so either
+  // works from then on.
+  let waiting: { method: string; credential: AuthCredential } | undefined;
 
   const connect = () => {
     if (connected) return connected;
@@ -101,8 +114,23 @@ export function firebaseSource(options: FirebaseSourceOptions): DataSource {
         watchers.delete(emit);
       };
     },
-    async signIn() {
-      await signInWithPopup(connect().auth, options.signin === "github" ? new GithubAuthProvider() : new GoogleAuthProvider());
+    methods: methods.map(({ id, name, Mark }) => ({ id, name, Mark })),
+    async signIn(id) {
+      const method = methods.find((m) => m.id === id) ?? methods[0]!;
+      let signedIn;
+      try {
+        signedIn = await signInWithPopup(connect().auth, method.provider());
+      } catch (refused) {
+        const credential = (refused as { code?: unknown } | null)?.code === "auth/account-exists-with-different-credential" ? method.credentialFrom(refused) : null;
+        if (credential) waiting = { method: method.id, credential };
+        throw refused;
+      }
+      if (waiting && waiting.method !== method.id) {
+        // Adding it can fail, say when it's on another account already; signing in
+        // worked either way.
+        await linkWithCredential(signedIn.user, waiting.credential).catch(() => {});
+      }
+      waiting = undefined;
     },
     async signOut() {
       await signOut(connect().auth);

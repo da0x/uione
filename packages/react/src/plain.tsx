@@ -102,6 +102,19 @@ export const plain: ComponentSet = {
       </span>
     ),
 
+  SignIn: ({ methods, busy, error, onChoose }) => (
+    <div>
+      {methods.map(({ id, name, Mark }) => (
+        <p key={id}>
+          <button type="button" disabled={busy !== undefined} onClick={() => onChoose(id)}>
+            {Mark && <Mark />} {busy === id ? `Signing in with ${name}…` : `Continue with ${name}`}
+          </button>
+        </p>
+      ))}
+      {error && <p role="alert">{error}</p>}
+    </div>
+  ),
+
   Hero: ({ title, children }) => (
     <section>
       <h1>{title}</h1>

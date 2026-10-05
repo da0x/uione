@@ -20,7 +20,7 @@ type Repository struct {
 }
 
 var repositories = one.Module("repos",
-	one.Command[Repository]("repository::create").Allow(one.SignedIn),
+	one.Command[Repository]("repository::create").Allow(one.Authenticated),
 )
 
 func TestAnEntityKeyedByItsOwnersUsernameIsMadeInTheirNameOnly(t *testing.T) {

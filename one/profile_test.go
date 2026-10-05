@@ -25,7 +25,7 @@ type Post struct {
 }
 
 var forum = one.Module("forum",
-	one.Command[Post]("post::create").Allow(one.SignedIn),
+	one.Command[Post]("post::create").Allow(one.Authenticated),
 	one.View("posts").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "author.name", "author.picture", "author.username"),
 	// Whoever made something is a person too, without a field naming them.
 	one.View("posted").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "created_by.name", "updated_by.picture"),

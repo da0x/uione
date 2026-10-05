@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { fill, useConfirmContext } from "./app.js";
+import { fill, useConfirmContext, useSignIn } from "./app.js";
 import type { FieldProps } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
@@ -310,7 +310,7 @@ export function Form({
   id,
   given = {},
   submit: says,
-  signin = false,
+  authenticated = false,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -319,10 +319,11 @@ export function Form({
   id?: string; // for an update: the entity it changes
   given?: Record<string, string | undefined>; // sent without being asked for, like the project an issue is made in
   submit?: string; // what its button says, rather than the command's name, like Save changes
-  signin?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
+  authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
 }) {
   const ui = useUI();
   const auth = useAuth();
+  const signIn = useSignIn();
   const runner = useConfirmedRunner();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
@@ -380,10 +381,10 @@ export function Form({
 
   // Someone signed out is asked to sign in, rather than shown what they couldn't
   // send; while it isn't known yet whether they are, nothing is shown.
-  if (signin && auth && !auth.person) {
+  if (authenticated && auth && !auth.person) {
     if (auth.person === undefined) return null;
     return (
-      <ui.Button kind="secondary" onClick={() => void auth.signIn()}>
+      <ui.Button kind="secondary" onClick={signIn.begin}>
         Sign in to {(says ?? label(action(command))).toLowerCase()}
       </ui.Button>
     );

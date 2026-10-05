@@ -174,6 +174,56 @@ namespace one::driver {
         return false;
     }
 
+    // A project block whose settings' values were lined up stays lined up when an
+    // upgrade renames a setting, like signin to authentication: its values move out
+    // to the column the longest name needs, and no further.
+    inline std::string align_settings(const std::string& before, const std::string& after) {
+        static const std::regex opens(R"(^[ \t]*project[ \t]+\w+[ \t]*\{[ \t]*$)");
+        static const std::regex setting(R"(^([ \t]+)([a-z_]+)([ \t]+)([^ \t{][^{]*)$)");
+        auto lines_of = [](const std::string& text) {
+            std::vector<std::string> lines;
+            std::size_t at = 0;
+            for (std::size_t end; (end = text.find('\n', at)) != std::string::npos; at = end + 1) lines.push_back(text.substr(at, end - at));
+            lines.push_back(text.substr(at));
+            return lines;
+        };
+        // The settings directly in the project block, by line, as indent, name and value.
+        struct line_setting {
+            std::size_t line;
+            std::string indent, key, value;
+            std::size_t column;
+        };
+        auto settings_of = [&](const std::vector<std::string>& lines) {
+            std::vector<line_setting> found;
+            std::size_t i = 0;
+            while (i < lines.size() && !std::regex_match(lines[i], opens)) ++i;
+            std::string indent;
+            for (++i; i < lines.size() && !lines[i].starts_with("}"); ++i) {
+                std::smatch m;
+                if (!std::regex_match(lines[i], m, setting)) continue;
+                if (indent.empty()) indent = m[1];
+                if (m[1] != indent) continue;  // inside an environment
+                found.push_back({i, m[1], m[2], m[4], static_cast<std::size_t>(m[1].length() + m[2].length() + m[3].length())});
+            }
+            return found;
+        };
+        auto lines = lines_of(after);
+        auto was = settings_of(lines_of(before));
+        auto now = settings_of(lines);
+        if (was.size() < 2 || was.size() != now.size()) return after;
+        std::size_t column = was[0].column;
+        for (const auto& s : was) {
+            if (s.column != column) return after;  // not lined up to begin with
+        }
+        std::size_t needed = column;
+        for (const auto& s : now) needed = std::max(needed, s.indent.size() + s.key.size() + 2);
+        if (needed == column) return after;
+        for (const auto& s : now) lines[s.line] = s.indent + s.key + std::string(needed - s.indent.size() - s.key.size(), ' ') + s.value;
+        std::string out;
+        for (std::size_t i = 0; i < lines.size(); ++i) out += (i ? "\n" : "") + lines[i];
+        return out;
+    }
+
     // An entity's choices written as an enum by an upgrade start in the column the
     // block's rules do, as they'd have been written, so the line still reads as name,
     // type and rules:
@@ -247,6 +297,7 @@ namespace one::driver {
             }
         }
         if (!out.problems.empty()) return out;
+        for (auto& [path, text] : files) text = align_settings(original[path], text);
         for (auto& [path, text] : files) text = align_choices(original[path], text);
         out.recorded = record_version(files, version);
         language::diagnostics after;

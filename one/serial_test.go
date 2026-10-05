@@ -31,9 +31,9 @@ type Issue struct {
 }
 
 var tracker = one.Module("tracker",
-	one.Command[Tracked]("tracked::create").Allow(one.SignedIn),
-	one.Command[Issue]("issue::create").Allow(one.SignedIn),
-	one.Command[Issue]("issue::update").Allow(one.SignedIn),
+	one.Command[Tracked]("tracked::create").Allow(one.Authenticated),
+	one.Command[Issue]("issue::create").Allow(one.Authenticated),
+	one.Command[Issue]("issue::update").Allow(one.Authenticated),
 )
 
 func (h *harness) issue(id string) map[string]any {

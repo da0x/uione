@@ -49,7 +49,7 @@ declaration    ::= project | namespace | format | entity | command | view | role
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "serve"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "authentication" | "icon" | "serve"
                  | "title" | "one" | "analytics"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
@@ -94,7 +94,7 @@ statement      ::= ( "require" expression STRING
                    | "remove" postfix "from" NAME
                    | postfix "=" expression ) END
 create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
-permission_word ::= "anyone" | "signed_in" | "owner"
+permission_word ::= "anyone" | "authenticated" | "owner"
 if             ::= "if" expression block ("else" (if | block))?
 
 /* view */

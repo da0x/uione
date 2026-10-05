@@ -101,7 +101,7 @@ site/studio.one	name   text  required	text	type
 site/studio.one	name   text  required	name	variable
 site/studio.one	owner  user  = me	user	type
 site/studio.one	owner  user  = me	me	constant
-site/studio.one	permission signed_in	signed_in	constant
+site/studio.one	permission authenticated	authenticated	constant
 site/studio.one	view projects per user	user	plain
 examples/tracker/main.one	create member {	create	keyword
 examples/tracker/main.one	role maintainer per project from member	from	keyword

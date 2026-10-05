@@ -34,7 +34,7 @@ export interface AppProps {
   data: DataSource;
   icon?: string; // the address of the app's icon, shown beside its name
   location?: string; // start at this address, in memory rather than the browser's
-  signin?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
+  authentication?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
   analytics?: Analytics; // counting visitors, once they agree; none counts no one, and asks no one
 }
 
@@ -80,11 +80,69 @@ function Counting({ analytics }: { analytics: Analytics }) {
   );
 }
 
-// Whether the page offers signing in. An app whose project names no way of signing
-// in doesn't, so it never shows a button that can't work.
-const SignInOffered = createContext(true);
+// Signing in, from the page's account area or from a form that needs it: at once,
+// with one way to sign in, or by choosing one, with several. An app whose project
+// names no way of signing in offers none, so it never shows a button that can't work.
+interface SignInFlow {
+  offered: boolean;
+  begin: () => void;
+  error: string | undefined; // why signing in just failed, shown beside the account
+  clear: () => void;
+}
 
-export function App({ name, icon, screens, ui, data, location, signin = true, analytics }: AppProps) {
+const SignInContext = createContext<SignInFlow>({ offered: true, begin: () => {}, error: undefined, clear: () => {} });
+
+export function useSignIn(): SignInFlow {
+  return useContext(SignInContext);
+}
+
+function SignInProvider({ offered, children }: { offered: boolean; children: ReactNode }) {
+  const ui = useUI();
+  const auth = useAuth();
+  const [choosing, setChoosing] = useState(false);
+  const [busy, setBusy] = useState<string | undefined>();
+  const [error, setError] = useState<string | undefined>();
+  const methods = auth?.methods ?? [];
+  const signIn = (method?: string) => {
+    if (!auth) return;
+    setError(undefined);
+    setBusy(method);
+    auth.signIn(method).then(
+      () => setChoosing(false),
+      (e: unknown) => setError(signInMessage(e)),
+    ).finally(() => setBusy(undefined));
+  };
+  const flow: SignInFlow = {
+    offered,
+    begin: () => {
+      if (methods.length > 1) {
+        setError(undefined);
+        setChoosing(true);
+      } else signIn(methods[0]?.id);
+    },
+    error: choosing ? undefined : error,
+    clear: () => setError(undefined),
+  };
+  return (
+    <SignInContext.Provider value={flow}>
+      {children}
+      {methods.length > 1 && (
+        <ui.Dialog
+          open={choosing}
+          title="Sign in"
+          onClose={() => {
+            setChoosing(false);
+            setError(undefined);
+          }}
+        >
+          <ui.SignIn methods={methods} busy={busy} error={error} onChoose={signIn} />
+        </ui.Dialog>
+      )}
+    </SignInContext.Provider>
+  );
+}
+
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics }: AppProps) {
   const routes = (
     <>
       {analytics && <Counting analytics={analytics} />}
@@ -98,15 +156,15 @@ export function App({ name, icon, screens, ui, data, location, signin = true, an
   );
   return (
     <UIContext.Provider value={ui}>
-      <SignInOffered.Provider value={signin}>
-        <DataProvider source={data}>
+      <DataProvider source={data}>
+        <SignInProvider offered={authentication}>
           {location === undefined ? (
             <BrowserRouter>{routes}</BrowserRouter>
           ) : (
             <MemoryRouter initialEntries={[location]}>{routes}</MemoryRouter>
           )}
-        </DataProvider>
-      </SignInOffered.Provider>
+        </SignInProvider>
+      </DataProvider>
     </UIContext.Provider>
   );
 }
@@ -128,8 +186,8 @@ function Shell({
   const link = useLinks();
   const { pathname } = useLocation();
   const auth = useAuth();
-  const offered = useContext(SignInOffered);
-  const [signInError, setSignInError] = useState<string | undefined>();
+  const signIn = useSignIn();
+  const [signOutError, setSignOutError] = useState<string | undefined>();
   useEffect(() => {
     document.title = title === name ? name : `${title} · ${name}`;
   }, [title, name]);
@@ -150,19 +208,20 @@ function Shell({
       nav={nav}
       title={title}
       account={
-        offered &&
+        signIn.offered &&
         auth && (
           <ui.Account
             name={auth.person?.name}
             ready={auth.person !== undefined}
-            error={signInError}
+            error={signIn.error ?? signOutError}
             onSignIn={() => {
-              setSignInError(undefined);
-              auth.signIn().catch((e: unknown) => setSignInError(signInMessage(e)));
+              setSignOutError(undefined);
+              signIn.begin();
             }}
             onSignOut={() => {
-              setSignInError(undefined);
-              auth.signOut().catch(() => setSignInError("couldn't sign you out; try again"));
+              setSignOutError(undefined);
+              signIn.clear();
+              auth.signOut().catch(() => setSignOutError("couldn't sign you out; try again"));
             }}
           />
         )
@@ -180,7 +239,7 @@ function signInMessage(e: unknown): string | undefined {
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return undefined;
   if (code === "auth/popup-blocked") return "your browser blocked the sign-in window; allow pop-ups for this site and try again";
   if (code === "auth/account-exists-with-different-credential") {
-    return "that email already signs in another way here; sign in that way";
+    return "your email already signs in here another way; sign in that way once, and this way will work too";
   }
   if (code === "auth/unauthorized-domain") return "sign-in isn't allowed on this address yet";
   if (code === "auth/operation-not-allowed") return "this way of signing in isn't turned on for this site";

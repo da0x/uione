@@ -549,10 +549,39 @@ describe("a form's button", () => {
 describe("what needs someone signed in", () => {
   it("asks someone signed out to sign in instead of showing a form, and shows it once they have", async () => {
     const source = memorySource({ person: null });
-    renderScreen(source, () => <Form command="tracker::project::create" fields={["name"]} signin />);
+    renderScreen(source, () => <Form command="tracker::project::create" fields={["name"]} authenticated />);
     expect(screen.queryByLabelText("Name")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Sign in to create" }));
     await waitFor(() => expect(screen.getByLabelText("Name")).toBeTruthy());
+  });
+
+  it("signs in at once with one way, and lets the person choose with several", async () => {
+    const one = memorySource({ person: null, methods: [{ id: "github", name: "GitHub" }] });
+    const first = renderScreen(one, () => <Form command="tracker::project::create" fields={["name"]} authenticated />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to create" }));
+    await waitFor(() => expect(screen.getByLabelText("Name")).toBeTruthy());
+    expect(one.signIns).toEqual(["github"]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    first.unmount();
+
+    const several = memorySource({
+      person: null,
+      methods: [
+        { id: "google", name: "Google" },
+        { id: "github", name: "GitHub" },
+        { id: "microsoft", name: "Microsoft" },
+      ],
+    });
+    renderScreen(several, () => <Form command="tracker::project::create" fields={["name"]} authenticated />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to create" }));
+    const choices = screen.getByRole("dialog", { name: "Sign in" });
+    expect(Array.from(choices.querySelectorAll("button")).map((b) => b.textContent?.trim())).toEqual(
+      expect.arrayContaining(["Continue with Google", "Continue with GitHub", "Continue with Microsoft"]),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Microsoft" }));
+    await waitFor(() => expect(screen.getByLabelText("Name")).toBeTruthy());
+    expect(several.signIns).toEqual(["microsoft"]);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Sign in" })).toBeNull());
   });
 
   it("shows a form anyone may send to everyone", () => {

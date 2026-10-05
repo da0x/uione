@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolor \"red\"\n}\n").message ==
-          "'color' isn't a project setting; expected domain, firebase, region, ui, signin, icon, serve, redirect, title, one or analytics");
+          "'color' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, serve, redirect, title, one or analytics");
     CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
@@ -735,10 +735,22 @@ TEST_CASE("a project can redirect an address that moved, and a link can go to an
     CHECK(only_error("screen \"Home\" / {\n\tlink \"uione.io\" \"Open\"\n}\n").message.starts_with("a link goes to an address"));
 }
 
-TEST_CASE("people sign in with Google or GitHub") {
-    CHECK(check_source("project p {\n\tsignin google\n}\n").empty());
-    CHECK(check_source("project p {\n\tsignin github\n}\n").empty());
-    CHECK(only_error("project p {\n\tsignin twitter\n}\n").message == "signin is google or github");
+TEST_CASE("people sign in with Google, GitHub or Microsoft, each named once") {
+    CHECK(check_source("project p {\n\tauthentication google\n}\n").empty());
+    CHECK(check_source("project p {\n\tauthentication github\n\tauthentication google\n\tauthentication microsoft\n}\n").empty());
+    CHECK(only_error("project p {\n\tauthentication twitter\n}\n").message == "authentication is google, github or microsoft, one to a line");
+    CHECK(only_error("project p {\n\tauthentication github\n\tauthentication github\n}\n").message == "authentication github is named twice");
+    // Earlier versions' words, each with its fix.
+    auto signin = only_error("project p {\n\tsignin github\n}\n");
+    CHECK(signin.message == "signin is called authentication now, like authentication github");
+    REQUIRE(signin.fix);
+    CHECK(signin.fix->text == "authentication");
+    CHECK(signin.fix->length == 6);
+    auto signed_in = only_error("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission signed_in\n}\n");
+    CHECK(signed_in.message == "signed_in is called authenticated now");
+    REQUIRE(signed_in.fix);
+    CHECK(signed_in.fix->text == "authenticated");
+    CHECK(check_source("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission authenticated\n}\n").empty());
 }
 
 TEST_CASE("a field can start as the person's username") {

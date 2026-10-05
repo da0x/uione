@@ -5,7 +5,7 @@
 // running before it has a backend. A view with no data stays loading, exactly as a
 // real view would before its first document arrives.
 
-import type { AuthSource, CommandInput, DataSource, Person, ViewData, ViewState, ViewStatus } from "./data.js";
+import type { AuthSource, AuthenticationMethod, CommandInput, DataSource, Person, ViewData, ViewState, ViewStatus } from "./data.js";
 
 export interface MemorySource extends DataSource {
   // Replaces a view's data and marks it live, telling everyone listening.
@@ -14,14 +14,18 @@ export interface MemorySource extends DataSource {
   status(view: string, status: ViewStatus, subject?: string): void;
   // Every command run so far, in order.
   readonly runs: { command: string; input: CommandInput }[];
+  // The way each sign-in used, by its id, in order.
+  readonly signIns: (string | undefined)[];
 }
 
 export interface MemoryOptions {
   views?: Record<string, ViewData>;
   commands?: Record<string, (input: CommandInput) => void | Promise<void>>;
   // Gives the source sign-in, starting with this person signed in, or no one when
-  // it's null. Signing in makes anyone the person "you".
+  // it's null. Signing in makes anyone the person "you", whichever way.
   person?: Person | null;
+  // The ways it offers to sign in; one, unnamed, when it doesn't say.
+  methods?: AuthenticationMethod[];
 }
 
 export function memorySource(options: MemoryOptions = {}): MemorySource {
@@ -29,6 +33,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
   const states = new Map<string, ViewState>();
   const listeners = new Map<string, Set<(state: ViewState) => void>>();
   const runs: { command: string; input: CommandInput }[] = [];
+  const signIns: (string | undefined)[] = [];
 
   for (const [view, data] of Object.entries(options.views ?? {})) {
     states.set(view, { status: "live", data });
@@ -55,13 +60,18 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
           watchers.delete(emit);
         };
       },
-      signIn: () => become({ uid: "you", name: "You" }),
+      methods: options.methods,
+      signIn: (method) => {
+        signIns.push(method);
+        return become({ uid: "you", name: "You" });
+      },
       signOut: () => become(null),
     };
   }
 
   return {
     runs,
+    signIns,
     auth,
 
     subscribe(view, subject, emit) {

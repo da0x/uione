@@ -26,17 +26,31 @@ namespace {
 
 } // namespace
 
+TEST_CASE("an upgrade renames signin and signed_in, and keeps the settings lined up") {
+    auto dir = project("uione-upgrade-authentication",
+                       "project shop {\n\tone     \"0.5.10\"\n\tregion  \"us-east4\"\n\tsignin  google\n\tenvironment production {\n\t\tdomain    \"shop.example\"\n\t\tfirebase  \"shop-example\"\n\t}\n}\n"
+                       "entity order {\n\ttitle text\n}\ncommand order::create {\n\tpermission signed_in\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    REQUIRE(done.problems.empty());
+    CHECK(done.fixes == 2);
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\tone             \"9.9.9\"\n\tregion          \"us-east4\"\n\tauthentication  google\n") != std::string::npos);
+    CHECK(text.find("\t\tdomain    \"shop.example\"") != std::string::npos);  // an environment's settings are its own
+    CHECK(text.find("permission authenticated") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade applies the fixes, records the version, and checks clean") {
     auto dir = project("uione-upgrade", "project shop {\n\tsignin  google\n}\n"
                                         "entity order {\n\tstatus  open | shipped = open\n}\n"
                                         "command order::ship {\n\trequire status == open  \"shipped already\"\n\tstatus = shipped\n}\n");
     auto done = driver::upgrade(dir.string(), "9.9.9");
     REQUIRE(done.problems.empty());
-    CHECK(done.fixes == 4);
+    CHECK(done.fixes == 5);
     CHECK(done.recorded);
     REQUIRE(done.changed.size() == 1);
     const auto& text = done.changed.begin()->second;
-    CHECK(text.find("\tone     \"9.9.9\"\n\tsignin  google") != std::string::npos);  // lined up with signin
+    CHECK(text.find("\tone             \"9.9.9\"\n\tauthentication  google") != std::string::npos);  // lined up with authentication
     CHECK(text.find("status  enum  open | shipped = status::open") != std::string::npos);
     CHECK(text.find("require status == status::open") != std::string::npos);
     CHECK(text.find("status = status::shipped") != std::string::npos);
