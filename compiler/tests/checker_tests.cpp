@@ -409,15 +409,15 @@ TEST_CASE("a view's lists have names of their own, and a table names the one it 
     CHECK(e.message == "view page has no book.title in its loans; add it to the list's block");
 }
 
-TEST_CASE("a view shows a person's name and picture, and nothing else about them") {
+TEST_CASE("a view shows a person's name, picture and username, and nothing else about them") {
     const std::string start = "entity post {\n\ttext  text\n\tauthor  user = me\n}\n";
-    CHECK(check_source(start + "view posts {\n\teach post {\n\t\ttext  author.name  author.picture\n\t}\n}\n").empty());
+    CHECK(check_source(start + "view posts {\n\teach post {\n\t\ttext  author.name  author.picture  author.username\n\t}\n}\n").empty());
     auto e = only_error(start + "view posts {\n\teach post {\n\t\tauthor.email\n\t}\n}\n");
-    CHECK(e.message == "a view can show a person's name and picture, not author.email");
+    CHECK(e.message == "a view can show a person's name, picture and username, not author.email");
     e = only_error(start + "view posts {\n\teach post {\n\t\tauthor.nme\n\t}\n}\n");
-    CHECK(e.message == "a view can show a person's name and picture, not author.nme; did you mean name?");
+    CHECK(e.message == "a view can show a person's name, picture and username, not author.nme; did you mean name?");
     e = only_error(start + "command post::sign {\n\ttext = author.name\n}\n");
-    CHECK(e.message == "a person's name and picture are shown in views; here author is only who they are");
+    CHECK(e.message == "a person's name, picture and username are shown in views; here author is only who they are");
 }
 
 TEST_CASE("a role held within something names the entity that grants it, which points at it and a person") {

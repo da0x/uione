@@ -1413,7 +1413,7 @@ namespace one::language {
         const field* profile_field(const context& in, const field& person, const std::string& member, location where) {
             static const std::vector<field> profile = [] {
                 std::vector<field> fields;
-                for (const char* name : {"id", "name", "picture"}) {
+                for (const char* name : {"id", "name", "picture", "username"}) {
                     field f;
                     f.name = name;
                     f.type = qualified_name{{"text"}, {}};
@@ -1422,14 +1422,14 @@ namespace one::language {
                 return fields;
             }();
             if (!in.reader) {
-                error(where, "a person's name and picture are shown in views; here " + person.name + " is only who they are");
+                error(where, "a person's name, picture and username are shown in views; here " + person.name + " is only who they are");
                 return nullptr;
             }
             for (const auto& f : profile) {
                 if (f.name == member) return &f;
             }
-            error(where, "a view can show a person's name and picture, not " + person.name + "." + member +
-                             nearest(member, {"name", "picture"}));
+            error(where, "a view can show a person's name, picture and username, not " + person.name + "." + member +
+                             nearest(member, {"name", "picture", "username"}));
             return nullptr;
         }
 

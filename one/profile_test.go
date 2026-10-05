@@ -11,6 +11,8 @@ import (
 	"os"
 	"testing"
 
+	"cloud.google.com/go/firestore"
+
 	"github.com/da0x/uione/one"
 )
 
@@ -24,7 +26,7 @@ type Post struct {
 
 var forum = one.Module("forum",
 	one.Command[Post]("post::create").Allow(one.SignedIn),
-	one.View("posts").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "author.name", "author.picture"),
+	one.View("posts").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "author.name", "author.picture", "author.username"),
 	// Whoever made something is a person too, without a field naming them.
 	one.View("posted").Public().Each(one.All[Post]()).Order("created_at").Fields("text", "created_by.name", "updated_by.picture"),
 )
@@ -60,10 +62,15 @@ func TestAPostShowsWhoWroteItByNameAndPicture(t *testing.T) {
 		t.Fatal(err)
 	}
 	token = h.rename(token, "ada@example.com", "Ada Lovelace", "https://example.com/ada.png")
+	// Her GitHub username, which signing in with GitHub keeps; the Auth emulator
+	// can't, so it's written as that would.
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"username": "ada"}, firestore.MergeAll); err != nil {
+		t.Fatal(err)
+	}
 	h.mustRun("forum/post/create", token, map[string]any{"text": "Hello"})
 
 	row := rows(h.view("forum::posts"))[0]
-	if row["author.name"] != "Ada Lovelace" || row["author.picture"] != "https://example.com/ada.png" {
+	if row["author.name"] != "Ada Lovelace" || row["author.picture"] != "https://example.com/ada.png" || row["author.username"] != "ada" {
 		t.Fatalf("the post shows its author as %v", row)
 	}
 	if _, has := row["author"]; has {

@@ -251,8 +251,9 @@ entity loan {
   it's shown: `license  enum mit "MIT" | apache_2_0 "Apache-2.0"`.
 - `user` is a person, stored as their id. A view can show their name and picture
   (`member.name`, `member.picture`), which come from how they signed in and are
-  kept up to date each time they do something. Nothing else about them, such as
-  their email address, can reach a view.
+  kept up to date each time they do something, and, for someone who signed in with
+  GitHub, their username (`member.username`), like da0x. Nothing else about them,
+  such as their email address, can reach a view.
 - `list of label`, `list of user` or `list of text` holds several: labels, the
   people assigned, tags. A view can read through each, as `assignees.name`, and
   pick by what a list holds, as `where assignees has user.id`. A form writes a list
@@ -295,7 +296,7 @@ What a field can hold, written after its name: `title  text  required`.
 | `number` | a number, whole or not | a number box |
 | `serial` | a whole number counted up as each entity is made, 1, 2, 3, and never typed; `serial per project` counts within each project | a number |
 | `boolean` | true or false | a checkbox |
-| `user` | a person who has signed in, by their id; a view can show their name and picture | their name |
+| `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
 
