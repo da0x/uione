@@ -326,10 +326,23 @@ namespace one::language {
         return (folder / "components" / (name + ".tsx")).string();
     }
 
+    // thread issue_page.comments: a list of what people wrote, each with who wrote it
+    // and when. timeline issue_page.history: an entity's changes, each said as what
+    // happened, like "Ada closed this". Both read one of a view's lists.
+    struct thread_item {
+        qualified_name view;
+        std::string list;
+    };
+
+    struct timeline_item {
+        qualified_name view;
+        std::string list;
+    };
+
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item>
             node;
     };
 

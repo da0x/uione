@@ -242,12 +242,7 @@ namespace tracker {
 		form issue::update {
 			title  body  labels
 		}
-		table issue_page.comments {
-			author.picture ""
-			author.name "Author"
-			body
-			created_at "Written"
-		}
+		thread issue_page.comments
 		comment::create
 		form comment::create {
 			body
@@ -258,13 +253,7 @@ namespace tracker {
 			author
 			url "On GitHub"
 		}
-		table issue_page.changes {
-			field "Changed"
-			before "From"
-			after "To"
-			created_by.name "By"
-			created_at "When"
-		}
+		timeline issue_page.changes
 	}
 
 } // namespace tracker

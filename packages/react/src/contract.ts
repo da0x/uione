@@ -49,6 +49,35 @@ export interface SignInProps {
   onChoose: (method: string) => void;
 }
 
+// What people wrote, one after another, each with who wrote it and when, like an
+// issue's comments.
+export interface ThreadEntry {
+  id: string;
+  author: string;
+  picture?: string; // an https address of the author's picture
+  when: string; // when it was written, as it's shown
+  body: ReactNode;
+}
+
+export interface ThreadProps {
+  status: ViewStatus;
+  entries: ThreadEntry[];
+}
+
+// What happened to something, one change after another, each said in words: who,
+// what they did, like "closed this", and when.
+export interface TimelineEntry {
+  id: string;
+  who: string;
+  what: string;
+  when: string;
+}
+
+export interface TimelineProps {
+  status: ViewStatus;
+  entries: TimelineEntry[];
+}
+
 export interface HeroProps {
   title: string;
   children: ReactNode;
@@ -190,6 +219,8 @@ export interface ComponentSet {
   Pages: ComponentType<PagesProps>;
   Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
+  Thread: ComponentType<ThreadProps>;
+  Timeline: ComponentType<TimelineProps>;
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;
   Dialog: ComponentType<DialogProps>;

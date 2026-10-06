@@ -267,7 +267,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|link|markdown|at)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|link|markdown|at)\\b",
           "name": "keyword.other.uione"
         },
         {

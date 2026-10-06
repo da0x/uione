@@ -851,6 +851,12 @@ namespace one::generators {
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     out.line("<Link to=" + web_detail::js_string(target) + ">" + web_detail::jsx_text(link->label) + "</Link>");
+                } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
+                    parts.components.insert("Thread");
+                    out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
+                } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) {
+                    parts.components.insert("Timeline");
+                    out.line("<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list) + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {

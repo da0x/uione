@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <initializer_list>
 #include <map>
 #include <optional>
 #include <regex>
@@ -1079,6 +1080,40 @@ namespace one::language {
 
         // A view per entity is shown for one entity at a time, the one the screen's
         // address names, so the screen needs that entity as a parameter of its route.
+        // A thread or a timeline shows one of a view's lists, whose rows hold what it
+        // needs: a thread who wrote each and what, a timeline each change of an entity.
+        void verify_listing(const std::string& ns, const qualified_name& name, const std::string& list_name, const std::string& route, bool changes,
+                            std::initializer_list<std::string_view> needs) {
+            snake(name);
+            const view_declaration* view = find(ns, name, &scope::views);
+            if (!view) {
+                error(name.where, "there's no view " + name.text() + " " + in_namespace(ns));
+                return;
+            }
+            verify_shown(*view, name.text(), route, name.where);
+            const view_each* list = nullptr;
+            for (const auto& each : view->each) {
+                if (each.name && *each.name == list_name) list = &each;
+            }
+            if (!list) {
+                error(name.where, "view " + name.text() + " has no list called " + list_name);
+                return;
+            }
+            if (changes && !list->changes) {
+                error(name.where, "a timeline shows an entity's changes, so " + list_name + " is each change of an entity, like each change of issue");
+                return;
+            }
+            for (auto need : needs) {
+                bool has = false;
+                for (const auto& row : list->rows) {
+                    if ((row.name ? *row.name : written(*row.value)) == need) has = true;
+                }
+                if (!has) {
+                    error(name.where, std::string(changes ? "a timeline" : "a thread") + " needs " + std::string(need) + " in each of " + list_name + "'s rows");
+                }
+            }
+        }
+
         // When a button shows: what the page's views say, compared with values, like
         // issue_page.status == status::open, and joined with && and ||.
         void verify_condition(const std::string& ns, const expression& e, const std::string& route) {
@@ -1220,6 +1255,10 @@ namespace one::language {
                         }
                     }
                     screen_items(ns, block->items, route);
+                } else if (auto* thread = std::get_if<thread_item>(&item.node)) {
+                    verify_listing(ns, thread->view, thread->list, route, false, {"body", "author.name"});
+                } else if (auto* timeline = std::get_if<timeline_item>(&item.node)) {
+                    verify_listing(ns, timeline->view, timeline->list, route, true, {"field", "before", "after", "created_at"});
                 } else if (auto* table = std::get_if<table_item>(&item.node)) {
                     snake(table->view);
                     const view_declaration* view = find(ns, table->view, &scope::views);

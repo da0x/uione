@@ -190,6 +190,14 @@ TEST_CASE("a table shows the list of a view it names") {
           std::string::npos);
 }
 
+TEST_CASE("an issue's comments are a thread, and its changes a timeline") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Thread view={issuePage} list="comments" />)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Timeline view={issuePage} list="changes" />)") != std::string::npos);
+}
+
 TEST_CASE("a create form takes what the screen's address names, without asking for it") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");

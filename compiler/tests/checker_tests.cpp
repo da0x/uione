@@ -785,3 +785,18 @@ TEST_CASE("a button's when reads the views its screen shows") {
     CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tissue::close when count(issue) > 1\n}\n}\n").message ==
           "a button's when compares a view's fields with values, like issue_page.status == status::open");
 }
+
+TEST_CASE("a thread shows who wrote what, and a timeline an entity's changes") {
+    const std::string start = "namespace a {\nentity issue history {\n\ttitle  text\n}\nentity comment {\n\tissue  issue  required\n\tbody  text\n\tauthor  user  = me\n}\n";
+    const std::string view = "view issue_page per issue {\n\tcomments = each comment where issue == issue.id {\n\t\tauthor.name  body  created_at\n\t}\n"
+                             "\thistory = each change of issue where issue == issue.id {\n\t\tfield  before  after  created_at\n\t}\n}\n";
+    CHECK(check_source(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.comments\n\ttimeline issue_page.history\n}\n}\n").empty());
+    CHECK(only_error(start + view + "screen \"Issue\" /issues/:issue {\n\ttimeline issue_page.comments\n}\n}\n").message ==
+          "a timeline shows an entity's changes, so comments is each change of an entity, like each change of issue");
+    auto wrong = check_source(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.history\n}\n}\n");
+    REQUIRE(wrong.size() == 2);
+    CHECK(wrong[0].message == "a thread needs body in each of history's rows");
+    CHECK(wrong[1].message == "a thread needs author.name in each of history's rows");
+    CHECK(only_error(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.replies\n}\n}\n").message ==
+          "view issue_page has no list called replies");
+}

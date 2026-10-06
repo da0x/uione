@@ -115,6 +115,33 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Thread: ({ status, entries }) =>
+    status !== "live" || entries.length === 0 ? (
+      <p>{status === "loading" ? "Loading…" : "Nothing here yet."}</p>
+    ) : (
+      <ol>
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            <p>
+              <strong>{entry.author}</strong> {entry.when}
+            </p>
+            {entry.body}
+          </li>
+        ))}
+      </ol>
+    ),
+
+  Timeline: ({ status, entries }) =>
+    status !== "live" || entries.length === 0 ? null : (
+      <ul>
+        {entries.map((entry) => (
+          <li key={entry.id}>
+            {entry.who} {entry.what}, {entry.when}
+          </li>
+        ))}
+      </ul>
+    ),
+
   Hero: ({ title, children }) => (
     <section>
       <h1>{title}</h1>

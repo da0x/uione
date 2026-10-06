@@ -678,6 +678,15 @@ namespace one::language {
                 end_line();
                 return {where, std::move(table)};
             }
+            if (at_word("thread") || at_word("timeline")) {
+                bool thread = advance().text == "thread";
+                qualified_name view = parse_qualified_name("the view whose list it shows");
+                expect(token_kind::dot, thread ? "'.' and the view's list, like issue_page.comments" : "'.' and the view's list, like issue_page.history");
+                std::string list = expect(token_kind::identifier, "which of the view's lists").text;
+                end_line();
+                if (thread) return {where, thread_item{std::move(view), std::move(list)}};
+                return {where, timeline_item{std::move(view), std::move(list)}};
+            }
             if (at_word("form")) {
                 advance();
                 form_item form;

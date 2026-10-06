@@ -131,6 +131,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
+                 | ("thread" | "timeline") qualified "." NAME END
                  | "component" NAME END
                  | NAME ("::" NAME)+ STRING? ("when" expression)? END
 column         ::= postfix STRING?

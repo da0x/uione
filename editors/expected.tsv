@@ -158,7 +158,9 @@ examples/tracker/main.one	changes = each change of issue where issue	of	keyword
 examples/tracker/main.one	field  before  after  created_by.name	after	plain
 examples/tracker/main.one	after "To"	after	plain
 examples/tracker/main.one	entity issue history {	history	keyword
-examples/tracker/main.one	table issue_page.changes {	changes	plain
+examples/tracker/main.one	timeline issue_page.changes	changes	plain
+examples/tracker/main.one	timeline issue_page.changes	timeline	keyword
+examples/tracker/main.one	thread issue_page.comments	thread	keyword
 editors/fixtures/environments.one	region  "us-east4"	region	keyword
 editors/fixtures/environments.one	domain    "shop.example"	domain	keyword
 examples/tracker/main.one	title  body  labels	title	plain

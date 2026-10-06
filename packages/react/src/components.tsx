@@ -118,6 +118,51 @@ export function Markdown({ view, field }: { view: ViewState; field: string }) {
   return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} />;
 }
 
+// When something was written or changed, with the time of day, as a thread or a
+// timeline says it.
+function when(value: unknown): string {
+  const at = value instanceof Date ? value : typeof value === "string" || typeof value === "number" ? new Date(value) : undefined;
+  return at && !Number.isNaN(at.getTime()) ? at.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+}
+
+// One of a view's lists as a thread: each row's author, picture, time and body, the
+// body rendered as Markdown.
+export function Thread({ view, list }: { view: ViewState; list: string }) {
+  const ui = useUI();
+  const entries = (view.status === "live" ? rowsOf(view.data?.[list]) : []).map((row) => ({
+    id: row.id,
+    author: show(row["author.name"]),
+    picture: typeof row["author.picture"] === "string" ? (row["author.picture"] as string) : undefined,
+    when: when(row.created_at),
+    body: <ui.Markdown status="live" source={typeof row.body === "string" ? row.body : ""} />,
+  }));
+  return <ui.Thread status={view.status} entries={entries} />;
+}
+
+// What a change did, in words: making the thing, or a field set, cleared or changed.
+export function changed(field: unknown, before: unknown, after: unknown): string {
+  if (typeof field !== "string" || field === "") return "created this";
+  const name = field.replaceAll("_", " ");
+  const was = show(before);
+  const is = show(after);
+  if (was === "") return `set ${name} to ${is}`;
+  if (is === "") return `cleared ${name}`;
+  return `changed ${name} from ${was} to ${is}`;
+}
+
+// One of a view's lists of an entity's changes as a timeline, oldest first as the
+// view orders it.
+export function Timeline({ view, list }: { view: ViewState; list: string }) {
+  const ui = useUI();
+  const entries = (view.status === "live" ? rowsOf(view.data?.[list]) : []).map((row) => ({
+    id: row.id,
+    who: show(row["created_by.name"]),
+    what: changed(row.field, row.before, row.after),
+    when: when(row.created_at),
+  }));
+  return <ui.Timeline status={view.status} entries={entries} />;
+}
+
 // A value from a view, shown only while the view is live. While it's loading, stale
 // or denied, the component set shows a placeholder instead, because an old number
 // that looks current is worse than no number.

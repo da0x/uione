@@ -570,6 +570,46 @@ export const radix: ComponentSet = {
     </aside>
   ),
 
+  // A conversation: each entry beside its author's picture, headed by their name
+  // and when they wrote it.
+  Thread: ({ status, entries }) =>
+    status !== "live" || entries.length === 0 ? (
+      <p className="text-sm text-muted">{status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : "Nothing here yet."}</p>
+    ) : (
+      <ol className="flex flex-col gap-4">
+        {entries.map((entry) => (
+          <li key={entry.id} className="flex gap-3">
+            {entry.picture?.startsWith("https://") ? (
+              <img src={entry.picture} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-1 size-8 flex-none rounded-full border border-line object-cover" />
+            ) : (
+              <span aria-hidden="true" className="mt-1 size-8 flex-none rounded-full border border-line bg-sunken" />
+            )}
+            <article className="min-w-0 flex-1 overflow-hidden rounded-box border border-line bg-surface">
+              <header className="flex flex-wrap items-baseline gap-x-2 border-b border-line bg-sunken/60 px-4 py-2 text-sm">
+                <span className="font-medium">{entry.author}</span>
+                <span className="text-muted">{entry.when}</span>
+              </header>
+              <div className="px-4 py-3">{entry.body}</div>
+            </article>
+          </li>
+        ))}
+      </ol>
+    ),
+
+  // What happened, oldest first, down a line, each change one sentence.
+  Timeline: ({ status, entries }) =>
+    status !== "live" || entries.length === 0 ? null : (
+      <ol className="relative ml-1.5 flex flex-col gap-3 border-l border-line pl-5 text-sm">
+        {entries.map((entry) => (
+          <li key={entry.id} className="relative">
+            <span aria-hidden="true" className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-page bg-muted" />
+            <span className="font-medium">{entry.who}</span> <span className="text-muted">{entry.what}</span>
+            <span className="text-muted"> · {entry.when}</span>
+          </li>
+        ))}
+      </ol>
+    ),
+
   Picture: ({ source }) => (
     <img
       src={source}

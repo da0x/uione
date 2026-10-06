@@ -12,6 +12,9 @@ import {
   Live,
   Table,
   Text,
+  Thread,
+  Timeline,
+  changed,
   holds,
   memorySource,
   shortAddress,
@@ -673,5 +676,37 @@ describe("a yes or no", () => {
     fireEvent.click(box);
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     await waitFor(() => expect(source.runs).toEqual([{ command: "projects::project::update", input: { takes_reports: true, id: "p1" } }]));
+  });
+});
+
+describe("threads and timelines", () => {
+  it("says what each change did", () => {
+    expect(changed("", null, null)).toBe("created this");
+    expect(changed("status", "open", "closed")).toBe("changed status from open to closed");
+    expect(changed("due_at", "", "Friday")).toBe("set due at to Friday");
+    expect(changed("labels", ["bug"], [])).toBe("cleared labels");
+  });
+
+  it("shows what people wrote, each with who and when, and an entity's changes as sentences", () => {
+    const view = {
+      status: "live" as const,
+      data: {
+        comments: [{ id: "c1", "author.name": "Ada", body: "Reproduced **here**.", created_at: "2026-10-06T10:00:00Z" }],
+        history: [
+          { id: "h1", "created_by.name": "Ada", field: "", created_at: "2026-10-06T09:00:00Z" },
+          { id: "h2", "created_by.name": "Grace", field: "status", before: "open", after: "closed", created_at: "2026-10-06T11:00:00Z" },
+        ],
+      },
+    };
+    renderScreen(memorySource(), () => (
+      <>
+        <Thread view={view} list="comments" />
+        <Timeline view={view} list="history" />
+      </>
+    ));
+    expect(screen.getByText("Ada", { selector: "strong" })).toBeTruthy();
+    expect(screen.getByText(/Reproduced/)).toBeTruthy();
+    expect(screen.getByText(/Grace changed status from open to closed/)).toBeTruthy();
+    expect(screen.getByText(/Ada created this/)).toBeTruthy();
   });
 });
