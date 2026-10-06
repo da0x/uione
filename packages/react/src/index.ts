@@ -6,7 +6,7 @@
 export { App, screen, useSignIn, useTitle } from "./app.js";
 export type { AppProps, Screen, ScreenInfo, TitlePart } from "./app.js";
 
-export { Code, Command, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Table, Text } from "./components.js";
+export { Code, Command, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Table, Text, holds } from "./components.js";
 export type { DocPage, FieldSpec } from "./components.js";
 
 export { useAuth, useCommand, useRunner, useView } from "./data.js";

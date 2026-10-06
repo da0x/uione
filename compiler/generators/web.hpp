@@ -25,6 +25,7 @@
 
 #include "code/stream.hpp"
 #include "generators/markdown.hpp"
+#include "generators/roles.hpp"
 #include "language/ast.hpp"
 #include "language/names.hpp"
 #include "platform/files.hpp"
@@ -156,7 +157,7 @@ namespace one::generators {
         // from, and `out_dir` is where the web app goes, so imports between the two can
         // be worked out.
         web_generator(const std::vector<language::file>& files, std::string project_dir, std::string out_dir)
-            : files_(files), project_dir_(std::move(project_dir)), out_dir_(std::move(out_dir)) {
+            : files_(files), project_dir_(std::move(project_dir)), out_dir_(std::move(out_dir)), held_(roles_of(files).held) {
             for (const auto& f : files_) {
                 indexing_ = f.path;
                 index("", f.declarations);
@@ -200,6 +201,7 @@ namespace one::generators {
         std::string project_dir_;
         std::string out_dir_;
         std::string name_ = "app";
+        std::vector<held_roles> held_;  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
@@ -753,6 +755,25 @@ namespace one::generators {
             return nullptr;
         }
 
+        // Whether the person reading may run a command a role grants, on a page whose
+        // address names where the role is held, like the project in
+        // /:project/issues/:issue: one of the roles granting it, held there. Nothing,
+        // when no role grants it or the page doesn't say where.
+        std::string allowed(screen_parts& parts, const std::string& ns, const std::string& command) {
+            for (const auto& held : held_) {
+                auto granting = held.granting.find(command);
+                if (granting == held.granting.end()) continue;
+                if (!names_parameter(route_, held.within) || !entity_named(ns, held.within)) continue;
+                parts.params.insert(held.within);
+                parts.components.insert("holds");
+                std::string roles;
+                for (const auto& role : granting->second) roles += (roles.empty() ? "" : ", ") + web_detail::js_string(role);
+                return " allowed={holds(" + view_variable(parts, held.view) + ", " + web_detail::js_string(held.field) + ", " +
+                       web_detail::js_name(held.within + "_id") + ", [" + roles + "])}";
+            }
+            return "";
+        }
+
         // A button's when, as JavaScript reading the page's views: false until every
         // view it reads has arrived, so a button that may not apply isn't shown early.
         std::string condition(screen_parts& parts, const std::string& ns, const language::expression& e) {
@@ -852,7 +873,7 @@ namespace one::generators {
                     }
                     std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
                     std::string when = button->when ? " when={" + condition(parts, ns, *button->when) + "}" : "";
-                    out.line("<Command name=" + web_detail::js_string(command) + id + label + when + " />");
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + when + allowed(parts, ns, command) + " />");
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
@@ -1032,7 +1053,7 @@ namespace one::generators {
                 if (button->label) opens += " opener=" + web_detail::js_string(*button->label);
                 if (button->when) opens += " when={" + condition(parts, ns, *button->when) + "}";
             }
-            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + opens + authenticated +
+            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + opens + authenticated + allowed(parts, ns, command) +
                      " />");
         }
 

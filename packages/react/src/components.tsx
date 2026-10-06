@@ -154,13 +154,35 @@ export function Confirm({ command, question }: { command: string; question: stri
   return null;
 }
 
+// Whether a person holds one of some roles within something, like maintainer in a
+// project, as the view of their roles says: its rows each name where, in a field
+// like project, and the role. Not while it hasn't arrived, so a button that may not
+// apply isn't shown early.
+export function holds(roles: ViewState, field: string, within: string | undefined, granting: readonly string[]): boolean {
+  if (roles.status !== "live" || !within) return false;
+  const rows = Array.isArray(roles.data?.rows) ? (roles.data.rows as Record<string, unknown>[]) : [];
+  return rows.some((row) => row[field] === within && typeof row.role === "string" && granting.includes(row.role));
+}
+
 // A button that runs a command on its own, with nothing to fill in, on the entity
 // with that id when it acts on one. It says what it does, as its screen names it or
 // as its command is named, and isn't there at all while it doesn't apply.
-export function Command({ name, id, label: says, when = true }: { name: string; id?: string; label?: string; when?: boolean }) {
+export function Command({
+  name,
+  id,
+  label: says,
+  when = true,
+  allowed = true,
+}: {
+  name: string;
+  id?: string;
+  label?: string;
+  when?: boolean;
+  allowed?: boolean; // whether the person reading may run it; while they may not, it isn't there
+}) {
   const ui = useUI();
   const runner = useConfirmedRunner();
-  if (!when) return null;
+  if (!when || !allowed) return null;
   return (
     <ui.Button kind="primary" disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
       {says ?? label(action(name))}
@@ -315,6 +337,7 @@ export function Form({
   submit: says,
   opener,
   when = true,
+  allowed = true,
   authenticated = false,
 }: {
   command: string;
@@ -326,6 +349,7 @@ export function Form({
   submit?: string; // what its button says, rather than the command's name, like Save changes
   opener?: string; // what the button that opens it says, like New issue, when that's not its submit
   when?: boolean; // whether it applies now; while it doesn't, neither it nor its button is there
+  allowed?: boolean; // whether the person reading, once signed in, may send it; while they may not, it isn't there
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
 }) {
   const ui = useUI();
@@ -397,6 +421,7 @@ export function Form({
       </ui.Button>
     );
   }
+  if (!allowed) return null;
   if (!button) return form;
   return (
     <>

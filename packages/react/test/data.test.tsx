@@ -12,6 +12,7 @@ import {
   Live,
   Table,
   Text,
+  holds,
   memorySource,
   shortAddress,
   screen as defineScreen,
@@ -228,6 +229,26 @@ describe("when something fails, the person is told", () => {
     expect(screen.getByRole("dialog", { name: "New issue" })).toBeTruthy();
     shown.unmount();
     renderScreen(memorySource(), () => <Form command="tracker::issue::create" fields={["title"]} button opener="New issue" when={false} />);
+    expect(screen.queryByRole("button", { name: "New issue" })).toBeNull();
+  });
+
+  it("knows who holds a role where, once their roles arrive", () => {
+    const roles = { status: "live" as const, data: { rows: [{ id: "a", project: "uione", role: "maintainer" }, { id: "b", project: "neotrac", role: "reporter" }] } };
+    expect(holds(roles, "project", "uione", ["maintainer"])).toBe(true);
+    expect(holds(roles, "project", "neotrac", ["maintainer"])).toBe(false);
+    expect(holds(roles, "project", "elsewhere", ["maintainer", "reporter"])).toBe(false);
+    expect(holds({ status: "loading", data: undefined }, "project", "uione", ["maintainer"])).toBe(false);
+    expect(holds(roles, "project", undefined, ["maintainer"])).toBe(false);
+  });
+
+  it("leaves out a button and a form the person reading may not use", () => {
+    renderScreen(memorySource({ person: { uid: "ada", name: "Ada" } }), () => (
+      <>
+        <Command name="tracker::issue::close" allowed={false} />
+        <Form command="tracker::issue::create" fields={["title"]} button opener="New issue" authenticated allowed={false} />
+      </>
+    ));
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.queryByRole("button", { name: "New issue" })).toBeNull();
   });
 

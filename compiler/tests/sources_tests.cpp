@@ -84,3 +84,17 @@ TEST_CASE("a command's lines lead to the Go they became") {
     }
     CHECK(from == std::vector<std::string>{"\t\tbook.Status = StatusLent"});
 }
+
+TEST_CASE("a project whose roles are held within something gets a view per person of where they hold them") {
+    auto built = generate("/examples/tracker");
+    const generators::output_file* app = nullptr;
+    const generators::output_file* api = nullptr;
+    for (const auto& f : built.files) {
+        if (f.path == "web/src/app.tsx") app = &f;
+        if (f.path == "api/tracker/tracker.go") api = &f;
+    }
+    REQUIRE(app != nullptr);
+    REQUIRE(api != nullptr);
+    CHECK(app->content.find(R"(personal: ["tracker::mine", "tracker::member_roles"])") != std::string::npos);
+    CHECK(api->content.find(R"(one.View("member_roles").PerUser().)") != std::string::npos);
+}

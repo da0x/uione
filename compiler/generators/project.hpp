@@ -11,6 +11,7 @@
 
 #include "generators/api.hpp"
 #include "generators/infrastructure.hpp"
+#include "generators/roles.hpp"
 #include "generators/rules.hpp"
 #include "generators/web.hpp"
 #include "language/ast.hpp"
@@ -26,8 +27,11 @@ namespace one::generators {
 
     // The project's files have parsed and checked cleanly. `out_dir` is where the
     // build folder goes, since imports between it and the project are worked out.
-    inline generated_project generate_project(const std::vector<language::file>& files, const std::string& project_dir,
+    // The views that say who holds which roles (roles.hpp) are added to the files
+    // first, so every generator sees them.
+    inline generated_project generate_project(std::vector<language::file>& files, const std::string& project_dir,
                                               const std::string& out_dir) {
+        for (auto& view : roles_of(files).files) files.push_back(std::move(view));
         generated_project out;
         auto api = generate_api(files, project_dir, out_dir + "/api");
         out.errors = api.errors;

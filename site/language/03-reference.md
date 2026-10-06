@@ -563,6 +563,11 @@ screen "Book" /books/:book {
   a view's fields with values, choices like `status::open`, `true`, `false` and
   `none`, joined with `&&` and `||`, and holds nothing until the views it reads have
   arrived.
+- A button is there only for someone who may press it. A command a role grants,
+  like `issue::close` granted to maintainers per project, shows on a page whose
+  address names the project only to the people who hold one of those roles there;
+  someone signed out is asked to sign in instead. The roles a person holds are a
+  view of their own the build adds, read only by them.
 - A title can show what the page does: `screen "#{issue_page.number}
   {issue_page.title}" /:project/issues/:issue`. The page has no title until those
   values arrive, and the browser's tab names it too.

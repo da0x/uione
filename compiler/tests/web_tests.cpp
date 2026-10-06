@@ -194,8 +194,9 @@ TEST_CASE("a create form takes what the screen's address names, without asking f
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button authenticated />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button authenticated allowed={holds(memberRoles, "project", projectId, ["maintainer", "reporter"])} />)") !=
           std::string::npos);
+    CHECK(screens->content.find(R"(const memberRoles = useView("tracker::member_roles");)") != std::string::npos);
     CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button authenticated />)") !=
           std::string::npos);
     // On the list of every project, no project is named, so none is given.
