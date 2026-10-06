@@ -155,13 +155,15 @@ export function Confirm({ command, question }: { command: string; question: stri
 }
 
 // A button that runs a command on its own, with nothing to fill in, on the entity
-// with that id when it acts on one.
-export function Command({ name, id }: { name: string; id?: string }) {
+// with that id when it acts on one. It says what it does, as its screen names it or
+// as its command is named, and isn't there at all while it doesn't apply.
+export function Command({ name, id, label: says, when = true }: { name: string; id?: string; label?: string; when?: boolean }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
+  if (!when) return null;
   return (
     <ui.Button kind="primary" disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
-      {label(action(name))}
+      {says ?? label(action(name))}
     </ui.Button>
   );
 }
@@ -311,6 +313,8 @@ export function Form({
   id,
   given = {},
   submit: says,
+  opener,
+  when = true,
   authenticated = false,
 }: {
   command: string;
@@ -320,6 +324,8 @@ export function Form({
   id?: string; // for an update: the entity it changes
   given?: Record<string, string | undefined>; // sent without being asked for, like the project an issue is made in
   submit?: string; // what its button says, rather than the command's name, like Save changes
+  opener?: string; // what the button that opens it says, like New issue, when that's not its submit
+  when?: boolean; // whether it applies now; while it doesn't, neither it nor its button is there
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
 }) {
   const ui = useUI();
@@ -382,6 +388,7 @@ export function Form({
 
   // Someone signed out is asked to sign in, rather than shown what they couldn't
   // send; while it isn't known yet whether they are, nothing is shown.
+  if (!when) return null;
   if (authenticated && auth && !auth.person) {
     if (auth.person === undefined) return null;
     return (
@@ -394,11 +401,11 @@ export function Form({
   return (
     <>
       <ui.Button kind="primary" onClick={() => setOpen(true)}>
-        {says ?? label(action(command))}
+        {opener ?? says ?? label(action(command))}
       </ui.Button>
       <ui.Dialog
         open={open}
-        title={says ?? label(action(command))}
+        title={opener ?? says ?? label(action(command))}
         onClose={() => {
           setOpen(false);
           runner.clear(command);

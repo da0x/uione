@@ -775,3 +775,13 @@ TEST_CASE("a screen's title can show a view the screen can read") {
                      "screen \"{issue_page.title}\" /issues {\n\ttext \"hi\"\n}\n}\n")
               .message.starts_with("view issue_page has one document per issue, so the screen showing it needs :issue"));
 }
+
+TEST_CASE("a button's when reads the views its screen shows") {
+    const std::string start = "namespace a {\nentity issue {\n\tstatus  enum  open | closed = status::open\n}\n"
+                              "command issue::close {\n\tstatus = status::closed\n}\nview issue_page per issue {\n\tstatus = issue.status\n}\n";
+    CHECK(check_source(start + "screen \"Issue\" /issues/:issue {\n\tissue::close \"Close issue\" when issue_page.status == status::open\n}\n}\n").empty());
+    CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tissue::close when issue_page.title == \"x\"\n}\n}\n").message ==
+          "view issue_page has no title for the button to read");
+    CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tissue::close when count(issue) > 1\n}\n}\n").message ==
+          "a button's when compares a view's fields with values, like issue_page.status == status::open");
+}

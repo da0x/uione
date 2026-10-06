@@ -1079,6 +1079,36 @@ namespace one::language {
 
         // A view per entity is shown for one entity at a time, the one the screen's
         // address names, so the screen needs that entity as a parameter of its route.
+        // When a button shows: what the page's views say, compared with values, like
+        // issue_page.status == status::open, and joined with && and ||.
+        void verify_condition(const std::string& ns, const expression& e, const std::string& route) {
+            static const std::string how = "a button's when compares a view's fields with values, like issue_page.status == status::open";
+            if (auto* binary = std::get_if<binary_expression>(&e.node)) {
+                verify_condition(ns, *binary->left, route);
+                verify_condition(ns, *binary->right, route);
+            } else if (auto* unary = std::get_if<unary_expression>(&e.node); unary && unary->op == token_kind::logical_not) {
+                verify_condition(ns, *unary->operand, route);
+            } else if (auto* member = std::get_if<member_expression>(&e.node)) {
+                auto* object = std::get_if<name_expression>(&member->object->node);
+                const view_declaration* view = object ? find(ns, object->name, &scope::views) : nullptr;
+                if (!view) {
+                    error(e.where, how);
+                    return;
+                }
+                verify_shown(*view, object->name.text(), route, e.where);
+                bool has = false;
+                for (const auto& v : view->values) {
+                    if ((v.name ? *v.name : written(*v.value)) == member->member) has = true;
+                }
+                if (!has) error(e.where, "view " + object->name.text() + " has no " + member->member + " for the button to read");
+            } else if (auto* name = std::get_if<name_expression>(&e.node)) {
+                const std::string word = name->name.text();
+                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none") error(e.where, how);
+            } else if (!std::holds_alternative<literal_expression>(e.node)) {
+                error(e.where, how);
+            }
+        }
+
         // Live values like {book_page.title}, in a text or a screen's title, each read a
         // view the screen can show.
         void verify_live_text(const std::string& ns, const std::string& text, const std::string& route, location where) {
@@ -1273,6 +1303,7 @@ namespace one::language {
                     verify_command_use(ns, confirm->command);
                 } else if (auto* button = std::get_if<button_item>(&item.node)) {
                     verify_command_use(ns, button->command);
+                    if (button->when) verify_condition(ns, *button->when, route);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);
                     std::string file = component_file(path_, component->name);

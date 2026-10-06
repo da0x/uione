@@ -741,16 +741,54 @@ namespace one::generators {
             return false;
         }
 
-        static bool has_button_for(const std::vector<language::screen_item>& items, const language::qualified_name& command) {
+        static const language::button_item* button_for(const std::vector<language::screen_item>& items, const language::qualified_name& command) {
             for (const auto& item : items) {
                 if (auto* button = std::get_if<language::button_item>(&item.node)) {
-                    if (button->command.text() == command.text()) return true;
+                    if (button->command.text() == command.text()) return button;
                 }
                 if (auto* block = std::get_if<language::content_block>(&item.node)) {
-                    if (has_button_for(block->items, command)) return true;
+                    if (auto* found = button_for(block->items, command)) return found;
                 }
             }
-            return false;
+            return nullptr;
+        }
+
+        // A button's when, as JavaScript reading the page's views: false until every
+        // view it reads has arrived, so a button that may not apply isn't shown early.
+        std::string condition(screen_parts& parts, const std::string& ns, const language::expression& e) {
+            std::set<std::string> read;
+            std::string test = condition_of(parts, ns, e, read);
+            std::string ready;
+            for (const auto& variable : read) ready += variable + ".status === \"live\" && ";
+            return ready + "(" + test + ")";
+        }
+
+        std::string condition_of(screen_parts& parts, const std::string& ns, const language::expression& e, std::set<std::string>& read) {
+            using language::token_kind;
+            if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
+                std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
+                               : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
+                               : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"
+                               : binary->op == token_kind::less_equal ? "<=" : ">=";
+                return "(" + condition_of(parts, ns, *binary->left, read) + " " + op + " " + condition_of(parts, ns, *binary->right, read) + ")";
+            }
+            if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + condition_of(parts, ns, *unary->operand, read);
+            if (auto* member = std::get_if<language::member_expression>(&e.node)) {
+                auto* object = std::get_if<language::name_expression>(&member->object->node);
+                std::string variable = view_variable(parts, full_view(ns, object->name.text()));
+                read.insert(variable);
+                return "(" + variable + ".data?.[" + web_detail::js_string(member->member) + "] ?? null)";
+            }
+            if (auto* name = std::get_if<language::name_expression>(&e.node)) {
+                const std::string word = name->name.text();
+                if (word == "true" || word == "false") return word;
+                if (word == "none") return "null";
+                return web_detail::js_string(name->name.parts.back());  // a choice, like status::open
+            }
+            if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
+                return literal->type == language::literal_expression::kind::number ? literal->value : web_detail::js_string(literal->value);
+            }
+            return "false";
         }
 
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
@@ -795,7 +833,7 @@ namespace one::generators {
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
-                    this->form(out, parts, ns, *form, has_button_for(screen, form->commands.front()));
+                    this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
                 } else if (auto* confirm = std::get_if<language::confirm_item>(&item.node)) {
                     parts.components.insert("Confirm");
                     out.line("<Confirm command=" + web_detail::js_string(full_command(ns, confirm->command)) +
@@ -812,7 +850,9 @@ namespace one::generators {
                         parts.params.insert(entity->name);
                         id = " id={" + web_detail::js_name(entity->name + "_id") + "}";
                     }
-                    out.line("<Command name=" + web_detail::js_string(command) + id + " />");
+                    std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
+                    std::string when = button->when ? " when={" + condition(parts, ns, *button->when) + "}" : "";
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + when + " />");
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
@@ -926,7 +966,7 @@ namespace one::generators {
             return "[" + options + "]";
         }
 
-        void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, bool button) {
+        void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, const language::button_item* button) {
             parts.components.insert("Form");
             std::string command = full_command(ns, form.commands.front());
             const language::entity_declaration* entity = entity_of_command(command);
@@ -984,7 +1024,15 @@ namespace one::generators {
             // Everything but a command anyone may run needs its person signed in, so a
             // form asks someone who isn't to sign in, rather than taking what they type.
             std::string authenticated = open_.contains(command) ? "" : " authenticated";
-            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + (button ? " button" : "") + authenticated +
+            // The button that opens it says what its line on the screen says, and shows
+            // while its when holds.
+            std::string opens;
+            if (button) {
+                opens = " button";
+                if (button->label) opens += " opener=" + web_detail::js_string(*button->label);
+                if (button->when) opens += " when={" + condition(parts, ns, *button->when) + "}";
+            }
+            out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + opens + authenticated +
                      " />");
         }
 

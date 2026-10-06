@@ -306,8 +306,12 @@ namespace one::language {
         std::string message;
     };
 
+    // issue::close "Close issue" when issue_page.status == status::open: a command's
+    // button, named for what it does, and shown only while the page says it applies.
     struct button_item {
         qualified_name command;
+        std::optional<std::string> label;
+        expression_ptr when;
     };
 
     // component workbench: a hand-written React component, components/workbench.tsx

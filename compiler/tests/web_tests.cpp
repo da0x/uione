@@ -363,6 +363,31 @@ TEST_CASE("a screen's title can show what the page does, once it's arrived") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("a button says what it does, and shows only while its when holds") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-button-when";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity issue {\n\ttitle  text\n\tstatus  enum  open | closed = status::open\n}\n"
+                         "command issue::create\n"
+                         "command issue::close {\n\tstatus = status::closed\n}\n"
+                         "view issue_page per issue {\n\tstatus = issue.status\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n"
+                         "\tissue::close \"Close issue\" when issue_page.status == status::open\n"
+                         "}\n"
+                         "screen \"Issues\" /issues {\n\tissue::create \"New issue\"\n\tform issue::create {\n\t\ttitle\n\t}\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Command name="tracker::issue::close" id={issueId} label="Close issue" when={issuePage.status === "live" && (((issuePage.data?.["status"] ?? null) === "open"))} />)") !=
+          std::string::npos);
+    CHECK(tsx.find(R"( button opener="New issue")") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a command's button on its entity's page acts on that entity") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-command-button";

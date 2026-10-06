@@ -555,6 +555,17 @@ screen "Book" /books/:book {
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
+- A button says what it does when its line names it: `issue::create "New issue"`
+  opens the form, and `issue::close "Close issue"` runs the command. Without a
+  name, it's named after its command, like Close.
+- `when` shows a button only while it applies, as the page's views say:
+  `issue::close "Close issue" when issue_page.status == status::open`. It compares
+  a view's fields with values, choices like `status::open`, `true`, `false` and
+  `none`, joined with `&&` and `||`, and holds nothing until the views it reads have
+  arrived.
+- A title can show what the page does: `screen "#{issue_page.number}
+  {issue_page.title}" /:project/issues/:issue`. The page has no title until those
+  values arrive, and the browser's tab names it too.
 - A `create` form on a screen whose address names what the entity points at, like
   `form issue::create` on `/projects/:project`, sends that project without asking
   for it.

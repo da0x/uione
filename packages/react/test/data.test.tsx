@@ -214,6 +214,23 @@ describe("when something fails, the person is told", () => {
     await waitFor(() => expect(source.runs).toEqual([{ command: "tracker::issue::close", input: { id: "uione-12" } }]));
   });
 
+  it("says what a button does, and leaves it out while it doesn't apply", () => {
+    const source = memorySource();
+    const { rerender } = renderScreen(source, () => <Command name="tracker::issue::close" id="uione-12" label="Close issue" when={true} />);
+    expect(screen.getByRole("button", { name: "Close issue" })).toBeTruthy();
+    rerender(<App name="app" screens={[defineScreen({ title: "Test", route: "/" }, () => <Command name="tracker::issue::close" label="Close issue" when={false} />)]} ui={plain} data={source} location="/" />);
+    expect(screen.queryByRole("button", { name: "Close issue" })).toBeNull();
+  });
+
+  it("opens a form from a button named for it, and leaves both out while they don't apply", () => {
+    const shown = renderScreen(memorySource(), () => <Form command="tracker::issue::create" fields={["title"]} button opener="New issue" />);
+    fireEvent.click(screen.getByRole("button", { name: "New issue" }));
+    expect(screen.getByRole("dialog", { name: "New issue" })).toBeTruthy();
+    shown.unmount();
+    renderScreen(memorySource(), () => <Form command="tracker::issue::create" fields={["title"]} button opener="New issue" when={false} />);
+    expect(screen.queryByRole("button", { name: "New issue" })).toBeNull();
+  });
+
   it("shows why an action on a table row failed", async () => {
     const source = memorySource({
       views: { "library::shelf": { rows: [{ id: "b1", title: "Dune", author: "Herbert" }] } },

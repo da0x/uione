@@ -132,7 +132,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "component" NAME END
-                 | NAME ("::" NAME)+ END
+                 | NAME ("::" NAME)+ STRING? ("when" expression)? END
 column         ::= postfix STRING?
 form_line      ::= (NAME+ | NAME* NAME "=" expression hint?) END
 hint           ::= "{" NEWLINE? "hint" STRING END "}"

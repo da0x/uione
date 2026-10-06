@@ -707,8 +707,14 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
+                button_item button{std::move(name), std::nullopt, nullptr};
+                if (at(token_kind::string)) button.label = expect(token_kind::string, "what the button says").text;
+                if (at_word("when")) {
+                    advance();
+                    button.when = parse_expression();
+                }
                 end_line();
-                return {where, button_item{std::move(name)}};
+                return {where, std::move(button)};
             }
             fail_expecting("a screen element");
         }
