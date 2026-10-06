@@ -116,7 +116,7 @@ examples/tracker/main.one	where assignees has user.id	has	keyword
 examples/tasks/main.one	view list per user	list	name
 examples/tracker/main.one	entity issue history {	history	keyword
 examples/tracker/main.one	entity issue history {	issue	name
-examples/tracker/main.one	each change of issue where project	change	keyword
+examples/tracker/main.one	each change of issue where project	change	type
 examples/tracker/main.one	limit 50	limit	keyword
 examples/tracker/main.one	webhook github /hooks/github {	webhook	declare
 examples/tracker/main.one	webhook github /hooks/github {	github	name
@@ -145,9 +145,20 @@ editors/fixtures/roles.one	project::update  member::create	project	namespace
 editors/fixtures/roles.one	project::update  member::create	update	plain
 editors/fixtures/roles.one	project::update  member::create	create	plain
 editors/fixtures/roles.one	command project::update	command	declare
-examples/tracker/main.one	project = id  person = me	project	plain
+examples/tracker/main.one	project = id  person = me	project	variable
 examples/tracker/main.one	labels     list of text	text	type
 examples/tracker/main.one	assignees  list of user	user	type
 editors/fixtures/roles.one	tags    list of label	list	type
 editors/fixtures/roles.one	tags    list of label	of	type
 editors/fixtures/roles.one	tags    list of label	label	type
+examples/tracker/main.one	title = issue.title	title	variable
+examples/tracker/main.one	title = issue.title	issue.title	plain
+examples/tracker/main.one	changes = each change of issue where issue	changes	variable
+examples/tracker/main.one	changes = each change of issue where issue	of	keyword
+examples/tracker/main.one	field  before  after  created_by.name	after	plain
+examples/tracker/main.one	after "To"	after	plain
+examples/tracker/main.one	entity issue history {	history	keyword
+examples/tracker/main.one	table issue_page.changes {	changes	plain
+editors/fixtures/environments.one	region  "us-east4"	region	keyword
+editors/fixtures/environments.one	domain    "shop.example"	domain	keyword
+examples/tracker/main.one	title  body  labels	title	plain

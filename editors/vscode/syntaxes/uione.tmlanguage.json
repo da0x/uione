@@ -10,6 +10,9 @@
       "include": "#comments"
     },
     {
+      "include": "#project"
+    },
+    {
       "include": "#entity"
     },
     {
@@ -23,6 +26,12 @@
     },
     {
       "include": "#example"
+    },
+    {
+      "include": "#assigned"
+    },
+    {
+      "include": "#member"
     },
     {
       "include": "#keywords"
@@ -205,6 +214,18 @@
     "keywords": {
       "patterns": [
         {
+          "comment": "each change of issue: change is the language's own record of an entity's changes, a type, as text is.",
+          "match": "\\b(change)\\s+(of)\\b",
+          "captures": {
+            "1": {
+              "name": "support.type.uione"
+            },
+            "2": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
+        {
           "begin": "\\b(link)\\s+(namespace)\\b",
           "end": "(?=\")|$",
           "beginCaptures": {
@@ -246,12 +267,8 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|change|history|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|link|markdown|domain|firebase|region|ui|authentication|icon|serve|redirect|title|one|analytics|at)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|link|markdown|at)\\b",
           "name": "keyword.other.uione"
-        },
-        {
-          "match": "\\b(?:required|unique|after|key)\\b",
-          "name": "storage.modifier.uione"
         },
         {
           "match": "(?<!::)(?<!\\|)(?<!\\| )(?<!enum )\\b(?:public)\\b(?=\\s*(?:\\{|$|when\\b))",
@@ -376,6 +393,79 @@
         },
         {
           "include": "#namespaces"
+        },
+        {
+          "include": "#operators"
+        }
+      ]
+    },
+    "assigned": {
+      "comment": "A name given a value with =, like title = issue.title in a view or status = status::closed in a command: the field it sets.",
+      "match": "(?<![.\\w])([a-z_]\\w*)\\s*(=)(?!=)",
+      "captures": {
+        "1": {
+          "name": "variable.other.field.uione"
+        },
+        "2": {
+          "name": "keyword.operator.uione"
+        }
+      }
+    },
+    "member": {
+      "comment": "What follows a dot is a field of what's before it, like title in issue.title, even a word that's a keyword elsewhere.",
+      "match": "(?<=\\w\\.)[a-z_]\\w*"
+    },
+    "project": {
+      "comment": "A project's block: its settings, each a word at the start of its line, and its environments, whose blocks hold settings too. Elsewhere those words are names, like a column called title.",
+      "begin": "^\\s*(project)\\s+([A-Za-z_]\\w*)\\s*(\\{)",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.uione"
+        },
+        "2": {
+          "name": "entity.name.type.uione"
+        }
+      },
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#project-body"
+        }
+      ]
+    },
+    "project-body": {
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|serve|redirect|title|one|analytics)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
+        {
+          "include": "#declarations"
+        },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#project-body"
+            }
+          ]
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#numbers"
         },
         {
           "include": "#operators"

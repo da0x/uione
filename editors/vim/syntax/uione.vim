@@ -30,14 +30,18 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create readers when add remove to has of change history limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown domain firebase region ui authentication icon serve redirect analytics at
-" title and one are project settings when a string follows them, and fields' names otherwise.
-syn match   uioneKeyword   /\<title\>\ze\s\+"/
-syn match   uioneKeyword   /\<one\>\ze\s\+"/
+syn keyword uioneKeyword   require permission clear create readers when add remove to has of limit for by on component order each per where from table form confirm hint
+syn keyword uioneKeyword   hero section menu link markdown at
+" each change of issue: change is the language's own record of an entity's changes,
+" a type, as text is.
+syn match   uioneType      "\<change\>\ze\s\+of\>"
+" history only in an entity's header: entity issue history {.
+syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<history\>"
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite
 syn keyword uioneStatement if else return
-syn keyword uioneModifier  required unique after key
+" A field's rules, only in an entity's block; elsewhere these words are names, like a
+" column called after.
+syn keyword uioneModifier  contained required unique after key
 " public is a view's modifier, before its block or when, and otherwise a choice's
 " name, as in visibility enum public | private, which stays plain.
 syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$\|when\>\)\)\@=/
@@ -68,6 +72,21 @@ syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|seri
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
 syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\|enum\)\>"
+
+" A name given a value with =, like title = issue.title in a view or status =
+" status::closed in a command: the field it sets.
+syn match uioneAssigned "\%(\.\|\w\)\@<!\<\h\w*\ze\s*=\%(=\)\@!"
+" What follows a dot is a field of what's before it, like title in issue.title, even
+" a word that's a keyword elsewhere. Starting at the dot, it comes before any keyword.
+syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
+
+" A project's block: its settings, each a word at the start of its line, and its
+" environments, whose blocks hold settings too. Elsewhere those words are names, like
+" a column called title.
+syn cluster uioneProjectItems contains=uioneSetting,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
+syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
+syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|authentication\|icon\|serve\|redirect\|title\|one\|analytics\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite
@@ -104,6 +123,8 @@ hi def link uionePattern     Special
 hi def link uioneKeyword     Statement
 hi def link uioneStatement   Statement
 hi def link uioneModifier    StorageClass
+hi def link uioneSetting     Statement
+hi def link uioneAssigned    Identifier
 hi def link uioneType        Type
 hi def link uioneUserType    Type
 hi def link uioneFieldName   Identifier

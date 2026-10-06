@@ -44,6 +44,7 @@ const vimGroups = {
   uioneParam: "param", uioneString: "string", uioneInterpDelim: "interp",
   uioneInterp: "plain", uioneFieldName: "variable", uioneUserType: "type", uioneFieldWord: "keyword",
   uioneFields: "plain", uioneMember: "plain", uioneListOf: "type", uioneListType: "type", "": "plain",
+  uioneSetting: "keyword", uioneAssigned: "variable", uioneDotted: "plain", uioneProject: "plain", uioneProjectBraces: "plain", uioneProjectBrace: "plain",
 };
 
 function vim(file, specs) {
