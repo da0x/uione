@@ -115,6 +115,8 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Actions: ({ children }) => <div>{children}</div>,
+
   Thread: ({ status, entries }) =>
     status !== "live" || entries.length === 0 ? (
       <p>{status === "loading" ? "Loading…" : "Nothing here yet."}</p>

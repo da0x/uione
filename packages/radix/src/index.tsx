@@ -570,6 +570,9 @@ export const radix: ComponentSet = {
     </aside>
   ),
 
+  // Buttons in a row; while none of them applies, the row takes no room.
+  Actions: ({ children }) => <div className="flex flex-wrap items-center gap-2 empty:hidden">{children}</div>,
+
   // A conversation: each entry beside its author's picture, headed by their name
   // and when they wrote it.
   Thread: ({ status, entries }) =>

@@ -118,6 +118,12 @@ export function Markdown({ view, field }: { view: ViewState; field: string }) {
   return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} />;
 }
 
+// Buttons one after another, in a row.
+export function Actions({ children }: { children: ReactNode }) {
+  const ui = useUI();
+  return <ui.Actions>{children}</ui.Actions>;
+}
+
 // When something was written or changed, with the time of day, as a thread or a
 // timeline says it.
 function when(value: unknown): string {

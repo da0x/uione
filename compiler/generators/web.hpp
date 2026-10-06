@@ -815,8 +815,33 @@ namespace one::generators {
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
                           const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
                           std::size_t first = 0) {
+            // Buttons one after another sit in a row: a command's own, and a form's that
+            // opens it. A command's line whose form draws its button is passed over.
+            auto presses = [&](const language::screen_item& it) {
+                if (auto* b = std::get_if<language::button_item>(&it.node)) return !has_form_for(screen, b->command);
+                if (auto* f = std::get_if<language::form_item>(&it.node)) return button_for(screen, f->commands.front()) != nullptr;
+                return false;
+            };
+            auto passed = [&](const language::screen_item& it) {
+                auto* b = std::get_if<language::button_item>(&it.node);
+                return b && has_form_for(screen, b->command);
+            };
+            bool in_row = false;
             for (std::size_t at = first; at < items.size(); ++at) {
                 const auto& item = items[at];
+                if (in_row && !presses(item) && !passed(item)) {
+                    out.close("</Actions>");
+                    in_row = false;
+                }
+                if (!in_row && presses(item)) {
+                    std::size_t run = 0;
+                    for (std::size_t next = at; next < items.size() && (presses(items[next]) || passed(items[next])); ++next) run += presses(items[next]);
+                    if (run > 1) {
+                        parts.components.insert("Actions");
+                        out.open("<Actions>");
+                        in_row = true;
+                    }
+                }
                 auto from_item = out.from(screen_path_, item.where.line);
                 item_line_ = item.where.line;
                 // A menu's links go down the side, with everything after it beside them.
@@ -888,6 +913,7 @@ namespace one::generators {
                     out.line("<" + tag + " />");
                 }
             }
+            if (in_row) out.close("</Actions>");
         }
 
         void content(stream& out, screen_parts& parts, const std::string& ns, const language::content_text& text) {

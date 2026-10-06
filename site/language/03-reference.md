@@ -563,6 +563,8 @@ screen "Book" /books/:book {
   of issue`, one sentence each: "Ada created this", "Grace changed status from open
   to closed". Its rows need `field`, `before`, `after` and `created_at`, and name
   who made each change with `created_by.name`.
+- Buttons one after another on a screen sit together in a row, a command's own and
+  the ones that open forms alike.
 - A button says what it does when its line names it: `issue::create "New issue"`
   opens the form, and `issue::close "Close issue"` runs the command. Without a
   name, it's named after its command, like Close.

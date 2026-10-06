@@ -397,6 +397,37 @@ TEST_CASE("a button says what it does, and shows only while its when holds") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("buttons one after another sit in a row") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-actions";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity issue {\n\ttitle  text\n\tstatus  enum  open | closed = status::open\n}\n"
+                         "command issue::update\n"
+                         "command issue::close {\n\tstatus = status::closed\n}\n"
+                         "command issue::reopen {\n\tstatus = status::open\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tstatus = issue.status\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n"
+                         "\tissue::update \"Edit\"\n\tform issue::update {\n\t\ttitle\n\t}\n\tissue::close\n\tissue::reopen\n"
+                         "\ttext \"{issue_page.title}\"\n\tissue::close\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    std::size_t row = tsx.find("<Actions>");
+    REQUIRE(row != std::string::npos);
+    std::size_t end = tsx.find("</Actions>", row);
+    REQUIRE(end != std::string::npos);
+    std::string inside = tsx.substr(row, end - row);
+    CHECK(inside.find("<Form command=\"tracker::issue::update\"") != std::string::npos);
+    CHECK(inside.find("<Command name=\"tracker::issue::reopen\"") != std::string::npos);
+    CHECK(tsx.find("<Actions>", end) == std::string::npos);  // a button alone isn't in a row
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a command's button on its entity's page acts on that entity") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-command-button";

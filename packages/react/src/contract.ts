@@ -78,6 +78,11 @@ export interface TimelineProps {
   entries: TimelineEntry[];
 }
 
+// Buttons that sit together in a row, like Edit and Close issue.
+export interface ActionsProps {
+  children: ReactNode;
+}
+
 export interface HeroProps {
   title: string;
   children: ReactNode;
@@ -223,6 +228,7 @@ export interface ComponentSet {
   Timeline: ComponentType<TimelineProps>;
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;
+  Actions: ComponentType<ActionsProps>;
   Dialog: ComponentType<DialogProps>;
   Live: ComponentType<LiveProps>;
   Markdown: ComponentType<MarkdownProps>;
