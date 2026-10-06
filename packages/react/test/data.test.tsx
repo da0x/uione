@@ -339,6 +339,11 @@ describe("a web address in a table", () => {
   it("keeps a short address whole, and a long one's host and end", () => {
     expect(shortAddress("https://neotrac.org/")).toBe("neotrac.org");
     expect(shortAddress("https://example.com/a/very/long/path/that/goes/on/and/on/to/the/end.html")).toBe("example.com/…/on/and/on/to/the/end.html");
+    // A build's log: its project, after the ?, isn't shown, and its id is too long to.
+    expect(shortAddress("https://console.cloud.google.com/cloud-build/builds;region=us-east4/7877c18a-a4d3-4c35-a91d-79ba1b2859e5?project=39906949747")).toBe(
+      "console.cloud.google.com/…",
+    );
+    expect(shortAddress("https://neotrac.org/projects?sort=name#top")).toBe("neotrac.org/projects");
   });
 });
 

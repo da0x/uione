@@ -26,18 +26,22 @@ function sameSite(to: string): boolean {
   }
 }
 
-// A web address as a table shows it: its host and path, without the scheme, and
-// shortened in the middle when it's long, at a slash, like
-// console.cloud.google.com/…/builds/a2d3.
+// A web address as a table shows it: its host and path, without the scheme or what
+// follows a ? or #, and shortened in the middle when it's long, at a slash, like
+// example.com/…/on/to/the/end.html, or to its site, like console.cloud.google.com/…,
+// when its last part is too long to show whole.
 export function shortAddress(address: string, most = 42): string {
-  const plain = address.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+  // What's after a ? or # says how to show the page, not which page it is.
+  const plain = address.replace(/^https?:\/\//i, "").replace(/[?#].*$/, "").replace(/\/$/, "");
   if (plain.length <= most) return plain;
-  const host = plain.split("/")[0];
+  const host = plain.split("/")[0]!;
   let tail = plain.slice(-Math.max(8, most - host.length - 3));
-  // From a whole path segment, so no part of a name is shown cut.
+  // From a whole path segment, so no part of a name is shown cut; with none that
+  // fits, the site alone says where it goes.
   const slash = tail.indexOf("/");
-  if (slash > 0) tail = tail.slice(slash);
-  return host.length + tail.length + 2 >= plain.length ? plain : `${host}/…${tail.startsWith("/") ? "" : "/"}${tail}`;
+  if (slash < 0) return `${host}/…`;
+  tail = tail.slice(slash);
+  return host.length + tail.length + 2 >= plain.length ? plain : `${host}/…${tail}`;
 }
 
 export function useLinks(): (to: string) => LinkProps {
