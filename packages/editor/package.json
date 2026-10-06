@@ -1,6 +1,6 @@
 {
   "name": "@uione/editor",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "An editor for .one files, on CodeMirror: highlighting from uione's grammar, the compiler's problems as you type, tabs as wide as the reader likes, and the code each line becomes, side by side.",
   "license": "AGPL-3.0-only",
   "author": "Daher Alfawares",
@@ -47,7 +47,7 @@
     "shiki": "^4.4.3"
   },
   "peerDependencies": {
-    "@uione/compiler": "^0.6.4",
+    "@uione/compiler": "^0.6.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
@@ -55,7 +55,7 @@
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@uione/compiler": "0.6.4",
+    "@uione/compiler": "0.6.5",
     "jsdom": "^26.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

@@ -23,9 +23,9 @@ screen "uione" / {
 	}
 
 	section "Install" {
-		text "uione 0.6.4 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://www.uione.io/install.sh | sh"
+		text "uione 0.6.5 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://www.uione.io/install.sh | sh"
 		link namespace install "Install"
-		link namespace releases "What's new in 0.6.4"
+		link namespace releases "What's new in 0.6.5"
 	}
 
 	section "Free software" {
