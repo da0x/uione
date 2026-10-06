@@ -154,12 +154,13 @@ export function Confirm({ command, question }: { command: string; question: stri
   return null;
 }
 
-// A button that runs a command on its own, with nothing to fill in.
-export function Command({ name }: { name: string }) {
+// A button that runs a command on its own, with nothing to fill in, on the entity
+// with that id when it acts on one.
+export function Command({ name, id }: { name: string; id?: string }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
   return (
-    <ui.Button kind="primary" disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name)}>
+    <ui.Button kind="primary" disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
       {label(action(name))}
     </ui.Button>
   );

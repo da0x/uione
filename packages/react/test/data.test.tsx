@@ -207,6 +207,13 @@ describe("when something fails, the person is told", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("you can't restock the shelf");
   });
 
+  it("runs a command on the entity it's given", async () => {
+    const source = memorySource();
+    renderScreen(source, () => <Command name="tracker::issue::close" id="uione-12" />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(source.runs).toEqual([{ command: "tracker::issue::close", input: { id: "uione-12" } }]));
+  });
+
   it("shows why an action on a table row failed", async () => {
     const source = memorySource({
       views: { "library::shelf": { rows: [{ id: "b1", title: "Dune", author: "Herbert" }] } },

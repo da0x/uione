@@ -758,7 +758,16 @@ namespace one::generators {
                 } else if (auto* button = std::get_if<language::button_item>(&item.node)) {
                     if (has_form_for(screen, button->command)) continue;  // the form draws its own button
                     parts.components.insert("Command");
-                    out.line("<Command name=" + web_detail::js_string(full_command(ns, button->command)) + " />");
+                    // A command on the entity the page's address names, like closing the
+                    // issue at /projects/:project/issues/:issue, acts on that one.
+                    std::string command = full_command(ns, button->command);
+                    std::string id;
+                    const language::entity_declaration* entity = entity_of_command(command);
+                    if (entity && command.substr(command.rfind("::") + 2) != "create" && names_parameter(route_, entity->name) && entity_named(ns, entity->name)) {
+                        parts.params.insert(entity->name);
+                        id = " id={" + web_detail::js_name(entity->name + "_id") + "}";
+                    }
+                    out.line("<Command name=" + web_detail::js_string(command) + id + " />");
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";

@@ -342,6 +342,29 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
 }
 
+TEST_CASE("a command's button on its entity's page acts on that entity") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-command-button";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity project {\n\tslug  text  required  key\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n"
+                         "\tstatus  enum  open | closed = status::open\n}\n"
+                         "command issue::close {\n\tstatus = status::closed\n}\n"
+                         "command project::create\n"
+                         "screen \"Issue\" /projects/:project/issues/:issue {\n\tissue::close\n}\n"
+                         "screen \"Projects\" /projects {\n\tproject::create\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(const issueId = keyOf([useParam("project"), useParam("issue")]);)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Command name="tracker::issue::close" id={issueId} />)") != std::string::npos);
+    CHECK(screens->content.find(R"(<Command name="tracker::project::create" />)") != std::string::npos);  // nothing to act on yet
+    fs::remove_all(dir);
+}
+
 TEST_CASE("an app offers the ways of signing in its project names, in its order, and only those") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-authentication";
