@@ -1195,6 +1195,12 @@ namespace one::language {
         // A table shows a view's rows, so each column is either something the rows
         // hold or a command on the row's entity, like withdraw. A row holds exactly
         // what its view's block lists, so a view never sends a field by accident.
+        // The entity a view's list is of, like issue in each issue where ...
+        const entity_declaration* listed_entity(const std::string& ns, const view_each& each) {
+            auto* source = std::get_if<name_expression>(&each.source->node);
+            return source ? find_entity(ns, source->name) : nullptr;
+        }
+
         void verify_column(const std::string& ns, const view_each& each, const std::string& view_name,
                            const table_column& column) {
             std::string key = written(*column.value);
@@ -1272,6 +1278,18 @@ namespace one::language {
                         if (list) verify_column(ns, *list, table->view.text(), column);
                     }
                     if (view) verify_shown(*view, table->view.text(), route, table->view.where);
+                    // Tabs by a choice the table shows, like status: one for each of its choices.
+                    if (table->by) {
+                        bool shown = false;
+                        for (const auto& column : table->columns) shown = shown || written(*column.value) == *table->by;
+                        const entity_declaration* rows_of = list ? listed_entity(ns, *list) : nullptr;
+                        const field* chosen = rows_of ? find_field(*rows_of, *table->by) : nullptr;
+                        if (!shown) {
+                            error(table->by_where, "the table's tabs are by " + *table->by + ", which it needs as a column too");
+                        } else if (!chosen || chosen->choices.empty()) {
+                            error(table->by_where, "a table's tabs are by a field with choices, like status, and " + *table->by + " isn't one");
+                        }
+                    }
                     if (table->link) {
                         // The last :parameter is the row's own; any before it come from this
                         // screen's address, like the project in /projects/:project/issues/:issue.

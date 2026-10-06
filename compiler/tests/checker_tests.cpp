@@ -800,3 +800,13 @@ TEST_CASE("a thread shows who wrote what, and a timeline an entity's changes") {
     CHECK(only_error(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.replies\n}\n}\n").message ==
           "view issue_page has no list called replies");
 }
+
+TEST_CASE("a table's tabs are by a choice it shows") {
+    const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\tstatus  enum  open | closed = status::open\n}\n"
+                              "view issues {\n\teach issue {\n\t\ttitle  status\n\t}\n}\n";
+    CHECK(check_source(start + "screen \"Issues\" /issues {\n\ttable issues by status {\n\t\ttitle\n\t\tstatus\n\t}\n}\n}\n").empty());
+    CHECK(only_error(start + "screen \"Issues\" /issues {\n\ttable issues by status {\n\t\ttitle\n\t}\n}\n}\n").message ==
+          "the table's tabs are by status, which it needs as a column too");
+    CHECK(only_error(start + "screen \"Issues\" /issues {\n\ttable issues by title {\n\t\ttitle\n\t\tstatus\n\t}\n}\n}\n").message ==
+          "a table's tabs are by a field with choices, like status, and title isn't one");
+}

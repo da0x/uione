@@ -710,3 +710,28 @@ describe("threads and timelines", () => {
     expect(screen.getByText(/Ada created this/)).toBeTruthy();
   });
 });
+
+describe("a table's tabs and labels", () => {
+  it("shows the rows of one choice at a time, each tab with its count, and a list of words as labels", () => {
+    const view = {
+      status: "live" as const,
+      data: {
+        issues: [
+          { id: "1", title: "Tabs too wide", status: "open", labels: ["phone", "editor"] },
+          { id: "2", title: "Hover is empty", status: "open", labels: [] },
+          { id: "3", title: "Old bug", status: "closed", labels: ["bug"] },
+        ],
+      },
+    };
+    renderScreen(memorySource(), () => (
+      <Table view={view} list="issues" columns={{ title: "Title", labels: "Labels" }} labels={["labels"]} by="status" choices={{ status: { open: "Open", closed: "Closed" } }} />
+    ));
+    expect(screen.getByRole("tab", { name: "Open 2" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("Tabs too wide")).toBeTruthy();
+    expect(screen.queryByText("Old bug")).toBeNull();
+    expect(screen.getByText("phone, editor")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Closed 1" }));
+    expect(screen.getByText("Old bug")).toBeTruthy();
+    expect(screen.queryByText("Tabs too wide")).toBeNull();
+  });
+});

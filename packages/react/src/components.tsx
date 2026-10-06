@@ -292,6 +292,8 @@ export function Table({
   keyed,
   pictures = [],
   choices = {},
+  labels = [],
+  by,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -301,12 +303,27 @@ export function Table({
   keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
   pictures?: string[];
   choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
+  labels?: string[]; // columns holding a list of words, each shown on its own, like an issue's labels
+  by?: string; // a choice column whose choices are tabs, each showing the rows that have it
 }) {
   const ui = useUI();
   const auth = useAuth();
   const links = useLinks();
   const params = useParams();
-  const rows = rowsOf(view.data?.[list]);
+  const all = rowsOf(view.data?.[list]);
+  // With tabs, the first choice is shown first, like Open before Closed.
+  const options = by ? Object.keys(choices[by] ?? {}) : [];
+  const [picked, setPicked] = useState<string | undefined>();
+  const chosen = picked ?? options[0];
+  const rows = by && chosen !== undefined ? all.filter((row) => row[by] === chosen) : all;
+  const tabs = by
+    ? options.map((option) => ({
+        label: choices[by]?.[option] ?? option,
+        count: all.filter((row) => row[by] === option).length,
+        selected: option === chosen,
+        onSelect: () => setPicked(option),
+      }))
+    : undefined;
   const runner = useConfirmedRunner();
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
@@ -314,6 +331,7 @@ export function Table({
   return (
     <ui.Table
       status={view.status}
+      tabs={tabs}
       columns={Object.values(columns)}
       error={actions.map((name) => runner.error(name)).find((e) => e !== undefined)}
       rows={rows.map((row) => ({
@@ -323,6 +341,7 @@ export function Table({
           const value = row[key];
           const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
           if (shown !== undefined) return shown;
+          if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
           // A web address is a link, to wherever it is, shown shortened.
           if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
             return (

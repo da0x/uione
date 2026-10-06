@@ -957,6 +957,7 @@ namespace one::generators {
             std::string columns;
             std::string actions;
             std::string pictures;
+            std::string labels;
             std::string shown;  // a choice column's values, as they're shown
             const language::entity_declaration* entity = listed(ns, table.view.text(), table.list);
             for (const auto& column : table.columns) {
@@ -974,6 +975,12 @@ namespace one::generators {
                     if (auto command = row_command(ns, table.view.text(), table.list, key)) {
                         actions += (actions.empty() ? "" : ", ") + web_detail::js_string(*command);
                         continue;
+                    }
+                }
+                // A list of words, like an issue's labels, each shown on its own.
+                if (entity && key.find('.') == std::string::npos) {
+                    for (const auto& f : entity->fields) {
+                        if (f.name == key && f.list && f.type && f.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
                     }
                 }
                 if (entity && key.find('.') == std::string::npos) {
@@ -1006,6 +1013,8 @@ namespace one::generators {
             if (!actions.empty()) line += " actions={[" + actions + "]}";
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
+            if (!labels.empty()) line += " labels={[" + labels + "]}";
+            if (table.by) line += " by=" + web_detail::js_string(*table.by);
             out.line(line + " />");
         }
 

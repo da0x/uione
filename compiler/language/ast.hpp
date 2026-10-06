@@ -286,6 +286,8 @@ namespace one::language {
         std::vector<table_column> columns;
         std::optional<std::string> link;  // the screen each row opens, like /books/:book
         location link_where;
+        std::optional<std::string> by;    // table project_page.issues by status: a tab for each of its choices
+        location by_where;
     };
 
     struct form_field {

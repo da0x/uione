@@ -656,6 +656,11 @@ namespace one::language {
                     advance();
                     table.list = expect(token_kind::identifier, "which of the view's lists, like comments").text;
                 }
+                if (at_word("by")) {
+                    advance();
+                    table.by_where = peek().where;
+                    table.by = expect(token_kind::identifier, "the choice its rows are sorted into tabs by, like status").text;
+                }
                 if (at_word("link")) {
                     advance();
                     table.link_where = peek().where;

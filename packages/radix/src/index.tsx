@@ -320,8 +320,26 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: ({ status, columns, rows, error }) => (
+  Table: ({ status, columns, rows, error, tabs }) => (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
+      {/* Its rows by a choice, like Open and Closed, each with how many there are. */}
+      {tabs && (
+        <div role="tablist" className="flex gap-1 border-b border-line px-2 pt-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.label}
+              type="button"
+              role="tab"
+              aria-selected={tab.selected}
+              onClick={tab.onSelect}
+              className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 pb-2 text-sm ${tab.selected ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
+            >
+              {tab.label}
+              <span className="rounded-full bg-sunken px-1.5 text-xs tabular-nums text-muted">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>
         <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
           <tr>
@@ -568,6 +586,17 @@ export const radix: ComponentSet = {
         </button>
       </div>
     </aside>
+  ),
+
+  // Each word a small chip, like an issue's labels.
+  Labels: ({ items }) => (
+    <span className="inline-flex flex-wrap gap-1">
+      {items.map((item) => (
+        <span key={item} className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs font-medium">
+          {item}
+        </span>
+      ))}
+    </span>
   ),
 
   // Buttons in a row; while none of them applies, the row takes no room.

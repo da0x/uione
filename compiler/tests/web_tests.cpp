@@ -190,6 +190,18 @@ TEST_CASE("a table shows the list of a view it names") {
           std::string::npos);
 }
 
+TEST_CASE("a project's issues are in tabs by their status, with their labels each on its own") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    std::size_t at = screens->content.find(R"(<Table view={projectPage} list="issues")");
+    REQUIRE(at != std::string::npos);
+    std::string line = screens->content.substr(at, screens->content.find('\n', at) - at);
+    CHECK(line.find(R"( labels={["labels"]})") != std::string::npos);
+    CHECK(line.find(R"( by="status")") != std::string::npos);
+    CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
+}
+
 TEST_CASE("an issue's comments are a thread, and its changes a timeline") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");

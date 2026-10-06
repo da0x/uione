@@ -145,6 +145,21 @@ export interface TableProps {
   columns: string[];
   rows: TableRow[];
   error?: string; // why the last action on a row failed
+  tabs?: TableTab[]; // its rows by one of their choices, like Open and Closed, one shown at a time
+}
+
+// One of a table's tabs: a choice, how many rows have it, and whether it's the one
+// shown.
+export interface TableTab {
+  label: string;
+  count: number;
+  selected: boolean;
+  onSelect: () => void;
+}
+
+// A few words, each on its own, like an issue's labels.
+export interface LabelsProps {
+  items: string[];
 }
 
 export interface FieldProps {
@@ -224,6 +239,7 @@ export interface ComponentSet {
   Pages: ComponentType<PagesProps>;
   Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
+  Labels: ComponentType<LabelsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;
   Form: ComponentType<FormProps>;

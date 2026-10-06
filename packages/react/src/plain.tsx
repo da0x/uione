@@ -117,6 +117,8 @@ export const plain: ComponentSet = {
 
   Actions: ({ children }) => <div>{children}</div>,
 
+  Labels: ({ items }) => <span>{items.join(", ")}</span>,
+
   Thread: ({ status, entries }) =>
     status !== "live" || entries.length === 0 ? (
       <p>{status === "loading" ? "Loading…" : "Nothing here yet."}</p>
@@ -219,10 +221,19 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error }) => {
+  Table: ({ status, columns, rows, error, tabs }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
+        {tabs && (
+          <div role="tablist">
+            {tabs.map((tab) => (
+              <button key={tab.label} type="button" role="tab" aria-selected={tab.selected} onClick={tab.onSelect}>
+                {tab.label} {tab.count}
+              </button>
+            ))}
+          </div>
+        )}
         <table aria-busy={status === "loading"}>
           <thead>
             <tr>

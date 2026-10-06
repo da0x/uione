@@ -198,7 +198,7 @@ namespace tracker {
 		form project::update {
 			name  repository  visibility
 		}
-		table project_page.issues link /issues/:issue {
+		table project_page.issues by status link /issues/:issue {
 			number "#"
 			title
 			status

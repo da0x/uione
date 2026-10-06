@@ -551,6 +551,11 @@ screen "Book" /books/:book {
   project in `/projects/:project/issues/:issue`, come from the screen's own address,
   or from the row when it holds them, like a list of one person's issues across
   projects.
+- `table project_page.issues by status` sorts the rows into tabs, one for each of
+  a choice's values, like Open and Closed, each with how many rows it has. The
+  first choice is shown first, and the table needs the choice as a column.
+- A column holding a list of words, like an issue's `labels`, shows each on its
+  own.
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks

@@ -99,9 +99,9 @@ if             ::= "if" expression block ("else" (if | block))?
 
 /* view */
 
-view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? view_line* "}" END
+view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
 view_line      ::= (NAME "=")? each
-                 | "readers" NAME ("." NAME)? END
+                 | "readers" NAME ("." NAME)+ END
                  | "public" "when" expression END
                  | NAME "=" expression END
 each           ::= "each" ("change" "of")? postfix ("where" expression)? ("{" NEWLINE? list_line* "}")? END
@@ -128,7 +128,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END
                  | ("text" | "code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
-                 | "table" qualified ("." NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
+                 | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | ("thread" | "timeline") qualified "." NAME END
