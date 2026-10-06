@@ -9,7 +9,7 @@ import type { ComponentType, ReactNode } from "react";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } from "react-router";
 import type { Analytics, ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
-import type { CommandInput, DataSource } from "./data.js";
+import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
 
 export interface ScreenInfo {
@@ -189,7 +189,7 @@ function Shell({
   const signIn = useSignIn();
   const [signOutError, setSignOutError] = useState<string | undefined>();
   useEffect(() => {
-    document.title = title === name ? name : `${title} · ${name}`;
+    document.title = !title || title === name ? name : `${title} · ${name}`;
   }, [title, name]);
   // The screens with a nav label, linked at their route without parameters, so
   // /docs/:page is listed as /docs. The current one is marked.
@@ -262,18 +262,39 @@ function routerPath(route: string): string {
 // another is the same page, as an editor keeps its place moving between files.
 function Page({ name, icon, screen: Body, screens }: { name: string; icon: string | undefined; screen: Screen; screens: Screen[] }) {
   const { pathname } = useLocation();
+  const [titled, setTitled] = useState<string | undefined>();
   const rest = restOf.exec(Body.info.route)?.[1];
   const taken = rest ? matchPath(routerPath(Body.info.route), pathname)?.params["*"] : undefined;
   const key = taken ? pathname.split("/").slice(0, -taken.split("/").length).join("/") : pathname;
   return (
-    <Shell name={name} icon={icon} title={Body.info.title} screens={screens}>
+    <Shell name={name} icon={icon} title={titled ?? Body.info.title} screens={screens}>
       <Rest.Provider value={rest}>
-        <Contained key={key}>
-          <Body />
-        </Contained>
+        <Titling.Provider value={setTitled}>
+          <Contained key={key}>
+            <Body />
+          </Contained>
+        </Titling.Provider>
       </Rest.Provider>
     </Shell>
   );
+}
+
+// A title made from what the page shows, like an issue's number and title: its
+// words, and each value as the view and field it's read from. Until every view it
+// reads has arrived, the page has no title, rather than a wrong one, and leaving
+// the page gives it back its own.
+export type TitlePart = string | readonly [ViewState, string];
+
+const Titling = createContext<(title: string | undefined) => void>(() => {});
+
+export function useTitle(parts: readonly TitlePart[]) {
+  const set = useContext(Titling);
+  const ready = parts.every((part) => typeof part === "string" || part[0].status === "live");
+  const title = ready ? parts.map((part) => (typeof part === "string" ? part : String(part[0].data?.[part[1]] ?? ""))).join("").trim() : "";
+  useEffect(() => {
+    set(title);
+    return () => set(undefined);
+  }, [set, title]);
 }
 
 // A screen that throws while it's drawn takes down only itself, so the navigation

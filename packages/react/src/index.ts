@@ -3,8 +3,8 @@
 
 // @uione/react: the runtime every uione screen is built on.
 
-export { App, screen, useSignIn } from "./app.js";
-export type { AppProps, Screen, ScreenInfo } from "./app.js";
+export { App, screen, useSignIn, useTitle } from "./app.js";
+export type { AppProps, Screen, ScreenInfo, TitlePart } from "./app.js";
 
 export { Code, Command, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Table, Text } from "./components.js";
 export type { DocPage, FieldSpec } from "./components.js";

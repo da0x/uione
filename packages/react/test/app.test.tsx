@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
-import { App, Form, Link, Text, memorySource, screen as defineScreen, show, useParam, useView } from "../src/index.js";
+import { App, Form, Link, Text, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
 import type { Person } from "../src/index.js";
 import { useConfirmContext } from "../src/app.js";
 import { withoutLicense } from "../src/components.js";
@@ -254,5 +254,22 @@ describe("counting visitors", () => {
     localStorage.clear();
     render(<App name="uione" screens={[home]} ui={plain} data={memorySource()} location="/" />);
     expect(screen.queryByRole("complementary", { name: "Counting visits" })).toBeNull();
+  });
+});
+
+describe("titles made from what a page shows", () => {
+  it("has none until its views arrive, then shows them, in the page and its tab", () => {
+    const source = memorySource();
+    const issue = defineScreen({ title: "", route: "/issues/:issue" }, () => {
+      const page = useView("tracker::issue_page", useParam("issue"));
+      useTitle(["#", [page, "number"], " ", [page, "title"]]);
+      return <Text>body</Text>;
+    });
+    render(<App name="tracker" screens={[issue]} ui={plain} data={source} location="/issues/12" />);
+    expect(document.title).toBe("tracker");
+    expect(screen.queryByRole("heading", { level: 1 })?.textContent ?? "").toBe("");
+    act(() => source.set("tracker::issue_page", { number: 12, title: "Tabs are too wide" }, "12"));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("#12 Tabs are too wide");
+    expect(document.title).toBe("#12 Tabs are too wide · tracker");
   });
 });

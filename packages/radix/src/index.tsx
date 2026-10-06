@@ -138,7 +138,7 @@ export const radix: ComponentSet = {
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
       <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-8 sm:pt-10" : "pt-5 sm:pt-6"}`}>
-        {title !== name && <h1 className="mb-8 text-[2rem] leading-tight font-semibold tracking-[-0.025em]">{title}</h1>}
+        {title !== name && <h1 className="mb-8 text-[2rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
         <div className="flex flex-col gap-10">{children}</div>
       </main>
     </div>

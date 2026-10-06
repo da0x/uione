@@ -766,3 +766,12 @@ TEST_CASE("a namespace's screens can be at another address") {
     auto e = only_error("namespace studio at / {\nscreen \"Projects\" / {\n\ttext \"a\"\n}\n}\nscreen \"Home\" / {\n\ttext \"b\"\n}\n");
     CHECK(e.message.starts_with("two screens are at /;"));
 }
+
+TEST_CASE("a screen's title can show a view the screen can read") {
+    CHECK(check_source("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+                       "screen \"{issue_page.title}\" /issues/:issue {\n\ttext \"hi\"\n}\n}\n")
+              .empty());
+    CHECK(only_error("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+                     "screen \"{issue_page.title}\" /issues {\n\ttext \"hi\"\n}\n}\n")
+              .message.starts_with("view issue_page has one document per issue, so the screen showing it needs :issue"));
+}

@@ -342,6 +342,27 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
 }
 
+TEST_CASE("a screen's title can show what the page does, once it's arrived") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-live-title";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity issue {\n\tnumber  number  key\n\ttitle  text\n}\n"
+                         "view issue_page per issue {\n\tnumber = issue.number\n\ttitle = issue.title\n}\n"
+                         "screen \"#{issue_page.number} {issue_page.title}\" /issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n"
+                         "screen \"Home\" / {\n\ttext \"hi\"\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(export const issues = screen({ title: "", route: "/tracker/issues/:issue" }, () => {)") != std::string::npos);
+    CHECK(tsx.find(R"(useTitle(["#", [issuePage, "number"], " ", [issuePage, "title"]]);)") != std::string::npos);
+    CHECK(tsx.find("import { Live, Text, screen, useParam, useTitle, useView }") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a command's button on its entity's page acts on that entity") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-command-button";

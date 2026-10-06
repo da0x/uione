@@ -1073,10 +1073,35 @@ namespace one::language {
                 }
             }
             screen_items(ns, s.items, full_route(ns, s.route));
+            // A title can show what the page does: screen "#{issue_page.number} {issue_page.title}".
+            if (!s.title_is_name) verify_live_text(ns, s.title, full_route(ns, s.route), where);
         }
 
         // A view per entity is shown for one entity at a time, the one the screen's
         // address names, so the screen needs that entity as a parameter of its route.
+        // Live values like {book_page.title}, in a text or a screen's title, each read a
+        // view the screen can show.
+        void verify_live_text(const std::string& ns, const std::string& text, const std::string& route, location where) {
+            for (std::size_t open = text.find('{'); open != std::string::npos; open = text.find('{', open + 1)) {
+                std::size_t close = text.find('}', open);
+                if (close == std::string::npos) break;
+                std::string inside = text.substr(open + 1, close - open - 1);
+                std::size_t dot = inside.rfind('.');
+                if (dot == std::string::npos) continue;
+                qualified_name name{{}, where};
+                std::string written = inside.substr(0, dot);
+                for (std::size_t at = 0;;) {
+                    std::size_t next = written.find("::", at);
+                    name.parts.push_back(written.substr(at, next == std::string::npos ? std::string::npos : next - at));
+                    if (next == std::string::npos) break;
+                    at = next + 2;
+                }
+                if (const view_declaration* view = find(ns, name, &scope::views)) {
+                    verify_shown(*view, name.text(), route, where);
+                }
+            }
+        }
+
         void verify_shown(const view_declaration& view, const std::string& view_name,
                           const std::string& route, location where) {
             if (!view.per || *view.per == "user") return;
@@ -1226,25 +1251,7 @@ namespace one::language {
                     this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
                            text && (text->type == content_text::kind::text || text->value.starts_with("{"))) {
-                    // A live value like {book_page.title} reads a view too.
-                    for (std::size_t open = text->value.find('{'); open != std::string::npos; open = text->value.find('{', open + 1)) {
-                        std::size_t close = text->value.find('}', open);
-                        if (close == std::string::npos) break;
-                        std::string inside = text->value.substr(open + 1, close - open - 1);
-                        std::size_t dot = inside.rfind('.');
-                        if (dot == std::string::npos) continue;
-                        qualified_name name{{}, item.where};
-                        std::string written = inside.substr(0, dot);
-                        for (std::size_t at = 0;;) {
-                            std::size_t next = written.find("::", at);
-                            name.parts.push_back(written.substr(at, next == std::string::npos ? std::string::npos : next - at));
-                            if (next == std::string::npos) break;
-                            at = next + 2;
-                        }
-                        if (const view_declaration* view = find(ns, name, &scope::views)) {
-                            verify_shown(*view, name.text(), route, item.where);
-                        }
-                    }
+                    verify_live_text(ns, text->value, route, item.where);
                 } else if (auto* form = std::get_if<form_item>(&item.node)) {
                     for (const auto& command : form->commands) verify_command_use(ns, command);
                     const entity_declaration* entity = find_command(ns, form->commands.front());

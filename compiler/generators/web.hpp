@@ -539,6 +539,14 @@ namespace one::generators {
                 items.close("</>");
 
                 std::string title = s->title_is_name ? web_detail::label(s->title) : s->title;
+                // A title that shows live values, like "#{issue_page.number} {issue_page.title}",
+                // is set by the screen once they've arrived; until then it has none.
+                std::string titling;
+                if (!s->title_is_name && title.find('{') != std::string::npos) {
+                    titling = "useTitle([" + title_parts(parts, ns, title) + "]);";
+                    components.insert("useTitle");
+                    title = "";
+                }
                 if (parts.optional_page && route.ends_with("/:page")) route += "?";
                 std::string info = "{ title: " + web_detail::js_string(title) + ", route: " + web_detail::js_string(route);
                 // A screen that needs a parameter, like /books/:book, opens from a link to
@@ -556,7 +564,16 @@ namespace one::generators {
                 // like two titled after the app, after the last word of its address
                 // (/:project/settings/deployments gives deployments). A name another
                 // file's screen already has is numbered.
-                std::string name = web_detail::js_name(found.size() == 1 ? stem : s->title);
+                // A title made of live values names nothing, so its screen is named after
+                // its address instead.
+                std::string word_of_route = stem;
+                for (std::size_t start = 0; start < route.size();) {
+                    std::size_t end = route.find('/', start + 1);
+                    std::string part = route.substr(start + 1, end == std::string::npos ? std::string::npos : end - start - 1);
+                    if (!part.empty() && part[0] != ':') word_of_route = part;
+                    start = end == std::string::npos ? route.size() : end;
+                }
+                std::string name = web_detail::js_name(found.size() == 1 ? stem : titling.empty() ? s->title : word_of_route);
                 bool shared = std::count_if(found.begin(), found.end(), [&](const found_screen& other) {
                                   return other.screen->title == s->title;
                               }) > 1;
@@ -614,6 +631,7 @@ namespace one::generators {
                         bodies.line("const " + variable + " = useView(" + web_detail::js_string(view) +
                                     (per ? ", " + web_detail::js_name(*per + "_id") : std::string()) + ");");
                     }
+                    if (!titling.empty()) bodies.line(titling);
                     bodies.open("return (");
                     bodies.embed(items);
                     bodies.close(");");
@@ -652,6 +670,33 @@ namespace one::generators {
             std::string variable = web_detail::js_name(full.substr(full.rfind(':') == std::string::npos ? 0 : full.rfind(':') + 1));
             parts.views.emplace_back(variable, full);
             return variable;
+        }
+
+        // A title with {view.field} in it, as useTitle takes it: the plain parts as
+        // strings, and each value as the view it's read from and its field.
+        std::string title_parts(screen_parts& parts, const std::string& ns, std::string_view text) {
+            std::string out;
+            auto add = [&](const std::string& part) { out += (out.empty() ? "" : ", ") + part; };
+            std::size_t at = 0;
+            while (at < text.size()) {
+                std::size_t open = text.find('{', at);
+                std::size_t close = open == std::string_view::npos ? open : text.find('}', open);
+                if (close == std::string_view::npos) {
+                    add(web_detail::js_string(text.substr(at)));
+                    break;
+                }
+                if (open > at) add(web_detail::js_string(text.substr(at, open - at)));
+                std::string_view value = text.substr(open + 1, close - open - 1);
+                std::size_t dot = value.rfind('.');
+                if (dot == std::string_view::npos) {
+                    add(web_detail::js_string(text.substr(open, close - open + 1)));
+                } else {
+                    std::string view = full_view(ns, std::string(value.substr(0, dot)));
+                    add("[" + view_variable(parts, view) + ", " + web_detail::js_string(value.substr(dot + 1)) + "]");
+                }
+                at = close + 1;
+            }
+            return out;
         }
 
         // Text with {view.field} in it: the plain parts as they are, and each value as
