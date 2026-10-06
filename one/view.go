@@ -1011,6 +1011,11 @@ func (v *ViewSpec) definition() string {
 	return hex.EncodeToString(sum[:])
 }
 
+// composing changes whenever how views are put together changes in a way their
+// stored documents need rebuilding for, like building a new view per entity for the
+// entities already stored.
+const composing = "2"
+
 // rebuildChanged rebuilds the stored documents of every view whose definition
 // changed since the backend last started, as when a deploy adds a field to a view,
 // so they hold what it shows now rather than waiting for something they show to
@@ -1021,7 +1026,9 @@ func (a *App) rebuildChanged(ctx context.Context) error {
 		if !v.keyed() {
 			continue // composed afresh at every start already
 		}
-		definition := v.definition()
+		// What's recorded is the view's definition and how this library puts views
+		// together, so a fix to that rebuilds every view once too.
+		definition := v.definition() + " " + composing
 		kept := a.store.Collection("view_definitions").Doc(strings.ReplaceAll(v.full, "/", "_"))
 		snap, err := kept.Get(ctx)
 		if err != nil && status.Code(err) != codes.NotFound {
@@ -1034,9 +1041,26 @@ func (a *App) rebuildChanged(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		version := time.Now().UnixNano()
+		// Each document there is, and for a view per entity, one for every entity of
+		// that kind already stored: a view that's new, or newly reads something, has
+		// a document for each from the start, not only once one changes.
+		subjects := map[string]bool{}
 		for _, doc := range docs {
-			subject := strings.TrimPrefix(doc.Ref.ID, v.full+":")
+			subjects[strings.TrimPrefix(doc.Ref.ID, v.full+":")] = true
+		}
+		if v.per != nil {
+			if schema, ok := a.reg.schemas[v.per]; ok {
+				refs, err := a.store.Collection(schema.collection).DocumentRefs(ctx).GetAll()
+				if err != nil {
+					return err
+				}
+				for _, ref := range refs {
+					subjects[ref.ID] = true
+				}
+			}
+		}
+		version := time.Now().UnixNano()
+		for subject := range subjects {
 			data, err := a.compose(ctx, v, subject)
 			if err != nil {
 				return err
@@ -1045,7 +1069,7 @@ func (a *App) rebuildChanged(ctx context.Context) error {
 				return err
 			}
 		}
-		if _, err := kept.Set(ctx, map[string]any{"definition": definition, "view": v.full, "rebuilt": len(docs), "at": time.Now()}); err != nil {
+		if _, err := kept.Set(ctx, map[string]any{"definition": definition, "view": v.full, "rebuilt": len(subjects), "at": time.Now()}); err != nil {
 			return err
 		}
 	}

@@ -16,7 +16,7 @@ import { releases } from "./screens/releases";
 // developing, both are the local emulators. A production build uses the real
 // project, with the settings the deploy writes to .env.production.
 const local = {
-  config: { projectId: "demo-uione", apiKey: "demo" },
+  config: { projectId: "demo-uione", apiKey: "demo", authDomain: "demo-uione.firebaseapp.com" },
   emulators: { firestore: "localhost:8080", auth: "localhost:9099" },
 };
 const cloud = {

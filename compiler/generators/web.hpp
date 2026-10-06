@@ -1083,7 +1083,9 @@ namespace one::generators {
             out.line("// developing, both are the local emulators. A production build uses the real");
             out.line("// project, with the settings the deploy writes to .env.production.");
             out.open("const local = {");
-            out.line("config: { projectId: \"demo-uione\", apiKey: \"demo\" },");
+            // Signing in opens a window, which Firebase only does with an auth domain,
+            // even with the emulator answering in its place.
+            out.line("config: { projectId: \"demo-uione\", apiKey: \"demo\", authDomain: \"demo-uione.firebaseapp.com\" },");
             out.line("emulators: { firestore: \"localhost:8080\", auth: \"localhost:9099\" },");
             out.close("};");
             out.open("const cloud = {");

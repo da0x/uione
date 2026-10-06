@@ -61,3 +61,28 @@ func TestAViewWhoseDefinitionChangedIsRebuiltWhenTheBackendStarts(t *testing.T) 
 		t.Errorf("the changed view rebuilt %v documents, not 1", kept.Data()["rebuilt"])
 	}
 }
+
+// studio, as a later deploy has it: with a view per project it didn't have before.
+func studioWithCards() one.Item {
+	return one.Module("studio",
+		one.Command[Project]("project::create").Allow(one.Authenticated),
+		one.View("card").Per(one.Entity[Project]()).Public().Copy("name", "name"),
+	)
+}
+
+func TestANewViewPerEntityHasADocumentForEachOneStoredAlready(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("ada@example.com")
+	id := h.mustRun("studio/project/create", token, map[string]any{"name": "neotrac"})
+
+	// The project was made before there was a card for it; the next backend makes
+	// its card when it starts, rather than when the project next changes.
+	next, err := one.New(context.Background(), studioWithCards())
+	if err != nil {
+		t.Fatal(err)
+	}
+	next.Close()
+	if card := h.view("studio::card:" + id); card["name"] != "neotrac" {
+		t.Fatalf("the new view's document for a project already there is %v", card)
+	}
+}
