@@ -337,7 +337,7 @@ export function Form({
   submit: says,
   opener,
   when = true,
-  allowed = true,
+  allowed,
   authenticated = false,
 }: {
   command: string;
@@ -349,7 +349,7 @@ export function Form({
   submit?: string; // what its button says, rather than the command's name, like Save changes
   opener?: string; // what the button that opens it says, like New issue, when that's not its submit
   when?: boolean; // whether it applies now; while it doesn't, neither it nor its button is there
-  allowed?: boolean; // whether the person reading, once signed in, may send it; while they may not, it isn't there
+  allowed?: boolean; // whether the person reading may send it, when only some people may; while they may not, it isn't there
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
 }) {
   const ui = useUI();
@@ -413,6 +413,9 @@ export function Form({
   // Someone signed out is asked to sign in, rather than shown what they couldn't
   // send; while it isn't known yet whether they are, nothing is shown.
   if (!when) return null;
+  // Someone signed out is asked to sign in only for what anyone signed in may do;
+  // what takes a role, signing in wouldn't let them do.
+  if (allowed !== undefined && !auth?.person) return null;
   if (authenticated && auth && !auth.person) {
     if (auth.person === undefined) return null;
     return (
@@ -421,7 +424,7 @@ export function Form({
       </ui.Button>
     );
   }
-  if (!allowed) return null;
+  if (allowed === false) return null;
   if (!button) return form;
   return (
     <>

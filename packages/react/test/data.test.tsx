@@ -634,6 +634,17 @@ describe("what needs someone signed in", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Sign in" })).toBeNull());
   });
 
+  it("doesn't ask someone signed out to sign in for what takes a role", () => {
+    renderScreen(memorySource({ person: null }), () => (
+      <>
+        <Form command="tracker::issue::update" fields={["title"]} button authenticated allowed={false} />
+        <Form command="tracker::project::create" fields={["name"]} button authenticated />
+      </>
+    ));
+    expect(screen.queryByRole("button", { name: /update/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign in to create" })).toBeTruthy();
+  });
+
   it("shows a form anyone may send to everyone", () => {
     renderScreen(memorySource({ person: null }), () => <Form command="waitlist::signup::create" fields={["email"]} />);
     expect(screen.getByLabelText("Email")).toBeTruthy();
