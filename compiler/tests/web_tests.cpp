@@ -575,6 +575,7 @@ view issue_page per issue {
 }
 screen "Issue" /:project/issues/:issue {
 	issue::move along project_page.steps
+	copy issue_page
 }
 screen "Steps" /:project/steps {
 	step::create "New step"
@@ -592,6 +593,8 @@ screen "Steps" /:project/steps {
     CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
     CHECK(tsx.find(R"({ name: "from", type: "choice", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
     CHECK(tsx.find(R"({ name: "roles", type: "choices", choices: listChoices(projectPage, "roles", "title") })") != std::string::npos);
+    // Copying an issue leaves out its phase's id, which means nothing pasted.
+    CHECK(tsx.find(R"(<Copy view={issuePage} fields={[]})") != std::string::npos);
 }
 
 TEST_CASE("a project's theme and corners are on its page from the first paint") {

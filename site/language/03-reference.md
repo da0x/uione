@@ -519,7 +519,8 @@ view project_page per project {
 - `order by` goes inside the list it sorts. Each key is `ascending`, which it is
   unless it says, or `descending`, newest or largest first:
   `order by done  created_at descending` puts the ones not done first, and the newest
-  first within each.
+  first within each. A key can be a field of what each row points at, like
+  `order by from.position`, when the list shows it too.
 - A view has at most one list without a name, its rows. Any others have names,
   like `loans = each loan ...`, so one page can hold a book's details and several
   lists that belong to it. Each item in a list is its own entity, so a long list

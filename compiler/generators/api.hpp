@@ -731,7 +731,18 @@ namespace one::generators {
                     unsupported(path_, s.where, "a command that changes anything but its own fields and those of what it points at");
                     return;
                 }
-                auto value = expression(e, *a->value, me, target->second);
+                // start = phase::to_do, on a project: its own phase of that name.
+                std::optional<std::string> value;
+                const language::field* f = target->second;
+                auto* named = std::get_if<language::name_expression>(&a->value->node);
+                if (named && named->name.parts.size() == 2 && f && f->type && f->choices.empty()) {
+                    if (const language::entity_declaration* pointed_at = pkg_ ? entity(*pkg_, f->type->text()) : nullptr) {
+                        for (const auto& k : pointed_at->fields) {
+                            if (k.key && k.type && k.type->text() == e.name) value = "one.Key(" + me + ".ID, " + api_detail::go_string(named->name.parts[1]) + ")";
+                        }
+                    }
+                }
+                if (!value) value = expression(e, *a->value, me, f);
                 if (value) out.line(target->first + " = " + *value);
             } else if (auto* l = std::get_if<language::list_statement>(&s.node)) {
                 // add me to assignees, remove me from assignees.
@@ -1417,6 +1428,20 @@ namespace one::generators {
                             order.push_back("one.By(" + api_detail::go_string(arg->name.parts[0]) + ", " + api_detail::go_name(callee->name.text()) + ")");
                             continue;
                         }
+                    }
+                    // from.position: a field of what each row points at, which the
+                    // row holds too.
+                    if (std::holds_alternative<language::member_expression>(e->node)) {
+                        std::string through = web_detail::text_of(*e);
+                        bool shown = std::any_of(each.rows.begin(), each.rows.end(), [&](const language::view_value& row) {
+                            return !row.name && web_detail::text_of(*row.value) == through;
+                        });
+                        if (!shown) {
+                            unsupported(path_, key->where, "ordering by " + through + " without the rows holding it; add it to the list's block");
+                            return false;
+                        }
+                        order.push_back(api_detail::go_string((reverse ? "-" : "") + through));
+                        continue;
                     }
                     auto* n = std::get_if<language::name_expression>(&e->node);
                     if (!n || n->name.parts.size() != 1) {

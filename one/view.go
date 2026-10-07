@@ -730,7 +730,13 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 		}
 		return docs[i].Ref.ID < docs[j].Ref.ID
 	})
-	if len(l.order) > 0 {
+	// An order by a field of what each row points at, like from.position, sorts the
+	// rows once they're read through, so the limit comes after.
+	throughRows := false
+	for _, o := range l.order {
+		throughRows = throughRows || strings.Contains(o.field, ".")
+	}
+	if len(l.order) > 0 && !throughRows {
 		key := func(doc *firestore.DocumentSnapshot, o ordering) any {
 			stored := doc.Data()[o.field]
 			if o.through != nil {
@@ -747,7 +753,7 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 			return false
 		})
 	}
-	if l.limit > 0 && len(docs) > l.limit {
+	if l.limit > 0 && len(docs) > l.limit && !throughRows {
 		docs = docs[:l.limit]
 	}
 	each := a.reg.schemas[l.query.typ]
@@ -807,6 +813,23 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 			}
 		}
 		rows = append(rows, row)
+	}
+	if throughRows {
+		sort.SliceStable(rows, func(i, j int) bool {
+			for _, o := range l.order {
+				x, y := rows[i].(map[string]any)[o.field], rows[j].(map[string]any)[o.field]
+				if o.through != nil {
+					x, y = o.through(x), o.through(y)
+				}
+				if c := compare(x, y); c != 0 {
+					return (c < 0) != o.reverse
+				}
+			}
+			return false
+		})
+		if l.limit > 0 && len(rows) > l.limit {
+			rows = rows[:l.limit]
+		}
 	}
 	return rows, nil
 }

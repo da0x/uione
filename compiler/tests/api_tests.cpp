@@ -140,6 +140,7 @@ TEST_CASE("a project can start from a preset: what it makes when, named by name,
 entity crew {
 	slug      slug  required  unique  key
 	workflow  enum { simple  steady } = workflow::simple
+	start     stage
 }
 entity rank {
 	crew   crew  required  key
@@ -172,6 +173,13 @@ command crew::create {
 		create stage { crew = id  name = "todo" }
 		create stage { crew = id  name = "done" }
 		create leg { crew = id  from = stage::todo  to = stage::done  ranks = [rank::captain, rank::bosun] }
+		start = stage::todo
+	}
+}
+view legs per crew {
+	legs = each leg where crew == crew.id {
+		order by from.name  to.name descending
+		from.name  to.name
 	}
 }
 }
@@ -183,6 +191,8 @@ command crew::create {
     auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
     REQUIRE(found != generated.files.end());
     CHECK(found->content.find("if x.Workflow == WorkflowSteady {") != std::string::npos);
+    CHECK(found->content.find(R"(x.Start = one.Key(x.ID, "todo"))") != std::string::npos);
+    CHECK(found->content.find(R"(Order("from.name", "-to.name").)") != std::string::npos);
     CHECK(found->content.find(R"(&Rank{Crew: x.ID, Name: "bosun", Title: "Bosun", May: []string{"crew::create"}})") != std::string::npos);
     CHECK(found->content.find(R"(&Leg{Crew: x.ID, From: one.Key(x.ID, "todo"), To: one.Key(x.ID, "done"), Ranks: []string{one.Key(x.ID, "captain"), one.Key(x.ID, "bosun")}})") != std::string::npos);
 

@@ -1291,9 +1291,11 @@ namespace one::generators {
                     auto* member = std::get_if<language::member_expression>(&value.value->node);
                     if (const language::field* f = member && entity ? field_through(view_ns, entity, *member) : nullptr) {
                         if (f->type && f->type->text() == "markdown") kind = "markdown";
-                        // A person is held by their id, which means nothing pasted;
-                        // their name is a value of its own, like implementer.
+                        // A person, or another entity, is held by its id, which means
+                        // nothing pasted; its name or title is a value of its own, like
+                        // implementer or phase_title.
                         if (f->type && f->type->text() == "user") kind = "people";
+                        if (f->type && entities_.count(view_ns) && entities_[view_ns].count(f->type->text())) kind = "people";
                         // A choice as it's shown, like In progress.
                         if (!f->choices.empty()) {
                             shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) +

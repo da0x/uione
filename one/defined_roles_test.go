@@ -5,6 +5,7 @@ package one_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/da0x/uione/one"
@@ -66,6 +67,9 @@ var crews = one.Module("crew",
 	one.Command[Job]("job::update"),
 	one.Command[Stage]("stage::create"),
 	one.Command[Leg]("leg::create"),
+	// A crew's legs, in the order of the stages they leave from.
+	one.View("legs").Per(one.Entity[Crew]()).Public().
+		List("legs", one.Where[Leg]("crew", one.Subject)).Order("-from.name", "to.name").Fields("from.name", "to.name"),
 	// A job moves along a leg its mover's rank may take, from the stage it was in.
 	one.Command[Job]("job::move").Fields("stage").Do(func(c *one.Ctx, j *Job) error {
 		ok, err := one.Exists(c, one.Where[Leg]("from", c.Was("stage")).And("to", j.Stage), func(l *Leg) (bool, error) {
@@ -169,4 +173,23 @@ func TestAJobMovesOnlyAlongALegItsMoversRankMayTake(t *testing.T) {
 	h.expect("crew/job/move", token, map[string]any{"id": job, "stage": done}, 400, "your rank doesn't move a job from there to there")
 	h.expect("crew/job/move", token, map[string]any{"id": job, "title": "lower"}, 400, "Title can't be changed by job::move")
 	h.mustRun("crew/job/move", captain, map[string]any{"id": job, "stage": done})
+}
+
+func TestAListOrdersByAFieldOfWhatItsRowsPointAt(t *testing.T) {
+	h := start(t)
+	_, captain := h.signUp("jo@example.com")
+	h.mustRun("crew/crew/create", captain, map[string]any{"slug": "yawl"})
+	for _, stage := range []string{"a", "b", "c"} {
+		h.mustRun("crew/stage/create", captain, map[string]any{"crew": "yawl", "name": stage})
+	}
+	for _, leg := range [][2]string{{"a", "b"}, {"c", "a"}, {"b", "c"}, {"c", "b"}} {
+		h.mustRun("crew/leg/create", captain, map[string]any{"crew": "yawl", "from": one.Key("yawl", leg[0]), "to": one.Key("yawl", leg[1])})
+	}
+	var got []string
+	for _, row := range list(h.view("crew::legs:yawl"), "legs") {
+		got = append(got, row["from.name"].(string)+row["to.name"].(string))
+	}
+	if strings.Join(got, " ") != "ca cb bc ab" {
+		t.Errorf("legs by where they leave from, last first, then where they go: %v", got)
+	}
 }
