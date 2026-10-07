@@ -563,7 +563,7 @@ view project_page per project {
 		name  title
 	}
 	steps = each step where project == project.id {
-		from  to  title  to.title  roles
+		from  to  title  from.title  to.title  roles
 	}
 	roles = each role where project == project.id {
 		name  title
@@ -590,7 +590,7 @@ screen "Steps" /:project/steps {
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
+    CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" from="from.title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
     CHECK(tsx.find(R"({ name: "from", type: "choice", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
     CHECK(tsx.find(R"({ name: "roles", type: "choices", choices: listChoices(projectPage, "roles", "title") })") != std::string::npos);
     // Copying an issue leaves out its phase's id, which means nothing pasted.

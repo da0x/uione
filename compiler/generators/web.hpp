@@ -1144,6 +1144,7 @@ namespace one::generators {
                     std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
                     if (column == "title") line += " shown=\"title\"";
                     if (column == "to.title") line += " to=\"to.title\"";
+                    if (column == "from.title") line += " from=\"from.title\"";
                     for (const auto& held : held_) {
                         if (held.allows.empty() || held.ns != ns || !step || !names_parameter(route_, held.within)) continue;
                         for (const auto& f : step->fields) {

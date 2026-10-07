@@ -29,7 +29,16 @@ type Arrow struct {
 	To   string `firestore:"to" one:"refers=boards::column"`
 }
 
+// A lane of a board, keyed by its board and a name made from its title.
+type Lane struct {
+	one.Record
+	Board string `firestore:"board" one:"required,key"`
+	Name  string `firestore:"name" one:"required,key,from=title"`
+	Title string `firestore:"title" one:"required"`
+}
+
 var boards = one.Module("boards",
+	one.Command[Lane]("lane::create").Allow(one.Anyone),
 	one.Command[Column]("column::create").Allow(one.Anyone),
 	one.Command[Card]("card::create").Allow(one.Anyone),
 	one.Command[Arrow]("arrow::create").Allow(one.Anyone),
@@ -89,5 +98,21 @@ func TestADeleteMovesWhatsInItAndTakesWhatPointsAtItInTheSameStep(t *testing.T) 
 	docs, err := h.store.Collection("boards_column").Documents(t.Context()).GetAll()
 	if err != nil || len(docs) != 2 {
 		t.Fatalf("the columns left: %d, %v", len(docs), err)
+	}
+}
+
+func TestAKeyMadeFromATitleNamesANewOneAndIsntTakenTwice(t *testing.T) {
+	h := start(t)
+	if id := h.mustRun("boards/lane/create", "", map[string]any{"board": "b1", "title": "In review"}); id != "b1-in_review" {
+		t.Fatalf("the lane is %s, not b1-in_review", id)
+	}
+	// The same words, however they're written, aren't a second lane, nor this one again.
+	h.expect("boards/lane/create", "", map[string]any{"board": "b1", "title": "In  Review!"}, http.StatusBadRequest, "Title is already taken")
+	if title := h.stored("boards_lane", "b1-in_review")["title"]; title != "In review" {
+		t.Fatalf("the lane's title became %v", title)
+	}
+	// A name that's given is used as it is.
+	if id := h.mustRun("boards/lane/create", "", map[string]any{"board": "b1", "name": "done", "title": "Finished"}); id != "b1-done" {
+		t.Fatalf("the lane is %s, not b1-done", id)
 	}
 }

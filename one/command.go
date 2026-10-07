@@ -87,7 +87,7 @@ func create(c *Ctx, s *schema, v reflect.Value) error {
 			return err
 		}
 	}
-	s.start(v, c.me, username, c.now)
+	madeFrom := s.start(v, c.me, username, c.now)
 	s.normalize(v)
 	if err := s.validate(v); err != nil {
 		return err
@@ -106,6 +106,9 @@ func create(c *Ctx, s *schema, v reflect.Value) error {
 	if snap, err := c.tx.Get(ref); err == nil {
 		if taken := s.uniqueKey(); taken != nil {
 			return invalid("%s is already taken", label(taken.name))
+		}
+		if madeFrom != "" {
+			return invalid("%s is already taken", label(madeFrom))
 		}
 		if err := s.ownedByAnother(snap.Data(), c.me); err != nil {
 			return err
@@ -582,7 +585,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := s.decode(c.input, v); err != nil {
 				return err
 			}
-			s.start(v, c.me, username, now)
+			madeFrom := s.start(v, c.me, username, now)
 			s.normalize(v)
 			if within {
 				if err := a.permittedWithin(tx, c.me, permission, &owned{s, v}); err != nil {
@@ -620,6 +623,11 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if snap, err := tx.Get(ref); err == nil {
 				if taken := s.uniqueKey(); taken != nil {
 					return invalid("%s is already taken", label(taken.name))
+				}
+				// A key made from another field, like a phase's from its title, names
+				// a new one, so another already there isn't it made again.
+				if madeFrom != "" {
+					return invalid("%s is already taken", label(madeFrom))
 				}
 				if err := s.ownedByAnother(snap.Data(), c.me); err != nil {
 					return err

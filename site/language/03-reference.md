@@ -335,6 +335,11 @@ entity loan {
   command, `me.username` is their GitHub username, `now` is the time it runs, and
   `none` is no value. A field that starts as `me` or `me.username` always does, so
   nobody can make something in another's name.
+- `name  text  required  key = slug(title)` makes a name from another field when
+  none is given: a phase titled In review is named `in_review`, so a form asks only
+  for the title. The name is made once, so a rename changes only the title, and a
+  second phase whose title makes the same name is refused rather than taken for the
+  first.
 
 ## Built-in types
 

@@ -727,7 +727,22 @@ namespace one::language {
                 if (f.after && !find_field(e, *f.after)) {
                     error(f.where, "'after " + *f.after + "' names a field entity " + e.name + " doesn't have");
                 }
-                if (f.initial) {
+                // slug(title): a name made from another of its fields when none is
+                // given, like a phase's key from its title.
+                if (auto* call = f.initial ? std::get_if<call_expression>(&f.initial->node) : nullptr) {
+                    auto* callee = std::get_if<name_expression>(&call->callee->node);
+                    auto* from = call->arguments.size() == 1 ? std::get_if<name_expression>(&call->arguments[0]->node) : nullptr;
+                    const field* source = from && from->name.parts.size() == 1 ? find_field(e, from->name.parts[0]) : nullptr;
+                    if (!callee || callee->name.text() != "slug" || !from) {
+                        error(f.initial->where, "a field starts as a value, me, me.username, now, or a name made from another field, like slug(title)");
+                    } else if (!source || !source->type || source->type->text() != "text") {
+                        error(f.initial->where, "slug makes a name from a text field of entity " + e.name + ", like slug(title)");
+                    } else if (!f.type || (f.type->text() != "text" && f.type->text() != "slug")) {
+                        error(f.initial->where, f.name + " starts as a name made from " + source->name + ", so it's text");
+                    } else {
+                        mean_field(from->name.where, source);
+                    }
+                } else if (f.initial) {
                     names_in(*f.initial);
                     // me.username: the signed-in person's GitHub username, like da0x.
                     if (auto* m = std::get_if<member_expression>(&f.initial->node)) {

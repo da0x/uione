@@ -453,6 +453,7 @@ export function Steps({
   list,
   shown,
   to,
+  from,
   held,
   roles,
   within,
@@ -467,6 +468,7 @@ export function Steps({
   list: string;
   shown?: string; // a step's own title, like Start work
   to?: string; // the title of where it goes, like to.title
+  from?: string; // the title of where it starts, like from.title, to say where nothing leads on from
   held?: string; // the step's list of roles that may take it
   roles?: ViewState; // the view of the person's roles
   within?: string; // the project they're held in
@@ -482,9 +484,15 @@ export function Steps({
       ? (roles.data.rows as Record<string, unknown>[]).filter((row) => row[place] === within).map((row) => row[role])
       : [],
   );
-  const open = rowsOf(steps.data?.[list]).filter(
-    (step) => step.from === now && (!held || (Array.isArray(step[held]) && (step[held] as unknown[]).some((r) => mine.has(r)))),
-  );
+  const leaving = rowsOf(steps.data?.[list]).filter((step) => step.from === now);
+  const open = leaving.filter((step) => !held || (Array.isArray(step[held]) && (step[held] as unknown[]).some((r) => mine.has(r))));
+  // Someone who holds a role there is told when none of theirs moves it on, rather
+  // than shown nothing; someone who holds none had no moves to look for.
+  if (open.length === 0) {
+    if (!held || mine.size === 0) return null;
+    const here = from && leaving.length > 0 ? show(leaving[0][from]) : "";
+    return <ui.Text>{here ? `No moves from ${here} for your roles` : "No moves from here for your roles"}</ui.Text>;
+  }
   return (
     <>
       {open.map((step) => (

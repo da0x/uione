@@ -184,6 +184,19 @@ command column::delete {
     CHECK(go.find("board.Start = into") != std::string::npos);
 }
 
+TEST_CASE("a key made from another field tells the library which") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace board {\nentity lane {\n\tname   text  required  key = slug(title)\n\ttitle  text  required\n}\n}\n", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "board/board.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(one:"required,key,from=title")") != std::string::npos);
+}
+
 TEST_CASE("a once changes what's stored, each step a body done to the entities it names") {
     language::diagnostics out;
     std::vector<language::file> files;

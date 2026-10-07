@@ -304,6 +304,19 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("a key can be made from another field when it isn't given, like a phase's name from its title") {
+    const std::string lane = "entity lane {\n\tname   text  required  key = slug(title)\n\ttitle  text  required\n\tsize   number\n}\n";
+    CHECK(check_source(lane).size() == 0);
+
+    std::string number = lane;
+    number.replace(number.find("slug(title)"), 11, "slug(size)");
+    CHECK(only_error(number).message == "slug makes a name from a text field of entity lane, like slug(title)");
+
+    std::string other = lane;
+    other.replace(other.find("slug(title)"), 11, "upper(title)");
+    CHECK(only_error(other).message == "a field starts as a value, me, me.username, now, or a name made from another field, like slug(title)");
+}
+
 TEST_CASE("a command's inputs, and the entities it changes or deletes with it, are checked where they're named") {
     const std::string board = R"(namespace board {
 entity column {

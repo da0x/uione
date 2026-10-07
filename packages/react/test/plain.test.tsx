@@ -172,6 +172,22 @@ describe("a workflow's steps", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
     await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "projects::issue::move", input: { id: "ark-1", phase: "ark-doing" } }));
   });
+
+  it("say where nothing leads on for the person's roles, and say nothing to someone who holds none", () => {
+    const issue = { status: "live" as const, data: { phase: "ark-review" } };
+    const page = { status: "live" as const, data: { steps: [{ id: "s1", from: "ark-review", "from.title": "In review", to: "ark-done", roles: ["ark-tester"] }] } };
+    const programmer = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", role: "ark-programmer" }] } };
+    const outsider = { status: "live" as const, data: { rows: [] } };
+    const steps = (roles: typeof programmer | typeof outsider) => (
+      <Steps command="projects::issue::move" id="ark-1" field="phase" current={issue} steps={page} list="steps" from="from.title" held="roles" roles={roles} within="ark" />
+    );
+    const { unmount } = renderScreen(memorySource(), () => steps(programmer));
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("No moves from In review for your roles")).toBeTruthy();
+    unmount();
+    renderScreen(memorySource(), () => steps(outsider));
+    expect(screen.queryByText(/No moves/)).toBeNull();
+  });
 });
 
 describe("a value that isn't available", () => {

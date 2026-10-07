@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // Record holds what every entity has. A generated entity embeds it, so ids,
@@ -85,6 +86,7 @@ type field struct {
 	after    string
 	choices  []string
 	initial  string // the value a new entity starts with; "me" and "now" are special
+	from     string // the field a new entity's value is made from when it's given none, like a phase's name from its title
 	refers   string // the entity this field points at, like library::book
 }
 
@@ -149,6 +151,8 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.choices = strings.Split(value, "|")
 			case "default":
 				fd.initial = value
+			case "from":
+				fd.from = value
 			case "refers":
 				fd.refers = value
 			}
@@ -330,8 +334,22 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 
 // start fills in what a new entity starts with: "me" is the person creating it,
 // "now" is the time, and anything else is a literal value, like a first choice.
-func (s *schema) start(v reflect.Value, me, username string, now time.Time) {
+//
+// It returns the field a key was made from, like a phase's title, when one was: an
+// entity whose key was made that way, and is taken, isn't the same one made again.
+func (s *schema) start(v reflect.Value, me, username string, now time.Time) (madeFrom string) {
 	for _, f := range s.fields {
+		if f.from != "" {
+			target := v.FieldByIndex(f.index)
+			source := s.field(f.from)
+			if target.Kind() == reflect.String && target.String() == "" && source != nil && v.FieldByIndex(source.index).Kind() == reflect.String {
+				target.SetString(slugOf(v.FieldByIndex(source.index).String()))
+				if f.key {
+					madeFrom = f.from
+				}
+			}
+			continue
+		}
 		if f.initial == "" {
 			continue
 		}
@@ -354,6 +372,26 @@ func (s *schema) start(v reflect.Value, me, username string, now time.Time) {
 			target.SetString(f.initial)
 		}
 	}
+	return madeFrom
+}
+
+// slugOf is a name made from words, as a key: In review is in_review. Letters and
+// digits are kept, lowercase, and everything between them becomes one underscore.
+func slugOf(words string) string {
+	var b strings.Builder
+	gap := false
+	for _, r := range strings.ToLower(words) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if gap && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteRune(r)
+			gap = false
+		} else {
+			gap = true
+		}
+	}
+	return b.String()
 }
 
 // validate checks an entity against its rules, and says what's wrong the way a

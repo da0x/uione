@@ -379,6 +379,10 @@ namespace one::generators {
             }
             if (name && name->name.parts.size() == 1) return "default=" + name->name.parts[0];
             if (web_detail::text_of(*f.initial) == "me.username") return std::string("default=me.username");
+            // slug(title): made from the title when it isn't given.
+            if (auto* call = std::get_if<language::call_expression>(&f.initial->node); call && call->arguments.size() == 1) {
+                return "from=" + web_detail::text_of(*call->arguments[0]);
+            }
             unsupported(path_, f.initial->where, "a starting value that's worked out, rather than me, now, true, false or a choice");
             return std::nullopt;
         }
