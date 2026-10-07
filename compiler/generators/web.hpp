@@ -934,7 +934,18 @@ namespace one::generators {
                         if (!said.contains(column) && !through) subject += (subject.empty() ? "" : ", ") + web_detail::js_string(column);
                     }
                     if (!subject.empty()) line += " subject={[" + subject + "]}";
-                    if (timeline->link) line += " link=" + web_detail::js_string(full_route(ns, *timeline->link));
+                    if (timeline->link) {
+                        std::string target = full_route(ns, *timeline->link);
+                        line += " link=" + web_detail::js_string(target);
+                        // What it opens is named by its key's parts, like /:project/issues/:issue.
+                        std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                        auto keyed = keyed_by(ns, last, target);
+                        if (!keyed.empty()) {
+                            std::string names;
+                            for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                            line += " keyed={[" + names + "]}";
+                        }
+                    }
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table);

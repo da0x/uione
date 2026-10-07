@@ -191,11 +191,13 @@ export function Timeline({
   list,
   subject = [],
   link,
+  keyed,
 }: {
   view: ViewState;
   list: string;
   subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
   link?: string; // where each change's subject is, like /:project/issues/:issue
+  keyed?: string[]; // the key's parts before the last, when the link names them, like project
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -212,7 +214,7 @@ export function Timeline({
     // A number is said as one, like #12.
     const named = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
     const [head, tail] = phrase(row.field, row.before, row.after, row.action);
-    const to = link ? links(rowLink(link, row, params)) : undefined;
+    const to = link ? links(rowLink(link, row, params, keyed)) : undefined;
     return { ...entry, what: head, subject: named.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
   return <ui.Timeline status={view.status} entries={entries} />;
