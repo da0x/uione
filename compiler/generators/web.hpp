@@ -976,7 +976,7 @@ namespace one::generators {
                 } else if (auto* details = std::get_if<language::details_item>(&item.node)) {
                     this->details(out, parts, ns, *details);
                 } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
-                    this->copy(out, parts, ns, *copy);
+                    this->copy(out, parts, ns, *copy, screen);
                 } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
                     parts.components.insert("Thread");
                     out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
@@ -1130,7 +1130,58 @@ namespace one::generators {
         // says it: each value but the ones the page's title shows, a markdown one as it
         // was written, then each list, as a conversation, a timeline of changes, or
         // rows. The ids of people, which mean nothing pasted elsewhere, are left out.
-        void copy(stream& out, screen_parts& parts, const std::string& ns, const language::copy_item& copy) {
+        // What a screen calls its values where it shows or asks for them: a details
+        // line's label, like implementer "Implemented by", or a form field's, like
+        // body "Description". The first one written wins.
+        // Only the details of the same view count, and only the forms for the entity
+        // it's per, not a comment's on the same page.
+        static void labels_on(const std::vector<language::screen_item>& items, const std::string& view, const std::string& entity,
+                              std::map<std::string, std::string>& out) {
+            for (const auto& item : items) {
+                if (auto* details = std::get_if<language::details_item>(&item.node)) {
+                    if (details->view.text() != view) continue;
+                    for (const auto& f : details->fields) {
+                        if (f.label) out.emplace(web_detail::text_of(*f.value), *f.label);
+                    }
+                } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
+                    bool on = std::any_of(form->commands.begin(), form->commands.end(), [&](const language::qualified_name& c) {
+                        return c.parts.size() >= 2 && c.parts[c.parts.size() - 2] == entity;
+                    });
+                    if (!on) continue;
+                    for (const auto& f : form->fields) {
+                        if (f.label) out.emplace(f.name, *f.label);
+                    }
+                } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    labels_on(block->items, view, entity, out);
+                }
+            }
+        }
+
+        // The field a value reads, through what the entity points at: issue.status is
+        // the issue's status, and issue.project.lifecycle the project's lifecycle.
+        const language::field* field_through(const std::string& ns, const language::entity_declaration* from, const language::member_expression& m) {
+            std::vector<std::string> path{m.member};
+            for (auto* at = std::get_if<language::member_expression>(&m.object->node); at; at = std::get_if<language::member_expression>(&at->object->node)) {
+                path.insert(path.begin(), at->member);
+            }
+            for (std::size_t i = 0; from && i < path.size(); ++i) {
+                const language::field* found = nullptr;
+                for (const auto& f : from->fields) {
+                    if (f.name == path[i]) found = &f;
+                }
+                if (!found || i + 1 == path.size()) return found;
+                from = nullptr;
+                if (found->type) {
+                    if (auto scope = entities_.find(ns); scope != entities_.end()) {
+                        if (auto e = scope->second.find(found->type->text()); e != scope->second.end()) from = e->second;
+                    }
+                }
+            }
+            return nullptr;
+        }
+
+        void copy(stream& out, screen_parts& parts, const std::string& ns, const language::copy_item& copy,
+                  const std::vector<language::screen_item>& screen) {
             parts.components.insert("Copy");
             std::string full = full_view(ns, copy.view.text());
             std::size_t split = full.rfind("::");
@@ -1141,7 +1192,7 @@ namespace one::generators {
                 if (auto found = scope->second.find(name); found != scope->second.end()) view = found->second;
             }
             std::string variable = view_variable(parts, full);
-            std::string fields, lists;
+            std::string fields, lists, shown;
             if (view) {
                 const language::entity_declaration* entity = nullptr;
                 if (view->per) {
@@ -1149,20 +1200,28 @@ namespace one::generators {
                         if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
                     }
                 }
+                std::map<std::string, std::string> called;
+                labels_on(screen, copy.view.text(), view->per.value_or(""), called);
                 for (const auto& value : view->values) {
                     std::string key = value.name ? *value.name : web_detail::text_of(*value.value);
                     if (screen_title_.find("{" + name + "." + key + "}") != std::string::npos) continue;
                     std::string kind;
                     auto* member = std::get_if<language::member_expression>(&value.value->node);
-                    if (member && entity) {
-                        for (const auto& f : entity->fields) {
-                            if (f.name != member->member || !f.type) continue;
-                            if (f.type->text() == "markdown") kind = "markdown";
-                            if (f.list && f.type->text() == "user") kind = "people";
+                    if (const language::field* f = member && entity ? field_through(view_ns, entity, *member) : nullptr) {
+                        if (f->type && f->type->text() == "markdown") kind = "markdown";
+                        // A person is held by their id, which means nothing pasted;
+                        // their name is a value of its own, like implementer.
+                        if (f->type && f->type->text() == "user") kind = "people";
+                        // A choice as it's shown, like In progress.
+                        if (!f->choices.empty()) {
+                            shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) +
+                                     ": Object.fromEntries(" + choice_options(*f) + ")";
                         }
                     }
                     if (kind == "people") continue;
-                    fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " + web_detail::js_string(web_detail::label(key)) +
+                    auto label = called.find(key);
+                    fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
+                              web_detail::js_string(label != called.end() ? label->second : web_detail::label(key)) +
                               (kind.empty() ? "" : ", " + web_detail::js_string(kind)) + "]";
                 }
                 for (const auto& each : view->each) {
@@ -1178,7 +1237,8 @@ namespace one::generators {
                 }
             }
             std::string label = copy.label ? " label=" + web_detail::js_string(*copy.label) : "";
-            out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]} />");
+            std::string choices = shown.empty() ? "" : " choices={{ " + shown + " }}";
+            out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]}" + choices + " />");
         }
 
         void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table) {

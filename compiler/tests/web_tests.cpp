@@ -200,7 +200,7 @@ TEST_CASE("an issue can be copied whole, as its view holds it") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Copy view={issuePage} label="Copy issue" fields={[["title", "Title"], ["body", "Body", "markdown"], ["labels", "Labels"], ["status", "Status"], ["visibility", "Visibility"]]} lists={[["comments", "Comments", "thread", ["author.picture", "author.name", "body", "created_at"]], ["mentions", "Mentions", "rows", ["kind", "title", "author", "url"]], ["changes", "Changes", "changes", ["field", "before", "after", "created_by.name", "created_at"]]]} />)") !=
+    CHECK(screens->content.find(R"(<Copy view={issuePage} label="Copy issue" fields={[["title", "Title"], ["body", "Body", "markdown"], ["labels", "Labels"], ["status", "Status"], ["visibility", "Visibility"]]} lists={[["comments", "Comments", "thread", ["author.picture", "author.name", "body", "created_at"]], ["mentions", "Mentions", "rows", ["kind", "title", "author", "url"]], ["changes", "Changes", "changes", ["field", "before", "after", "created_by.name", "created_at"]]]} choices={{ status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]), visibility: Object.fromEntries([["public", "Public"], ["private", "Private"]]) }} />)") !=
           std::string::npos);
 }
 
@@ -215,6 +215,23 @@ TEST_CASE("a project's issues are in tabs by their status, with their labels eac
     CHECK(line.find(R"( by="status")") != std::string::npos);
     CHECK(line.find(R"( search={["title", "labels"]} sort="-number" page={25})") != std::string::npos);
     CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
+}
+
+TEST_CASE("a copy names values as the screen does, and leaves out a person's id for their name") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-copy";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\nentity project {\n\tlifecycle  enum  full \"Implement, verify\" | simple\n}\nentity issue {\n\tproject  project\n\tbody  markdown\n\timplemented_by  user\n}\n"
+                         "entity comment {\n\tbody  text\n}\ncommand issue::update\ncommand comment::create\n"
+                         "view issue_page per issue {\n\tbody = issue.body\n\tlifecycle = issue.project.lifecycle\n\timplemented_by = issue.implemented_by\n\timplementer = issue.implemented_by.name\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\timplementer \"Implemented by\"\n\t}\n"
+                         "\tform issue::update {\n\t\tbody \"Description\"\n\t}\n\tform comment::create {\n\t\tbody \"Comment\"\n\t}\n\tcopy issue_page\n}\n}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(fields={[["body", "Description", "markdown"], ["lifecycle", "Lifecycle"], ["implementer", "Implemented by"]]} lists={[]} )"
+                                R"(choices={{ lifecycle: Object.fromEntries([["full", "Implement, verify"], ["simple", "Simple"]]) }} />)") != std::string::npos);
 }
 
 TEST_CASE("a screen is laid out in regions, everything in main unless it says") {

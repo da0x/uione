@@ -754,14 +754,21 @@ describe("copying what a page shows", () => {
         labels: ["feature", "issues"],
         body: "One button copies **everything**.",
         comments: [{ id: "c", "author.name": "Ada", body: "Including comments.", created_at: "2026-10-06T10:00:00Z" }],
-        history: [{ id: "h", "created_by.name": "Ada", field: "", action: "projects::issue::create", created_at: "2026-10-06T09:00:00Z" }],
+        history: [
+          { id: "h", "created_by.name": "Ada", field: "", action: "projects::issue::create", created_at: "2026-10-06T09:00:00Z" },
+          { id: "s1", "created_by.name": "Bob", field: "status", before: "open", after: "in_progress", action: "projects::issue::start", created_at: "2026-10-06T11:00:00Z" },
+          { id: "s2", "created_by.name": "Bob", field: "implemented_by", before: null, after: "bob", action: "projects::issue::start", created_at: "2026-10-06T11:00:00Z" },
+        ],
       },
-      [["status", "Status"], ["labels", "Labels"], ["body", "Body", "markdown"]],
+      [["status", "Status"], ["labels", "Labels"], ["body", "Description", "markdown"]],
       [["comments", "Comments", "thread", ["author.name", "body", "created_at"]], ["history", "History", "changes", ["field"]]],
+      { status: { open: "Open" } },
     );
-    expect(text.startsWith("# #12 Copy an issue whole\n\n**Status:** open  \n**Labels:** feature, issues  \n\nOne button copies **everything**.\n\n## Comments\n\n**Ada** · ")).toBe(true);
+    expect(text.startsWith("# #12 Copy an issue whole\n\n**Status:** Open  \n**Labels:** feature, issues  \n\n## Description\n\nOne button copies **everything**.\n\n## Comments\n\n**Ada** · ")).toBe(true);
     expect(text).toContain("\n\nIncluding comments.\n");
     expect(text).toContain("## History\n\n- Ada created this · ");
+    // A command that changed two fields at once is one line, as on the page.
+    expect(text.match(/- Bob /g)).toHaveLength(1);
   });
 });
 

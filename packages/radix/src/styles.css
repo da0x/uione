@@ -116,6 +116,12 @@
 /* The one flourish: a fine blueprint grid behind a hero, fading out towards the
    page. It says engineering without saying anything. */
 @layer components {
+  /* A label in its own hue, soft on light pages and deep on dark ones. */
+  .one-label {
+    background: light-dark(hsl(var(--label-hue) 80% 93%), hsl(var(--label-hue) 45% 18%));
+    border-color: light-dark(hsl(var(--label-hue) 55% 78%), hsl(var(--label-hue) 45% 34%));
+    color: light-dark(hsl(var(--label-hue) 70% 27%), hsl(var(--label-hue) 75% 80%));
+  }
   .one-blueprint {
     position: relative;
     isolation: isolate;

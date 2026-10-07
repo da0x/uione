@@ -15,7 +15,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
@@ -102,6 +102,32 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
 };
 const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
 
+// A label's hue: the one people expect for the usual ones, like red for a bug, and
+// for any other one picked from its words, so it's the same each time.
+const knownHues: Record<string, number> = {
+  bug: 2,
+  defect: 2,
+  regression: 2,
+  security: 340,
+  feature: 152,
+  enhancement: 152,
+  documentation: 212,
+  docs: 212,
+  question: 285,
+  "good first issue": 262,
+  "help wanted": 168,
+  duplicate: 220,
+  wontfix: 220,
+};
+
+export function labelHue(label: string): number {
+  const known = knownHues[label.trim().toLowerCase()];
+  if (known !== undefined) return known;
+  let hash = 0;
+  for (const c of label.trim().toLowerCase()) hash = (hash * 31 + c.codePointAt(0)!) >>> 0;
+  return hash % 360;
+}
+
 export const radix: ComponentSet = {
   Page: ({ name, icon, home, nav, title, account, children }) => (
     <div className="min-h-screen bg-page text-ink">
@@ -137,9 +163,9 @@ export const radix: ComponentSet = {
           its own reading width. */}
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
-      <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-8 sm:pt-10" : "pt-5 sm:pt-6"}`}>
-        {title !== name && <h1 className="mb-8 text-[2rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
-        <div className="flex flex-col gap-10">{children}</div>
+      <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
+        {title !== name && <h1 className="mb-5 text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
+        <div className="flex flex-col gap-7">{children}</div>
       </main>
     </div>
   ),
@@ -322,46 +348,51 @@ export const radix: ComponentSet = {
 
   Table: ({ status, columns, rows, error, tabs, search, pages }) => (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
-      {search && (
-        <div className="border-b border-line px-3 py-2">
-          <input
+      {/* Its rows by a choice, like Open and Closed, each with how many there are,
+          and the search box at the end of the same row. */}
+      {(tabs || search) && (
+        <div className="flex flex-wrap items-end gap-x-3 border-b border-line px-2">
+          {tabs && (
+            <div role="tablist" className="flex gap-1 pt-1.5">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.label}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab.selected}
+                  onClick={tab.onSelect}
+                  className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-2.5 pt-1 pb-1.5 text-sm ${tab.selected ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                >
+                  {tab.label}
+                  <span className="rounded-full bg-sunken px-1.5 text-xs tabular-nums text-muted">{tab.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {search && (
+            <div className="ml-auto w-full py-1.5 sm:w-64">
+              <input
             type="search"
             value={search.value}
             onChange={(event) => search.onChange(event.target.value)}
             placeholder={`${search.label}…`}
             aria-label={search.label}
-            className="w-full max-w-sm rounded-control border border-control-line bg-page px-3 py-1.5 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
-          />
-        </div>
-      )}
-      {/* Its rows by a choice, like Open and Closed, each with how many there are. */}
-      {tabs && (
-        <div role="tablist" className="flex gap-1 border-b border-line px-2 pt-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.label}
-              type="button"
-              role="tab"
-              aria-selected={tab.selected}
-              onClick={tab.onSelect}
-              className={`-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 pb-2 text-sm ${tab.selected ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"}`}
-            >
-              {tab.label}
-              <span className="rounded-full bg-sunken px-1.5 text-xs tabular-nums text-muted">{tab.count}</span>
-            </button>
-          ))}
+            className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+              />
+            </div>
+          )}
         </div>
       )}
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>
         <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
           <tr>
             {columns.map((column) => (
-              <th key={column} className="px-4 py-2.5 font-medium">
+              <th key={column} className="px-3 py-1.5 font-medium">
                 {column}
               </th>
             ))}
             {rows.some((row) => row.actions.length > 0) && (
-              <th className="px-4 py-2">
+              <th className="px-3 py-1.5">
                 <span className="sr-only">Actions</span>
               </th>
             )}
@@ -371,7 +402,7 @@ export const radix: ComponentSet = {
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60">
               {row.cells.map((cell, i) => (
-                <td key={i} className="px-4 py-2.5">
+                <td key={i} className="px-3 py-1.5">
                   {i === 0 && row.link ? (
                     <a {...row.link} className="font-medium text-accent hover:underline">
                       {cell}
@@ -382,7 +413,7 @@ export const radix: ComponentSet = {
                 </td>
               ))}
               {rows.some((other) => other.actions.length > 0) && (
-                <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                <td className="px-3 py-1.5 text-right whitespace-nowrap">
                   {row.actions.map((a) => (
                     <button
                       key={a.label}
@@ -429,8 +460,9 @@ export const radix: ComponentSet = {
   Form: function RadixForm({ fields, submit, busy, error, onSubmit }) {
     const id = useId();
     return (
+      // Writing, like a comment, takes the column's width; a few short fields don't.
       <form
-        className="flex max-w-md flex-col gap-5"
+        className={`flex flex-col gap-5 ${fields.some((field) => field.type === "markdown") ? "max-w-3xl" : "max-w-md"}`}
         onSubmit={(event) => {
           event.preventDefault();
           onSubmit();
@@ -590,7 +622,9 @@ export const radix: ComponentSet = {
   // Nothing written, like an issue without a description, takes no room.
   Markdown: ({ status, source }) =>
     status === "live" && source?.trim() ? (
-      <MarkdownText source={source} />
+      <div className="rounded-box border border-line bg-surface px-5 py-4 shadow-panel">
+        <MarkdownText source={source} />
+      </div>
     ) : status === "live" ? null : (
       <div aria-busy={status === "loading"} className="h-6" />
     ),
@@ -627,10 +661,11 @@ export const radix: ComponentSet = {
   ),
 
   // Each word a small chip, like an issue's labels.
+  // Each label in a color of its own, the same wherever it's shown.
   Labels: ({ items }) => (
     <span className="inline-flex flex-wrap gap-1">
       {items.map((item) => (
-        <span key={item} className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs font-medium">
+        <span key={item} className="one-label rounded-full border px-2 py-px text-xs font-medium" style={{ "--label-hue": labelHue(item) } as CSSProperties}>
           {item}
         </span>
       ))}

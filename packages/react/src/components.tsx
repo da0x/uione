@@ -225,6 +225,16 @@ export function changed(field: unknown, before: unknown, after: unknown, command
   return (head.endsWith(" of") ? `${head.slice(0, -3)}${tail ? ` ${tail}` : ""}` : `${head} this${tail ? ` ${tail}` : ""}`).trim();
 }
 
+// A list of changes with each command said once: one like close, setting status and
+// closed_at together, keeps only its first change.
+function onceEach(rows: Row[]): Row[] {
+  return rows.filter((row, i) => {
+    const before = rows[i - 1];
+    const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));
+    return !(own && before && before.action === row.action && String(before.created_at) === String(row.created_at));
+  });
+}
+
 // One of a view's lists of an entity's changes as a timeline, oldest first as the
 // view orders it. A command that changes several fields at once, like close
 // setting status and closed_at, is said once.
@@ -245,12 +255,7 @@ export function Timeline({
   const links = useLinks();
   const params = useParams();
   const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
-  const said = rows.filter((row, i) => {
-    const before = rows[i - 1];
-    const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));
-    return !(own && before && before.action === row.action && String(before.created_at) === String(row.created_at));
-  });
-  const entries = said.map((row) => {
+  const entries = onceEach(rows).map((row) => {
     const entry = { id: row.id, who: show(row["created_by.name"]), when: when(row.created_at) };
     if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
     // A number is said as one, like #12.
@@ -263,23 +268,34 @@ export function Timeline({
 }
 
 // What a view holds, as Markdown to paste somewhere else whole: the page's title,
-// each value, a markdown one as written, and each list, a conversation as who wrote
-// what and when, changes as what happened, and rows as their values.
+// each value, a markdown one as written under its name, and each list, a
+// conversation as who wrote what and when, changes as what happened, each command
+// once, and rows as their values.
 export type CopiedField = readonly [name: string, label: string, kind?: "markdown"];
 export type CopiedList = readonly [name: string, label: string, kind: "thread" | "changes" | "rows", columns: readonly string[]];
 
-export function markdownOf(title: string, data: Record<string, unknown> | undefined, fields: readonly CopiedField[], lists: readonly CopiedList[]): string {
+export function markdownOf(
+  title: string,
+  data: Record<string, unknown> | undefined,
+  fields: readonly CopiedField[],
+  lists: readonly CopiedList[],
+  choices: Record<string, Record<string, string>> = {},
+): string {
   const out: string[] = [];
   if (title) out.push(`# ${title}`, "");
-  const said = fields.filter(([name, , kind]) => kind !== "markdown" && show(data?.[name]) !== "");
-  for (const [name, label] of said) out.push(`**${label}:** ${show(data?.[name])}  `);
+  const value = (name: string) => {
+    const stored = data?.[name];
+    return (typeof stored === "string" ? choices[name]?.[stored] : undefined) ?? show(stored);
+  };
+  const said = fields.filter(([name, , kind]) => kind !== "markdown" && value(name) !== "");
+  for (const [name, label] of said) out.push(`**${label}:** ${value(name)}  `);
   if (said.length) out.push("");
-  for (const [name, , kind] of fields) {
+  for (const [name, label, kind] of fields) {
     const value = data?.[name];
-    if (kind === "markdown" && typeof value === "string" && value.trim()) out.push(value.trim(), "");
+    if (kind === "markdown" && typeof value === "string" && value.trim()) out.push(`## ${label}`, "", value.trim(), "");
   }
   for (const [name, label, kind, columns] of lists) {
-    const rows = rowsOf(data?.[name]);
+    const rows = kind === "changes" ? onceEach(rowsOf(data?.[name])) : rowsOf(data?.[name]);
     if (rows.length === 0) continue;
     out.push(`## ${label}`, "");
     for (const row of rows) {
@@ -302,11 +318,13 @@ export function Copy({
   label: says = "Copy",
   fields,
   lists,
+  choices,
 }: {
   view: ViewState;
   label?: string;
   fields: readonly CopiedField[];
   lists: readonly CopiedList[];
+  choices?: Record<string, Record<string, string>>; // a choice's values, as they're shown
 }) {
   const ui = useUI();
   const title = usePageTitle();
@@ -318,7 +336,7 @@ export function Copy({
   }, [copied]);
   if (view.status !== "live") return null;
   return (
-    <ui.Button kind="secondary" onClick={() => void navigator.clipboard.writeText(markdownOf(title, view.data, fields, lists)).then(() => setCopied(true))}>
+    <ui.Button kind="secondary" onClick={() => void navigator.clipboard.writeText(markdownOf(title, view.data, fields, lists, choices)).then(() => setCopied(true))}>
       {copied ? "Copied" : says}
     </ui.Button>
   );
