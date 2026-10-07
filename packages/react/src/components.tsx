@@ -228,6 +228,10 @@ export function changed(field: unknown, before: unknown, after: unknown, command
 // A list of changes with each command said once: one like close, setting status and
 // closed_at together, keeps only its first change.
 function onceEach(rows: Row[]): Row[] {
+  // A field that went from nothing to nothing, as an older backend recorded when it
+  // first wrote one empty, didn't change.
+  const nothing = (value: unknown) => value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+  rows = rows.filter((row) => !(typeof row.field === "string" && row.field !== "" && "before" in row && "after" in row && nothing(row.before) && nothing(row.after)));
   return rows.filter((row, i) => {
     const before = rows[i - 1];
     const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));

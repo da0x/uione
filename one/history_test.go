@@ -4,9 +4,11 @@
 package one_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"cloud.google.com/go/firestore"
 	"github.com/da0x/uione/one"
 )
 
@@ -24,6 +26,7 @@ type Case struct {
 	Folder string `firestore:"folder" one:"required,refers=log::folder"`
 	Title  string `firestore:"title" one:"required"`
 	Status string `firestore:"status" one:"choices=open|closed,default=open"`
+	Note   string `firestore:"note"`
 }
 
 var cases = one.Module("log",
@@ -86,5 +89,24 @@ func TestAFoldersTimelineHoldsTheChangesOfItsCasesOnly(t *testing.T) {
 	}
 	if latest := list(h.view("log::folder_page:cold"), "latest"); len(latest) != 1 || latest[0]["field"] != "status" {
 		t.Errorf("the cold folder's latest change is %v", latest)
+	}
+}
+
+func TestAFieldStoredAsNothingIsntChangedByBeingWrittenEmpty(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("bo@example.com")
+	h.mustRun("log/folder/create", token, map[string]any{"name": "warm"})
+	k := h.mustRun("log/case/create", token, map[string]any{"folder": "warm", "title": "Odd noise"})
+	// As a case made before it had a note is stored: without one.
+	if _, err := h.store.Collection("log_case").Doc(k).Update(context.Background(), []firestore.Update{{Path: "note", Value: firestore.Delete}}); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRun("log/case/update", token, map[string]any{"id": k, "title": "Odd noise, at night"})
+	var fields []any
+	for _, change := range list(h.view("log::case_page:"+k), "changes") {
+		fields = append(fields, change["field"])
+	}
+	if !reflect.DeepEqual(fields, []any{"", "title"}) {
+		t.Errorf("only the title changed, not the note it had nothing in: %v", fields)
 	}
 }

@@ -758,6 +758,8 @@ describe("copying what a page shows", () => {
           { id: "h", "created_by.name": "Ada", field: "", action: "projects::issue::create", created_at: "2026-10-06T09:00:00Z" },
           { id: "s1", "created_by.name": "Bob", field: "status", before: "open", after: "in_progress", action: "projects::issue::start", created_at: "2026-10-06T11:00:00Z" },
           { id: "s2", "created_by.name": "Bob", field: "implemented_by", before: null, after: "bob", action: "projects::issue::start", created_at: "2026-10-06T11:00:00Z" },
+          // From nothing to nothing, as an older backend recorded it: no change at all.
+          { id: "e1", "created_by.name": "Cy", field: "verified_by", before: null, after: "", action: "projects::issue::update", created_at: "2026-10-06T12:00:00Z" },
         ],
       },
       [["status", "Status"], ["labels", "Labels"], ["body", "Description", "markdown"]],
@@ -769,6 +771,7 @@ describe("copying what a page shows", () => {
     expect(text).toContain("## History\n\n- Ada created this · ");
     // A command that changed two fields at once is one line, as on the page.
     expect(text.match(/- Bob /g)).toHaveLength(1);
+    expect(text).not.toContain("Cy");
   });
 });
 

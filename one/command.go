@@ -275,9 +275,22 @@ func (a *App) keep(tx *firestore.Transaction, s *schema, id string, before, afte
 // a list as read or as written, a whole number as either kind, a time to the
 // nanosecond.
 func alike(x, y any) bool {
+	// Nothing, empty text and an empty list are the same, so a field that wasn't
+	// stored, written as empty, isn't a change.
 	plain := func(v any) any {
 		switch value := v.(type) {
+		case string:
+			if value == "" {
+				return nil
+			}
+		case []any:
+			if len(value) == 0 {
+				return nil
+			}
 		case []string:
+			if len(value) == 0 {
+				return nil
+			}
 			list := make([]any, len(value))
 			for i, item := range value {
 				list[i] = item
