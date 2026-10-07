@@ -695,9 +695,18 @@ namespace one::language {
                 qualified_name view = parse_qualified_name("the view whose list it shows");
                 expect(token_kind::dot, thread ? "'.' and the view's list, like issue_page.comments" : "'.' and the view's list, like issue_page.history");
                 std::string list = expect(token_kind::identifier, "which of the view's lists").text;
+                if (thread) {
+                    end_line();
+                    return {where, thread_item{std::move(view), std::move(list)}};
+                }
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}};
+                if (at_word("link")) {
+                    advance();
+                    timeline.link_where = peek().where;
+                    timeline.link = expect(token_kind::route, "the screen each change opens, like /:project/issues/:issue").text;
+                }
                 end_line();
-                if (thread) return {where, thread_item{std::move(view), std::move(list)}};
-                return {where, timeline_item{std::move(view), std::move(list)}};
+                return {where, std::move(timeline)};
             }
             if (at_word("form")) {
                 advance();

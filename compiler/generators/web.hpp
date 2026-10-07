@@ -421,6 +421,20 @@ namespace one::generators {
             return e == entities->second.end() ? nullptr : e->second;
         }
 
+        // The columns a view's list holds, as written, like issue.number.
+        std::vector<std::string> listed_columns(const std::string& ns, const std::string& view, const std::string& list) const {
+            std::vector<std::string> columns;
+            auto scope = views_.find(ns);
+            if (scope == views_.end()) return columns;
+            auto v = scope->second.find(view);
+            if (v == scope->second.end()) return columns;
+            for (const auto& each : v->second->each) {
+                if (each.name != list) continue;
+                for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
+            }
+            return columns;
+        }
+
         std::optional<std::string> row_command(const std::string& ns, const std::string& view, const std::optional<std::string>& list,
                                                const std::string& column) const {
             const language::entity_declaration* entity = listed(ns, view, list);
@@ -907,7 +921,21 @@ namespace one::generators {
                     out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
                 } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) {
                     parts.components.insert("Timeline");
-                    out.line("<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list) + " />");
+                    std::string line = "<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list);
+                    // What each change was to, named by the list's own columns, like an
+                    // issue's number and title, and opened by its link.
+                    // A column whose fields are listed too, like issue beside issue.number,
+                    // is there for the link, not to be read.
+                    std::string subject;
+                    auto columns = listed_columns(ns, timeline->view.text(), timeline->list);
+                    for (const auto& column : columns) {
+                        static const std::set<std::string> said{"field", "before", "after", "action", "created_by.name", "created_at"};
+                        bool through = std::any_of(columns.begin(), columns.end(), [&](const std::string& other) { return other.starts_with(column + "."); });
+                        if (!said.contains(column) && !through) subject += (subject.empty() ? "" : ", ") + web_detail::js_string(column);
+                    }
+                    if (!subject.empty()) line += " subject={[" + subject + "]}";
+                    if (timeline->link) line += " link=" + web_detail::js_string(full_route(ns, *timeline->link));
+                    out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {

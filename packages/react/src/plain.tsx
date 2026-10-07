@@ -140,7 +140,7 @@ export const plain: ComponentSet = {
       <ul>
         {entries.map((entry) => (
           <li key={entry.id}>
-            {entry.who} {entry.what}, {entry.when}
+            {entry.who} {entry.what} {entry.subject && (entry.link ? <a {...entry.link}>{entry.subject}</a> : entry.subject)} {entry.after}, {entry.when}
           </li>
         ))}
       </ul>

@@ -639,6 +639,19 @@ export const radix: ComponentSet = {
           <li key={entry.id} className="relative">
             <span aria-hidden="true" className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-page bg-muted" />
             <span className="font-medium">{entry.who}</span> <span className="text-muted">{entry.what}</span>
+            {entry.subject && (
+              <>
+                {" "}
+                {entry.link ? (
+                  <a {...entry.link} className="font-medium text-accent hover:underline">
+                    {entry.subject}
+                  </a>
+                ) : (
+                  <span className="font-medium">{entry.subject}</span>
+                )}
+              </>
+            )}
+            {entry.after && <span className="text-muted"> {entry.after}</span>}
             <span className="text-muted"> · {entry.when}</span>
           </li>
         ))}

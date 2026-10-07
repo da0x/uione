@@ -581,6 +581,10 @@ screen "Book" /books/:book {
   to closed". Its rows need `field`, `before`, `after` and `created_at`, and name
   who made each change with `created_by.name`. With `action` too, a change a
   command of its own made says what that command did: "Ada closed this".
+- A timeline of many things' changes, like every issue's in a project, names what
+  each change was to with the list's own columns, like `issue.number` and
+  `issue.title`, and `link` opens it: `timeline project_page.timeline link
+  /:project/issues/:issue` reads "Ada closed #12 Copy an issue whole".
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

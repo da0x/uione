@@ -161,37 +161,60 @@ export function done(action: string): string {
   return [past, ...rest].join(" ");
 }
 
-// What a change did, in words: making the thing, a field set, cleared or changed,
-// or, made by a command of its own like close, what that command did: closed this.
-export function changed(field: unknown, before: unknown, after: unknown, command?: unknown): string {
+// What a change did, in words, around what it changed: making it, a field set,
+// cleared or changed, or, made by a command of its own like close, what that
+// command did. [before, after] the thing, like ["changed title of", "from a to b"].
+export function phrase(field: unknown, before: unknown, after: unknown, command?: unknown): [string, string] {
   const verb = typeof command === "string" ? action(command) : "";
-  if (verb && verb !== "create" && verb !== "update" && verb !== "delete") return `${done(verb)} this`;
-  if (typeof field !== "string" || field === "") return "created this";
+  if (verb && verb !== "create" && verb !== "update" && verb !== "delete") return [done(verb), ""];
+  if (typeof field !== "string" || field === "") return ["created", ""];
   const name = field.replaceAll("_", " ");
   const was = show(before);
   const is = show(after);
-  if (was === "") return `set ${name} to ${is}`;
-  if (is === "") return `cleared ${name}`;
-  return `changed ${name} from ${was} to ${is}`;
+  if (was === "") return [`set ${name} of`, `to ${is}`];
+  if (is === "") return [`cleared ${name} of`, ""];
+  return [`changed ${name} of`, `from ${was} to ${is}`];
+}
+
+// The same said of "this", as a thing's own timeline says it: closed this, changed
+// status from open to closed.
+export function changed(field: unknown, before: unknown, after: unknown, command?: unknown): string {
+  const [head, tail] = phrase(field, before, after, command);
+  return (head.endsWith(" of") ? `${head.slice(0, -3)}${tail ? ` ${tail}` : ""}` : `${head} this${tail ? ` ${tail}` : ""}`).trim();
 }
 
 // One of a view's lists of an entity's changes as a timeline, oldest first as the
 // view orders it. A command that changes several fields at once, like close
 // setting status and closed_at, is said once.
-export function Timeline({ view, list }: { view: ViewState; list: string }) {
+export function Timeline({
+  view,
+  list,
+  subject = [],
+  link,
+}: {
+  view: ViewState;
+  list: string;
+  subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
+  link?: string; // where each change's subject is, like /:project/issues/:issue
+}) {
   const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
   const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
   const said = rows.filter((row, i) => {
     const before = rows[i - 1];
     const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));
     return !(own && before && before.action === row.action && String(before.created_at) === String(row.created_at));
   });
-  const entries = said.map((row) => ({
-    id: row.id,
-    who: show(row["created_by.name"]),
-    what: changed(row.field, row.before, row.after, row.action),
-    when: when(row.created_at),
-  }));
+  const entries = said.map((row) => {
+    const entry = { id: row.id, who: show(row["created_by.name"]), when: when(row.created_at) };
+    if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
+    // A number is said as one, like #12.
+    const named = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
+    const [head, tail] = phrase(row.field, row.before, row.after, row.action);
+    const to = link ? links(rowLink(link, row, params)) : undefined;
+    return { ...entry, what: head, subject: named.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
+  });
   return <ui.Timeline status={view.status} entries={entries} />;
 }
 

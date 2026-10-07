@@ -210,6 +210,14 @@ TEST_CASE("a project's issues are in tabs by their status, with their labels eac
     CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
 }
 
+TEST_CASE("a project's timeline names each issue that changed, and links to it") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Timeline view={projectPage} list="timeline" subject={["issue.number", "issue.title"]} link="/tracker/issues/:issue" />)") !=
+          std::string::npos);
+}
+
 TEST_CASE("an issue's comments are a thread, and its changes a timeline") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");

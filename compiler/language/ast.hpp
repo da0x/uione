@@ -340,6 +340,8 @@ namespace one::language {
     struct timeline_item {
         qualified_name view;
         std::string list;
+        std::optional<std::string> link;  // timeline project_page.timeline link /:project/issues/:issue: what each change was to
+        location link_where;
     };
 
     // copy issue_page "Copy issue": a button that copies everything a view holds, as

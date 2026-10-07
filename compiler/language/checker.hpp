@@ -1297,6 +1297,9 @@ namespace one::language {
                     verify_listing(ns, thread->view, thread->list, route, false, {"body", "author.name"});
                 } else if (auto* timeline = std::get_if<timeline_item>(&item.node)) {
                     verify_listing(ns, timeline->view, timeline->list, route, true, {"field", "before", "after", "created_at"});
+                    if (timeline->link && !routes_.contains(full_route(ns, *timeline->link))) {
+                        error(timeline->link_where, "there's no screen at " + full_route(ns, *timeline->link) + " for this timeline's changes to open");
+                    }
                 } else if (auto* table = std::get_if<table_item>(&item.node)) {
                     snake(table->view);
                     const view_declaration* view = find(ns, table->view, &scope::views);

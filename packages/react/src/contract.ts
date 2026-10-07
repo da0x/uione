@@ -69,8 +69,11 @@ export interface ThreadProps {
 export interface TimelineEntry {
   id: string;
   who: string;
-  what: string;
+  what: string; // like "closed this", or, with a subject, the words before it, like "closed"
   when: string;
+  subject?: string; // what changed, like "#12 Copy an issue whole", for a timeline of many things
+  link?: LinkProps; // where the subject is
+  after?: string; // the words after the subject, like "from open to closed"
 }
 
 export interface TimelineProps {

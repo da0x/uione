@@ -131,7 +131,7 @@ namespace tracker {
 		timeline = each change of issue where project == project.id {
 			order -created_at
 			limit 50
-			issue  field  after  created_by.name  created_at
+			issue  issue.number  issue.title  field  before  after  action  created_by.name  created_at
 		}
 	}
 
@@ -222,13 +222,7 @@ namespace tracker {
 		form member::create {
 			person  role
 		}
-		table project_page.timeline link /issues/:issue {
-			issue
-			field "Changed"
-			after "To"
-			created_by.name "By"
-			created_at "When"
-		}
+		timeline project_page.timeline link /issues/:issue
 	}
 
 	screen "Project settings" /projects/:project/settings {

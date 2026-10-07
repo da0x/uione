@@ -18,6 +18,7 @@ import {
   done,
   holds,
   markdownOf,
+  phrase,
   memorySource,
   shortAddress,
   screen as defineScreen,
@@ -760,5 +761,20 @@ describe("copying what a page shows", () => {
     expect(text.startsWith("# #12 Copy an issue whole\n\n**Status:** open  \n**Labels:** feature, issues  \n\nOne button copies **everything**.\n\n## Comments\n\n**Ada** · ")).toBe(true);
     expect(text).toContain("\n\nIncluding comments.\n");
     expect(text).toContain("## History\n\n- Ada created this · ");
+  });
+});
+
+describe("a timeline of many things", () => {
+  it("names what each change was to, and links to it", () => {
+    expect(phrase("status", "open", "closed", "tracker::issue::close")).toEqual(["closed", ""]);
+    expect(phrase("title", "a", "b", "tracker::issue::update")).toEqual(["changed title of", "from a to b"]);
+    const view = {
+      status: "live" as const,
+      data: { timeline: [{ id: "h", issue: "uione-12", "issue.number": 12, "issue.title": "Copy an issue whole", "created_by.name": "Ada", action: "tracker::issue::close", field: "status", created_at: "2026-10-06T10:00:00Z" }] },
+    };
+    renderScreen(memorySource(), () => <Timeline view={view} list="timeline" subject={["issue.number", "issue.title"]} link="/issues/:issue" />);
+    const link = screen.getByRole("link", { name: "#12 Copy an issue whole" });
+    expect(link.getAttribute("href")).toBe("/issues/uione-12");
+    expect(link.parentElement?.textContent).toMatch(/^Ada closed #12 Copy an issue whole/);
   });
 });
