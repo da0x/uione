@@ -293,6 +293,12 @@ export function Confirm({ command, question }: { command: string; question: stri
   return null;
 }
 
+// Whether a list from a view has a value, like an issue's assignees having whoever
+// is reading.
+export function listHas(list: unknown, item: unknown): boolean {
+  return Array.isArray(list) && list.includes(item);
+}
+
 // Whether a person holds one of some roles within something, like maintainer in a
 // project, as the view of their roles says: its rows each name where, in a field
 // like project, and the role. Not while it hasn't arrived, so a button that may not

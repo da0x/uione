@@ -437,9 +437,8 @@ TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
-    CHECK(tsx.find(R"(when={issuePage.status === "live" && ((Array.isArray((issuePage.data?.["assignees"] ?? null)) && (issuePage.data?.["assignees"] ?? null).includes(viewer)))})") !=
-          std::string::npos);
-    CHECK(tsx.find("import { Actions, Command, screen, useAuth, useParam, useView }") != std::string::npos);
+    CHECK(tsx.find(R"(when={issuePage.status === "live" && (listHas((issuePage.data?.["assignees"] ?? null), viewer))})") != std::string::npos);
+    CHECK(tsx.find("import { Actions, Command, listHas, screen, useAuth, useParam, useView }") != std::string::npos);
     fs::remove_all(dir);
 }
 

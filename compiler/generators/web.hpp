@@ -797,8 +797,8 @@ namespace one::generators {
             if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
                 // A list has a value, like assignees has me.
                 if (binary->op == token_kind::has) {
-                    std::string list = condition_of(parts, ns, *binary->left, read);
-                    return "(Array.isArray(" + list + ") && " + list + ".includes(" + condition_of(parts, ns, *binary->right, read) + "))";
+                    parts.components.insert("listHas");
+                    return "listHas(" + condition_of(parts, ns, *binary->left, read) + ", " + condition_of(parts, ns, *binary->right, read) + ")";
                 }
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
