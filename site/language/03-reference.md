@@ -858,7 +858,7 @@ namespace studio {
 }
 ```
 
-It uses three things from the `one` library:
+It uses four things from the `one` library:
 
 - `After`, on a command, runs a function once the command's change is saved, with
   the entity as it was saved: `DeploymentCreate.After(start)`, from an `init`
@@ -867,5 +867,9 @@ It uses three things from the `one` library:
 - `one.Route("POST /hooks/deploy", handle)` answers requests of its own, like a
   build reporting back. A route checks the request itself: `s.SignedIn(r)` says
   who sent it, by the sign-in it carries, or `""` for nobody.
-- Both are given a `System`, the backend itself. `Run` runs any command, even one
+- `one.Once("name", work)` does work the first time a backend with it starts, and
+  never again, like moving what's stored to a new shape a deploy brings. It's added
+  to the namespace from an `init` function: `Module.Add(one.Once(...))`. If it
+  fails, the backend doesn't start, and the deploy says so.
+- They're given a `System`, the backend itself. `Run` runs any command, even one
   no role grants, and `one.Fetch` and `one.FetchWhere` read what's stored.

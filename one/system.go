@@ -79,11 +79,25 @@ func Fetch[E any, P entityPointer[E]](s *System, id string) (*E, error) {
 // FetchWhere reads every stored entity whose field has a value: a project's files,
 // with FetchWhere[File](s, "project", id).
 func FetchWhere[E any, P entityPointer[E]](s *System, field string, value any) ([]*E, error) {
+	return fetch[E, P](s, &field, value)
+}
+
+// FetchAll reads every stored entity of a kind, like every project, for work done
+// Once across all of them.
+func FetchAll[E any, P entityPointer[E]](s *System) ([]*E, error) {
+	return fetch[E, P](s, nil, nil)
+}
+
+func fetch[E any, P entityPointer[E]](s *System, field *string, value any) ([]*E, error) {
 	schema, ok := s.app.reg.schemas[reflect.TypeFor[E]()]
 	if !ok {
 		return nil, &Failure{Status: 500, Message: "this backend has no " + reflect.TypeFor[E]().Name()}
 	}
-	docs, err := s.app.store.Collection(schema.collection).Where(field, "==", value).Documents(s.ctx).GetAll()
+	query := s.app.store.Collection(schema.collection).Query
+	if field != nil {
+		query = query.Where(*field, "==", value)
+	}
+	docs, err := query.Documents(s.ctx).GetAll()
 	if err != nil {
 		return nil, err
 	}

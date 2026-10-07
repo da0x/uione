@@ -28,7 +28,8 @@ type Item interface {
 	register(r *registry, ns string)
 }
 
-type module struct {
+// ModuleSpec is a namespace's commands and views, made with Module.
+type ModuleSpec struct {
 	name  string
 	items []Item
 }
@@ -36,9 +37,16 @@ type module struct {
 // Module groups a namespace's commands and views. Everything in it is named inside
 // the namespace, so Command("signup::create") in Module("waitlist") is
 // waitlist::signup::create.
-func Module(name string, items ...Item) Item { return &module{name, items} }
+func Module(name string, items ...Item) *ModuleSpec { return &ModuleSpec{name, items} }
 
-func (m *module) register(r *registry, ns string) {
+// Add puts more in a module from Go written by hand beside it, from an init
+// function, like work done once: Module.Add(one.Once("...", migrate)).
+func (m *ModuleSpec) Add(items ...Item) *ModuleSpec {
+	m.items = append(m.items, items...)
+	return m
+}
+
+func (m *ModuleSpec) register(r *registry, ns string) {
 	for _, item := range m.items {
 		item.register(r, join(ns, m.name))
 	}
@@ -95,6 +103,7 @@ type registry struct {
 	roles    map[string][]string
 	scoped   []*RoleSpec  // roles held within an entity, like a project
 	defined  []*RolesSpec // roles each project, or the like, defines for itself as records
+	once     []*OnceSpec  // work done the first time a backend with it starts
 	named    map[string]bool
 	twice    []string // roles given more than once, which is a mistake
 	hooks    []*GitHubSpec
@@ -257,6 +266,10 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	// Projects made before their roles were records get them before any view is
 	// rebuilt, so the views show them.
 	if err := a.seedEarlierRoles(ctx); err != nil {
+		return nil, err
+	}
+	// Then what a deploy changes once, before views are rebuilt, so they show it.
+	if err := a.doOnce(ctx); err != nil {
 		return nil, err
 	}
 	// A view with a document per person or per entity is rebuilt where its
