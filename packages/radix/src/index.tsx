@@ -370,7 +370,7 @@ export const radix: ComponentSet = {
             </div>
           )}
           {search && (
-            <div className="ml-auto w-full py-1.5 sm:w-64">
+            <div className="ml-auto w-full py-1.5 sm:w-80">
               <input
             type="search"
             value={search.value}
@@ -400,7 +400,20 @@ export const radix: ComponentSet = {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} className="border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60">
+            // A row that opens something opens it wherever it's clicked, as its first
+            // cell's link does; a link or button of its own still does its own thing.
+            <tr
+              key={row.id}
+              onClick={
+                row.link
+                  ? (event) => {
+                      if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                      event.currentTarget.querySelector("a")?.click();
+                    }
+                  : undefined
+              }
+              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${row.link ? "cursor-pointer" : ""}`}
+            >
               {row.cells.map((cell, i) => (
                 <td key={i} className="px-3 py-1.5">
                   {i === 0 && row.link ? (
@@ -723,9 +736,9 @@ export const radix: ComponentSet = {
         {entries.map((entry) => (
           <li key={entry.id} className="flex gap-3">
             {entry.picture?.startsWith("https://") ? (
-              <img src={entry.picture} alt="" loading="lazy" referrerPolicy="no-referrer" className="mt-1 size-8 flex-none rounded-full border border-line object-cover" />
+              <img src={entry.picture} alt="" loading="lazy" referrerPolicy="no-referrer" className="one-person mt-1 size-8 flex-none rounded-full border border-line object-cover" />
             ) : (
-              <span aria-hidden="true" className="mt-1 size-8 flex-none rounded-full border border-line bg-sunken" />
+              <span aria-hidden="true" className="one-person mt-1 size-8 flex-none rounded-full border border-line bg-sunken" />
             )}
             <article className="min-w-0 flex-1 overflow-hidden rounded-box border border-line bg-surface">
               <header className="flex flex-wrap items-baseline gap-x-2 border-b border-line bg-sunken/60 px-4 py-2 text-sm">
@@ -772,7 +785,7 @@ export const radix: ComponentSet = {
       alt=""
       loading="lazy"
       referrerPolicy="no-referrer"
-      className="inline-block size-6 rounded-full border border-line object-cover"
+      className="one-person inline-block size-6 rounded-full border border-line object-cover"
     />
   ),
 

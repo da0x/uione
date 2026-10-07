@@ -85,12 +85,13 @@
 /*
  * PaperColor, the palette of the editor theme: a warm gray page, like paper, with
  * graphite text and its navy for what's pressed; dark, near black with soft blues.
- * Panels sit flat on the page.
+ * Panels sit flat on the page. Text is a shade darker than the editor's, so a page
+ * of it reads as easily as code does.
  */
 :root[data-palette="papercolor"] {
   --color-page: #eeeeee;
-  --color-ink: #444444;
-  --color-muted: #5f5f5f;
+  --color-ink: #262626;
+  --color-muted: #4e4e4e;
   --color-line: #d0d0d0;
   --color-control-line: #878787;
   --color-surface: #f7f7f7;
@@ -106,8 +107,8 @@
 @media (prefers-color-scheme: dark) {
   :root[data-palette="papercolor"]:not([data-theme="light"]) {
     --color-page: #1c1c1c;
-    --color-ink: #d0d0d0;
-    --color-muted: #9e9e9e;
+    --color-ink: #e4e4e4;
+    --color-muted: #b2b2b2;
     --color-line: #3a3a3a;
     --color-control-line: #626262;
     --color-surface: #262626;
@@ -123,8 +124,8 @@
 }
 :root[data-palette="papercolor"][data-theme="dark"] {
   --color-page: #1c1c1c;
-  --color-ink: #d0d0d0;
-  --color-muted: #9e9e9e;
+  --color-ink: #e4e4e4;
+  --color-muted: #b2b2b2;
   --color-line: #3a3a3a;
   --color-control-line: #626262;
   --color-surface: #262626;
@@ -138,13 +139,13 @@
   --shadow-panel: none;
 }
 
-/* Square corners, for a sharper look: panels, controls, and the chips and pictures
-   that are otherwise round. */
+/* Square corners, for a sharper look: panels, controls, and the chips that are
+   otherwise round. A person's picture stays a circle: it's a face, not a panel. */
 :root[data-corners="square"] {
   --radius-box: 0px;
   --radius-control: 0px;
 }
-:root[data-corners="square"] .rounded-full {
+:root[data-corners="square"] .rounded-full:not(.one-person) {
   border-radius: 0;
 }
 

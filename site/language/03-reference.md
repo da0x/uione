@@ -171,8 +171,8 @@ place of the component set's, a lighter one of it on a dark page. It's written
 `theme papercolor` gives the site the component set's PaperColor colors, light and
 dark: a warm gray page with graphite text, and panels that sit flat on it. A
 `color` given as well is still its color for buttons and links. `corners square`
-squares the corners of panels, buttons, labels and pictures, for a sharper look;
-they're round unless it says.
+squares the corners of panels, buttons and labels, for a sharper look; they're
+round unless it says. A person's picture stays a circle either way.
 
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google

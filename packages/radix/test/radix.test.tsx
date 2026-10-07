@@ -219,6 +219,19 @@ describe("tables and live values", () => {
     expect(screen.getByRole("columnheader", { name: "Actions" })).toBeTruthy();
   });
 
+  it("opens a row's page wherever the row is clicked, but not from its own buttons", () => {
+    const source = memorySource();
+    function Books() {
+      return <Table view={useView("library::shelf")} link="/docs/:page" columns={{ title: "Title", author: "Author" }} actions={["library::book::withdraw"]} />;
+    }
+    renderScreen(() => <Books />, source);
+    act(() => source.set("library::shelf", { rows: [{ id: "dune", title: "Dune", author: "Herbert" }] }));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    expect(screen.queryByRole("heading", { name: "Docs" })).toBeNull();
+    fireEvent.click(screen.getByText("Herbert"));
+    expect(screen.getByRole("heading", { name: "Docs" })).toBeTruthy();
+  });
+
   it("shows a placeholder instead of a value that isn't live", () => {
     const source = memorySource();
     function Count() {
@@ -242,6 +255,12 @@ describe("the stylesheet", () => {
     expect(text).toContain("prefers-color-scheme:dark");
     expect(text).toContain(".bg-accent");
     expect(text).toContain(".one-prose");
+  });
+
+  it("squares corners when the page asks, except a person's picture, which stays a circle", () => {
+    const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
+    expect(text).toMatch(/\[data-corners=(square|"square")\] \.rounded-full:not\(\.one-person\)\{border-radius:0\}/);
+    expect(text).toMatch(/\[data-palette=(papercolor|"papercolor")\]\{--color-page:#eee/);
   });
 });
 
