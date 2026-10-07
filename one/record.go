@@ -420,15 +420,24 @@ func (s *schema) id(v reflect.Value) (string, bool) {
 		if value == "" {
 			return "", false
 		}
-		parts[i] = url.PathEscape(value)
-		// Parts are joined by dashes, so a dash in any part but the first is escaped:
-		// project engine with person x-1 is engine-x%2D1, never the same id as
-		// project engine-x with person 1.
+		parts[i] = value
+	}
+	return Key(parts...), true
+}
+
+// Key is the id of an entity named by its keys, in order: Key("engine",
+// "maintainer") is the engine project's maintainer role. Parts are joined by
+// dashes, so a dash in any part but the first is escaped: project engine with
+// person x-1 is engine-x%2D1, never the same id as project engine-x with person 1.
+func Key(parts ...string) string {
+	escaped := make([]string, len(parts))
+	for i, part := range parts {
+		escaped[i] = url.PathEscape(part)
 		if i > 0 {
-			parts[i] = strings.ReplaceAll(parts[i], "-", "%2D")
+			escaped[i] = strings.ReplaceAll(escaped[i], "-", "%2D")
 		}
 	}
-	return strings.Join(parts, "-"), true
+	return strings.Join(escaped, "-")
 }
 
 // normalize stores key fields in the same form the id is made from, and lowercases

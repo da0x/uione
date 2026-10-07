@@ -93,7 +93,8 @@ type registry struct {
 	commands map[string]func(*App, *call) (string, error)
 	views    []*ViewSpec
 	roles    map[string][]string
-	scoped   []*RoleSpec // roles held within an entity, like a project
+	scoped   []*RoleSpec  // roles held within an entity, like a project
+	defined  []*RolesSpec // roles each project, or the like, defines for itself as records
 	named    map[string]bool
 	twice    []string // roles given more than once, which is a mistake
 	hooks    []*GitHubSpec
@@ -252,6 +253,11 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 		if _, err := a.write(ctx, v, "", data, version, "start"); err != nil {
 			return nil, err
 		}
+	}
+	// Projects made before their roles were records get them before any view is
+	// rebuilt, so the views show them.
+	if err := a.seedEarlierRoles(ctx); err != nil {
+		return nil, err
 	}
 	// A view with a document per person or per entity is rebuilt where its
 	// definition changed, so a deploy that changes it reaches every document.

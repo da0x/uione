@@ -63,8 +63,12 @@ func Create[E any, P entityPointer[E]](c *Ctx, entity *E) error {
 	if s == nil {
 		return fmt.Errorf("one: %s isn't an entity any module uses", reflect.TypeFor[E]().Name())
 	}
-	v := reflect.ValueOf(entity).Elem()
-	record := P(entity).record()
+	return create(c, s, reflect.ValueOf(entity).Elem())
+}
+
+// create is Create for an entity known by its schema, like a project's roles.
+func create(c *Ctx, s *schema, v reflect.Value) error {
+	record := v.Addr().Interface().(interface{ record() *Record }).record()
 	username := ""
 	if s.startsWithUsername() {
 		var err error
@@ -96,12 +100,12 @@ func Create[E any, P entityPointer[E]](c *Ctx, entity *E) error {
 			return err
 		}
 		before = snap.Data()
-		existing := new(E)
-		if err := snap.DataTo(existing); err != nil {
+		kept := reflect.New(s.typ).Elem()
+		if err := snap.DataTo(kept.Addr().Interface()); err != nil {
 			return err
 		}
-		record.CreatedAt, record.CreatedBy = P(existing).record().CreatedAt, P(existing).record().CreatedBy
-		kept := reflect.ValueOf(existing).Elem()
+		earlier := kept.Addr().Interface().(interface{ record() *Record }).record()
+		record.CreatedAt, record.CreatedBy = earlier.CreatedAt, earlier.CreatedBy
 		for _, f := range counted {
 			v.FieldByIndex(f.index).Set(kept.FieldByIndex(f.index))
 		}
@@ -475,6 +479,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 					return err
 				}
 			}
+			// A project starts with its default roles, made with it.
+			if err := a.seedRoles(body, s, ref.ID); err != nil {
+				return err
+			}
 			if err := s.validate(v); err != nil {
 				return err
 			}
@@ -785,8 +793,14 @@ func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction
 	if !a.scopes(p) {
 		return nil
 	}
+	var scopes []*schema
 	for _, ro := range a.reg.scoped {
-		scope := a.reg.schemas[ro.scope]
+		scopes = append(scopes, a.reg.schemas[ro.scope])
+	}
+	for _, r := range a.reg.defined {
+		scopes = append(scopes, a.reg.schemas[r.scope])
+	}
+	for _, scope := range scopes {
 		after, err := a.within(tx, &owned{s, v}, scope)
 		if err != nil {
 			return err
@@ -813,6 +827,9 @@ func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction
 
 // scopes says whether a role held within an entity grants a permission.
 func (a *App) scopes(p Permission) bool {
+	if len(a.reg.defined) > 0 {
+		return true // a project's own roles may allow anything
+	}
 	for _, ro := range a.reg.scoped {
 		if contains(ro.permissions, string(p)) {
 			return true
@@ -825,6 +842,9 @@ func (a *App) scopes(p Permission) bool {
 // within the entity the command acts in: the project an issue points at, or the
 // project itself. A member that points at both and names the role grants it.
 func (a *App) permittedWithin(tx *firestore.Transaction, me string, p Permission, entity *owned) error {
+	if allowed, err := a.allowedByRoles(tx, me, p, entity); err != nil || allowed {
+		return err
+	}
 	for _, ro := range a.reg.scoped {
 		if !contains(ro.permissions, string(p)) {
 			continue

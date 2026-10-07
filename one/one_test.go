@@ -78,6 +78,7 @@ var modules = []one.Item{
 	tracker,
 	forum,
 	teams,
+	crews,
 	desk,
 	cases,
 	code,
