@@ -166,6 +166,19 @@ describe("a workbench, with the real compiler", async () => {
     await waitFor(() => expect(editor.state.doc.lineAt(editor.state.selection.main.head).number).toBe(3));
   });
 
+  it("colors only a .one file with uione's words", () => {
+    const code = "entity book {\n\ttitle  text\n}\n";
+    const colored = (path: string) => {
+      const { container, unmount } = render(<Workbench compiler={compiler} files={{ [path]: code }} path={path} onChange={() => {}} generated={false} />);
+      const count = container.querySelectorAll(".cm-content span[style]").length;
+      unmount();
+      return count;
+    };
+    expect(colored("main.one")).toBeGreaterThan(0);
+    expect(colored("components/book.tsx")).toBe(0);
+    expect(colored("README.md")).toBe(0);
+  });
+
   it("can be only read, by someone who can't change the file", () => {
     let changed = false;
     const { container } = render(

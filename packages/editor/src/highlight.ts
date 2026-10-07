@@ -131,10 +131,11 @@ const dark = EditorView.baseTheme({
 
 // Highlighting in a light and a dark theme, each shown on its page, GitHub's unless
 // others are given. One not yet loaded shows as GitHub's; load it with loadThemes,
-// and highlight again.
-export function highlighting(themes: Themes = defaultThemes): Extension {
+// and highlight again. A file that isn't .one, like a component's .tsx, gets the
+// theme's colors but none of uione's words.
+export function highlighting(themes: Themes = defaultThemes, uione = true): Extension {
   const showing = shown(themes);
-  return [plugin(showing), surface(showing), dark];
+  return uione ? [plugin(showing), surface(showing), dark] : [surface(showing)];
 }
 
 // The colors a token gets, in light and dark: the nth piece of `code` reading

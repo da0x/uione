@@ -114,10 +114,10 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           drawSelection(),
           history(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          colors.current.of(highlighting(themesOf(themes?.light, themes?.dark))),
+          colors.current.of(highlighting(themesOf(themes?.light, themes?.dark), path.endsWith(".one"))),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
-          ...(compiler.define
+          ...(compiler.define && path.endsWith(".one")
             ? [
                 definitions({
                   compiler: compiler as Pick<Compiler, "define">,
@@ -199,7 +199,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
     let current = true;
     const chosen = themesOf(themes?.light, themes?.dark);
     void loadThemes(chosen).then(() => {
-      if (current && view.current) view.current.dispatch({ effects: colors.current.reconfigure(highlighting(chosen)) });
+      if (current && view.current) view.current.dispatch({ effects: colors.current.reconfigure(highlighting(chosen, path.endsWith(".one"))) });
     });
     return () => {
       current = false;
