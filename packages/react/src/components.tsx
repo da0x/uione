@@ -440,6 +440,68 @@ export function Command({
   );
 }
 
+// A button for each step from where something is now, like an issue's phase, that
+// one of the person's roles may take: "Start work" or "Move to In review", each
+// moving it to the step's to. Steps are rows holding from and to, and the roles that
+// may take them; the person's roles come from the view of their roles, here.
+export function Steps({
+  command,
+  id,
+  field,
+  current,
+  steps,
+  list,
+  shown,
+  to,
+  held,
+  roles,
+  within,
+  place = "project",
+  role = "role",
+}: {
+  command: string;
+  id?: string;
+  field: string; // what the command changes, like phase
+  current?: ViewState; // the view holding where it is now
+  steps: ViewState;
+  list: string;
+  shown?: string; // a step's own title, like Start work
+  to?: string; // the title of where it goes, like to.title
+  held?: string; // the step's list of roles that may take it
+  roles?: ViewState; // the view of the person's roles
+  within?: string; // the project they're held in
+  place?: string; // the field of a role's row naming the project
+  role?: string; // the field of a role's row naming the role
+}) {
+  const ui = useUI();
+  const runner = useConfirmedRunner();
+  if (current?.status !== "live" || steps.status !== "live") return null;
+  const now = current.data?.[field];
+  const mine = new Set(
+    roles?.status === "live" && Array.isArray(roles.data?.rows)
+      ? (roles.data.rows as Record<string, unknown>[]).filter((row) => row[place] === within).map((row) => row[role])
+      : [],
+  );
+  const open = rowsOf(steps.data?.[list]).filter(
+    (step) => step.from === now && (!held || (Array.isArray(step[held]) && (step[held] as unknown[]).some((r) => mine.has(r)))),
+  );
+  return (
+    <>
+      {open.map((step) => (
+        <ui.Button
+          key={step.id}
+          kind="primary"
+          disabled={runner.busy(command)}
+          error={runner.error(command)}
+          onClick={() => void runner.run(command, { ...(id === undefined ? {} : { id }), [field]: step.to })}
+        >
+          {(shown && show(step[shown])) || (to && show(step[to]) ? `Move to ${show(step[to])}` : label(action(command)))}
+        </ui.Button>
+      ))}
+    </>
+  );
+}
+
 type Row = Record<string, unknown> & { id: string };
 
 // A view's data comes from outside the app, so a list that isn't a list, or a row

@@ -369,6 +369,10 @@ namespace one::language {
         qualified_name command;
         std::optional<std::string> label;
         expression_ptr when;
+        // issue::move along project_page.steps: a button for each step from where the
+        // entity is now that the person's roles may take, moving it to the step's to.
+        std::optional<qualified_name> along;  // the view, like project_page
+        std::string along_list;               // its list of steps, like steps
     };
 
     // component workbench: a hand-written React component, components/workbench.tsx

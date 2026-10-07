@@ -513,6 +513,87 @@ screen "Crew" /crews/:crew {
     CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") != std::string::npos);
 }
 
+TEST_CASE("a workflow's steps are buttons along them, and a step's form picks its phases and roles") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-workflow";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(namespace work {
+entity project {
+	slug  slug  required  unique  key
+}
+entity role {
+	project  project  required  key
+	name     slug     required  key
+	title    text     required
+	may      list of permission
+}
+entity member {
+	project  project  required  key
+	person   user     required  key
+	role     role     required  key
+}
+roles role per project from member {
+	owner "Owner"  step::create  issue::move
+}
+entity phase {
+	project  project  required  key
+	name     slug     required  key
+	title    text     required
+}
+entity step {
+	project  project  required  key
+	from     phase    required  key
+	to       phase    required  key
+	title    text
+	roles    list of role
+}
+entity issue {
+	project  project  required
+	phase    phase
+}
+command step::create
+command issue::move {
+	changes phase
+	require exists(step where from == was issue.phase && to == issue.phase && held(roles))  "not from there to there"
+}
+view project_page per project {
+	readers member
+	phases = each phase where project == project.id {
+		name  title
+	}
+	steps = each step where project == project.id {
+		from  to  title  to.title  roles
+	}
+	roles = each role where project == project.id {
+		name  title
+	}
+}
+view issue_page per issue {
+	readers member
+	phase = issue.phase
+}
+screen "Issue" /:project/issues/:issue {
+	issue::move along project_page.steps
+}
+screen "Steps" /:project/steps {
+	step::create "New step"
+	form step::create "Create" {
+		from  to  title  roles
+	}
+}
+}
+)");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "from", type: "choice", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "roles", type: "choices", choices: listChoices(projectPage, "roles", "title") })") != std::string::npos);
+}
+
 TEST_CASE("a project's theme and corners are on its page from the first paint") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-theme";

@@ -973,7 +973,7 @@ TEST_CASE("a screen's regions are its layout's, and hold everything once there a
 
 TEST_CASE("a table searches and sorts by what its rows have") {
     const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\tnumber  number\n}\nview issues {\n\teach issue {\n\t\ttitle  number\n\t}\n}\n";
-    CHECK(check_source(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsearch title\n\t\tsort number descending\n\t\tpage 10\n\t\ttitle\n\t}\n}\n}\n").empty());
+    CHECK(check_source(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsearch title\n\t\tsort by number descending\n\t\tpage 10\n\t\ttitle\n\t}\n}\n}\n").empty());
     CHECK(only_error(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsearch body\n\t\ttitle\n\t}\n}\n}\n").message == "the table searches body, which its rows don't have");
-    CHECK(only_error(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsort created_at descending\n\t\ttitle\n\t}\n}\n}\n").message == "the table is sorted by created_at, which its rows don't have");
+    CHECK(only_error(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsort by created_at descending\n\t\ttitle\n\t}\n}\n}\n").message == "the table is sorted by created_at, which its rows don't have");
 }

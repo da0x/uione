@@ -30,7 +30,7 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create readers when add remove to has of limit for by on component order each per where from table form confirm hint
+syn keyword uioneKeyword   require permission clear create readers when was add remove to has of limit for by on component order each per where from table form confirm hint
 syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at
 " each change of issue: change is the language's own record of an entity's changes,
 " a type, as text is.

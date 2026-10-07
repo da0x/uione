@@ -219,7 +219,7 @@ namespace tracker {
 		}
 		table project_page.issues by status link /issues/:issue {
 			search title labels
-			sort number descending
+			sort by number descending
 			page 25
 			number "#"
 			title

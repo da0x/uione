@@ -167,5 +167,5 @@ examples/tracker/main.one	copy issue_page "Copy issue"	copy	keyword
 examples/tracker/main.one	details issue_page {	details	keyword
 examples/tracker/main.one	screen "Issue" /issues/:issue layout two_columns {	layout	keyword
 examples/tracker/main.one	search title labels	search	keyword
-examples/tracker/main.one	sort number descending	sort	keyword
+examples/tracker/main.one	sort by number descending	sort	keyword
 examples/tracker/main.one	page 25	page	keyword

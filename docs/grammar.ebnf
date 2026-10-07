@@ -166,7 +166,7 @@ equality       ::= comparison (("==" | "!=" | "has") comparison)*
 comparison     ::= sum (("<" | ">" | "<=" | ">=") sum)*
 sum            ::= product (("+" | "-") product)*
 product        ::= unary ("*" unary)*
-unary          ::= ("!" | "-") unary | postfix
+unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
 primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")"
@@ -175,6 +175,6 @@ qualified      ::= NAME ("::" NAME)*
 
 table_line     ::= "by" NAME END
                  | "search" (NAME ("." NAME)*)+ END
-                 | "sort" NAME ("ascending" | "descending")? END
+                 | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END
                  | column+ ("when" expression)? END

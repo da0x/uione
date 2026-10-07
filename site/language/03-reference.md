@@ -113,7 +113,7 @@ Words for values that aren't written out:
 The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
-- in a command: `require`, `permission`, `create`, `clear`, `changes`, `add … to`, `remove … from`;
+- in a command: `require`, `permission`, `create`, `clear`, `changes`, `was`, `add … to`, `remove … from`;
 - in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
@@ -403,6 +403,21 @@ command loan::checkin {
   issue's title can't also set its status by sending it. `changes cloud_project
   deploy_account` adds fields it may change besides, like those a hand-written
   component sends. An update with neither may change any field but its keys.
+  Another command, like a move, takes only the fields its `changes` and its forms
+  name: `changes phase` takes the phase an issue moves to.
+- `was issue.phase` is what a field held before the command changed it.
+- `exists(step where from == was issue.phase && to == issue.phase)` asks whether
+  there's one, in a `require`. Inside it, the entity's own fields are named
+  plainly, and the command's entity by its name. `held(roles)` there asks whether
+  the person holds one of a list of the project's [roles](#roles), so who may take
+  a step is the project's to say:
+
+```one
+command issue::move {
+	changes phase
+	require exists(step where from == was issue.phase && to == issue.phase && held(roles))  "your role doesn't move an issue from there to there"
+}
+```
 - `create` makes another entity in the same step, giving its fields values worked
   out where the command runs. `id` is the id of the command's own entity, and `me`
   is the person running it. Every required field gets a value, unless it starts
@@ -652,7 +667,7 @@ screen "Book" /books/:book {
   or from the row when it holds them, like a list of one person's issues across
   projects.
 - A table's block can start with its own settings: `search title labels` gives it a
-  box that finds rows by those fields, `sort number descending` puts its rows in
+  box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of

@@ -779,9 +779,15 @@ namespace one::language {
                             if (at(token_kind::minus)) {
                                 const token& minus = advance();
                                 const token& field = expect(token_kind::identifier, "the field rows are sorted by");
-                                fail(minus.where, "write " + field.text + " descending; a - in front isn't said in words",
-                                     fix{minus.where, field.end - minus.begin, field.text + " descending"});
+                                fail(minus.where, "write by " + field.text + " descending; a - in front isn't said in words",
+                                     fix{minus.where, field.end - minus.begin, "by " + field.text + " descending"});
                             }
+                            // sort by number: said the way it reads.
+                            if (!at_word("by") || peek(1).kind != token_kind::identifier) {
+                                const token& field = peek();
+                                fail(field.where, "write sort by " + field.text + ", saying what rows are sorted by", fix{field.where, 0, "by "});
+                            }
+                            advance();
                             table.sort = expect(token_kind::identifier, "the field rows are sorted by").text;
                             if (at_word("ascending")) {
                                 advance();
@@ -894,7 +900,15 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, ""};
+                if (at_word("along")) {
+                    advance();
+                    button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
+                    expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
+                    button.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
+                    end_line();
+                    return {where, std::move(button)};
+                }
                 if (at(token_kind::string)) button.label = expect(token_kind::string, "what the button says").text;
                 if (at_word("when")) {
                     advance();
@@ -1152,6 +1166,19 @@ namespace one::language {
         }
 
         expression_ptr parse_unary() {
+            // was issue.phase: what a field held before the command, kept as a call.
+            if (at_word("was") && peek(1).kind == token_kind::identifier) {
+                const token& was = advance();
+                auto callee = std::make_unique<expression>();
+                callee->where = was.where;
+                callee->node = name_expression{qualified_name{{"was"}, was.where}};
+                call_expression call{std::move(callee), {}};
+                call.arguments.push_back(parse_postfix());
+                auto e = std::make_unique<expression>();
+                e->where = was.where;
+                e->node = std::move(call);
+                return e;
+            }
             if (at(token_kind::logical_not) || at(token_kind::minus)) {
                 const token& op = advance();
                 auto e = std::make_unique<expression>();

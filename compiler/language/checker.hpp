@@ -89,6 +89,7 @@ namespace one::language {
             std::map<std::string, declared<enum_declaration>> enums;
             std::map<std::string, declared<function_declaration>> functions;
             std::map<std::string, origin> commands;  // entity::command
+            std::map<std::string, const command_declaration*> command_nodes;  // the same, as declared
             std::vector<const role_declaration*> roles;
             std::vector<const roles_declaration*> defined;  // roles each project defines for itself
             std::map<std::string, origin> role_names;  // so a role is declared once
@@ -104,6 +105,7 @@ namespace one::language {
             const entity_declaration* subject = nullptr; // the entity a view per entity is for
             bool hook = false;                           // a webhook's handler, which may create
             bool update = false;                         // an update command's body, which may say what it changes
+            bool command = false;                        // a command's body, which may ask what a field was and what exists
         };
 
         diagnostics& out_;
@@ -205,6 +207,7 @@ namespace one::language {
                     add(here.functions, function->name, *function, d.where, "function", ns);
                 } else if (auto* c = std::get_if<command_declaration>(&d.node)) {
                     if (c->name.parts.size() != 2) continue;  // reported in the second pass
+                    here.command_nodes.try_emplace(c->name.text(), c);
                     auto [it, inserted] = here.commands.try_emplace(c->name.text(), origin{path_, d.where});
                     if (!inserted) {
                         error(d.where, "command " + c->name.text() + " is declared twice " + in_namespace(ns) +
@@ -787,7 +790,8 @@ namespace one::language {
                 return;
             }
             context in{ns, entity, nullptr, {}, false};
-            in.update = c.name.parts.back() == "update";
+            in.update = c.name.parts.back() != "create" && c.name.parts.back() != "delete";
+            in.command = true;
             statements(ns, c.body, entity, in);
         }
 
@@ -809,7 +813,7 @@ namespace one::language {
                     }
                 } else if (auto* c = std::get_if<changes_statement>(&s.node)) {
                     if (!in.update) {
-                        error(s.where, "changes goes in an update command, naming the fields it may change besides its forms'");
+                        error(s.where, "changes goes in a command that changes what's there, like an update or a move, naming the fields it takes");
                     }
                     for (const auto& name : c->fields) {
                         snake(name, s.where);
@@ -1385,6 +1389,44 @@ namespace one::language {
             }
         }
 
+        // issue::move along project_page.steps: the command changes one field, like
+        // phase, and each step in the list goes from one of those to another, so its
+        // rows hold from and to.
+        void verify_along(const std::string& ns, const button_item& button, const std::string& route) {
+            const command_declaration* command = nullptr;
+            if (auto here = scopes_.find(ns); here != scopes_.end()) {
+                if (auto it = here->second.command_nodes.find(button.command.text()); it != here->second.command_nodes.end()) command = it->second;
+            }
+            if (!command) return;  // verify_command_use says so
+            std::vector<std::string> changed;
+            for (const auto& st : command->body) {
+                if (auto* c = std::get_if<changes_statement>(&st.node)) changed.insert(changed.end(), c->fields.begin(), c->fields.end());
+            }
+            if (changed.size() != 1) {
+                error(button.command.where, button.command.text() + " goes along steps, so it changes one field, the one they go between, like changes phase");
+            }
+            const view_declaration* view = find(ns, *button.along, &scope::views);
+            if (!view) {
+                error(button.along->where, "there's no view " + button.along->text() + " for its steps " + in_namespace(ns));
+                return;
+            }
+            verify_shown(*view, button.along->text(), route, button.along->where);
+            for (const auto& each : view->each) {
+                if (!each.name || *each.name != button.along_list) continue;
+                bool from = false, to = false;
+                for (const auto& row : each.rows) {
+                    std::string column = row.name ? *row.name : written(*row.value);
+                    from = from || column == "from";
+                    to = to || column == "to";
+                }
+                if (!from || !to) {
+                    error(button.along->where, "view " + button.along->text() + "'s " + button.along_list + " are steps, so each row holds from and to");
+                }
+                return;
+            }
+            error(button.along->where, "view " + button.along->text() + " has no list called " + button.along_list);
+        }
+
         void verify_command_use(const std::string& ns, const qualified_name& name) {
             snake(name);
             if (!find_command(ns, name)) {
@@ -1641,6 +1683,7 @@ namespace one::language {
                 } else if (auto* button = std::get_if<button_item>(&item.node)) {
                     verify_command_use(ns, button->command);
                     if (button->when) verify_condition(ns, *button->when, route);
+                    if (button->along) verify_along(ns, *button, route);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);
                     std::string file = component_file(path_, component->name);
@@ -2052,6 +2095,7 @@ namespace one::language {
                 return nullptr;
             }
             context inner{outer.ns, e, outer.row ? outer.row : outer.entity, {}, outer.reader, outer.subject};
+            inner.command = outer.command;
             if (w.condition) resolve(inner, *w.condition);
             return e;
         }
@@ -2078,6 +2122,35 @@ namespace one::language {
                 if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");
                 return e;
             }
+            // exists(step where from == was issue.phase && held(roles)): whether
+            // there's one, in a command's require.
+            if (name == "exists") {
+                if (!arguments(1)) return nullptr;
+                if (!in.command) error(call.callee->where, "exists goes in a command, like require exists(step where ...)  \"...\"");
+                auto* w = std::get_if<where_expression>(&call.arguments[0]->node);
+                if (!w) {
+                    error(call.arguments[0]->where, "exists takes an entity and where, like exists(step where to == issue.phase)");
+                    return nullptr;
+                }
+                where_of(in, *w);
+                return nullptr;
+            }
+            // was issue.phase: what a field of the command's entity held before it.
+            if (name == "was") {
+                if (!arguments(1)) return nullptr;
+                if (!in.command) error(call.callee->where, "was goes in a command, saying what a field held before it");
+                resolve(in, *call.arguments[0]);
+                return nullptr;
+            }
+            // held(roles): whether the person holds one of these project roles.
+            if (name == "held") {
+                if (!arguments(1)) return nullptr;
+                const field* roles = resolve(in, *call.arguments[0]);
+                if (roles && (!roles->list || !defined_roles(in.ns, *roles))) {
+                    error(call.arguments[0]->where, "held takes a list of a project's roles, like held(roles)");
+                }
+                return nullptr;
+            }
             // github_secret(project.id): the secret a project pastes into GitHub for
             // its webhook, shown only in a view per that project.
             if (name == "github_secret") {
@@ -2101,7 +2174,7 @@ namespace one::language {
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "starts_with", "drop", "github_secret"};
+            std::vector<std::string> known{"count", "first", "exists", "was", "held", "starts_with", "drop", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;

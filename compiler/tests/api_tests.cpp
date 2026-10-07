@@ -133,6 +133,70 @@ screen "Issue" /issues/:issue {
     CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
 }
 
+TEST_CASE("a move takes what it changes, and asks what exists and what roles are held") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew    crew  required  key
+	person  user  required  key
+	rank    rank  required  key
+}
+roles rank per crew from hand {
+	captain "Captain"  job::move
+}
+entity stage {
+	crew  crew  required  key
+	name  slug  required  key
+}
+entity leg {
+	crew   crew   required  key
+	from   stage  required  key
+	to     stage  required  key
+	ranks  list of rank
+}
+entity job {
+	crew   crew  required
+	stage  stage
+}
+command job::move {
+	changes stage
+	require exists(leg where from == was job.stage && to == job.stage && held(ranks))  "not from there to there"
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(var Move = one.Command[Job]("job::move").Fields("stage").)") != std::string::npos);
+    CHECK(found->content.find(R"(found, err := one.Exists(c, one.Where[Leg]("from", c.Was("stage")).And("to", j.Stage), func(l *Leg) (bool, error) { return c.Held(l.Ranks) }))") != std::string::npos);
+    CHECK(found->content.find("if !found {") != std::string::npos);
+}
+
+TEST_CASE("exists and was are a command's, and held takes a project's roles") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace crew {\nentity job {\n\ttitle  text\n\ttags  list of text\n}\n"
+                                                "view jobs {\n\tbusy = exists(job where title == none)\n}\n"
+                                                "command job::close {\n\trequire exists(job where held(tags))  \"no\"\n}\n}\n", out));
+    language::check(files, out);
+    REQUIRE(out.size() >= 2);
+    CHECK(std::any_of(out.begin(), out.end(), [](const auto& d) { return d.message == "exists goes in a command, like require exists(step where ...)  \"...\""; }));
+    CHECK(std::any_of(out.begin(), out.end(), [](const auto& d) { return d.message == "held takes a list of a project's roles, like held(roles)"; }));
+}
+
 TEST_CASE("a project's own roles become one.Roles, and a role it starts with its id") {
     language::diagnostics out;
     std::vector<language::file> files;
@@ -179,14 +243,14 @@ command hand::create
     CHECK(found->content.find(", Roles)") != std::string::npos);
 }
 
-TEST_CASE("changes goes only in an update, naming the entity's fields") {
+TEST_CASE("changes goes only in a command that changes what's there, naming the entity's fields") {
     language::diagnostics out;
     std::vector<language::file> files;
     files.push_back(language::parse("main.one", "namespace tracker {\nentity issue {\n\ttitle  text\n}\n"
-                                                "command issue::close {\n\tchanges title\n}\ncommand issue::update {\n\tchanges colour\n}\n}\n", out));
+                                                "command issue::create {\n\tchanges title\n}\ncommand issue::update {\n\tchanges colour\n}\n}\n", out));
     language::check(files, out);
     REQUIRE(out.size() == 2);
-    CHECK(out[0].message == "changes goes in an update command, naming the fields it may change besides its forms'");
+    CHECK(out[0].message == "changes goes in a command that changes what's there, like an update or a move, naming the fields it takes");
     CHECK(out[1].message == "'changes colour' names a field entity issue doesn't have");
 }
 

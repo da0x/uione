@@ -216,6 +216,7 @@ namespace one::generators {
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
+        std::map<std::string, const language::command_declaration*> command_nodes_;  // by full name, like projects::issue::move
         std::set<std::string> open_;  // commands anyone may run, signed in or not, in full
         std::vector<std::string> personal_;  // views with one document per person
         // A set of markdown pages, one per file, shown by a screen like /docs/:page.
@@ -288,6 +289,7 @@ namespace one::generators {
                     if (v->per == "user") personal_.push_back(web_detail::join(ns, v->name));
                 } else if (auto* c = std::get_if<language::command_declaration>(&d.node)) {
                     commands_[ns].insert(c->name.text());
+                    command_nodes_[web_detail::join(ns, c->name.text())] = c;
                     for (const auto& s : c->body) {
                         auto* p = std::get_if<language::permission_statement>(&s.node);
                         if (p && p->permission.text() == "anyone") open_.insert(web_detail::join(ns, c->name.text()));
@@ -1031,6 +1033,8 @@ namespace one::generators {
                     parts.components.insert("Confirm");
                     out.line("<Confirm command=" + web_detail::js_string(full_command(ns, confirm->command)) +
                              " question=" + web_detail::js_string(confirm->message) + " />");
+                } else if (auto* button = std::get_if<language::button_item>(&item.node); button && button->along) {
+                    steps(out, parts, ns, *button);
                 } else if (auto* button = std::get_if<language::button_item>(&item.node)) {
                     if (has_form_for(screen, button->command)) continue;  // the form draws its own button
                     parts.components.insert("Command");
@@ -1055,6 +1059,69 @@ namespace one::generators {
                 }
             }
             if (in_row) out.close("</Actions>");
+        }
+
+        // issue::move along project_page.steps: a button for each step from where the
+        // entity is now, as a view per it on the screen says, that the person's roles
+        // may take; pressing one moves it to the step's to.
+        void steps(stream& out, screen_parts& parts, const std::string& ns, const language::button_item& button) {
+            std::string command = full_command(ns, button.command);
+            const language::entity_declaration* entity = entity_of_command(command);
+            const language::command_declaration* declared = command_nodes_.count(command) ? command_nodes_[command] : nullptr;
+            std::string field;
+            if (declared) {
+                for (const auto& st : declared->body) {
+                    if (auto* c = std::get_if<language::changes_statement>(&st.node); c && !c->fields.empty()) field = c->fields.front();
+                }
+            }
+            if (!entity || field.empty()) return;
+            parts.components.insert("Steps");
+            parts.params.insert(entity->name);
+            // Where it is now: a view per the entity, holding the field.
+            std::string current;
+            if (auto scope = views_.find(ns); scope != views_.end()) {
+                for (const auto& [name, view] : scope->second) {
+                    if (!view->per || *view->per != entity->name) continue;
+                    for (const auto& value : view->values) {
+                        if ((value.name ? *value.name : web_detail::text_of(*value.value)) == field) current = view_variable(parts, web_detail::join(ns, name));
+                    }
+                }
+            }
+            std::string list = view_variable(parts, full_view(ns, button.along->text()));
+            std::string line = "<Steps command=" + web_detail::js_string(command) + " id={" + web_detail::js_name(entity->name + "_id") + "} field=" +
+                               web_detail::js_string(field) + " current={" + (current.empty() ? "undefined" : current) + "} steps={" + list + "} list=" +
+                               web_detail::js_string(button.along_list);
+            // Whose roles may take each step: a list of the project's roles on it.
+            const language::view_declaration* view = nullptr;
+            if (auto scope = views_.find(ns); scope != views_.end()) {
+                if (auto it = scope->second.find(button.along->parts.back()); it != scope->second.end()) view = it->second;
+            }
+            for (std::size_t at = 0; view && at < view->each.size(); ++at) {
+                const auto& each = view->each[at];
+                if (!each.name || *each.name != button.along_list) continue;
+                auto* source = std::get_if<language::name_expression>(&each.source->node);
+                const language::entity_declaration* step = nullptr;
+                if (auto scope = entities_.find(ns); source && scope != entities_.end()) {
+                    if (auto it = scope->second.find(source->name.text()); it != scope->second.end()) step = it->second;
+                }
+                for (const auto& row : each.rows) {
+                    std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
+                    if (column == "title") line += " shown=\"title\"";
+                    if (column == "to.title") line += " to=\"to.title\"";
+                    for (const auto& held : held_) {
+                        if (held.allows.empty() || held.ns != ns || !step || !names_parameter(route_, held.within)) continue;
+                        for (const auto& f : step->fields) {
+                            if (f.name == column && f.list && f.type && f.type->text() == held.record) {
+                                parts.params.insert(held.within);
+                                line += " held=" + web_detail::js_string(column) + " roles={" + view_variable(parts, held.view) + "} within={" +
+                                        web_detail::js_name(held.within + "_id") + "} place=" + web_detail::js_string(held.field) + " role=" +
+                                        web_detail::js_string(held.allows.substr(0, held.allows.find('.')));
+                            }
+                        }
+                    }
+                }
+            }
+            out.line(line + " />");
         }
 
         void content(stream& out, screen_parts& parts, const std::string& ns, const language::content_text& text) {
@@ -1352,17 +1419,25 @@ namespace one::generators {
             return "[" + options + "]";
         }
 
-        // A view per the roles' project, like project_page, with a list of its roles,
-        // as the view variable and the list's name: projectPage, "roles".
-        std::optional<std::string> roles_list(screen_parts& parts, const std::string& ns, const held_roles& held) {
+        // A list of an entity, like a project's roles, in a view per something the
+        // screen's address names, like project_page: the view, the list, and what each
+        // is shown by, its title or its name: projectPage, "roles", "title".
+        std::optional<std::string> listed_on_screen(screen_parts& parts, const std::string& ns, const std::string& entity) {
             auto scope = views_.find(ns);
-            if (scope == views_.end() || !names_parameter(route_, held.within)) return std::nullopt;
+            if (scope == views_.end()) return std::nullopt;
             for (const auto& [name, view] : scope->second) {
-                if (!view->per || *view->per != held.within) continue;
+                if (!view->per || !names_parameter(route_, *view->per)) continue;
                 for (const auto& each : view->each) {
                     auto* source = std::get_if<language::name_expression>(&each.source->node);
-                    if (!each.name || each.changes || !source || source->name.text() != held.record) continue;
-                    return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name);
+                    if (!each.name || each.changes || !source || source->name.text() != entity) continue;
+                    std::string shown;
+                    for (const auto& row : each.rows) {
+                        std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
+                        if (column == "title" || (column == "name" && shown.empty())) shown = column;
+                    }
+                    if (shown.empty()) continue;
+                    parts.params.insert(*view->per);
+                    return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name) + ", " + web_detail::js_string(shown);
                 }
             }
             return std::nullopt;
@@ -1398,14 +1473,14 @@ namespace one::generators {
                                 }
                                 choices = ", choices: [" + options + "]";
                             }
-                            // A person's role: one of the project's own, from a list of
-                            // them a view on the screen holds.
-                            if (!field.list && field.type->text() == held.record) {
-                                if (auto list = roles_list(parts, ns, held)) {
-                                    type = "choice";
-                                    parts.components.insert("listChoices");
-                                    choices = ", choices: listChoices(" + *list + ", \"title\")";
-                                }
+                        }
+                        // Another entity, like a person's role or a step's phases: one
+                        // of those a view on the screen lists, or several for a list.
+                        if (field.name == f.name && field.type && choices.empty()) {
+                            if (auto list = listed_on_screen(parts, ns, field.type->text())) {
+                                type = field.list ? "choices" : "choice";
+                                parts.components.insert("listChoices");
+                                choices = ", choices: listChoices(" + *list + ")";
                             }
                         }
                         // A choice is picked from its choices, not typed.

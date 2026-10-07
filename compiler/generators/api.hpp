@@ -139,6 +139,7 @@ namespace one::generators {
         code::source project_;  // the project block, or fixed without one
         std::string collecting_;  // the file being collected
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
+        std::map<const language::expression*, std::string> existing_;  // each exists(...) asked in a command, and what holds its answer
 
         code::source at(const void* declaration) const {
             auto it = declared_.find(declaration);
@@ -587,7 +588,7 @@ namespace one::generators {
             // title can't also set its status.
             // It also changes what its changes statements name, for a hand-written
             // component; with neither, it may change anything but its keys.
-            if (c.name.parts.back() == "update") {
+            if (c.name.parts.back() != "create" && c.name.parts.back() != "delete") {
                 std::vector<std::string> fields;
                 if (auto forms = form_fields_.find(web_detail::join(ns, c.name.text())); forms != form_fields_.end()) fields = forms->second;
                 for (const auto& s : c.body) {
@@ -614,6 +615,7 @@ namespace one::generators {
             }
             std::string me = e.name.substr(0, 1) == "c" ? "x" : e.name.substr(0, 1);
             pointed_.clear();
+            existing_.clear();
             for (const auto* s : body) find_pointed(e, *s);
             out.open(head + ".");
             out.open("Do(func(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
@@ -715,6 +717,9 @@ namespace one::generators {
 
         void statement(stream& out, const language::entity_declaration& e, const language::statement& s, const std::string& me, bool& uses_time) {
             if (auto* r = std::get_if<language::require_statement>(&s.node)) {
+                // What exists is asked first, in the command's transaction, so the
+                // condition reads it like any other value.
+                if (!exists_before(out, e, *r->condition, me)) return;
                 auto failing = negate(e, *r->condition, me);
                 if (!failing) return;
                 out.open("if " + *failing + " {");
@@ -812,6 +817,8 @@ namespace one::generators {
             }
             auto value = expression(e, condition, me, nullptr);
             if (!value) return std::nullopt;
+            // A plain name, like found, needs no parentheses.
+            if (web_detail::is_identifier(*value)) return "!" + *value;
             return "!(" + *value + ")";
         }
 
@@ -834,7 +841,84 @@ namespace one::generators {
 
         // An expression inside a command's body, in Go. `beside` is the field it's
         // compared with or assigned to, so a choice's name becomes its constant.
+        // exists(step where from == was issue.phase && to == issue.phase && held(roles)):
+        // a query of the step's fields, each equal to a value of the command's, and the
+        // roles it lets through, read before the require that asks.
+        bool exists_before(stream& out, const language::entity_declaration& e, const language::expression& x, const std::string& me) {
+            if (auto* b = std::get_if<language::binary_expression>(&x.node)) {
+                return exists_before(out, e, *b->left, me) && exists_before(out, e, *b->right, me);
+            }
+            if (auto* u = std::get_if<language::unary_expression>(&x.node)) return exists_before(out, e, *u->operand, me);
+            auto* call = std::get_if<language::call_expression>(&x.node);
+            auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+            if (!callee || callee->name.text() != "exists") return true;
+            auto* w = std::get_if<language::where_expression>(&call->arguments[0]->node);
+            auto* source = w ? std::get_if<language::name_expression>(&w->source->node) : nullptr;
+            const language::entity_declaration* found = source && pkg_ ? entity(*pkg_, source->name.text()) : nullptr;
+            if (!found) {
+                unsupported(path_, x.where, "exists of an entity from another namespace");
+                return false;
+            }
+            std::vector<const language::expression*> parts;
+            std::function<void(const language::expression&)> split = [&](const language::expression& part) {
+                if (auto* b = std::get_if<language::binary_expression>(&part.node); b && b->op == language::token_kind::logical_and) {
+                    split(*b->left);
+                    split(*b->right);
+                } else {
+                    parts.push_back(&part);
+                }
+            };
+            if (w->condition) split(*w->condition);
+            std::string query, keep;
+            std::string each = found->name.substr(0, 1) == me ? "x" : found->name.substr(0, 1);
+            for (const auto* part : parts) {
+                auto* b = std::get_if<language::binary_expression>(&part->node);
+                auto* left = b ? std::get_if<language::name_expression>(&b->left->node) : nullptr;
+                const language::field* f = left && left->name.parts.size() == 1 ? field(*found, left->name.parts[0]) : nullptr;
+                if (b && b->op == language::token_kind::equal && f) {
+                    auto value = expression(e, *b->right, me, f);
+                    if (!value) return false;
+                    query += (query.empty() ? "one.Where[" + api_detail::go_name(found->name) + "](" : ".And(") + api_detail::go_string(f->name) + ", " + *value + ")";
+                    continue;
+                }
+                auto* held = std::get_if<language::call_expression>(&part->node);
+                auto* named = held ? std::get_if<language::name_expression>(&held->callee->node) : nullptr;
+                auto* roles = named && named->name.text() == "held" ? std::get_if<language::name_expression>(&held->arguments[0]->node) : nullptr;
+                if (roles && field(*found, roles->name.text())) {
+                    keep = "func(" + each + " *" + api_detail::go_name(found->name) + ") (bool, error) { return c.Held(" + each + "." +
+                           api_detail::go_name(roles->name.text()) + ") }";
+                    continue;
+                }
+                unsupported(path_, part->where, "a condition in exists other than a field == a value, and held(...)");
+                return false;
+            }
+            if (query.empty()) query = "one.All[" + api_detail::go_name(found->name) + "]()";
+            std::string name = "found" + (existing_.empty() ? std::string() : std::to_string(existing_.size() + 1));
+            out.line(name + ", err := one.Exists(c, " + query + ", " + (keep.empty() ? "nil" : keep) + ")");
+            out.open("if err != nil {");
+            out.line("return err");
+            out.close("}");
+            existing_[&x] = name;
+            return true;
+        }
+
         std::optional<std::string> expression(const language::entity_declaration& e, const language::expression& x, const std::string& me, const language::field* beside) {
+            if (auto found = existing_.find(&x); found != existing_.end()) return found->second;
+            if (auto* call = std::get_if<language::call_expression>(&x.node)) {
+                auto* callee = std::get_if<language::name_expression>(&call->callee->node);
+                // was issue.phase, or was phase: the field as it was stored.
+                if (callee && callee->name.text() == "was") {
+                    const auto& of = *call->arguments[0];
+                    std::string name = web_detail::text_of(of);
+                    if (name.starts_with(e.name + ".")) name = name.substr(e.name.size() + 1);
+                    if (field(e, name)) return "c.Was(" + api_detail::go_string(name) + ")";
+                }
+            }
+            // issue.phase: the command's own entity's field, named by the entity.
+            if (auto* m = std::get_if<language::member_expression>(&x.node)) {
+                auto* object = std::get_if<language::name_expression>(&m->object->node);
+                if (object && object->name.text() == e.name && field(e, m->member)) return me + "." + api_detail::go_name(m->member);
+            }
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
                 return lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
             }

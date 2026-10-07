@@ -6,7 +6,7 @@
 export { App, accentOf, screen, usePageTitle, useSignIn, useTitle } from "./app.js";
 export type { AppProps, Screen, ScreenInfo, TitlePart } from "./app.js";
 
-export { Actions, Code, Command, Copy, Details, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Table, Text, Thread, Timeline, changed, done, holds, allows, listChoices, listHas, markdownOf, phrase } from "./components.js";
+export { Actions, Code, Command, Copy, Details, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Table, Text, Thread, Timeline, changed, done, holds, allows, listChoices, listHas, markdownOf, phrase } from "./components.js";
 export type { CopiedField, CopiedList, DocPage, FieldSpec, RowAction } from "./components.js";
 
 export { useAuth, useCommand, useRunner, useView } from "./data.js";

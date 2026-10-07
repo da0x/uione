@@ -321,7 +321,13 @@ TEST_CASE("an order key says ascending or descending in words, and a - in front 
 
     auto sorted = parse_errors("screen \"S\" /s {\n\ttable v {\n\t\tsort -number\n\t\ttitle\n\t}\n}\n");
     REQUIRE(sorted.size() == 1);
-    CHECK(sorted[0].message == "write number descending; a - in front isn't said in words");
+    CHECK(sorted[0].message == "write by number descending; a - in front isn't said in words");
+
+    auto unsaid = parse_errors("screen \"S\" /s {\n\ttable v {\n\t\tsort number\n\t\ttitle\n\t}\n}\n");
+    REQUIRE(unsaid.size() == 1);
+    CHECK(unsaid[0].message == "write sort by number, saying what rows are sorted by");
+    REQUIRE(unsaid[0].fix);
+    CHECK(unsaid[0].fix->text == "by ");
 }
 
 TEST_CASE("a file that ends inside a block is an error, not a hang") {

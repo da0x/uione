@@ -6,7 +6,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, vi } from "vitest";
-import { App, Form, Live, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Form, Live, Steps, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -124,6 +124,31 @@ describe("a project's own roles", () => {
     fireEvent.click(screen.getByLabelText("Create job"));
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "crew::rank::create", input: { may: ["job::update"] } }));
+  });
+});
+
+describe("a workflow's steps", () => {
+  it("are buttons for the steps from where it is that the person's roles may take, each moving it on", async () => {
+    const source = memorySource();
+    const issue = { status: "live" as const, data: { phase: "ark-ready" } };
+    const page = {
+      status: "live" as const,
+      data: {
+        steps: [
+          { id: "s1", from: "ark-ready", to: "ark-doing", title: "Start work", roles: ["ark-programmer"] },
+          { id: "s2", from: "ark-ready", to: "ark-triage", "to.title": "Triage", roles: ["ark-owner"] },
+          { id: "s3", from: "ark-doing", to: "ark-review", "to.title": "In review", roles: ["ark-programmer"] },
+          { id: "s4", from: "ark-ready", to: "ark-closed", "to.title": "Closed", roles: ["ark-programmer"] },
+        ],
+      },
+    };
+    const roles = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", role: "ark-programmer" }] } };
+    renderScreen(source, () => (
+      <Steps command="projects::issue::move" id="ark-1" field="phase" current={issue} steps={page} list="steps" shown="title" to="to.title" held="roles" roles={roles} within="ark" />
+    ));
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Start work", "Move to Closed"]);
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+    await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "projects::issue::move", input: { id: "ark-1", phase: "ark-doing" } }));
   });
 });
 
