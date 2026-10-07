@@ -155,7 +155,12 @@ export function accentOf(color: string): string {
   const luminance = 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
   const ink = 1.05 / (luminance + 0.05) >= 4.5 ? "#ffffff" : "#0e1726";
   const light = `--color-accent: ${color}; --color-accent-hover: color-mix(in oklab, ${color} 82%, black); --color-accent-ink: ${ink}; --color-accent-soft: color-mix(in oklab, ${color} 12%, white); --color-grid: color-mix(in srgb, ${color} 7%, transparent);`;
-  const dark = `--color-accent: color-mix(in oklab, ${color} 55%, white); --color-accent-hover: color-mix(in oklab, ${color} 35%, white); --color-accent-ink: #0a101c; --color-accent-soft: color-mix(in oklab, ${color} 28%, #0a101c); --color-grid: color-mix(in srgb, ${color} 8%, transparent);`;
+  // Lightened in OKLCH, which keeps the color as vivid as it was; where that isn't
+  // understood, the mix before it stands.
+  const dark =
+    `--color-accent: color-mix(in oklab, ${color} 55%, white); --color-accent: oklch(from ${color} max(l, 0.76) c h); ` +
+    `--color-accent-hover: color-mix(in oklab, ${color} 35%, white); --color-accent-hover: oklch(from ${color} max(l, 0.84) c h); ` +
+    `--color-accent-ink: #0a101c; --color-accent-soft: color-mix(in oklab, ${color} 28%, #0a101c); --color-grid: color-mix(in srgb, ${color} 8%, transparent);`;
   return `:root { ${light} } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} } } :root[data-theme="dark"] { ${dark} }`;
 }
 
