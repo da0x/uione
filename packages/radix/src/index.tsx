@@ -381,7 +381,7 @@ export const radix: ComponentSet = {
                   )}
                 </td>
               ))}
-              {row.actions.length > 0 && (
+              {rows.some((other) => other.actions.length > 0) && (
                 <td className="px-4 py-2.5 text-right whitespace-nowrap">
                   {row.actions.map((a) => (
                     <button

@@ -569,7 +569,9 @@ screen "Book" /books/:book {
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
   `withdraw`, puts that command on each row, and `delete "Remove"` names its
   button. Like any button, it's there only for someone whose role lets them run
-  it.
+  it. `delete "Remove" when person != me` puts it only on the rows where its when
+  holds, read from the row's own fields, so the list needs `person` among them.
+  The when ends its line.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a

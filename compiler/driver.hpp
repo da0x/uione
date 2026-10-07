@@ -62,6 +62,7 @@ namespace one::driver {
         std::string label;  // "Implementing", when it has one
         bool labeled = false;
         int line = 0;
+        std::string when;   // person != me, as written, on a row's button
     };
 
     struct outlined_row {
@@ -141,7 +142,7 @@ namespace one::driver {
 
         inline outlined_table table_of(const language::table_item& t, const declared& known) {
             outlined_table out;
-            for (const auto& c : t.columns) out.columns.push_back({written(*c.value), c.label.value_or(""), c.label.has_value(), c.where.line});
+            for (const auto& c : t.columns) out.columns.push_back({written(*c.value), c.label.value_or(""), c.label.has_value(), c.where.line, c.when_written});
             out.by = t.by.value_or("");
             out.search = t.search;
             if (t.sort) out.sort = (t.sort_descending ? "-" : "") + *t.sort;

@@ -732,6 +732,14 @@ namespace one::language {
                             column.where = peek().where;
                             column.value = parse_postfix();
                             if (at(token_kind::string)) column.label = advance().text;
+                            if (at_word("when")) {
+                                advance();
+                                std::size_t begin = peek().begin;
+                                column.when = parse_expression();
+                                column.when_written = std::string(source_.substr(begin, tokens_[pos_ - 1].end - begin));
+                                // What follows is the condition's, so it ends the line.
+                                if (!at_line_end()) fail_expecting("the end of the line after a row's when");
+                            }
                             table.columns.push_back(std::move(column));
                         }
                         end_line();

@@ -1279,13 +1279,46 @@ namespace one::language {
             if (key.empty()) return;
             if (auto* source = std::get_if<name_expression>(&each.source->node); source && key.find('.') == std::string::npos) {
                 qualified_name command{{source->name.parts.back(), key}, column.where};
-                if (find_command(ns, command)) return;
+                if (find_command(ns, command)) {
+                    if (column.when) verify_row_condition(each, view_name, *column.when);
+                    return;
+                }
             }
+            if (column.when) error(column.when->where, "only a row's button has a when, like delete \"Remove\" when person != me");
+            if (!in_rows(each, key)) {
+                std::string where = each.name ? *each.name : "rows";
+                error(column.where, "view " + view_name + " has no " + key + " in its " + where + "; add it to the list's block");
+            }
+        }
+
+        bool in_rows(const view_each& each, const std::string& key) {
             for (const auto& row : each.rows) {
-                if ((row.name && *row.name == key) || (!row.name && written(*row.value) == key)) return;
+                if ((row.name && *row.name == key) || (!row.name && written(*row.value) == key)) return true;
             }
-            std::string where = each.name ? *each.name : "rows";
-            error(column.where, "view " + view_name + " has no " + key + " in its " + where + "; add it to the list's block");
+            return false;
+        }
+
+        // A row's button's when reads that row: the fields its list holds, compared
+        // with values, like person != me or role == role::maintainer.
+        void verify_row_condition(const view_each& each, const std::string& view_name, const expression& e) {
+            static const std::string how = "a row's when compares the row's fields with values, like person != me";
+            if (auto* binary = std::get_if<binary_expression>(&e.node)) {
+                verify_row_condition(each, view_name, *binary->left);
+                verify_row_condition(each, view_name, *binary->right);
+            } else if (auto* unary = std::get_if<unary_expression>(&e.node); unary && unary->op == token_kind::logical_not) {
+                verify_row_condition(each, view_name, *unary->operand);
+            } else if (std::holds_alternative<member_expression>(e.node) ||
+                       (std::holds_alternative<name_expression>(e.node) && std::get<name_expression>(e.node).name.parts.size() == 1)) {
+                std::string key = written(e);
+                static const std::set<std::string> values{"true", "false", "none", "me"};
+                if (values.contains(key)) return;
+                if (!in_rows(each, key)) {
+                    std::string where = each.name ? *each.name : "rows";
+                    error(e.where, "view " + view_name + " has no " + key + " in its " + where + " for the row's when to read; add it to the list's block");
+                }
+            } else if (auto* name = std::get_if<name_expression>(&e.node); !(name && name->name.parts.size() == 2) && !std::holds_alternative<literal_expression>(e.node)) {
+                error(e.where, how);
+            }
         }
 
         // A form for anything but create changes one entity that's already there, so it

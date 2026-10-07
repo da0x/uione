@@ -172,4 +172,4 @@ table_line     ::= "by" NAME END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "-"? NAME END
                  | "page" WHOLE END
-                 | column+ END
+                 | column+ ("when" expression)? END

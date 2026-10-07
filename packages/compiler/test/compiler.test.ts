@@ -81,14 +81,15 @@ describe("the compiler in the browser", () => {
   it("outlines a table's columns and settings, and what its rows hold", () => {
     const board =
       "namespace tracker {\n\tentity issue {\n\t\ttitle  text\n\t\tstatus  enum  open | closed\n\t}\n" +
-      "\tview board {\n\t\tissues = each issue {\n\t\t\ttitle  status\n\t\t}\n\t}\n" +
-      '\tscreen "Board" /board {\n\t\ttable board.issues by status {\n\t\t\tpage 10\n\t\t\ttitle "Title"\n\t\t\tstatus\n\t\t}\n\t}\n}\n';
+      "\tview board {\n\t\tissues = each issue {\n\t\t\ttitle  status\n\t\t}\n\t}\n\tcommand issue::close\n" +
+      '\tscreen "Board" /board {\n\t\ttable board.issues by status {\n\t\t\tpage 10\n\t\t\ttitle "Title"\n\t\t\tstatus\n\t\t\tclose when status == status::open\n\t\t}\n\t}\n}\n';
     const checked = run(one, { kind: "check", files: { "board.one": board } }) as Checked;
     expect(checked.problems).toEqual([]);
     expect(checked.screens[0].items[0].table).toEqual({
       columns: [
-        { value: "title", label: "Title", line: 14 },
-        { value: "status", label: null, line: 15 },
+        { value: "title", label: "Title", when: "", line: 15 },
+        { value: "status", label: null, when: "", line: 16 },
+        { value: "close", label: null, when: "status == status::open", line: 17 },
       ],
       rows: [
         { name: "title", choices: false },

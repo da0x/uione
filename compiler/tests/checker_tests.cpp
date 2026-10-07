@@ -272,6 +272,38 @@ screen "Shelf" /shelf {
     CHECK(e.where.line == 16);
 }
 
+TEST_CASE("a row's button may say which rows it's on, reading the row's own fields") {
+    const std::string shelf = R"(
+entity book {
+	title   text
+	lender  user
+}
+command book::withdraw
+view shelf {
+	each book {
+		title  lender
+	}
+}
+screen "Shelf" /shelf {
+	table shelf {
+		title
+		withdraw "Withdraw" when lender != me && title != none
+	}
+}
+)";
+    CHECK(check_source(shelf).size() == 0);
+
+    std::string unread = shelf;
+    unread.replace(unread.find("when lender"), 11, "when author");
+    auto e = only_error(unread);
+    CHECK(e.message == "view shelf has no author in its rows for the row's when to read; add it to the list's block");
+    CHECK(e.where.line == 15);
+
+    std::string shown = shelf;
+    shown.replace(shown.find("\t\ttitle\n\t\twithdraw"), 7, "\t\ttitle when lender != me\n");
+    CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
+}
+
 TEST_CASE("names inside expressions are looked up where they're written, with the nearest match suggested") {
     const std::string project = R"(namespace library {
 entity book {

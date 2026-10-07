@@ -281,6 +281,10 @@ namespace one::language {
         location where;
         expression_ptr value;
         std::optional<std::string> label;
+        // delete "Remove" when person != me: a row's button shown only on the rows
+        // where it holds, read from the row's own fields, and its text as written.
+        expression_ptr when;
+        std::string when_written;
     };
 
     struct table_item {

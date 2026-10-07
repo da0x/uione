@@ -93,6 +93,12 @@ TEST_CASE("table columns that name a command on the row become actions") {
     CHECK(screens->content.find(R"(<Confirm command="library::book::withdraw" question="Withdraw {title}? It will not be lent again." />)") != std::string::npos);
 }
 
+TEST_CASE("a row's button with a when is on only the rows it holds for") {
+    const auto& content = find(generate("/examples/tracker"), "src/screens/main.tsx")->content;
+    CHECK(content.find(R"(actions={[{ name: "tracker::member::delete", label: "Remove", allowed: holds(memberRoles, "project", projectId, ["maintainer"]), when: (row) => ((row["person"] ?? null) !== viewer) }]})") != std::string::npos);
+    CHECK(content.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
+}
+
 TEST_CASE("a button for a command with a form becomes the form's own button") {
     auto files = generate("/examples/library");
     const auto& content = find(files, "src/screens/main.tsx")->content;

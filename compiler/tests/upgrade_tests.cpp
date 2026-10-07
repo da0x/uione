@@ -204,6 +204,7 @@ TEST_CASE("a table is outlined with its columns, its settings and what its rows 
 			page 25
 			title "Title"
 			status
+			close "Close" when status == status::open  // as written
 		}
 	}
 }
@@ -214,13 +215,16 @@ TEST_CASE("a table is outlined with its columns, its settings and what its rows 
     REQUIRE(screens[0].items.size() == 1);
     REQUIRE(screens[0].items[0].table);
     const auto& t = *screens[0].items[0].table;
-    REQUIRE(t.columns.size() == 2);
+    REQUIRE(t.columns.size() == 3);
     CHECK(t.columns[0].value == "title");
     CHECK(t.columns[0].label == "Title");
     CHECK(t.columns[0].labeled);
     CHECK(t.columns[0].line == 16);
     CHECK(t.columns[1].value == "status");
     CHECK_FALSE(t.columns[1].labeled);
+    CHECK(t.columns[1].when.empty());
+    CHECK(t.columns[2].value == "close");
+    CHECK(t.columns[2].when == "status == status::open");
     REQUIRE(t.rows.size() == 3);
     CHECK(t.rows[0].name == "title");
     CHECK_FALSE(t.rows[0].choices);

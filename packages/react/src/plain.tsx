@@ -298,6 +298,7 @@ export const plain: ComponentSet = {
                     </button>
                   </td>
                 ))}
+                {row.actions.length < actions && <td colSpan={actions - row.actions.length} />}
               </tr>
             ))}
           </tbody>

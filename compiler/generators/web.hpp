@@ -873,6 +873,38 @@ namespace one::generators {
             return "false";
         }
 
+        // A row's button's when, as JavaScript reading the row: person != me is
+        // ((row["person"] ?? null) !== viewer).
+        std::string row_condition(screen_parts& parts, const language::expression& e) {
+            using language::token_kind;
+            if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
+                if (binary->op == token_kind::has) {
+                    parts.components.insert("listHas");
+                    return "listHas(" + row_condition(parts, *binary->left) + ", " + row_condition(parts, *binary->right) + ")";
+                }
+                std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
+                               : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
+                               : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"
+                               : binary->op == token_kind::less_equal ? "<=" : ">=";
+                return "(" + row_condition(parts, *binary->left) + " " + op + " " + row_condition(parts, *binary->right) + ")";
+            }
+            if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + row_condition(parts, *unary->operand);
+            if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
+                return literal->type == language::literal_expression::kind::number ? literal->value : web_detail::js_string(literal->value);
+            }
+            if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 2) {
+                return web_detail::js_string(name->name.parts.back());  // a choice, like role::maintainer
+            }
+            const std::string word = web_detail::text_of(e);
+            if (word == "true" || word == "false") return word;
+            if (word == "none") return "null";
+            if (word == "me") {
+                parts.viewer = true;
+                return "viewer";
+            }
+            return "(row[" + web_detail::js_string(word) + "] ?? null)";
+        }
+
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
                           const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
                           std::size_t first = 0) {
@@ -1175,11 +1207,12 @@ namespace one::generators {
                     if (auto command = row_command(ns, table.view.text(), table.list, key)) {
                         std::string allowed = this->allowed(parts, ns, *command);
                         std::string action = web_detail::js_string(*command);
-                        if (column.label || !allowed.empty()) {
+                        if (column.label || !allowed.empty() || column.when) {
                             action = "{ name: " + action;
                             if (column.label) action += ", label: " + web_detail::js_string(*column.label);
                             // allowed={holds(...)} as a property: allowed: holds(...)
                             if (!allowed.empty()) action += ", allowed: " + allowed.substr(10, allowed.size() - 11);
+                            if (column.when) action += ", when: (row) => " + row_condition(parts, *column.when);
                             action += " }";
                         }
                         actions += (actions.empty() ? "" : ", ") + action;

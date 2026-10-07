@@ -66,6 +66,30 @@ describe("a table's row actions", () => {
     expect(screen.queryByRole("button", { name: /Promote/ })).toBeNull();
   });
 
+  it("are only on the rows their when holds for, each row keeping its cells", () => {
+    const source = memorySource({
+      views: {
+        "projects::people": {
+          rows: [
+            { id: "m1", name: "Ada", person: "ada" },
+            { id: "m2", name: "Bob", person: "bob" },
+          ],
+        },
+      },
+    });
+    renderScreen(source, () => (
+      <Table
+        view={useView("projects::people")}
+        columns={{ name: "Name" }}
+        actions={[{ name: "projects::member::delete", label: "Remove", when: (row) => row.person !== "ada" }]}
+      />
+    ));
+    expect(screen.queryByRole("button", { name: "Remove Ada" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Remove Bob" })).toBeTruthy();
+    const [ada, bob] = screen.getAllByRole("row").slice(1);
+    expect(ada.children.length).toBe(bob.children.length);
+  });
+
   it("leave no actions column when none are allowed", () => {
     const source = memorySource({ views: { "projects::people": { rows: [{ id: "m1", name: "Ada" }] } } });
     renderScreen(source, () => <Table view={useView("projects::people")} columns={{ name: "Name" }} actions={[{ name: "projects::member::delete", allowed: false }]} />);

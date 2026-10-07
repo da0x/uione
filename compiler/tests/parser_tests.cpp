@@ -299,6 +299,12 @@ TEST_CASE("a block that's never closed is reported") {
 
 // Found by feeding the parser damaged copies of the examples. Each one used to hang,
 // because a block that the file ended inside never saw its closing brace.
+TEST_CASE("a row's when ends its line, so nothing after it is taken for a column") {
+    auto out = parse_errors("screen \"Shelf\" /shelf {\n\ttable shelf {\n\t\twithdraw when lender != me  title\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected the end of the line after a row's when, found 'title'");
+}
+
 TEST_CASE("a file that ends inside a block is an error, not a hang") {
     for (std::string_view source : {
              "screen \"\" / {\n\ttable shelf {\n",

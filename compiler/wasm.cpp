@@ -120,6 +120,8 @@ namespace {
             out += ",\"label\":";
             if (c.labeled) text(out, c.label);
             else out += "null";
+            out += ",\"when\":";
+            text(out, c.when);
             out += ",\"line\":" + std::to_string(c.line) + "}";
         }
         out += "],\"rows\":[";

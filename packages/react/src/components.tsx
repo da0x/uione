@@ -467,6 +467,7 @@ export interface RowAction {
   name: string;
   label?: string;
   allowed?: boolean; // whether the person reading may run it
+  when?: (row: Record<string, unknown>) => boolean; // the rows it's on, like those that aren't the reader's own
 }
 
 export function Table({
@@ -573,7 +574,7 @@ export function Table({
           const source = row[key];
           return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
         }),
-        actions: pressed.map((a) => ({
+        actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
           label: a.label ?? label(action(a.name)),
           disabled: runner.busy(a.name),
           onClick: () => void runner.run(a.name, { id: row.id }, row),

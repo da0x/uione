@@ -66,7 +66,7 @@ export interface OutlinedItem {
 // when it isn't; and what its rows hold, which is what it can show, the ones with
 // choices marked, since those are what it can be divided by.
 export interface OutlinedTable {
-  columns: { value: string; label: string | null; line: number }[];
+  columns: { value: string; label: string | null; when: string; line: number }[]; // when: a row button's, as written, or ""
   rows: { name: string; choices: boolean }[];
   by: string;
   search: string[];
