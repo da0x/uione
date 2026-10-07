@@ -37,6 +37,22 @@ type Job struct {
 	one.Record
 	Crew  string `firestore:"crew" one:"required,refers=crew::crew"`
 	Title string `firestore:"title" one:"required"`
+	Stage string `firestore:"stage" one:"refers=crew::stage"`
+}
+
+// Where a job is, and the legs between stages, each taken by the ranks it names.
+type Stage struct {
+	one.Record
+	Crew string `firestore:"crew" one:"required,key,refers=crew::crew"`
+	Name string `firestore:"name" one:"required,key"`
+}
+
+type Leg struct {
+	one.Record
+	Crew  string   `firestore:"crew" one:"required,key,refers=crew::crew"`
+	From  string   `firestore:"from" one:"required,key,refers=crew::stage"`
+	To    string   `firestore:"to" one:"required,key,refers=crew::stage"`
+	Ranks []string `firestore:"ranks" one:"refers=crew::rank"`
 }
 
 var crews = one.Module("crew",
@@ -48,9 +64,24 @@ var crews = one.Module("crew",
 	one.Command[Rank]("rank::update").Fields("title", "may"),
 	one.Command[Job]("job::create"),
 	one.Command[Job]("job::update"),
+	one.Command[Stage]("stage::create"),
+	one.Command[Leg]("leg::create"),
+	// A job moves along a leg its mover's rank may take, from the stage it was in.
+	one.Command[Job]("job::move").Fields("stage").Do(func(c *one.Ctx, j *Job) error {
+		ok, err := one.Exists(c, one.Where[Leg]("from", c.Was("stage")).And("to", j.Stage), func(l *Leg) (bool, error) {
+			return c.Held(l.Ranks)
+		})
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return c.Fail("your rank doesn't move a job from there to there")
+		}
+		return nil
+	}),
 	one.Roles(one.Entity[Rank](), one.Entity[Crew](), one.Entity[Hand](), "may").
-		Default("captain", "Captain", "hand::create", "rank::create", "rank::update", "job::create", "job::update").
-		Default("deckhand", "Deckhand", "job::create"),
+		Default("captain", "Captain", "hand::create", "rank::create", "rank::update", "job::create", "job::update", "job::move", "stage::create", "leg::create").
+		Default("deckhand", "Deckhand", "job::create", "job::move"),
 )
 
 func TestACrewStartsWithItsDefaultRolesAndItsMakerAsCaptain(t *testing.T) {
@@ -117,4 +148,25 @@ func TestACrewMadeBeforeItsRolesWereRecordsGetsThemWhenTheBackendStarts(t *testi
 		t.Fatalf("the captain's role points at the crew's captain record: %v %v", snap.Data(), err)
 	}
 	h.mustRun("crew/job/create", token, map[string]any{"crew": "dory", "title": "bail"})
+}
+
+func TestAJobMovesOnlyAlongALegItsMoversRankMayTake(t *testing.T) {
+	h := start(t)
+	_, captain := h.signUp("hal@example.com")
+	deckhand, token := h.signUp("ivy@example.com")
+	h.mustRun("crew/crew/create", captain, map[string]any{"slug": "sloop"})
+	h.mustRun("crew/hand/create", captain, map[string]any{"crew": "sloop", "person": deckhand, "rank": one.Key("sloop", "deckhand")})
+	for _, stage := range []string{"todo", "doing", "done"} {
+		h.mustRun("crew/stage/create", captain, map[string]any{"crew": "sloop", "name": stage})
+	}
+	todo, doing, done := one.Key("sloop", "todo"), one.Key("sloop", "doing"), one.Key("sloop", "done")
+	h.mustRun("crew/leg/create", captain, map[string]any{"crew": "sloop", "from": todo, "to": doing, "ranks": []any{one.Key("sloop", "deckhand")}})
+	h.mustRun("crew/leg/create", captain, map[string]any{"crew": "sloop", "from": doing, "to": done, "ranks": []any{one.Key("sloop", "captain")}})
+
+	job := h.mustRun("crew/job/create", captain, map[string]any{"crew": "sloop", "title": "hoist", "stage": todo})
+	h.expect("crew/job/move", token, map[string]any{"id": job, "stage": done}, 400, "your rank doesn't move a job from there to there")
+	h.mustRun("crew/job/move", token, map[string]any{"id": job, "stage": doing})
+	h.expect("crew/job/move", token, map[string]any{"id": job, "stage": done}, 400, "your rank doesn't move a job from there to there")
+	h.expect("crew/job/move", token, map[string]any{"id": job, "title": "lower"}, 400, "Title can't be changed by job::move")
+	h.mustRun("crew/job/move", captain, map[string]any{"id": job, "stage": done})
 }

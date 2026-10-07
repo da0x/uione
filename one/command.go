@@ -42,6 +42,8 @@ type Ctx struct {
 	made  []*made
 
 	counters map[string]*counting // every serial counted in the transaction, by counter
+	before   map[string]any       // the entity as it was stored before the command, for Was
+	entity   *owned               // the command's entity, for Held
 	command  string               // the command running, like tracker::issue::close, for history
 }
 
@@ -341,6 +343,17 @@ func validID(id string) bool {
 		!(strings.HasPrefix(id, "__") && strings.HasSuffix(id, "__"))
 }
 
+// Was is what a field of the command's entity held before the command changed it,
+// like the phase an issue is moving from: the stored value, or nil for something
+// new.
+func (c *Ctx) Was(field string) any {
+	value := c.before[field]
+	if value == nil {
+		return ""
+	}
+	return value
+}
+
 // Fail stops the command with a message for the person who ran it.
 func (c *Ctx) Fail(message string) error { return &Failure{Status: 400, Message: message} }
 
@@ -376,7 +389,8 @@ func (c *Cmd[E, P]) Allow(p Permission) *Cmd[E, P] {
 // Fields says which fields an update may change: those its forms ask for, like an
 // issue's title and description, so whoever may edit an issue can't also set its
 // status or who approved it by sending them. Without it, an update may change any
-// field but its keys.
+// field but its keys. Another command, like move, takes only the fields it names,
+// like the phase an issue moves to, and without it takes none.
 func (c *Cmd[E, P]) Fields(names ...string) *Cmd[E, P] {
 	c.fields = names
 	return c
@@ -462,6 +476,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		record := P(entity).record()
 		before, after = nil, nil
 		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action}
+		body.entity = &owned{s, v}
 		pointed = nil
 
 		if action == "create" {
@@ -560,6 +575,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			return err
 		}
 		before = snap.Data()
+		body.before = before
 		if err := a.permitted(ctx, tx, c.me, permission, &owned{s, v}); err != nil {
 			return err
 		}
@@ -578,7 +594,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			saved = entity
 			return tx.Delete(ref)
 		}
-		if action == "update" {
+		// An update takes what's sent; another command, like move, only the fields
+		// it says it changes, like the phase an issue moves to.
+		if action == "update" || fields != nil {
 			input := map[string]any{}
 			for name, value := range c.input {
 				if name == "id" || s.isKey(name) {
