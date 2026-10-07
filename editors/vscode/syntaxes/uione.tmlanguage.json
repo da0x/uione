@@ -263,6 +263,14 @@
           "name": "keyword.control.uione"
         },
         {
+          "match": "^\\s*(changes)(?=\\s+[A-Za-z_])",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
+        {
           "match": "\\b(?:text|code)(?=\\s+\")",
           "name": "keyword.other.uione"
         },

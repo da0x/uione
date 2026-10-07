@@ -35,6 +35,9 @@ syn keyword uioneKeyword   hero section menu link markdown thread timeline copy 
 " each change of issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+of\>"
+" changes only where it starts a statement naming fields: changes owner, not a list
+" called changes.
+syn match   uioneKeyword   "^\s*\zs\<changes\>\ze\s\+\h"
 " history only in an entity's header: entity issue history {.
 syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<history\>"
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite

@@ -945,6 +945,15 @@ namespace one::language {
                 end_line();
                 return {where, std::move(s)};
             }
+            if (at_word("changes") && peek(1).kind == token_kind::identifier) {
+                advance();
+                changes_statement s;
+                do {
+                    s.fields.push_back(expect(token_kind::identifier, "a field it changes").text);
+                } while (at(token_kind::identifier));
+                end_line();
+                return {where, std::move(s)};
+            }
             if (at_word("return")) {
                 advance();
                 return_statement s{parse_expression()};

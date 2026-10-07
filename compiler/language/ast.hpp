@@ -100,6 +100,12 @@ namespace one::language {
         std::vector<std::string> fields;
     };
 
+    // changes cloud_project deploy_account: fields an update may change besides
+    // those its forms ask for, like the ones a hand-written component sends.
+    struct changes_statement {
+        std::vector<std::string> fields;
+    };
+
     struct assign_statement {
         expression_ptr target;
         expression_ptr value;
@@ -140,7 +146,7 @@ namespace one::language {
 
     struct statement {
         location where;
-        std::variant<require_statement, permission_statement, clear_statement, assign_statement,
+        std::variant<require_statement, permission_statement, clear_statement, changes_statement, assign_statement,
                      create_statement, list_statement, return_statement, if_statement>
             node;
     };

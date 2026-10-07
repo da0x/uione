@@ -137,6 +137,7 @@ namespace one::generators {
         std::map<const void*, code::source> declared_;
         code::source project_;  // the project block, or fixed without one
         std::string collecting_;  // the file being collected
+        std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
 
         code::source at(const void* declaration) const {
             auto it = declared_.find(declaration);
@@ -201,6 +202,26 @@ namespace one::generators {
                     pkg.hooks.emplace_back(hook, d.where);
                 } else if (auto* backend = std::get_if<language::backend_declaration>(&d.node)) {
                     pkg.backends.emplace_back(backend->name, language::backend_file(f.path, backend->name));
+                } else if (auto* screen = std::get_if<language::screen_declaration>(&d.node)) {
+                    collect_forms(ns, screen->items);
+                }
+            }
+        }
+
+        // The fields each command's forms ask for, wherever they are, by the command's
+        // full name: what an update may change.
+        void collect_forms(const std::string& ns, const std::vector<language::screen_item>& items) {
+            for (const auto& item : items) {
+                if (auto* form = std::get_if<language::form_item>(&item.node)) {
+                    for (const auto& command : form->commands) {
+                        std::string full = command.parts.size() > 2 ? command.text() : web_detail::join(ns, command.text());
+                        auto& fields = form_fields_[full];
+                        for (const auto& field : form->fields) {
+                            if (std::find(fields.begin(), fields.end(), field.name) == fields.end()) fields.push_back(field.name);
+                        }
+                    }
+                } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    collect_forms(ns, block->items);
                 }
             }
         }
@@ -446,7 +467,7 @@ namespace one::generators {
                 members.push_back(var);
                 auto from_command = in(body, at(c), where.line);
                 path_ = at(c).path.empty() ? pkg.path : at(c).path;  // what's unsupported is said where it's written
-                command(body, *e, *c, var, uses_time);
+                command(body, ns, *e, *c, var, uses_time);
                 body.line();
             }
 
@@ -526,16 +547,36 @@ namespace one::generators {
             return "";
         }
 
-        void command(stream& out, const language::entity_declaration& e, const language::command_declaration& c,
+        void command(stream& out, const std::string& ns, const language::entity_declaration& e, const language::command_declaration& c,
                      const std::string& var, bool& uses_time) {
             std::string head = "var " + var + " = one.Command[" + api_detail::go_name(e.name) + "](" +
                                api_detail::go_string(c.name.text()) + ")";
             std::string allow = permission(c);
             if (!allow.empty()) head += ".Allow(" + allow + ")";
+            // An update changes only what its forms ask for, so editing an issue's
+            // title can't also set its status.
+            // It also changes what its changes statements name, for a hand-written
+            // component; with neither, it may change anything but its keys.
+            if (c.name.parts.back() == "update") {
+                std::vector<std::string> fields;
+                if (auto forms = form_fields_.find(web_detail::join(ns, c.name.text())); forms != form_fields_.end()) fields = forms->second;
+                for (const auto& s : c.body) {
+                    if (auto* changes = std::get_if<language::changes_statement>(&s.node)) {
+                        for (const auto& name : changes->fields) {
+                            if (std::find(fields.begin(), fields.end(), name) == fields.end()) fields.push_back(name);
+                        }
+                    }
+                }
+                if (!fields.empty()) {
+                    std::string names;
+                    for (const auto& name : fields) names += (names.empty() ? "" : ", ") + api_detail::go_string(name);
+                    head += ".Fields(" + names + ")";
+                }
+            }
 
             std::vector<const language::statement*> body;
             for (const auto& s : c.body) {
-                if (!std::holds_alternative<language::permission_statement>(s.node)) body.push_back(&s);
+                if (!std::holds_alternative<language::permission_statement>(s.node) && !std::holds_alternative<language::changes_statement>(s.node)) body.push_back(&s);
             }
             if (body.empty()) {
                 out.line(head);

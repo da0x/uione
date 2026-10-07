@@ -97,6 +97,7 @@ namespace one::language {
             bool reader = false;                         // user.id, the person reading a view
             const entity_declaration* subject = nullptr; // the entity a view per entity is for
             bool hook = false;                           // a webhook's handler, which may create
+            bool update = false;                         // an update command's body, which may say what it changes
         };
 
         diagnostics& out_;
@@ -663,7 +664,9 @@ namespace one::language {
                                         ", which isn't declared " + in_namespace(ns));
                 return;
             }
-            statements(ns, c.body, entity, context{ns, entity, nullptr, {}, false});
+            context in{ns, entity, nullptr, {}, false};
+            in.update = c.name.parts.back() == "update";
+            statements(ns, c.body, entity, in);
         }
 
         void statements(const std::string& ns, const std::vector<statement>& body, const entity_declaration* entity, const context& in) {
@@ -681,6 +684,15 @@ namespace one::language {
                         } else if (f && fixed_once_made(*f)) {
                             error(s.where, why_fixed(*f));
                         }
+                    }
+                } else if (auto* c = std::get_if<changes_statement>(&s.node)) {
+                    if (!in.update) {
+                        error(s.where, "changes goes in an update command, naming the fields it may change besides its forms'");
+                    }
+                    for (const auto& name : c->fields) {
+                        snake(name, s.where);
+                        const field* f = entity ? find_field(*entity, name) : nullptr;
+                        if (entity && !f) error(s.where, "'changes " + name + "' names a field entity " + entity->name + " doesn't have");
                     }
                 } else if (auto* a = std::get_if<assign_statement>(&s.node)) {
                     std::size_t errors = out_.size();

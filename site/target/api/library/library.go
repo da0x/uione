@@ -38,7 +38,7 @@ type Loan struct {
 
 var BookCreate = one.Command[Book]("book::create")
 
-var Update = one.Command[Book]("book::update")
+var Update = one.Command[Book]("book::update").Fields("title", "author", "summary")
 
 var Withdraw = one.Command[Book]("book::withdraw").
 	Do(func(c *one.Ctx, b *Book) error {

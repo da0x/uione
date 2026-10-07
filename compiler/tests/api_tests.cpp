@@ -100,6 +100,50 @@ TEST_CASE("the library example's backend is generated exactly as its target says
     CHECK(file->content == without_license(*target));
 }
 
+TEST_CASE("an update changes what its forms ask for and what it says it changes, and nothing else") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace tracker {
+entity issue {
+	title   text
+	status  enum  open | done
+	owner   user
+}
+command issue::update {
+	changes owner
+}
+command issue::create
+view issue_page per issue {
+	title = issue.title
+}
+screen "Issue" /issues/:issue {
+	form issue::update {
+		title
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "tracker/tracker.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(var Update = one.Command[Issue]("issue::update").Fields("title", "owner"))") != std::string::npos);
+    CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
+}
+
+TEST_CASE("changes goes only in an update, naming the entity's fields") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace tracker {\nentity issue {\n\ttitle  text\n}\n"
+                                                "command issue::close {\n\tchanges title\n}\ncommand issue::update {\n\tchanges colour\n}\n}\n", out));
+    language::check(files, out);
+    REQUIRE(out.size() == 2);
+    CHECK(out[0].message == "changes goes in an update command, naming the fields it may change besides its forms'");
+    CHECK(out[1].message == "'changes colour' names a field entity issue doesn't have");
+}
+
 TEST_CASE("what the library can't do yet stops the build, and says where") {
     language::diagnostics out;
     std::vector<language::file> files;

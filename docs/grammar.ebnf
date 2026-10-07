@@ -87,6 +87,7 @@ block          ::= "{" NEWLINE? statement* "}"
 statement      ::= ( "require" expression STRING
                    | "permission" (permission_word | qualified)
                    | "clear" NAME+
+                   | "changes" NAME+
                    | "return" expression
                    | if
                    | create

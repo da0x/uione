@@ -107,6 +107,8 @@ var modules = []one.Item{
 			t.Done = true
 			return nil
 		}),
+		// Renaming a task changes its title, and only that: done is complete's to say.
+		one.Command[Task]("task::update").Allow(one.Owner).Fields("title"),
 		one.Command[Task]("task::delete").Allow(one.Owner).Do(func(c *one.Ctx, t *Task) error {
 			if !t.Done {
 				return c.Fail("finish that task before deleting it")
@@ -333,6 +335,18 @@ func TestADeleteCommandsBodyDecidesFirst(t *testing.T) {
 	h.mustRun("tasks/task/delete", token, map[string]any{"id": id})
 	if rows, _ := h.view("tasks::list:" + me)["rows"].([]any); len(rows) != 0 {
 		t.Fatalf("a delete its body allows removes the task: %v", rows)
+	}
+}
+
+func TestAnUpdateChangesOnlyTheFieldsItSays(t *testing.T) {
+	h := start(t)
+	me, token := h.signUp("fern@example.com")
+	id := h.mustRun("tasks/task/create", token, map[string]any{"title": "water the plants"})
+	h.expect("tasks/task/update", token, map[string]any{"id": id, "title": "water the ferns", "done": true}, 400, "Done can't be changed by task::update")
+	h.mustRun("tasks/task/update", token, map[string]any{"id": id, "title": "water the ferns"})
+	row := h.view("tasks::list:" + me)["rows"].([]any)[0].(map[string]any)
+	if row["title"] != "water the ferns" || row["done"] != false {
+		t.Fatalf("an update changes what it says and nothing else: %v", row)
 	}
 }
 

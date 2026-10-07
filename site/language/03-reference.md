@@ -111,7 +111,7 @@ Words for values that aren't written out:
 The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
-- in a command: `require`, `permission`, `create`, `clear`, `add … to`, `remove … from`;
+- in a command: `require`, `permission`, `create`, `clear`, `changes`, `add … to`, `remove … from`;
 - in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
@@ -363,6 +363,10 @@ command loan::checkin {
 - `add me to assignees` and `remove me from assignees` change a list. Adding what's
   already there, or removing what isn't, changes nothing. A list is never given a
   whole new value with `=`.
+- An update changes only the fields its forms ask for, so whoever may edit an
+  issue's title can't also set its status by sending it. `changes cloud_project
+  deploy_account` adds fields it may change besides, like those a hand-written
+  component sends. An update with neither may change any field but its keys.
 - `create` makes another entity in the same step, giving its fields values worked
   out where the command runs. `id` is the id of the command's own entity, and `me`
   is the person running it. Every required field gets a value, unless it starts

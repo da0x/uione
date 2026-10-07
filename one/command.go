@@ -334,6 +334,7 @@ type Cmd[E any, P entityPointer[E]] struct {
 	entity     string // as the command's name says, checked against E
 	action     string
 	permission Permission
+	fields     []string // what an update may change, when it says
 	do         func(*Ctx, *E) error
 	after      []func(*System, *E)
 }
@@ -352,6 +353,15 @@ func Command[E any, P entityPointer[E]](name string) *Cmd[E, P] {
 // permission named after it: signup::create needs "signup:create".
 func (c *Cmd[E, P]) Allow(p Permission) *Cmd[E, P] {
 	c.permission = p
+	return c
+}
+
+// Fields says which fields an update may change: those its forms ask for, like an
+// issue's title and description, so whoever may edit an issue can't also set its
+// status or who approved it by sending them. Without it, an update may change any
+// field but its keys.
+func (c *Cmd[E, P]) Fields(names ...string) *Cmd[E, P] {
+	c.fields = names
 	return c
 }
 
@@ -385,7 +395,7 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 		permission = Permission(s.entity + ":" + c.action)
 	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
-		return run[E, P](a, call, s, c.action, permission, c.do, c.after)
+		return run[E, P](a, call, s, c.action, permission, c.fields, c.do, c.after)
 	}
 }
 
@@ -396,7 +406,7 @@ type call struct {
 	system bool // run by the backend's own code, which may run any command
 }
 
-func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
+func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, fields []string, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
 	if c.system {
 		permission = Anyone
 	}
@@ -550,9 +560,13 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if action == "update" {
 			input := map[string]any{}
 			for name, value := range c.input {
-				if name != "id" && !s.isKey(name) {
-					input[name] = value
+				if name == "id" || s.isKey(name) {
+					continue
 				}
+				if fields != nil && !c.system && !contains(fields, name) && s.field(name) != nil {
+					return invalid("%s can't be changed by %s::%s", label(name), s.name, action)
+				}
+				input[name] = value
 			}
 			if err := s.decode(input, v); err != nil {
 				return err
