@@ -133,6 +133,66 @@ screen "Issue" /issues/:issue {
     CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
 }
 
+TEST_CASE("a once changes what's stored, each step a body done to the entities it names") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug   slug  required  unique  key
+	start  stage
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity stage {
+	crew  crew  required  key
+	name  slug  required  key
+}
+entity task {
+	crew   crew  required  key
+	title  text
+	stage  stage
+}
+command crew::update
+command task::update
+once "2026-10-07 stages" {
+	each rank where name == "mate" {
+		title = "First mate"
+		may = [
+			crew::update,
+			task::update,
+		]
+	}
+	each crew {
+		create stage { crew = id  name = "todo" }
+		start = stage::todo
+	}
+	each task {
+		stage = stage::todo
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find(R"(var Once20261007Stages = one.Once("2026-10-07 stages",)") != std::string::npos);
+    CHECK(go.find(R"(one.Each[Rank]("name", "mate", func(c *one.Ctx, r *Rank) error {)") != std::string::npos);
+    CHECK(go.find(R"(r.May = []string{"crew::update", "task::update"})") != std::string::npos);
+    CHECK(go.find(R"(one.Each[Crew]("", nil, func(c *one.Ctx, x *Crew) error {)") != std::string::npos);
+    CHECK(go.find(R"(x.Start = one.Key(x.ID, "todo"))") != std::string::npos);
+    // A task names its crew's stage through the crew it's in.
+    CHECK(go.find(R"(t.Stage = one.Key(t.Crew, "todo"))") != std::string::npos);
+    CHECK(go.find(", Once20261007Stages") != std::string::npos);
+}
+
 TEST_CASE("a project can start from a preset: what it makes when, named by name, with lists") {
     language::diagnostics out;
     std::vector<language::file> files;

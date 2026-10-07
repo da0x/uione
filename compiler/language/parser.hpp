@@ -192,6 +192,7 @@ namespace one::language {
             if (word == "picker") return {where, parse_picker()};
             if (word == "enum") return {where, parse_enum()};
             if (word == "webhook") return {where, parse_webhook()};
+            if (word == "once" && peek(1).kind == token_kind::string) return {where, parse_once()};
             if (word == "backend") {
                 advance();
                 backend_declaration backend{expect(token_kind::identifier, "the backend's name, like deploy").text};
@@ -200,7 +201,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook or backend");
+                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend or once");
         }
 
         project_declaration parse_project() {
@@ -384,6 +385,30 @@ namespace one::language {
             }
             end_line();
             return command;
+        }
+
+        once_declaration parse_once() {
+            advance();
+            once_declaration once;
+            once.name = advance().text;
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                if (!at_word("each")) fail_expecting("each and what it changes, like each project { ... }");
+                advance();
+                once_step step;
+                step.entity_where = peek().where;
+                step.entity = expect(token_kind::identifier, "the entity it changes, like project").text;
+                if (at_word("where")) {
+                    advance();
+                    step.where = parse_expression();
+                }
+                step.body = parse_statement_block();
+                end_line();
+                once.steps.push_back(std::move(step));
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return once;
         }
 
         view_declaration parse_view() {
@@ -1289,12 +1314,16 @@ namespace one::language {
                 e = parse_expression();
                 expect(token_kind::right_paren, "')'");
             } else if (at(token_kind::left_bracket)) {
+                // A long list goes on over lines, until its ].
                 advance();
+                skip_newlines();
                 list_expression list;
                 while (!at(token_kind::right_bracket)) {
                     list.items.push_back(parse_expression());
+                    skip_newlines();
                     if (!at(token_kind::comma)) break;
                     advance();
+                    skip_newlines();
                 }
                 expect(token_kind::right_bracket, "']' after the list's values");
                 e->node = std::move(list);

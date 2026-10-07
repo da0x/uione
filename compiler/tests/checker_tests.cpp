@@ -304,6 +304,56 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("a once's steps are checked as updates of what they go through, and may name what's stored") {
+    const std::string crew = R"(namespace crew {
+entity crew {
+	slug     slug  required  unique  key
+	newcomer rank
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew  crew  required  key
+	person  user  required  key
+	rank  rank  required  key
+}
+roles rank per crew from hand {
+	captain "Captain"  crew::update
+}
+command crew::update
+once "2026-10-07 mates" {
+	each rank where name == "mate" {
+		title = "First mate"
+		may = [crew::update]
+	}
+	each crew {
+		newcomer = rank::bosun
+	}
+}
+}
+)";
+    CHECK(check_source(crew).size() == 0);
+
+    std::string where = crew;
+    where.replace(where.find("where name == \"mate\""), 20, "where title != \"mate\"");
+    CHECK(only_error(where).message == "a once's where picks by a field's value, like where name == \"developer\"");
+
+    std::string entity = crew;
+    entity.replace(entity.find("each rank where"), 9, "each rang");
+    CHECK(only_error(entity).message == "there's no entity rang in namespace crew");
+
+    std::string field = crew;
+    field.replace(field.find("title = \"First mate\""), 5, "titel");
+    CHECK(only_error(field).message.starts_with("entity rank has no field titel"));
+
+    CHECK(only_error("once \"x\" {\n\teach crew {\n\t}\n}\n").message ==
+          "once \"x\" changes a namespace's entities, so it goes inside a namespace");
+}
+
 TEST_CASE("roles a project defines for itself are records of an entity, given by members") {
     const std::string crew = R"(namespace crew {
 entity crew {
@@ -657,7 +707,7 @@ TEST_CASE("a list holds text, people or entities, changes by add and remove, and
     e = only_error(start + "command issue::take {\n\tadd me to assignes\n}\n");
     CHECK(e.message == "entity issue has no field assignes; did you mean assignees?");
     e = only_error(start + "command issue::take {\n\tassignees = me\n}\n");
-    CHECK(e.message == "assignees is a list; add to it or remove from it, like add me to assignees");
+    CHECK(e.message == "assignees is a list; add to it or remove from it, like add me to assignees, or give it a whole list, like [a, b]");
     e = only_error(start + "view mine per user {\n\teach issue where title has user.id\n}\n");
     CHECK(e.message == "has asks a list, and title isn't one");
 }

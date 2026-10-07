@@ -42,7 +42,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= project | namespace | format | enum_type | entity | command | view | role | roles
-                 | function | screen | picker | webhook | backend
+                 | function | screen | picker | webhook | backend | once
 
 /* project */
 
@@ -81,6 +81,11 @@ rule           ::= "required" | "unique" | "key" | "after" NAME
 /* backend */
 
 backend        ::= "backend" NAME END
+
+/* once */
+
+once           ::= "once" STRING "{" NEWLINE? once_step* "}" END
+once_step      ::= "each" NAME ("where" expression)? block END
 
 /* command */
 
@@ -170,7 +175,7 @@ product        ::= unary ("*" unary)*
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
-primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" (expression ("," expression)*)? "]"
+primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 

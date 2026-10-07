@@ -125,6 +125,7 @@ namespace one::generators {
             std::vector<std::pair<const language::webhook_declaration*, language::location>> hooks;
             std::vector<std::pair<const language::roles_declaration*, language::location>> defined;  // roles each project defines
             std::vector<std::pair<std::string, std::string>> backends;  // each name, and the file it's written in
+            std::vector<std::pair<const language::once_declaration*, language::location>> onces;
         };
 
         const std::vector<language::file>& files_;
@@ -206,6 +207,8 @@ namespace one::generators {
                     pkg.hooks.emplace_back(hook, d.where);
                 } else if (auto* backend = std::get_if<language::backend_declaration>(&d.node)) {
                     pkg.backends.emplace_back(backend->name, language::backend_file(f.path, backend->name));
+                } else if (auto* once = std::get_if<language::once_declaration>(&d.node)) {
+                    pkg.onces.emplace_back(once, d.where);
                 } else if (auto* screen = std::get_if<language::screen_declaration>(&d.node)) {
                     collect_forms(ns, screen->items);
                 }
@@ -475,6 +478,26 @@ namespace one::generators {
                 body.line();
             }
 
+            for (const auto& [o, where] : pkg.onces) {
+                // Named for its words, like Once20261007Workflows.
+                std::string var = "Once";
+                bool upper = true;
+                for (char ch : o->name) {
+                    if (!std::isalnum(static_cast<unsigned char>(ch))) {
+                        upper = true;
+                        continue;
+                    }
+                    var += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(ch))) : ch;
+                    upper = false;
+                }
+                if (std::find(members.begin(), members.end(), var) != members.end()) var += std::to_string(members.size());
+                members.push_back(var);
+                auto from_once = in(body, at(o), where.line);
+                path_ = at(o).path.empty() ? pkg.path : at(o).path;
+                once(body, *o, var, uses_time);
+                body.line();
+            }
+
             for (const auto& [v, where] : pkg.views) {
                 std::string var = api_detail::go_name(v->name);
                 if (std::find(members.begin(), members.end(), var) != members.end()) var += "View";
@@ -613,12 +636,26 @@ namespace one::generators {
                 out.line(head);
                 return;
             }
-            std::string me = e.name.substr(0, 1) == "c" ? "x" : e.name.substr(0, 1);
+            std::string me = receiver(e);
+            out.open(head + ".");
+            out.open("Do(func(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
+            body_of(out, e, body, me, at(&c), uses_time);
+            out.close("})");
+            out.dedent();
+        }
+
+        // The name a body calls its entity by: its first letter, or x for one whose
+        // letter is c, which is the body's Ctx.
+        static std::string receiver(const language::entity_declaration& e) {
+            return e.name.substr(0, 1) == "c" ? "x" : e.name.substr(0, 1);
+        }
+
+        // A body's Go, for a command or a once's step, ending in its return.
+        void body_of(stream& out, const language::entity_declaration& e, const std::vector<const language::statement*>& body, const std::string& me,
+                     const code::source& source, bool& uses_time) {
             pointed_.clear();
             existing_.clear();
             for (const auto* s : body) find_pointed(e, *s);
-            out.open(head + ".");
-            out.open("Do(func(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
             // What the body reads through a reference is read first, in the command's
             // own transaction, so its changes are saved with the command's.
             for (const auto& [name, target] : pointed_) {
@@ -629,12 +666,71 @@ namespace one::generators {
                 out.close("}");
             }
             for (const auto* s : body) {
-                auto from_statement = in(out, at(&c), s->where.line);
+                auto from_statement = in(out, source, s->where.line);
                 statement(out, e, *s, me, uses_time);
             }
             out.line("return nil");
-            out.close("})");
-            out.dedent();
+        }
+
+        // once "2026-10-07 workflows" { each project { ... } }: one.Once with a
+        // one.Each for each step, in order.
+        void once(stream& out, const language::once_declaration& o, const std::string& var, bool& uses_time) {
+            out.open("var " + var + " = one.Once(" + api_detail::go_string(o.name) + ",");
+            for (const auto& step : o.steps) {
+                auto from_step = in(out, at(&o), step.entity_where.line);
+                const language::entity_declaration* e = pkg_ ? entity(*pkg_, step.entity) : nullptr;
+                if (!e) {
+                    unsupported(path_, step.entity_where, "a once that changes an entity from another namespace");
+                    continue;
+                }
+                std::string me = receiver(*e);
+                std::string field = "\"\"", value = "nil";
+                if (step.where) {
+                    auto* b = std::get_if<language::binary_expression>(&step.where->node);
+                    auto* name = b ? std::get_if<language::name_expression>(&b->left->node) : nullptr;
+                    const language::field* f = name ? this->field(*e, name->name.text()) : nullptr;
+                    auto picked = f ? expression(*e, *b->right, me, f) : std::nullopt;
+                    if (!picked) {
+                        unsupported(path_, step.where->where, "a once's where that isn't a field's value");
+                        continue;
+                    }
+                    field = api_detail::go_string(f->name);
+                    value = *picked;
+                }
+                std::vector<const language::statement*> body;
+                for (const auto& s : step.body) body.push_back(&s);
+                out.open("one.Each[" + api_detail::go_name(e->name) + "](" + field + ", " + value + ", func(c *one.Ctx, " + me + " *" +
+                         api_detail::go_name(e->name) + ") error {");
+                body_of(out, *e, body, me, at(&o), uses_time);
+                out.close("}),");
+            }
+            out.close(")");
+        }
+
+        // One of a project's own by its name, like phase::triage or role::developer,
+        // given to a field of an entity in that project: its id, made of the project,
+        // the entity's own or the one it's in, and the name. A command a role allows,
+        // like issue::create, is its name.
+        std::optional<std::string> own_named(const language::entity_declaration& e, const std::string& me, const language::field& f,
+                                             const language::expression& item) const {
+            auto* named = std::get_if<language::name_expression>(&item.node);
+            if (!named || named->name.parts.size() != 2 || !f.type || !f.choices.empty() || !pkg_) return std::nullopt;
+            if (f.type->text() == "permission") return api_detail::go_string(named->name.text());
+            const language::entity_declaration* pointed_at = entity(*pkg_, f.type->text());
+            if (!pointed_at) return std::nullopt;
+            for (const auto& k : pointed_at->fields) {
+                if (!k.key || !k.type || !entity(*pkg_, k.type->text())) continue;
+                std::string place;
+                if (k.type->text() == e.name) {
+                    place = me + ".ID";
+                } else {
+                    for (const auto& g : e.fields) {
+                        if (!g.list && g.type && g.type->text() == k.type->text()) place = me + "." + api_detail::go_name(g.name);
+                    }
+                }
+                if (!place.empty()) return "one.Key(" + place + ", " + api_detail::go_string(named->name.parts[1]) + ")";
+            }
+            return std::nullopt;
         }
 
         // A Go local variable for a snake_case name: due_at becomes dueAt.
@@ -731,18 +827,27 @@ namespace one::generators {
                     unsupported(path_, s.where, "a command that changes anything but its own fields and those of what it points at");
                     return;
                 }
-                // start = phase::to_do, on a project: its own phase of that name.
-                std::optional<std::string> value;
+                // start = phase::to_do, on a project: its own phase of that name. A
+                // list is given whole: may = [issue::create, comment::create].
                 const language::field* f = target->second;
-                auto* named = std::get_if<language::name_expression>(&a->value->node);
-                if (named && named->name.parts.size() == 2 && f && f->type && f->choices.empty()) {
-                    if (const language::entity_declaration* pointed_at = pkg_ ? entity(*pkg_, f->type->text()) : nullptr) {
-                        for (const auto& k : pointed_at->fields) {
-                            if (k.key && k.type && k.type->text() == e.name) value = "one.Key(" + me + ".ID, " + api_detail::go_string(named->name.parts[1]) + ")";
-                        }
+                auto one_of = [&](const language::expression& item) -> std::optional<std::string> {
+                    if (f) {
+                        if (auto own = own_named(e, me, *f, item)) return own;
                     }
+                    return expression(e, item, me, f);
+                };
+                std::optional<std::string> value;
+                if (auto* list = std::get_if<language::list_expression>(&a->value->node)) {
+                    std::string items;
+                    for (const auto& item : list->items) {
+                        auto one = one_of(*item);
+                        if (!one) return;
+                        items += (items.empty() ? "" : ", ") + *one;
+                    }
+                    value = "[]string{" + items + "}";
+                } else {
+                    value = one_of(*a->value);
                 }
-                if (!value) value = expression(e, *a->value, me, f);
                 if (value) out.line(target->first + " = " + *value);
             } else if (auto* l = std::get_if<language::list_statement>(&s.node)) {
                 // add me to assignees, remove me from assignees.

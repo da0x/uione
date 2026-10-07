@@ -123,6 +123,14 @@
           }
         },
         {
+          "match": "^\\s*(once)\\b(?=\\s+\")",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            }
+          }
+        },
+        {
           "match": "^\\s*(project|environment|enum|entity|view|roles|role|screen|picker|webhook|backend)\\b(?!::|\\s*=)(?:\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*))?",
           "captures": {
             "1": {

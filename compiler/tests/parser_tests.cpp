@@ -305,6 +305,27 @@ TEST_CASE("a row's when ends its line, so nothing after it is taken for a column
     CHECK(out[0].message == "expected the end of the line after a row's when, found 'title'");
 }
 
+TEST_CASE("a once is named, and holds its steps in order, each a body for what it goes through") {
+    auto f = parse_ok("once \"2026-10-07 stages\" {\n"
+                      "\teach rank where name == \"mate\" {\n\t\tmay = [\n\t\t\tcrew::update,\n\t\t\ttask::update,\n\t\t]\n\t}\n"
+                      "\teach crew {\n\t\tstart = stage::todo\n\t}\n"
+                      "}\n");
+    const auto& once = std::get<once_declaration>(f.declarations[0].node);
+    CHECK(once.name == "2026-10-07 stages");
+    REQUIRE(once.steps.size() == 2);
+    CHECK(once.steps[0].entity == "rank");
+    CHECK(once.steps[0].where);
+    CHECK(once.steps[1].entity == "crew");
+    CHECK_FALSE(once.steps[1].where);
+    // The list goes on over lines, and may end in a comma.
+    const auto& may = std::get<assign_statement>(once.steps[0].body[0].node);
+    CHECK(std::get<list_expression>(may.value->node).items.size() == 2);
+
+    auto out = parse_errors("once \"x\" {\n\tcrew {\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected each and what it changes, like each project { ... }, found 'crew'");
+}
+
 TEST_CASE("a when block holds a condition a line, and all of them must hold") {
     auto f = parse_ok("screen \"Issue\" /issues/:issue {\n"
                       "\tissue::verify \"Verify\" when {\n"

@@ -41,3 +41,33 @@ func TestWorkDoneOnceIsDoneAtTheFirstStartAndNotAgain(t *testing.T) {
 		t.Fatalf("what it made, once: %d tasks, %v", len(docs), err)
 	}
 }
+
+// Every old task is done, once: each one stored, and none of the others.
+var eachModule = one.Module("tasks", one.Once("finish the old tasks", one.Each[Task]("title", "old", func(c *one.Ctx, t *Task) error {
+	t.Done = true
+	return nil
+})))
+
+func TestEachDoesItsWorkToTheStoredEntitiesItNames(t *testing.T) {
+	h := start(t)
+	ctx := context.Background()
+	for id, title := range map[string]string{"a": "old", "b": "old", "c": "new"} {
+		if _, err := h.store.Collection("tasks_task").Doc(id).Set(ctx, map[string]any{"id": id, "title": title, "done": false}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	app, err := one.New(ctx, append(modules, eachModule)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Close()
+	for id, want := range map[string]bool{"a": true, "b": true, "c": false} {
+		snap, err := h.store.Collection("tasks_task").Doc(id).Get(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if done, _ := snap.Data()["done"].(bool); done != want {
+			t.Errorf("task %s (%v) is done: %v, want %v", id, snap.Data()["title"], done, want)
+		}
+	}
+}

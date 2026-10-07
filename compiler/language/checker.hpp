@@ -109,6 +109,7 @@ namespace one::language {
             // What a command's body makes by name, like create phase { name = "triaged" },
             // by entity: what phase::triaged may name, with a project's starting roles.
             const std::map<std::string, std::set<std::string>>* made = nullptr;
+            bool stored = false;                         // a once's, which may name what's already stored, like role::developer
         };
 
         diagnostics& out_;
@@ -859,8 +860,9 @@ namespace one::language {
                     std::size_t errors = out_.size();
                     const field* target = resolve(in, *a->target);
                     if (target && fixed_once_made(*target)) error(a->target->where, why_fixed(*target));
-                    if (target && target->list) {
-                        error(a->target->where, target->name + " is a list; add to it or remove from it, like add me to " + target->name);
+                    if (target && target->list && !std::holds_alternative<list_expression>(a->value->node)) {
+                        error(a->target->where, target->name + " is a list; add to it or remove from it, like add me to " + target->name +
+                                                    ", or give it a whole list, like [a, b]");
                     }
                     // With the target wrong, what's assigned to it can't be judged.
                     if (out_.size() == errors) resolve(in, *a->value, target);
@@ -1747,6 +1749,44 @@ namespace one::language {
             return nullptr;
         }
 
+        // once "2026-10-07 workflows" { each project { ... } }: each step's body is
+        // checked as an update's on its entity, and may name what's already stored, as
+        // role::developer, as well as what it makes. A where picks by a field's value.
+        void verify(const std::string& ns, location where, const once_declaration& o) {
+            if (ns.empty()) {
+                error(where, "once \"" + o.name + "\" changes a namespace's entities, so it goes inside a namespace");
+                return;
+            }
+            if (o.name.empty()) error(where, "a once has a name of its own, like \"2026-10-07 workflows\", so it's known to be done");
+            if (o.steps.empty()) error(where, "once \"" + o.name + "\" does nothing; give it a step, like each project { ... }");
+            for (const auto& step : o.steps) {
+                snake(step.entity, step.entity_where);
+                const entity_declaration* entity = find_entity(ns, qualified_name{{step.entity}, step.entity_where});
+                mean_entity(step.entity_where, step.entity.size(), entity);
+                if (!entity) {
+                    error(step.entity_where, "there's no entity " + step.entity + " " + in_namespace(ns));
+                    continue;
+                }
+                context in{ns, entity, nullptr, {}, false};
+                in.update = true;
+                in.command = true;
+                in.stored = true;
+                std::map<std::string, std::set<std::string>> made;
+                made_by_name(step.body, made);
+                in.made = &made;
+                if (step.where) {
+                    auto* b = std::get_if<binary_expression>(&step.where->node);
+                    auto* name = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+                    if (!b || b->op != token_kind::equal || !name || name->name.parts.size() != 1) {
+                        error(step.where->where, "a once's where picks by a field's value, like where name == \"developer\"");
+                    } else {
+                        resolve(in, *step.where);
+                    }
+                }
+                statements(ns, step.body, entity, in);
+            }
+        }
+
         // backend deploy: backend/deploy.go beside this file, Go in the namespace's
         // package, built with the generated code beside it.
         void verify(const std::string& ns, location where, const backend_declaration& b) {
@@ -1986,7 +2026,7 @@ namespace one::language {
                             if (const roles_declaration* r = defined_roles(in.ns, *beside)) {
                                 for (const auto& d : r->defaults) known.insert(d.name);
                             }
-                            if (!known.contains(n->name.parts[1])) {
+                            if (!in.stored && !known.contains(n->name.parts[1])) {
                                 std::string names;
                                 for (const auto& k : known) names += (names.empty() ? "" : ", ") + named->name + "::" + k;
                                 error(n->name.where, n->name.text() + " isn't a " + named->name + " this command makes or every project starts with" +

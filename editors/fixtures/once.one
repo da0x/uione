@@ -1,0 +1,40 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A once, for the highlighting test: once opens a declaration with its name in a
+// string, each and where are keywords, and a long list goes on over lines.
+
+namespace tracker {
+
+	entity project {
+		name   text  required
+		start  text
+	}
+
+	entity role {
+		project  project  required  key
+		name     text     required  key
+		title    text
+		may      list of permission
+	}
+
+	command project::update
+
+	once "2026-10-07 workflows" {
+		each role where name == "developer" {
+			title = "Programmer"
+			may = [
+				project::update,
+			]
+		}
+		each project {
+			start = "triage"
+		}
+	}
+
+	// A field named once is still a field.
+	entity task {
+		once  boolean
+	}
+
+}

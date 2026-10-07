@@ -169,3 +169,8 @@ examples/tracker/main.one	screen "Issue" /issues/:issue layout two_columns {	lay
 examples/tracker/main.one	search title labels	search	keyword
 examples/tracker/main.one	sort by number descending	sort	keyword
 examples/tracker/main.one	page 25	page	keyword
+editors/fixtures/once.one	once "2026-10-07 workflows" {	once	declare
+editors/fixtures/once.one	once "2026-10-07 workflows" {	"2026-10-07 workflows"	string
+editors/fixtures/once.one	each role where	each	keyword
+editors/fixtures/once.one	each role where	where	keyword
+editors/fixtures/once.one	\t\tonce  boolean	once	variable

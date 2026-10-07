@@ -466,6 +466,24 @@ namespace one::language {
         std::string name;
     };
 
+    // each project { start = phase::triage }: a command's body done to every stored
+    // entity of a kind, or to those its where names, like each role where name ==
+    // "developer".
+    struct once_step {
+        std::string entity;
+        location entity_where;
+        expression_ptr where;  // name == "developer", or none for all of them
+        std::vector<statement> body;
+    };
+
+    // once "2026-10-07 workflows" { each project { ... } }: a change to what's stored
+    // that a deploy brings, done the first time the backend starts with it and never
+    // again, its steps in order.
+    struct once_declaration {
+        std::string name;
+        std::vector<once_step> steps;
+    };
+
     // The file a backend is written in, beside the .one file that names it.
     inline std::string backend_file(const std::string& one_file, const std::string& name) {
         auto folder = std::filesystem::path(one_file).parent_path();
@@ -485,7 +503,7 @@ namespace one::language {
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
-                     webhook_declaration, backend_declaration, enum_declaration, roles_declaration>
+                     webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration>
             node;
     };
 

@@ -79,6 +79,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`screen`](#screen) | a page, at an address |
 | [`picker`](#picker) | how an entity is chosen in a form |
 | [`webhook`](#webhook) | what's done when another service sends an event |
+| [`once`](#once) | a change to what's stored, done once, the first time the backend starts with it |
 | [`backend`](#backend) | Go written by hand beside what's generated |
 
 ## Comments
@@ -118,6 +119,7 @@ The language's own words, inside what a declaration says:
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
+- in a once: `each`, `where`;
 - on a screen: `table`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
@@ -424,6 +426,7 @@ command issue::move {
   what the command makes, or a role every project starts with, named by the project
   and its name. A list field is given its values whole: `roles = [role::maintainer,
   role::programmer]`, or a role's `may = [issue::create, issue::move]`.
+  A long list goes on over lines until its `]`, and may end in a comma.
 - `create` makes another entity in the same step, giving its fields values worked
   out where the command runs. `id` is the id of the command's own entity, and `me`
   is the person running it. Every required field gets a value, unless it starts
@@ -856,6 +859,40 @@ view project_settings per project {
   from, keeps it in Secret Manager, and gives it only to the backend. It never
   goes into GitHub itself.
 
+## once
+
+A change to what's stored that a deploy brings, like giving every project made
+before workflows the phases it now needs. It's done the first time the backend
+starts with it, before anything else, and never again: that it's done is kept by
+its name, so a once is named for when it was written and what it does, and its
+name never changes. If it fails, the backend doesn't start, and the deploy says so.
+
+```one
+once "2026-10-07 workflows" {
+	each role where name == "developer" {
+		title = "Programmer"
+	}
+	each project {
+		create phase { project = id  name = "triage"  title = "Triage"  position = 1 }
+		start = phase::triage
+	}
+	each issue {
+		phase = phase::triage
+	}
+}
+```
+
+- Its steps are done in order, each `each` to every stored entity of its kind,
+  or to those whose field holds a value, like `where name == "developer"`.
+- What a step says is a command's body on that entity: it changes the entity's
+  fields, `create`s others beside it, and decides with `if`, and each entity is
+  changed in a step of its own, checked against its rules, with its history
+  saying it was changed.
+- `phase::triage` is the project's phase named triage, from the project itself or
+  from what's in it, like an issue. A once may name what's already stored, like
+  `role::developer`, as well as what it makes.
+- It runs as the backend itself, so no role is needed.
+
 ## backend
 
 Go written by hand, for what the language doesn't say, the way `component` is for
@@ -878,9 +915,8 @@ It uses four things from the `one` library:
 - `one.Route("POST /hooks/deploy", handle)` answers requests of its own, like a
   build reporting back. A route checks the request itself: `s.SignedIn(r)` says
   who sent it, by the sign-in it carries, or `""` for nobody.
-- `one.Once("name", work)` does work the first time a backend with it starts, and
-  never again, like moving what's stored to a new shape a deploy brings. It's added
-  to the namespace from an `init` function: `Module.Add(one.Once(...))`. If it
-  fails, the backend doesn't start, and the deploy says so.
+- `one.Once("name", work)` is a [`once`](#once) with work written in Go, for what
+  a once can't say. It's added to the namespace from an `init` function:
+  `Module.Add(one.Once(...))`.
 - They're given a `System`, the backend itself. `Run` runs any command, even one
   no role grants, and `one.Fetch` and `one.FetchWhere` read what's stored.

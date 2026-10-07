@@ -20,6 +20,7 @@ syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
 syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<once\>\ze\s\+\""
 syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\|\s*=\)\@!" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
 syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
