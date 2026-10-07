@@ -124,7 +124,7 @@ namespace tracker {
 
 	view projects public {
 		each project where visibility == visibility::public {
-			order -created_at
+			order created_at descending
 			slug  name
 		}
 	}
@@ -139,7 +139,7 @@ namespace tracker {
 		repository = project.repository
 		visibility = project.visibility
 		issues = each issue where project == project.id {
-			order -status  -number
+			order status descending  number descending
 			number  title  status  labels  assignees.name  author.picture  author.name
 		}
 		members = each member where project == project.id {
@@ -147,7 +147,7 @@ namespace tracker {
 			person  person.picture  person.name  role
 		}
 		timeline = each change of issue where project == project.id {
-			order -created_at
+			order created_at descending
 			limit 50
 			issue  issue.number  issue.title  field  before  after  action  created_by.name  created_at
 		}
@@ -219,7 +219,7 @@ namespace tracker {
 		}
 		table project_page.issues by status link /issues/:issue {
 			search title labels
-			sort -number
+			sort number descending
 			page 25
 			number "#"
 			title

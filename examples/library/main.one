@@ -79,7 +79,7 @@ namespace library {
 		shelfmark = book.shelfmark
 		summary = book.summary
 		loans = each loan where book == book.id {
-			order -number
+			order number descending
 			number  member.picture  member.name  lent_at  returned_at
 		}
 	}

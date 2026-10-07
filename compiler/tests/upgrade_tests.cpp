@@ -200,7 +200,7 @@ TEST_CASE("a table is outlined with its columns, its settings and what its rows 
 	screen "Board" /board {
 		table board.issues by status link /issues/:issue {
 			search title
-			sort -title
+			sort title descending
 			page 25
 			title "Title"
 			status

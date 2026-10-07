@@ -28,7 +28,7 @@ namespace tasks {
 
 	view list per user {
 		each task where owner == user.id {
-			order done  -created_at
+			order done  created_at descending
 			title  done
 		}
 	}

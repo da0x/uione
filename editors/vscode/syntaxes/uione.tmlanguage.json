@@ -275,7 +275,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|layout|main|side|search|sort|page|link|markdown|at)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|layout|main|side|search|sort|ascending|descending|page|link|markdown|at)\\b",
           "name": "keyword.other.uione"
         },
         {
@@ -283,7 +283,7 @@
           "name": "storage.modifier.uione"
         },
         {
-          "match": "^\\s*[A-Za-z_]\\w*\\s+(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b",
+          "match": "^\\s*(?!(?:sort|order|search|page|by)\\s)[A-Za-z_]\\w*\\s+(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b",
           "captures": {
             "1": {
               "name": "support.type.uione"
@@ -372,7 +372,7 @@
           }
         },
         {
-          "match": "^\\s*([A-Za-z_]\\w*)\\s+(?:(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b|([A-Za-z_]\\w*(?:::[A-Za-z_]\\w*)*))",
+          "match": "^\\s*(?!(?:sort|order|search|page|by)\\s)([A-Za-z_]\\w*)\\s+(?:(text|markdown|email|slug|date|number|serial|boolean|user|list|enum)\\b|([A-Za-z_]\\w*(?:::[A-Za-z_]\\w*)*))",
           "captures": {
             "1": {
               "name": "variable.other.field.uione"

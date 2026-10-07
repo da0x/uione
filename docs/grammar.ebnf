@@ -111,7 +111,7 @@ each           ::= "each" ("change" "of")? postfix ("where" expression)? ("{" NE
 list_line      ::= "order" order_key+ END
                  | "limit" WHOLE END
                  | row_line
-order_key      ::= "-"? postfix
+order_key      ::= postfix ("ascending" | "descending")?
 row_line       ::= (postfix+ | postfix* NAME "=" expression) END
 
 /* role */
@@ -173,6 +173,6 @@ qualified      ::= NAME ("::" NAME)*
 
 table_line     ::= "by" NAME END
                  | "search" (NAME ("." NAME)*)+ END
-                 | "sort" "-"? NAME END
+                 | "sort" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END
                  | column+ ("when" expression)? END

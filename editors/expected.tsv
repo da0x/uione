@@ -66,7 +66,7 @@ examples/tasks/main.one	permission owner	owner	constant
 examples/tasks/main.one	owner  user     = me	owner	variable
 examples/tasks/main.one	where owner == user.id	owner	plain
 examples/tasks/main.one	require !done	!	operator
-examples/tasks/main.one	order done  -created_at	-	operator
+examples/tasks/main.one	order done  created_at descending	descending	keyword
 examples/tasks/main.one	screen "Tasks" / {	/	route
 site/site.one	project uione {	project	declare
 site/site.one	project uione {	uione	name
@@ -167,5 +167,5 @@ examples/tracker/main.one	copy issue_page "Copy issue"	copy	keyword
 examples/tracker/main.one	details issue_page {	details	keyword
 examples/tracker/main.one	screen "Issue" /issues/:issue layout two_columns {	layout	keyword
 examples/tracker/main.one	search title labels	search	keyword
-examples/tracker/main.one	sort -number	sort	keyword
+examples/tracker/main.one	sort number descending	sort	keyword
 examples/tracker/main.one	page 25	page	keyword

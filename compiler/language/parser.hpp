@@ -448,15 +448,28 @@ namespace one::language {
         // A sort key: a value, or a value with - in front of it to sort in reverse.
         // It stops before any operator, because order done -created_at is two keys,
         // not a subtraction.
+        // A key, then ascending, which it is unless it says, or descending: newest or
+        // largest first. Descending is kept as the key reversed.
         expression_ptr parse_order_key() {
             if (at(token_kind::minus)) {
-                const token& op = advance();
+                const token& minus = advance();
+                std::size_t begin = peek().begin;
+                auto key = parse_postfix();
+                std::string written(source_.substr(begin, tokens_[pos_ - 1].end - begin));
+                fail(minus.where, "write " + written + " descending; a - in front isn't said in words",
+                     fix{minus.where, tokens_[pos_ - 1].end - minus.begin, written + " descending"});
+            }
+            auto key = parse_postfix();
+            if (at_word("ascending")) {
+                advance();
+            } else if (at_word("descending")) {
+                location where = advance().where;
                 auto e = std::make_unique<expression>();
-                e->where = op.where;
-                e->node = unary_expression{token_kind::minus, parse_postfix()};
+                e->where = where;
+                e->node = unary_expression{token_kind::minus, std::move(key)};
                 return e;
             }
-            return parse_postfix();
+            return key;
         }
 
         view_each parse_each() {
@@ -725,10 +738,18 @@ namespace one::language {
                             advance();
                             table.sort_where = peek().where;
                             if (at(token_kind::minus)) {
+                                const token& minus = advance();
+                                const token& field = expect(token_kind::identifier, "the field rows are sorted by");
+                                fail(minus.where, "write " + field.text + " descending; a - in front isn't said in words",
+                                     fix{minus.where, field.end - minus.begin, field.text + " descending"});
+                            }
+                            table.sort = expect(token_kind::identifier, "the field rows are sorted by").text;
+                            if (at_word("ascending")) {
+                                advance();
+                            } else if (at_word("descending")) {
                                 advance();
                                 table.sort_descending = true;
                             }
-                            table.sort = expect(token_kind::identifier, "the field rows are sorted by").text;
                             end_line();
                             continue;
                         }

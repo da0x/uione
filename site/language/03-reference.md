@@ -113,7 +113,8 @@ The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
 - in a command: `require`, `permission`, `create`, `clear`, `changes`, `add … to`, `remove … from`;
-- in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `limit`,
+- in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `ascending`,
+  `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - on a screen: `table`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
@@ -431,7 +432,7 @@ view signups public {
 view book_page per book {
 	title = book.title
 	loans = each loan where book == book.id {
-		order -number
+		order number descending
 		number  member  lent_at  returned_at
 	}
 }
@@ -477,7 +478,7 @@ view issue_page per issue {
 ```one
 view project_page per project {
 	timeline = each change of issue where project == project.id {
-		order -created_at
+		order created_at descending
 		limit 50
 		issue  field  after  created_by.name  created_at
 	}
@@ -486,7 +487,10 @@ view project_page per project {
 
 - A list of every project would name private ones too, so it picks the public
   ones: `each project where visibility == visibility::public`.
-- `order` goes inside the list it sorts, and `-` sorts in reverse.
+- `order` goes inside the list it sorts. Each key is `ascending`, which it is
+  unless it says, or `descending`, newest or largest first:
+  `order done  created_at descending` puts the ones not done first, and the newest
+  first within each.
 - A view has at most one list without a name, its rows. Any others have names,
   like `loans = each loan ...`, so one page can hold a book's details and several
   lists that belong to it. Each item in a list is its own entity, so a long list
@@ -589,8 +593,8 @@ screen "Book" /books/:book {
   or from the row when it holds them, like a list of one person's issues across
   projects.
 - A table's block can start with its own settings: `search title labels` gives it a
-  box that finds rows by those fields, `sort -number` puts its rows in order, a `-`
-  for largest or latest first, and `page 25` shows them 25 at a time. `by status`
+  box that finds rows by those fields, `sort number descending` puts its rows in
+  order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
