@@ -242,6 +242,7 @@ namespace tracker {
 		form issue::update {
 			title  body  labels
 		}
+		copy issue_page "Copy issue"
 		thread issue_page.comments
 		comment::create
 		form comment::create {

@@ -201,7 +201,8 @@ namespace one::generators {
         std::string project_dir_;
         std::string out_dir_;
         std::string name_ = "app";
-        std::vector<held_roles> held_;  // the roles held within something, and what grants each command
+        std::vector<held_roles> held_;
+        std::string screen_title_;  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
@@ -520,6 +521,7 @@ namespace one::generators {
             std::vector<std::pair<std::string, std::string>> views;  // variable, full view name
             std::vector<std::string> imports;                        // extra import lines
             bool optional_page = false;
+            bool viewer = false;  // a button's when reads who's reading, as me
         };
 
         stream screen_file(const language::file& f, const std::vector<found_screen>& found, std::vector<screen_import>& screens,
@@ -533,6 +535,7 @@ namespace one::generators {
                 screen_parts parts;
                 std::string route = full_route(ns, s->route);
                 route_ = route;
+                screen_title_ = s->title_is_name ? "" : s->title;
                 docs_base_ = route.substr(0, route.find("/:"));  // where its pages live, if it has any
                 stream items;
                 auto from_items = items.from(f.path, where.line);
@@ -604,7 +607,7 @@ namespace one::generators {
                 for (const auto& [variable, view] : parts.views) {
                     if (auto per = per_entity(view)) parts.params.insert(*per);
                 }
-                if (parts.views.empty() && parts.params.empty()) {
+                if (parts.views.empty() && parts.params.empty() && !parts.viewer) {
                     bodies.open("export const " + name + " = screen(" + info + ", () => (");
                     bodies.embed(items);
                     bodies.close("));");
@@ -634,6 +637,11 @@ namespace one::generators {
                                     (per ? ", " + web_detail::js_name(*per + "_id") : std::string()) + ");");
                     }
                     if (!titling.empty()) bodies.line(titling);
+                    // Who's reading, for a button's when that says me; nobody, signed out.
+                    if (parts.viewer) {
+                        components.insert("useAuth");
+                        bodies.line("const viewer = useAuth()?.person?.uid ?? null;");
+                    }
                     bodies.open("return (");
                     bodies.embed(items);
                     bodies.close(");");
@@ -787,6 +795,11 @@ namespace one::generators {
         std::string condition_of(screen_parts& parts, const std::string& ns, const language::expression& e, std::set<std::string>& read) {
             using language::token_kind;
             if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
+                // A list has a value, like assignees has me.
+                if (binary->op == token_kind::has) {
+                    std::string list = condition_of(parts, ns, *binary->left, read);
+                    return "(Array.isArray(" + list + ") && " + list + ".includes(" + condition_of(parts, ns, *binary->right, read) + "))";
+                }
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
                                : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"
@@ -804,6 +817,10 @@ namespace one::generators {
                 const std::string word = name->name.text();
                 if (word == "true" || word == "false") return word;
                 if (word == "none") return "null";
+                if (word == "me") {
+                    parts.viewer = true;
+                    return "viewer";
+                }
                 return web_detail::js_string(name->name.parts.back());  // a choice, like status::open
             }
             if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
@@ -820,7 +837,7 @@ namespace one::generators {
             auto presses = [&](const language::screen_item& it) {
                 if (auto* b = std::get_if<language::button_item>(&it.node)) return !has_form_for(screen, b->command);
                 if (auto* f = std::get_if<language::form_item>(&it.node)) return button_for(screen, f->commands.front()) != nullptr;
-                return false;
+                return std::holds_alternative<language::copy_item>(it.node);
             };
             auto passed = [&](const language::screen_item& it) {
                 auto* b = std::get_if<language::button_item>(&it.node);
@@ -876,6 +893,8 @@ namespace one::generators {
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     out.line("<Link to=" + web_detail::js_string(target) + ">" + web_detail::jsx_text(link->label) + "</Link>");
+                } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
+                    this->copy(out, parts, ns, *copy);
                 } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
                     parts.components.insert("Thread");
                     out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
@@ -949,6 +968,61 @@ namespace one::generators {
                 parts.components.insert("Pages");
                 out.line("<Pages base=" + web_detail::js_string(docs_base_) + " pages={pages} />");
             }
+        }
+
+        // A button copying everything a view holds as Markdown, in the order the view
+        // says it: each value but the ones the page's title shows, a markdown one as it
+        // was written, then each list, as a conversation, a timeline of changes, or
+        // rows. The ids of people, which mean nothing pasted elsewhere, are left out.
+        void copy(stream& out, screen_parts& parts, const std::string& ns, const language::copy_item& copy) {
+            parts.components.insert("Copy");
+            std::string full = full_view(ns, copy.view.text());
+            std::size_t split = full.rfind("::");
+            std::string view_ns = split == std::string::npos ? "" : full.substr(0, split);
+            std::string name = split == std::string::npos ? full : full.substr(split + 2);
+            const language::view_declaration* view = nullptr;
+            if (auto scope = views_.find(view_ns); scope != views_.end()) {
+                if (auto found = scope->second.find(name); found != scope->second.end()) view = found->second;
+            }
+            std::string variable = view_variable(parts, full);
+            std::string fields, lists;
+            if (view) {
+                const language::entity_declaration* entity = nullptr;
+                if (view->per) {
+                    if (auto scope = entities_.find(view_ns); scope != entities_.end()) {
+                        if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
+                    }
+                }
+                for (const auto& value : view->values) {
+                    std::string key = value.name ? *value.name : web_detail::text_of(*value.value);
+                    if (screen_title_.find("{" + name + "." + key + "}") != std::string::npos) continue;
+                    std::string kind;
+                    auto* member = std::get_if<language::member_expression>(&value.value->node);
+                    if (member && entity) {
+                        for (const auto& f : entity->fields) {
+                            if (f.name != member->member || !f.type) continue;
+                            if (f.type->text() == "markdown") kind = "markdown";
+                            if (f.list && f.type->text() == "user") kind = "people";
+                        }
+                    }
+                    if (kind == "people") continue;
+                    fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " + web_detail::js_string(web_detail::label(key)) +
+                              (kind.empty() ? "" : ", " + web_detail::js_string(kind)) + "]";
+                }
+                for (const auto& each : view->each) {
+                    if (!each.name) continue;
+                    std::vector<std::string> columns;
+                    for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
+                    auto has = [&](const std::string& c) { return std::find(columns.begin(), columns.end(), c) != columns.end(); };
+                    std::string kind = each.changes ? "changes" : has("body") && has("author.name") ? "thread" : "rows";
+                    std::string shown;
+                    for (const auto& c : columns) shown += (shown.empty() ? "" : ", ") + web_detail::js_string(c);
+                    lists += (lists.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(*each.name) + ", " +
+                             web_detail::js_string(web_detail::label(*each.name)) + ", " + web_detail::js_string(kind) + ", [" + shown + "]]";
+                }
+            }
+            std::string label = copy.label ? " label=" + web_detail::js_string(*copy.label) : "";
+            out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]} />");
         }
 
         void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table) {

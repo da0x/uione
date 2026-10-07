@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { fill, useConfirmContext, useSignIn } from "./app.js";
+import { fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
 import type { FieldProps } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
@@ -145,8 +145,27 @@ export function Thread({ view, list }: { view: ViewState; list: string }) {
   return <ui.Thread status={view.status} entries={entries} />;
 }
 
-// What a change did, in words: making the thing, or a field set, cleared or changed.
-export function changed(field: unknown, before: unknown, after: unknown): string {
+// A command's action as something done, like close as closed: the past tense of
+// its first word, and the rest as it is, like take_over as took over.
+const irregular: Record<string, string> = {
+  take: "took", make: "made", give: "gave", send: "sent", leave: "left", begin: "began", write: "wrote", set: "set", put: "put",
+  run: "ran", find: "found", hold: "held", keep: "kept", get: "got", bring: "brought", buy: "bought", pay: "paid", lead: "led",
+};
+export function done(action: string): string {
+  const [verb = "", ...rest] = action.split("_");
+  const past = irregular[verb]
+    ?? (verb.endsWith("e") ? `${verb}d`
+    : /[^aeiou]y$/.test(verb) ? `${verb.slice(0, -1)}ied`
+    : /^[^aeiou]*[aeiou][^aeiouwxy]$/.test(verb) ? `${verb}${verb.at(-1)}ed`
+    : `${verb}ed`);
+  return [past, ...rest].join(" ");
+}
+
+// What a change did, in words: making the thing, a field set, cleared or changed,
+// or, made by a command of its own like close, what that command did: closed this.
+export function changed(field: unknown, before: unknown, after: unknown, command?: unknown): string {
+  const verb = typeof command === "string" ? action(command) : "";
+  if (verb && verb !== "create" && verb !== "update" && verb !== "delete") return `${done(verb)} this`;
   if (typeof field !== "string" || field === "") return "created this";
   const name = field.replaceAll("_", " ");
   const was = show(before);
@@ -157,16 +176,85 @@ export function changed(field: unknown, before: unknown, after: unknown): string
 }
 
 // One of a view's lists of an entity's changes as a timeline, oldest first as the
-// view orders it.
+// view orders it. A command that changes several fields at once, like close
+// setting status and closed_at, is said once.
 export function Timeline({ view, list }: { view: ViewState; list: string }) {
   const ui = useUI();
-  const entries = (view.status === "live" ? rowsOf(view.data?.[list]) : []).map((row) => ({
+  const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
+  const said = rows.filter((row, i) => {
+    const before = rows[i - 1];
+    const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));
+    return !(own && before && before.action === row.action && String(before.created_at) === String(row.created_at));
+  });
+  const entries = said.map((row) => ({
     id: row.id,
     who: show(row["created_by.name"]),
-    what: changed(row.field, row.before, row.after),
+    what: changed(row.field, row.before, row.after, row.action),
     when: when(row.created_at),
   }));
   return <ui.Timeline status={view.status} entries={entries} />;
+}
+
+// What a view holds, as Markdown to paste somewhere else whole: the page's title,
+// each value, a markdown one as written, and each list, a conversation as who wrote
+// what and when, changes as what happened, and rows as their values.
+export type CopiedField = readonly [name: string, label: string, kind?: "markdown"];
+export type CopiedList = readonly [name: string, label: string, kind: "thread" | "changes" | "rows", columns: readonly string[]];
+
+export function markdownOf(title: string, data: Record<string, unknown> | undefined, fields: readonly CopiedField[], lists: readonly CopiedList[]): string {
+  const out: string[] = [];
+  if (title) out.push(`# ${title}`, "");
+  const said = fields.filter(([name, , kind]) => kind !== "markdown" && show(data?.[name]) !== "");
+  for (const [name, label] of said) out.push(`**${label}:** ${show(data?.[name])}  `);
+  if (said.length) out.push("");
+  for (const [name, , kind] of fields) {
+    const value = data?.[name];
+    if (kind === "markdown" && typeof value === "string" && value.trim()) out.push(value.trim(), "");
+  }
+  for (const [name, label, kind, columns] of lists) {
+    const rows = rowsOf(data?.[name]);
+    if (rows.length === 0) continue;
+    out.push(`## ${label}`, "");
+    for (const row of rows) {
+      if (kind === "thread") {
+        out.push(`**${show(row["author.name"])}** · ${when(row.created_at)}`, "", String(row.body ?? "").trim(), "");
+      } else if (kind === "changes") {
+        out.push(`- ${show(row["created_by.name"])} ${changed(row.field, row.before, row.after, row.action)} · ${when(row.created_at)}`);
+      } else {
+        out.push(`- ${columns.map((column) => show(row[column])).filter((value) => value !== "").join(" · ")}`);
+      }
+    }
+    if (kind !== "thread") out.push("");
+  }
+  return out.join("\n").trim() + "\n";
+}
+
+// A button copying what a view holds, as Markdown, saying so for a moment.
+export function Copy({
+  view,
+  label: says = "Copy",
+  fields,
+  lists,
+}: {
+  view: ViewState;
+  label?: string;
+  fields: readonly CopiedField[];
+  lists: readonly CopiedList[];
+}) {
+  const ui = useUI();
+  const title = usePageTitle();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  if (view.status !== "live") return null;
+  return (
+    <ui.Button kind="secondary" onClick={() => void navigator.clipboard.writeText(markdownOf(title, view.data, fields, lists)).then(() => setCopied(true))}>
+      {copied ? "Copied" : says}
+    </ui.Button>
+  );
 }
 
 // A value from a view, shown only while the view is live. While it's loading, stale

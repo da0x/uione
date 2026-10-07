@@ -341,10 +341,17 @@ namespace one::language {
         std::string list;
     };
 
+    // copy issue_page "Copy issue": a button that copies everything a view holds, as
+    // Markdown, to be pasted somewhere else whole.
+    struct copy_item {
+        qualified_name view;
+        std::optional<std::string> label;
+    };
+
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item>
             node;
     };
 

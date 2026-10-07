@@ -270,9 +270,11 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
     <Shell name={name} icon={icon} title={titled ?? Body.info.title} screens={screens}>
       <Rest.Provider value={rest}>
         <Titling.Provider value={setTitled}>
-          <Contained key={key}>
-            <Body />
-          </Contained>
+          <Titled.Provider value={titled ?? Body.info.title}>
+            <Contained key={key}>
+              <Body />
+            </Contained>
+          </Titled.Provider>
         </Titling.Provider>
       </Rest.Provider>
     </Shell>
@@ -286,6 +288,12 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
 export type TitlePart = string | readonly [ViewState, string];
 
 const Titling = createContext<(title: string | undefined) => void>(() => {});
+const Titled = createContext("");
+
+// The page's title as it's shown now, like an issue's number and title.
+export function usePageTitle(): string {
+  return useContext(Titled);
+}
 
 export function useTitle(parts: readonly TitlePart[]) {
   const set = useContext(Titling);

@@ -1115,7 +1115,8 @@ namespace one::language {
         }
 
         // When a button shows: what the page's views say, compared with values, like
-        // issue_page.status == status::open, and joined with && and ||.
+        // issue_page.status == status::open, and joined with && and ||. me is whoever
+        // is reading, as in issue_page.assignees has me.
         void verify_condition(const std::string& ns, const expression& e, const std::string& route) {
             static const std::string how = "a button's when compares a view's fields with values, like issue_page.status == status::open";
             if (auto* binary = std::get_if<binary_expression>(&e.node)) {
@@ -1138,7 +1139,7 @@ namespace one::language {
                 if (!has) error(e.where, "view " + object->name.text() + " has no " + member->member + " for the button to read");
             } else if (auto* name = std::get_if<name_expression>(&e.node)) {
                 const std::string word = name->name.text();
-                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none") error(e.where, how);
+                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me") error(e.where, how);
             } else if (!std::holds_alternative<literal_expression>(e.node)) {
                 error(e.where, how);
             }
@@ -1261,6 +1262,13 @@ namespace one::language {
                         }
                     }
                     screen_items(ns, block->items, route);
+                } else if (auto* copy = std::get_if<copy_item>(&item.node)) {
+                    snake(copy->view);
+                    if (const view_declaration* view = find(ns, copy->view, &scope::views)) {
+                        verify_shown(*view, copy->view.text(), route, copy->view.where);
+                    } else {
+                        error(copy->view.where, "there's no view " + copy->view.text() + " to copy " + in_namespace(ns));
+                    }
                 } else if (auto* thread = std::get_if<thread_item>(&item.node)) {
                     verify_listing(ns, thread->view, thread->list, route, false, {"body", "author.name"});
                 } else if (auto* timeline = std::get_if<timeline_item>(&item.node)) {

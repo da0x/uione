@@ -560,6 +560,12 @@ screen "Book" /books/:book {
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
+- `copy issue_page "Copy issue"` is a button that copies everything the view
+  holds, as Markdown, to paste somewhere else whole: the page's title, each value
+  but the ones the title shows, a markdown value as it was written, then each list,
+  a conversation as who wrote what and when, changes as what happened, and other
+  rows as their values. As the view gains fields, so does what it copies. The ids of
+  people are left out, since they mean nothing pasted elsewhere.
 - `thread issue_page.comments` shows a list of what people wrote as a
   conversation: each entry with its author's picture and name, when it was written,
   and its body as Markdown. Its rows need `body` and `author.name`, and show
@@ -567,7 +573,8 @@ screen "Book" /books/:book {
 - `timeline issue_page.history` shows an entity's changes, a list of `each change
   of issue`, one sentence each: "Ada created this", "Grace changed status from open
   to closed". Its rows need `field`, `before`, `after` and `created_at`, and name
-  who made each change with `created_by.name`.
+  who made each change with `created_by.name`. With `action` too, a change a
+  command of its own made says what that command did: "Ada closed this".
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike.
 - A button says what it does when its line names it: `issue::create "New issue"`
@@ -576,7 +583,8 @@ screen "Book" /books/:book {
 - `when` shows a button only while it applies, as the page's views say:
   `issue::close "Close issue" when issue_page.status == status::open`. It compares
   a view's fields with values, choices like `status::open`, `true`, `false` and
-  `none`, joined with `&&` and `||`, and holds nothing until the views it reads have
+  `none`, and whoever is reading as `me`, as in `issue_page.assignees has me`,
+  joined with `&&` and `||`, and holds nothing until the views it reads have
   arrived.
 - A button is there only for someone who may press it. A command a role grants,
   like `issue::close` granted to maintainers per project, shows on a page whose

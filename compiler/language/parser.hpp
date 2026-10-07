@@ -683,6 +683,13 @@ namespace one::language {
                 end_line();
                 return {where, std::move(table)};
             }
+            if (at_word("copy")) {
+                advance();
+                copy_item copy{parse_qualified_name("the view to copy"), std::nullopt};
+                if (at(token_kind::string)) copy.label = advance().text;
+                end_line();
+                return {where, std::move(copy)};
+            }
             if (at_word("thread") || at_word("timeline")) {
                 bool thread = advance().text == "thread";
                 qualified_name view = parse_qualified_name("the view whose list it shows");

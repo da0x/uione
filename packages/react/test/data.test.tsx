@@ -15,7 +15,9 @@ import {
   Thread,
   Timeline,
   changed,
+  done,
   holds,
+  markdownOf,
   memorySource,
   shortAddress,
   screen as defineScreen,
@@ -685,6 +687,11 @@ describe("threads and timelines", () => {
     expect(changed("status", "open", "closed")).toBe("changed status from open to closed");
     expect(changed("due_at", "", "Friday")).toBe("set due at to Friday");
     expect(changed("labels", ["bug"], [])).toBe("cleared labels");
+    expect(changed("status", "open", "closed", "tracker::issue::close")).toBe("closed this");
+    expect(changed("status", "closed", "open", "tracker::issue::reopen")).toBe("reopened this");
+    expect(changed("title", "a", "b", "tracker::issue::update")).toBe("changed title from a to b");
+    expect(changed("", null, null, "tracker::issue::create")).toBe("created this");
+    expect([done("take"), done("drop"), done("assign"), done("copy"), done("take_over")]).toEqual(["took", "dropped", "assigned", "copied", "took over"]);
   });
 
   it("shows what people wrote, each with who and when, and an entity's changes as sentences", () => {
@@ -733,5 +740,25 @@ describe("a table's tabs and labels", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Closed 1" }));
     expect(screen.getByText("Old bug")).toBeTruthy();
     expect(screen.queryByText("Tabs too wide")).toBeNull();
+  });
+});
+
+describe("copying what a page shows", () => {
+  it("writes an issue as Markdown: its title, values, description, conversation and history", () => {
+    const text = markdownOf(
+      "#12 Copy an issue whole",
+      {
+        status: "open",
+        labels: ["feature", "issues"],
+        body: "One button copies **everything**.",
+        comments: [{ id: "c", "author.name": "Ada", body: "Including comments.", created_at: "2026-10-06T10:00:00Z" }],
+        history: [{ id: "h", "created_by.name": "Ada", field: "", action: "projects::issue::create", created_at: "2026-10-06T09:00:00Z" }],
+      },
+      [["status", "Status"], ["labels", "Labels"], ["body", "Body", "markdown"]],
+      [["comments", "Comments", "thread", ["author.name", "body", "created_at"]], ["history", "History", "changes", ["field"]]],
+    );
+    expect(text.startsWith("# #12 Copy an issue whole\n\n**Status:** open  \n**Labels:** feature, issues  \n\nOne button copies **everything**.\n\n## Comments\n\n**Ada** · ")).toBe(true);
+    expect(text).toContain("\n\nIncluding comments.\n");
+    expect(text).toContain("## History\n\n- Ada created this · ");
   });
 });

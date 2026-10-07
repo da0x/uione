@@ -190,6 +190,14 @@ TEST_CASE("a table shows the list of a view it names") {
           std::string::npos);
 }
 
+TEST_CASE("an issue can be copied whole, as its view holds it") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Copy view={issuePage} label="Copy issue" fields={[["title", "Title"], ["body", "Body", "markdown"], ["labels", "Labels"], ["status", "Status"]]} lists={[["comments", "Comments", "thread", ["author.picture", "author.name", "body", "created_at"]], ["mentions", "Mentions", "rows", ["kind", "title", "author", "url"]], ["changes", "Changes", "changes", ["field", "before", "after", "created_by.name", "created_at"]]]} />)") !=
+          std::string::npos);
+}
+
 TEST_CASE("a project's issues are in tabs by their status, with their labels each on its own") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
@@ -406,6 +414,32 @@ TEST_CASE("a button says what it does, and shows only while its when holds") {
     CHECK(tsx.find(R"(<Command name="tracker::issue::close" id={issueId} label="Close issue" when={issuePage.status === "live" && (((issuePage.data?.["status"] ?? null) === "open"))} />)") !=
           std::string::npos);
     CHECK(tsx.find(R"( button opener="New issue")") != std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("a button's when can ask whether a list has whoever is reading") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-when-me";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity issue {\n\ttitle  text\n\tassignees  list of user\n}\n"
+                         "command issue::take {\n\tadd me to assignees\n}\n"
+                         "command issue::drop {\n\tremove me from assignees\n}\n"
+                         "view issue_page per issue {\n\tassignees = issue.assignees\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n"
+                         "\tissue::take \"Assign to me\" when !(issue_page.assignees has me)\n"
+                         "\tissue::drop \"Unassign me\" when issue_page.assignees has me\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
+    CHECK(tsx.find(R"(when={issuePage.status === "live" && ((Array.isArray((issuePage.data?.["assignees"] ?? null)) && (issuePage.data?.["assignees"] ?? null).includes(viewer)))})") !=
+          std::string::npos);
+    CHECK(tsx.find("import { Actions, Command, screen, useAuth, useParam, useView }") != std::string::npos);
     fs::remove_all(dir);
 }
 
