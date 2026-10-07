@@ -59,6 +59,20 @@ export interface OutlinedItem {
   label: string; // "Close issue", when it says something
   line: number;
   items: OutlinedItem[];
+  table: OutlinedTable | null; // a table's columns and settings
+}
+
+// A table's columns, and how it's divided, searched, sorted and paged, empty or 0
+// when it isn't; and what its rows hold, which is what it can show, the ones with
+// choices marked, since those are what it can be divided by.
+export interface OutlinedTable {
+  columns: { value: string; label: string | null; line: number }[];
+  rows: { name: string; choices: boolean }[];
+  by: string;
+  search: string[];
+  sort: string; // -number, for the largest first
+  page: number;
+  link: string;
 }
 
 export interface OutlinedScreen {

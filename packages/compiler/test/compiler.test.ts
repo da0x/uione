@@ -71,11 +71,35 @@ describe("the compiler in the browser", () => {
         layout: "two_columns",
         layoutLine: 2,
         items: [
-          { kind: "region", subject: "main", label: "", line: 3, items: [{ kind: "text", subject: "", label: "A book", line: 4, items: [] }] },
-          { kind: "region", subject: "side", label: "", line: 6, items: [{ kind: "link", subject: "/books", label: "Every book", line: 7, items: [] }] },
+          { kind: "region", subject: "main", label: "", line: 3, table: null, items: [{ kind: "text", subject: "", label: "A book", line: 4, items: [], table: null }] },
+          { kind: "region", subject: "side", label: "", line: 6, table: null, items: [{ kind: "link", subject: "/books", label: "Every book", line: 7, items: [], table: null }] },
         ],
       },
     ]);
+  });
+
+  it("outlines a table's columns and settings, and what its rows hold", () => {
+    const board =
+      "namespace tracker {\n\tentity issue {\n\t\ttitle  text\n\t\tstatus  enum  open | closed\n\t}\n" +
+      "\tview board {\n\t\tissues = each issue {\n\t\t\ttitle  status\n\t\t}\n\t}\n" +
+      '\tscreen "Board" /board {\n\t\ttable board.issues by status {\n\t\t\tpage 10\n\t\t\ttitle "Title"\n\t\t\tstatus\n\t\t}\n\t}\n}\n';
+    const checked = run(one, { kind: "check", files: { "board.one": board } }) as Checked;
+    expect(checked.problems).toEqual([]);
+    expect(checked.screens[0].items[0].table).toEqual({
+      columns: [
+        { value: "title", label: "Title", line: 14 },
+        { value: "status", label: null, line: 15 },
+      ],
+      rows: [
+        { name: "title", choices: false },
+        { name: "status", choices: true },
+      ],
+      by: "status",
+      search: [],
+      sort: "",
+      page: 10,
+      link: "",
+    });
   });
 
   it("outlines the project block, and builds for the environment named", () => {

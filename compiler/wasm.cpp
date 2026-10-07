@@ -107,6 +107,41 @@ namespace {
         out += "]}";
     }
 
+    void table(std::string& out, const std::optional<one::driver::outlined_table>& t) {
+        if (!t) {
+            out += "null";
+            return;
+        }
+        out += "{\"columns\":[";
+        for (std::size_t n = 0; n < t->columns.size(); ++n) {
+            const auto& c = t->columns[n];
+            out += n ? ",{\"value\":" : "{\"value\":";
+            text(out, c.value);
+            out += ",\"label\":";
+            if (c.labeled) text(out, c.label);
+            else out += "null";
+            out += ",\"line\":" + std::to_string(c.line) + "}";
+        }
+        out += "],\"rows\":[";
+        for (std::size_t n = 0; n < t->rows.size(); ++n) {
+            out += n ? ",{\"name\":" : "{\"name\":";
+            text(out, t->rows[n].name);
+            out += std::string(",\"choices\":") + (t->rows[n].choices ? "true" : "false") + "}";
+        }
+        out += "],\"by\":";
+        text(out, t->by);
+        out += ",\"search\":[";
+        for (std::size_t n = 0; n < t->search.size(); ++n) {
+            if (n) out += ",";
+            text(out, t->search[n]);
+        }
+        out += "],\"sort\":";
+        text(out, t->sort);
+        out += ",\"page\":" + std::to_string(t->page) + ",\"link\":";
+        text(out, t->link);
+        out += "}";
+    }
+
     void item(std::string& out, const one::driver::outlined_item& i) {
         out += "{\"kind\":";
         text(out, i.kind);
@@ -119,7 +154,9 @@ namespace {
             if (n) out += ",";
             item(out, i.items[n]);
         }
-        out += "]}";
+        out += "],\"table\":";
+        table(out, i.table);
+        out += "}";
     }
 
     // Each screen's layout and items, by line.

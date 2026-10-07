@@ -52,12 +52,40 @@ namespace one::driver {
     // where it starts, a region holding its own. An item is named by its kind, like
     // table or button, what it shows or runs, and what it says, when it says
     // something.
+    //
+    // A table says more: its columns, and how it's divided, searched, sorted and
+    // paged, each with its line, or 0 when it isn't; and what its rows hold, which is
+    // what it can show, the ones with choices marked, since those are what it can be
+    // divided by.
+    struct outlined_column {
+        std::string value;  // implemented_by.name
+        std::string label;  // "Implementing", when it has one
+        bool labeled = false;
+        int line = 0;
+    };
+
+    struct outlined_row {
+        std::string name;
+        bool choices = false;
+    };
+
+    struct outlined_table {
+        std::vector<outlined_column> columns;
+        std::vector<outlined_row> rows;
+        std::string by;
+        std::vector<std::string> search;
+        std::string sort;  // -number, for the largest first
+        int page = 0;
+        std::string link;
+    };
+
     struct outlined_item {
         std::string kind;     // table, form, button, text, region, ...
         std::string subject;  // projects::issue_page.comments, issue::close, main
         std::string label;    // "Close issue", when it has one
         int line = 0;
         std::vector<outlined_item> items;  // a region's, a section's or a menu's
+        std::optional<outlined_table> table;
     };
 
     struct outlined_screen {
@@ -79,11 +107,72 @@ namespace one::driver {
 
     namespace outline_detail {
 
+        // The views and entities declared, by name and by namespace::name, for a
+        // table to find its rows in.
+        struct declared {
+            std::map<std::string, const language::view_declaration*> views;
+            std::map<std::string, const language::entity_declaration*> entities;
+            std::string ns;  // the namespace being outlined
+
+            template <typename T>
+            const T* find(const std::map<std::string, const T*>& in, const std::string& name) const {
+                if (!ns.empty()) {
+                    if (auto at = in.find(ns + "::" + name); at != in.end()) return at->second;
+                }
+                auto at = in.find(name);
+                return at == in.end() ? nullptr : at->second;
+            }
+        };
+
+        inline void collect(const std::vector<language::declaration>& declarations, const std::string& ns, declared& out) {
+            for (const auto& d : declarations) {
+                std::string prefix = ns.empty() ? "" : ns + "::";
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) collect(n->declarations, prefix + n->name, out);
+                if (auto* v = std::get_if<language::view_declaration>(&d.node)) out.views[prefix + v->name] = v;
+                if (auto* e = std::get_if<language::entity_declaration>(&d.node)) out.entities[prefix + e->name] = e;
+            }
+        }
+
+        inline std::string written(const language::expression& e) {
+            if (auto* name = std::get_if<language::name_expression>(&e.node)) return name->name.text();
+            if (auto* member = std::get_if<language::member_expression>(&e.node)) return written(*member->object) + "." + member->member;
+            return "";
+        }
+
+        inline outlined_table table_of(const language::table_item& t, const declared& known) {
+            outlined_table out;
+            for (const auto& c : t.columns) out.columns.push_back({written(*c.value), c.label.value_or(""), c.label.has_value(), c.where.line});
+            out.by = t.by.value_or("");
+            out.search = t.search;
+            if (t.sort) out.sort = (t.sort_descending ? "-" : "") + *t.sort;
+            out.page = t.page.value_or(0);
+            out.link = t.link.value_or("");
+            const language::view_declaration* view = known.find(known.views, t.view.text());
+            if (!view) return out;
+            for (const auto& each : view->each) {
+                if (each.name != t.list) continue;
+                const language::entity_declaration* listed = nullptr;
+                if (each.source && !each.changes) {
+                    if (auto* name = std::get_if<language::name_expression>(&each.source->node)) listed = known.find(known.entities, name->name.text());
+                }
+                for (const auto& row : each.rows) {
+                    std::string name = row.name ? *row.name : written(*row.value);
+                    if (name.empty()) continue;
+                    bool choices = false;
+                    if (listed && !row.name) {
+                        for (const auto& f : listed->fields) choices = choices || (f.name == name && !f.choices.empty());
+                    }
+                    out.rows.push_back({name, choices});
+                }
+            }
+            return out;
+        }
+
         inline std::string named(const language::qualified_name& view, const std::optional<std::string>& list) {
             return list ? view.text() + "." + *list : view.text();
         }
 
-        inline outlined_item item_of(const language::screen_item& i) {
+        inline outlined_item item_of(const language::screen_item& i, const declared& known) {
             outlined_item out;
             out.line = i.where.line;
             std::visit(
@@ -94,7 +183,7 @@ namespace one::driver {
                         out.kind = n.type == kind::region ? "region" : n.type == kind::menu ? "menu" : n.type == kind::hero ? "hero" : "section";
                         out.subject = n.type == kind::region ? n.title : "";
                         if (n.type != kind::region) out.label = n.title;
-                        for (const auto& inner : n.items) out.items.push_back(item_of(inner));
+                        for (const auto& inner : n.items) out.items.push_back(item_of(inner, known));
                     } else if constexpr (std::is_same_v<T, language::content_text>) {
                         using kind = language::content_text::kind;
                         out.kind = n.type == kind::markdown ? "markdown" : n.type == kind::code ? "code" : "text";
@@ -106,6 +195,7 @@ namespace one::driver {
                     } else if constexpr (std::is_same_v<T, language::table_item>) {
                         out.kind = "table";
                         out.subject = named(n.view, n.list);
+                        out.table = table_of(n, known);
                     } else if constexpr (std::is_same_v<T, language::form_item>) {
                         out.kind = "form";
                         for (const auto& c : n.commands) out.subject += (out.subject.empty() ? "" : " ") + c.text();
@@ -141,14 +231,19 @@ namespace one::driver {
         }
 
         inline void screens_in(const std::string& path, const std::vector<language::declaration>& declarations,
-                               std::vector<outlined_screen>& out) {
+                               declared& known, std::vector<outlined_screen>& out) {
             for (const auto& d : declarations) {
-                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) screens_in(path, n->declarations, out);
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                    std::string outer = known.ns;
+                    known.ns = outer.empty() ? n->name : outer + "::" + n->name;
+                    screens_in(path, n->declarations, known, out);
+                    known.ns = outer;
+                }
                 auto* s = std::get_if<language::screen_declaration>(&d.node);
                 if (!s) continue;
                 outlined_screen screen{path, s->title, s->route, d.where.line, s->layout.value_or(""),
                                        s->layout ? s->layout_where.line : 0, {}};
-                for (const auto& i : s->items) screen.items.push_back(item_of(i));
+                for (const auto& i : s->items) screen.items.push_back(item_of(i, known));
                 out.push_back(std::move(screen));
             }
         }
@@ -158,7 +253,9 @@ namespace one::driver {
     // Every screen in the files, in the order they're written.
     inline std::vector<outlined_screen> screens_of(const std::vector<language::file>& files) {
         std::vector<outlined_screen> out;
-        for (const auto& f : files) outline_detail::screens_in(f.path, f.declarations, out);
+        outline_detail::declared known;
+        for (const auto& f : files) outline_detail::collect(f.declarations, "", known);
+        for (const auto& f : files) outline_detail::screens_in(f.path, f.declarations, known, out);
         return out;
     }
 

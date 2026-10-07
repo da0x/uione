@@ -183,3 +183,53 @@ TEST_CASE("each screen is outlined by line: its layout, its regions and their it
     CHECK(screens[1].items[0].kind == "table");
     CHECK(screens[1].items[0].subject == "issues");
 }
+
+TEST_CASE("a table is outlined with its columns, its settings and what its rows hold") {
+    language::diagnostics found;
+    std::vector<language::file> files;
+    files.push_back(language::parse("issues.one", R"(namespace tracker {
+	entity issue {
+		title   text
+		status  enum  open | closed
+	}
+	view board {
+		issues = each issue {
+			title  status  author.name
+		}
+	}
+	screen "Board" /board {
+		table board.issues by status link /issues/:issue {
+			search title
+			sort -title
+			page 25
+			title "Title"
+			status
+		}
+	}
+}
+)", found));
+    REQUIRE(found.empty());
+    auto screens = driver::screens_of(files);
+    REQUIRE(screens.size() == 1);
+    REQUIRE(screens[0].items.size() == 1);
+    REQUIRE(screens[0].items[0].table);
+    const auto& t = *screens[0].items[0].table;
+    REQUIRE(t.columns.size() == 2);
+    CHECK(t.columns[0].value == "title");
+    CHECK(t.columns[0].label == "Title");
+    CHECK(t.columns[0].labeled);
+    CHECK(t.columns[0].line == 16);
+    CHECK(t.columns[1].value == "status");
+    CHECK_FALSE(t.columns[1].labeled);
+    REQUIRE(t.rows.size() == 3);
+    CHECK(t.rows[0].name == "title");
+    CHECK_FALSE(t.rows[0].choices);
+    CHECK(t.rows[1].name == "status");
+    CHECK(t.rows[1].choices);
+    CHECK(t.rows[2].name == "author.name");
+    CHECK(t.by == "status");
+    CHECK(t.search == std::vector<std::string>{"title"});
+    CHECK(t.sort == "-title");
+    CHECK(t.page == 25);
+    CHECK(t.link == "/issues/:issue");
+}
