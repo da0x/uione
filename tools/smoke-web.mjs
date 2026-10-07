@@ -40,7 +40,7 @@ const pages = {
   "/language": ["Start", "Your first project"],
   "/language/overview": ["Overview", "One architecture"],
   "/language/reference": ["Tab width", "Reference", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
-  "/releases": ["0.6.14", "Presets a project starts from"],
+  "/releases": ["0.6.15", "Changes to what's stored, done once"],
   "/mission": ["An application should be as short as what it does."],
 };
 
