@@ -692,6 +692,45 @@ TEST_CASE("a when block shows a button, a text or a row's button only while all 
     fs::remove_all(dir);
 }
 
+TEST_CASE("a row's button opens its command's form, started from the row, and the form isn't drawn on its own") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-row-form";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity phase {\n\ttitle  text  required\n\tposition  number\n}\n"
+                         "command phase::update\n"
+                         "view phases {\n\teach phase {\n\t\ttitle  position\n\t}\n}\n"
+                         "screen \"Phases\" /phases {\n"
+                         "\ttable phases {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
+                         "\tform phase::update \"Save\" {\n\t\ttitle \"Called\"\n\t}\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(actions={[{ name: "tracker::phase::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]})") != std::string::npos);
+    CHECK(tsx.find("<Form ") == std::string::npos);
+
+    // The row holds what the form asks for, or it couldn't start from it.
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace tracker {\n"
+                                                "entity phase {\n\ttitle  text  required\n\tposition  number\n}\n"
+                                                "command phase::update\n"
+                                                "view phases {\n\teach phase {\n\t\ttitle\n\t}\n}\n"
+                                                "screen \"Phases\" /phases {\n"
+                                                "\ttable phases {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
+                                                "\tform phase::update {\n\t\ttitle  position\n\t}\n"
+                                                "}\n"
+                                                "}\n", out));
+    language::check(files, out);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "form phase::update opens from each row of phases, so the list needs position; add it to the list's block");
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

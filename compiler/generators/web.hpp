@@ -801,6 +801,38 @@ namespace one::generators {
             return false;
         }
 
+        // The form a screen has for a command, written anywhere on it.
+        static const language::form_item* form_for(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) {
+            for (const auto& item : items) {
+                if (auto* form = std::get_if<language::form_item>(&item.node)) {
+                    if (full_command(ns, form->commands.front()) == command) return form;
+                }
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    if (auto* found = form_for(ns, block->items, command)) return found;
+                }
+            }
+            return nullptr;
+        }
+
+        // Whether a command is a button on each row of a table on the screen, like
+        // phase::update "Rename": its form then opens from the row rather than being
+        // drawn on its own.
+        bool on_rows(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) const {
+            for (const auto& item : items) {
+                if (auto* table = std::get_if<language::table_item>(&item.node)) {
+                    for (const auto& column : table->columns) {
+                        std::string key = web_detail::text_of(*column.value);
+                        if (key.find('.') != std::string::npos) continue;
+                        if (auto found = row_command(ns, table->view.text(), table->list, key); found && *found == command) return true;
+                    }
+                }
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    if (on_rows(ns, block->items, command)) return true;
+                }
+            }
+            return false;
+        }
+
         static const language::button_item* button_for(const std::vector<language::screen_item>& items, const language::qualified_name& command) {
             for (const auto& item : items) {
                 if (auto* button = std::get_if<language::button_item>(&item.node)) {
@@ -931,10 +963,13 @@ namespace one::generators {
             auto presses = [&](const language::screen_item& it) {
                 if (std::holds_alternative<language::content_link>(it.node)) return in_block_ == 0;  // a hero or a section lays out its own
                 if (auto* b = std::get_if<language::button_item>(&it.node)) return !has_form_for(screen, b->command);
-                if (auto* f = std::get_if<language::form_item>(&it.node)) return button_for(screen, f->commands.front()) != nullptr;
+                if (auto* f = std::get_if<language::form_item>(&it.node)) {
+                    return button_for(screen, f->commands.front()) != nullptr && !on_rows(ns, screen, full_command(ns, f->commands.front()));
+                }
                 return std::holds_alternative<language::copy_item>(it.node);
             };
             auto passed = [&](const language::screen_item& it) {
+                if (auto* f = std::get_if<language::form_item>(&it.node)) return on_rows(ns, screen, full_command(ns, f->commands.front()));
                 auto* b = std::get_if<language::button_item>(&it.node);
                 return b && has_form_for(screen, b->command);
             };
@@ -1026,8 +1061,9 @@ namespace one::generators {
                     }
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
-                    this->table(out, parts, ns, *table);
+                    this->table(out, parts, ns, *table, screen);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
+                    if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
                 } else if (auto* confirm = std::get_if<language::confirm_item>(&item.node)) {
                     parts.components.insert("Confirm");
@@ -1325,7 +1361,7 @@ namespace one::generators {
             out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]}" + choices + " />");
         }
 
-        void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table) {
+        void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table, const std::vector<language::screen_item>& screen) {
             parts.components.insert("Table");
             std::string view = full_view(ns, table.view.text());
             std::string columns;
@@ -1351,12 +1387,19 @@ namespace one::generators {
                     if (auto command = row_command(ns, table.view.text(), table.list, key)) {
                         std::string allowed = this->allowed(parts, ns, *command);
                         std::string action = web_detail::js_string(*command);
-                        if (column.label || !allowed.empty() || column.when) {
+                        // A form for it on the screen asks first, opened from the row.
+                        const language::form_item* asks = form_for(ns, screen, *command);
+                        if (column.label || !allowed.empty() || column.when || asks) {
                             action = "{ name: " + action;
                             if (column.label) action += ", label: " + web_detail::js_string(*column.label);
                             // allowed={holds(...)} as a property: allowed: holds(...)
                             if (!allowed.empty()) action += ", allowed: " + allowed.substr(10, allowed.size() - 11);
                             if (column.when) action += ", when: (row) => " + row_condition(parts, *column.when);
+                            if (asks) {
+                                action += ", form: { fields: [" + form_fields(parts, ns, *asks) + "]";
+                                if (asks->submit) action += ", submit: " + web_detail::js_string(*asks->submit);
+                                action += " }";
+                            }
                             action += " }";
                         }
                         actions += (actions.empty() ? "" : ", ") + action;
@@ -1445,10 +1488,10 @@ namespace one::generators {
             return std::nullopt;
         }
 
-        void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, const language::button_item* button) {
-            parts.components.insert("Form");
-            std::string command = full_command(ns, form.commands.front());
-            const language::entity_declaration* entity = entity_of_command(command);
+        // What a form asks for, as the Form component takes it: each field with its
+        // kind and choices.
+        std::string form_fields(screen_parts& parts, const std::string& ns, const language::form_item& form) {
+            const language::entity_declaration* entity = entity_of_command(full_command(ns, form.commands.front()));
             std::string fields;
             for (const auto& f : form.fields) {
                 std::string type = "text";
@@ -1503,6 +1546,14 @@ namespace one::generators {
                           (f.hint ? ", hint: " + web_detail::js_string(*f.hint) : "") + " }";
                 fields += (fields.empty() ? "" : ", ") + spec;
             }
+            return fields;
+        }
+
+        void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, const language::button_item* button) {
+            parts.components.insert("Form");
+            std::string command = full_command(ns, form.commands.front());
+            const language::entity_declaration* entity = entity_of_command(command);
+            std::string fields = form_fields(parts, ns, form);
             // An update starts from the entity's page view and acts on the entity the
             // address names (the checker makes sure both are there).
             std::string edit;

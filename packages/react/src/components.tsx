@@ -568,6 +568,9 @@ export interface RowAction {
   label?: string;
   allowed?: boolean; // whether the person reading may run it
   when?: (row: Record<string, unknown>) => boolean; // the rows it's on, like those that aren't the reader's own
+  // A form it asks with first, opened in a dialog and started from the row, like a
+  // rename asking for the new title; without one, the button runs it at once.
+  form?: { fields: (string | FieldSpec)[]; submit?: string };
 }
 
 export function Table({
@@ -631,56 +634,74 @@ export function Table({
       }))
     : undefined;
   const runner = useConfirmedRunner();
-  const pressed = actions.map((a) => (typeof a === "string" ? { name: a } : a)).filter((a) => a.allowed !== false);
+  const pressed: RowAction[] = actions.map((a) => (typeof a === "string" ? { name: a } : a)).filter((a) => a.allowed !== false);
+  // The row whose button opened its form, while it's open.
+  const [asking, setAsking] = useState<{ action: RowAction; row: Row }>();
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
+  const asked = asking?.action.form;
+  const says = asking ? (asking.action.label ?? label(action(asking.action.name))) : "";
   return (
-    <ui.Table
-      status={view.status}
-      tabs={tabs}
-      search={
-        search.length
-          ? {
-              value: query,
-              label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`,
-              onChange: (value: string) => {
-                setQuery(value);
-                setAt(1);
-              },
+    <>
+      <ui.Table
+        status={view.status}
+        tabs={tabs}
+        search={
+          search.length
+            ? {
+                value: query,
+                label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`,
+                onChange: (value: string) => {
+                  setQuery(value);
+                  setAt(1);
+                },
+              }
+            : undefined
+        }
+        pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
+        columns={Object.values(columns)}
+        error={pressed.map((a) => runner.error(a.name)).find((e) => e !== undefined)}
+        rows={rows.map((row) => ({
+          id: row.id,
+          link: link ? links(rowLink(link, row, params, keyed)) : undefined,
+          cells: Object.keys(columns).map((key) => {
+            const value = row[key];
+            const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
+            if (shown !== undefined) return shown;
+            if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
+            // A web address is a link, to wherever it is, shown shortened.
+            if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
+              return (
+                <ui.Link {...links(value)}>
+                  <span title={value}>{shortAddress(value)}</span>
+                </ui.Link>
+              );
             }
-          : undefined
-      }
-      pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
-      columns={Object.values(columns)}
-      error={pressed.map((a) => runner.error(a.name)).find((e) => e !== undefined)}
-      rows={rows.map((row) => ({
-        id: row.id,
-        link: link ? links(rowLink(link, row, params, keyed)) : undefined,
-        cells: Object.keys(columns).map((key) => {
-          const value = row[key];
-          const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
-          if (shown !== undefined) return shown;
-          if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
-          // A web address is a link, to wherever it is, shown shortened.
-          if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
-            return (
-              <ui.Link {...links(value)}>
-                <span title={value}>{shortAddress(value)}</span>
-              </ui.Link>
-            );
-          }
-          if (!pictures.includes(key)) return show(value);
-          const source = row[key];
-          return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
-        }),
-        actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
-          label: a.label ?? label(action(a.name)),
-          disabled: runner.busy(a.name),
-          onClick: () => void runner.run(a.name, { id: row.id }, row),
-        })),
-      }))}
-    />
+            if (!pictures.includes(key)) return show(value);
+            const source = row[key];
+            return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
+          }),
+          actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
+            label: a.label ?? label(action(a.name)),
+            disabled: runner.busy(a.name),
+            onClick: () => (a.form ? setAsking({ action: a, row }) : void runner.run(a.name, { id: row.id }, row)),
+          })),
+        }))}
+      />
+      {asking && asked && (
+        <ui.Dialog open title={says} onClose={() => setAsking(undefined)}>
+          <Form
+            command={asking.action.name}
+            fields={asked.fields}
+            from={{ status: "live", data: asking.row }}
+            id={asking.row.id}
+            submit={asked.submit ?? says}
+            onDone={() => setAsking(undefined)}
+          />
+        </ui.Dialog>
+      )}
+    </>
   );
 }
 
@@ -729,6 +750,7 @@ export function Form({
   when = true,
   allowed,
   authenticated = false,
+  onDone,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -741,6 +763,7 @@ export function Form({
   when?: boolean; // whether it applies now; while it doesn't, neither it nor its button is there
   allowed?: boolean; // whether the person reading may send it, when only some people may; while they may not, it isn't there
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
+  onDone?: () => void; // called once what it sent is done, like closing the dialog a row's button opened it in
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -773,6 +796,7 @@ export function Form({
         setValues(empty());
       }
       setOpen(false);
+      onDone?.();
     }
   };
 

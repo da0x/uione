@@ -3,7 +3,7 @@
 
 // The plain component set, as someone using a screen reader or a keyboard meets it.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, vi } from "vitest";
 import { App, Form, Live, Steps, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
@@ -64,6 +64,28 @@ describe("a table's row actions", () => {
     ));
     expect(screen.getByRole("button", { name: "Remove Ada" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Promote/ })).toBeNull();
+  });
+
+  it("open their command's form when it asks first, started from the row, and send it with the row's id", async () => {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    const source = memorySource({ views: { "projects::workflow": { rows: [{ id: "p1", title: "Open" }] } } });
+    renderScreen(source, () => (
+      <Table
+        view={useView("projects::workflow")}
+        columns={{ title: "Phase" }}
+        actions={[{ name: "projects::phase::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]}
+      />
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Rename Open" }));
+    expect(source.runs).toEqual([]);
+    const called = screen.getByLabelText("Called") as HTMLInputElement;
+    expect(called.value).toBe("Open");
+    fireEvent.change(called, { target: { value: "Triage" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    expect(source.runs).toEqual([{ command: "projects::phase::update", input: { title: "Triage", id: "p1" } }]);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("are only on the rows their when holds for, each row keeping its cells", () => {

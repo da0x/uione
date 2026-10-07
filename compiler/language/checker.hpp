@@ -119,6 +119,7 @@ namespace one::language {
         std::map<std::string, origin> routes_;
         std::map<const entity_declaration*, entity_declaration> changes_;  // what each history holds
         std::optional<origin> project_;
+        const std::vector<screen_item>* screen_ = nullptr;  // the screen being checked, whose tables a form can open from
 
         void error(location where, std::string message, std::optional<fix> resolved = std::nullopt) {
             out_.push_back({path_, where, std::move(message), std::move(resolved)});
@@ -1322,7 +1323,9 @@ namespace one::language {
                     }
                 }
             }
+            screen_ = &s.items;
             screen_items(ns, s.items, full_route(ns, s.route));
+            screen_ = nullptr;
             // A title can show what the page does: screen "#{issue_page.number} {issue_page.title}".
             if (!s.title_is_name) verify_live_text(ns, s.title, full_route(ns, s.route), where);
         }
@@ -1537,6 +1540,29 @@ namespace one::language {
             }
         }
 
+        // The list of a table on the screen being checked whose rows each have a button
+        // for a command, like phase::update "Rename" on the phases: a form for it opens
+        // from the row and starts from it. With its view's name.
+        std::pair<const view_each*, std::string> rows_with(const std::string& ns, const std::vector<screen_item>& items, const qualified_name& command) {
+            for (const auto& item : items) {
+                if (auto* block = std::get_if<content_block>(&item.node)) {
+                    if (auto found = rows_with(ns, block->items, command); found.first) return found;
+                }
+                auto* table = std::get_if<table_item>(&item.node);
+                const view_declaration* view = table ? find(ns, table->view, &scope::views) : nullptr;
+                if (!view) continue;
+                for (const auto& each : view->each) {
+                    if (each.name != table->list) continue;
+                    auto* source = std::get_if<name_expression>(&each.source->node);
+                    if (!source || command.parts.size() != 2 || source->name.parts.back() != command.parts[0]) continue;
+                    for (const auto& column : table->columns) {
+                        if (written(*column.value) == command.parts[1]) return {&each, table->view.text()};
+                    }
+                }
+            }
+            return {nullptr, ""};
+        }
+
         // A form for anything but create changes one entity that's already there, so it
         // starts from what's stored: its screen names the entity in its address, and a
         // view per that entity holds every field the form asks for. Without that, a
@@ -1714,7 +1740,18 @@ namespace one::language {
                         }
                         if (f.value) names_in(*f.value);
                     }
-                    if (entity) verify_edit_form(ns, *entity, *form, route);
+                    // One a row's button opens starts from that row, which holds what it asks.
+                    auto [rows, view_name] = screen_ ? rows_with(ns, *screen_, form->commands.front()) : std::pair<const view_each*, std::string>{nullptr, ""};
+                    if (rows) {
+                        for (const auto& f : form->fields) {
+                            if (!in_rows(*rows, f.name)) {
+                                error(f.where, "form " + form->commands.front().text() + " opens from each row of " + view_name + ", so the list needs " +
+                                                   f.name + "; add it to the list's block");
+                            }
+                        }
+                    } else if (entity) {
+                        verify_edit_form(ns, *entity, *form, route);
+                    }
                 } else if (auto* confirm = std::get_if<confirm_item>(&item.node)) {
                     verify_command_use(ns, confirm->command);
                 } else if (auto* button = std::get_if<button_item>(&item.node)) {

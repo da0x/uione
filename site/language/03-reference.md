@@ -691,6 +691,10 @@ screen "Book" /books/:book {
   it. `delete "Remove" when person != me` puts it only on the rows where its when
   holds, read from the row's own fields, so the list needs `person` among them.
   The when ends its line, or its block does.
+- A row's button for a command with a `form` on the screen opens that form, started
+  from the row, and sends it for that row: `update "Rename"` with `form
+  phase::update "Save" { title }` renames the phase on the row. The form isn't drawn
+  on its own, and the list holds what it asks for.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a
