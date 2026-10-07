@@ -155,6 +155,9 @@ namespace one::generators {
         std::vector<std::pair<std::string, const language::entity_declaration*>> pointed_;
         // The inputs of the command being written, like into, by name, with their types.
         std::map<std::string, std::string> inputs_;
+        // Tables whose rows are dragged into order, with their namespace: the entity's
+        // update may change the field they're ordered by.
+        std::vector<std::pair<std::string, const language::table_item*>> reordered_;
         // The entity the view being written has a document per, if it has one.
         std::string subject_;
         std::string project_name_ = "app";
@@ -229,6 +232,8 @@ namespace one::generators {
                             if (std::find(fields.begin(), fields.end(), field.name) == fields.end()) fields.push_back(field.name);
                         }
                     }
+                } else if (auto* table = std::get_if<language::table_item>(&item.node); table && table->reorder) {
+                    reordered_.push_back({ns, table});
                 } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     collect_forms(ns, block->items);
                 }
@@ -620,6 +625,18 @@ namespace one::generators {
             if (c.name.parts.back() != "create" && c.name.parts.back() != "delete") {
                 std::vector<std::string> fields;
                 if (auto forms = form_fields_.find(web_detail::join(ns, c.name.text())); forms != form_fields_.end()) fields = forms->second;
+                // A table dragged into order sets the field it's ordered by.
+                for (const auto& [where, table] : reordered_) {
+                    if (where != ns || c.name.parts.back() != "update" || !pkg_) continue;
+                    for (const auto& [view, _] : pkg_->views) {
+                        if (view->name != table->view.text()) continue;
+                        for (const auto& each : view->each) {
+                            auto* source = std::get_if<language::name_expression>(&each.source->node);
+                            if (each.name != table->list || !source || source->name.text() != e.name) continue;
+                            if (std::find(fields.begin(), fields.end(), *table->reorder) == fields.end()) fields.push_back(*table->reorder);
+                        }
+                    }
+                }
                 for (const auto& s : c.body) {
                     if (auto* changes = std::get_if<language::changes_statement>(&s.node)) {
                         for (const auto& name : changes->fields) {

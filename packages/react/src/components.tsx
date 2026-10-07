@@ -454,6 +454,7 @@ export function Steps({
   shown,
   to,
   from,
+  here: named,
   held,
   roles,
   within,
@@ -469,6 +470,7 @@ export function Steps({
   shown?: string; // a step's own title, like Start work
   to?: string; // the title of where it goes, like to.title
   from?: string; // the title of where it starts, like from.title, to say where nothing leads on from
+  here?: string; // the same, held by the current view, like phase_title, for where no step starts
   held?: string; // the step's list of roles that may take it
   roles?: ViewState; // the view of the person's roles
   within?: string; // the project they're held in
@@ -489,8 +491,8 @@ export function Steps({
   // Someone who holds a role there is told when none of theirs moves it on, rather
   // than shown nothing; someone who holds none had no moves to look for.
   if (open.length === 0) {
-    if (!held || mine.size === 0) return null;
-    const here = from && leaving.length > 0 ? show(leaving[0][from]) : "";
+    if (!held || mine.size === 0 || now === undefined || now === null || now === "") return null;
+    const here = (named && show(current.data?.[named])) || (from && leaving.length > 0 ? show(leaving[0][from]) : "");
     return <ui.Text>{here ? `No moves from ${here} for your roles` : "No moves from here for your roles"}</ui.Text>;
   }
   return (
@@ -595,6 +597,7 @@ export function Table({
   search = [],
   sort,
   page,
+  reorder,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -609,6 +612,9 @@ export function Table({
   search?: string[]; // fields a box finds rows by, like title and labels
   sort?: string; // the field rows are sorted by, with a - for largest or latest first, like -number
   page?: number; // how many rows a page has
+  // Rows put in order by dragging, which runs the command with a number for the field
+  // between its new neighbors', like a phase's position; the list is ordered by it.
+  reorder?: { command: string; field: string; allowed?: boolean };
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -648,6 +654,18 @@ export function Table({
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
+  // Put in order only when every row is shown, so a row's neighbors are its own.
+  const arranged = reorder && reorder.allowed !== false && !by && !wanted && !page && !sort ? reorder : undefined;
+  const move = (from: number, to: number) => {
+    if (!arranged || from === to || to < 0 || to >= rows.length) return;
+    const rest = rows.filter((_, i) => i !== from);
+    const before = rest[to - 1]?.[arranged.field];
+    const after = rest[to]?.[arranged.field];
+    const number = (value: unknown) => (typeof value === "number" ? value : undefined);
+    const [low, high] = [number(before), number(after)];
+    const place = low !== undefined && high !== undefined ? (low + high) / 2 : low !== undefined ? low + 1 : high !== undefined ? high - 1 : 1;
+    void runner.run(arranged.command, { id: rows[from].id, [arranged.field]: place });
+  };
   const asked = asking?.action.form;
   const says = asking ? (asking.action.label ?? label(action(asking.action.name))) : "";
   return (
@@ -668,8 +686,9 @@ export function Table({
             : undefined
         }
         pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
+        reorder={arranged ? { label: "Move", onMove: move } : undefined}
         columns={Object.values(columns)}
-        error={pressed.map((a) => runner.error(a.name)).find((e) => e !== undefined)}
+        error={[...pressed.map((a) => a.name), ...(arranged ? [arranged.command] : [])].map((name) => runner.error(name)).find((e) => e !== undefined)}
         rows={rows.map((row) => ({
           id: row.id,
           link: link ? links(rowLink(link, row, params, keyed)) : undefined,
@@ -707,6 +726,104 @@ export function Table({
             submit={asked.submit ?? says}
             onDone={() => setAsking(undefined)}
           />
+        </ui.Dialog>
+      )}
+    </>
+  );
+}
+
+// A command a grid's cell runs: the form it asks with, and whether the person may.
+export interface GridCommand {
+  name: string;
+  fields?: (string | FieldSpec)[];
+  given?: Record<string, string | undefined>; // sent without being asked, like the project from the page's address
+  submit?: string;
+  allowed?: boolean;
+}
+
+// What goes between two of a list's things, like the moves between a project's
+// phases: a row and a column for each thing, in the list's order, and in each cell
+// the entry from the row's to the column's, if there is one. Pressing an empty cell
+// asks create's form, with the two filled in; pressing a full one asks update's,
+// started from the entry, with remove beside it.
+export function Grid({
+  view,
+  list,
+  from,
+  to,
+  cell,
+  over,
+  overList,
+  shown = "title",
+  corner,
+  create,
+  update,
+  remove,
+}: {
+  view: ViewState;
+  list: string; // the entries, like steps
+  from: string; // the field naming an entry's row, like from
+  to: string; // the field naming its column, like to
+  cell?: string; // what a cell shows of its entry, like roles.title
+  over: ViewState;
+  overList: string; // the things, like phases
+  shown?: string; // what a thing is called, like title
+  corner?: string;
+  create?: GridCommand;
+  update?: GridCommand;
+  remove?: GridCommand;
+}) {
+  const ui = useUI();
+  const runner = useConfirmedRunner();
+  const [asking, setAsking] = useState<{ a: Row; b: Row; entry?: Row }>();
+  const things = rowsOf(over.data?.[overList]);
+  const entries = rowsOf(view.data?.[list]);
+  const may = (command?: GridCommand) => (command && command.allowed !== false ? command : undefined);
+  const [adds, changes, removes] = [may(create), may(update), may(remove)];
+  const name = (thing: Row) => show(thing[shown]) || thing.id;
+  const status = over.status === "live" ? view.status : over.status;
+  const close = () => setAsking(undefined);
+  const entry = asking?.entry;
+  return (
+    <>
+      <ui.Grid
+        status={status}
+        corner={corner ?? `${label(from)}, ${label(to).toLowerCase()}`}
+        columns={things.map(name)}
+        error={[create, update, remove].map((c) => (c ? runner.error(c.name) : undefined)).find((e) => e !== undefined)}
+        rows={things.map((a) => ({
+          label: name(a),
+          cells: things.map((b) => {
+            if (a.id === b.id) return { text: "", label: `${name(a)} to itself`, self: true };
+            const found = entries.find((e) => e[from] === a.id && e[to] === b.id);
+            const text = found ? (cell ? show(found[cell]) : "") || "✓" : "";
+            const open = found ? changes || removes : adds;
+            return {
+              text,
+              label: found ? `${name(a)} to ${name(b)}: ${text}` : `Add ${name(a)} to ${name(b)}`,
+              onClick: open ? () => setAsking({ a, b, entry: found }) : undefined,
+            };
+          }),
+        }))}
+      />
+      {asking && (
+        <ui.Dialog open title={`${name(asking.a)} to ${name(asking.b)}`} onClose={close}>
+          {entry && changes && (
+            <Form command={changes.name} fields={changes.fields ?? []} from={{ status: "live", data: entry }} id={entry.id} submit={changes.submit} onDone={close} />
+          )}
+          {!entry && adds && (
+            <Form command={adds.name} fields={adds.fields ?? []} given={{ ...adds.given, [from]: asking.a.id, [to]: asking.b.id }} submit={adds.submit} onDone={close} />
+          )}
+          {entry && removes && (
+            <ui.Button
+              kind="secondary"
+              disabled={runner.busy(removes.name)}
+              error={runner.error(removes.name)}
+              onClick={() => void runner.run(removes.name, { id: entry.id }, entry).then((done) => done && close())}
+            >
+              {removes.submit ?? "Remove"}
+            </ui.Button>
+          )}
         </ui.Dialog>
       )}
     </>

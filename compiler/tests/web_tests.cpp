@@ -507,7 +507,7 @@ screen "Crew" /crews/:crew {
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"({ name: "rank", type: "choice", choices: listChoices(crewPage, "ranks", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "rank", type: "pick", choices: listChoices(crewPage, "ranks", "title") })") != std::string::npos);
     CHECK(tsx.find(R"(allowed={allows(handRoles, "crew", crewId, "hand::create", "rank.may")})") != std::string::npos);
     CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["crew::create", "Create crew"], ["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") == std::string::npos);
     CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") != std::string::npos);
@@ -591,7 +591,7 @@ screen "Steps" /:project/steps {
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" from="from.title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
-    CHECK(tsx.find(R"({ name: "from", type: "choice", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "from", type: "pick", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
     CHECK(tsx.find(R"({ name: "roles", type: "choices", choices: listChoices(projectPage, "roles", "title") })") != std::string::npos);
     // Copying an issue leaves out its phase's id, which means nothing pasted.
     CHECK(tsx.find(R"(<Copy view={issuePage} fields={[]})") != std::string::npos);
@@ -750,9 +750,63 @@ TEST_CASE("a form asks for a command's input as it would a field of its type") {
                          "}\n");
     const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(form: { fields: [{ name: "into", label: "Move its cards to", type: "choice", choices: listChoices(boardPage, "columns", "title") }], submit: "Remove" })") !=
+    CHECK(screens->content.find(R"(form: { fields: [{ name: "into", label: "Move its cards to", type: "pick", choices: listChoices(boardPage, "columns", "title") }], submit: "Remove" })") !=
           std::string::npos);
     fs::remove_all(dir);
+}
+
+TEST_CASE("a grid shows what goes between a list's things, its cells opening create, update and delete, and rows are dragged into order") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-grid";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace board {\n"
+                         "entity board {\n\ttitle  text\n}\n"
+                         "entity column {\n\tboard  board  required  key\n\tname  text  required  key = slug(title)\n\ttitle  text\n\tposition  number\n}\n"
+                         "entity arrow {\n\tboard  board  required  key\n\tfrom  column  required  key\n\tto  column  required  key\n\tsays  text\n}\n"
+                         "command column::update\n"
+                         "command arrow::create\ncommand arrow::update\ncommand arrow::delete\n"
+                         "view board_page per board {\n"
+                         "\tcolumns = each column where board == board.id {\n\t\torder by position\n\t\ttitle  position\n\t}\n"
+                         "\tarrows = each arrow where board == board.id {\n\t\tfrom  to  says\n\t}\n"
+                         "}\n"
+                         "screen \"Board\" /boards/:board {\n"
+                         "\ttable board_page.columns {\n\t\treorder position\n\t\ttitle\n\t}\n"
+                         "\tgrid board_page.arrows by from and to over board_page.columns {\n\t\tsays\n\t}\n"
+                         "\tform arrow::create \"Allow\" {\n\t\tfrom  to  says\n\t}\n"
+                         "\tform arrow::update \"Save\" {\n\t\tsays\n\t}\n"
+                         "}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(reorder={{ command: "board::column::update", field: "position" }})") != std::string::npos);
+    // The cell gives the row and column, so create asks only the rest, and sends the board from the address.
+    CHECK(tsx.find(R"(<Grid view={boardPage} list="arrows" from="from" to="to" cell="says" over={boardPage} overList="columns" shown="title" create={{ name: "board::arrow::create", fields: ["says"], submit: "Allow", given: { board: boardId } }} update={{ name: "board::arrow::update", fields: ["says"], submit: "Save" }} remove={{ name: "board::arrow::delete" }} />)") != std::string::npos);
+    // Their forms open from the cells, not on their own.
+    CHECK(tsx.find("<Form ") == std::string::npos);
+    fs::remove_all(dir);
+
+    // What the grid's entries point at is what its rows and columns are.
+    language::diagnostics out;
+    std::vector<language::file> wrong;
+    wrong.push_back(language::parse("main.one", "namespace board {\n"
+                                                "entity board {\n\ttitle  text\n}\n"
+                                                "entity column {\n\tboard  board\n\ttitle  text\n}\n"
+                                                "entity arrow {\n\tboard  board\n\tfrom  column\n\tto  board\n}\n"
+                                                "view board_page per board {\n"
+                                                "\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n"
+                                                "\tarrows = each arrow where board == board.id {\n\t\tfrom  to\n\t}\n"
+                                                "}\n"
+                                                "screen \"Board\" /boards/:board {\n"
+                                                "\tgrid board_page.arrows by from and to over board_page.columns\n"
+                                                "}\n"
+                                                "}\n", out));
+    language::check(wrong, out);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "arrow.to is a row or column of the grid, so it points at a column, what board_page.columns lists");
 }
 
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {

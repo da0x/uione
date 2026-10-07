@@ -184,6 +184,39 @@ command column::delete {
     CHECK(go.find("board.Start = into") != std::string::npos);
 }
 
+TEST_CASE("an update may set the field a table's rows are dragged into order by") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace board {
+entity column {
+	title     text
+	position  number
+}
+command column::update
+view columns {
+	each column {
+		order by position
+		title  position
+	}
+}
+screen "Columns" /columns {
+	table columns {
+		reorder position
+		title
+	}
+	form column::update {
+		title
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "board/board.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(one.Command[Column]("column::update").Fields("title", "position"))") != std::string::npos);
+}
+
 TEST_CASE("a key made from another field tells the library which") {
     language::diagnostics out;
     std::vector<language::file> files;

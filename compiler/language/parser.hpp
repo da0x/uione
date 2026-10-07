@@ -799,6 +799,13 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        if (at_word("reorder") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            table.reorder_where = peek().where;
+                            table.reorder = advance().text;
+                            end_line();
+                            continue;
+                        }
                         if (at_word("search") && peek(1).kind == token_kind::identifier) {
                             advance();
                             table.search_where = peek().where;
@@ -866,6 +873,37 @@ namespace one::language {
                 }
                 end_line();
                 return {where, std::move(table)};
+            }
+            if (at_word("grid")) {
+                advance();
+                grid_item grid;
+                grid.view = parse_qualified_name("the view whose list it shows, like project_page");
+                expect(token_kind::dot, "'.' and the view's list, like project_page.steps");
+                grid.list = expect(token_kind::identifier, "the view's list, like steps").text;
+                if (!at_word("by")) fail_expecting("by and the fields naming each one's row and column, like by from and to");
+                advance();
+                grid.from_where = peek().where;
+                grid.from = expect(token_kind::identifier, "the field naming each one's row, like from").text;
+                if (!at_word("and")) fail_expecting("and the field naming each one's column, like and to");
+                advance();
+                grid.to_where = peek().where;
+                grid.to = expect(token_kind::identifier, "the field naming each one's column, like to").text;
+                if (!at_word("over")) fail_expecting("over and the list of what its rows and columns are, like over project_page.phases");
+                advance();
+                grid.over = parse_qualified_name("the view whose list its rows and columns are, like project_page");
+                expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
+                grid.over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        if (grid.cell) fail_expecting("'}'; a grid's cell shows one thing, like roles.title");
+                        grid.cell = parse_postfix();
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(grid)};
             }
             if (at_word("details")) {
                 advance();

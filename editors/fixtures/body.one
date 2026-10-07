@@ -7,7 +7,13 @@
 namespace board {
 
 	entity column {
-		title  text
+		title     text
+		position  number
+	}
+
+	entity arrow {
+		from  column
+		to    column
 	}
 
 	entity card {
@@ -23,17 +29,25 @@ namespace board {
 		delete each card where column == into
 	}
 
+	command column::update
+
 	view columns {
-		each column {
-			title
+		columns = each column {
+			order by position
+			title  position
+		}
+		arrows = each arrow {
+			from  to
 		}
 	}
 
 	screen "Columns" /columns {
-		table columns {
+		table columns.columns {
+			reorder position
 			title
 			delete "Remove"
 		}
+		grid columns.arrows by from and to over columns.columns
 	}
 
 }

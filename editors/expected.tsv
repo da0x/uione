@@ -179,3 +179,7 @@ editors/fixtures/body.one	delete each card	delete	keyword
 editors/fixtures/body.one	delete each card	each	keyword
 editors/fixtures/body.one	\t\tinput   text	input	variable
 editors/fixtures/body.one	delete "Remove"	delete	plain
+editors/fixtures/body.one	reorder position	reorder	keyword
+editors/fixtures/body.one	grid columns.arrows	grid	keyword
+editors/fixtures/body.one	by from and to over	and	keyword
+editors/fixtures/body.one	by from and to over	over	keyword

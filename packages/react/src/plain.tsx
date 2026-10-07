@@ -242,7 +242,7 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error, tabs, search, pages }) => {
+  Table: ({ status, columns, rows, error, tabs, search, pages, reorder }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
@@ -270,6 +270,11 @@ export const plain: ComponentSet = {
         <table aria-busy={status === "loading"}>
           <thead>
             <tr>
+              {reorder && (
+                <th>
+                  <span style={hidden}>Order</span>
+                </th>
+              )}
               {columns.map((column) => (
                 <th key={column}>{column}</th>
               ))}
@@ -281,8 +286,24 @@ export const plain: ComponentSet = {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, at) => (
               <tr key={row.id}>
+                {reorder && (
+                  <td>
+                    {/* Moved a place at a time, with Alt and the arrow keys. */}
+                    <button
+                      type="button"
+                      aria-label={[reorder.label, rowName(row.cells)].filter(Boolean).join(" ")}
+                      onKeyDown={(event) => {
+                        if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                        event.preventDefault();
+                        reorder.onMove(at, event.key === "ArrowUp" ? at - 1 : at + 1);
+                      }}
+                    >
+                      ⠿
+                    </button>
+                  </td>
+                )}
                 {row.cells.map((cell, i) => (
                   <td key={i}>{i === 0 && row.link ? <a {...row.link}>{cell}</a> : cell}</td>
                 ))}
@@ -307,6 +328,44 @@ export const plain: ComponentSet = {
       </>
     );
   },
+
+  Grid: ({ status, corner, columns, rows, error }) => (
+    <>
+      <table aria-busy={status === "loading"}>
+        <thead>
+          <tr>
+            <th>{corner}</th>
+            {columns.map((column, i) => (
+              <th key={i} scope="col">
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              <th scope="row">{row.label}</th>
+              {row.cells.map((cell, j) => (
+                <td key={j}>
+                  {cell.self ? (
+                    "—"
+                  ) : cell.onClick ? (
+                    <button type="button" aria-label={cell.label} onClick={cell.onClick}>
+                      {cell.text || "·"}
+                    </button>
+                  ) : (
+                    cell.text || "·"
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {error && <p role="alert">{error}</p>}
+    </>
+  ),
 
   Form: function PlainForm({ fields, submit, busy, error, onSubmit }) {
     const id = useId();

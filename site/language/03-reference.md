@@ -121,8 +121,8 @@ The language's own words, inside what a declaration says:
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `table`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
-  `code`, `link`, `menu`, `markdown`, `hint`;
+- on a screen: `table`, `grid`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, and in a grid, `by … and … over`;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
 
@@ -705,6 +705,10 @@ screen "Book" /books/:book {
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too.
+- `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and
+  Alt+↓ on a row's handle, for whoever may update them. A drop gives the row a
+  position between its new neighbors', so only it changes. The list is ordered by
+  that field, and the entity's `update` may set it.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.
@@ -720,6 +724,27 @@ screen "Book" /books/:book {
   from the row, and sends it for that row: `update "Rename"` with `form
   phase::update "Save" { title }` renames the phase on the row. The form isn't drawn
   on its own, and the list holds what it asks for.
+- `grid project_page.steps by from and to over project_page.phases { roles.title }`
+  shows what goes between two of a list's things: a row and a column for each
+  phase, in its order, and in each cell what the step from the row's phase to the
+  column's holds, like the roles that may take it. Pressing an empty cell opens the
+  form for `step::create` on the screen, with `from` and `to` filled in; pressing a
+  full one opens the form for `step::update`, started from the step, with Remove
+  beside it for `step::delete`. Neither form is drawn on its own, and each is there
+  only for whoever may run it.
+
+```one
+grid project_page.steps by from and to over project_page.phases {
+	roles.title
+}
+form step::create "Allow" {
+	roles "Taken by"
+}
+form step::update "Save" {
+	roles "Taken by"
+}
+```
+
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a

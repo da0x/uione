@@ -150,6 +150,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "timeline" qualified "." NAME ("link" ROUTE)? END
                  | "copy" qualified STRING? END
                  | "details" qualified "{" NEWLINE? (column+ END)* "}" END
+                 | "grid" qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
                  | NAME ("::" NAME)+ STRING? ("when" condition)? END
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
@@ -183,6 +184,7 @@ built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 
 table_line     ::= "by" NAME END
+                 | "reorder" NAME END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END

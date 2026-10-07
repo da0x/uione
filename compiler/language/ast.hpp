@@ -376,6 +376,21 @@ namespace one::language {
         location sort_where;
         std::optional<int> page;          // page 25: this many rows at a time
         location page_where;
+        std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
+        location reorder_where;
+    };
+
+    // grid project_page.steps by from and to over project_page.phases { roles.title }:
+    // what goes between two of a list's things, a row and a column for each, and in a
+    // cell what it holds, like the roles that may take a move.
+    struct grid_item {
+        qualified_name view;
+        std::optional<std::string> list;
+        std::string from, to;  // the fields naming an entry's row and column
+        location from_where, to_where;
+        qualified_name over;
+        std::string over_list;
+        expression_ptr cell;   // what a cell shows, or none for a mark
     };
 
     struct form_field {
@@ -453,7 +468,7 @@ namespace one::language {
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item>
             node;
     };
 

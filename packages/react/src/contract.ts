@@ -159,6 +159,36 @@ export interface TableProps {
   tabs?: TableTab[]; // its rows by one of their choices, like Open and Closed, one shown at a time
   search?: TableSearch; // a box that finds rows by what's typed
   pages?: TablePages; // its rows a page at a time
+  reorder?: TableReorder; // its rows put in order by the person, when they may
+}
+
+// Rows a person puts in order: dragged by their handles, or moved with Alt+↑ and
+// Alt+↓ on a handle. onMove says which row went where, by their places in rows.
+export interface TableReorder {
+  label: string; // what a handle says, before the row's name, like Move
+  onMove: (from: number, to: number) => void;
+}
+
+// What goes between two of the same things, like the moves between a project's
+// phases: a row and a column for each, and a cell for each pair, the row's first.
+export interface GridProps {
+  status: ViewStatus;
+  corner: string; // what the rows and columns are, like "From, to"
+  columns: string[];
+  rows: GridRow[];
+  error?: string;
+}
+
+export interface GridRow {
+  label: string;
+  cells: GridCell[];
+}
+
+export interface GridCell {
+  text: string; // what's there, like the roles that may take a move; empty for nothing
+  label: string; // what pressing it does, like Add Triage to Ready
+  onClick?: () => void; // absent for someone who can't change it
+  self?: boolean; // a thing and itself, where nothing goes
 }
 
 export interface TableSearch {
@@ -196,7 +226,7 @@ export interface LabelsProps {
 export interface FieldProps {
   name: string;
   label: string;
-  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), or choice
+  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), choice, or pick (one of a list's records, however many)
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   value: string;
   hint?: string;
@@ -270,6 +300,7 @@ export interface ComponentSet {
   Pages: ComponentType<PagesProps>;
   Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
+  Grid: ComponentType<GridProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;

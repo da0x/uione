@@ -14,7 +14,7 @@ import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
@@ -346,7 +346,11 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: ({ status, columns, rows, error, tabs, search, pages }) => (
+  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder }) {
+    // The row being dragged, and the place it would go.
+    const [dragged, setDragged] = useState<number>();
+    const [over, setOver] = useState<number>();
+    return (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
           and the search box at the end of the same row. */}
@@ -386,6 +390,11 @@ export const radix: ComponentSet = {
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>
         <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
           <tr>
+            {reorder && (
+              <th className="w-0 py-1.5 pl-2">
+                <span className="sr-only">Order</span>
+              </th>
+            )}
             {columns.map((column) => (
               <th key={column} className="px-3 py-1.5 font-medium">
                 {column}
@@ -399,11 +408,39 @@ export const radix: ComponentSet = {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {rows.map((row, at) => (
             // A row that opens something opens it wherever it's clicked, as its first
             // cell's link does; a link or button of its own still does its own thing.
             <tr
               key={row.id}
+              draggable={reorder ? true : undefined}
+              onDragStart={reorder ? () => setDragged(at) : undefined}
+              onDragOver={
+                reorder
+                  ? (event) => {
+                      event.preventDefault();
+                      setOver(at);
+                    }
+                  : undefined
+              }
+              onDragEnd={
+                reorder
+                  ? () => {
+                      setDragged(undefined);
+                      setOver(undefined);
+                    }
+                  : undefined
+              }
+              onDrop={
+                reorder
+                  ? (event) => {
+                      event.preventDefault();
+                      if (dragged !== undefined) reorder.onMove(dragged, at);
+                      setDragged(undefined);
+                      setOver(undefined);
+                    }
+                  : undefined
+              }
               onClick={
                 row.link
                   ? (event) => {
@@ -412,8 +449,25 @@ export const radix: ComponentSet = {
                     }
                   : undefined
               }
-              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${row.link ? "cursor-pointer" : ""}`}
+              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${row.link ? "cursor-pointer" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
             >
+              {reorder && (
+                <td className="w-0 py-1.5 pl-2">
+                  <button
+                    type="button"
+                    aria-label={`${reorder.label} ${typeof row.cells[0] === "string" ? row.cells[0] : ""}`.trim()}
+                    title="Drag, or Alt+↑ and Alt+↓"
+                    onKeyDown={(event) => {
+                      if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                      event.preventDefault();
+                      reorder.onMove(at, event.key === "ArrowUp" ? at - 1 : at + 1);
+                    }}
+                    className="cursor-grab rounded-control px-1 text-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden active:cursor-grabbing"
+                  >
+                    ⠿
+                  </button>
+                </td>
+              )}
               {row.cells.map((cell, i) => (
                 <td key={i} className="px-3 py-1.5">
                   {i === 0 && row.link ? (
@@ -433,6 +487,8 @@ export const radix: ComponentSet = {
                       type="button"
                       disabled={a.disabled}
                       onClick={a.onClick}
+                      // Named for its row too, like Rename Open, among the same button on every row.
+                      aria-label={typeof row.cells[0] === "string" && row.cells[0] ? `${a.label} ${row.cells[0]}` : undefined}
                       className="ml-3 font-medium text-accent hover:underline disabled:opacity-50"
                     >
                       {a.label}
@@ -462,6 +518,62 @@ export const radix: ComponentSet = {
           </button>
         </nav>
       )}
+      {error && (
+        <p role="alert" className="border-t border-line px-4 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+    );
+  },
+
+  // Rows down the side and the same things across the top, each cell what goes from
+  // its row to its column; a cell to press for what may change, and a dash where a
+  // thing meets itself.
+  Grid: ({ status, corner, columns, rows, error }) => (
+    <div className="w-fit max-w-full overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
+      <table className="text-sm" aria-busy={status === "loading"}>
+        <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
+          <tr>
+            <th className="px-3 py-1.5 text-left font-medium">{corner}</th>
+            {columns.map((column, i) => (
+              <th key={i} scope="col" className="px-3 py-1.5 text-left font-medium whitespace-nowrap">
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-t border-line first:border-t-0">
+              <th scope="row" className="bg-sunken/50 px-3 py-1.5 text-left font-medium whitespace-nowrap">
+                {row.label}
+              </th>
+              {row.cells.map((cell, j) => (
+                <td key={j} className="border-l border-line p-0">
+                  {cell.self ? (
+                    <span className="block px-3 py-1.5 text-center text-muted" aria-label={cell.label}>
+                      —
+                    </span>
+                  ) : cell.onClick ? (
+                    <button
+                      type="button"
+                      aria-label={cell.label}
+                      onClick={cell.onClick}
+                      className={`block w-full min-w-24 px-3 py-1.5 hover:bg-sunken/60 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden focus-visible:ring-inset ${cell.text ? "text-left font-medium text-ink" : "text-center text-muted"}`}
+                    >
+                      {cell.text || "·"}
+                    </button>
+                  ) : (
+                    <span className={`block px-3 py-1.5 ${cell.text ? "" : "text-center text-muted"}`}>{cell.text || "·"}</span>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
       {error && (
         <p role="alert" className="border-t border-line px-4 py-2 text-sm text-danger">
           {error}
@@ -527,7 +639,7 @@ export const radix: ComponentSet = {
                 describedBy={field.hint ? `${id}-${field.name}-hint` : undefined}
                 onChange={field.onChange}
               />
-            ) : field.choices && field.choices.length <= fewChoices ? (
+            ) : field.choices && field.choices.length <= fewChoices && field.type !== "pick" ? (
               <div
                 role="radiogroup"
                 aria-labelledby={`${id}-${field.name}-label`}

@@ -1642,6 +1642,15 @@ namespace one::language {
                 if (auto* block = std::get_if<content_block>(&item.node)) {
                     if (auto found = rows_with(ns, block->items, command); found.first) return found;
                 }
+                // A grid's cell opens its entity's update, started from the entry.
+                if (auto* grid = std::get_if<grid_item>(&item.node); grid && command.parts.size() == 2 && command.parts[1] == "update") {
+                    if (const view_declaration* view = find(ns, grid->view, &scope::views)) {
+                        for (const auto& each : view->each) {
+                            auto* source = std::get_if<name_expression>(&each.source->node);
+                            if (each.name == grid->list && source && source->name.parts.back() == command.parts[0]) return {&each, grid->view.text()};
+                        }
+                    }
+                }
                 auto* table = std::get_if<table_item>(&item.node);
                 const view_declaration* view = table ? find(ns, table->view, &scope::views) : nullptr;
                 if (!view) continue;
@@ -1756,6 +1765,21 @@ namespace one::language {
                     }
                     if (table->sort && !in_rows(*table->sort)) error(table->sort_where, "the table is sorted by " + *table->sort + ", which its rows don't have");
                     if (table->page && *table->page < 1) error(table->page_where, "a page has at least one row");
+                    // reorder position: rows dragged into order, which an update sets.
+                    if (table->reorder && list) {
+                        const entity_declaration* rows_of = listed_entity(ns, *list);
+                        const field* f = rows_of ? find_field(*rows_of, *table->reorder) : nullptr;
+                        bool ordered = !list->order.empty() && written(*list->order.front()) == *table->reorder;
+                        if (!f || !f->type || f->type->text() != "number") {
+                            error(table->reorder_where, "a table's rows are put in order by a number field of theirs, like reorder position");
+                        } else if (!in_rows(*table->reorder)) {
+                            error(table->reorder_where, "the table is put in order by " + *table->reorder + ", which its rows don't have");
+                        } else if (!ordered) {
+                            error(table->reorder_where, "the list is put in order by " + *table->reorder + ", so it's ordered by it first, like order by " + *table->reorder);
+                        } else if (!find_command(ns, qualified_name{{rows_of->name, "update"}, table->reorder_where})) {
+                            error(table->reorder_where, "rows are put in order by " + rows_of->name + "::update, which isn't declared " + in_namespace(ns));
+                        }
+                    }
                     // Tabs by a choice the table shows, like status: one for each of its choices.
                     if (table->by) {
                         bool shown = false;
@@ -1812,6 +1836,8 @@ namespace one::language {
                             error(table->link_where, "there's no screen at " + target + " for this table's rows to open");
                         }
                     }
+                } else if (auto* grid = std::get_if<grid_item>(&item.node)) {
+                    verify_grid(ns, *grid, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
                     this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
@@ -1866,6 +1892,52 @@ namespace one::language {
                                               ".tsx beside this file, which isn't there");
                     }
                 }
+            }
+        }
+
+        // A view's named list, or nothing, having said why.
+        const view_each* named_list(const std::string& ns, const qualified_name& view_name, const std::string& list, const std::string& route) {
+            snake(view_name);
+            const view_declaration* view = find(ns, view_name, &scope::views);
+            if (!view) {
+                error(view_name.where, "there's no view " + view_name.text() + " " + in_namespace(ns));
+                return nullptr;
+            }
+            verify_shown(*view, view_name.text(), route, view_name.where);
+            for (const auto& each : view->each) {
+                if (each.name && *each.name == list) return &each;
+            }
+            error(view_name.where, "view " + view_name.text() + " has no list called " + list);
+            return nullptr;
+        }
+
+        // grid project_page.steps by from and to over project_page.phases: each entry
+        // names its row and column by fields pointing at what the over list lists, and
+        // the rows hold those, what a cell shows, and a title or name for each thing.
+        void verify_grid(const std::string& ns, const grid_item& grid, const std::string& route) {
+            const view_each* entries = named_list(ns, grid.view, *grid.list, route);
+            const view_each* things = named_list(ns, grid.over, grid.over_list, route);
+            if (!entries || !things) return;
+            const entity_declaration* entry = listed_entity(ns, *entries);
+            const entity_declaration* thing = listed_entity(ns, *things);
+            if (!entry || !thing) return;
+            for (const auto& [name, where] : {std::pair{grid.from, grid.from_where}, std::pair{grid.to, grid.to_where}}) {
+                const field* f = find_field(*entry, name);
+                if (!f) {
+                    error(where, "entity " + entry->name + " has no field " + name + nearest(name, field_names(*entry)));
+                } else if (pointed(ns, *f) != thing) {
+                    error(where, entry->name + "." + name + " is a row or column of the grid, so it points at a " + thing->name + ", what " +
+                                     grid.over.text() + "." + grid.over_list + " lists");
+                } else if (!in_rows(*entries, name)) {
+                    error(where, "view " + grid.view.text() + " has no " + name + " in its " + *grid.list + "; add it to the list's block");
+                }
+            }
+            if (grid.cell) {
+                std::string shown = written(*grid.cell);
+                if (!in_rows(*entries, shown)) error(grid.cell->where, "view " + grid.view.text() + " has no " + shown + " in its " + *grid.list + "; add it to the list's block");
+            }
+            if (!in_rows(*things, "title") && !in_rows(*things, "name")) {
+                error(grid.over.where, "a grid's rows and columns are called by their title or name, so " + grid.over.text() + "." + grid.over_list + " needs one");
             }
         }
 

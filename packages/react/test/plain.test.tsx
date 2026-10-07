@@ -5,8 +5,8 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { afterEach, vi } from "vitest";
-import { App, Form, Live, Steps, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { afterEach, beforeEach, vi } from "vitest";
+import { App, Form, Grid, Live, Steps, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -187,6 +187,83 @@ describe("a workflow's steps", () => {
     unmount();
     renderScreen(memorySource(), () => steps(outsider));
     expect(screen.queryByText(/No moves/)).toBeNull();
+  });
+});
+
+describe("a grid", () => {
+  const page = {
+    status: "live" as const,
+    data: {
+      phases: [
+        { id: "p1", title: "Triage" },
+        { id: "p2", title: "Done" },
+      ],
+      steps: [{ id: "s1", from: "p1", to: "p2", "roles.title": ["Member"], roles: ["r1"] }],
+    },
+  };
+
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+  });
+
+  it("has a cell for each pair, a dash for each with itself, and creates what an empty one is pressed for", async () => {
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Grid
+        view={page}
+        list="steps"
+        from="from"
+        to="to"
+        cell="roles.title"
+        over={page}
+        overList="phases"
+        create={{ name: "projects::step::create", fields: ["title"], submit: "Allow", given: { project: "ark" } }}
+        update={{ name: "projects::step::update", fields: ["title"] }}
+        remove={{ name: "projects::step::delete" }}
+      />
+    ));
+    expect(screen.getAllByRole("row").map((r) => r.textContent)).toEqual(["From, toTriageDone", "Triage—Member", "Done·—"]);
+    fireEvent.click(screen.getByRole("button", { name: "Add Done to Triage" }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Reopen" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Allow" })));
+    expect(source.runs).toEqual([{ command: "projects::step::create", input: { title: "Reopen", project: "ark", from: "p2", to: "p1" } }]);
+  });
+
+  it("opens update for a full cell, with remove beside it, and nothing for what the person may not change", async () => {
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Grid view={page} list="steps" from="from" to="to" cell="roles.title" over={page} overList="phases" create={{ name: "projects::step::create", allowed: false }} remove={{ name: "projects::step::delete" }} />
+    ));
+    expect(screen.queryByRole("button", { name: "Add Done to Triage" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Triage to Done: Member" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Remove" })));
+    expect(source.runs).toEqual([{ command: "projects::step::delete", input: { id: "s1" } }]);
+  });
+});
+
+describe("a table put in order", () => {
+  it("moves a row with Alt and an arrow, giving it a place between its new neighbors", async () => {
+    const source = memorySource({
+      views: {
+        "projects::workflow": {
+          phases: [
+            { id: "p1", title: "Triage", position: 1 },
+            { id: "p2", title: "Ready", position: 2 },
+            { id: "p3", title: "Done", position: 3 },
+          ],
+        },
+      },
+    });
+    renderScreen(source, () => (
+      <Table view={useView("projects::workflow")} list="phases" columns={{ title: "Phase" }} reorder={{ command: "projects::phase::update", field: "position" }} />
+    ));
+    const handle = screen.getByRole("button", { name: "Move Done" });
+    await act(async () => fireEvent.keyDown(handle, { key: "ArrowUp", altKey: true }));
+    expect(source.runs).toEqual([{ command: "projects::phase::update", input: { id: "p3", position: 1.5 } }]);
+    await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Triage" }), { key: "ArrowUp", altKey: true }));
+    expect(source.runs.length).toBe(1);
   });
 });
 

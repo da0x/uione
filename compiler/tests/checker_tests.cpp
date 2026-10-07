@@ -304,6 +304,42 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("a table's rows are dragged into order by a number field they're ordered by, which an update sets") {
+    const std::string board = R"(namespace board {
+entity column {
+	title     text
+	position  number
+}
+command column::update
+view columns {
+	each column {
+		order by position
+		title  position
+	}
+}
+screen "Columns" /columns {
+	table columns {
+		reorder position
+		title
+	}
+}
+}
+)";
+    CHECK(check_source(board).size() == 0);
+
+    std::string text = board;
+    text.replace(text.find("reorder position"), 16, "reorder title");
+    CHECK(only_error(text).message == "a table's rows are put in order by a number field of theirs, like reorder position");
+
+    std::string unordered = board;
+    unordered.replace(unordered.find("\t\torder by position\n"), 20, "");
+    CHECK(only_error(unordered).message == "the list is put in order by position, so it's ordered by it first, like order by position");
+
+    std::string updated = board;
+    updated.replace(updated.find("command column::update\n"), 23, "");
+    CHECK(only_error(updated).message == "rows are put in order by column::update, which isn't declared in namespace board");
+}
+
 TEST_CASE("a key can be made from another field when it isn't given, like a phase's name from its title") {
     const std::string lane = "entity lane {\n\tname   text  required  key = slug(title)\n\ttitle  text  required\n\tsize   number\n}\n";
     CHECK(check_source(lane).size() == 0);

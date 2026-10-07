@@ -819,6 +819,12 @@ namespace one::generators {
         // drawn on its own.
         bool on_rows(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) const {
             for (const auto& item : items) {
+                // A grid's cells open its entity's create and update.
+                if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
+                    if (const language::entity_declaration* entry = listed(ns, grid->view.text(), grid->list)) {
+                        if (command == web_detail::join(ns, entry->name + "::create") || command == web_detail::join(ns, entry->name + "::update")) return true;
+                    }
+                }
                 if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     for (const auto& column : table->columns) {
                         std::string key = web_detail::text_of(*column.value);
@@ -1062,6 +1068,8 @@ namespace one::generators {
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     this->table(out, parts, ns, *table, screen);
+                } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
+                    this->grid(out, parts, ns, *grid, screen);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
                     if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
@@ -1114,12 +1122,16 @@ namespace one::generators {
             parts.components.insert("Steps");
             parts.params.insert(entity->name);
             // Where it is now: a view per the entity, holding the field.
-            std::string current;
+            std::string current, here;
             if (auto scope = views_.find(ns); scope != views_.end()) {
                 for (const auto& [name, view] : scope->second) {
                     if (!view->per || *view->per != entity->name) continue;
                     for (const auto& value : view->values) {
                         if ((value.name ? *value.name : web_detail::text_of(*value.value)) == field) current = view_variable(parts, web_detail::join(ns, name));
+                    }
+                    // What it's called where it is, like phase_title = issue.phase.title.
+                    for (const auto& value : view->values) {
+                        if (value.name && web_detail::text_of(*value.value) == entity->name + "." + field + ".title") here = *value.name;
                     }
                 }
             }
@@ -1127,6 +1139,7 @@ namespace one::generators {
             std::string line = "<Steps command=" + web_detail::js_string(command) + " id={" + web_detail::js_name(entity->name + "_id") + "} field=" +
                                web_detail::js_string(field) + " current={" + (current.empty() ? "undefined" : current) + "} steps={" + list + "} list=" +
                                web_detail::js_string(button.along_list);
+            if (!here.empty()) line += " here=" + web_detail::js_string(here);
             // Whose roles may take each step: a list of the project's roles on it.
             const language::view_declaration* view = nullptr;
             if (auto scope = views_.find(ns); scope != views_.end()) {
@@ -1362,6 +1375,63 @@ namespace one::generators {
             out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]}" + choices + " />");
         }
 
+        // grid project_page.steps by from and to over project_page.phases: a cell for
+        // each pair, opening the entity's create where there's nothing, and its update
+        // and delete where there's something, each as its form on the screen asks.
+        void grid(stream& out, screen_parts& parts, const std::string& ns, const language::grid_item& grid, const std::vector<language::screen_item>& screen) {
+            parts.components.insert("Grid");
+            const language::entity_declaration* entry = listed(ns, grid.view.text(), grid.list);
+            std::string line = "<Grid view={" + view_variable(parts, full_view(ns, grid.view.text())) + "} list=" + web_detail::js_string(*grid.list) +
+                               " from=" + web_detail::js_string(grid.from) + " to=" + web_detail::js_string(grid.to);
+            if (grid.cell) line += " cell=" + web_detail::js_string(web_detail::text_of(*grid.cell));
+            line += " over={" + view_variable(parts, full_view(ns, grid.over.text())) + "} overList=" + web_detail::js_string(grid.over_list);
+            for (const auto& column : listed_columns(ns, grid.over.text(), grid.over_list)) {
+                if (column == "title") line += " shown=\"title\"";
+            }
+            auto command = [&](const std::string& action, bool given) -> std::string {
+                if (!entry) return "";
+                std::string full = web_detail::join(ns, entry->name + "::" + action);
+                auto commands = commands_.find(ns);
+                if (commands == commands_.end() || !commands->second.contains(entry->name + "::" + action)) return "";
+                std::string spec = "{ name: " + web_detail::js_string(full);
+                if (const language::form_item* form = form_for(ns, screen, full)) {
+                    // The row and column are given by the cell, so its form doesn't ask them.
+                    language::form_item asked;
+                    asked.commands = form->commands;
+                    for (const auto& f : form->fields) {
+                        if (given && (f.name == grid.from || f.name == grid.to)) continue;
+                        language::form_field copy;
+                        copy.where = f.where;
+                        copy.name = f.name;
+                        copy.hint = f.hint;
+                        copy.label = f.label;
+                        asked.fields.push_back(std::move(copy));
+                    }
+                    spec += ", fields: [" + form_fields(parts, ns, asked) + "]";
+                    if (form->submit) spec += ", submit: " + web_detail::js_string(*form->submit);
+                }
+                // What the page's address names, like the project, is sent with a create.
+                if (given) {
+                    std::string sent;
+                    for (const auto& field : entry->fields) {
+                        if (!field.type || field.type->parts.size() != 1 || field.name == grid.from || field.name == grid.to) continue;
+                        const std::string& points = field.type->parts[0];
+                        if (!names_parameter(route_, points) || !entity_named(ns, points)) continue;
+                        parts.params.insert(points);
+                        sent += (sent.empty() ? "" : ", ") + field.name + ": " + web_detail::js_name(points + "_id");
+                    }
+                    if (!sent.empty()) spec += ", given: { " + sent + " }";
+                }
+                std::string allowed = this->allowed(parts, ns, full);
+                if (!allowed.empty()) spec += ", allowed: " + allowed.substr(10, allowed.size() - 11);
+                return spec + " }";
+            };
+            if (auto c = command("create", true); !c.empty()) line += " create={" + c + "}";
+            if (auto c = command("update", false); !c.empty()) line += " update={" + c + "}";
+            if (auto c = command("delete", false); !c.empty()) line += " remove={" + c + "}";
+            out.line(line + " />");
+        }
+
         void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table, const std::vector<language::screen_item>& screen) {
             parts.components.insert("Table");
             std::string view = full_view(ns, table.view.text());
@@ -1452,6 +1522,13 @@ namespace one::generators {
             }
             if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
             if (table.page) line += " page={" + std::to_string(*table.page) + "}";
+            // Rows dragged into order, each drop setting the field with an update.
+            if (table.reorder && entity) {
+                std::string command = web_detail::join(ns, entity->name + "::update");
+                std::string allowed = this->allowed(parts, ns, command);
+                line += " reorder={{ command: " + web_detail::js_string(command) + ", field: " + web_detail::js_string(*table.reorder) +
+                        (allowed.empty() ? "" : ", allowed: " + allowed.substr(10, allowed.size() - 11)) + " }}";
+            }
             out.line(line + " />");
         }
 
@@ -1524,7 +1601,7 @@ namespace one::generators {
                         // of those a view on the screen lists, or several for a list.
                         if (field.name == f.name && field.type && choices.empty()) {
                             if (auto list = listed_on_screen(parts, ns, field.type->text())) {
-                                type = field.list ? "choices" : "choice";
+                                type = field.list ? "choices" : "pick";
                                 parts.components.insert("listChoices");
                                 choices = ", choices: listChoices(" + *list + ")";
                             }
@@ -1550,7 +1627,7 @@ namespace one::generators {
                         if (t == "number" || t == "date" || t == "boolean" || t == "email") {
                             type = t;
                         } else if (auto list = listed_on_screen(parts, ns, t)) {
-                            type = "choice";
+                            type = "pick";
                             parts.components.insert("listChoices");
                             choices = ", choices: listChoices(" + *list + ")";
                         }
