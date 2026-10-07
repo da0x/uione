@@ -413,6 +413,23 @@ function rowsOf(value: unknown): Row[] {
   );
 }
 
+// How rows are put in order by a field: numbers and dates as such, words as a reader
+// would sort them, and nothing last; with a - in front, largest or latest first.
+function ordering(sort: string): (a: Row, b: Row) => number {
+  const descending = sort.startsWith("-");
+  const field = descending ? sort.slice(1) : sort;
+  const key = (value: unknown) => (value instanceof Date ? value.getTime() : value);
+  return (a, b) => {
+    const x = key(a[field]);
+    const y = key(b[field]);
+    if (x === y) return 0;
+    if (x === undefined || x === null || x === "") return 1;
+    if (y === undefined || y === null || y === "") return -1;
+    const order = typeof x === "number" && typeof y === "number" ? x - y : show(x).localeCompare(show(y), undefined, { numeric: true });
+    return descending ? -order : order;
+  };
+}
+
 // The address a row opens. The last parameter is the row; any before it, like the
 // project in /projects/:project/issues/:issue, are the ones this screen was opened
 // with, or the row's own field of that name.
@@ -455,6 +472,9 @@ export function Table({
   choices = {},
   labels = [],
   by,
+  search = [],
+  sort,
+  page,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -466,23 +486,39 @@ export function Table({
   choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
   labels?: string[]; // columns holding a list of words, each shown on its own, like an issue's labels
   by?: string; // a choice column whose choices are tabs, each showing the rows that have it
+  search?: string[]; // fields a box finds rows by, like title and labels
+  sort?: string; // the field rows are sorted by, with a - for largest or latest first, like -number
+  page?: number; // how many rows a page has
 }) {
   const ui = useUI();
   const auth = useAuth();
   const links = useLinks();
   const params = useParams();
-  const all = rowsOf(view.data?.[list]);
+  // What's typed in the search box, over the fields it searches, as they're shown.
+  const [query, setQuery] = useState("");
+  const [at, setAt] = useState(1);
+  const wanted = query.trim().toLowerCase();
+  const found = rowsOf(view.data?.[list]).filter(
+    (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
+  );
   // With tabs, the first choice is shown first, like Open before Closed.
   const options = by ? Object.keys(choices[by] ?? {}) : [];
   const [picked, setPicked] = useState<string | undefined>();
   const chosen = picked ?? options[0];
-  const rows = by && chosen !== undefined ? all.filter((row) => row[by] === chosen) : all;
+  const tabbed = by && chosen !== undefined ? found.filter((row) => row[by] === chosen) : found;
+  const sorted = sort ? [...tabbed].sort(ordering(sort)) : tabbed;
+  const count = page ? Math.max(1, Math.ceil(sorted.length / page)) : 1;
+  const current = Math.min(at, count);
+  const rows = page ? sorted.slice((current - 1) * page, current * page) : sorted;
   const tabs = by
     ? options.map((option) => ({
         label: choices[by]?.[option] ?? option,
-        count: all.filter((row) => row[by] === option).length,
+        count: found.filter((row) => row[by] === option).length,
         selected: option === chosen,
-        onSelect: () => setPicked(option),
+        onSelect: () => {
+          setPicked(option);
+          setAt(1);
+        },
       }))
     : undefined;
   const runner = useConfirmedRunner();
@@ -493,6 +529,19 @@ export function Table({
     <ui.Table
       status={view.status}
       tabs={tabs}
+      search={
+        search.length
+          ? {
+              value: query,
+              label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`,
+              onChange: (value: string) => {
+                setQuery(value);
+                setAt(1);
+              },
+            }
+          : undefined
+      }
+      pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
       columns={Object.values(columns)}
       error={actions.map((name) => runner.error(name)).find((e) => e !== undefined)}
       rows={rows.map((row) => ({

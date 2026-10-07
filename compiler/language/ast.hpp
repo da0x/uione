@@ -291,6 +291,13 @@ namespace one::language {
         location link_where;
         std::optional<std::string> by;    // table project_page.issues by status: a tab for each of its choices
         location by_where;
+        std::vector<std::string> search;  // search title labels: a box that finds rows by these
+        location search_where;
+        std::optional<std::string> sort;  // sort -number: rows in this order, - for largest or latest first
+        bool sort_descending = false;
+        location sort_where;
+        std::optional<int> page;          // page 25: this many rows at a time
+        location page_where;
     };
 
     struct form_field {

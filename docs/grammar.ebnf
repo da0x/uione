@@ -130,7 +130,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "text" STRING ("when" expression)? END
                  | ("code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
-                 | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
+                 | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
@@ -167,3 +167,9 @@ argument       ::= expression ("where" expression)?
 primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")"
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
+
+table_line     ::= "by" NAME END
+                 | "search" (NAME ("." NAME)*)+ END
+                 | "sort" "-"? NAME END
+                 | "page" WHOLE END
+                 | column+ END

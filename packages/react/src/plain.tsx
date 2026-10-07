@@ -242,10 +242,22 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error, tabs }) => {
+  Table: ({ status, columns, rows, error, tabs, search, pages }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
+        {search && <input type="search" value={search.value} aria-label={search.label} placeholder={search.label} onChange={(event) => search.onChange(event.target.value)} />}
+        {pages && (
+          <p>
+            <button type="button" disabled={pages.page <= 1} onClick={() => pages.onPage(pages.page - 1)}>
+              Previous
+            </button>{" "}
+            Page {pages.page} of {pages.count}{" "}
+            <button type="button" disabled={pages.page >= pages.count} onClick={() => pages.onPage(pages.page + 1)}>
+              Next
+            </button>
+          </p>
+        )}
         {tabs && (
           <div role="tablist">
             {tabs.map((tab) => (

@@ -157,6 +157,20 @@ export interface TableProps {
   rows: TableRow[];
   error?: string; // why the last action on a row failed
   tabs?: TableTab[]; // its rows by one of their choices, like Open and Closed, one shown at a time
+  search?: TableSearch; // a box that finds rows by what's typed
+  pages?: TablePages; // its rows a page at a time
+}
+
+export interface TableSearch {
+  value: string;
+  label: string; // what it searches, like "Search title and labels"
+  onChange: (value: string) => void;
+}
+
+export interface TablePages {
+  page: number; // from 1
+  count: number;
+  onPage: (page: number) => void;
 }
 
 // One of a table's tabs: a choice, how many rows have it, and whether it's the one

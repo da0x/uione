@@ -792,3 +792,17 @@ describe("details", () => {
     expect(screen.queryByText("Verified by")).toBeNull();
   });
 });
+
+describe("a table's search, order and pages", () => {
+  it("finds rows by what's typed, puts them in order, and shows them a page at a time", () => {
+    const issues = Array.from({ length: 5 }, (_, i) => ({ id: String(i + 1), number: i + 1, title: i % 2 ? "Editor tabs" : "Deploys hang" }));
+    renderScreen(memorySource(), () => (
+      <Table view={{ status: "live", data: { issues } }} list="issues" columns={{ number: "#", title: "Title" }} search={["title"]} sort="-number" page={2} />
+    ));
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual(["5Deploys hang", "4Editor tabs"]);
+    expect(screen.getByText(/Page 1 of 3/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search title" }), { target: { value: "editor" } });
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual(["4Editor tabs", "2Editor tabs"]);
+    expect(screen.queryByText(/Page 1 of/)).toBeNull();
+  });
+});

@@ -557,6 +557,10 @@ screen "Book" /books/:book {
   project in `/projects/:project/issues/:issue`, come from the screen's own address,
   or from the row when it holds them, like a list of one person's issues across
   projects.
+- A table's block can start with its own settings: `search title labels` gives it a
+  box that finds rows by those fields, `sort -number` puts its rows in order, a `-`
+  for largest or latest first, and `page 25` shows them 25 at a time. `by status`
+  can go there too.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.

@@ -1213,6 +1213,13 @@ namespace one::generators {
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             if (table.by) line += " by=" + web_detail::js_string(*table.by);
+            if (!table.search.empty()) {
+                std::string fields;
+                for (const auto& f : table.search) fields += (fields.empty() ? "" : ", ") + web_detail::js_string(f);
+                line += " search={[" + fields + "]}";
+            }
+            if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
+            if (table.page) line += " page={" + std::to_string(*table.page) + "}";
             out.line(line + " />");
         }
 

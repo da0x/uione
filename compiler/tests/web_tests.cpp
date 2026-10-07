@@ -207,6 +207,7 @@ TEST_CASE("a project's issues are in tabs by their status, with their labels eac
     std::string line = screens->content.substr(at, screens->content.find('\n', at) - at);
     CHECK(line.find(R"( labels={["labels"]})") != std::string::npos);
     CHECK(line.find(R"( by="status")") != std::string::npos);
+    CHECK(line.find(R"( search={["title", "labels"]} sort="-number" page={25})") != std::string::npos);
     CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
 }
 

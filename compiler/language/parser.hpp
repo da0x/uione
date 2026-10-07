@@ -687,6 +687,46 @@ namespace one::language {
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
+                        // A table's own settings, a word starting a line: by, search, sort, page.
+                        if (at_word("by") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            table.by_where = peek().where;
+                            table.by = advance().text;
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("search") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            table.search_where = peek().where;
+                            while (at(token_kind::identifier)) {
+                                std::string name = advance().text;
+                                while (at(token_kind::dot)) {
+                                    advance();
+                                    name += "." + expect(token_kind::identifier, "a field").text;
+                                }
+                                table.search.push_back(name);
+                            }
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("sort") && (peek(1).kind == token_kind::identifier || peek(1).kind == token_kind::minus)) {
+                            advance();
+                            table.sort_where = peek().where;
+                            if (at(token_kind::minus)) {
+                                advance();
+                                table.sort_descending = true;
+                            }
+                            table.sort = expect(token_kind::identifier, "the field rows are sorted by").text;
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("page") && peek(1).kind == token_kind::number) {
+                            advance();
+                            table.page_where = peek().where;
+                            table.page = std::stoi(advance().text);
+                            end_line();
+                            continue;
+                        }
                         while (!at_line_end()) {
                             table_column column;
                             column.where = peek().where;

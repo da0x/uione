@@ -1374,6 +1374,19 @@ namespace one::language {
                         if (list) verify_column(ns, *list, table->view.text(), column);
                     }
                     if (view) verify_shown(*view, table->view.text(), route, table->view.where);
+                    // What the table searches and sorts by is in its rows.
+                    auto in_rows = [&](const std::string& name) {
+                        if (!list) return true;
+                        for (const auto& row : list->rows) {
+                            if ((row.name ? *row.name : written(*row.value)) == name) return true;
+                        }
+                        return false;
+                    };
+                    for (const auto& name : table->search) {
+                        if (!in_rows(name)) error(table->search_where, "the table searches " + name + ", which its rows don't have");
+                    }
+                    if (table->sort && !in_rows(*table->sort)) error(table->sort_where, "the table is sorted by " + *table->sort + ", which its rows don't have");
+                    if (table->page && *table->page < 1) error(table->page_where, "a page has at least one row");
                     // Tabs by a choice the table shows, like status: one for each of its choices.
                     if (table->by) {
                         bool shown = false;

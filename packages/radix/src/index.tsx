@@ -320,8 +320,20 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: ({ status, columns, rows, error, tabs }) => (
+  Table: ({ status, columns, rows, error, tabs, search, pages }) => (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
+      {search && (
+        <div className="border-b border-line px-3 py-2">
+          <input
+            type="search"
+            value={search.value}
+            onChange={(event) => search.onChange(event.target.value)}
+            placeholder={`${search.label}…`}
+            aria-label={search.label}
+            className="w-full max-w-sm rounded-control border border-control-line bg-page px-3 py-1.5 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+          />
+        </div>
+      )}
       {/* Its rows by a choice, like Open and Closed, each with how many there are. */}
       {tabs && (
         <div role="tablist" className="flex gap-1 border-b border-line px-2 pt-2">
@@ -390,8 +402,21 @@ export const radix: ComponentSet = {
       </table>
       {rows.length === 0 && (
         <p className="px-4 py-6 text-center text-sm text-muted">
-          {status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : "Nothing here yet."}
+          {status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : search?.value.trim() ? "Nothing matches." : "Nothing here yet."}
         </p>
+      )}
+      {pages && (
+        <nav aria-label="Pages" className="flex items-center justify-between gap-3 border-t border-line px-4 py-2 text-sm text-muted">
+          <button type="button" disabled={pages.page <= 1} onClick={() => pages.onPage(pages.page - 1)} className="hover:text-ink disabled:opacity-40">
+            ← Previous
+          </button>
+          <span className="tabular-nums">
+            Page {pages.page} of {pages.count}
+          </span>
+          <button type="button" disabled={pages.page >= pages.count} onClick={() => pages.onPage(pages.page + 1)} className="hover:text-ink disabled:opacity-40">
+            Next →
+          </button>
+        </nav>
       )}
       {error && (
         <p role="alert" className="border-t border-line px-4 py-2 text-sm text-danger">
