@@ -169,7 +169,7 @@ product        ::= unary ("*" unary)*
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
-primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")"
+primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" (expression ("," expression)*)? "]"
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 

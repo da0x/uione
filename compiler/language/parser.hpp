@@ -1260,6 +1260,16 @@ namespace one::language {
                 advance();
                 e = parse_expression();
                 expect(token_kind::right_paren, "')'");
+            } else if (at(token_kind::left_bracket)) {
+                advance();
+                list_expression list;
+                while (!at(token_kind::right_bracket)) {
+                    list.items.push_back(parse_expression());
+                    if (!at(token_kind::comma)) break;
+                    advance();
+                }
+                expect(token_kind::right_bracket, "']' after the list's values");
+                e->node = std::move(list);
             } else {
                 fail_expecting("a value");
             }

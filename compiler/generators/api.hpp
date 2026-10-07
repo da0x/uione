@@ -752,24 +752,42 @@ namespace one::generators {
                 for (const auto& v : made->values) {
                     const language::field* f = field(*target, v.name);
                     if (!f) continue;
-                    // A role every project starts with, role::maintainer, is the id of
-                    // that role of the project the made entity points at.
+                    // One of a project's own by its name, role::maintainer or
+                    // phase::triaged, is its id: the project the made entity points at,
+                    // and the name. A list of them, or of commands a role allows, is a
+                    // list of those.
                     std::optional<std::string> value;
-                    if (auto* named = std::get_if<language::name_expression>(&v.value->node); named && named->name.parts.size() == 2 && f->type) {
-                        for (const auto& [r, _] : pkg_->defined) {
-                            if (r->entity != f->type->text()) continue;
-                            for (const auto& other : made->values) {
-                                const language::field* g = field(*target, other.name);
-                                if (!g || !g->type || g->type->text() != r->per) continue;
-                                auto place = expression(e, *other.value, me, g);
-                                if (!place) return;
-                                value = "one.Key(" + *place + ", " + api_detail::go_string(named->name.parts[1]) + ")";
-                            }
-                            if (!value) {
-                                unsupported(path_, v.value->where, "a role given without the " + r->per + " it's in, in the same create");
-                                return;
-                            }
+                    auto one_of = [&](const language::expression& item) -> std::optional<std::string> {
+                        auto* named = std::get_if<language::name_expression>(&item.node);
+                        if (!named || named->name.parts.size() != 2 || !f->type) return expression(e, item, me, f);
+                        if (f->type->text() == "permission") return api_detail::go_string(named->name.text());
+                        const language::entity_declaration* pointed_at = entity(*pkg_, f->type->text());
+                        const language::field* place = nullptr;
+                        if (!pointed_at) return expression(e, item, me, f);
+                        for (const auto& k : pointed_at->fields) {
+                            if (k.key && k.type && entity(*pkg_, k.type->text())) place = &k;
                         }
+                        if (!place) return expression(e, item, me, f);
+                        for (const auto& other : made->values) {
+                            const language::field* g = field(*target, other.name);
+                            if (!g || !g->type || g->type->text() != place->type->text()) continue;
+                            auto where = expression(e, *other.value, me, g);
+                            if (!where) return std::nullopt;
+                            return "one.Key(" + *where + ", " + api_detail::go_string(named->name.parts[1]) + ")";
+                        }
+                        unsupported(path_, item.where, "naming a " + pointed_at->name + " without the " + place->type->text() + " it's in, in the same create");
+                        return std::nullopt;
+                    };
+                    if (auto* list = std::get_if<language::list_expression>(&v.value->node)) {
+                        std::string items;
+                        for (const auto& item : list->items) {
+                            auto one = one_of(*item);
+                            if (!one) return;
+                            items += (items.empty() ? "" : ", ") + *one;
+                        }
+                        value = "[]string{" + items + "}";
+                    } else {
+                        value = one_of(*v.value);
                     }
                     if (!value) value = expression(e, *v.value, me, f);
                     if (!value) return;
@@ -777,6 +795,18 @@ namespace one::generators {
                 }
                 out.open("if err := one.Create(c, &" + api_detail::go_name(target->name) + "{" + fields + "}); err != nil {");
                 out.line("return err");
+                out.close("}");
+            } else if (auto* i = std::get_if<language::if_statement>(&s.node)) {
+                // if workflow == workflow::kanban { create phase ... }: what's done when.
+                auto condition = expression(e, *i->condition, me, nullptr);
+                if (!condition) return;
+                out.open("if " + *condition + " {");
+                for (const auto& inner : i->then_body) statement(out, e, inner, me, uses_time);
+                if (!i->else_body.empty()) {
+                    out.dedent();
+                    out.open("} else {");
+                    for (const auto& inner : i->else_body) statement(out, e, inner, me, uses_time);
+                }
                 out.close("}");
             } else if (auto* cl = std::get_if<language::clear_statement>(&s.node)) {
                 for (const auto& name : cl->fields) {

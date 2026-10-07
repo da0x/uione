@@ -418,6 +418,12 @@ command issue::move {
 	require exists(step where from == was issue.phase && to == issue.phase && held(roles))  "your role doesn't move an issue from there to there"
 }
 ```
+- `if workflow == workflow::kanban { ... }` does what's inside only when its
+  condition holds, so a project can start from a preset it picks.
+- In a `create`, `phase::triaged` is the project's phase named triaged: one of
+  what the command makes, or a role every project starts with, named by the project
+  and its name. A list field is given its values whole: `roles = [role::maintainer,
+  role::programmer]`, or a role's `may = [issue::create, issue::move]`.
 - `create` makes another entity in the same step, giving its fields values worked
   out where the command runs. `id` is the id of the command's own entity, and `me`
   is the person running it. Every required field gets a value, unless it starts

@@ -106,6 +106,9 @@ namespace one::language {
             bool hook = false;                           // a webhook's handler, which may create
             bool update = false;                         // an update command's body, which may say what it changes
             bool command = false;                        // a command's body, which may ask what a field was and what exists
+            // What a command's body makes by name, like create phase { name = "triaged" },
+            // by entity: what phase::triaged may name, with a project's starting roles.
+            const std::map<std::string, std::set<std::string>>* made = nullptr;
         };
 
         diagnostics& out_;
@@ -465,6 +468,35 @@ namespace one::language {
             }
         }
 
+        // What create statements make by a name given plainly, by entity, through ifs.
+        static void made_by_name(const std::vector<statement>& body, std::map<std::string, std::set<std::string>>& made) {
+            for (const auto& st : body) {
+                if (auto* c = std::get_if<create_statement>(&st.node)) {
+                    for (const auto& v : c->values) {
+                        auto* literal = v.value ? std::get_if<literal_expression>(&v.value->node) : nullptr;
+                        if (v.name == "name" && literal) made[c->entity].insert(literal->value);
+                    }
+                } else if (auto* i = std::get_if<if_statement>(&st.node)) {
+                    made_by_name(i->then_body, made);
+                    made_by_name(i->else_body, made);
+                }
+            }
+        }
+
+        // Whether an entity is named within another by a name, like a project's role or
+        // phase: its keys are a field pointing at the other and name.
+        bool named_within(const std::string& ns, const entity_declaration& e) {
+            int keys = 0;
+            bool place = false, name = false;
+            for (const auto& f : e.fields) {
+                if (!f.key) continue;
+                ++keys;
+                if (pointed(ns, f)) place = true;
+                if (f.name == "name") name = true;
+            }
+            return keys == 2 && place && name;
+        }
+
         // The roles a field's type names, when its entity is a project's roles, like a
         // member's role: what role::maintainer, a role every project starts with, means.
         const roles_declaration* defined_roles(const std::string& ns, const field& f) {
@@ -792,6 +824,9 @@ namespace one::language {
             context in{ns, entity, nullptr, {}, false};
             in.update = c.name.parts.back() != "create" && c.name.parts.back() != "delete";
             in.command = true;
+            std::map<std::string, std::set<std::string>> made;
+            made_by_name(c.body, made);
+            in.made = &made;
             statements(ns, c.body, entity, in);
         }
 
@@ -1925,17 +1960,40 @@ namespace one::language {
                     }
                     return nullptr;
                 }
-                // A role every project starts with, like role::maintainer, given to a
-                // field that points at a project's role.
-                if (n->name.parts.size() == 2 && beside) {
-                    if (const roles_declaration* r = defined_roles(in.ns, *beside)) {
-                        bool known = n->name.parts[0] == r->entity &&
-                                     std::any_of(r->defaults.begin(), r->defaults.end(), [&](const default_role& d) { return d.name == n->name.parts[1]; });
-                        if (!known) {
-                            std::string names;
-                            for (const auto& d : r->defaults) names += (names.empty() ? "" : ", ") + r->entity + "::" + d.name;
-                            error(n->name.where, n->name.text() + " isn't a role every " + r->per + " starts with" + (names.empty() ? "" : "; those are " + names));
+                // A command a role allows, like issue::create, in its list.
+                if (n->name.parts.size() == 2 && beside && beside->type && beside->type->text() == "permission") {
+                    auto here = scopes_.find(in.ns);
+                    if (here == scopes_.end() || !here->second.commands.contains(n->name.text())) {
+                        error(n->name.where, n->name.text() + " isn't a command " + in_namespace(in.ns));
+                    }
+                    return nullptr;
+                }
+                // One of a project's own, by its name, like role::maintainer or
+                // phase::triaged: what's named by the project and a name.
+                if (n->name.parts.size() == 2 && beside && beside->choices.empty()) {
+                    if (const entity_declaration* named = pointed(in.ns, *beside)) {
+                        if (n->name.parts[0] != named->name) {
+                            error(n->name.where, beside->name + " is a " + named->name + ", like " + named->name + "::" + n->name.parts[1]);
+                        } else if (!named_within(in.ns, *named)) {
+                            error(n->name.where, named->name + "::" + n->name.parts[1] + " names a " + named->name + " within its project by its name, so " +
+                                                     named->name + "'s keys are the project and a name, like name  slug  required  key");
+                        } else {
+                            // One the command makes, or a role every project starts with.
+                            std::set<std::string> known;
+                            if (in.made) {
+                                if (auto it = in.made->find(named->name); it != in.made->end()) known = it->second;
+                            }
+                            if (const roles_declaration* r = defined_roles(in.ns, *beside)) {
+                                for (const auto& d : r->defaults) known.insert(d.name);
+                            }
+                            if (!known.contains(n->name.parts[1])) {
+                                std::string names;
+                                for (const auto& k : known) names += (names.empty() ? "" : ", ") + named->name + "::" + k;
+                                error(n->name.where, n->name.text() + " isn't a " + named->name + " this command makes or every project starts with" +
+                                                         (names.empty() ? "" : "; those are " + names));
+                            }
                         }
+                        snake(n->name.parts[1], n->name.where);
                         return nullptr;
                     }
                 }
@@ -1985,6 +2043,12 @@ namespace one::language {
             }
             if (auto* call = std::get_if<call_expression>(&e.node)) {
                 called(in, *call);
+                return nullptr;
+            }
+            // [role::maintainer, role::programmer]: each value is one the list holds.
+            if (auto* list = std::get_if<list_expression>(&e.node)) {
+                if (beside && !beside->list) error(e.where, beside->name + " holds one value, not a list of them");
+                for (const auto& item : list->items) resolve(in, *item, beside);
                 return nullptr;
             }
             return resolve_rest(in, e);

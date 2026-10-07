@@ -133,6 +133,88 @@ screen "Issue" /issues/:issue {
     CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
 }
 
+TEST_CASE("a project can start from a preset: what it makes when, named by name, with lists") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug      slug  required  unique  key
+	workflow  enum { simple  steady } = workflow::simple
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew    crew  required  key
+	person  user  required  key
+	rank    rank  required  key
+}
+roles rank per crew from hand {
+	captain "Captain"  crew::create
+}
+entity stage {
+	crew  crew  required  key
+	name  slug  required  key
+}
+entity leg {
+	crew   crew   required  key
+	from   stage  required  key
+	to     stage  required  key
+	ranks  list of rank
+}
+command crew::create {
+	permission authenticated
+	if workflow == workflow::steady {
+		create rank { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
+		create stage { crew = id  name = "todo" }
+		create stage { crew = id  name = "done" }
+		create leg { crew = id  from = stage::todo  to = stage::done  ranks = [rank::captain, rank::bosun] }
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find("if x.Workflow == WorkflowSteady {") != std::string::npos);
+    CHECK(found->content.find(R"(&Rank{Crew: x.ID, Name: "bosun", Title: "Bosun", May: []string{"crew::create"}})") != std::string::npos);
+    CHECK(found->content.find(R"(&Leg{Crew: x.ID, From: one.Key(x.ID, "todo"), To: one.Key(x.ID, "done"), Ranks: []string{one.Key(x.ID, "captain"), one.Key(x.ID, "bosun")}})") != std::string::npos);
+
+    // A name the command doesn't make, and every crew doesn't start with, is a mistake.
+    language::diagnostics wrong;
+    std::vector<language::file> typo;
+    std::string text = R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity stage {
+	crew  crew  required  key
+	name  slug  required  key
+}
+entity leg {
+	crew  crew   required  key
+	from  stage  required  key
+	to    stage  required  key
+}
+command crew::create {
+	permission authenticated
+	create stage { crew = id  name = "todo" }
+	create leg { crew = id  from = stage::todo  to = stage::dnoe }
+}
+}
+)";
+    typo.push_back(language::parse("main.one", text, wrong));
+    language::check(typo, wrong);
+    REQUIRE(wrong.size() == 1);
+    CHECK(wrong[0].message == "stage::dnoe isn't a stage this command makes or every project starts with; those are stage::todo");
+}
+
 TEST_CASE("a move takes what it changes, and asks what exists and what roles are held") {
     language::diagnostics out;
     std::vector<language::file> files;

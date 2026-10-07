@@ -348,7 +348,7 @@ view crew_page per crew {
 
     std::string unknown = crew;
     unknown.replace(unknown.find("rank = rank::captain"), 20, "rank = rank::admiral");
-    CHECK(only_error(unknown).message == "rank::admiral isn't a role every crew starts with; those are rank::captain, rank::deckhand");
+    CHECK(only_error(unknown).message == "rank::admiral isn't a rank this command makes or every project starts with; those are rank::captain, rank::deckhand");
 
     std::string allowing = crew;
     allowing.replace(allowing.find("deckhand \"Deckhand\"  job::create"), 32, "deckhand \"Deckhand\"  job::sink");

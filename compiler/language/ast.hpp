@@ -70,6 +70,12 @@ namespace one::language {
         expression_ptr operand;
     };
 
+    // [role::maintainer, role::programmer]: a list's values, given whole, as what a
+    // create statement gives a list field.
+    struct list_expression {
+        std::vector<expression_ptr> items;
+    };
+
     struct binary_expression {
         token_kind op = token_kind::equal;
         expression_ptr left;
@@ -79,7 +85,7 @@ namespace one::language {
     struct expression {
         location where;
         std::variant<literal_expression, name_expression, member_expression, call_expression,
-                     where_expression, unary_expression, binary_expression>
+                     where_expression, unary_expression, binary_expression, list_expression>
             node;
     };
 
