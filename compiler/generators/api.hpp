@@ -454,6 +454,7 @@ namespace one::generators {
                 std::string var = api_detail::go_name(v->name);
                 if (std::find(members.begin(), members.end(), var) != members.end()) var += "View";
                 auto from_view = in(body, at(v), where.line);
+                path_ = at(v).path.empty() ? pkg.path : at(v).path;  // what's unsupported is said where it's written
                 if (view(body, pkg, *v, where, var)) members.push_back(var);
                 body.line();
             }
@@ -1163,6 +1164,13 @@ namespace one::generators {
                                          value.where.line});
                         continue;
                     }
+                    // Through what it points at: lifecycle = issue.project.lifecycle.
+                    auto* through = std::get_if<language::member_expression>(&m->object->node);
+                    if (through && web_detail::text_of(*through->object) == subject_) {
+                        calls.push_back({"Copy(" + api_detail::go_string(*value.name) + ", " + api_detail::go_string(through->member + "." + m->member) + ")",
+                                         value.where.line});
+                        continue;
+                    }
                 }
                 auto* call = std::get_if<language::call_expression>(&value.value->node);
                 auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
@@ -1171,7 +1179,7 @@ namespace one::generators {
                     continue;
                 }
                 if (!callee || callee->name.text() != "count" || call->arguments.size() != 1) {
-                    unsupported(path_, value.where, "a view value other than count(...), or a field of the entity a view per entity is for");
+                    unsupported(path_, value.where, "a view value other than count(...), or a field of the entity a view per entity is for, or of what it points at");
                     return false;
                 }
                 const auto& argument = *call->arguments[0];

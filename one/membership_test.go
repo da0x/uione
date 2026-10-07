@@ -68,7 +68,7 @@ var teams = one.Module("team",
 		Copy("slug", "slug").
 		List("chores", one.Where[Chore]("team", one.Subject)).Fields("title"),
 	one.View("chore_page").Per(one.Entity[Chore]()).Readers(one.Entity[Seat]()).PublicWhen("team.visibility", "public").
-		Copy("title", "title"),
+		Copy("title", "title").Copy("visibility", "team.visibility"),
 	one.View("report_card").Per(one.Entity[Report]()).ReadersFrom("author").Copy("title", "title"),
 	one.View("report_page").Per(one.Entity[Report]()).Readers(one.Entity[Seat]()).ReadersFrom("author").ReadersFrom("watchers").
 		Copy("title", "title"),
@@ -114,6 +114,20 @@ func TestALeadSeatsHelpersWhoCanDoLess(t *testing.T) {
 	h.mustRun("team/seat/create", adaToken, map[string]any{"team": "engine", "person": grace})
 	chore := h.mustRun("team/chore/create", graceToken, map[string]any{"team": "engine", "title": "Card the wool"})
 	h.expect("team/chore/update", graceToken, map[string]any{"id": chore, "title": "Changed"}, http.StatusForbidden, "you don't have permission to do this")
+}
+
+func TestAChoresPageShowsItsTeamsVisibilityAsTheTeamChangesIt(t *testing.T) {
+	h := start(t)
+	_, adaToken := h.signUp("ada@example.com")
+	h.mustRun("team/team/create", adaToken, map[string]any{"slug": "engine"})
+	chore := h.mustRun("team/chore/create", adaToken, map[string]any{"team": "engine", "title": "Oil the gears"})
+	if page := h.view("team::chore_page:" + chore); page["visibility"] != "public" {
+		t.Fatalf("a chore's page shows its team as %v", page["visibility"])
+	}
+	h.mustRun("team/team/update", adaToken, map[string]any{"id": "engine", "visibility": "private"})
+	if page := h.view("team::chore_page:" + chore); page["visibility"] != "private" {
+		t.Fatalf("after the team changed, a chore's page shows it as %v", page["visibility"])
+	}
 }
 
 func TestARemarkIsHeldWithinItsChoresTeam(t *testing.T) {

@@ -151,6 +151,7 @@ namespace tracker {
 		body = issue.body
 		labels = issue.labels
 		status = issue.status
+		visibility = issue.project.visibility
 		comments = each comment where issue == issue.id {
 			order created_at
 			author.picture  author.name  body  created_at

@@ -352,6 +352,23 @@ func (v *ViewSpec) resolve(r *registry) error {
 	if err := v.held(r); err != nil {
 		return err
 	}
+	// A value copied through what the entity points at, like an issue's
+	// project.lifecycle, reads that entity too, so changing it rebuilds the view.
+	for _, c := range v.copies {
+		through, _, hop := strings.Cut(c.field, ".")
+		if !hop {
+			continue
+		}
+		if v.per == nil {
+			return fmt.Errorf("one: view %s copies %s, which needs a document per entity", v.full, c.field)
+		}
+		f := r.schemas[v.per].field(through)
+		if f == nil || r.entity(f.refers) == nil {
+			return fmt.Errorf("one: view %s copies %s, but %s doesn't point at another entity", v.full, c.field, through)
+		}
+		target := r.entity(f.refers)
+		v.reads[target.entity] = target
+	}
 	for _, l := range v.lists {
 		each := r.schemas[l.query.typ]
 		for _, name := range l.fields {
@@ -461,6 +478,27 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	if v.per != nil && a.reg.schemas[v.per].entity == ev.Entity {
 		add(ev.ID)
 		return subjects, nil
+	}
+	// A change to what the documents copy a value through, like a project whose
+	// issues' pages show its lifecycle, changes every one that points at it.
+	if v.per != nil {
+		per := a.reg.schemas[v.per]
+		for _, c := range v.copies {
+			through, _, hop := strings.Cut(c.field, ".")
+			if !hop {
+				continue
+			}
+			if f := per.field(through); f == nil || a.reg.entity(f.refers) == nil || a.reg.entity(f.refers).entity != ev.Entity {
+				continue
+			}
+			refs, err := a.store.Collection(per.collection).Where(through, "==", ev.ID).Documents(ctx).GetAll()
+			if err != nil {
+				return nil, err
+			}
+			for _, ref := range refs {
+				add(ref.Ref.ID)
+			}
+		}
 	}
 	listed, everywhere := false, false
 	for _, l := range v.lists {
@@ -632,7 +670,22 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 			return nil, err
 		}
 		for _, c := range v.copies {
-			data[c.name] = fields[c.field]
+			through, field, hop := strings.Cut(c.field, ".")
+			if !hop {
+				data[c.name] = fields[c.field]
+				continue
+			}
+			// Through what the entity points at, like its project's lifecycle.
+			id, _ := fields[through].(string)
+			if id == "" {
+				data[c.name] = nil
+				continue
+			}
+			held, err := a.stored(ctx, a.reg.entity(a.reg.schemas[v.per].field(through).refers), id)
+			if err != nil {
+				return nil, err
+			}
+			data[c.name] = held[field]
 		}
 		if v.scope != nil || len(v.people) > 0 {
 			if err := a.access(ctx, v, subject, fields, data); err != nil {

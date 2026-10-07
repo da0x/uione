@@ -117,7 +117,7 @@ view orders {
     auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
     CHECK(generated.files.empty());
     REQUIRE(generated.errors.size() == 1);
-    CHECK(generated.errors[0].message == "not supported yet: a view value other than count(...), or a field of the entity a view per entity is for");
+    CHECK(generated.errors[0].message == "not supported yet: a view value other than count(...), or a field of the entity a view per entity is for, or of what it points at");
     CHECK(generated.errors[0].where.line == 6);
 }
 
@@ -133,6 +133,20 @@ TEST_CASE("what can't be done yet is said in the file it's written in") {
     REQUIRE(generated.errors.size() == 1);
     CHECK(generated.errors[0].path == "closing.one");
     CHECK(generated.errors[0].where.line == 4);
+}
+
+TEST_CASE("what a view can't do yet is said in the file the view is in") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("orders.one", "namespace shop {\nentity order {\n\ttotal  number\n}\n}\n", out));
+    files.push_back(language::parse("pages.one", "namespace shop {\nview order_page per order {\n\ttotal = order.total + 1\n}\n}\n", out));
+    files.push_back(language::parse("more.one", "namespace shop {\nentity line {\n\torder  order\n}\n}\n", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.size() == 1);
+    CHECK(generated.errors[0].path == "pages.one");
+    CHECK(generated.errors[0].where.line == 3);
 }
 
 TEST_CASE("a command names its entity's fields plainly, or with the entity's name, alike") {
@@ -282,4 +296,11 @@ TEST_CASE("a field starting as the person's username tells the library so") {
     CHECK(go->content.find(R"(one:"key,default=me.username")") != std::string::npos);
     CHECK(go->content.find(R"(one:"key,slug")") != std::string::npos);
     fs::remove_all(dir);
+}
+
+TEST_CASE("a view per entity can show a field of what it points at") {
+    auto generated = api("/examples/tracker");
+    const auto* tracker = find(generated.files, "tracker/tracker.go");
+    REQUIRE(tracker != nullptr);
+    CHECK(tracker->content.find(R"(Copy("visibility", "project.visibility"))") != std::string::npos);
 }

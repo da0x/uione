@@ -194,7 +194,7 @@ TEST_CASE("an issue can be copied whole, as its view holds it") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Copy view={issuePage} label="Copy issue" fields={[["title", "Title"], ["body", "Body", "markdown"], ["labels", "Labels"], ["status", "Status"]]} lists={[["comments", "Comments", "thread", ["author.picture", "author.name", "body", "created_at"]], ["mentions", "Mentions", "rows", ["kind", "title", "author", "url"]], ["changes", "Changes", "changes", ["field", "before", "after", "created_by.name", "created_at"]]]} />)") !=
+    CHECK(screens->content.find(R"(<Copy view={issuePage} label="Copy issue" fields={[["title", "Title"], ["body", "Body", "markdown"], ["labels", "Labels"], ["status", "Status"], ["visibility", "Visibility"]]} lists={[["comments", "Comments", "thread", ["author.picture", "author.name", "body", "created_at"]], ["mentions", "Mentions", "rows", ["kind", "title", "author", "url"]], ["changes", "Changes", "changes", ["field", "before", "after", "created_by.name", "created_at"]]]} />)") !=
           std::string::npos);
 }
 

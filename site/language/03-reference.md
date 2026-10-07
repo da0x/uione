@@ -404,7 +404,9 @@ view book_page per book {
 
 - `per <entity>` makes one document per entity, like a page per book. Inside the
   view, that entity is named plainly: `title = book.title` puts its title in the
-  document, and `where book == book.id` picks the rows that belong to it. A screen
+  document, `lifecycle = issue.project.lifecycle` a field of what it points at,
+  which changing the project changes on every issue's page, and `where book ==
+  book.id` picks the rows that belong to it. A screen
   showing it reads it for the entity its address names, so its route has that
   entity as a parameter: `screen "Book" /books/:book`. `per user` makes one
   document per person, readable only by that person.
