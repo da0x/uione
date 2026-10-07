@@ -49,6 +49,28 @@ describe("a table's row actions", () => {
     expect(screen.getByRole("button", { name: "Withdraw Dune" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Actions" })).toBeTruthy();
   });
+
+  it("say what the table calls them, and aren't there for someone not allowed them", () => {
+    const source = memorySource({ views: { "projects::people": { rows: [{ id: "m1", name: "Ada" }] } } });
+    renderScreen(source, () => (
+      <Table
+        view={useView("projects::people")}
+        columns={{ name: "Name" }}
+        actions={[
+          { name: "projects::member::delete", label: "Remove", allowed: true },
+          { name: "projects::member::promote", allowed: false },
+        ]}
+      />
+    ));
+    expect(screen.getByRole("button", { name: "Remove Ada" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Promote/ })).toBeNull();
+  });
+
+  it("leave no actions column when none are allowed", () => {
+    const source = memorySource({ views: { "projects::people": { rows: [{ id: "m1", name: "Ada" }] } } });
+    renderScreen(source, () => <Table view={useView("projects::people")} columns={{ name: "Name" }} actions={[{ name: "projects::member::delete", allowed: false }]} />);
+    expect(screen.queryByRole("columnheader", { name: "Actions" })).toBeNull();
+  });
 });
 
 describe("a value that isn't available", () => {

@@ -567,7 +567,9 @@ screen "Book" /books/:book {
 - A column holding a list of words, like an issue's `labels`, shows each on its
   own.
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
-  `withdraw`, puts that command on each row.
+  `withdraw`, puts that command on each row, and `delete "Remove"` names its
+  button. Like any button, it's there only for someone whose role lets them run
+  it.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a

@@ -1169,9 +1169,20 @@ namespace one::generators {
                         }
                     }
                 }
-                if (!column.label && key.find('.') == std::string::npos) {
+                // A command, as a button on each row: named as the table says, like
+                // delete "Remove", and only for whoever's role lets them press it.
+                if (key.find('.') == std::string::npos) {
                     if (auto command = row_command(ns, table.view.text(), table.list, key)) {
-                        actions += (actions.empty() ? "" : ", ") + web_detail::js_string(*command);
+                        std::string allowed = this->allowed(parts, ns, *command);
+                        std::string action = web_detail::js_string(*command);
+                        if (column.label || !allowed.empty()) {
+                            action = "{ name: " + action;
+                            if (column.label) action += ", label: " + web_detail::js_string(*column.label);
+                            // allowed={holds(...)} as a property: allowed: holds(...)
+                            if (!allowed.empty()) action += ", allowed: " + allowed.substr(10, allowed.size() - 11);
+                            action += " }";
+                        }
+                        actions += (actions.empty() ? "" : ", ") + action;
                         continue;
                     }
                 }

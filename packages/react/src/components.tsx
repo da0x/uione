@@ -458,9 +458,17 @@ function rowLink(route: string, row: Row, params: Readonly<Record<string, string
 }
 
 // A view's rows, or one of its named lists, one column per field. Each command in
-// `actions` becomes a button on every row, run with that row's id. A column in
+// `actions` becomes a button on every row, run with that row's id: named for the
+// command, or as its label says, and not there at all for someone it isn't allowed. A column in
 // `pictures`, like member.picture, shows the person's picture rather than its
 // address, and only when it's an https address.
+// A command on each row of a table, like member::delete "Remove".
+export interface RowAction {
+  name: string;
+  label?: string;
+  allowed?: boolean; // whether the person reading may run it
+}
+
 export function Table({
   view,
   list = "rows",
@@ -479,7 +487,7 @@ export function Table({
   view: ViewState;
   list?: string; // which of the view's lists, like comments
   columns: Record<string, string>;
-  actions?: string[];
+  actions?: (string | RowAction)[];
   link?: string; // a route like /books/:book, which each row's id fills
   keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
   pictures?: string[];
@@ -522,6 +530,7 @@ export function Table({
       }))
     : undefined;
   const runner = useConfirmedRunner();
+  const pressed = actions.map((a) => (typeof a === "string" ? { name: a } : a)).filter((a) => a.allowed !== false);
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
@@ -543,7 +552,7 @@ export function Table({
       }
       pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
       columns={Object.values(columns)}
-      error={actions.map((name) => runner.error(name)).find((e) => e !== undefined)}
+      error={pressed.map((a) => runner.error(a.name)).find((e) => e !== undefined)}
       rows={rows.map((row) => ({
         id: row.id,
         link: link ? links(rowLink(link, row, params, keyed)) : undefined,
@@ -564,10 +573,10 @@ export function Table({
           const source = row[key];
           return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
         }),
-        actions: actions.map((name) => ({
-          label: label(action(name)),
-          disabled: runner.busy(name),
-          onClick: () => void runner.run(name, { id: row.id }, row),
+        actions: pressed.map((a) => ({
+          label: a.label ?? label(action(a.name)),
+          disabled: runner.busy(a.name),
+          onClick: () => void runner.run(a.name, { id: row.id }, row),
         })),
       }))}
     />

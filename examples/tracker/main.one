@@ -5,11 +5,12 @@
 // each with a role in it, and issues numbered within each project.
 //
 // The example for roles held within something. Whoever makes a project
-// maintains it, maintainers add members, and what each person may do to a
-// project's issues and comments depends on their role in that project alone. A
-// private project's pages are read by its members and nobody else. Every change
-// to an issue is kept, and shown on its page and in its project's timeline.
-// Commits and pull requests on GitHub that mention #12 show on issue 12's page.
+// maintains it, maintainers add and remove members, and what each person may
+// do to a project's issues and comments depends on their role in that project
+// alone. A private project's pages are read by its members and nobody else.
+// Every change to an issue is kept, and shown on its page and in its project's
+// timeline. Commits and pull requests on GitHub that mention #12 show on issue
+// 12's page.
 
 namespace tracker {
 
@@ -65,6 +66,13 @@ namespace tracker {
 
 	command project::update
 	command member::create
+
+	// Removing someone from a project, though never yourself, so a project always
+	// keeps the maintainer who removed the others.
+	command member::delete {
+		require person != me  "you can't remove yourself from a project"
+	}
+
 	command issue::create
 	command issue::update
 
@@ -84,7 +92,7 @@ namespace tracker {
 
 	command comment::create
 
-	role maintainer per project from member  project::update  member::create  issue::create  issue::update  issue::take  issue::drop  issue::close  comment::create
+	role maintainer per project from member  project::update  member::create  member::delete  issue::create  issue::update  issue::take  issue::drop  issue::close  comment::create
 	role reporter per project from member  issue::create  issue::take  issue::drop  comment::create
 
 	// Every public project, newest first. A private one is listed nowhere.
@@ -220,7 +228,9 @@ namespace tracker {
 			person.picture ""
 			person.name "Member"
 			role
+			delete "Remove"
 		}
+		confirm member::delete "Remove this person from the project?"
 		member::create
 		form member::create {
 			person  role
