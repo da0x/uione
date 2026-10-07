@@ -160,6 +160,12 @@ export interface TableTab {
   onSelect: () => void;
 }
 
+// A thing's values, each beside what it is, like an issue's status and who
+// implemented it; the ones with nothing in them aren't given.
+export interface DetailsProps {
+  items: { label: string; value: ReactNode }[];
+}
+
 // A few words, each on its own, like an issue's labels.
 export interface LabelsProps {
   items: string[];
@@ -243,6 +249,7 @@ export interface ComponentSet {
   Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
   Labels: ComponentType<LabelsProps>;
+  Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;
   Form: ComponentType<FormProps>;

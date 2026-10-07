@@ -1286,6 +1286,20 @@ namespace one::language {
                         }
                     }
                     screen_items(ns, block->items, route);
+                } else if (auto* details = std::get_if<details_item>(&item.node)) {
+                    snake(details->view);
+                    const view_declaration* view = find(ns, details->view, &scope::views);
+                    if (!view) {
+                        error(details->view.where, "there's no view " + details->view.text() + " for these details " + in_namespace(ns));
+                    } else {
+                        verify_shown(*view, details->view.text(), route, details->view.where);
+                        for (const auto& f : details->fields) {
+                            std::string key = written(*f.value);
+                            bool has = false;
+                            for (const auto& v : view->values) has = has || (v.name ? *v.name : written(*v.value)) == key;
+                            if (!has) error(f.where, "view " + details->view.text() + " has no " + key + " to show");
+                        }
+                    }
                 } else if (auto* copy = std::get_if<copy_item>(&item.node)) {
                     snake(copy->view);
                     if (const view_declaration* view = find(ns, copy->view, &scope::views)) {
@@ -1374,6 +1388,7 @@ namespace one::language {
                 } else if (auto* text = std::get_if<content_text>(&item.node);
                            text && (text->type == content_text::kind::text || text->value.starts_with("{"))) {
                     verify_live_text(ns, text->value, route, item.where);
+                    if (text->when) verify_condition(ns, *text->when, route);
                 } else if (auto* form = std::get_if<form_item>(&item.node)) {
                     for (const auto& command : form->commands) verify_command_use(ns, command);
                     const entity_declaration* entity = find_command(ns, form->commands.front());
@@ -1704,6 +1719,8 @@ namespace one::language {
                 if (std::holds_alternative<member_expression>(m->object->node)) {
                     const field* inner = resolve(in, *m->object);
                     if (!inner) return nullptr;
+                    // issue.implemented_by.name: a person's name, picture or username.
+                    if (inner->type && inner->type->text() == "user" && !inner->list) return profile_field(in, *inner, m->member, where);
                     const entity_declaration* through = pointed(in.ns, *inner);
                     if (!through) {
                         error(where, inner->name + " isn't another entity, so it has no fields to read");

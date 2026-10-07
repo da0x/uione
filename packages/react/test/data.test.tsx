@@ -8,6 +8,7 @@ import {
   App,
   Command,
   Confirm,
+  Details,
   Form,
   Live,
   Table,
@@ -776,5 +777,18 @@ describe("a timeline of many things", () => {
     const link = screen.getByRole("link", { name: "#12 Copy an issue whole" });
     expect(link.getAttribute("href")).toBe("/issues/uione-12");
     expect(link.parentElement?.textContent).toMatch(/^Ada closed #12 Copy an issue whole/);
+  });
+});
+
+describe("details", () => {
+  it("shows a view's values beside what they are, leaving out the empty ones", () => {
+    const view = { status: "live" as const, data: { status: "in_progress", labels: ["editor"], implementer: "Ada", verifier: null } };
+    renderScreen(memorySource(), () => (
+      <Details view={view} fields={[["status", "Status"], ["labels", "Labels"], ["implementer", "Implemented by"], ["verifier", "Verified by"]]} choices={{ status: { in_progress: "In progress" } }} labels={["labels"]} />
+    ));
+    expect(screen.getByText("In progress")).toBeTruthy();
+    expect(screen.getByText("Ada")).toBeTruthy();
+    expect(screen.getByText("editor")).toBeTruthy();
+    expect(screen.queryByText("Verified by")).toBeNull();
   });
 });

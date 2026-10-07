@@ -266,6 +266,7 @@ namespace one::language {
         enum class kind { text, code, markdown };
         kind type = kind::text;
         std::string value;
+        expression_ptr when;  // text "Implemented by {issue_page.implementer}" when issue_page.implementer != none
     };
 
     struct content_link {
@@ -351,10 +352,17 @@ namespace one::language {
         std::optional<std::string> label;
     };
 
+    // details issue_page { status "Status"  implementer "Implemented by" }: a view's
+    // values, each beside what it is, the ones with nothing in them left out.
+    struct details_item {
+        qualified_name view;
+        std::vector<table_column> fields;
+    };
+
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item>
             node;
     };
 

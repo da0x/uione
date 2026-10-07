@@ -210,6 +210,30 @@ TEST_CASE("a project's issues are in tabs by their status, with their labels eac
     CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
 }
 
+TEST_CASE("an issue's details are its values, each beside what it is") {
+    auto files = generate("/examples/tracker");
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Details view={issuePage} fields={[["status", "Status"], ["labels", "Labels"]]} choices={{ status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]) }} labels={["labels"]} />)") !=
+          std::string::npos);
+}
+
+TEST_CASE("a text can be shown only while its when holds") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-text-when";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\nentity issue {\n\ttitle  text\n\towner  user\n}\n"
+                         "view issue_page per issue {\n\towner = issue.owner\n\towner_name = issue.owner.name\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n\ttext \"Taken by {issue_page.owner_name}\" when issue_page.owner != none\n}\n}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"({issuePage.status === "live" && (((issuePage.data?.["owner"] ?? null) !== null)) && <Text>Taken by <Live view={issuePage} field="owner_name" /></Text>})") !=
+          std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a project's timeline names each issue that changed, and links to it") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");

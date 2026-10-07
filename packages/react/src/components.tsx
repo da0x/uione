@@ -118,6 +118,33 @@ export function Markdown({ view, field }: { view: ViewState; field: string }) {
   return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} />;
 }
 
+// A view's values, each beside what it is: a choice as it's shown, a list of words
+// each on its own, and none of the ones with nothing in them.
+export function Details({
+  view,
+  fields,
+  choices = {},
+  labels = [],
+}: {
+  view: ViewState;
+  fields: readonly (readonly [name: string, label: string])[];
+  choices?: Record<string, Record<string, string>>;
+  labels?: string[];
+}) {
+  const ui = useUI();
+  if (view.status !== "live") return null;
+  const items = fields.flatMap<{ label: string; value: ReactNode }>(([name, label]) => {
+    const value = view.data?.[name];
+    if (labels.includes(name) && Array.isArray(value)) {
+      const words = value.map(show).filter((word) => word !== "");
+      return words.length ? [{ label, value: <ui.Labels items={words} /> }] : [];
+    }
+    const said = typeof value === "string" ? (choices[name]?.[value] ?? value) : show(value);
+    return said === "" ? [] : [{ label, value: said }];
+  });
+  return items.length ? <ui.Details items={items} /> : null;
+}
+
 // Buttons one after another, in a row.
 export function Actions({ children }: { children: ReactNode }) {
   const ui = useUI();

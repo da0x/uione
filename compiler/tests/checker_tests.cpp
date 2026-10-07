@@ -817,3 +817,9 @@ TEST_CASE("a project's color is dark enough to read on a white page") {
     CHECK(only_error("project p {\n\tcolor  \"#fde047\"\n}\n").message ==
           "color #fde047 is too light to read as a link on a white page (1.3:1, and it needs 4.5:1); choose a darker one");
 }
+
+TEST_CASE("details show values the view has") {
+    const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\towner  user\n}\nview issue_page per issue {\n\ttitle = issue.title\n\towner_name = issue.owner.name\n}\n";
+    CHECK(check_source(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\towner_name \"Owner\"\n\t}\n}\n}\n").empty());
+    CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\tstatus\n\t}\n}\n}\n").message == "view issue_page has no status to show");
+}

@@ -119,6 +119,17 @@ export const plain: ComponentSet = {
 
   Labels: ({ items }) => <span>{items.join(", ")}</span>,
 
+  Details: ({ items }) => (
+    <dl>
+      {items.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  ),
+
   Thread: ({ status, entries }) =>
     status !== "live" || entries.length === 0 ? (
       <p>{status === "loading" ? "Loading…" : "Nothing here yet."}</p>

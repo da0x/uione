@@ -914,6 +914,8 @@ namespace one::generators {
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     out.line("<Link to=" + web_detail::js_string(target) + ">" + web_detail::jsx_text(link->label) + "</Link>");
+                } else if (auto* details = std::get_if<language::details_item>(&item.node)) {
+                    this->details(out, parts, ns, *details);
                 } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
                     this->copy(out, parts, ns, *copy);
                 } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
@@ -984,6 +986,11 @@ namespace one::generators {
         void content(stream& out, screen_parts& parts, const std::string& ns, const language::content_text& text) {
             if (text.type == language::content_text::kind::text) {
                 parts.components.insert("Text");
+                // Shown only while its when holds, like who implemented an issue, once someone has.
+                if (text.when) {
+                    out.line("{" + condition(parts, ns, *text.when) + " && <Text>" + live_text(parts, ns, text.value) + "</Text>}");
+                    return;
+                }
                 out.line("<Text>" + live_text(parts, ns, text.value) + "</Text>");
             } else if (text.type == language::content_text::kind::code) {
                 namespace fs = std::filesystem;
@@ -1014,6 +1021,50 @@ namespace one::generators {
                 parts.components.insert("Pages");
                 out.line("<Pages base=" + web_detail::js_string(docs_base_) + " pages={pages} />");
             }
+        }
+
+        // A view's values, each beside what it is: a choice as it's shown, like In
+        // progress, and a list of words each on its own.
+        void details(stream& out, screen_parts& parts, const std::string& ns, const language::details_item& details) {
+            parts.components.insert("Details");
+            std::string full = full_view(ns, details.view.text());
+            std::size_t split = full.rfind("::");
+            std::string view_ns = split == std::string::npos ? "" : full.substr(0, split);
+            std::string name = split == std::string::npos ? full : full.substr(split + 2);
+            const language::view_declaration* view = nullptr;
+            if (auto scope = views_.find(view_ns); scope != views_.end()) {
+                if (auto found = scope->second.find(name); found != scope->second.end()) view = found->second;
+            }
+            const language::entity_declaration* entity = nullptr;
+            if (view && view->per) {
+                if (auto scope = entities_.find(view_ns); scope != entities_.end()) {
+                    if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
+                }
+            }
+            std::string fields, shown, labels;
+            for (const auto& f : details.fields) {
+                std::string key = web_detail::text_of(*f.value);
+                fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
+                          web_detail::js_string(f.label ? *f.label : web_detail::label(key)) + "]";
+                if (!view || !entity) continue;
+                for (const auto& value : view->values) {
+                    if ((value.name ? *value.name : web_detail::text_of(*value.value)) != key) continue;
+                    auto* member = std::get_if<language::member_expression>(&value.value->node);
+                    if (!member) continue;
+                    for (const auto& field : entity->fields) {
+                        if (field.name != member->member) continue;
+                        if (!field.choices.empty()) {
+                            shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) +
+                                     ": Object.fromEntries(" + choice_options(field) + ")";
+                        }
+                        if (field.list && field.type && field.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
+                    }
+                }
+            }
+            std::string line = "<Details view={" + view_variable(parts, full) + "} fields={[" + fields + "]}";
+            if (!shown.empty()) line += " choices={{ " + shown + " }}";
+            if (!labels.empty()) line += " labels={[" + labels + "]}";
+            out.line(line + " />");
         }
 
         // A button copying everything a view holds as Markdown, in the order the view

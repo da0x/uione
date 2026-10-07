@@ -589,6 +589,18 @@ export const radix: ComponentSet = {
     </aside>
   ),
 
+  // What a thing is, label beside value, in a quiet panel.
+  Details: ({ items }) => (
+    <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-box border border-line bg-surface px-4 py-3 text-sm">
+      {items.map((item) => (
+        <div key={item.label} className="contents">
+          <dt className="text-muted">{item.label}</dt>
+          <dd className="m-0 font-medium">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  ),
+
   // Each word a small chip, like an issue's labels.
   Labels: ({ items }) => (
     <span className="inline-flex flex-wrap gap-1">

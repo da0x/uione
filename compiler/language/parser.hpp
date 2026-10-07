@@ -620,6 +620,10 @@ namespace one::language {
                           : word == "code"   ? content_text::kind::code
                                              : content_text::kind::markdown;
                 text.value = advance().text;
+                if (text.type == content_text::kind::text && at_word("when")) {
+                    advance();
+                    text.when = parse_expression();
+                }
                 end_line();
                 return {where, std::move(text)};
             }
@@ -682,6 +686,25 @@ namespace one::language {
                 }
                 end_line();
                 return {where, std::move(table)};
+            }
+            if (at_word("details")) {
+                advance();
+                details_item details;
+                details.view = parse_qualified_name("the view whose values it shows");
+                expect(token_kind::left_brace, "'{'");
+                while (in_block()) {
+                    while (!at_line_end()) {
+                        table_column field;
+                        field.where = peek().where;
+                        field.value = parse_postfix();
+                        if (at(token_kind::string)) field.label = advance().text;
+                        details.fields.push_back(std::move(field));
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(details)};
             }
             if (at_word("copy")) {
                 advance();

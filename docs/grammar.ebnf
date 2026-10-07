@@ -126,7 +126,8 @@ screen         ::= "screen" (STRING | NAME) ROUTE screen_block END
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END
-                 | ("text" | "code" | "markdown") STRING END
+                 | "text" STRING ("when" expression)? END
+                 | ("code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
                  | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? (column+ END)* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
@@ -134,9 +135,10 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "thread" qualified "." NAME END
                  | "timeline" qualified "." NAME ("link" ROUTE)? END
                  | "copy" qualified STRING? END
+                 | "details" qualified "{" NEWLINE? (column+ END)* "}" END
                  | "component" NAME END
                  | NAME ("::" NAME)+ STRING? ("when" expression)? END
-column         ::= postfix STRING?
+column         ::= NAME ("." NAME)* STRING?
 form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint?) END
 hint           ::= "{" NEWLINE? "hint" STRING END "}"
 

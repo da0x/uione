@@ -566,6 +566,13 @@ screen "Book" /books/:book {
   `withdraw`, puts that command on each row.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
+- `details issue_page { status "Status"  implementer "Implemented by" }` shows a
+  view's values, each beside what it is, a choice as it's shown and a list of words
+  each on its own, and leaves out the ones with nothing in them.
+- `text "Taken by {issue_page.owner_name}" when issue_page.owner != none` shows a
+  text only while its when holds, as a button's does.
+- A view can read a person's `name`, `picture` or `username` through a field
+  holding them: `implementer = issue.implemented_by.name`.
 - `copy issue_page "Copy issue"` is a button that copies everything the view
   holds, as Markdown, to paste somewhere else whole: the page's title, each value
   but the ones the title shows, a markdown value as it was written, then each list,
