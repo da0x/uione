@@ -107,6 +107,12 @@ var modules = []one.Item{
 			t.Done = true
 			return nil
 		}),
+		one.Command[Task]("task::delete").Allow(one.Owner).Do(func(c *one.Ctx, t *Task) error {
+			if !t.Done {
+				return c.Fail("finish that task before deleting it")
+			}
+			return nil
+		}),
 	),
 }
 
@@ -313,6 +319,21 @@ func TestACommandsBodyRunsOnTheEntity(t *testing.T) {
 	id := h.mustRun("tasks/task/create", token, map[string]any{"title": "write the docs"})
 	h.mustRun("tasks/task/complete", token, map[string]any{"id": id})
 	h.expect("tasks/task/complete", token, map[string]any{"id": id}, 400, "that task is already done")
+}
+
+func TestADeleteCommandsBodyDecidesFirst(t *testing.T) {
+	h := start(t)
+	me, token := h.signUp("dina@example.com")
+	id := h.mustRun("tasks/task/create", token, map[string]any{"title": "water the plants"})
+	h.expect("tasks/task/delete", token, map[string]any{"id": id}, 400, "finish that task before deleting it")
+	if rows, _ := h.view("tasks::list:" + me)["rows"].([]any); len(rows) != 1 {
+		t.Fatalf("a delete its body refuses keeps the task: %v", rows)
+	}
+	h.mustRun("tasks/task/complete", token, map[string]any{"id": id})
+	h.mustRun("tasks/task/delete", token, map[string]any{"id": id})
+	if rows, _ := h.view("tasks::list:" + me)["rows"].([]any); len(rows) != 0 {
+		t.Fatalf("a delete its body allows removes the task: %v", rows)
+	}
 }
 
 func TestAViewsRowsFollowItsOrder(t *testing.T) {

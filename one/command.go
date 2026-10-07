@@ -533,6 +533,12 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			return err
 		}
 		if action == "delete" {
+			// Its body says whether it may go, as a require does, before it goes.
+			if do != nil {
+				if err := do(body, entity); err != nil {
+					return err
+				}
+			}
 			kept, err := a.keep(tx, s, id, before, nil, body.command, c.me, now)
 			if err != nil {
 				return err
