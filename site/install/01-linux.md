@@ -12,7 +12,7 @@ curl -fsSL https://www.uione.io/install.sh | sh
 The installer picks the build for your machine, checks it against the release's
 checksums, and puts it in `~/.local/bin`. It changes nothing else: no profile is
 edited, and nothing runs as root. [Read it first](/install.sh) if you like, and
-set `UIONE_VERSION=0.6.6` for a particular release or `UIONE_INSTALL` for another
+set `UIONE_VERSION=0.6.7` for a particular release or `UIONE_INSTALL` for another
 folder.
 
 The build is a single static binary, so it runs on any distribution. Check it:
@@ -34,7 +34,7 @@ uione in [the studio](https://uione.io/signin), in your browser, with every line
 
 ```sh
 mkdir tasks && cd tasks
-curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.6.6/examples/tasks/main.one -o main.one
+curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.6.7/examples/tasks/main.one -o main.one
 one check .
 one build .
 ```
