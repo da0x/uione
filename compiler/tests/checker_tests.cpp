@@ -304,6 +304,12 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("a theme and corners are ones the component set has") {
+    CHECK(only_error("project p {\n\ttheme  solarized\n}\n").message == "theme is papercolor, or left out for the component set's own");
+    CHECK(only_error("project p {\n\tcorners  sharp\n}\n").message == "corners are square or round");
+    CHECK(check_source("project p {\n\ttheme  papercolor\n\tcorners  square\n}\n").size() == 0);
+}
+
 TEST_CASE("an enum declared on its own gives any field of its type its choices, named with the enum") {
     const std::string project = R"(
 enum status {

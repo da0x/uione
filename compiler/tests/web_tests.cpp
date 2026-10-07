@@ -453,6 +453,19 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
 }
 
+TEST_CASE("a project's theme and corners are on its page from the first paint") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-theme";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "project tracker {\n\ttheme    papercolor\n\tcorners  square\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* page = find(files, "index.html");
+    REQUIRE(page != nullptr);
+    CHECK(page->content.find(R"(<html lang="en" data-palette="papercolor" data-corners="square">)") != std::string::npos);
+}
+
 TEST_CASE("a screen's title can show what the page does, once it's arrived") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-live-title";

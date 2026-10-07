@@ -161,7 +161,10 @@ export function accentOf(color: string): string {
     `--color-accent: color-mix(in oklab, ${color} 55%, white); --color-accent: oklch(from ${color} max(l, 0.76) c h); ` +
     `--color-accent-hover: color-mix(in oklab, ${color} 35%, white); --color-accent-hover: oklch(from ${color} max(l, 0.84) c h); ` +
     `--color-accent-ink: #0a101c; --color-accent-soft: color-mix(in oklab, ${color} 28%, #0a101c); --color-grid: color-mix(in srgb, ${color} 8%, transparent);`;
-  return `:root { ${light} } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} } } :root[data-theme="dark"] { ${dark} }`;
+  // As exact as a theme's own rules, which it follows on the page, so the site's
+  // color wins over a theme's accent too.
+  const any = ':is([data-palette], :not([data-palette]))';
+  return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
 export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color }: AppProps) {

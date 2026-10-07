@@ -442,7 +442,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "layout", "serve", "redirect", "title", "one", "analytics"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -490,6 +490,14 @@ namespace one::language {
                         std::snprintf(shown, sizeof shown, "%.1f", contrast);
                         error(s.where, "color " + s.value + " is too light to read as a link on a white page (" + shown + ":1, and it needs 4.5:1); choose a darker one");
                     }
+                }
+                // The site's colors, light and dark, as a theme of its component set's.
+                if (s.key == "theme" && s.value != "papercolor") {
+                    error(s.where, "theme is papercolor, or left out for the component set's own");
+                }
+                // Corners square, for a sharper look, or round, as they are unless it says.
+                if (s.key == "corners" && s.value != "square" && s.value != "round") {
+                    error(s.where, "corners are square or round");
                 }
                 // Visitors counted with Firebase Analytics, once they agree to it.
                 if (s.key == "analytics" && s.value != "google") {

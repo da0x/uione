@@ -277,9 +277,9 @@ describe("titles made from what a page shows", () => {
 describe("a site's own color", () => {
   it("draws buttons and links in it, with text that reads on it, lighter on a dark page", () => {
     const teal = accentOf("#0f766e");
-    expect(teal).toContain(":root { --color-accent: #0f766e;");
+    expect(teal).toContain(":root:is([data-palette], :not([data-palette])) { --color-accent: #0f766e;");
     expect(teal).toContain("--color-accent-ink: #ffffff;");
-    expect(teal).toContain(':root[data-theme="dark"] { --color-accent: color-mix(in oklab, #0f766e 55%, white); --color-accent: oklch(from #0f766e max(l, 0.76) c h);');
+    expect(teal).toContain(':root:is([data-palette], :not([data-palette]))[data-theme="dark"] { --color-accent: color-mix(in oklab, #0f766e 55%, white); --color-accent: oklch(from #0f766e max(l, 0.76) c h);');
     expect(accentOf("#fde047")).toContain("--color-accent-ink: #0e1726;");
     expect(accentOf("red; } body { display: none")).toBe("");
   });

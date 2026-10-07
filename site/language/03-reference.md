@@ -120,7 +120,7 @@ The language's own words, inside what a declaration says:
 - on a screen: `table`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
-  `authentication`, `icon`, `serve`, `redirect`.
+  `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
 
 ## project
 
@@ -166,6 +166,12 @@ moved on to where it is now, and a project can have as many as it needs.
 `color "#0f766e"` is the site's own color, for its buttons, links and focus rings, in
 place of the component set's, a lighter one of it on a dark page. It's written
 #rrggbb, and dark enough to read as a link on a white page.
+
+`theme papercolor` gives the site the component set's PaperColor colors, light and
+dark: a warm gray page with graphite text, and panels that sit flat on it. A
+`color` given as well is still its color for buttons and links. `corners square`
+squares the corners of panels, buttons, labels and pictures, for a sharper look;
+they're round unless it says.
 
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google
