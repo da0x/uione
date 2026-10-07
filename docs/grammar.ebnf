@@ -132,7 +132,7 @@ screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END
                  | ("main" | "side") screen_block END
-                 | "text" STRING ("when" expression)? END
+                 | "text" STRING ("when" condition)? END
                  | ("code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
                  | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
@@ -143,7 +143,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "copy" qualified STRING? END
                  | "details" qualified "{" NEWLINE? (column+ END)* "}" END
                  | "component" NAME END
-                 | NAME ("::" NAME)+ STRING? ("when" expression)? END
+                 | NAME ("::" NAME)+ STRING? ("when" condition)? END
+condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
 form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint?) END
 hint           ::= "{" NEWLINE? "hint" STRING END "}"
@@ -177,4 +178,4 @@ table_line     ::= "by" NAME END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END
-                 | column+ ("when" expression)? END
+                 | column+ ("when" condition)? END

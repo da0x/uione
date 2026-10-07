@@ -656,6 +656,42 @@ TEST_CASE("a button says what it does, and shows only while its when holds") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("a when block shows a button, a text or a row's button only while all its lines hold") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-when-block";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\n"
+                         "entity issue {\n\ttitle  text\n\towner  user\n\tstatus  enum  open | closed = status::open\n}\n"
+                         "command issue::close {\n\tstatus = status::closed\n}\n"
+                         "command issue::delete\n"
+                         "view issue_page per issue {\n\tstatus = issue.status\n\towner = issue.owner\n}\n"
+                         "view issues {\n\teach issue {\n\t\ttitle  owner  status\n\t}\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n"
+                         "\tissue::close \"Close issue\" when {\n"
+                         "\t\tissue_page.status == status::open\n"
+                         "\t\tissue_page.owner == me\n"
+                         "\t}\n"
+                         "\ttext \"Yours\" when {\n\t\tissue_page.owner == me\n\t}\n"
+                         "}\n"
+                         "screen \"Issues\" /issues {\n"
+                         "\ttable issues {\n"
+                         "\t\ttitle\n"
+                         "\t\tdelete \"Remove\" when {\n\t\t\towner == me\n\t\t\tstatus == status::closed\n\t\t}\n"
+                         "\t}\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(when={issuePage.status === "live" && ((((issuePage.data?.["status"] ?? null) === "open") && ((issuePage.data?.["owner"] ?? null) === viewer)))} />)") !=
+          std::string::npos);
+    CHECK(tsx.find(R"({issuePage.status === "live" && (((issuePage.data?.["owner"] ?? null) === viewer)) && <Text>Yours</Text>})") != std::string::npos);
+    CHECK(tsx.find(R"(when: (row) => (((row["owner"] ?? null) === viewer) && ((row["status"] ?? null) === "closed")))") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

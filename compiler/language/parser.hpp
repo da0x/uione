@@ -715,7 +715,7 @@ namespace one::language {
                 text.value = advance().text;
                 if (text.type == content_text::kind::text && at_word("when")) {
                     advance();
-                    text.when = parse_expression();
+                    text.when = parse_when();
                 }
                 end_line();
                 return {where, std::move(text)};
@@ -828,7 +828,7 @@ namespace one::language {
                             if (at_word("when")) {
                                 advance();
                                 std::size_t begin = peek().begin;
-                                column.when = parse_expression();
+                                column.when = parse_when();
                                 column.when_written = std::string(source_.substr(begin, tokens_[pos_ - 1].end - begin));
                                 // What follows is the condition's, so it ends the line.
                                 if (!at_line_end()) fail_expecting("the end of the line after a row's when");
@@ -927,7 +927,7 @@ namespace one::language {
                 if (at(token_kind::string)) button.label = expect(token_kind::string, "what the button says").text;
                 if (at_word("when")) {
                     advance();
-                    button.when = parse_expression();
+                    button.when = parse_when();
                 }
                 end_line();
                 return {where, std::move(button)};
@@ -1164,6 +1164,34 @@ namespace one::language {
         }
 
         expression_ptr parse_expression() { return parse_binary(0); }
+
+        // What follows a when: a condition, or a block of them, one a line, that all
+        // hold, as if each line were joined to the next with &&:
+        //
+        //     when {
+        //         issue_page.status == status::implemented
+        //         issue_page.implemented_by != me
+        //     }
+        expression_ptr parse_when() {
+            if (!at(token_kind::left_brace)) return parse_expression();
+            location where = advance().where;
+            expression_ptr all;
+            while (in_block()) {
+                auto line = parse_expression();
+                if (!at_line_end()) fail_expecting("the end of the line; a when block has one condition a line");
+                if (!all) {
+                    all = std::move(line);
+                    continue;
+                }
+                auto both = std::make_unique<expression>();
+                both->where = line->where;
+                both->node = binary_expression{token_kind::logical_and, std::move(all), std::move(line)};
+                all = std::move(both);
+            }
+            expect(token_kind::right_brace, "'}'");
+            if (!all) fail(where, "a when block holds its conditions, one a line");
+            return all;
+        }
 
         expression_ptr parse_binary(int loosest) {
             auto left = parse_unary();

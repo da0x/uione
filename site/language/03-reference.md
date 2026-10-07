@@ -687,7 +687,7 @@ screen "Book" /books/:book {
   button. Like any button, it's there only for someone whose role lets them run
   it. `delete "Remove" when person != me` puts it only on the rows where its when
   holds, read from the row's own fields, so the list needs `person` among them.
-  The when ends its line.
+  The when ends its line, or its block does.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a
@@ -734,6 +734,17 @@ screen "Book" /books/:book {
   `none`, and whoever is reading as `me`, as in `issue_page.assignees has me`,
   joined with `&&` and `||`, and holds nothing until the views it reads have
   arrived.
+- A when with several conditions can be a block of them, one a line, that all
+  hold, the same as joining them with `&&`. It reads better than a long line, and
+  a line is added or taken out without touching the others. A line can still use
+  `||`, and keeps it to itself. Texts and rows' buttons take a block too.
+
+```one
+issue::verify "Verify" when {
+	issue_page.status == status::implemented || issue_page.status == status::verified
+	issue_page.implemented_by != me
+}
+```
 - A button is there only for someone who may press it. A command a role grants,
   like `issue::close` granted to maintainers per project, shows on a page whose
   address names the project only to the people who hold one of those roles there;

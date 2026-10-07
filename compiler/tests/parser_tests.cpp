@@ -305,6 +305,31 @@ TEST_CASE("a row's when ends its line, so nothing after it is taken for a column
     CHECK(out[0].message == "expected the end of the line after a row's when, found 'title'");
 }
 
+TEST_CASE("a when block holds a condition a line, and all of them must hold") {
+    auto f = parse_ok("screen \"Issue\" /issues/:issue {\n"
+                      "\tissue::verify \"Verify\" when {\n"
+                      "\t\tissue_page.status == status::implemented || issue_page.status == status::verified\n"
+                      "\t\tissue_page.implemented_by != me\n"
+                      "\t}\n"
+                      "}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    const auto& button = std::get<button_item>(screen.items[0].node);
+    REQUIRE(button.when);
+    // The lines are joined with &&, each kept whole: the || stays inside the first.
+    const auto& all = std::get<binary_expression>(button.when->node);
+    CHECK(all.op == token_kind::logical_and);
+    CHECK(std::get<binary_expression>(all.left->node).op == token_kind::logical_or);
+    CHECK(std::get<binary_expression>(all.right->node).op == token_kind::not_equal);
+
+    // Each line is one condition, and the block holds at least one.
+    auto out = parse_errors("screen \"Issue\" /issues/:issue {\n\tissue::verify when {\n\t\ta == b  c == d\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected the end of the line; a when block has one condition a line, found 'c'");
+    out = parse_errors("screen \"Issue\" /issues/:issue {\n\tissue::verify when {\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "a when block holds its conditions, one a line");
+}
+
 TEST_CASE("an order key says ascending or descending in words, and a - in front is fixed to say it") {
     auto f = parse_ok("view v {\n\teach loan {\n\t\torder by done ascending  created_at descending\n\t\ttitle\n\t}\n}\n");
     const auto& order = std::get<view_declaration>(f.declarations[0].node).each[0].order;
