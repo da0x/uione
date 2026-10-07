@@ -50,6 +50,7 @@ describe("problems", () => {
         return {
           files: 2,
           project: null,
+          screens: [],
           problems: [
             { path: "main.one", line: 2, column: 2, message: "'dueAt' isn't snake_case; write it as due_at" },
             { path: "other.one", line: 1, column: 1, message: "elsewhere" },
