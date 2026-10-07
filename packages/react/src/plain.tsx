@@ -117,6 +117,16 @@ export const plain: ComponentSet = {
 
   Actions: ({ children }) => <div>{children}</div>,
 
+  Layout: ({ regions }) => (
+    <>
+      {Object.entries(regions).map(([name, content]) => (
+        <div key={name} data-region={name}>
+          {content}
+        </div>
+      ))}
+    </>
+  ),
+
   Labels: ({ items }) => <span>{items.join(", ")}</span>,
 
   Details: ({ items }) => (

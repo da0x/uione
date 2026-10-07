@@ -579,6 +579,12 @@ screen "Book" /books/:book {
   a conversation as who wrote what and when, changes as what happened, and other
   rows as their values. As the view gains fields, so does what it copies. The ids of
   people are left out, since they mean nothing pasted elsewhere.
+- `layout two_columns` after a screen's address lays it out in two columns: `main`,
+  wide, for what the page is about, and `side`, narrow, beside it on a wide screen
+  and after it on a phone. A screen puts its items in them with `main { ... }` and
+  `side { ... }`, every item in one once it uses any, or leaves them all in main.
+  `single`, one column, is how a screen is laid out unless it or the project block's
+  `layout` setting says otherwise.
 - `thread issue_page.comments` shows a list of what people wrote as a
   conversation: each entry with its author's picture and name, when it was written,
   and its body as Markdown. Its rows need `body` and `author.name`, and show

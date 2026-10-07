@@ -267,7 +267,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|link|markdown|at)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|layout|main|side|link|markdown|at)\\b",
           "name": "keyword.other.uione"
         },
         {
@@ -442,7 +442,7 @@
           "include": "#strings"
         },
         {
-          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|color|serve|redirect|title|one|analytics)\\b",
+          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|color|layout|serve|redirect|title|one|analytics)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"

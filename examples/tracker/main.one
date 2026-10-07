@@ -230,7 +230,7 @@ namespace tracker {
 		text "Its secret: {project_settings.webhook_secret}"
 	}
 
-	screen "Issue" /issues/:issue {
+	screen "Issue" /issues/:issue layout two_columns {
 		text "{issue_page.title}"
 		markdown "{issue_page.body}"
 		issue::update

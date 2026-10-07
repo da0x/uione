@@ -49,7 +49,7 @@ declaration    ::= project | namespace | format | entity | command | view | role
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "authentication" | "icon" | "color" | "serve"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "authentication" | "icon" | "color" | "layout" | "serve"
                  | "title" | "one" | "analytics"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
@@ -122,10 +122,11 @@ function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
 
 /* screen */
 
-screen         ::= "screen" (STRING | NAME) ROUTE screen_block END
+screen         ::= "screen" (STRING | NAME) ROUTE ("layout" NAME)? screen_block END
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END
+                 | ("main" | "side") screen_block END
                  | "text" STRING ("when" expression)? END
                  | ("code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END

@@ -255,7 +255,9 @@ namespace one::language {
     struct screen_item;
 
     struct content_block {
-        enum class kind { hero, section, menu };  // a menu holds links, with the rest of the screen beside it
+        // A menu holds links, with the rest of the screen beside it; a region is one
+        // part of the screen's layout, like main or side, named in title.
+        enum class kind { hero, section, menu, region };
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;
@@ -370,6 +372,8 @@ namespace one::language {
         std::string title;
         bool title_is_name = false;  // screen docs /:page, rather than screen "Shelf" /shelf
         std::string route;
+        std::optional<std::string> layout;  // layout two_columns: how its regions are laid out
+        location layout_where;
         std::vector<screen_item> items;
     };
 

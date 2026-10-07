@@ -612,6 +612,24 @@ export const radix: ComponentSet = {
     </span>
   ),
 
+  // Two columns: what the page is about, wide, and what's said of it, narrow, beside
+  // it on a wide screen and after it on a phone. Any other layout is one column.
+  Layout: ({ name, regions }) =>
+    name === "two_columns" ? (
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-10">{regions.main}</div>
+        <aside className="flex min-w-0 flex-col gap-6">{regions.side}</aside>
+      </div>
+    ) : (
+      <div className="flex flex-col gap-10">
+        {Object.entries(regions).map(([region, content]) => (
+          <div key={region} className="flex flex-col gap-10">
+            {content}
+          </div>
+        ))}
+      </div>
+    ),
+
   // Buttons in a row; while none of them applies, the row takes no room.
   Actions: ({ children }) => <div className="flex flex-wrap items-center gap-2 empty:hidden">{children}</div>,
 

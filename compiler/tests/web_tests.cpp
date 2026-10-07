@@ -210,6 +210,29 @@ TEST_CASE("a project's issues are in tabs by their status, with their labels eac
     CHECK(line.find(R"(status: Object.fromEntries([["open", "Open"], ["closed", "Closed"]]))") != std::string::npos);
 }
 
+TEST_CASE("a screen is laid out in regions, everything in main unless it says") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-layouts";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+                         "screen \"Issue\" /issues/:issue layout two_columns {\n\tmain {\n\t\ttext \"{issue_page.title}\"\n\t}\n\tside {\n\t\ttext \"aside\"\n\t}\n}\n"
+                         "screen \"Other\" /other layout two_columns {\n\ttext \"all in main\"\n}\n"
+                         "screen \"Plain\" /plain {\n\ttext \"as it was\"\n}\n}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find("<Layout name=\"two_columns\">\n        <Region name=\"main\">\n          <Text><Live view={issuePage} field=\"title\" /></Text>\n        </Region>\n        <Region name=\"side\">") != std::string::npos);
+    std::size_t other = tsx.find("export const other");
+    REQUIRE(other != std::string::npos);
+    CHECK(tsx.find("<Region name=\"main\">", other) < tsx.find("<Text>all in main</Text>", other));
+    std::size_t plain = tsx.find("export const plain");
+    REQUIRE(plain != std::string::npos);
+    CHECK(tsx.find("<Layout", plain) == std::string::npos);  // laid out as it was
+    fs::remove_all(dir);
+}
+
 TEST_CASE("an issue's details are its values, each beside what it is") {
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");

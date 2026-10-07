@@ -81,6 +81,14 @@ export interface TimelineProps {
   entries: TimelineEntry[];
 }
 
+// A screen laid out in regions, like two_columns' main and side: what's in each, by
+// its name. A component set draws the layouts it knows, and anything else as one
+// column, its regions one after another.
+export interface LayoutProps {
+  name: string;
+  regions: Record<string, ReactNode>;
+}
+
 // Buttons that sit together in a row, like Edit and Close issue.
 export interface ActionsProps {
   children: ReactNode;
@@ -255,6 +263,7 @@ export interface ComponentSet {
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;
   Actions: ComponentType<ActionsProps>;
+  Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;
   Live: ComponentType<LiveProps>;
   Markdown: ComponentType<MarkdownProps>;

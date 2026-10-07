@@ -5,7 +5,7 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { useEffect, useState } from "react";
+import { Children, isValidElement, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
@@ -143,6 +143,21 @@ export function Details({
     return said === "" ? [] : [{ label, value: said }];
   });
   return items.length ? <ui.Details items={items} /> : null;
+}
+
+// One region of a screen's layout, like main: what's in it, which Layout places.
+export function Region({ children }: { name: string; children?: ReactNode }) {
+  return <>{children}</>;
+}
+
+// A screen laid out in regions, gathered from the Regions inside it by name.
+export function Layout({ name, children }: { name: string; children?: ReactNode }) {
+  const ui = useUI();
+  const regions: Record<string, ReactNode> = {};
+  Children.forEach(children, (child) => {
+    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region) regions[child.props.name] = child.props.children;
+  });
+  return <ui.Layout name={name} regions={regions} />;
 }
 
 // Buttons one after another, in a row.

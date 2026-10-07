@@ -140,6 +140,7 @@ namespace one::language {
         // Where a namespace's screens are: under its name, like /docs, unless it says
         // otherwise with at, like namespace studio at /.
         std::map<std::string, std::string> prefixes_;
+        std::string layout_;  // the project's layout for its screens, when it says one
 
         std::string prefix_of(const std::string& ns) const {
             if (ns.empty()) return "";
@@ -209,11 +210,14 @@ namespace one::language {
                             error(d.where, "two screens are at " + route + "; the other is at " + first_seen(it->second));
                         }
                     }
-                } else if (std::holds_alternative<project_declaration>(d.node)) {
+                } else if (auto* p = std::get_if<project_declaration>(&d.node)) {
                     if (project_) {
                         error(d.where, "a project has one project block; the first is at " + first_seen(*project_));
                     } else {
                         project_ = origin{path_, d.where};
+                        for (const auto& setting : p->settings) {
+                            if (setting.key == "layout") layout_ = setting.value;
+                        }
                     }
                 }
             }
@@ -365,6 +369,20 @@ namespace one::language {
             verify(join(ns, n.name), n.declarations);
         }
 
+        // The regions each layout has, in the order it draws them, or none for a layout
+        // there isn't.
+        static const std::vector<std::string>* regions_of(const std::string& layout) {
+            static const std::map<std::string, std::vector<std::string>> layouts{{"single", {"main"}}, {"two_columns", {"main", "side"}}};
+            auto found = layouts.find(layout);
+            return found == layouts.end() ? nullptr : &found->second;
+        }
+
+        static std::string join_words(const std::vector<std::string>& words) {
+            std::string out;
+            for (std::size_t i = 0; i < words.size(); ++i) out += (i == 0 ? "" : i + 1 == words.size() ? " and " : ", ") + words[i];
+            return out;
+        }
+
         // How much a color stands out from white, as WCAG measures it: 21 for black, 1
         // for white itself.
         static double contrast_with_white(const std::string& hex) {
@@ -380,7 +398,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "serve", "redirect", "title", "one", "analytics"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "layout", "serve", "redirect", "title", "one", "analytics"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -391,7 +409,7 @@ namespace one::language {
             auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, authentication, icon, color, serve, redirect, title, one or analytics");
+                                   "region, ui, authentication, icon, color, layout, serve, redirect, title, one or analytics");
                     return;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
@@ -413,6 +431,10 @@ namespace one::language {
                     } else if (!methods.insert(s.value).second) {
                         error(s.where, "authentication " + s.value + " is named twice");
                     }
+                }
+                // How screens are laid out unless they say: single or two_columns.
+                if (s.key == "layout" && !regions_of(s.value)) {
+                    error(s.where, "layout is single or two_columns");
                 }
                 // The site's own color, for its buttons and links, as #rrggbb: dark enough
                 // to read as text on a white page.
@@ -1095,6 +1117,31 @@ namespace one::language {
                 auto last = s.route.rfind('/');
                 if (star != s.route.size() - 1 || s.route.compare(last, 2, "/:") != 0 || star == last + 2) {
                     error(where, "a * ends the last parameter of an address, taking the rest of it, like /code/:file*");
+                }
+            }
+            // Its layout, and the regions it puts its items in: every item in one, once
+            // there are any, and each region one its layout has, once.
+            std::string layout = s.layout ? *s.layout : layout_.empty() ? "single" : layout_;
+            const std::vector<std::string>* regions = regions_of(layout);
+            if (s.layout && !regions) error(s.layout_where, "layout is single or two_columns");
+            std::set<std::string> placed;
+            bool any_region = false;
+            for (const auto& item : s.items) {
+                auto* block = std::get_if<content_block>(&item.node);
+                if (!block || block->type != content_block::kind::region) continue;
+                any_region = true;
+                if (regions && std::find(regions->begin(), regions->end(), block->title) == regions->end()) {
+                    error(item.where, "layout " + layout + " has no region " + block->title + "; its regions are " + join_words(*regions));
+                } else if (!placed.insert(block->title).second) {
+                    error(item.where, "region " + block->title + " is here twice; put everything in it in one block");
+                }
+            }
+            if (any_region) {
+                for (const auto& item : s.items) {
+                    auto* block = std::get_if<content_block>(&item.node);
+                    if (!block || block->type != content_block::kind::region) {
+                        error(item.where, "this screen puts its items in regions, so this goes in one too, like main { ... }");
+                    }
                 }
             }
             screen_items(ns, s.items, full_route(ns, s.route));

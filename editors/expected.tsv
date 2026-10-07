@@ -165,3 +165,4 @@ editors/fixtures/environments.one	domain    "shop.example"	domain	keyword
 examples/tracker/main.one	title  body  labels	title	plain
 examples/tracker/main.one	copy issue_page "Copy issue"	copy	keyword
 examples/tracker/main.one	details issue_page {	details	keyword
+examples/tracker/main.one	screen "Issue" /issues/:issue layout two_columns {	layout	keyword

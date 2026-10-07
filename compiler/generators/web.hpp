@@ -206,6 +206,7 @@ namespace one::generators {
         int in_block_ = 0;  // how deep in heroes and sections the items being written are  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string color_;  // the site's own color, for its buttons and links, like #0f766e
+        std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
@@ -262,6 +263,7 @@ namespace one::generators {
                         if (s.key == "ui") ui_ = s.value;
                         if (s.key == "title") title_ = s.value;
                         if (s.key == "color") color_ = s.value;
+                        if (s.key == "layout") layout_ = s.value;
                         if (s.key == "authentication") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
                         if (s.key == "serve") {
@@ -557,7 +559,32 @@ namespace one::generators {
                 stream items;
                 auto from_items = items.from(f.path, where.line);
                 items.open("<>");
-                screen_items(items, parts, ns, s->items, s->items);
+                // Laid out in regions, like main and side: as the screen puts its items
+                // in them, or with everything in main.
+                std::string layout = s->layout ? *s->layout : layout_;
+                std::vector<const language::content_block*> regions;
+                for (const auto& item : s->items) {
+                    auto* block = std::get_if<language::content_block>(&item.node);
+                    if (block && block->type == language::content_block::kind::region) regions.push_back(block);
+                }
+                if (layout == "single" && regions.empty()) {
+                    screen_items(items, parts, ns, s->items, s->items);
+                } else {
+                    parts.components.insert("Layout");
+                    parts.components.insert("Region");
+                    items.open("<Layout name=" + web_detail::js_string(layout) + ">");
+                    if (regions.empty()) {
+                        items.open("<Region name=\"main\">");
+                        screen_items(items, parts, ns, s->items, s->items);
+                        items.close("</Region>");
+                    }
+                    for (const auto* region : regions) {
+                        items.open("<Region name=" + web_detail::js_string(region->title) + ">");
+                        screen_items(items, parts, ns, region->items, s->items);
+                        items.close("</Region>");
+                    }
+                    items.close("</Layout>");
+                }
                 items.close("</>");
 
                 std::string title = s->title_is_name ? web_detail::label(s->title) : s->title;

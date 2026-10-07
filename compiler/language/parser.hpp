@@ -575,6 +575,11 @@ namespace one::language {
                 fail_expecting("the screen's title, like \"Shelf\"");
             }
             screen.route = expect(token_kind::route, "the screen's route, like /shelf").text;
+            if (at_word("layout")) {
+                advance();
+                screen.layout_where = peek().where;
+                screen.layout = expect(token_kind::identifier, "a layout, like single or two_columns").text;
+            }
             screen.items = parse_screen_block();
             end_line();
             return screen;
@@ -595,6 +600,15 @@ namespace one::language {
             bool string_follows = peek(1).kind == token_kind::string;
 
             // menu { link /settings "General" ... }: links down the side of the screen.
+            // main { ... }: one region of the screen's layout.
+            if ((at_word("main") || at_word("side")) && peek(1).kind == token_kind::left_brace) {
+                content_block region;
+                region.type = content_block::kind::region;
+                region.title = advance().text;
+                region.items = parse_screen_block();
+                end_line();
+                return {where, std::move(region)};
+            }
             if (at_word("menu") && peek(1).kind == token_kind::left_brace) {
                 advance();
                 content_block block;

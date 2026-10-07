@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, color, serve, redirect, title, one or analytics");
+          "'colour' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, color, layout, serve, redirect, title, one or analytics");
     CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
@@ -822,4 +822,14 @@ TEST_CASE("details show values the view has") {
     const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\towner  user\n}\nview issue_page per issue {\n\ttitle = issue.title\n\towner_name = issue.owner.name\n}\n";
     CHECK(check_source(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\towner_name \"Owner\"\n\t}\n}\n}\n").empty());
     CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\tstatus\n\t}\n}\n}\n").message == "view issue_page has no status to show");
+}
+
+TEST_CASE("a screen's regions are its layout's, and hold everything once there are any") {
+    const std::string start = "namespace a {\n";
+    CHECK(check_source(start + "screen \"S\" /s layout two_columns {\n\tmain {\n\t\ttext \"a\"\n\t}\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
+    CHECK(only_error(start + "screen \"S\" /s layout three_columns {\n\ttext \"a\"\n}\n}\n").message == "layout is single or two_columns");
+    CHECK(only_error(start + "screen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").message == "layout single has no region side; its regions are main");
+    CHECK(only_error(start + "screen \"S\" /s layout two_columns {\n\tmain {\n\t\ttext \"a\"\n\t}\n\ttext \"b\"\n}\n}\n").message ==
+          "this screen puts its items in regions, so this goes in one too, like main { ... }");
+    CHECK(check_source("project p {\n\tlayout  two_columns\n}\nnamespace a {\nscreen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
 }
