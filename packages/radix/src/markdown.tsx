@@ -107,6 +107,7 @@ export function MarkdownField({
           value={value}
           rows={6}
           onChange={(event) => onChange(event.target.value)}
+          aria-labelledby={labelledBy}
           aria-describedby={describedBy}
           className="block w-full resize-y rounded-b-box bg-page px-3 py-2 font-mono text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         />

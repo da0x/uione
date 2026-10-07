@@ -295,6 +295,7 @@ namespace one::language {
         std::string name;
         expression_ptr value;             // = suggest_code(start_date)
         std::optional<std::string> hint;
+        std::optional<std::string> label; // body "Comment": what the field is called, rather than its name
     };
 
     struct form_item {

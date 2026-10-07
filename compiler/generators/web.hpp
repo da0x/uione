@@ -202,7 +202,8 @@ namespace one::generators {
         std::string out_dir_;
         std::string name_ = "app";
         std::vector<held_roles> held_;
-        std::string screen_title_;  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
+        std::string screen_title_;
+        int in_block_ = 0;  // how deep in heroes and sections the items being written are  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
@@ -833,8 +834,10 @@ namespace one::generators {
                           const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
                           std::size_t first = 0) {
             // Buttons one after another sit in a row: a command's own, and a form's that
-            // opens it. A command's line whose form draws its button is passed over.
+            // opens it, and so do links. A command's line whose form draws its button is
+            // passed over.
             auto presses = [&](const language::screen_item& it) {
+                if (std::holds_alternative<language::content_link>(it.node)) return in_block_ == 0;  // a hero or a section lays out its own
                 if (auto* b = std::get_if<language::button_item>(&it.node)) return !has_form_for(screen, b->command);
                 if (auto* f = std::get_if<language::form_item>(&it.node)) return button_for(screen, f->commands.front()) != nullptr;
                 return std::holds_alternative<language::copy_item>(it.node);
@@ -883,7 +886,9 @@ namespace one::generators {
                     parts.components.insert(tag);
                     std::string id = block->anchor ? " id=" + web_detail::js_string(*block->anchor) : "";
                     out.open("<" + tag + " title=" + web_detail::js_string(block->title) + id + ">");
+                    ++in_block_;
                     screen_items(out, parts, ns, block->items, screen);
+                    --in_block_;
                     out.close("</" + tag + ">");
                 } else if (auto* text = std::get_if<language::content_text>(&item.node)) {
                     content(out, parts, ns, *text);
@@ -1128,9 +1133,10 @@ namespace one::generators {
                         }
                     }
                 }
-                std::string spec = type == "text" && !f.hint
+                std::string spec = type == "text" && !f.hint && !f.label
                     ? web_detail::js_string(f.name)
-                    : "{ name: " + web_detail::js_string(f.name) + (type == "text" ? "" : ", type: " + web_detail::js_string(type)) + choices +
+                    : "{ name: " + web_detail::js_string(f.name) + (f.label ? ", label: " + web_detail::js_string(*f.label) : "") +
+                          (type == "text" ? "" : ", type: " + web_detail::js_string(type)) + choices +
                           (f.hint ? ", hint: " + web_detail::js_string(*f.hint) : "") + " }";
                 fields += (fields.empty() ? "" : ", ") + spec;
             }

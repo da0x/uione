@@ -562,10 +562,11 @@ export const radix: ComponentSet = {
     </Dialog.Root>
   ),
 
+  // Nothing written, like an issue without a description, takes no room.
   Markdown: ({ status, source }) =>
-    status === "live" && source ? (
+    status === "live" && source?.trim() ? (
       <MarkdownText source={source} />
-    ) : (
+    ) : status === "live" ? null : (
       <div aria-busy={status === "loading"} className="h-6" />
     ),
 
@@ -604,9 +605,11 @@ export const radix: ComponentSet = {
 
   // A conversation: each entry beside its author's picture, headed by their name
   // and when they wrote it.
+  // A conversation not yet begun takes no room; what's below it, like the box to
+  // write in, says so well enough.
   Thread: ({ status, entries }) =>
-    status !== "live" || entries.length === 0 ? (
-      <p className="text-sm text-muted">{status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : "Nothing here yet."}</p>
+    status === "live" && entries.length === 0 ? null : status !== "live" ? (
+      <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "You can't see this."}</p>
     ) : (
       <ol className="flex flex-col gap-4">
         {entries.map((entry) => (

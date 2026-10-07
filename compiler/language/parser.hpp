@@ -748,6 +748,7 @@ namespace one::language {
                 const token& name = expect(token_kind::identifier, "a field to ask for");
                 f.name = name.text;
                 f.where = name.where;
+                if (at(token_kind::string)) f.label = advance().text;
                 if (at(token_kind::assign)) {
                     advance();
                     f.value = parse_expression();

@@ -442,6 +442,20 @@ TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("a form can call a field something other than its name") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-field-label";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace tracker {\nentity comment {\n\tbody  markdown  required\n\tnote  text\n}\ncommand comment::create\n"
+                         "screen \"Comments\" /comments {\n\tform comment::create \"Comment\" {\n\t\tbody \"Comment\"  note\n\t}\n}\n}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(fields={[{ name: "body", label: "Comment", type: "markdown" }, "note"]})") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("buttons one after another sit in a row") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-actions";

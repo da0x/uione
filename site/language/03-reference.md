@@ -578,7 +578,8 @@ screen "Book" /books/:book {
   who made each change with `created_by.name`. With `action` too, a change a
   command of its own made says what that command did: "Ada closed this".
 - Buttons one after another on a screen sit together in a row, a command's own and
-  the ones that open forms alike.
+  the ones that open forms alike, and so do links one after another, outside a
+  hero or a section, which lay out their own.
 - A button says what it does when its line names it: `issue::create "New issue"`
   opens the form, and `issue::close "Close issue"` runs the command. Without a
   name, it's named after its command, like Close.
@@ -606,6 +607,8 @@ screen "Book" /books/:book {
   ask for a key, which never changes.
 - `form project::update "Save changes" { ... }` names the form's button; without
   it, the button is named after the command, like Update.
+- A field can be called something other than its name: `form comment::create
+  "Comment" { body "Comment" }` asks for the body, labelled Comment.
 - `confirm` asks before a command runs.
 - `component opening_hours` draws a hand-written React component: the default
   export of `components/opening_hours.tsx`, beside the `.one` file. It's for

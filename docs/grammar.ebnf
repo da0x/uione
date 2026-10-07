@@ -136,7 +136,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "component" NAME END
                  | NAME ("::" NAME)+ STRING? ("when" expression)? END
 column         ::= postfix STRING?
-form_line      ::= (NAME+ | NAME* NAME "=" expression hint?) END
+form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint?) END
 hint           ::= "{" NEWLINE? "hint" STRING END "}"
 
 /* picker */
