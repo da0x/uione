@@ -128,3 +128,58 @@ TEST_CASE("a project names its compiler's version as one, like one \"0.4.0\"") {
     REQUIRE(found.size() == 1);
     CHECK(found[0].message == "one names the compiler's version, like one \"0.4.0\"");
 }
+
+TEST_CASE("each screen is outlined by line: its layout, its regions and their items") {
+    language::diagnostics found;
+    std::vector<language::file> files;
+    files.push_back(language::parse("issues.one", R"(namespace tracker {
+	screen "Issue" /issues/:issue layout two_columns {
+		main {
+			markdown "{issue_page.body}"
+			thread issue_page.comments
+		}
+		side {
+			issue::close "Close" when issue_page.open
+			details issue_page {
+				status "Status"
+			}
+		}
+	}
+	screen "Issues" /issues {
+		table issues
+	}
+}
+)", found));
+    REQUIRE(found.empty());
+    auto screens = driver::screens_of(files);
+    REQUIRE(screens.size() == 2);
+    const auto& issue = screens[0];
+    CHECK(issue.path == "issues.one");
+    CHECK(issue.title == "Issue");
+    CHECK(issue.route == "/issues/:issue");
+    CHECK(issue.line == 2);
+    CHECK(issue.layout == "two_columns");
+    CHECK(issue.layout_line == 2);
+    REQUIRE(issue.items.size() == 2);
+    CHECK(issue.items[0].kind == "region");
+    CHECK(issue.items[0].subject == "main");
+    CHECK(issue.items[0].line == 3);
+    REQUIRE(issue.items[0].items.size() == 2);
+    CHECK(issue.items[0].items[0].kind == "markdown");
+    CHECK(issue.items[0].items[1].kind == "thread");
+    CHECK(issue.items[0].items[1].subject == "issue_page.comments");
+    CHECK(issue.items[0].items[1].line == 5);
+    const auto& side = issue.items[1];
+    CHECK(side.subject == "side");
+    REQUIRE(side.items.size() == 2);
+    CHECK(side.items[0].kind == "button");
+    CHECK(side.items[0].subject == "issue::close");
+    CHECK(side.items[0].label == "Close");
+    CHECK(side.items[1].kind == "details");
+    CHECK(side.items[1].line == 9);
+    CHECK(screens[1].layout.empty());
+    CHECK(screens[1].layout_line == 0);
+    REQUIRE(screens[1].items.size() == 1);
+    CHECK(screens[1].items[0].kind == "table");
+    CHECK(screens[1].items[0].subject == "issues");
+}

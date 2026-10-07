@@ -50,6 +50,27 @@ export interface Outline {
   environments: OutlinedEnvironment[];
 }
 
+// A screen's parts, by line, so an editor can lay it out: its layout, and each
+// item, named by its kind, what it shows or runs and what it says; a region, like
+// main, holds items of its own.
+export interface OutlinedItem {
+  kind: string; // table, form, button, text, markdown, region, ...
+  subject: string; // projects::issue_page.comments, issue::close, main
+  label: string; // "Close issue", when it says something
+  line: number;
+  items: OutlinedItem[];
+}
+
+export interface OutlinedScreen {
+  path: string;
+  title: string;
+  route: string;
+  line: number;
+  layout: string; // as written; empty when the project's is used
+  layoutLine: number; // where it's written, or 0
+  items: OutlinedItem[];
+}
+
 // What the name at a place in a file means: what it says, and where it's declared,
 // or the language reference's section for one of the language's own words.
 export type Definition =
@@ -69,6 +90,7 @@ export interface Checked {
   problems: Problem[];
   files: number;
   project: Outline | null; // when a project block parsed
+  screens: OutlinedScreen[]; // when everything parsed
 }
 
 export interface Built {
@@ -121,6 +143,7 @@ export function run(one: Module, request: Request): Answer {
   if (request.kind === "check") {
     const checked = within(call("one_check", project)) as Checked;
     if (checked.project) checked.project.path = inside(checked.project.path);
+    for (const screen of checked.screens) screen.path = inside(screen.path);
     return checked;
   }
   if (request.kind === "define") {

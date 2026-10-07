@@ -107,6 +107,44 @@ namespace {
         out += "]}";
     }
 
+    void item(std::string& out, const one::driver::outlined_item& i) {
+        out += "{\"kind\":";
+        text(out, i.kind);
+        out += ",\"subject\":";
+        text(out, i.subject);
+        out += ",\"label\":";
+        text(out, i.label);
+        out += ",\"line\":" + std::to_string(i.line) + ",\"items\":[";
+        for (std::size_t n = 0; n < i.items.size(); ++n) {
+            if (n) out += ",";
+            item(out, i.items[n]);
+        }
+        out += "]}";
+    }
+
+    // Each screen's layout and items, by line.
+    void screens(std::string& out, const std::vector<one::driver::outlined_screen>& list) {
+        out += "[";
+        for (std::size_t n = 0; n < list.size(); ++n) {
+            const auto& s = list[n];
+            out += n ? ",{\"path\":" : "{\"path\":";
+            text(out, s.path);
+            out += ",\"title\":";
+            text(out, s.title);
+            out += ",\"route\":";
+            text(out, s.route);
+            out += ",\"line\":" + std::to_string(s.line) + ",\"layout\":";
+            text(out, s.layout);
+            out += ",\"layoutLine\":" + std::to_string(s.layout_line) + ",\"items\":[";
+            for (std::size_t i = 0; i < s.items.size(); ++i) {
+                if (i) out += ",";
+                item(out, s.items[i]);
+            }
+            out += "]}";
+        }
+        out += "]";
+    }
+
 } // namespace
 
 extern "C" {
@@ -123,6 +161,8 @@ EMSCRIPTEN_KEEPALIVE const char* one_check(const char* project) {
     problems(answer, checked.problems);
     answer += ",\"files\":" + std::to_string(checked.files) + ",\"project\":";
     outline(answer, checked.project);
+    answer += ",\"screens\":";
+    screens(answer, checked.screens);
     answer += "}";
     return answer.c_str();
 }

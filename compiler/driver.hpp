@@ -13,7 +13,9 @@
 #include <optional>
 #include <regex>
 #include <tuple>
+#include <type_traits>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "generators/project.hpp"
@@ -46,11 +48,119 @@ namespace one::driver {
         std::vector<environment> environments;
     };
 
+    // A screen's parts, for an editor that lays it out: its layout, and each item
+    // where it starts, a region holding its own. An item is named by its kind, like
+    // table or button, what it shows or runs, and what it says, when it says
+    // something.
+    struct outlined_item {
+        std::string kind;     // table, form, button, text, region, ...
+        std::string subject;  // projects::issue_page.comments, issue::close, main
+        std::string label;    // "Close issue", when it has one
+        int line = 0;
+        std::vector<outlined_item> items;  // a region's, a section's or a menu's
+    };
+
+    struct outlined_screen {
+        std::string path;
+        std::string title;
+        std::string route;
+        int line = 0;
+        std::string layout;   // as written; empty when the project's is used
+        int layout_line = 0;  // where it's written, when it is
+        std::vector<outlined_item> items;
+    };
+
     struct checked {
         language::diagnostics problems;
         std::size_t files = 0;
         std::optional<driver::outline> project;  // when a project block parsed
+        std::vector<outlined_screen> screens;    // when everything parsed
     };
+
+    namespace outline_detail {
+
+        inline std::string named(const language::qualified_name& view, const std::optional<std::string>& list) {
+            return list ? view.text() + "." + *list : view.text();
+        }
+
+        inline outlined_item item_of(const language::screen_item& i) {
+            outlined_item out;
+            out.line = i.where.line;
+            std::visit(
+                [&](const auto& n) {
+                    using T = std::decay_t<decltype(n)>;
+                    if constexpr (std::is_same_v<T, language::content_block>) {
+                        using kind = language::content_block::kind;
+                        out.kind = n.type == kind::region ? "region" : n.type == kind::menu ? "menu" : n.type == kind::hero ? "hero" : "section";
+                        out.subject = n.type == kind::region ? n.title : "";
+                        if (n.type != kind::region) out.label = n.title;
+                        for (const auto& inner : n.items) out.items.push_back(item_of(inner));
+                    } else if constexpr (std::is_same_v<T, language::content_text>) {
+                        using kind = language::content_text::kind;
+                        out.kind = n.type == kind::markdown ? "markdown" : n.type == kind::code ? "code" : "text";
+                        out.label = n.value;
+                    } else if constexpr (std::is_same_v<T, language::content_link>) {
+                        out.kind = "link";
+                        out.subject = n.target;
+                        out.label = n.label;
+                    } else if constexpr (std::is_same_v<T, language::table_item>) {
+                        out.kind = "table";
+                        out.subject = named(n.view, n.list);
+                    } else if constexpr (std::is_same_v<T, language::form_item>) {
+                        out.kind = "form";
+                        for (const auto& c : n.commands) out.subject += (out.subject.empty() ? "" : " ") + c.text();
+                        out.label = n.submit.value_or("");
+                    } else if constexpr (std::is_same_v<T, language::confirm_item>) {
+                        out.kind = "confirm";
+                        out.subject = n.command.text();
+                        out.label = n.message;
+                    } else if constexpr (std::is_same_v<T, language::button_item>) {
+                        out.kind = "button";
+                        out.subject = n.command.text();
+                        out.label = n.label.value_or("");
+                    } else if constexpr (std::is_same_v<T, language::component_item>) {
+                        out.kind = "component";
+                        out.subject = n.name;
+                    } else if constexpr (std::is_same_v<T, language::thread_item>) {
+                        out.kind = "thread";
+                        out.subject = n.view.text() + "." + n.list;
+                    } else if constexpr (std::is_same_v<T, language::timeline_item>) {
+                        out.kind = "timeline";
+                        out.subject = n.view.text() + "." + n.list;
+                    } else if constexpr (std::is_same_v<T, language::copy_item>) {
+                        out.kind = "copy";
+                        out.subject = n.view.text();
+                        out.label = n.label.value_or("");
+                    } else if constexpr (std::is_same_v<T, language::details_item>) {
+                        out.kind = "details";
+                        out.subject = n.view.text();
+                    }
+                },
+                i.node);
+            return out;
+        }
+
+        inline void screens_in(const std::string& path, const std::vector<language::declaration>& declarations,
+                               std::vector<outlined_screen>& out) {
+            for (const auto& d : declarations) {
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) screens_in(path, n->declarations, out);
+                auto* s = std::get_if<language::screen_declaration>(&d.node);
+                if (!s) continue;
+                outlined_screen screen{path, s->title, s->route, d.where.line, s->layout.value_or(""),
+                                       s->layout ? s->layout_where.line : 0, {}};
+                for (const auto& i : s->items) screen.items.push_back(item_of(i));
+                out.push_back(std::move(screen));
+            }
+        }
+
+    } // namespace outline_detail
+
+    // Every screen in the files, in the order they're written.
+    inline std::vector<outlined_screen> screens_of(const std::vector<language::file>& files) {
+        std::vector<outlined_screen> out;
+        for (const auto& f : files) outline_detail::screens_in(f.path, f.declarations, out);
+        return out;
+    }
 
     inline std::optional<outline> outline_of(const std::vector<language::file>& files) {
         for (const auto& f : files) {
@@ -360,6 +470,8 @@ namespace one::driver {
             std::vector<language::file> files;
             out.files += check_project(root, out.problems, &files);
             if (!out.project) out.project = outline_of(files);
+            auto screens = screens_of(files);
+            out.screens.insert(out.screens.end(), screens.begin(), screens.end());
         }
         return out;
     }

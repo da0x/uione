@@ -17,7 +17,7 @@ const tasks = { "main.one": readFileSync(`${repository}examples/tasks/main.one`,
 
 describe("the compiler in the browser", () => {
   it("checks a project and finds nothing wrong", () => {
-    expect(run(one, { kind: "check", files: tasks })).toEqual({ problems: [], files: 1, project: null });
+    expect(run(one, { kind: "check", files: tasks })).toMatchObject({ problems: [], files: 1, project: null });
   });
 
   it("says what's wrong, where, within the project", () => {
@@ -55,6 +55,27 @@ describe("the compiler in the browser", () => {
   it("forgets a project's files when it's given another's", () => {
     run(one, { kind: "check", files: { "old.one": "entity broken {\n" } });
     expect((run(one, { kind: "check", files: tasks }) as Checked).problems).toEqual([]);
+  });
+
+  it("outlines each screen: its layout, and its items by line", () => {
+    const page =
+      'namespace shelf {\n\tscreen "Book" /books/:book layout two_columns {\n\t\tmain {\n\t\t\ttext "A book"\n\t\t}\n' +
+      '\t\tside {\n\t\t\tlink "/books" "Every book"\n\t\t}\n\t}\n}\n';
+    const checked = run(one, { kind: "check", files: { "shelf.one": page } }) as Checked;
+    expect(checked.screens).toEqual([
+      {
+        path: "shelf.one",
+        title: "Book",
+        route: "/books/:book",
+        line: 2,
+        layout: "two_columns",
+        layoutLine: 2,
+        items: [
+          { kind: "region", subject: "main", label: "", line: 3, items: [{ kind: "text", subject: "", label: "A book", line: 4, items: [] }] },
+          { kind: "region", subject: "side", label: "", line: 6, items: [{ kind: "link", subject: "/books", label: "Every book", line: 7, items: [] }] },
+        ],
+      },
+    ]);
   });
 
   it("outlines the project block, and builds for the environment named", () => {

@@ -6,7 +6,7 @@
 
 import type { Built, Checked, Definition, Files, Request, Shown } from "./project.js";
 
-export type { Built, Checked, Definition, Files, GeneratedFile, Outline, OutlinedEnvironment, OutlinedSetting, Problem, Shown, ShownFile, Source } from "./project.js";
+export type { Built, Checked, Definition, Files, GeneratedFile, Outline, OutlinedEnvironment, OutlinedItem, OutlinedScreen, OutlinedSetting, Problem, Shown, ShownFile, Source } from "./project.js";
 
 export interface Compiler {
   version(): Promise<string>;
