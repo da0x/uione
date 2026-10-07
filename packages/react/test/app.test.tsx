@@ -3,7 +3,7 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
-import { App, Form, Link, Text, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
+import { App, Form, Link, Text, accentOf, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
 import type { Person } from "../src/index.js";
 import { useConfirmContext } from "../src/app.js";
 import { withoutLicense } from "../src/components.js";
@@ -271,5 +271,16 @@ describe("titles made from what a page shows", () => {
     act(() => source.set("tracker::issue_page", { number: 12, title: "Tabs are too wide" }, "12"));
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("#12 Tabs are too wide");
     expect(document.title).toBe("#12 Tabs are too wide · tracker");
+  });
+});
+
+describe("a site's own color", () => {
+  it("draws buttons and links in it, with text that reads on it, lighter on a dark page", () => {
+    const teal = accentOf("#0f766e");
+    expect(teal).toContain(":root { --color-accent: #0f766e;");
+    expect(teal).toContain("--color-accent-ink: #ffffff;");
+    expect(teal).toContain(':root[data-theme="dark"] { --color-accent: color-mix(in oklab, #0f766e 55%, white);');
+    expect(accentOf("#fde047")).toContain("--color-accent-ink: #0e1726;");
+    expect(accentOf("red; } body { display: none")).toBe("");
   });
 });

@@ -442,7 +442,7 @@
           "include": "#strings"
         },
         {
-          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|serve|redirect|title|one|analytics)\\b",
+          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|color|serve|redirect|title|one|analytics)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"

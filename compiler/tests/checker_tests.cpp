@@ -199,8 +199,8 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 }
 
 TEST_CASE("one project block, with known settings") {
-    CHECK(only_error("project a {\n\tcolor \"red\"\n}\n").message ==
-          "'color' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, serve, redirect, title, one or analytics");
+    CHECK(only_error("project a {\n\tcolour \"red\"\n}\n").message ==
+          "'colour' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, color, serve, redirect, title, one or analytics");
     CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
@@ -809,4 +809,11 @@ TEST_CASE("a table's tabs are by a choice it shows") {
           "the table's tabs are by status, which it needs as a column too");
     CHECK(only_error(start + "screen \"Issues\" /issues {\n\ttable issues by title {\n\t\ttitle\n\t\tstatus\n\t}\n}\n}\n").message ==
           "a table's tabs are by a field with choices, like status, and title isn't one");
+}
+
+TEST_CASE("a project's color is dark enough to read on a white page") {
+    CHECK(check_source("project p {\n\tcolor  \"#0f766e\"\n}\n").empty());
+    CHECK(only_error("project p {\n\tcolor  \"teal\"\n}\n").message == "color is written #rrggbb, like color \"#0f766e\"");
+    CHECK(only_error("project p {\n\tcolor  \"#fde047\"\n}\n").message ==
+          "color #fde047 is too light to read as a link on a white page (1.3:1, and it needs 4.5:1); choose a darker one");
 }

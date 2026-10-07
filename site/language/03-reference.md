@@ -161,6 +161,10 @@ as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redir
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
 
+`color "#0f766e"` is the site's own color, for its buttons, links and focus rings, in
+place of the component set's, a lighter one of it on a dark page. It's written
+#rrggbb, and dark enough to read as a link on a white page.
+
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google
 Analytics account of the owner's. It records each screen as it's opened. A visitor

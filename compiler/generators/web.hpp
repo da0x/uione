@@ -205,6 +205,7 @@ namespace one::generators {
         std::string screen_title_;
         int in_block_ = 0;  // how deep in heroes and sections the items being written are  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
+        std::string color_;  // the site's own color, for its buttons and links, like #0f766e
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
@@ -260,6 +261,7 @@ namespace one::generators {
                     for (const auto& s : p->settings) {
                         if (s.key == "ui") ui_ = s.value;
                         if (s.key == "title") title_ = s.value;
+                        if (s.key == "color") color_ = s.value;
                         if (s.key == "authentication") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
                         if (s.key == "serve") {
@@ -1365,6 +1367,7 @@ namespace one::generators {
                 auto from_icon = icon_.empty() ? out.from(project_.path, project_.line) : out.from(icon_source_.path, icon_source_.line);
                 // A project that names no way of signing in offers none.
                 std::string offered = has_project_ && authentication_.empty() ? ", authentication: false" : "";
+                if (!color_.empty()) icon += ", color: " + web_detail::js_string(color_);
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + (analytics_ ? ", analytics" : "") + " };");
             }

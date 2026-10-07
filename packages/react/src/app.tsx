@@ -35,6 +35,7 @@ export interface AppProps {
   icon?: string; // the address of the app's icon, shown beside its name
   location?: string; // start at this address, in memory rather than the browser's
   authentication?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
+  color?: string; // the site's own color, as #rrggbb, for its buttons and links in place of the component set's
   analytics?: Analytics; // counting visitors, once they agree; none counts no one, and asks no one
 }
 
@@ -142,9 +143,26 @@ function SignInProvider({ offered, children }: { offered: boolean; children: Rea
   );
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics }: AppProps) {
+// The site's own color as the accent tokens a component set draws with: the color
+// itself on a light page, with a darker hover, a soft tint and text that reads on
+// it; and on a dark page, a lighter one, so it stands out there too.
+export function accentOf(color: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return "";
+  const [r, g, b] = [1, 3, 5].map((at) => {
+    const c = parseInt(color.slice(at, at + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  const ink = 1.05 / (luminance + 0.05) >= 4.5 ? "#ffffff" : "#0e1726";
+  const light = `--color-accent: ${color}; --color-accent-hover: color-mix(in oklab, ${color} 82%, black); --color-accent-ink: ${ink}; --color-accent-soft: color-mix(in oklab, ${color} 12%, white); --color-grid: color-mix(in srgb, ${color} 7%, transparent);`;
+  const dark = `--color-accent: color-mix(in oklab, ${color} 55%, white); --color-accent-hover: color-mix(in oklab, ${color} 35%, white); --color-accent-ink: #0a101c; --color-accent-soft: color-mix(in oklab, ${color} 28%, #0a101c); --color-grid: color-mix(in srgb, ${color} 8%, transparent);`;
+  return `:root { ${light} } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} } } :root[data-theme="dark"] { ${dark} }`;
+}
+
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color }: AppProps) {
   const routes = (
     <>
+      {color && <style>{accentOf(color)}</style>}
       {analytics && <Counting analytics={analytics} />}
       <Routes>
       {screens.map((s) => (

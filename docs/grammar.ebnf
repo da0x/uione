@@ -49,7 +49,7 @@ declaration    ::= project | namespace | format | entity | command | view | role
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "authentication" | "icon" | "serve"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "authentication" | "icon" | "color" | "serve"
                  | "title" | "one" | "analytics"
 
 /* A place the project runs: its own domain, Firebase project and region, which take

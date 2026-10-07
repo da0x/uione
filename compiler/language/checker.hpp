@@ -15,6 +15,8 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <initializer_list>
 #include <map>
 #include <optional>
@@ -363,11 +365,22 @@ namespace one::language {
             verify(join(ns, n.name), n.declarations);
         }
 
+        // How much a color stands out from white, as WCAG measures it: 21 for black, 1
+        // for white itself.
+        static double contrast_with_white(const std::string& hex) {
+            auto channel = [&](std::size_t at) {
+                double c = std::stoi(hex.substr(at, 2), nullptr, 16) / 255.0;
+                return c <= 0.03928 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+            };
+            double luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+            return 1.05 / (luminance + 0.05);
+        }
+
         // Where a project runs goes into generated Go, YAML and shell, so each value has
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "serve", "redirect", "title", "one", "analytics"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "serve", "redirect", "title", "one", "analytics"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -378,7 +391,7 @@ namespace one::language {
             auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
                 if (!known.contains(s.key)) {
                     error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, authentication, icon, serve, redirect, title, one or analytics");
+                                   "region, ui, authentication, icon, color, serve, redirect, title, one or analytics");
                     return;
                 }
                 if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
@@ -399,6 +412,17 @@ namespace one::language {
                         error(s.where, "authentication is google, github or microsoft, one to a line");
                     } else if (!methods.insert(s.value).second) {
                         error(s.where, "authentication " + s.value + " is named twice");
+                    }
+                }
+                // The site's own color, for its buttons and links, as #rrggbb: dark enough
+                // to read as text on a white page.
+                if (s.key == "color") {
+                    if (!std::regex_match(s.value, std::regex("#[0-9a-fA-F]{6}"))) {
+                        error(s.where, "color is written #rrggbb, like color \"#0f766e\"");
+                    } else if (double contrast = contrast_with_white(s.value); contrast < 4.5) {
+                        char shown[8];
+                        std::snprintf(shown, sizeof shown, "%.1f", contrast);
+                        error(s.where, "color " + s.value + " is too light to read as a link on a white page (" + shown + ":1, and it needs 4.5:1); choose a darker one");
                     }
                 }
                 // Visitors counted with Firebase Analytics, once they agree to it.
