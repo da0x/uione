@@ -321,7 +321,7 @@ TEST_CASE("what components share comes along with them") {
     CHECK(find(files, "src/components/workbench.tsx") != nullptr);
 }
 
-TEST_CASE("what a project's components need is added to the app's dependencies") {
+TEST_CASE("what a project's components need is added to the app's dependencies, the compiler kept whole for Vite") {
     namespace fs = std::filesystem;
     fs::path dir = fs::path(root) / "compiler" / "build" / "component-project";
     fs::remove_all(dir);
@@ -329,13 +329,16 @@ TEST_CASE("what a project's components need is added to the app's dependencies")
     REQUIRE(platform::write_file((dir / "main.one").string(), "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"));
     REQUIRE(platform::write_file((dir / "components" / "workbench.tsx").string(), "export default function Workbench() { return null; }\n"));
     REQUIRE(platform::write_file((dir / "components" / "package.json").string(),
-                                 "{\n  \"private\": true,\n  \"dependencies\": {\n    \"@uione/editor\": \"0.1.0\",\n    \"react\": \"^19.0.0\"\n  }\n}\n"));
+                                 "{\n  \"private\": true,\n  \"dependencies\": {\n    \"@uione/compiler\": \"0.1.0\",\n    \"@uione/editor\": \"0.1.0\",\n    \"react\": \"^19.0.0\"\n  }\n}\n"));
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* manifest = find(files, "package.json");
     REQUIRE(manifest != nullptr);
     CHECK(manifest->content.find("\"@uione/editor\": \"0.1.0\",\n") != std::string::npos);
     CHECK(manifest->content.find("\"react\": \"^19.3.0\",\n") != std::string::npos);  // the app's own version wins
+    const auto* vite = find(files, "vite.config.ts");
+    REQUIRE(vite != nullptr);
+    CHECK(vite->content.find("optimizeDeps: { exclude: [\"@uione/compiler\"] },") != std::string::npos);
 }
 
 TEST_CASE("a link to a namespace goes to its address") {

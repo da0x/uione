@@ -1407,6 +1407,9 @@ namespace one::generators {
             out.open("export default defineConfig({");
             out.line("plugins: [react()],");
             out.line("server: { proxy: { \"/api\": \"http://localhost:8081\" } },");
+            // The compiler starts its worker from a file beside its own, which Vite's
+            // prebundling for development would leave behind.
+            if (dependencies_.contains("@uione/compiler")) out.line("optimizeDeps: { exclude: [\"@uione/compiler\"] },");
             out.close("});");
             return out;
         }
