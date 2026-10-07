@@ -226,7 +226,7 @@ describe("tables and live values", () => {
     }
     renderScreen(() => <Books />, source);
     act(() => source.set("library::shelf", { rows: [{ id: "dune", title: "Dune", author: "Herbert" }] }));
-    fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw Dune" }));
     expect(screen.queryByRole("heading", { name: "Docs" })).toBeNull();
     fireEvent.click(screen.getByText("Herbert"));
     expect(screen.getByRole("heading", { name: "Docs" })).toBeTruthy();
