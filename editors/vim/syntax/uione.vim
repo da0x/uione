@@ -39,6 +39,8 @@ syn match   uioneType      "\<change\>\ze\s\+of\>"
 " changes only where it starts a statement naming fields: changes owner, not a list
 " called changes.
 syn match   uioneKeyword   "^\s*\zs\<changes\>\ze\s\+\h"
+syn match   uioneKeyword   "^\s*\zs\<input\>\ze\s\+\h\w*\s\+\h"
+syn match   uioneKeyword   "^\s*\zs\<delete\>\ze\s\+each\>"
 " history only in an entity's header: entity issue history {.
 syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<history\>"
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite

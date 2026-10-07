@@ -304,6 +304,42 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("a command's inputs, and the entities it changes or deletes with it, are checked where they're named") {
+    const std::string board = R"(namespace board {
+entity column {
+	title  text
+}
+entity card {
+	column  column
+}
+command column::delete {
+	input into column
+	each card where column == id {
+		column = into
+	}
+	delete each card where column == into
+}
+}
+)";
+    CHECK(check_source(board).size() == 0);
+
+    std::string field = board;
+    field.replace(field.find("input into column"), 17, "input into column\n\tinput title text");
+    CHECK(only_error(field).message == "title is a field of entity column already; an input is something else it's sent");
+
+    std::string picked = board;
+    picked.replace(picked.find("where column == id"), 18, "where colour == id");
+    CHECK(only_error(picked).message.starts_with("entity card has no field colour"));
+
+    std::string shape = board;
+    shape.replace(shape.find("where column == into"), 20, "where column != into");
+    CHECK(only_error(shape).message == "what's picked is by a field's value, like where phase == id, or by any of several, like from == id || to == id");
+
+    std::string unknown = board;
+    unknown.replace(unknown.find("each card where"), 9, "each cart");
+    CHECK(only_error(unknown).message == "there's no entity cart in namespace board");
+}
+
 TEST_CASE("a once's steps are checked as updates of what they go through, and may name what's stored") {
     const std::string crew = R"(namespace crew {
 entity crew {

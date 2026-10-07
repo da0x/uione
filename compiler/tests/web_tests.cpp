@@ -731,6 +731,30 @@ TEST_CASE("a row's button opens its command's form, started from the row, and th
     fs::remove_all(dir);
 }
 
+TEST_CASE("a form asks for a command's input as it would a field of its type") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-form-input";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace board {\n"
+                         "entity board {\n\ttitle  text\n}\n"
+                         "entity column {\n\tboard  board\n\ttitle  text\n}\n"
+                         "entity card {\n\tcolumn  column\n}\n"
+                         "command column::delete {\n\tinput into column\n\teach card where column == id {\n\t\tcolumn = into\n\t}\n}\n"
+                         "view board_page per board {\n\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n}\n"
+                         "screen \"Columns\" /boards/:board {\n"
+                         "\ttable board_page.columns {\n\t\ttitle\n\t\tdelete \"Remove\"\n\t}\n"
+                         "\tform column::delete \"Remove\" {\n\t\tinto \"Move its cards to\"\n\t}\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(form: { fields: [{ name: "into", label: "Move its cards to", type: "choice", choices: listChoices(boardPage, "columns", "title") }], submit: "Remove" })") !=
+          std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

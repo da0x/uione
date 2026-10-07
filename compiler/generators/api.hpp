@@ -153,6 +153,8 @@ namespace one::generators {
         // The reference fields a command's body reads through, like a loan's book,
         // in the order it first does, with the entity each points at.
         std::vector<std::pair<std::string, const language::entity_declaration*>> pointed_;
+        // The inputs of the command being written, like into, by name, with their types.
+        std::map<std::string, std::string> inputs_;
         // The entity the view being written has a document per, if it has one.
         std::string subject_;
         std::string project_name_ = "app";
@@ -628,20 +630,106 @@ namespace one::generators {
                 }
             }
 
+            // What it's sent besides its entity's fields, read in its body.
+            inputs_.clear();
+            std::string inputs;
+            for (const auto& s : c.body) {
+                auto* input = std::get_if<language::input_statement>(&s.node);
+                if (!input) continue;
+                inputs += (inputs.empty() ? "" : ", ") + api_detail::go_string(input->name);
+                const std::string type = input->type.text();
+                inputs_[input->name] = type == "number" ? "float64" : type == "boolean" ? "bool" : "string";
+            }
+            if (!inputs.empty()) head += ".Inputs(" + inputs + ")";
+
             std::vector<const language::statement*> body;
             for (const auto& s : c.body) {
-                if (!std::holds_alternative<language::permission_statement>(s.node) && !std::holds_alternative<language::changes_statement>(s.node)) body.push_back(&s);
+                if (!std::holds_alternative<language::permission_statement>(s.node) && !std::holds_alternative<language::changes_statement>(s.node) &&
+                    !std::holds_alternative<language::input_statement>(s.node)) {
+                    body.push_back(&s);
+                }
             }
             if (body.empty()) {
                 out.line(head);
+                inputs_.clear();
                 return;
             }
             std::string me = receiver(e);
             out.open(head + ".");
             out.open("Do(func(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
+            for (const auto& [name, type] : inputs_) {
+                bool used = std::any_of(body.begin(), body.end(), [&](const language::statement* s) { return mentions(*s, name); });
+                if (used) out.line(local_name(name) + ", _ := c.Input(" + api_detail::go_string(name) + ").(" + type + ")");
+            }
             body_of(out, e, body, me, at(&c), uses_time);
             out.close("})");
             out.dedent();
+            inputs_.clear();
+        }
+
+        // Whether a statement names something plainly, like an input.
+        static bool mentions(const language::expression& x, const std::string& name) {
+            return std::visit(
+                [&](const auto& node) -> bool {
+                    using T = std::decay_t<decltype(node)>;
+                    if constexpr (std::is_same_v<T, language::name_expression>) {
+                        return node.name.parts.size() == 1 && node.name.parts[0] == name;
+                    } else if constexpr (std::is_same_v<T, language::member_expression>) {
+                        return mentions(*node.object, name);
+                    } else if constexpr (std::is_same_v<T, language::call_expression>) {
+                        return std::any_of(node.arguments.begin(), node.arguments.end(), [&](const auto& a) { return mentions(*a, name); });
+                    } else if constexpr (std::is_same_v<T, language::where_expression>) {
+                        return mentions(*node.source, name) || mentions(*node.condition, name);
+                    } else if constexpr (std::is_same_v<T, language::unary_expression>) {
+                        return mentions(*node.operand, name);
+                    } else if constexpr (std::is_same_v<T, language::binary_expression>) {
+                        return mentions(*node.left, name) || mentions(*node.right, name);
+                    } else if constexpr (std::is_same_v<T, language::list_expression>) {
+                        return std::any_of(node.items.begin(), node.items.end(), [&](const auto& i) { return mentions(*i, name); });
+                    } else {
+                        return false;
+                    }
+                },
+                x.node);
+        }
+
+        static bool mentions(const language::statement& s, const std::string& name) {
+            auto any = [&](const std::vector<language::statement>& body) {
+                return std::any_of(body.begin(), body.end(), [&](const auto& inner) { return mentions(inner, name); });
+            };
+            if (auto* r = std::get_if<language::require_statement>(&s.node)) return mentions(*r->condition, name);
+            if (auto* a = std::get_if<language::assign_statement>(&s.node)) return mentions(*a->target, name) || mentions(*a->value, name);
+            if (auto* c = std::get_if<language::create_statement>(&s.node)) {
+                return std::any_of(c->values.begin(), c->values.end(), [&](const auto& v) { return mentions(*v.value, name); });
+            }
+            if (auto* l = std::get_if<language::list_statement>(&s.node)) return mentions(*l->value, name);
+            if (auto* i = std::get_if<language::if_statement>(&s.node)) return mentions(*i->condition, name) || any(i->then_body) || any(i->else_body);
+            if (auto* each = std::get_if<language::each_statement>(&s.node)) return mentions(*each->where, name) || any(each->body);
+            if (auto* gone = std::get_if<language::delete_statement>(&s.node)) return mentions(*gone->where, name);
+            return false;
+        }
+
+        // each issue where phase == id, or delete each step where from == id || to ==
+        // id: each field of what's picked, and the Go for the value it's to hold.
+        std::optional<std::vector<std::pair<std::string, std::string>>> picks(const language::entity_declaration& e, const language::expression& where,
+                                                                              const std::string& me, const language::entity_declaration& picked) {
+            std::vector<std::pair<std::string, std::string>> out;
+            auto* b = std::get_if<language::binary_expression>(&where.node);
+            if (b && b->op == language::token_kind::logical_or) {
+                auto l = picks(e, *b->left, me, picked);
+                auto r = picks(e, *b->right, me, picked);
+                if (!l || !r) return std::nullopt;
+                out = *l;
+                out.insert(out.end(), r->begin(), r->end());
+                return out;
+            }
+            auto* name = b ? std::get_if<language::name_expression>(&b->left->node) : nullptr;
+            if (!name) return std::nullopt;
+            const std::string& field_name = name->name.parts[0];
+            auto value = expression(e, *b->right, me, field(picked, field_name));
+            if (!value) return std::nullopt;
+            out.emplace_back(api_detail::go_string(field_name), *value);
+            return out;
         }
 
         // The name a body calls its entity by: its first letter, or x for one whose
@@ -784,6 +872,11 @@ namespace one::generators {
             if (auto* c = std::get_if<language::create_statement>(&s.node)) {
                 for (const auto& v : c->values) find_pointed(e, *v.value);
             }
+            if (auto* i = std::get_if<language::if_statement>(&s.node)) {
+                find_pointed(e, *i->condition);
+                for (const auto& inner : i->then_body) find_pointed(e, inner);
+                for (const auto& inner : i->else_body) find_pointed(e, inner);
+            }
         }
 
         // A field a command's body names, with the Go that reaches it: done is t.Done,
@@ -924,6 +1017,42 @@ namespace one::generators {
                     for (const auto& inner : i->else_body) statement(out, e, inner, me, uses_time);
                 }
                 out.close("}");
+            } else if (auto* each = std::get_if<language::each_statement>(&s.node)) {
+                // each issue where phase == id { phase = into }: each one changed in the
+                // command's transaction.
+                const language::entity_declaration* picked = pkg_ ? entity(*pkg_, each->entity) : nullptr;
+                auto pick = picked ? picks(e, *each->where, me, *picked) : std::nullopt;
+                if (!pick) {
+                    unsupported(path_, s.where, "this each in a command");
+                    return;
+                }
+                std::string inner = local_name(picked->name);
+                out.open("if err := one.EachIn(c, " + pick->front().first + ", " + pick->front().second + ", func(" + inner + " *" +
+                         api_detail::go_name(picked->name) + ") error {");
+                auto outer = pointed_;
+                pointed_.clear();
+                for (const auto& inside : each->body) statement(out, *picked, inside, inner, uses_time);
+                pointed_ = outer;
+                out.line("return nil");
+                out.dedent();
+                out.open("}); err != nil {");
+                out.line("return err");
+                out.close("}");
+            } else if (auto* gone = std::get_if<language::delete_statement>(&s.node)) {
+                // delete each step where from == id || to == id: deleted with the command.
+                const language::entity_declaration* picked = pkg_ ? entity(*pkg_, gone->entity) : nullptr;
+                auto pick = picked ? picks(e, *gone->where, me, *picked) : std::nullopt;
+                if (!pick) {
+                    unsupported(path_, s.where, "this delete each in a command");
+                    return;
+                }
+                for (const auto& [name, value] : *pick) {
+                    out.open("if err := one.DeleteWhere[" + api_detail::go_name(picked->name) + "](c, " + name + ", " + value + "); err != nil {");
+                    out.line("return err");
+                    out.close("}");
+                }
+            } else if (std::holds_alternative<language::input_statement>(s.node)) {
+                // Read where the body starts.
             } else if (auto* cl = std::get_if<language::clear_statement>(&s.node)) {
                 for (const auto& name : cl->fields) {
                     const language::field* f = field(e, name);
@@ -1077,6 +1206,7 @@ namespace one::generators {
                 if (name == "now") return std::string("c.Now()");
                 if (name == "me") return std::string("c.Me()");
                 if (name == "id") return me + ".ID";
+                if (inputs_.contains(name)) return local_name(name);
                 if (name == "true" || name == "false") return name;
                 if (name == "none" && beside) return zero(*beside);
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {

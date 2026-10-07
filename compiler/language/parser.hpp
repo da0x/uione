@@ -1099,6 +1099,39 @@ namespace one::language {
                 end_line();
                 return {where, std::move(s)};
             }
+            if (at_word("input") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier) {
+                advance();
+                input_statement s;
+                s.name_where = peek().where;
+                s.name = advance().text;
+                s.type = parse_qualified_name("what it is, like phase or text");
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("each") && peek(1).kind == token_kind::identifier) {
+                advance();
+                each_statement s;
+                s.entity_where = peek().where;
+                s.entity = advance().text;
+                if (!at_word("where")) fail_expecting("where and what it picks, like each issue where phase == id { ... }");
+                advance();
+                s.where = parse_expression();
+                s.body = parse_statement_block();
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("delete") && peek(1).kind == token_kind::identifier && peek(1).text == "each") {
+                advance();
+                advance();
+                delete_statement s;
+                s.entity_where = peek().where;
+                s.entity = expect(token_kind::identifier, "what it deletes, like step").text;
+                if (!at_word("where")) fail_expecting("where and what it picks, like delete each step where from == id");
+                advance();
+                s.where = parse_expression();
+                end_line();
+                return {where, std::move(s)};
+            }
             if (at_word("return")) {
                 advance();
                 return_statement s{parse_expression()};

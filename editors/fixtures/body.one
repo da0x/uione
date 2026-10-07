@@ -1,0 +1,39 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A command's body that takes an input and changes or deletes other entities, for
+// the highlighting test: input and delete are keywords only where they start one.
+
+namespace board {
+
+	entity column {
+		title  text
+	}
+
+	entity card {
+		column  column
+		input   text
+	}
+
+	command column::delete {
+		input into column
+		each card where column == id {
+			column = into
+		}
+		delete each card where column == into
+	}
+
+	view columns {
+		each column {
+			title
+		}
+	}
+
+	screen "Columns" /columns {
+		table columns {
+			title
+			delete "Remove"
+		}
+	}
+
+}

@@ -100,6 +100,9 @@ statement      ::= ( "require" expression STRING
                    | create
                    | "add" postfix "to" NAME
                    | "remove" postfix "from" NAME
+                   | "input" NAME qualified
+                   | "each" NAME "where" expression block
+                   | "delete" "each" NAME "where" expression
                    | postfix "=" expression ) END
 create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
 permission_word ::= "anyone" | "authenticated" | "owner"

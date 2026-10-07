@@ -133,6 +133,57 @@ screen "Issue" /issues/:issue {
     CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
 }
 
+TEST_CASE("a command is sent inputs besides its fields, and changes or deletes other entities in the same step") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace board {
+entity board {
+	title  text
+	start  column
+}
+entity column {
+	board  board  required
+	title  text
+}
+entity card {
+	column  column
+}
+entity arrow {
+	from  column
+	to    column
+}
+command column::delete {
+	input into column
+	input note text
+	require into != id  "pick another column"
+	each card where column == id {
+		column = into
+	}
+	delete each arrow where from == id || to == id
+	if board.start == id {
+		board.start = into
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "board/board.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find(R"(one.Command[Column]("column::delete").Inputs("into", "note").)") != std::string::npos);
+    CHECK(go.find(R"(into, _ := c.Input("into").(string))") != std::string::npos);
+    // An input the body doesn't name isn't read, so the Go has nothing unused.
+    CHECK(go.find(R"(c.Input("note"))") == std::string::npos);
+    CHECK(go.find(R"(if err := one.EachIn(c, "column", x.ID, func(card *Card) error {)") != std::string::npos);
+    CHECK(go.find("card.Column = into") != std::string::npos);
+    CHECK(go.find(R"(one.DeleteWhere[Arrow](c, "from", x.ID))") != std::string::npos);
+    CHECK(go.find(R"(one.DeleteWhere[Arrow](c, "to", x.ID))") != std::string::npos);
+    CHECK(go.find("board.Start = into") != std::string::npos);
+}
+
 TEST_CASE("a once changes what's stored, each step a body done to the entities it names") {
     language::diagnostics out;
     std::vector<language::file> files;

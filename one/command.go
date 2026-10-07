@@ -45,6 +45,15 @@ type Ctx struct {
 	before   map[string]any       // the entity as it was stored before the command, for Was
 	entity   *owned               // the command's entity, for Held
 	command  string               // the command running, like tracker::issue::close, for history
+	given    map[string]any       // what it was sent besides its entity's fields, for Input
+	gone     []*gone              // what it deletes besides its own entity, with DeleteWhere
+}
+
+// gone is an entity a command's body deletes with DeleteWhere.
+type gone struct {
+	schema *schema
+	ref    *firestore.DocumentRef
+	before map[string]any
 }
 
 // made is an entity a command's body created with Create.
@@ -173,6 +182,19 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 // transaction commits.
 func (c *Ctx) save() ([]event, error) {
 	var events []event
+	deleted := map[string]bool{}
+	for _, g := range c.gone {
+		deleted[g.ref.Path] = true
+		if err := c.tx.Delete(g.ref); err != nil {
+			return nil, err
+		}
+		kept, err := c.app.keep(c.tx, g.schema, g.ref.ID, g.before, nil, c.command, c.me, c.now)
+		if err != nil {
+			return nil, err
+		}
+		events = append(events, kept...)
+		events = append(events, event{Type: g.schema.name + ".updated", Entity: g.schema.entity, ID: g.ref.ID, Version: c.now.UnixNano(), Before: g.before})
+	}
 	for _, n := range c.counters {
 		if err := c.tx.Set(n.ref, map[string]any{"last": n.value}); err != nil {
 			return nil, err
@@ -198,7 +220,7 @@ func (c *Ctx) save() ([]event, error) {
 		})
 	}
 	for _, r := range c.reads {
-		if reflect.DeepEqual(r.schema.data(r.value), r.before) {
+		if deleted[r.ref.Path] || reflect.DeepEqual(r.schema.data(r.value), r.before) {
 			continue
 		}
 		if err := r.schema.validate(r.value); err != nil {
@@ -355,6 +377,60 @@ func (c *Ctx) Was(field string) any {
 }
 
 // Fail stops the command with a message for the person who ran it.
+// Input is what the command was sent besides its entity's fields, by its name, like
+// the phase a removed phase's issues move to; nil when it wasn't sent.
+func (c *Ctx) Input(name string) any { return c.given[name] }
+
+// EachIn changes, with the command, every entity of a kind whose field holds a
+// value, like each issue in a phase being removed: each is read in the command's
+// transaction, body changes it, and it's checked and saved with the command's own
+// change, both or neither, with its event and history.
+func EachIn[E any, P entityPointer[E]](c *Ctx, field string, value any, body func(*E) error) error {
+	s := c.app.reg.schemas[reflect.TypeFor[E]()]
+	if s == nil {
+		return fmt.Errorf("one: %s isn't an entity any module uses", reflect.TypeFor[E]().Name())
+	}
+	docs, err := c.tx.Documents(c.app.store.Collection(s.collection).Where(field, "==", value)).GetAll()
+	if err != nil {
+		return err
+	}
+	for _, doc := range docs {
+		entity, err := Read[E, P](c, doc.Ref.ID)
+		if err != nil {
+			return err
+		}
+		if err := body(entity); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteWhere deletes, with the command, every entity of a kind whose field holds a
+// value, like the steps to and from a phase being removed, in the command's
+// transaction, both or neither, each with its event and history. Called again for
+// another field, it deletes each one once.
+func DeleteWhere[E any, P entityPointer[E]](c *Ctx, field string, value any) error {
+	s := c.app.reg.schemas[reflect.TypeFor[E]()]
+	if s == nil {
+		return fmt.Errorf("one: %s isn't an entity any module uses", reflect.TypeFor[E]().Name())
+	}
+	docs, err := c.tx.Documents(c.app.store.Collection(s.collection).Where(field, "==", value)).GetAll()
+	if err != nil {
+		return err
+	}
+	for _, doc := range docs {
+		seen := false
+		for _, g := range c.gone {
+			seen = seen || g.ref.Path == doc.Ref.Path
+		}
+		if !seen {
+			c.gone = append(c.gone, &gone{schema: s, ref: doc.Ref, before: doc.Data()})
+		}
+	}
+	return nil
+}
+
 func (c *Ctx) Fail(message string) error { return &Failure{Status: 400, Message: message} }
 
 // Cmd is a command on entity E, named after its entity and action: signup::create.
@@ -365,6 +441,7 @@ type Cmd[E any, P entityPointer[E]] struct {
 	action     string
 	permission Permission
 	fields     []string // what an update may change, when it says
+	inputs     []string // what it's sent besides its entity's fields, when it says
 	do         func(*Ctx, *E) error
 	after      []func(*System, *E)
 }
@@ -393,6 +470,13 @@ func (c *Cmd[E, P]) Allow(p Permission) *Cmd[E, P] {
 // like the phase an issue moves to, and without it takes none.
 func (c *Cmd[E, P]) Fields(names ...string) *Cmd[E, P] {
 	c.fields = names
+	return c
+}
+
+// Inputs names what the command is sent besides its entity's fields, like the phase
+// a removed phase's issues move to. Its body reads each with Input; none is stored.
+func (c *Cmd[E, P]) Inputs(names ...string) *Cmd[E, P] {
+	c.inputs = names
 	return c
 }
 
@@ -426,7 +510,7 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 		permission = Permission(s.entity + ":" + c.action)
 	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
-		return run[E, P](a, call, s, c.action, permission, c.fields, c.do, c.after)
+		return run[E, P](a, call, s, c.action, permission, c.fields, c.inputs, c.do, c.after)
 	}
 }
 
@@ -437,9 +521,24 @@ type call struct {
 	system bool // run by the backend's own code, which may run any command
 }
 
-func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, fields []string, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
+func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, fields, inputs []string, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
 	if c.system {
 		permission = Anyone
+	}
+	// What it's sent besides its entity's fields is kept apart, for its body.
+	given := map[string]any{}
+	if len(inputs) > 0 {
+		input := map[string]any{}
+		for name, value := range c.input {
+			if contains(inputs, name) {
+				given[name] = value
+			} else {
+				input[name] = value
+			}
+		}
+		apart := *c
+		apart.input = input
+		c = &apart
 	}
 	var saved *E
 	// A field that starts as the person's username, like a project's owner, needs it
@@ -475,7 +574,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		v := reflect.ValueOf(entity).Elem()
 		record := P(entity).record()
 		before, after = nil, nil
-		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action}
+		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given}
 		body.entity = &owned{s, v}
 		pointed = nil
 
@@ -580,17 +679,22 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			return err
 		}
 		if action == "delete" {
-			// Its body says whether it may go, as a require does, before it goes.
+			// Its body says whether it may go, as a require does, before it goes, and
+			// what goes with it, like the issues of a phase moving to another.
 			if do != nil {
 				if err := do(body, entity); err != nil {
 					return err
 				}
 			}
+			changed, err := body.save()
+			if err != nil {
+				return err
+			}
 			kept, err := a.keep(tx, s, id, before, nil, body.command, c.me, now)
 			if err != nil {
 				return err
 			}
-			pointed = kept
+			pointed = append(changed, kept...)
 			saved = entity
 			return tx.Delete(ref)
 		}

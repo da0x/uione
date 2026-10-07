@@ -305,6 +305,27 @@ TEST_CASE("a row's when ends its line, so nothing after it is taken for a column
     CHECK(out[0].message == "expected the end of the line after a row's when, found 'title'");
 }
 
+TEST_CASE("a command's body can take an input, change each of some entities, and delete each of others") {
+    auto f = parse_ok("command phase::delete {\n"
+                      "\tinput into phase\n"
+                      "\teach issue where phase == id {\n\t\tphase = into\n\t}\n"
+                      "\tdelete each step where from == id || to == id\n"
+                      "}\n");
+    const auto& body = std::get<command_declaration>(f.declarations[0].node).body;
+    REQUIRE(body.size() == 3);
+    const auto& input = std::get<input_statement>(body[0].node);
+    CHECK(input.name == "into");
+    CHECK(input.type.text() == "phase");
+    const auto& each = std::get<each_statement>(body[1].node);
+    CHECK(each.entity == "issue");
+    CHECK(each.body.size() == 1);
+    CHECK(std::get<delete_statement>(body[2].node).entity == "step");
+
+    auto out = parse_errors("command phase::delete {\n\teach issue {\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected where and what it picks, like each issue where phase == id { ... }, found '{'");
+}
+
 TEST_CASE("a once is named, and holds its steps in order, each a body for what it goes through") {
     auto f = parse_ok("once \"2026-10-07 stages\" {\n"
                       "\teach rank where name == \"mate\" {\n\t\tmay = [\n\t\t\tcrew::update,\n\t\t\ttask::update,\n\t\t]\n\t}\n"

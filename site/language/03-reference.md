@@ -114,7 +114,8 @@ Words for values that aren't written out:
 The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
-- in a command: `require`, `permission`, `create`, `clear`, `changes`, `was`, `add … to`, `remove … from`;
+- in a command: `require`, `permission`, `create`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
+  `input`, `each … where`, `delete each … where`;
 - in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
@@ -427,6 +428,25 @@ command issue::move {
   and its name. A list field is given its values whole: `roles = [role::maintainer,
   role::programmer]`, or a role's `may = [issue::create, issue::move]`.
   A long list goes on over lines until its `]`, and may end in a comma.
+- `input into phase` is something a command is sent besides its entity's fields,
+  like the phase a removed phase's issues move to. Its forms ask for it, picked as a
+  field of its type would be, its body names it, and it's never stored.
+- `each issue where phase == id { phase = into }` changes other entities in the
+  same step as the command, picked by a field's value, and `delete each step where
+  from == id || to == id` deletes them, picked by any of several. Each is kept in
+  their history as the command's change.
+
+```one
+command phase::delete {
+	input into phase
+	require into != id  "pick another phase for its issues"
+	each issue where phase == id {
+		phase = into
+	}
+	delete each step where from == id || to == id
+}
+```
+
 - `create` makes another entity in the same step, giving its fields values worked
   out where the command runs. `id` is the id of the command's own entity, and `me`
   is the person running it. Every required field gets a value, unless it starts

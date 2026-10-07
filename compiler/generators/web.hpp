@@ -1539,6 +1539,22 @@ namespace one::generators {
                         }
                     }
                 }
+                // What the command is sent besides its entity's fields, like the phase
+                // a removed phase's issues move to: picked like a field of its type.
+                if (auto c = command_nodes_.find(full_command(ns, form.commands.front())); c != command_nodes_.end()) {
+                    for (const auto& st : c->second->body) {
+                        auto* input = std::get_if<language::input_statement>(&st.node);
+                        if (!input || input->name != f.name) continue;
+                        const std::string t = input->type.text();
+                        if (t == "number" || t == "date" || t == "boolean" || t == "email") {
+                            type = t;
+                        } else if (auto list = listed_on_screen(parts, ns, t)) {
+                            type = "choice";
+                            parts.components.insert("listChoices");
+                            choices = ", choices: listChoices(" + *list + ")";
+                        }
+                    }
+                }
                 std::string spec = type == "text" && !f.hint && !f.label
                     ? web_detail::js_string(f.name)
                     : "{ name: " + web_detail::js_string(f.name) + (f.label ? ", label: " + web_detail::js_string(*f.label) : "") +

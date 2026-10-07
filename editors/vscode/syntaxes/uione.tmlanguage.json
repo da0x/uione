@@ -271,6 +271,22 @@
           "name": "keyword.control.uione"
         },
         {
+          "match": "^\\s*(input)(?=\\s+[A-Za-z_]\\w*\\s+[A-Za-z_])",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(delete)(?=\\s+each\\b)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
+        {
           "match": "^\\s*(changes)(?=\\s+[A-Za-z_])",
           "captures": {
             "1": {

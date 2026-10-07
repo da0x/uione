@@ -174,3 +174,8 @@ editors/fixtures/once.one	once "2026-10-07 workflows" {	"2026-10-07 workflows"	s
 editors/fixtures/once.one	each role where	each	keyword
 editors/fixtures/once.one	each role where	where	keyword
 editors/fixtures/once.one	\t\tonce  boolean	once	variable
+editors/fixtures/body.one	input into column	input	keyword
+editors/fixtures/body.one	delete each card	delete	keyword
+editors/fixtures/body.one	delete each card	each	keyword
+editors/fixtures/body.one	\t\tinput   text	input	variable
+editors/fixtures/body.one	delete "Remove"	delete	plain

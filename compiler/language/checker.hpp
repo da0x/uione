@@ -110,6 +110,8 @@ namespace one::language {
             // by entity: what phase::triaged may name, with a project's starting roles.
             const std::map<std::string, std::set<std::string>>* made = nullptr;
             bool stored = false;                         // a once's, which may name what's already stored, like role::developer
+            // A command's inputs, like into in input into phase, named in its body.
+            const std::map<std::string, field, std::less<>>* inputs = nullptr;
         };
 
         diagnostics& out_;
@@ -829,7 +831,49 @@ namespace one::language {
             std::map<std::string, std::set<std::string>> made;
             made_by_name(c.body, made);
             in.made = &made;
+            std::map<std::string, field, std::less<>> inputs = inputs_of(c);
+            in.inputs = &inputs;
             statements(ns, c.body, entity, in);
+        }
+
+        // What a command is sent besides its entity's fields: input into phase.
+        static std::map<std::string, field, std::less<>> inputs_of(const command_declaration& c) {
+            std::map<std::string, field, std::less<>> inputs;
+            for (const auto& st : c.body) {
+                if (auto* i = std::get_if<input_statement>(&st.node)) {
+                    field f;
+                    f.name = i->name;
+                    f.where = i->name_where;
+                    f.type = i->type;
+                    inputs.emplace(i->name, std::move(f));
+                }
+            }
+            return inputs;
+        }
+
+        // each issue where phase == id, or delete each step where from == id || to ==
+        // id: a field of what's picked, its value worked out where the command runs,
+        // and for a delete, any of several.
+        void verify_pick(const entity_declaration& picked, const expression& where, const context& in, bool any) {
+            auto* b = std::get_if<binary_expression>(&where.node);
+            if (any && b && b->op == token_kind::logical_or) {
+                verify_pick(picked, *b->left, in, any);
+                verify_pick(picked, *b->right, in, any);
+                return;
+            }
+            auto* name = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+            if (!b || b->op != token_kind::equal || !name || name->name.parts.size() != 1) {
+                error(where.where, std::string("what's picked is by a field's value, like where phase == id") +
+                                       (any ? ", or by any of several, like from == id || to == id" : ""));
+                return;
+            }
+            const field* f = field_or_id(picked, name->name.parts[0]);
+            if (!f) {
+                error(name->name.where, "entity " + picked.name + " has no field " + name->name.parts[0] + nearest(name->name.parts[0], field_names(picked)));
+                return;
+            }
+            mean_field(name->name.where, f);
+            resolve(in, *b->right, f);
         }
 
         void statements(const std::string& ns, const std::vector<statement>& body, const entity_declaration* entity, const context& in) {
@@ -887,6 +931,41 @@ namespace one::language {
                     resolve(in, *i->condition);
                     statements(ns, i->then_body, entity, in);
                     statements(ns, i->else_body, entity, in);
+                } else if (auto* input = std::get_if<input_statement>(&s.node)) {
+                    snake(input->name, input->name_where);
+                    if (!in.command || in.stored) {
+                        error(s.where, "input goes in a command, naming what it's sent besides its entity's fields, like input into phase");
+                    } else if (entity && find_field(*entity, input->name)) {
+                        error(input->name_where, input->name + " is a field of entity " + entity->name + " already; an input is something else it's sent");
+                    } else {
+                        verify_type(ns, input->type);
+                    }
+                } else if (auto* each = std::get_if<each_statement>(&s.node)) {
+                    snake(each->entity, each->entity_where);
+                    const entity_declaration* picked = in.command && !in.stored ? find_entity(ns, qualified_name{{each->entity}, each->entity_where}) : nullptr;
+                    if (!in.command || in.stored) {
+                        error(s.where, "each in a body goes in a command; a once's steps are each already");
+                    } else if (!picked) {
+                        error(each->entity_where, "there's no entity " + each->entity + " " + in_namespace(ns));
+                    } else {
+                        mean_entity(each->entity_where, each->entity.size(), picked);
+                        verify_pick(*picked, *each->where, in, false);
+                        context inner = in;
+                        inner.entity = picked;
+                        inner.update = true;
+                        statements(ns, each->body, picked, inner);
+                    }
+                } else if (auto* gone = std::get_if<delete_statement>(&s.node)) {
+                    snake(gone->entity, gone->entity_where);
+                    const entity_declaration* picked = find_entity(ns, qualified_name{{gone->entity}, gone->entity_where});
+                    if (!in.command) {
+                        error(s.where, "delete each goes in a command, which changes things");
+                    } else if (!picked) {
+                        error(gone->entity_where, "there's no entity " + gone->entity + " " + in_namespace(ns));
+                    } else {
+                        mean_entity(gone->entity_where, gone->entity.size(), picked);
+                        verify_pick(*picked, *gone->where, in, true);
+                    }
                 }
             }
         }
@@ -1728,8 +1807,14 @@ namespace one::language {
                     for (const auto& command : form->commands) verify_command_use(ns, command);
                     const entity_declaration* entity = find_command(ns, form->commands.front());
                     bool creates = form->commands.front().parts.back() == "create";
+                    // What the command is sent besides its entity's fields, a form asks for too.
+                    std::map<std::string, field, std::less<>> inputs;
+                    if (auto here = scopes_.find(ns); here != scopes_.end()) {
+                        if (auto c = here->second.command_nodes.find(form->commands.front().text()); c != here->second.command_nodes.end()) inputs = inputs_of(*c->second);
+                    }
                     for (const auto& f : form->fields) {
                         snake(f.name, f.where);
+                        if (inputs.contains(f.name)) continue;
                         const field* asked = entity ? find_field(*entity, f.name) : nullptr;
                         if (entity && !asked) {
                             error(f.where, "the form asks for " + f.name + ", which isn't a field of entity " +
@@ -1744,7 +1829,7 @@ namespace one::language {
                     auto [rows, view_name] = screen_ ? rows_with(ns, *screen_, form->commands.front()) : std::pair<const view_each*, std::string>{nullptr, ""};
                     if (rows) {
                         for (const auto& f : form->fields) {
-                            if (!in_rows(*rows, f.name)) {
+                            if (!in_rows(*rows, f.name) && !inputs.contains(f.name)) {
                                 error(f.where, "form " + form->commands.front().text() + " opens from each row of " + view_name + ", so the list needs " +
                                                    f.name + "; add it to the list's block");
                             }
@@ -2085,6 +2170,9 @@ namespace one::language {
                     return nullptr;
                 }
                 if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
+                if (in.inputs) {
+                    if (auto it = in.inputs->find(name); it != in.inputs->end()) return &it->second;
+                }
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
                     error(n->name.where, "write " + naming(*beside) + "::" + name + "; an enum's choices are named with it",
                           fix{n->name.where, name.size(), naming(*beside) + "::" + name});

@@ -150,10 +150,38 @@ namespace one::language {
         std::vector<statement> else_body;
     };
 
+    // input into phase: a value a command is sent besides its entity's fields, like
+    // the phase a removed phase's issues move to. It's asked for by its forms, named
+    // in its body, and never stored.
+    struct input_statement {
+        std::string name;
+        location name_where;
+        qualified_name type;
+    };
+
+    // each issue where phase == id { phase = into }: other entities changed with the
+    // command, in the same step. The where picks them by a field's value, worked out
+    // where the command runs; the body names the picked one's fields plainly.
+    struct each_statement {
+        std::string entity;
+        location entity_where;
+        expression_ptr where;
+        std::vector<statement> body;
+    };
+
+    // delete each step where from == id || to == id: other entities deleted with the
+    // command, in the same step, picked by a field's value, or by any of several.
+    struct delete_statement {
+        std::string entity;
+        location entity_where;
+        expression_ptr where;
+    };
+
     struct statement {
         location where;
         std::variant<require_statement, permission_statement, clear_statement, changes_statement, assign_statement,
-                     create_statement, list_statement, return_statement, if_statement>
+                     create_statement, list_statement, return_statement, if_statement, input_statement, each_statement,
+                     delete_statement>
             node;
     };
 
