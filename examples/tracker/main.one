@@ -29,6 +29,13 @@ namespace tracker {
 		role     enum     maintainer | reporter = role::reporter
 	}
 
+	// Where an issue is. An enum declared on its own names its choices once, for
+	// any field of its type, each with how it's shown.
+	enum status {
+		open    "Open"
+		closed  "Closed"
+	}
+
 	entity issue history {
 		project    project       required  key
 		number     serial        per project  key
@@ -37,7 +44,7 @@ namespace tracker {
 		labels     list of text
 		assignees  list of user
 		author     user          = me
-		status     enum          open | closed = status::open
+		status     status        = status::open
 	}
 
 	// A commit or pull request that mentions an issue. Its key is the issue and
@@ -45,7 +52,10 @@ namespace tracker {
 	entity mention {
 		issue   issue  required  key
 		url     text   required  key
-		kind    enum   commit | pull_request
+		kind    enum {
+			commit
+			pull_request  "Pull request"
+		}
 		title   text
 		author  text
 	}

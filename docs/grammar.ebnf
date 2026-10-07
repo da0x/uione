@@ -41,7 +41,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= project | namespace | format | entity | command | view | role
+declaration    ::= project | namespace | format | enum_type | entity | command | view | role
                  | function | screen | picker | webhook | backend
 
 /* project */
@@ -70,7 +70,9 @@ example        ::= "example" PATTERN END
 
 entity         ::= "entity" NAME "history"? "{" NEWLINE? field* "}" END
 field          ::= NAME (enum | type) rule* ("=" expression)? END
-enum           ::= "enum" NAME STRING? ("|" NAME STRING?)*
+enum           ::= "enum" (choice ("|" choice)* | "{" NEWLINE? (choice+ END)* "}")
+choice         ::= NAME STRING?
+enum_type      ::= "enum" NAME "{" NEWLINE? (choice+ END)* "}" END
 type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | serial | "boolean" | "user" | list | qualified
 list           ::= "list" "of" ("text" | "user" | qualified)
 serial         ::= "serial" ("per" NAME)?

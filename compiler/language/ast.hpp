@@ -178,6 +178,15 @@ namespace one::language {
         location end;                           // its closing brace
     };
 
+    // enum status { open "Open"  closed "Closed" }: choices named once, for any field
+    // of this type, each written on its own line or several to a line.
+    struct enum_declaration {
+        std::string name;
+        std::vector<std::string> choices;
+        std::vector<std::string> choice_labels;  // how each is shown, or empty for its name
+        std::vector<location> choice_where;
+    };
+
     struct format_declaration {
         std::string name;
         std::string pattern;  // raw, like AAA-9999
@@ -187,9 +196,13 @@ namespace one::language {
     struct field {
         std::string name;
         location where;
-        std::optional<qualified_name> type;  // none when the field has choices, or no type
-        std::vector<std::string> choices;    // on_shelf | lent | withdrawn
-        std::vector<std::string> choice_labels;  // mit "MIT": how each choice is shown, or empty for its name
+        // A field whose type is an enum declared on its own, like status  status, is
+        // given that enum's choices once the project is checked, as if they were
+        // written on it, so everything after the checker sees choices either way.
+        mutable std::optional<qualified_name> type;  // none when the field has choices, or no type
+        mutable std::vector<std::string> choices;    // on_shelf | lent | withdrawn
+        mutable std::vector<std::string> choice_labels;  // mit "MIT": how each choice is shown, or empty for its name
+        mutable std::string enum_name;       // the enum its choices are from, which names them, like status
         bool list = false;                   // labels  list of label: several, each a label
         bool required = false;
         bool unique = false;
@@ -441,7 +454,7 @@ namespace one::language {
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
-                     webhook_declaration, backend_declaration>
+                     webhook_declaration, backend_declaration, enum_declaration>
             node;
     };
 
@@ -456,7 +469,7 @@ namespace one::language {
         if (f.choices.empty()) return std::nullopt;
         const std::string* value = nullptr;
         if (name.parts.size() == 1) value = &name.parts[0];
-        if (name.parts.size() == 2 && name.parts[0] == f.name) value = &name.parts[1];
+        if (name.parts.size() == 2 && (name.parts[0] == f.name || name.parts[0] == f.enum_name)) value = &name.parts[1];
         if (!value || std::find(f.choices.begin(), f.choices.end(), *value) == f.choices.end()) return std::nullopt;
         return *value;
     }

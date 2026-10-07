@@ -61,6 +61,10 @@ namespace one::language {
             }
             for (const auto& f : files) {
                 path_ = f.path;
+                give_enums("", f.declarations);
+            }
+            for (const auto& f : files) {
+                path_ = f.path;
                 verify("", f.declarations);
             }
         }
@@ -82,6 +86,7 @@ namespace one::language {
             std::map<std::string, declared<entity_declaration>> entities;
             std::map<std::string, declared<view_declaration>> views;
             std::map<std::string, declared<format_declaration>> formats;
+            std::map<std::string, declared<enum_declaration>> enums;
             std::map<std::string, declared<function_declaration>> functions;
             std::map<std::string, origin> commands;  // entity::command
             std::vector<const role_declaration*> roles;
@@ -181,6 +186,8 @@ namespace one::language {
                     add(here.views, v->name, *v, d.where, "view", ns);
                 } else if (auto* f = std::get_if<format_declaration>(&d.node)) {
                     add(here.formats, f->name, *f, d.where, "format", ns);
+                } else if (auto* en = std::get_if<enum_declaration>(&d.node)) {
+                    add(here.enums, en->name, *en, d.where, "enum", ns);
                 } else if (auto* r = std::get_if<role_declaration>(&d.node)) {
                     here.roles.push_back(r);
                     // A second role of the same name would replace the first, dropping its
@@ -219,6 +226,31 @@ namespace one::language {
                         for (const auto& setting : p->settings) {
                             if (setting.key == "layout") layout_ = setting.value;
                         }
+                    }
+                }
+            }
+        }
+
+        // A field whose type is an enum, like status  status, gets its choices, as if
+        // written on it, and the enum's name, which names them: status::open.
+        void give_enums(const std::string& ns, const std::vector<declaration>& declarations) {
+            for (const auto& d : declarations) {
+                if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
+                    give_enums(join(ns, n->name), n->declarations);
+                } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
+                    for (const auto& f : e->fields) {
+                        if (!f.type || !f.choices.empty()) continue;
+                        const enum_declaration* en = find(ns, *f.type, &scope::enums);
+                        if (!en) continue;
+                        mean(f.type->where, f.type->text().size(), "enum " + f.type->text(), origin_of(en, &scope::enums));
+                        if (f.list) {
+                            error(f.type->where, "a list of " + en->name + "'s choices isn't supported yet; a field holds one of them");
+                            continue;
+                        }
+                        f.choices = en->choices;
+                        f.choice_labels = en->choice_labels;
+                        f.enum_name = en->name;
+                        f.type.reset();
                     }
                 }
             }
@@ -306,7 +338,7 @@ namespace one::language {
             std::string kind;
             if (!f->choices.empty()) {
                 for (std::size_t i = 0; i < f->choices.size(); ++i) {
-                    kind += (i == 0 ? "" : i + 1 == f->choices.size() ? " or " : ", ") + f->name + "::" + f->choices[i];
+                    kind += (i == 0 ? "" : i + 1 == f->choices.size() ? " or " : ", ") + naming(*f) + "::" + f->choices[i];
                 }
             } else if (f->type) {
                 kind = (f->list ? "a list of " : "a ") + f->type->text();
@@ -362,6 +394,17 @@ namespace one::language {
         void verify(const std::string& ns, const std::vector<declaration>& declarations) {
             for (const auto& d : declarations) {
                 std::visit([&](const auto& node) { verify(ns, d.where, node); }, d.node);
+            }
+        }
+
+        void verify(const std::string&, location where, const enum_declaration& e) {
+            snake(e.name, where);
+            if (e.choices.empty()) error(where, "enum " + e.name + " needs its choices, each with how it's shown, like open \"Open\"");
+            for (std::size_t i = 0; i < e.choices.size(); ++i) {
+                snake(e.choices[i], e.choice_where[i]);
+                if (std::find(e.choices.begin(), e.choices.begin() + static_cast<std::ptrdiff_t>(i), e.choices[i]) != e.choices.begin() + static_cast<std::ptrdiff_t>(i)) {
+                    error(e.choice_where[i], e.choices[i] + " is one of " + e.name + "'s choices already");
+                }
             }
         }
 
@@ -584,10 +627,10 @@ namespace one::language {
                             choice_named(*start, f);
                         } else if (start && start->name.parts.size() == 1 &&
                                    std::find(f.choices.begin(), f.choices.end(), start->name.parts[0]) != f.choices.end()) {
-                            error(f.initial->where, "write " + f.name + "::" + start->name.parts[0] + "; an enum's choices are named with it",
-                                  fix{start->name.where, start->name.parts[0].size(), f.name + "::" + start->name.parts[0]});
+                            error(f.initial->where, "write " + naming(f) + "::" + start->name.parts[0] + "; an enum's choices are named with it",
+                                  fix{start->name.where, start->name.parts[0].size(), naming(f) + "::" + start->name.parts[0]});
                         } else {
-                            error(f.initial->where, "field " + f.name + " has to start as one of its choices, like " + f.name + "::" + f.choices[0]);
+                            error(f.initial->where, "field " + f.name + " has to start as one of its choices, like " + naming(f) + "::" + f.choices[0]);
                         }
                     }
                 }
@@ -1726,17 +1769,20 @@ namespace one::language {
         // its choices.
         void choice_named(const name_expression& n, const field& f) {
             const auto& written = n.name.parts;
-            if (written[0] != f.name) {
-                error(n.name.where, n.name.text() + " isn't one of " + f.name + "'s choices; they're written " + f.name + "::" +
+            if (written[0] != f.name && written[0] != f.enum_name) {
+                error(n.name.where, n.name.text() + " isn't one of " + f.name + "'s choices; they're written " + naming(f) + "::" +
                                         f.choices[0] + " and so on");
                 return;
             }
             if (std::find(f.choices.begin(), f.choices.end(), written[1]) == f.choices.end()) {
                 std::string choices;
-                for (const auto& c : f.choices) choices += (choices.empty() ? "" : ", ") + f.name + "::" + c;
+                for (const auto& c : f.choices) choices += (choices.empty() ? "" : ", ") + naming(f) + "::" + c;
                 error(n.name.where, written[1] + " isn't one of " + f.name + "'s choices, " + choices + nearest(written[1], f.choices));
             }
         }
+
+        // What a field's choices are written with: its enum's name, or its own.
+        static std::string naming(const field& f) { return f.enum_name.empty() ? f.name : f.enum_name; }
 
         // Checks every name in an expression against what it can mean here, and
         // returns the field it stands for, if it's one, so a choice compared with it
@@ -1766,8 +1812,8 @@ namespace one::language {
                 }
                 if (std::find(in.parameters.begin(), in.parameters.end(), name) != in.parameters.end()) return nullptr;
                 if (beside && std::find(beside->choices.begin(), beside->choices.end(), name) != beside->choices.end()) {
-                    error(n->name.where, "write " + beside->name + "::" + name + "; an enum's choices are named with it",
-                          fix{n->name.where, name.size(), beside->name + "::" + name});
+                    error(n->name.where, "write " + naming(*beside) + "::" + name + "; an enum's choices are named with it",
+                          fix{n->name.where, name.size(), naming(*beside) + "::" + name});
                     return nullptr;
                 }
                 if (in.entity) {
@@ -1778,7 +1824,7 @@ namespace one::language {
                 }
                 if (beside && !beside->choices.empty()) {
                     std::string choices;
-                    for (const auto& c : beside->choices) choices += (choices.empty() ? "" : ", ") + beside->name + "::" + c;
+                    for (const auto& c : beside->choices) choices += (choices.empty() ? "" : ", ") + naming(*beside) + "::" + c;
                     error(n->name.where, name + " isn't one of " + beside->name + "'s choices, " + choices +
                                              nearest(name, beside->choices));
                     return nullptr;

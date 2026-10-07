@@ -189,6 +189,7 @@ namespace one::language {
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
+            if (word == "enum") return {where, parse_enum()};
             if (word == "webhook") return {where, parse_webhook()};
             if (word == "backend") {
                 advance();
@@ -198,7 +199,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, entity, command, view, role, function, screen, picker, webhook or backend");
+                        "format, enum, entity, command, view, role, function, screen, picker, webhook or backend");
         }
 
         project_declaration parse_project() {
@@ -316,10 +317,21 @@ namespace one::language {
                         f.choices.push_back(name.text);
                         f.choice_labels.push_back(at(token_kind::string) ? advance().text : "");
                     };
-                    choice(expect(token_kind::identifier, "the enum's first choice, like open"));
-                    while (at(token_kind::pipe)) {
+                    if (at(token_kind::left_brace)) {
+                        // Or in a block, each on its own line or several to a line:
+                        // visibility enum { public  private } = visibility::public.
                         advance();
-                        choice(expect(token_kind::identifier, "a choice after '|'"));
+                        while (in_block()) {
+                            while (!at_line_end()) choice(expect(token_kind::identifier, "a choice, like open"));
+                            end_line();
+                        }
+                        expect(token_kind::right_brace, "'}'");
+                    } else {
+                        choice(expect(token_kind::identifier, "the enum's first choice, like open"));
+                        while (at(token_kind::pipe)) {
+                            advance();
+                            choice(expect(token_kind::identifier, "a choice after '|'"));
+                        }
                     }
                 } else {
                     f.type = parse_qualified_name("the field's type");
@@ -862,6 +874,25 @@ namespace one::language {
                 fields.push_back(std::move(f));
             }
             end_line();
+        }
+
+        enum_declaration parse_enum() {
+            advance();
+            enum_declaration e;
+            e.name = expect(token_kind::identifier, "the enum's name, like status").text;
+            expect(token_kind::left_brace, "'{' and its choices, each with how it's shown, like open \"Open\"");
+            while (in_block()) {
+                while (!at_line_end()) {
+                    const token& choice = expect(token_kind::identifier, "a choice, like open");
+                    e.choices.push_back(choice.text);
+                    e.choice_where.push_back(choice.where);
+                    e.choice_labels.push_back(at(token_kind::string) ? advance().text : "");
+                }
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return e;
         }
 
         picker_declaration parse_picker() {

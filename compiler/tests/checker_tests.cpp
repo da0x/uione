@@ -304,6 +304,48 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("an enum declared on its own gives any field of its type its choices, named with the enum") {
+    const std::string project = R"(
+enum status {
+	open         "Open"
+	in_progress  "In progress"
+}
+entity issue {
+	status  status = status::open
+	stage   status = status::in_progress
+	kind    enum {
+		bug
+		feature  "Feature"
+	} = kind::bug
+}
+command issue::start {
+	require status == status::open  "it isn't open"
+	status = status::in_progress
+}
+)";
+    auto files = std::vector<std::pair<std::string, std::string>>{{"test.one", project}};
+    diagnostics parse_errors;
+    std::vector<file> parsed;
+    parsed.push_back(parse("test.one", project, parse_errors));
+    REQUIRE(parse_errors.size() == 0);
+    diagnostics out;
+    check(parsed, out);
+    for (const auto& d : out) CAPTURE(format(d));
+    REQUIRE(out.size() == 0);
+    const auto& issue = std::get<entity_declaration>(parsed[0].declarations[1].node);
+    CHECK(issue.fields[0].choices == std::vector<std::string>{"open", "in_progress"});
+    CHECK(issue.fields[0].choice_labels == std::vector<std::string>{"Open", "In progress"});
+    CHECK(issue.fields[0].enum_name == "status");
+    CHECK_FALSE(issue.fields[0].type);
+    CHECK(issue.fields[2].choices == std::vector<std::string>{"bug", "feature"});
+
+    std::string wrong = project;
+    wrong.replace(wrong.find("status = status::open"), 21, "status = status::shut");
+    CHECK(only_error(wrong).message == "shut isn't one of status's choices, status::open, status::in_progress");
+
+    CHECK(only_error("enum status {\n\topen\n\topen\n}\n").message == "open is one of status's choices already");
+}
+
 TEST_CASE("names inside expressions are looked up where they're written, with the nearest match suggested") {
     const std::string project = R"(namespace library {
 entity book {

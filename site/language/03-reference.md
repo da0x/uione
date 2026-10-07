@@ -68,6 +68,7 @@ Each declaration starts a line with the word for what it declares, then its name
 |---|---|
 | [`project`](#project) | where the app runs and what it's built with |
 | [`namespace`](#namespace) | a group of declarations, and the address its screens are at |
+| [`enum`](#enum) | choices any field of its type can hold |
 | [`entity`](#entity) | something the app keeps, with its fields |
 | [`format`](#format) | a pattern a text field holds to |
 | [`command`](#command) | a way to change an entity |
@@ -233,6 +234,31 @@ namespace library {
 } // namespace library
 ```
 
+## enum
+
+Choices named once, each with how it's shown, for any field whose type it is.
+Each choice is on a line of its own, or several to a line.
+
+```one
+enum status {
+	open         "Open"
+	in_progress  "In progress"
+	done         "Done"
+}
+
+entity issue {
+	status  status = status::open
+}
+```
+
+- A choice is written with the enum's name, `status::open`, whatever the field is
+  called.
+- What a field starts as is the field's to say, with `=`, as for any field, so two
+  fields of one enum can start differently.
+- An enum used by one field alone can be written on it, in a block or, when it's
+  short, on one line: `visibility  enum { public  private } = visibility::public`,
+  or `visibility  enum  public | private = visibility::public`.
+
 ## entity
 
 The data a feature owns. Each line is a field: a name, a type, then its rules.
@@ -259,7 +285,8 @@ entity loan {
 - A field's type is one of the [built-in types](#built-in-types), a `format`
   declared in the file, or another entity (`book`), which stores its id and reads
   through it (`book.title`).
-- An enum's choices are always written with its name, the field's:
+- An enum's choices are always written with its name, the [enum](#enum)'s or, for
+  one written on the field, the field's:
   `status::on_shelf`, never `on_shelf` alone, wherever one is used, as a starting
   value, in a command, a comparison, a view's condition or what a command creates.
   So a choice reads as what it is, and two enums that share a choice, like an
