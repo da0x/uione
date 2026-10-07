@@ -66,7 +66,7 @@ command loan::checkin {
 
 view shelf {
 	each book where status != status::lent {
-		order title
+		order by title
 		title  shelfmark
 	}
 }
@@ -429,7 +429,7 @@ command loan::checkin {
 }
 view shelf {
 	each book where statu != lent {
-		order sort_title(titel)
+		order by sort_title(titel)
 		title  pages
 		lent = first(loan where loan.book == book.id && returned_at == none).member
 	}
@@ -463,7 +463,7 @@ function sort_title(title) {
 }
 
 TEST_CASE("an unknown function is reported, with the nearest one suggested") {
-    auto e = only_error("entity book {\n\ttitle  text\n}\nview shelf {\n\teach book {\n\t\torder sort_titel(title)\n\t\ttitle\n\t}\n}\n"
+    auto e = only_error("entity book {\n\ttitle  text\n}\nview shelf {\n\teach book {\n\t\torder by sort_titel(title)\n\t\ttitle\n\t}\n}\n"
                         "function sort_title(title) {\n\treturn title\n}\n");
     CHECK(e.message == "there's no function sort_titel; did you mean sort_title?");
     CHECK(e.where.line == 6);
@@ -667,7 +667,7 @@ TEST_CASE("a view lists the changes an entity keeps, by the entity or by what it
                               "entity issue history {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity note {\n\ttext  text\n}\n";
     CHECK(check_source(start + "view issue_page per issue {\n\tchanges = each change of issue where issue == issue.id {\n"
-                               "\t\torder created_at\n\t\tlimit 20\n\t\tfield  before  after  action  created_by.name  created_at\n\t}\n}\n"
+                               "\t\torder by created_at\n\t\tlimit 20\n\t\tfield  before  after  action  created_by.name  created_at\n\t}\n}\n"
                                "view project_page per project {\n\ttimeline = each change of issue where project == project.id {\n"
                                "\t\tissue  field  after\n\t}\n}\n")
               .empty());

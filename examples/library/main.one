@@ -58,7 +58,7 @@ namespace library {
 	// Every book still in the collection, by title as a reader says it.
 	view shelf {
 		each book where status != status::withdrawn {
-			order sort_title(title)
+			order by sort_title(title)
 			shelfmark  title  author  status
 			lent_to = first(loan where loan.book == book.id && returned_at == none).member
 		}
@@ -67,7 +67,7 @@ namespace library {
 	// What is out, soonest due first.
 	view desk {
 		each loan where returned_at == none {
-			order due_at
+			order by due_at
 			book.title  member.picture  member.name  due_at
 		}
 	}
@@ -79,7 +79,7 @@ namespace library {
 		shelfmark = book.shelfmark
 		summary = book.summary
 		loans = each loan where book == book.id {
-			order number descending
+			order by number descending
 			number  member.picture  member.name  lent_at  returned_at
 		}
 	}
@@ -87,7 +87,7 @@ namespace library {
 	// A member's own loans: one document per member, readable only by them.
 	view mine per user {
 		each loan where member == user.id && returned_at == none {
-			order due_at
+			order by due_at
 			book.title  due_at
 		}
 	}

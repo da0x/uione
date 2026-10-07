@@ -491,6 +491,21 @@ namespace one::language {
                 while (in_block()) {
                     if (at_word("order")) {
                         advance();
+                        // order by created_at descending: said the way it reads.
+                        if (at(token_kind::minus)) {
+                            // order -created_at, as it was written: both fixed at once.
+                            const token& minus = advance();
+                            std::size_t begin = peek().begin;
+                            parse_postfix();
+                            std::string key(source_.substr(begin, tokens_[pos_ - 1].end - begin));
+                            fail(minus.where, "write order by " + key + " descending, saying in words what rows are ordered by",
+                                 fix{minus.where, tokens_[pos_ - 1].end - minus.begin, "by " + key + " descending"});
+                        }
+                        if (!at_word("by") || at_line_end()) {
+                            const token& key = peek();
+                            fail(key.where, "write order by " + key.text + ", saying what rows are ordered by", fix{key.where, 0, "by "});
+                        }
+                        advance();
                         do {
                             each.order.push_back(parse_order_key());
                         } while (!at_line_end());

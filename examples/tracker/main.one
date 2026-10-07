@@ -124,7 +124,7 @@ namespace tracker {
 
 	view projects public {
 		each project where visibility == visibility::public {
-			order created_at descending
+			order by created_at descending
 			slug  name
 		}
 	}
@@ -139,15 +139,15 @@ namespace tracker {
 		repository = project.repository
 		visibility = project.visibility
 		issues = each issue where project == project.id {
-			order status descending  number descending
+			order by status descending  number descending
 			number  title  status  labels  assignees.name  author.picture  author.name
 		}
 		members = each member where project == project.id {
-			order role
+			order by role
 			person  person.picture  person.name  role
 		}
 		timeline = each change of issue where project == project.id {
-			order created_at descending
+			order by created_at descending
 			limit 50
 			issue  issue.number  issue.title  field  before  after  action  created_by.name  created_at
 		}
@@ -171,15 +171,15 @@ namespace tracker {
 		status = issue.status
 		visibility = issue.project.visibility
 		comments = each comment where issue == issue.id {
-			order created_at
+			order by created_at
 			author.picture  author.name  body  created_at
 		}
 		mentions = each mention where issue == issue.id {
-			order created_at
+			order by created_at
 			kind  title  author  url
 		}
 		changes = each change of issue where issue == issue.id {
-			order created_at
+			order by created_at
 			field  before  after  created_by.name  created_at
 		}
 	}
@@ -187,7 +187,7 @@ namespace tracker {
 	// The open issues assigned to the person reading, in every project.
 	view mine per user {
 		each issue where assignees has user.id && status == status::open {
-			order project  number
+			order by project  number
 			project  number  title
 		}
 	}

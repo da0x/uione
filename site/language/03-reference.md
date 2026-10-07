@@ -443,7 +443,7 @@ field of an entity it points at (`book.title`), or a value worked out for it
 ```one
 view desk {
 	each loan where returned_at == none {
-		order due_at
+		order by due_at
 		book.title  member  due_at
 	}
 }
@@ -455,7 +455,7 @@ view signups public {
 view book_page per book {
 	title = book.title
 	loans = each loan where book == book.id {
-		order number descending
+		order by number descending
 		number  member  lent_at  returned_at
 	}
 }
@@ -501,7 +501,7 @@ view issue_page per issue {
 ```one
 view project_page per project {
 	timeline = each change of issue where project == project.id {
-		order created_at descending
+		order by created_at descending
 		limit 50
 		issue  field  after  created_by.name  created_at
 	}
@@ -510,9 +510,9 @@ view project_page per project {
 
 - A list of every project would name private ones too, so it picks the public
   ones: `each project where visibility == visibility::public`.
-- `order` goes inside the list it sorts. Each key is `ascending`, which it is
+- `order by` goes inside the list it sorts. Each key is `ascending`, which it is
   unless it says, or `descending`, newest or largest first:
-  `order done  created_at descending` puts the ones not done first, and the newest
+  `order by done  created_at descending` puts the ones not done first, and the newest
   first within each.
 - A view has at most one list without a name, its rows. Any others have names,
   like `loans = each loan ...`, so one page can hold a book's details and several

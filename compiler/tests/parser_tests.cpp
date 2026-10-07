@@ -119,7 +119,7 @@ TEST_CASE("views: per, public, order, each, and computed values") {
     auto f = parse_ok(R"(
 view mine per user {
 	each loan where member == user.id {
-		order done  created_at descending
+		order by done  created_at descending
 		book.title  due_at
 		lent_to = first(loan where returned_at == none).member
 	}
@@ -306,7 +306,7 @@ TEST_CASE("a row's when ends its line, so nothing after it is taken for a column
 }
 
 TEST_CASE("an order key says ascending or descending in words, and a - in front is fixed to say it") {
-    auto f = parse_ok("view v {\n\teach loan {\n\t\torder done ascending  created_at descending\n\t\ttitle\n\t}\n}\n");
+    auto f = parse_ok("view v {\n\teach loan {\n\t\torder by done ascending  created_at descending\n\t\ttitle\n\t}\n}\n");
     const auto& order = std::get<view_declaration>(f.declarations[0].node).each[0].order;
     REQUIRE(order.size() == 2);
     CHECK_FALSE(std::holds_alternative<unary_expression>(order[0]->node));
@@ -314,10 +314,14 @@ TEST_CASE("an order key says ascending or descending in words, and a - in front 
 
     auto out = parse_errors("view v {\n\teach loan {\n\t\torder -created_at\n\t\ttitle\n\t}\n}\n");
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "write created_at descending; a - in front isn't said in words");
+    CHECK(out[0].message == "write order by created_at descending, saying in words what rows are ordered by");
     REQUIRE(out[0].fix);
-    CHECK(out[0].fix->text == "created_at descending");
+    CHECK(out[0].fix->text == "by created_at descending");
     CHECK(out[0].fix->length == 11);
+
+    auto unordered = parse_errors("view v {\n\teach loan {\n\t\torder title\n\t\ttitle\n\t}\n}\n");
+    REQUIRE(unordered.size() == 1);
+    CHECK(unordered[0].message == "write order by title, saying what rows are ordered by");
 
     auto sorted = parse_errors("screen \"S\" /s {\n\ttable v {\n\t\tsort -number\n\t\ttitle\n\t}\n}\n");
     REQUIRE(sorted.size() == 1);
@@ -345,7 +349,7 @@ TEST_CASE("a file that ends inside a block is an error, not a hang") {
 }
 
 TEST_CASE("a view's order goes inside the list it sorts") {
-    auto out = parse_errors("view shelf {\n\torder title\n\teach book {\n\t\ttitle\n\t}\n}\n");
+    auto out = parse_errors("view shelf {\n\torder by title\n\teach book {\n\t\ttitle\n\t}\n}\n");
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "order goes inside the list it sorts: each book { order title ... }");
     CHECK(out[0].where.line == 2);
@@ -356,7 +360,7 @@ TEST_CASE("a view can hold lists with names, and a table names the one it shows"
 view issue_page per issue {
 	title = issue.title
 	comments = each comment where issue == issue.id {
-		order created_at
+		order by created_at
 		author  body
 	}
 }
@@ -452,7 +456,7 @@ entity issue history {
 }
 view page per issue {
 	changes = each change of issue where issue == issue.id {
-		order created_at descending
+		order by created_at descending
 		limit 20
 		field  after
 	}

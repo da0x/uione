@@ -34,8 +34,8 @@ examples/library/main.one	require status == status::on_shelf	require	keyword
 examples/library/main.one	require status == status::on_shelf	==	operator
 examples/library/main.one	require status == status::on_shelf	"only	string
 examples/library/main.one	require returned_at == none	none	constant
-examples/library/main.one	order sort_title(title)	order	keyword
-examples/library/main.one	order sort_title(title)	sort_title	function
+examples/library/main.one	order by sort_title(title)	order	keyword
+examples/library/main.one	order by sort_title(title)	sort_title	function
 examples/library/main.one	each book where status	each	keyword
 examples/library/main.one	each book where status	where	keyword
 examples/library/main.one	first(loan where	first	function
@@ -66,7 +66,7 @@ examples/tasks/main.one	permission owner	owner	constant
 examples/tasks/main.one	owner  user     = me	owner	variable
 examples/tasks/main.one	where owner == user.id	owner	plain
 examples/tasks/main.one	require !done	!	operator
-examples/tasks/main.one	order done  created_at descending	descending	keyword
+examples/tasks/main.one	order by done  created_at descending	descending	keyword
 examples/tasks/main.one	screen "Tasks" / {	/	route
 site/site.one	project uione {	project	declare
 site/site.one	project uione {	uione	name
