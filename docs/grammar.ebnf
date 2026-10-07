@@ -41,7 +41,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= project | namespace | format | enum_type | entity | command | view | role
+declaration    ::= project | namespace | format | enum_type | entity | command | view | role | roles
                  | function | screen | picker | webhook | backend
 
 /* project */
@@ -74,7 +74,7 @@ enum           ::= "enum" (choice ("|" choice)* | "{" NEWLINE? (choice+ END)* "}
 choice         ::= NAME STRING?
 enum_type      ::= "enum" NAME "{" NEWLINE? (choice+ END)* "}" END
 type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | serial | "boolean" | "user" | list | qualified
-list           ::= "list" "of" ("text" | "user" | qualified)
+list           ::= "list" "of" ("text" | "user" | "permission" | qualified)
 serial         ::= "serial" ("per" NAME)?
 rule           ::= "required" | "unique" | "key" | "after" NAME
 
@@ -118,6 +118,8 @@ row_line       ::= (postfix+ | postfix* NAME "=" expression) END
 
 role           ::= "role" NAME ("per" NAME "from" NAME)? qualified*
                    ("{" NEWLINE? (qualified+ END)* "}")? END
+roles          ::= "roles" NAME "per" NAME "from" NAME ("{" NEWLINE? default_role* "}")? END
+default_role   ::= NAME STRING qualified* ("{" NEWLINE? (qualified+ END)* "}")? END
 
 /* function */
 

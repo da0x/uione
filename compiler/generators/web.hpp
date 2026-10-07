@@ -817,6 +817,17 @@ namespace one::generators {
         // when no role grants it or the page doesn't say where.
         std::string allowed(screen_parts& parts, const std::string& ns, const std::string& command) {
             for (const auto& held : held_) {
+                // A project's own roles allow what their records say now: any command of
+                // theirs but one anyone may run.
+                if (!held.allows.empty()) {
+                    if (!command.starts_with(held.ns + "::") || held.open.contains(command)) continue;
+                    if (!names_parameter(route_, held.within) || !entity_named(ns, held.within)) continue;
+                    parts.params.insert(held.within);
+                    parts.components.insert("allows");
+                    return " allowed={allows(" + view_variable(parts, held.view) + ", " + web_detail::js_string(held.field) + ", " +
+                           web_detail::js_name(held.within + "_id") + ", " + web_detail::js_string(command.substr(held.ns.size() + 2)) + ", " +
+                           web_detail::js_string(held.allows) + ")}";
+                }
                 auto granting = held.granting.find(command);
                 if (granting == held.granting.end()) continue;
                 if (!names_parameter(route_, held.within) || !entity_named(ns, held.within)) continue;
@@ -1341,6 +1352,22 @@ namespace one::generators {
             return "[" + options + "]";
         }
 
+        // A view per the roles' project, like project_page, with a list of its roles,
+        // as the view variable and the list's name: projectPage, "roles".
+        std::optional<std::string> roles_list(screen_parts& parts, const std::string& ns, const held_roles& held) {
+            auto scope = views_.find(ns);
+            if (scope == views_.end() || !names_parameter(route_, held.within)) return std::nullopt;
+            for (const auto& [name, view] : scope->second) {
+                if (!view->per || *view->per != held.within) continue;
+                for (const auto& each : view->each) {
+                    auto* source = std::get_if<language::name_expression>(&each.source->node);
+                    if (!each.name || each.changes || !source || source->name.text() != held.record) continue;
+                    return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name);
+                }
+            }
+            return std::nullopt;
+        }
+
         void form(stream& out, screen_parts& parts, const std::string& ns, const language::form_item& form, const language::button_item* button) {
             parts.components.insert("Form");
             std::string command = full_command(ns, form.commands.front());
@@ -1355,6 +1382,31 @@ namespace one::generators {
                             const auto& t = field.type->parts[0];
                             if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") type = t;
                             if (field.list) type = "list";
+                        }
+                        for (const auto& held : held_) {
+                            if (field.name != f.name || !field.type || held.allows.empty() || held.ns != ns) continue;
+                            // What a role allows: a box to tick for each command there is.
+                            if (field.list && field.type->text() == "permission") {
+                                type = "choices";
+                                std::string options;
+                                for (const auto& c : commands_[ns]) {
+                                    if (held.open.contains(web_detail::join(ns, c))) continue;
+                                    std::string action = c.substr(c.rfind("::") + 2), on = c.substr(0, c.rfind("::"));
+                                    std::replace(on.begin(), on.end(), '_', ' ');
+                                    options += (options.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(c) + ", " +
+                                               web_detail::js_string(web_detail::label(action) + " " + on) + "]";
+                                }
+                                choices = ", choices: [" + options + "]";
+                            }
+                            // A person's role: one of the project's own, from a list of
+                            // them a view on the screen holds.
+                            if (!field.list && field.type->text() == held.record) {
+                                if (auto list = roles_list(parts, ns, held)) {
+                                    type = "choice";
+                                    parts.components.insert("listChoices");
+                                    choices = ", choices: listChoices(" + *list + ", \"title\")";
+                                }
+                            }
                         }
                         // A choice is picked from its choices, not typed.
                         if (field.name == f.name && !field.choices.empty()) {

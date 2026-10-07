@@ -133,6 +133,52 @@ screen "Issue" /issues/:issue {
     CHECK(found->content.find(R"(var Create = one.Command[Issue]("issue::create"))" "\n") != std::string::npos);
 }
 
+TEST_CASE("a project's own roles become one.Roles, and a role it starts with its id") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew    crew  required  key
+	person  user  required  key
+	rank    rank  required  key
+}
+roles rank per crew from hand {
+	captain "Captain" {
+		hand::create
+	}
+	deckhand "Deckhand"  hand::create
+}
+command crew::create {
+	permission authenticated
+	create hand {
+		crew = id  person = me  rank = rank::captain
+	}
+}
+command hand::create
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find("Rank: one.Key(x.ID, \"captain\")") != std::string::npos);
+    CHECK(found->content.find("var Roles = one.Roles(one.Entity[Rank](), one.Entity[Crew](), one.Entity[Hand](), \"may\").\n"
+                              "\tDefault(\"captain\", \"Captain\", \"hand::create\").\n"
+                              "\tDefault(\"deckhand\", \"Deckhand\", \"hand::create\")\n") != std::string::npos);
+    CHECK(found->content.find(", Roles)") != std::string::npos);
+}
+
 TEST_CASE("changes goes only in an update, naming the entity's fields") {
     language::diagnostics out;
     std::vector<language::file> files;

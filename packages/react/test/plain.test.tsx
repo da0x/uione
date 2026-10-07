@@ -6,7 +6,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, vi } from "vitest";
-import { App, Form, Live, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Form, Live, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -94,6 +94,36 @@ describe("a table's row actions", () => {
     const source = memorySource({ views: { "projects::people": { rows: [{ id: "m1", name: "Ada" }] } } });
     renderScreen(source, () => <Table view={useView("projects::people")} columns={{ name: "Name" }} actions={[{ name: "projects::member::delete", allowed: false }]} />);
     expect(screen.queryByRole("columnheader", { name: "Actions" })).toBeNull();
+  });
+});
+
+describe("a project's own roles", () => {
+  it("allow what each role's record says, in that project only", () => {
+    const roles = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", "role.may": ["job::create"] }] } };
+    expect(allows(roles, "project", "ark", "job::create", "role.may")).toBe(true);
+    expect(allows(roles, "project", "ark", "job::update", "role.may")).toBe(false);
+    expect(allows(roles, "project", "raft", "job::create", "role.may")).toBe(false);
+    expect(allows({ status: "loading", data: undefined }, "project", "ark", "job::create", "role.may")).toBe(false);
+  });
+
+  it("are picked from a list a view holds, by their titles", () => {
+    const page = { status: "live" as const, data: { roles: [{ id: "ark-captain", title: "Captain" }, { id: "ark-deckhand", title: "Deckhand" }] } };
+    expect(listChoices(page, "roles", "title")).toEqual([
+      ["ark-captain", "Captain"],
+      ["ark-deckhand", "Deckhand"],
+    ]);
+  });
+
+  it("tick the commands a role allows, and send them as a list", async () => {
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Form command="crew::rank::create" fields={[{ name: "may", label: "Allows", type: "choices", choices: [["job::create", "Create job"], ["job::update", "Update job"]] }]} />
+    ));
+    fireEvent.click(screen.getByLabelText("Create job"));
+    fireEvent.click(screen.getByLabelText("Update job"));
+    fireEvent.click(screen.getByLabelText("Create job"));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "crew::rank::create", input: { may: ["job::update"] } }));
   });
 });
 

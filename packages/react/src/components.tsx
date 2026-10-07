@@ -398,6 +398,22 @@ export function holds(roles: ViewState, field: string, within: string | undefine
   return rows.some((row) => row[field] === within && typeof row.role === "string" && granting.includes(row.role));
 }
 
+// A view's list as a form's choices: each row's id, shown by one of its values, like
+// a project's roles by their titles.
+export function listChoices(view: ViewState, list: string, shown: string): [string, string][] {
+  if (view.status !== "live") return [];
+  return rowsOf(view.data?.[list]).map((row) => [row.id, show(row[shown]) || row.id]);
+}
+
+// Whether a person may run a command within something, like an issue's project,
+// where its roles are its own: one of the roles they hold there, as the view of
+// their roles says, allows it now, in the list each row carries, like role.may.
+export function allows(roles: ViewState, field: string, within: string | undefined, command: string, list: string): boolean {
+  if (roles.status !== "live" || !within) return false;
+  const rows = Array.isArray(roles.data?.rows) ? (roles.data.rows as Record<string, unknown>[]) : [];
+  return rows.some((row) => row[field] === within && Array.isArray(row[list]) && (row[list] as unknown[]).includes(command));
+}
+
 // A button that runs a command on its own, with nothing to fill in, on the entity
 // with that id when it acts on one. It says what it does, as its screen names it or
 // as its command is named, and isn't there at all while it doesn't apply.
@@ -627,10 +643,10 @@ function asField(value: unknown): string {
 }
 
 // What a form sends for a field: a yes or no as true or false, and a list, written
-// separated by commas, as the list of what's between them.
+// separated by commas, or several choices ticked, as the list of what's between them.
 function asInput(value: string, type: string | undefined): unknown {
   if (type === "boolean") return value === "true";
-  if (type !== "list") return value;
+  if (type !== "list" && type !== "choices") return value;
   return value
     .split(",")
     .map((item) => item.trim())

@@ -413,6 +413,11 @@ func (v *ViewSpec) held(r *registry) error {
 				v.scope = r.schemas[ro.scope]
 			}
 		}
+		for _, ro := range r.defined {
+			if ro.member == v.readers {
+				v.scope = r.schemas[ro.scope]
+			}
+		}
 		if v.scope == nil {
 			return fmt.Errorf("one: view %s is read by %s, which grants no role", v.full, r.schemas[v.readers].name)
 		}

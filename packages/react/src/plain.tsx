@@ -332,6 +332,23 @@ export const plain: ComponentSet = {
               <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
               {field.type === "markdown" ? (
                 <textarea {...common} onChange={(event) => field.onChange(event.target.value)} />
+              ) : field.type === "choices" && field.choices ? (
+                // Several choices, each a box to tick, sent as the list of those ticked.
+                <span role="group" aria-label={field.label}>
+                  {field.choices.map(([value, shown]) => {
+                    const ticked = field.value.split(",").map((item) => item.trim()).filter((item) => item !== "");
+                    return (
+                      <label key={value}>
+                        <input
+                          type="checkbox"
+                          checked={ticked.includes(value)}
+                          onChange={(event) => field.onChange((event.target.checked ? [...ticked, value] : ticked.filter((item) => item !== value)).join(", "))}
+                        />
+                        {shown}
+                      </label>
+                    );
+                  })}
+                </span>
               ) : field.type === "boolean" ? (
                 <input
                   {...common}

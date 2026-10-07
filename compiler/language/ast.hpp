@@ -265,6 +265,27 @@ namespace one::language {
         std::vector<qualified_name> permissions;
     };
 
+    // A role each project starts with: maintainer "Maintainer"  issue::create ...
+    struct default_role {
+        std::string name;
+        location where;
+        std::string title;
+        std::vector<qualified_name> permissions;
+    };
+
+    // roles role per project from member { ... }: the roles each project defines for
+    // itself, as records of role that its people edit, each listing the commands it
+    // allows; a member gives its person the role it points at. The block holds the
+    // roles each project starts with.
+    struct roles_declaration {
+        std::string entity;  // role
+        location entity_where;
+        std::string per;     // project
+        std::string from;    // member
+        location per_where;
+        std::vector<default_role> defaults;
+    };
+
     struct function_declaration {
         std::string name;
         std::vector<std::string> parameters;
@@ -454,7 +475,7 @@ namespace one::language {
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
-                     webhook_declaration, backend_declaration, enum_declaration>
+                     webhook_declaration, backend_declaration, enum_declaration, roles_declaration>
             node;
     };
 

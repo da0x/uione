@@ -123,6 +123,7 @@ namespace one::generators {
             std::vector<const language::format_declaration*> formats;
             std::vector<std::pair<const language::function_declaration*, language::location>> functions;
             std::vector<std::pair<const language::webhook_declaration*, language::location>> hooks;
+            std::vector<std::pair<const language::roles_declaration*, language::location>> defined;  // roles each project defines
             std::vector<std::pair<std::string, std::string>> backends;  // each name, and the file it's written in
         };
 
@@ -194,6 +195,8 @@ namespace one::generators {
                     pkg.views.emplace_back(v, d.where);
                 } else if (auto* r = std::get_if<language::role_declaration>(&d.node)) {
                     pkg.roles.push_back(r);
+                } else if (auto* rs = std::get_if<language::roles_declaration>(&d.node)) {
+                    pkg.defined.emplace_back(rs, d.where);
                 } else if (auto* fmt = std::get_if<language::format_declaration>(&d.node)) {
                     pkg.formats.push_back(fmt);
                 } else if (auto* function = std::get_if<language::function_declaration>(&d.node)) {
@@ -481,6 +484,33 @@ namespace one::generators {
             }
 
             functions(body, pkg);
+            // The roles each project defines for itself, and those it starts with.
+            for (const auto& [r, where] : pkg.defined) {
+                auto from_roles = in(body, at(r), where.line);
+                const language::entity_declaration* role = entity(pkg, r->entity);
+                std::string allows;
+                if (role) {
+                    for (const auto& f : role->fields) {
+                        if (f.list && f.type && f.type->text() == "permission") allows = f.name;
+                    }
+                }
+                std::string head = "var Roles = one.Roles(one.Entity[" + api_detail::go_name(r->entity) + "](), one.Entity[" + api_detail::go_name(r->per) +
+                                   "](), one.Entity[" + api_detail::go_name(r->from) + "](), " + api_detail::go_string(allows) + ")";
+                if (r->defaults.empty()) {
+                    body.line(head);
+                } else {
+                    body.open(head + ".");
+                    for (std::size_t i = 0; i < r->defaults.size(); ++i) {
+                        const auto& d = r->defaults[i];
+                        std::string line = "Default(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(d.title);
+                        for (const auto& p : d.permissions) line += ", " + api_detail::go_string(p.text());
+                        body.line(line + ")" + (i + 1 < r->defaults.size() ? "." : ""));
+                    }
+                    body.dedent();
+                }
+                body.line();
+                members.push_back("Roles");
+            }
             for (const auto& [hook, where] : pkg.hooks) {
                 auto from_hook = in(body, at(hook), where.line);
                 if (webhook(body, pkg, *hook)) members.push_back("Webhook" + api_detail::go_name(hook->provider));
@@ -717,7 +747,26 @@ namespace one::generators {
                 for (const auto& v : made->values) {
                     const language::field* f = field(*target, v.name);
                     if (!f) continue;
-                    auto value = expression(e, *v.value, me, f);
+                    // A role every project starts with, role::maintainer, is the id of
+                    // that role of the project the made entity points at.
+                    std::optional<std::string> value;
+                    if (auto* named = std::get_if<language::name_expression>(&v.value->node); named && named->name.parts.size() == 2 && f->type) {
+                        for (const auto& [r, _] : pkg_->defined) {
+                            if (r->entity != f->type->text()) continue;
+                            for (const auto& other : made->values) {
+                                const language::field* g = field(*target, other.name);
+                                if (!g || !g->type || g->type->text() != r->per) continue;
+                                auto place = expression(e, *other.value, me, g);
+                                if (!place) return;
+                                value = "one.Key(" + *place + ", " + api_detail::go_string(named->name.parts[1]) + ")";
+                            }
+                            if (!value) {
+                                unsupported(path_, v.value->where, "a role given without the " + r->per + " it's in, in the same create");
+                                return;
+                            }
+                        }
+                    }
+                    if (!value) value = expression(e, *v.value, me, f);
                     if (!value) return;
                     fields += (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value;
                 }

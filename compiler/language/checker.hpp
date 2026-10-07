@@ -90,6 +90,7 @@ namespace one::language {
             std::map<std::string, declared<function_declaration>> functions;
             std::map<std::string, origin> commands;  // entity::command
             std::vector<const role_declaration*> roles;
+            std::vector<const roles_declaration*> defined;  // roles each project defines for itself
             std::map<std::string, origin> role_names;  // so a role is declared once
         };
 
@@ -186,6 +187,8 @@ namespace one::language {
                     add(here.views, v->name, *v, d.where, "view", ns);
                 } else if (auto* f = std::get_if<format_declaration>(&d.node)) {
                     add(here.formats, f->name, *f, d.where, "format", ns);
+                } else if (auto* rs = std::get_if<roles_declaration>(&d.node)) {
+                    here.defined.push_back(rs);
                 } else if (auto* en = std::get_if<enum_declaration>(&d.node)) {
                     add(here.enums, en->name, *en, d.where, "enum", ns);
                 } else if (auto* r = std::get_if<role_declaration>(&d.node)) {
@@ -408,6 +411,71 @@ namespace one::language {
             }
         }
 
+        // roles role per project from member: role is a project's role, with a field
+        // pointing at the project, a name and a title among its keys and fields, and
+        // a list of the commands it allows; member points at a project, a person and
+        // a role. Each role a project starts with allows commands there are.
+        void verify(const std::string& ns, location, const roles_declaration& r) {
+            snake(r.entity, r.entity_where);
+            const entity_declaration* role = find_entity(ns, qualified_name{{r.entity}, r.entity_where});
+            const entity_declaration* scope = find_entity(ns, qualified_name{{r.per}, r.per_where});
+            const entity_declaration* member = find_entity(ns, qualified_name{{r.from}, r.per_where});
+            if (!role) error(r.entity_where, "a project's roles are records of " + r.entity + ", which isn't an entity " + in_namespace(ns));
+            if (!scope) error(r.per_where, "roles belong to " + r.per + ", which isn't an entity " + in_namespace(ns));
+            if (!member) error(r.per_where, "roles are given by " + r.from + ", which isn't an entity " + in_namespace(ns));
+            if (!role || !scope || !member) return;
+            mean_entity(r.entity_where, r.entity.size(), role);
+            bool place = false, name = false, title = false;
+            int allows = 0;
+            for (const auto& f : role->fields) {
+                if (f.key && pointed(ns, f) == scope) place = true;
+                if (f.name == "name" && f.key) name = true;
+                if (f.name == "title") title = true;
+                if (f.list && f.type && f.type->text() == "permission") ++allows;
+            }
+            if (!place) error(r.entity_where, r.entity + " is a role of a " + r.per + ", so it needs a key field pointing at one, like " + r.per + "  " + r.per + "  required  key");
+            if (!name) error(r.entity_where, r.entity + " is named within its " + r.per + ", so it needs a key field name, like name  slug  required  key");
+            if (!title) error(r.entity_where, r.entity + " is shown by its title, so it needs a field title, like title  text  required");
+            if (allows != 1) error(r.entity_where, r.entity + " says what it allows in one list of commands, like may  list of permission");
+            bool held_in = false, person = false, given = false;
+            for (const auto& f : member->fields) {
+                if (pointed(ns, f) == scope) held_in = true;
+                if (f.type && f.type->text() == "user") person = true;
+                if (pointed(ns, f) == role) given = true;
+            }
+            if (!held_in || !person || !given) {
+                error(r.per_where, r.from + " gives a person a role in a " + r.per + ", so it needs fields pointing at a " + r.per + ", a person and a " +
+                                       r.entity + ", like " + r.entity + "  " + r.entity + "  required  key");
+            }
+            std::set<std::string> seen;
+            for (const auto& d : r.defaults) {
+                snake(d.name, d.where);
+                if (!seen.insert(d.name).second) error(d.where, "every " + r.per + " starts with one " + d.name + "; it's given twice");
+                for (const auto& p : d.permissions) {
+                    snake(p);
+                    // What a project's role allows is running commands, so each is one.
+                    auto here = scopes_.find(ns);
+                    if (p.parts.size() != 2 || here == scopes_.end() || !here->second.commands.contains(p.text())) {
+                        error(p.where, d.name + " allows " + p.text() + ", which isn't a command " + in_namespace(ns));
+                    }
+                }
+            }
+        }
+
+        // The roles a field's type names, when its entity is a project's roles, like a
+        // member's role: what role::maintainer, a role every project starts with, means.
+        const roles_declaration* defined_roles(const std::string& ns, const field& f) {
+            if (!f.type) return nullptr;
+            for (const auto& space : candidates(ns, {})) {
+                auto it = scopes_.find(space);
+                if (it == scopes_.end()) continue;
+                for (const auto* r : it->second.defined) {
+                    if (r->entity == f.type->parts.back()) return r;
+                }
+            }
+            return nullptr;
+        }
+
         void verify(const std::string& ns, location where, const namespace_declaration& n) {
             snake(n.name, where);
             verify(join(ns, n.name), n.declarations);
@@ -609,6 +677,9 @@ namespace one::language {
                 // A field says what it holds, so nothing has to be worked out from how
                 // a command happens to use it.
                 if (!f.type && f.choices.empty()) error(f.where, f.name + " needs a type, like date or text");
+                if (f.type && f.type->text() == "permission" && !f.list) {
+                    error(f.where, "a role allows several commands, so " + f.name + " is a list of them, like " + f.name + "  list of permission");
+                }
                 if (f.per) verify_serial(ns, e, f);
                 if (f.list) verify_list(ns, f);
                 if (f.initial && is_serial(f)) {
@@ -649,7 +720,7 @@ namespace one::language {
         // isn't a key, a serial, unique, or after anything.
         void verify_list(const std::string& ns, const field& f) {
             const std::string held = f.type ? f.type->text() : "";
-            if (held != "text" && held != "user" && !(f.type && find_entity(ns, *f.type))) {
+            if (held != "text" && held != "user" && held != "permission" && !(f.type && find_entity(ns, *f.type))) {
                 error(f.where, f.name + " is a list, which holds text, people or entities, like list of label or list of user");
             }
             if (f.key || f.unique || f.after || f.initial) {
@@ -680,7 +751,7 @@ namespace one::language {
         }
 
         void verify_type(const std::string& ns, const qualified_name& type) {
-            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user"};
+            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user", "permission"};
             snake(type);
             if (type.parts.size() == 1 && built_in.contains(type.parts[0])) {
                 mean(type.where, type.parts[0].size(), "built-in type " + type.parts[0], std::nullopt, "built-in-types");
@@ -949,6 +1020,9 @@ namespace one::language {
                 if (auto here = scopes_.find(ns); here != scopes_.end()) {
                     for (const auto* r : here->second.roles) {
                         if (r->from == v.readers && r->per) scope = find_entity(ns, qualified_name{{*r->per}, v.readers_where});
+                    }
+                    for (const auto* r : here->second.defined) {
+                        if (r->from == *v.readers) scope = find_entity(ns, qualified_name{{r->per}, v.readers_where});
                     }
                 }
                 if (!find_entity(ns, qualified_name{{*v.readers}, v.readers_where})) {
@@ -1807,6 +1881,20 @@ namespace one::language {
                              owner->second);
                     }
                     return nullptr;
+                }
+                // A role every project starts with, like role::maintainer, given to a
+                // field that points at a project's role.
+                if (n->name.parts.size() == 2 && beside) {
+                    if (const roles_declaration* r = defined_roles(in.ns, *beside)) {
+                        bool known = n->name.parts[0] == r->entity &&
+                                     std::any_of(r->defaults.begin(), r->defaults.end(), [&](const default_role& d) { return d.name == n->name.parts[1]; });
+                        if (!known) {
+                            std::string names;
+                            for (const auto& d : r->defaults) names += (names.empty() ? "" : ", ") + r->entity + "::" + d.name;
+                            error(n->name.where, n->name.text() + " isn't a role every " + r->per + " starts with" + (names.empty() ? "" : "; those are " + names));
+                        }
+                        return nullptr;
+                    }
                 }
                 if (n->name.parts.size() != 1) return nullptr;
                 const std::string& name = n->name.parts[0];

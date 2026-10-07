@@ -304,6 +304,63 @@ screen "Shelf" /shelf {
     CHECK(only_error(shown).message == "only a row's button has a when, like delete \"Remove\" when person != me");
 }
 
+TEST_CASE("roles a project defines for itself are records of an entity, given by members") {
+    const std::string crew = R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew    crew  required  key
+	person  user  required  key
+	rank    rank  required  key
+}
+entity job {
+	crew   crew  required
+	title  text  required
+}
+roles rank per crew from hand {
+	captain "Captain" {
+		hand::create  job::create
+	}
+	deckhand "Deckhand"  job::create
+}
+command crew::create {
+	permission authenticated
+	create hand {
+		crew = id  person = me  rank = rank::captain
+	}
+}
+command hand::create
+command job::create
+view crew_page per crew {
+	readers hand
+	slug = crew.slug
+}
+}
+)";
+    CHECK(check_source(crew).size() == 0);
+
+    std::string unknown = crew;
+    unknown.replace(unknown.find("rank = rank::captain"), 20, "rank = rank::admiral");
+    CHECK(only_error(unknown).message == "rank::admiral isn't a role every crew starts with; those are rank::captain, rank::deckhand");
+
+    std::string allowing = crew;
+    allowing.replace(allowing.find("deckhand \"Deckhand\"  job::create"), 32, "deckhand \"Deckhand\"  job::sink");
+    CHECK(only_error(allowing).message == "deckhand allows job::sink, which isn't a command in namespace crew");
+
+    std::string single = crew;
+    single.replace(single.find("may    list of permission"), 25, "may    permission");
+    auto errors = check_source(single);
+    REQUIRE(errors.size() >= 1);
+    CHECK(errors[0].message == "a role allows several commands, so may is a list of them, like may  list of permission");
+}
+
 TEST_CASE("a theme and corners are ones the component set has") {
     CHECK(only_error("project p {\n\ttheme  solarized\n}\n").message == "theme is papercolor, or left out for the component set's own");
     CHECK(only_error("project p {\n\tcorners  sharp\n}\n").message == "corners are square or round");

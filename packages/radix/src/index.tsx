@@ -473,7 +473,25 @@ export const radix: ComponentSet = {
             <label id={`${id}-${field.name}-label`} htmlFor={`${id}-${field.name}`} className="text-sm font-medium">
               {field.label}
             </label>
-            {field.type === "boolean" ? (
+            {field.type === "choices" && field.choices ? (
+              // Several choices, like what a role allows: a box to tick beside each.
+              <div role="group" aria-labelledby={`${id}-${field.name}-label`} className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                {field.choices.map(([value, shown]) => {
+                  const ticked = field.value.split(",").map((item) => item.trim()).filter((item) => item !== "");
+                  return (
+                    <label key={value} className="flex w-fit cursor-pointer items-center gap-2.5 text-sm text-ink/90">
+                      <input
+                        type="checkbox"
+                        checked={ticked.includes(value)}
+                        onChange={(event) => field.onChange((event.target.checked ? [...ticked, value] : ticked.filter((item) => item !== value)).join(", "))}
+                        className="size-4 rounded border-control-line accent-accent"
+                      />
+                      {shown}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : field.type === "boolean" ? (
               // A yes or no: a box to tick, beside what it asks.
               <label className="flex w-fit cursor-pointer items-center gap-2.5 text-sm text-ink/90">
                 <input

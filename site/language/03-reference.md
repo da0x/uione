@@ -74,6 +74,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`command`](#command) | a way to change an entity |
 | [`view`](#view) | a document built ahead of time for a screen |
 | [`role`](#role) | permissions a person can be given |
+| [`roles`](#roles) | the roles each project defines for itself, as records its people edit |
 | [`function`](#function) | a value worked out from others |
 | [`screen`](#screen) | a page, at an address |
 | [`picker`](#picker) | how an entity is chosen in a form |
@@ -347,6 +348,7 @@ What a field can hold, written after its name: `title  text  required`.
 | `serial` | a whole number counted up as each entity is made, 1, 2, 3, and never typed; `serial per project` counts within each project | a number |
 | `boolean` | true or false | a checkbox |
 | `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
+| `list of permission` | the commands a project's role allows, like `issue::create` | a box to tick for each command |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
 
@@ -543,6 +545,57 @@ role reporter per project from member  issue::create  comment::create
   it, like an issue, and for anything that points at that, like an issue's
   comment. A maintainer of one project can do nothing in another.
 - A role held within something is never given everywhere.
+
+## roles
+
+Roles each project defines for itself, as records its people edit, rather than
+roles written in code. A project changes what a role allows, or adds a role of its
+own, in its settings, with no deploy.
+
+```one
+entity role {
+	project  project  required  key
+	name     slug     required  key
+	title    text     required
+	may      list of permission
+}
+
+entity member {
+	project  project  required  key
+	person   user     required  key
+	role     role     required  key
+}
+
+roles role per project from member {
+	maintainer "Maintainer" {
+		project::update  member::create  role::create  role::update
+		issue::create  issue::update  issue::close
+	}
+	reporter "Reporter"  issue::create  comment::create
+}
+
+command project::create {
+	permission authenticated
+	create member {
+		project = id  person = me  role = role::maintainer
+	}
+}
+```
+
+- A role is a record of its project, named by the project and its name, with a
+  title and the commands it allows: `may  list of permission`.
+- A member gives its person the role it points at, in its project. What the role
+  allows now is what they may do there, on the project and on everything held
+  within it, like its issues. Changing a role changes what everyone who holds it
+  may do, at once, and their pages show it.
+- The block gives the roles each project starts with, made with it; one that
+  allows a lot lists its commands in a block of its own. `role::maintainer` is the
+  project's maintainer role, as in what `project::create` makes.
+- A project made before its roles were records gets the ones it starts with when
+  the backend starts, and its members' roles, named as those are, point at them.
+- A form for a role ticks the commands it allows; a form for a member picks its
+  role from a list of the project's roles that a view on the screen holds, like
+  `roles = each role where project == project.id { name  title }`.
 
 ## function
 

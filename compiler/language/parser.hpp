@@ -186,6 +186,7 @@ namespace one::language {
             if (word == "command") return {where, parse_command()};
             if (word == "view") return {where, parse_view()};
             if (word == "role") return {where, parse_role()};
+            if (word == "roles") return {where, parse_roles()};
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
@@ -199,7 +200,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, role, function, screen, picker, webhook or backend");
+                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook or backend");
         }
 
         project_declaration parse_project() {
@@ -568,6 +569,44 @@ namespace one::language {
             }
             end_line();
             return role;
+        }
+
+        roles_declaration parse_roles() {
+            advance();
+            roles_declaration roles;
+            roles.entity_where = peek().where;
+            roles.entity = expect(token_kind::identifier, "the entity a project's roles are records of, like role").text;
+            if (!at_word("per")) fail_expecting("'per' and what each set of roles belongs to, like per project");
+            roles.per_where = advance().where;
+            roles.per = expect(token_kind::identifier, "what each set of roles belongs to, like project").text;
+            if (!at_word("from")) fail_expecting("'from' and the entity that gives a person a role, like from member");
+            advance();
+            roles.from = expect(token_kind::identifier, "the entity that gives a person a role, like member").text;
+            // The roles each project starts with, one to a line, with a block for one
+            // that allows a lot: maintainer "Maintainer" { issue::create ... }.
+            if (at(token_kind::left_brace)) {
+                advance();
+                while (in_block()) {
+                    default_role role;
+                    role.where = peek().where;
+                    role.name = expect(token_kind::identifier, "a role each project starts with, like maintainer").text;
+                    role.title = expect(token_kind::string, "how it's shown, like \"Maintainer\"").text;
+                    while (at(token_kind::identifier)) role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
+                    if (at(token_kind::left_brace)) {
+                        advance();
+                        while (in_block()) {
+                            while (at(token_kind::identifier)) role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
+                            end_line();
+                        }
+                        expect(token_kind::right_brace, "'}'");
+                    }
+                    end_line();
+                    roles.defaults.push_back(std::move(role));
+                }
+                expect(token_kind::right_brace, "'}'");
+            }
+            end_line();
+            return roles;
         }
 
         function_declaration parse_function() {

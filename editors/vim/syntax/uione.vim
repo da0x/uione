@@ -19,7 +19,7 @@ syn match   uioneComment "//.*$" contains=uioneTodo,@Spell
 syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
-syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
 syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\|\s*=\)\@!" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
 syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
@@ -70,7 +70,7 @@ syn match   uioneFieldWord "\<\%(per\|of\)\>" contained
 " A list's type is one type, read as a unit: list of text, list of label. Defined
 " after uioneFieldWord, so of in a list's type is the type's own.
 syn match   uioneListOf    "\%(^\s*\h\w*\s\+list\s\+\)\@<=of\>" contained nextgroup=uioneListType,uioneUserType skipwhite
-syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\)\>" contained
+syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|permission\)\>" contained
 
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).

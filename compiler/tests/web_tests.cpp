@@ -453,6 +453,66 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     CHECK(manifest->content.find(R"("name": "studio-web")") != std::string::npos);  // the project keeps its own name
 }
 
+TEST_CASE("a project's own roles decide its buttons, and its forms pick from them") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-roles";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity rank {
+	crew   crew  required  key
+	name   slug  required  key
+	title  text  required
+	may    list of permission
+}
+entity hand {
+	crew    crew  required  key
+	person  user  required  key
+	rank    rank  required  key
+}
+roles rank per crew from hand {
+	captain "Captain"  hand::create  rank::create
+}
+command crew::create {
+	permission authenticated
+	create hand {
+		crew = id  person = me  rank = rank::captain
+	}
+}
+command hand::create
+command rank::create
+view crew_page per crew {
+	readers hand
+	ranks = each rank where crew == crew.id {
+		name  title
+	}
+}
+screen "Crew" /crews/:crew {
+	hand::create "Add someone"
+	form hand::create "Add" {
+		person  rank
+	}
+	rank::create "New rank"
+	form rank::create "Create" {
+		name  title  may
+	}
+}
+}
+)");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"({ name: "rank", type: "choice", choices: listChoices(crewPage, "ranks", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"(allowed={allows(handRoles, "crew", crewId, "hand::create", "rank.may")})") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["crew::create", "Create crew"], ["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") == std::string::npos);
+    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") != std::string::npos);
+}
+
 TEST_CASE("a project's theme and corners are on its page from the first paint") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-theme";
