@@ -1243,11 +1243,19 @@ namespace one::language {
                 end_line();
                 return {where, std::move(s)};
             }
-            if (at_word("create") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace) {
-                advance();
+            bool runs = at(token_kind::identifier) && peek(1).kind == token_kind::scope && peek(2).kind == token_kind::identifier &&
+                        peek(2).text == "create" && peek(3).kind == token_kind::left_brace;
+            if (runs || (at_word("create") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace)) {
                 create_statement s;
-                s.entity_where = peek().where;
-                s.entity = advance().text;
+                if (runs) {
+                    s.entity_where = peek().where;
+                    s.command = parse_qualified_name("the command, like board::create");
+                    s.entity = s.command->parts.front();
+                } else {
+                    advance();
+                    s.entity_where = peek().where;
+                    s.entity = advance().text;
+                }
                 advance();
                 while (in_block()) {
                     while (!at_line_end()) {

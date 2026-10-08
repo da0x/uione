@@ -155,6 +155,9 @@ namespace one::generators {
         std::vector<std::pair<std::string, const language::entity_declaration*>> pointed_;
         // The inputs of the command being written, like into, by name, with their types.
         std::map<std::string, std::string> inputs_;
+        // Create commands another runs, like board::create in project::create, whose
+        // bodies are functions of their own so it can call them.
+        std::set<std::string> run_;
         // Tables whose rows are dragged into order, with their namespace: the entity's
         // update may change the field they're ordered by.
         std::vector<std::pair<std::string, const language::table_item*>> reordered_;
@@ -395,6 +398,11 @@ namespace one::generators {
         stream package_file(const std::string& ns, const package& pkg) {
             path_ = pkg.path;
             pkg_ = &pkg;
+            run_.clear();
+            for (const auto& [c, _] : pkg.commands) find_run(c->body);
+            for (const auto& [o, _] : pkg.onces) {
+                for (const auto& step : o->steps) find_run(step.body);
+            }
             bool uses_time = false;
             stream body("\t");
 
@@ -676,6 +684,20 @@ namespace one::generators {
                 return;
             }
             std::string me = receiver(e);
+            // Another command runs its body too: it's a function both name.
+            if (run_.contains(c.name.text())) {
+                out.open("func " + body_function(c.name.text()) + "(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
+                for (const auto& [name, type] : inputs_) {
+                    bool used = std::any_of(body.begin(), body.end(), [&](const language::statement* s) { return mentions(*s, name); });
+                    if (used) out.line(local_name(name) + ", _ := c.Input(" + api_detail::go_string(name) + ").(" + type + ")");
+                }
+                body_of(out, e, body, me, at(&c), uses_time);
+                out.close("}");
+                out.line();
+                out.line(head + ".Do(" + body_function(c.name.text()) + ")");
+                inputs_.clear();
+                return;
+            }
             out.open(head + ".");
             out.open("Do(func(c *one.Ctx, " + me + " *" + api_detail::go_name(e.name) + ") error {");
             for (const auto& [name, type] : inputs_) {
@@ -751,6 +773,25 @@ namespace one::generators {
             if (!value) return std::nullopt;
             out.emplace_back(api_detail::go_string(field_name), *value);
             return out;
+        }
+
+        // The function a command's body is, when another command runs it: board::create's
+        // is createBoard.
+        static std::string body_function(const std::string& command) {
+            auto cut = command.find("::");
+            return local_name(command.substr(cut + 2) + "_" + command.substr(0, cut));
+        }
+
+        // The create commands a package's bodies run, like board::create.
+        void find_run(const std::vector<language::statement>& body) {
+            for (const auto& s : body) {
+                if (auto* made = std::get_if<language::create_statement>(&s.node); made && made->command) run_.insert(made->command->text());
+                if (auto* i = std::get_if<language::if_statement>(&s.node)) {
+                    find_run(i->then_body);
+                    find_run(i->else_body);
+                }
+                if (auto* each = std::get_if<language::each_statement>(&s.node)) find_run(each->body);
+            }
         }
 
         // The name a body calls its entity by: its first letter, or x for one whose
@@ -1023,9 +1064,32 @@ namespace one::generators {
                     if (!value) return;
                     fields += (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value;
                 }
-                out.open("if err := one.Create(c, &" + api_detail::go_name(target->name) + "{" + fields + "}); err != nil {");
-                out.line("return err");
-                out.close("}");
+                // board::create { ... }: made, then that command's body run on it, in a
+                // block of its own so each one made is called made.
+                const language::command_declaration* runs = nullptr;
+                if (made->command && pkg_) {
+                    for (const auto& [command, _] : pkg_->commands) {
+                        if (command->name.text() == made->command->text()) runs = command;
+                    }
+                }
+                bool body = runs && std::any_of(runs->body.begin(), runs->body.end(), [](const language::statement& st) {
+                    return !std::holds_alternative<language::permission_statement>(st.node) && !std::holds_alternative<language::changes_statement>(st.node);
+                });
+                if (body) {
+                    out.open("{");
+                    out.line("made := &" + api_detail::go_name(target->name) + "{" + fields + "}");
+                    out.open("if err := one.Create(c, made); err != nil {");
+                    out.line("return err");
+                    out.close("}");
+                    out.open("if err := " + body_function(made->command->text()) + "(c, made); err != nil {");
+                    out.line("return err");
+                    out.close("}");
+                    out.close("}");
+                } else {
+                    out.open("if err := one.Create(c, &" + api_detail::go_name(target->name) + "{" + fields + "}); err != nil {");
+                    out.line("return err");
+                    out.close("}");
+                }
             } else if (auto* i = std::get_if<language::if_statement>(&s.node)) {
                 // if workflow == workflow::kanban { create phase ... }: what's done when.
                 auto condition = expression(e, *i->condition, me, nullptr);

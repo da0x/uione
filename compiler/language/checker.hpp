@@ -919,7 +919,9 @@ namespace one::language {
                 } else if (auto* a = std::get_if<assign_statement>(&s.node)) {
                     std::size_t errors = out_.size();
                     const field* target = resolve(in, *a->target);
-                    if (target && fixed_once_made(*target)) error(a->target->where, why_fixed(*target));
+                    // A once may give what was made before a key existed its key, like the board
+                    // a project's phases were in before it had boards.
+                    if (target && fixed_once_made(*target) && !in.stored) error(a->target->where, why_fixed(*target));
                     if (target && target->list && !std::holds_alternative<list_expression>(a->value->node)) {
                         error(a->target->where, target->name + " is a list; add to it or remove from it, like add me to " + target->name +
                                                     ", or give it a whole list, like [a, b]");
@@ -998,6 +1000,14 @@ namespace one::language {
             if (!made) {
                 error(c.entity_where, "there's no entity " + c.entity + " to create " + in_namespace(ns));
                 return;
+            }
+            // board::create { ... } runs that command's body too, so it's a create that's declared.
+            if (c.command) {
+                if (c.command->parts.size() != 2 || c.command->parts[1] != "create") {
+                    error(c.command->where, c.command->text() + " isn't a create; a command run here makes something, like " + c.entity + "::create");
+                } else {
+                    verify_command_use(ns, *c.command);
+                }
             }
             std::set<std::string, std::less<>> given;
             bool misnamed = false;

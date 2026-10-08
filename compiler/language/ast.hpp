@@ -138,6 +138,9 @@ namespace one::language {
         std::string entity;
         location entity_where;
         std::vector<field_value> values;
+        // board::create { ... }: made as that command makes it, its body run too,
+        // like a board's phases made from the preset it starts from.
+        std::optional<qualified_name> command;
     };
 
     struct return_statement {

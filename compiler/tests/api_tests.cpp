@@ -217,6 +217,71 @@ screen "Columns" /columns {
     CHECK(found->content.find(R"(one.Command[Column]("column::update").Fields("title", "position"))") != std::string::npos);
 }
 
+TEST_CASE("a command can run another's create, making the entity and doing what that command does") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace work {
+enum preset {
+	simple  "Simple"
+	none    "None"
+}
+entity project {
+	slug    slug  required  unique  key
+	preset  preset = preset::simple
+}
+entity board {
+	project  project  required  key
+	name     text     required  key = slug(title)
+	title    text     required
+	preset   preset = preset::simple
+	start    phase
+}
+entity phase {
+	board    board    required  key
+	name     text     required  key
+	project  project  required
+}
+command project::create {
+	permission authenticated
+	board::create { project = id  name = "main"  title = slug  preset = preset }
+}
+command board::create {
+	if preset == preset::simple {
+		create phase { board = id  name = "open"  project = project }
+		start = phase::open
+	}
+}
+once "2026-10-08 boards" {
+	each phase {
+		board = board::main
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "work/work.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find("func createBoard(c *one.Ctx, b *Board) error {") != std::string::npos);
+    CHECK(go.find(R"(var BoardCreate = one.Command[Board]("board::create").Do(createBoard))") != std::string::npos);
+    CHECK(go.find(R"(made := &Board{Project: p.ID, Name: "main", Title: p.Slug, Preset: p.Preset})") != std::string::npos);
+    CHECK(go.find("if err := createBoard(c, made); err != nil {") != std::string::npos);
+    // A once gives what was made before boards their board, though it's a key.
+    CHECK(go.find(R"(p.Board = one.Key(p.Project, "main"))") != std::string::npos);
+
+    // What's run is a create that's declared.
+    language::diagnostics wrong;
+    std::vector<language::file> bad;
+    bad.push_back(language::parse("main.one", "namespace work {\nentity board {\n\ttitle  text\n}\nentity project {\n\tname  text\n}\n"
+                                              "command project::create {\n\tboard::update { title = name }\n}\n}\n", wrong));
+    language::check(bad, wrong);
+    REQUIRE(wrong.size() == 1);
+    CHECK(wrong[0].message.starts_with("expected"));
+}
+
 TEST_CASE("a key made from another field tells the library which") {
     language::diagnostics out;
     std::vector<language::file> files;

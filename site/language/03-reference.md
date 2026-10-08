@@ -433,6 +433,11 @@ command issue::move {
   and its name. A list field is given its values whole: `roles = [role::maintainer,
   role::programmer]`, or a role's `may = [issue::create, issue::move]`.
   A long list goes on over lines until its `]`, and may end in a comma.
+- `board::create { project = id  title = name }` makes a board as `board::create`
+  makes one: its body runs too, like the phases of the preset a board starts from,
+  so a project made with a first board gets that board's phases with it.
+- A once may give what was made before a key existed its key, like the board a
+  project's phases were in before projects had boards.
 - `input into phase` is something a command is sent besides its entity's fields,
   like the phase a removed phase's issues move to. Its forms ask for it, picked as a
   field of its type would be, its body names it, and it's never stored.

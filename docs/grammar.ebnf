@@ -104,7 +104,7 @@ statement      ::= ( "require" expression STRING
                    | "each" NAME "where" expression block
                    | "delete" "each" NAME "where" expression
                    | postfix "=" expression ) END
-create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
+create         ::= ("create" NAME | NAME "::" "create") "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
 permission_word ::= "anyone" | "authenticated" | "owner"
 if             ::= "if" expression block ("else" (if | block))?
 
