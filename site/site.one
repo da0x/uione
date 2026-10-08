@@ -10,7 +10,7 @@
 import one
 
 project uione {
-	one        "0.6.30"
+	one        "0.7.0"
 	domain     "www.uione.io"
 	firebase   "uione-web"
 	region     "us-east4"

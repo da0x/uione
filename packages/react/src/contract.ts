@@ -42,7 +42,7 @@ export interface PageProps {
 export interface Footer {
   copyright?: string; // like Daher Alfawares
   link?: string; // where the name links, like their LinkedIn
-  version?: string; // like 0.6.30
+  version?: string; // like 0.7.0
   commit?: string; // like d9d95fd
 }
 

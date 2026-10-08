@@ -921,10 +921,10 @@ describe("a site's foot", () => {
   it("says who it's by, linked, and the uione and commit it was built from", () => {
     const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
     render(
-      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ copyright: "Ada Lovelace", link: "https://www.linkedin.com/in/ada", version: "0.6.30", commit: "d9d95fd0aaaa" }} />,
+      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ copyright: "Ada Lovelace", link: "https://www.linkedin.com/in/ada", version: "0.7.0", commit: "d9d95fd0aaaa" }} />,
     );
     const foot = screen.getByRole("contentinfo");
-    expect(foot.textContent).toBe(`© ${new Date().getFullYear()} Ada Lovelace · uione 0.6.30 · d9d95fd`);
+    expect(foot.textContent).toBe(`© ${new Date().getFullYear()} Ada Lovelace · uione 0.7.0 · d9d95fd`);
     expect(screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
   });
 });

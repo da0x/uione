@@ -30,7 +30,7 @@ const cloud = {
 };
 const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud), personal: ["studio::projects"] });
 
-export const site = { name: "uione", icon: "/icon.svg", screens: [about, home, install, language, mission, releases], ui: radix, data, authentication: false, footer: { copyright: "Daher Alfawares", link: "https://www.linkedin.com/in/dalfawares", version: "0.6.30", commit: import.meta.env.VITE_UIONE_COMMIT } };
+export const site = { name: "uione", icon: "/icon.svg", screens: [about, home, install, language, mission, releases], ui: radix, data, authentication: false, footer: { copyright: "Daher Alfawares", link: "https://www.linkedin.com/in/dalfawares", version: "0.7.0", commit: import.meta.env.VITE_UIONE_COMMIT } };
 
 export default function Site() {
   return <App {...site} />;
