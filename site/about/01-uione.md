@@ -1,6 +1,6 @@
 # About uione
 
-uione is made by [Daher Alfawares](https://www.linkedin.com/in/dalfawares).
+uione is made by [Daher Alfawares](https://www.linkedin.com/in/daheralfawares).
 
 It's one idea built three ways at once: a feature should be said once, plainly, and
 everything else should follow from it. The [mission](/mission) says why.
@@ -30,4 +30,4 @@ under the LGPL, so an app of any kind can use them. The source is on
 ## Get in touch
 
 I'd like to hear what you build, and what got in your way. You'll find me on
-[LinkedIn](https://www.linkedin.com/in/dalfawares).
+[LinkedIn](https://www.linkedin.com/in/daheralfawares).
