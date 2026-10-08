@@ -75,21 +75,29 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
   // Once someone's signed in, the backend is told, once for each person each time
   // the app opens: it does what signing in brings about, like joining the projects
   // an invitation to their email asked them to.
+  // It starts with the first view opened, which connects anyway, so making the
+  // source, as a page rendered ahead of time does, connects to nothing.
   let told: string | undefined;
-  backend.auth.watch((person) => {
-    if (!person || told === person.uid) return;
-    told = person.uid;
-    void (async () => {
-      const token = await backend.token().catch(() => undefined);
-      if (!token) return;
-      await (options.fetch ?? fetch)(`${api}/signin`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
-    })();
-  });
+  let telling = false;
+  const tell = () => {
+    if (telling) return;
+    telling = true;
+    backend.auth.watch((person) => {
+      if (!person || told === person.uid) return;
+      told = person.uid;
+      void (async () => {
+        const token = await backend.token().catch(() => undefined);
+        if (!token) return;
+        await (options.fetch ?? fetch)(`${api}/signin`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+      })();
+    });
+  };
 
   return {
     auth: backend.auth,
 
     subscribe(view, subject, emit) {
+      tell();
       if (subject !== undefined && !safeSubject(subject)) {
         emit({ status: "denied", data: undefined });
         return () => {};

@@ -365,8 +365,12 @@ describe("signing in", () => {
       asked.push({ url: String(url), auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
       return new Response("{}", { status: 200 });
     };
-    untracked(fake.backend, { fetch: fetch as typeof globalThis.fetch });
+    const source = untracked(fake.backend, { fetch: fetch as typeof globalThis.fetch });
     fake.become({ uid: "ada", name: "Ada" });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    // Nothing until a view is opened, so making the source connects to nothing.
+    expect(asked).toEqual([]);
+    stops.push(source.subscribe("waitlist::signups", undefined, () => {}));
     fake.become({ uid: "ada", name: "Ada" });
     for (let i = 0; i < 5; i++) await Promise.resolve();
     expect(asked).toEqual([{ url: "/api/signin", auth: "Bearer token-for-ada" }]);
