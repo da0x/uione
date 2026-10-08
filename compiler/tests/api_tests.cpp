@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/api.hpp"
+#include "generators/indexes.hpp"
 #include "generators/rules.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
@@ -833,4 +834,53 @@ view news per user {
     REQUIRE(file != nullptr);
     CHECK(file->content.find(R"(List("changes", one.All[one.ChangeOf[Issue]]().Except("created_by", one.Viewer).Has("board.followers", one.Viewer).)"
                              R"(Or(one.All[one.ChangeOf[Issue]]().Except("created_by", one.Viewer).Has("assignees", one.Viewer))).)") != std::string::npos);
+}
+
+TEST_CASE("a list kept to its newest rows has the index each way it's picked by needs") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace tracker {
+entity project {
+	slug  text  key
+}
+entity board {
+	project    project
+	followers  list of user
+}
+entity issue history {
+	project    project
+	board      board
+	assignees  list of user
+}
+view news per user {
+	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+		order by created_at descending
+		limit 30
+		field
+	}
+}
+view project_page per project {
+	timeline = each change of issue where project == project.id {
+		order by created_at descending
+		limit 50
+		field
+	}
+	everything = each change of issue where project == project.id {
+		field
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto file = generators::indexes_file(files);
+    CHECK(file.path == "firestore.indexes.json");
+    CHECK(file.content == R"({
+  "indexes": [
+    { "collection": "tracker_issue_history", "fields": [{ "field": "assignees", "array": "CONTAINS" }, { "field": "created_at", "order": "DESCENDING" }] },
+    { "collection": "tracker_issue_history", "fields": [{ "field": "board", "order": "ASCENDING" }, { "field": "created_at", "order": "DESCENDING" }] },
+    { "collection": "tracker_issue_history", "fields": [{ "field": "project", "order": "ASCENDING" }, { "field": "created_at", "order": "DESCENDING" }] }
+  ]
+}
+)");
 }

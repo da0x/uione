@@ -11,6 +11,7 @@
 
 #include "generators/api.hpp"
 #include "generators/infrastructure.hpp"
+#include "generators/indexes.hpp"
 #include "generators/roles.hpp"
 #include "generators/rules.hpp"
 #include "generators/web.hpp"
@@ -44,7 +45,7 @@ namespace one::generators {
         };
         under("web", generate_web(files, project_dir, out_dir + "/web"));
         under("api", api.files);
-        under("", {rules_file(project_dir)});
+        under("", {rules_file(project_dir), indexes_file(files)});
         auto deploy = generate_infrastructure(files, project_dir, out_dir);
         out.note = deploy.skipped;
         under("", deploy.files);

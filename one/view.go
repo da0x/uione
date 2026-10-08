@@ -784,32 +784,40 @@ func addAll(add func(string), value any) {
 // find reads the entities a query picks. subject is the person a per-person view
 // is for, and row the id of the row a value is worked out for.
 func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firestore.DocumentSnapshot, error) {
-	if len(q.or) > 0 {
-		// Each way on its own, and what any of them picks, once.
-		var all []*firestore.DocumentSnapshot
-		seen := map[string]bool{}
-		for _, way := range q.ways() {
-			docs, err := a.find(ctx, way, subject, row)
+	var all []*firestore.DocumentSnapshot
+	seen := map[string]bool{}
+	// Each way on its own, and what any of them picks, once.
+	for _, way := range q.ways() {
+		queries, err := a.stores(ctx, way, subject, row)
+		if err != nil {
+			return nil, err
+		}
+		for _, query := range queries {
+			docs, err := query.Documents(ctx).GetAll()
 			if err != nil {
 				return nil, err
 			}
 			for _, doc := range docs {
-				if !seen[doc.Ref.Path] {
+				if !seen[doc.Ref.Path] && !excepted(ctx, way, doc, subject, row) {
 					seen[doc.Ref.Path] = true
 					all = append(all, doc)
 				}
 			}
 		}
-		return all, nil
 	}
-	s := a.reg.schemas[q.typ]
+	return all, nil
+}
+
+// stores is one way of a query as what the store is asked: one query, or, for a
+// condition read through what the entity points at, like board.followers, one for
+// each 30 of what it points at, the boards the person follows, as Firestore allows.
+// An Except isn't asked; excepted checks it on what comes back.
+func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]firestore.Query, error) {
+	s := a.reg.schemas[way.typ]
 	query := a.store.Collection(s.collection).Query
-	// A condition read through what the entity points at, like board.followers,
-	// first finds what it points at, the boards the person follows, then picks the
-	// entities pointing at one of them, at most 30 to a query as Firestore allows.
 	var pointing string
 	var among []any
-	for _, c := range q.conditions {
+	for _, c := range way.conditions {
 		through, field, hop := strings.Cut(c.field, ".")
 		switch {
 		case hop:
@@ -835,34 +843,91 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 			query = query.Where(c.field, "==", givenIn(ctx, c.value, subject, row))
 		}
 	}
-	var docs []*firestore.DocumentSnapshot
 	if pointing == "" {
-		var err error
-		if docs, err = query.Documents(ctx).GetAll(); err != nil {
-			return nil, err
-		}
+		return []firestore.Query{query}, nil
 	}
+	var queries []firestore.Query
 	for start := 0; start < len(among); start += 30 {
-		end := min(start+30, len(among))
-		some, err := query.Where(pointing, "in", among[start:end]).Documents(ctx).GetAll()
-		if err != nil {
-			return nil, err
-		}
-		docs = append(docs, some...)
+		queries = append(queries, query.Where(pointing, "in", among[start:min(start+30, len(among))]))
 	}
-	kept := docs[:0]
-	for _, doc := range docs {
-		keep := true
-		for _, c := range q.conditions {
-			if c.except && same(doc.Data()[c.field], givenIn(ctx, c.value, subject, row)) {
-				keep = false
+	return queries, nil
+}
+
+// excepted says whether one of a way's Excepts leaves a document out.
+func excepted(ctx context.Context, way Query, doc *firestore.DocumentSnapshot, subject, row string) bool {
+	for _, c := range way.conditions {
+		if c.except && same(doc.Data()[c.field], givenIn(ctx, c.value, subject, row)) {
+			return true
+		}
+	}
+	return false
+}
+
+// newest reads, for a list kept to its newest rows, only those: each way it's
+// picked by asked of the store newest first, a page at a time, until it has the
+// limit's worth the person may read, and every one made at the same moment as the
+// last of them, so cutting the rows to the limit keeps the same ones reading every
+// row would. done is false when it can't, because the list is ordered some other
+// way, or the store hasn't the index it needs yet, as just after a deploy; the list
+// is then read whole.
+func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*firestore.DocumentSnapshot, done bool, err error) {
+	newestFirst := len(l.order) == 0 || (len(l.order) == 1 && l.order[0].field == "created_at" && l.order[0].reverse && l.order[0].through == nil)
+	if l.limit <= 0 || !newestFirst {
+		return nil, false, nil
+	}
+	page := l.limit + 10
+	seen := map[string]bool{}
+	for _, way := range l.query.ways() {
+		queries, err := a.stores(ctx, way, subject, "")
+		if err != nil {
+			return nil, false, err
+		}
+		for _, query := range queries {
+			var kept []*firestore.DocumentSnapshot
+			var after *firestore.DocumentSnapshot
+			for more := true; more; {
+				asked := query.OrderBy("created_at", firestore.Desc).Limit(page)
+				if after != nil {
+					asked = asked.StartAfter(after)
+				}
+				got, err := asked.Documents(ctx).GetAll()
+				if status.Code(err) == codes.FailedPrecondition {
+					return nil, false, nil
+				}
+				if err != nil {
+					return nil, false, err
+				}
+				more = len(got) == page
+				if len(got) > 0 {
+					after = got[len(got)-1]
+				}
+				var fresh []*firestore.DocumentSnapshot
+				for _, doc := range got {
+					if !excepted(ctx, way, doc, subject, "") {
+						fresh = append(fresh, doc)
+					}
+				}
+				if len(l.guards) > 0 {
+					if fresh, err = a.readable(ctx, l, subject, fresh); err != nil {
+						return nil, false, err
+					}
+				}
+				kept = append(kept, fresh...)
+				// Enough once the limit's worth is here and the page ends after the
+				// moment the last of them was made.
+				if len(kept) >= l.limit && len(got) > 0 && compare(got[len(got)-1].Data()["created_at"], kept[l.limit-1].Data()["created_at"]) < 0 {
+					more = false
+				}
+			}
+			for _, doc := range kept {
+				if !seen[doc.Ref.Path] {
+					seen[doc.Ref.Path] = true
+					docs = append(docs, doc)
+				}
 			}
 		}
-		if keep {
-			kept = append(kept, doc)
-		}
 	}
-	return kept, nil
+	return docs, true, nil
 }
 
 // count says how many entities a query picks. Firestore counts without reading them
@@ -1067,13 +1132,18 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 }
 
 func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) {
-	docs, err := a.find(ctx, l.query, subject, "")
+	docs, done, err := a.newest(ctx, l, subject)
 	if err != nil {
 		return nil, err
 	}
-	if len(l.guards) > 0 {
-		if docs, err = a.readable(ctx, l, subject, docs); err != nil {
+	if !done {
+		if docs, err = a.find(ctx, l.query, subject, ""); err != nil {
 			return nil, err
+		}
+		if len(l.guards) > 0 {
+			if docs, err = a.readable(ctx, l, subject, docs); err != nil {
+				return nil, err
+			}
 		}
 	}
 	// Newest first, by when each was made, so the order never depends on the store.

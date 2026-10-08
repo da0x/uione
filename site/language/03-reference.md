@@ -550,7 +550,11 @@ view issue_page per issue {
   page, like an issue's, is private to a project they aren't in, or no longer in,
   is left out, and comes back when they join it or it turns public.
 - `limit 50` keeps only the first rows of a list, once ordered, so a list that keeps
-  growing, like a project's timeline, stays small enough to be one document.
+  growing, like a project's timeline, stays small enough to be one document. A list
+  kept to its newest rows, ordered by `created_at descending` or not at all, reads
+  only those from the database, however long its history, with an index for each
+  way it's picked by that `one build` writes to `firestore.indexes.json` and the
+  deploy creates. Until an index is built, the list is read whole.
 
 ```one
 view news per user {

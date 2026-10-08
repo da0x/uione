@@ -4,6 +4,7 @@
 package one_test
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -78,6 +79,10 @@ var clubs = one.Module("club",
 			Or(one.All[one.ChangeOf[Trick]]().Has("dealt", one.Viewer).Except("created_by", one.Viewer))).
 		Fields("trick", "field", "after").
 		FirstOf("seen", one.Where[Glance]("person", one.Viewer), "seen_at"),
+	// The two newest changes someone else made, however many of their own came after.
+	one.View("others").PerUser().
+		List("others", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer)).Order("-created_at").Limit(2).
+		Fields("created_by", "trick"),
 	one.View("dealt").PerUser().Each(one.All[Trick]().Has("dealt", one.Viewer)).Fields("title"),
 )
 
@@ -196,5 +201,27 @@ func TestNewsSaysWhenThePersonLastLookedAtIt(t *testing.T) {
 	}
 	if seen := h.view("club::news:" + ada)["seen"]; seen != nil {
 		t.Errorf("Ada's news says she looked, when only Grace did: %v", seen)
+	}
+}
+
+func TestTheNewestRowsOfAListAreFoundPastPagesOfOnesLeftOut(t *testing.T) {
+	h := start(t)
+	ada, adaToken := h.signUp("ada@example.com")
+	grace, graceToken := h.signUp("grace@example.com")
+	h.mustRun("club/club/create", adaToken, map[string]any{"slug": "go"})
+	h.mustRun("club/seating/create", adaToken, map[string]any{"club": "go", "person": grace})
+	rack := h.mustRun("club/rack/create", adaToken, map[string]any{"club": "go", "name": "Joseki"})
+	first := h.mustRun("club/trick/create", graceToken, map[string]any{"club": "go", "rack": rack, "title": "First"})
+	second := h.mustRun("club/trick/create", graceToken, map[string]any{"club": "go", "rack": rack, "title": "Second"})
+	mine := h.mustRun("club/trick/create", adaToken, map[string]any{"club": "go", "rack": rack, "title": "Mine"})
+	for i := range 25 {
+		h.mustRun("club/trick/update", adaToken, map[string]any{"id": mine, "title": fmt.Sprint("Mine ", i)})
+	}
+	var got []string
+	for _, row := range list(h.view("club::others:"+ada), "others") {
+		got = append(got, fmt.Sprint(row["created_by"] == grace, " ", row["trick"]))
+	}
+	if want := []string{"true " + second, "true " + first}; !slices.Equal(got, want) {
+		t.Errorf("the two newest changes Ada didn't make are %v, want %v", got, want)
 	}
 }

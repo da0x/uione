@@ -45,6 +45,7 @@ package infrastructure
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -202,6 +203,13 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		Name:        pulumi.String("cloud.firestore"),
 		RulesetName: pulumi.Sprintf("projects/%s/rulesets/%s", p.Firebase, ruleset.Name),
 	}, opt(ruleset)); err != nil {
+		return err
+	}
+
+	// The indexes the backend's newest-first lists ask for, as one build wrote them.
+	// Firestore builds each one after the deploy, and the backend reads those lists
+	// whole until it has. One no longer written is deleted.
+	if err := indexes(ctx, p, project, opt(db)); err != nil {
 		return err
 	}
 
@@ -542,4 +550,56 @@ func answers(ctx context.Context, project, address string) (bool, error) {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
 		return false, fmt.Errorf("infrastructure: asking about %s at %s: %s %s", project, address, response.Status, body)
 	}
+}
+
+// indexes declares the Firestore indexes in firestore.indexes.json, beside the
+// rules. A build from before there were any has none to declare.
+func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options ...pulumi.ResourceOption) error {
+	written, err := os.ReadFile(filepath.Join(p.Build, "firestore.indexes.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var file struct {
+		Indexes []struct {
+			Collection string `json:"collection"`
+			Fields     []struct {
+				Field string `json:"field"`
+				Order string `json:"order"`
+				Array string `json:"array"`
+			} `json:"fields"`
+		} `json:"indexes"`
+	}
+	if err := json.Unmarshal(written, &file); err != nil {
+		return fmt.Errorf("infrastructure: firestore.indexes.json: %w", err)
+	}
+	for _, index := range file.Indexes {
+		name := "index-" + index.Collection
+		var fields firestore.IndexFieldArray
+		for _, f := range index.Fields {
+			field := &firestore.IndexFieldArgs{FieldPath: pulumi.String(f.Field)}
+			if f.Array != "" {
+				field.ArrayConfig = pulumi.String(f.Array)
+				name += "-" + f.Field + "-contains"
+			} else {
+				field.Order = pulumi.String(f.Order)
+				name += "-" + f.Field + "-" + strings.ToLower(f.Order)
+			}
+			fields = append(fields, field)
+		}
+		if _, err := firestore.NewIndex(ctx, name, &firestore.IndexArgs{
+			Project:        project,
+			Database:       pulumi.String("(default)"),
+			Collection:     pulumi.String(index.Collection),
+			QueryScope:     pulumi.String("COLLECTION"),
+			Fields:         fields,
+			SkipWait:       pulumi.Bool(true),
+			DeletionPolicy: pulumi.String("DELETE"),
+		}, options...); err != nil {
+			return err
+		}
+	}
+	return nil
 }

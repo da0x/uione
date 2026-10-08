@@ -179,6 +179,43 @@ func TestTheRulesDeployedAreTheGeneratedOnes(t *testing.T) {
 	}
 }
 
+func TestTheIndexesDeclaredAreTheGeneratedOnes(t *testing.T) {
+	dir := build(t)
+	index := `{ "indexes": [
+	{ "collection": "projects_issue_history", "fields": [{ "field": "assignees", "array": "CONTAINS" }, { "field": "created_at", "order": "DESCENDING" }] }
+] }`
+	if err := os.WriteFile(filepath.Join(dir, "build", "firestore.indexes.json"), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := declare(t, dir, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := m.get(t, "gcp:firestore/index:Index::index-projects_issue_history-assignees-contains-created_at-descending")
+	if got["collection"].StringValue() != "projects_issue_history" || got["database"].StringValue() != "(default)" {
+		t.Errorf("the index is on %v in %v", got["collection"], got["database"])
+	}
+	fields := got["fields"].ArrayValue()
+	if len(fields) != 2 || fields[0].ObjectValue()["arrayConfig"].StringValue() != "CONTAINS" || fields[1].ObjectValue()["order"].StringValue() != "DESCENDING" {
+		t.Errorf("the index's fields are %v", fields)
+	}
+	if !got["skipWait"].BoolValue() || got["deletionPolicy"].StringValue() != "DELETE" {
+		t.Errorf("the index waits %v and is deleted %v", got["skipWait"], got["deletionPolicy"])
+	}
+}
+
+func TestABuildWithoutIndexesDeclaresNone(t *testing.T) {
+	m, err := declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range m.resources {
+		if strings.Contains(name, "firestore/index:Index") {
+			t.Errorf("a build without indexes declares %s", name)
+		}
+	}
+}
+
 func TestTheBackendCanTouchFirestoreAndNothingElse(t *testing.T) {
 	m, err := declare(t, build(t), settings)
 	if err != nil {
