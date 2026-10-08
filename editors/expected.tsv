@@ -125,7 +125,7 @@ examples/tracker/main.one	for project by repository	for	keyword
 examples/tracker/main.one	for project by repository	by	keyword
 examples/tracker/main.one	on commit {	on	keyword
 examples/library/main.one	component opening_hours	component	keyword
-site/site.one	one       "0.6.24"	one	keyword
+site/site.one	one       "0.6.25"	one	keyword
 examples/tracker/main.one	visibility  enum  public	public	plain
 examples/tracker/main.one	= visibility::public	public	plain
 examples/tracker/main.one	view projects public	public	modifier
