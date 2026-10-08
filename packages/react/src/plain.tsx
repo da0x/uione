@@ -329,6 +329,51 @@ export const plain: ComponentSet = {
     );
   },
 
+  Board: ({ status, columns, error, onMove }) => (
+    <>
+      <div aria-busy={status === "loading"}>
+        {columns.map((column) => (
+          <section key={column.id} aria-label={column.title}>
+            <h3>
+              {column.title} ({column.cards.length})
+            </h3>
+            <ul>
+              {column.cards.map((card) => (
+                <li key={card.id}>
+                  {card.link ? <a {...card.link}>{card.title}</a> : card.title}
+                  {card.details.map((detail, i) => (
+                    <span key={i}> {detail}</span>
+                  ))}
+                  {/* Where it may go, a button for each, rather than a drag. */}
+                  {onMove &&
+                    card.reaches.map((to) => {
+                      const target = columns.find((c) => c.id === to);
+                      return target ? (
+                        <button key={to} type="button" onClick={() => onMove(card.id, to)}>
+                          Move to {target.title}
+                        </button>
+                      ) : null;
+                    })}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+      {error && <p role="alert">{error}</p>}
+    </>
+  ),
+
+  Switch: ({ label, options }) => (
+    <div role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option.label} type="button" aria-pressed={option.selected} onClick={option.onSelect}>
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ),
+
   Grid: ({ status, corner, columns, rows, error }) => (
     <>
       <table aria-busy={status === "loading"}>

@@ -481,11 +481,7 @@ export function Steps({
   const runner = useConfirmedRunner();
   if (current?.status !== "live" || steps.status !== "live") return null;
   const now = current.data?.[field];
-  const mine = new Set(
-    roles?.status === "live" && Array.isArray(roles.data?.rows)
-      ? (roles.data.rows as Record<string, unknown>[]).filter((row) => row[place] === within).map((row) => row[role])
-      : [],
-  );
+  const mine = rolesHeld(roles, within, place, role);
   const leaving = rowsOf(steps.data?.[list]).filter((step) => step.from === now);
   const open = leaving.filter((step) => !held || (Array.isArray(step[held]) && (step[held] as unknown[]).some((r) => mine.has(r))));
   // Someone who holds a role there is told when none of theirs moves it on, rather
@@ -581,6 +577,32 @@ export interface RowAction {
   // A form it asks with first, opened in a dialog and started from the row, like a
   // rename asking for the new title; without one, the button runs it at once.
   form?: { fields: (string | FieldSpec)[]; submit?: string };
+}
+
+// A row's value as a table's cell or a card shows it: a choice as it's shown, a list
+// of words each on its own, a web address as a short link, a person's picture as
+// the picture, and anything else as text.
+function cellOf(
+  ui: ReturnType<typeof useUI>,
+  links: ReturnType<typeof useLinks>,
+  row: Row,
+  key: string,
+  { choices = {}, labels = [], pictures = [] }: { choices?: Record<string, Record<string, string>>; labels?: string[]; pictures?: string[] },
+): ReactNode {
+  const value = row[key];
+  const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
+  if (shown !== undefined) return shown;
+  if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
+  // A web address is a link, to wherever it is, shown shortened.
+  if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
+    return (
+      <ui.Link {...links(value)}>
+        <span title={value}>{shortAddress(value)}</span>
+      </ui.Link>
+    );
+  }
+  if (!pictures.includes(key)) return show(value);
+  return typeof value === "string" && value.startsWith("https://") ? <ui.Picture source={value} /> : "";
 }
 
 export function Table({
@@ -692,23 +714,7 @@ export function Table({
         rows={rows.map((row) => ({
           id: row.id,
           link: link ? links(rowLink(link, row, params, keyed)) : undefined,
-          cells: Object.keys(columns).map((key) => {
-            const value = row[key];
-            const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
-            if (shown !== undefined) return shown;
-            if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
-            // A web address is a link, to wherever it is, shown shortened.
-            if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
-              return (
-                <ui.Link {...links(value)}>
-                  <span title={value}>{shortAddress(value)}</span>
-                </ui.Link>
-              );
-            }
-            if (!pictures.includes(key)) return show(value);
-            const source = row[key];
-            return typeof source === "string" && source.startsWith("https://") ? <ui.Picture source={source} /> : "";
-          }),
+          cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
             disabled: runner.busy(a.name),
@@ -728,6 +734,146 @@ export function Table({
           />
         </ui.Dialog>
       )}
+    </>
+  );
+}
+
+// The roles a person holds where something is, like their roles in a project, from
+// the view of their roles.
+function rolesHeld(roles: ViewState | undefined, within: string | undefined, place: string, role: string): Set<unknown> {
+  if (roles?.status !== "live" || !Array.isArray(roles.data?.rows)) return new Set();
+  return new Set((roles.data.rows as Record<string, unknown>[]).filter((row) => row[place] === within).map((row) => row[role]));
+}
+
+// How a board's cards move: by a command along a list of steps, like issue::move
+// along a project's steps, each step from one column to another for the roles it names.
+export interface BoardMove {
+  command: string;
+  steps: ViewState;
+  list: string;
+  held?: string; // the step's list of roles that may take it
+  roles?: ViewState; // the view of the person's roles
+  within?: string; // where they're held, like the project
+  place?: string;
+  role?: string;
+}
+
+// A list's rows as cards in columns, like a project's issues in its phases: a column
+// for each of the over list's things, in its order, and each card in the one its
+// field names. With a move, a card goes to a column a step from its own leads to,
+// for one of the person's roles; it's shown there at once, and back if the move fails.
+export function Board({
+  view,
+  list,
+  by,
+  over,
+  overList,
+  shown = "title",
+  columns,
+  link,
+  keyed,
+  pictures = [],
+  choices = {},
+  labels = [],
+  move,
+}: {
+  view: ViewState;
+  list: string; // the cards, like issues
+  by: string; // the field naming a card's column, like phase
+  over: ViewState;
+  overList: string; // the columns, like phases
+  shown?: string; // what a column is called, like title
+  columns: Record<string, string>; // what a card shows, its title first
+  link?: string;
+  keyed?: string[];
+  pictures?: string[];
+  choices?: Record<string, Record<string, string>>;
+  labels?: string[];
+  move?: BoardMove;
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const runner = useConfirmedRunner();
+  // Where each card moved is until the view says so too.
+  const [moved, setMoved] = useState<Record<string, string>>({});
+  const cards = rowsOf(view.data?.[list]);
+  const things = rowsOf(over.data?.[overList]);
+  const mine = move ? rolesHeld(move.roles, move.within, move.place ?? "project", move.role ?? "role") : new Set<unknown>();
+  const steps = move?.steps.status === "live" ? rowsOf(move.steps.data?.[move.list]) : [];
+  const where = (card: Row) => moved[card.id] ?? card[by];
+  const reaches = (at: unknown) =>
+    steps
+      .filter((step) => step.from === at && (!move?.held || (Array.isArray(step[move.held]) && (step[move.held] as unknown[]).some((r) => mine.has(r)))))
+      .map((step) => String(step.to));
+  useEffect(() => {
+    setMoved((now) => {
+      const settled = Object.keys(now).filter((id) => cards.some((card) => card.id === id && card[by] === now[id]));
+      if (settled.length === 0) return now;
+      return Object.fromEntries(Object.entries(now).filter(([id]) => !settled.includes(id)));
+    });
+    // Only the view's newer documents settle a move.
+  }, [view.data]);
+  const [title, ...rest] = Object.keys(columns);
+  const status = over.status === "live" ? view.status : over.status;
+  return (
+    <ui.Board
+      status={status}
+      error={move ? runner.error(move.command) : undefined}
+      onMove={
+        move
+          ? (id, to) => {
+              const card = cards.find((c) => c.id === id);
+              if (!card || !reaches(where(card)).includes(to)) return;
+              setMoved((now) => ({ ...now, [id]: to }));
+              void runner.run(move.command, { id, [by]: to }, card).then((done) => {
+                if (!done) setMoved((now) => Object.fromEntries(Object.entries(now).filter(([other]) => other !== id)));
+              });
+            }
+          : undefined
+      }
+      columns={things.map((thing) => ({
+        id: thing.id,
+        title: show(thing[shown]) || thing.id,
+        cards: cards
+          .filter((card) => where(card) === thing.id)
+          .map((card) => ({
+            id: card.id,
+            title: title ? cellOf(ui, links, card, title, { choices, labels, pictures }) : card.id,
+            link: link ? links(rowLink(link, card, params, keyed)) : undefined,
+            details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
+            reaches: reaches(where(card)),
+          })),
+      }))}
+    />
+  );
+}
+
+// One of a few ways to show the same list, like a table and a board, as the person
+// picks; their pick is remembered in their browser.
+export function Switched({ id, label: says, options, children }: { id: string; label: string; options: string[]; children: ReactNode }) {
+  const ui = useUI();
+  const key = `uione:switch:${id}`;
+  const [picked, setPicked] = useState(() => {
+    try {
+      const kept = Number(localStorage.getItem(key));
+      return Number.isInteger(kept) && kept >= 0 && kept < options.length ? kept : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const pick = (at: number) => {
+    setPicked(at);
+    try {
+      localStorage.setItem(key, String(at));
+    } catch {
+      // Without storage, the pick lasts as long as the page.
+    }
+  };
+  return (
+    <>
+      <ui.Switch label={says} options={options.map((option, at) => ({ label: option, selected: at === picked, onSelect: () => pick(at) }))} />
+      {Children.toArray(children)[picked]}
     </>
   );
 }

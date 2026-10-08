@@ -1838,6 +1838,8 @@ namespace one::language {
                     }
                 } else if (auto* grid = std::get_if<grid_item>(&item.node)) {
                     verify_grid(ns, *grid, route);
+                } else if (auto* board = std::get_if<board_item>(&item.node)) {
+                    verify_board(ns, *board, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
                     this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
@@ -1938,6 +1940,45 @@ namespace one::language {
             }
             if (!in_rows(*things, "title") && !in_rows(*things, "name")) {
                 error(grid.over.where, "a grid's rows and columns are called by their title or name, so " + grid.over.text() + "." + grid.over_list + " needs one");
+            }
+        }
+
+        // board project_page.issues by phase over project_page.phases: each card names
+        // its column by a field pointing at what the over list lists, and the cards hold
+        // that field and what they show. A move goes along steps and changes that field.
+        void verify_board(const std::string& ns, const board_item& board, const std::string& route) {
+            const view_each* cards = named_list(ns, board.view, *board.list, route);
+            const view_each* columns = named_list(ns, board.over, board.over_list, route);
+            if (!cards || !columns) return;
+            const entity_declaration* card = listed_entity(ns, *cards);
+            const entity_declaration* column = listed_entity(ns, *columns);
+            if (!card || !column) return;
+            const field* by = find_field(*card, board.by);
+            if (!by) {
+                error(board.by_where, "entity " + card->name + " has no field " + board.by + nearest(board.by, field_names(*card)));
+            } else if (pointed(ns, *by) != column) {
+                error(board.by_where, card->name + "." + board.by + " is a card's column, so it points at a " + column->name + ", what " + board.over.text() + "." +
+                                          board.over_list + " lists");
+            } else if (!in_rows(*cards, board.by)) {
+                error(board.by_where, "view " + board.view.text() + " has no " + board.by + " in its " + *board.list + "; add it to the list's block");
+            }
+            if (!in_rows(*columns, "title") && !in_rows(*columns, "name")) {
+                error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
+            }
+            if (board.columns.empty()) error(board.view.where, "a board's cards show something, its title first, like title");
+            for (const auto& shown : board.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*cards, key)) error(shown.where, "view " + board.view.text() + " has no " + key + " in its " + *board.list + "; add it to the list's block");
+            }
+            if (board.link && !routes_.contains(full_route(ns, *board.link))) {
+                error(board.link_where, "there's no screen at " + full_route(ns, *board.link) + " for this board's cards to open");
+            }
+            if (board.move) {
+                verify_command_use(ns, board.move->command);
+                if (board.move->command.parts.size() == 2 && board.move->command.parts[0] != card->name) {
+                    error(board.move->command.where, "a board's cards are " + card->name + "s, so they're moved by a command on " + card->name + ", like " + card->name + "::move");
+                }
+                verify_along(ns, *board.move, route);
             }
         }
 

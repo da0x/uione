@@ -874,6 +874,56 @@ namespace one::language {
                 end_line();
                 return {where, std::move(table)};
             }
+            if (at_word("board")) {
+                advance();
+                board_item board;
+                board.view = parse_qualified_name("the view whose list it shows, like project_page");
+                expect(token_kind::dot, "'.' and the view's list, like project_page.issues");
+                board.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                if (!at_word("by")) fail_expecting("by and the field naming each card's column, like by phase");
+                advance();
+                board.by_where = peek().where;
+                board.by = expect(token_kind::identifier, "the field naming each card's column, like phase").text;
+                if (!at_word("over")) fail_expecting("over and the list of its columns, like over project_page.phases");
+                advance();
+                board.over = parse_qualified_name("the view whose list its columns are, like project_page");
+                expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
+                board.over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                if (at_word("link")) {
+                    advance();
+                    board.link_where = peek().where;
+                    board.link = expect(token_kind::route, "the screen each card opens, like /:project/issues/:issue").text;
+                }
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        // move issue::move along project_page.steps: how a card is moved.
+                        if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, ""};
+                            if (!at_word("along")) fail_expecting("along and the view's list of steps, like along project_page.steps");
+                            advance();
+                            move.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
+                            expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
+                            move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
+                            board.move = std::move(move);
+                            end_line();
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            board.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(board)};
+            }
             if (at_word("grid")) {
                 advance();
                 grid_item grid;

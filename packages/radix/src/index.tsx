@@ -527,6 +527,118 @@ export const radix: ComponentSet = {
     );
   },
 
+  // Columns side by side, scrolled across when there are many, each with its cards and
+  // how many; a card dragged dims the columns it can't go to and marks the one it's
+  // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
+  Board: function RadixBoard({ status, columns, error, onMove }) {
+    const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
+    const [over, setOver] = useState<string>();
+    const reachable = (column: string) => !dragged || column === dragged.from || dragged.reaches.includes(column);
+    const drop = () => {
+      setDragged(undefined);
+      setOver(undefined);
+    };
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start gap-3 overflow-x-auto pb-2" aria-busy={status === "loading"}>
+          {columns.map((column, at) => (
+            <section
+              key={column.id}
+              aria-label={column.title}
+              onDragOver={(event) => {
+                if (!dragged?.reaches.includes(column.id)) return;
+                event.preventDefault();
+                setOver(column.id);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (dragged && onMove && dragged.reaches.includes(column.id)) onMove(dragged.card, column.id);
+                drop();
+              }}
+              className={`flex w-72 shrink-0 flex-col rounded-box border bg-sunken/70 transition-opacity ${reachable(column.id) ? "" : "opacity-40"} ${
+                over === column.id ? "border-accent ring-2 ring-accent/30" : "border-line"
+              }`}
+            >
+              <h3 className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1.5 text-[0.8rem] font-medium text-muted">
+                {column.title}
+                <span className="rounded-full bg-surface px-1.5 text-xs tabular-nums">{column.cards.length}</span>
+              </h3>
+              <ul className="flex min-h-16 flex-col gap-2 px-2 pb-2">
+                {column.cards.map((card) => {
+                  const movable = Boolean(onMove) && card.reaches.length > 0;
+                  return (
+                    <li
+                      key={card.id}
+                      draggable={movable ? true : undefined}
+                      tabIndex={movable && !card.link ? 0 : undefined}
+                      onDragStart={() => setDragged({ card: card.id, from: column.id, reaches: card.reaches })}
+                      onDragEnd={drop}
+                      onKeyDown={(event) => {
+                        if (!onMove || !event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+                        const step = event.key === "ArrowLeft" ? -1 : 1;
+                        for (let next = at + step; next >= 0 && next < columns.length; next += step) {
+                          if (!card.reaches.includes(columns[next].id)) continue;
+                          event.preventDefault();
+                          onMove(card.id, columns[next].id);
+                          return;
+                        }
+                      }}
+                      className={`rounded-box border border-line bg-surface px-3 py-2 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+                        movable ? "cursor-grab active:cursor-grabbing" : ""
+                      } ${dragged?.card === card.id ? "opacity-40" : ""}`}
+                    >
+                      {card.link ? (
+                        <a {...card.link} draggable={false} className="font-medium text-ink hover:text-accent hover:underline">
+                          {card.title}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{card.title}</span>
+                      )}
+                      {card.details.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
+                          {card.details.map((detail, i) => (
+                            <span key={i} className="inline-flex items-center">
+                              {detail}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+        {columns.length === 0 && <p className="px-4 py-6 text-center text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  },
+
+  // A few ways to show the same thing, side by side, the one shown filled in.
+  Switch: ({ label, options }) => (
+    <div role="group" aria-label={label} className="inline-flex self-start rounded-control border border-line bg-surface p-0.5 shadow-panel">
+      {options.map((option) => (
+        <button
+          key={option.label}
+          type="button"
+          aria-pressed={option.selected}
+          onClick={option.onSelect}
+          className={`rounded-control px-3 py-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+            option.selected ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ),
+
   // Rows down the side and the same things across the top, each cell what goes from
   // its row to its column; a cell to press for what may change, and a dash where a
   // thing meets itself.

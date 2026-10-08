@@ -424,6 +424,23 @@ namespace one::language {
         std::string along_list;               // its list of steps, like steps
     };
 
+    // board project_page.issues by phase over project_page.phases { ... }: a list's
+    // rows as cards in columns, a column for each of the over list's things, in its
+    // order; with move issue::move along project_page.steps, a card is dragged to
+    // another column along a step the person's roles may take.
+    struct board_item {
+        qualified_name view;
+        std::optional<std::string> list;
+        std::string by;  // the field naming a card's column, like phase
+        location by_where;
+        qualified_name over;
+        std::string over_list;
+        std::optional<std::string> link;  // the screen a card opens, like /:project/issues/:issue
+        location link_where;
+        std::optional<button_item> move;
+        std::vector<table_column> columns;  // what a card shows, its title first
+    };
+
     // component workbench: a hand-written React component, components/workbench.tsx
     // beside the .one file, drawn where the item is.
     struct component_item {
@@ -468,7 +485,7 @@ namespace one::language {
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item>
             node;
     };
 

@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Form, Grid, Live, Steps, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Form, Grid, Live, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -240,6 +240,70 @@ describe("a grid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Triage to Done: Member" }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Remove" })));
     expect(source.runs).toEqual([{ command: "projects::step::delete", input: { id: "s1" } }]);
+  });
+});
+
+describe("a board", () => {
+  const page = {
+    status: "live" as const,
+    data: {
+      phases: [
+        { id: "ark-reported", title: "Reported" },
+        { id: "ark-triaged", title: "Triaged" },
+        { id: "ark-closed", title: "Closed" },
+      ],
+      steps: [{ id: "s1", from: "ark-reported", to: "ark-triaged", roles: ["ark-member"] }],
+      issues: [
+        { id: "ark-1", title: "Crash", phase: "ark-reported" },
+        { id: "ark-2", title: "Typo", phase: "ark-triaged" },
+      ],
+    },
+  };
+  const roles = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", role: "ark-member" }] } };
+
+  it("puts each card in its column, and offers only the moves the person's roles may take, showing the card there at once", async () => {
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Board
+        view={page}
+        list="issues"
+        by="phase"
+        over={page}
+        overList="phases"
+        columns={{ title: "Title" }}
+        move={{ command: "projects::issue::move", steps: page, list: "steps", held: "roles", roles, within: "ark" }}
+      />
+    ));
+    const column = (name: string) => screen.getByRole("region", { name });
+    expect(column("Reported").textContent).toContain("Crash");
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Move to Triaged"]);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Move to Triaged" })));
+    expect(source.runs).toEqual([{ command: "projects::issue::move", input: { id: "ark-1", phase: "ark-triaged" } }]);
+    expect(column("Triaged").textContent).toContain("Crash");
+  });
+});
+
+describe("a switch between a table and a board", () => {
+  it("shows the one picked, and remembers it", () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) });
+    const shown = () =>
+      renderScreen(memorySource(), () => (
+        <Switched id="projects::project_page.issues" label="Show issues as" options={["Table", "Board"]}>
+          <p>the table</p>
+          <p>the board</p>
+        </Switched>
+      ));
+    const { unmount } = shown();
+    expect(screen.getByText("the table")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    expect(screen.getByText("the board")).toBeTruthy();
+    expect(screen.queryByText("the table")).toBeNull();
+    unmount();
+    shown();
+    expect(screen.getByRole("button", { name: "Board" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("the board")).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });
 

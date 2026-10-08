@@ -809,6 +809,57 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
     CHECK(out[0].message == "arrow.to is a row or column of the grid, so it points at a column, what board_page.columns lists");
 }
 
+TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, and a table before it of the same list switches with it") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-board";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work {\n"
+                         "entity project {\n\ttitle  text\n}\n"
+                         "entity phase {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
+                         "entity step {\n\tproject  project  required  key\n\tfrom  phase  required  key\n\tto  phase  required  key\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tphase  phase\n}\n"
+                         "command issue::move {\n\tchanges phase\n}\n"
+                         "view project_page per project {\n"
+                         "\tphases = each phase where project == project.id {\n\t\torder by position\n\t\ttitle\n\t}\n"
+                         "\tsteps = each step where project == project.id {\n\t\tfrom  to\n\t}\n"
+                         "\tissues = each issue where project == project.id {\n\t\tnumber  title  phase\n\t}\n"
+                         "}\n"
+                         "screen \"Project\" /projects/:project {\n"
+                         "\ttable project_page.issues {\n\t\tnumber  title\n\t}\n"
+                         "\tboard project_page.issues by phase over project_page.phases {\n\t\tmove issue::move along project_page.steps\n\t\ttitle\n\t\tnumber \"#\"\n\t}\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Switched id="work::project_page.issues" label="Show issues as" options={["Table", "Board"]}>)") != std::string::npos);
+    CHECK(tsx.find(R"(<Board view={projectPage} list="issues" by="phase" over={projectPage} overList="phases" shown="title" columns={{ title: "Title", number: "#" }} move={{ command: "work::issue::move", steps: projectPage, list: "steps" }} />)") !=
+          std::string::npos);
+    CHECK(tsx.find("</Switched>") != std::string::npos);
+    fs::remove_all(dir);
+
+    // A card's column is one of the over list's things.
+    language::diagnostics out;
+    std::vector<language::file> wrong;
+    wrong.push_back(language::parse("main.one", "namespace work {\n"
+                                                "entity project {\n\ttitle  text\n}\n"
+                                                "entity phase {\n\tproject  project\n\ttitle  text\n}\n"
+                                                "entity issue {\n\tproject  project\n\ttitle  text\n\tphase  phase\n}\n"
+                                                "view project_page per project {\n"
+                                                "\tphases = each phase where project == project.id {\n\t\ttitle\n\t}\n"
+                                                "\tissues = each issue where project == project.id {\n\t\ttitle  project\n\t}\n"
+                                                "}\n"
+                                                "screen \"Project\" /projects/:project {\n"
+                                                "\tboard project_page.issues by project over project_page.phases {\n\t\ttitle\n\t}\n"
+                                                "}\n"
+                                                "}\n", out));
+    language::check(wrong, out);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "issue.project is a card's column, so it points at a phase, what project_page.phases lists");
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

@@ -216,6 +216,7 @@ namespace one::generators {
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
         std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
+        const std::vector<language::field> nothing_;  // the fields of no entity
         std::map<std::string, const language::command_declaration*> command_nodes_;  // by full name, like projects::issue::move
         std::set<std::string> open_;  // commands anyone may run, signed in or not, in full
         std::vector<std::string> personal_;  // views with one document per person
@@ -1067,9 +1068,27 @@ namespace one::generators {
                     }
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
+                    // A board of the same list right after it: the two are one, shown as
+                    // the person picks, a table or a board.
+                    auto* board = at + 1 < items.size() ? std::get_if<language::board_item>(&items[at + 1].node) : nullptr;
+                    if (board && board->view.text() == table->view.text() && board->list == table->list) {
+                        parts.components.insert("Switched");
+                        std::string list = table->list ? *table->list : "rows";
+                        std::string words = web_detail::label(list);
+                        if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
+                        out.open("<Switched id=" + web_detail::js_string(full_view(ns, table->view.text()) + "." + list) + " label=" +
+                                 web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]}>");
+                        this->table(out, parts, ns, *table, screen);
+                        this->board(out, parts, ns, *board);
+                        out.close("</Switched>");
+                        ++at;
+                        continue;
+                    }
                     this->table(out, parts, ns, *table, screen);
                 } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
                     this->grid(out, parts, ns, *grid, screen);
+                } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
+                    this->board(out, parts, ns, *board);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
                     if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
@@ -1148,6 +1167,29 @@ namespace one::generators {
             for (std::size_t at = 0; view && at < view->each.size(); ++at) {
                 const auto& each = view->each[at];
                 if (!each.name || *each.name != button.along_list) continue;
+                for (const auto& row : each.rows) {
+                    std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
+                    if (column == "title") line += " shown=\"title\"";
+                    if (column == "to.title") line += " to=\"to.title\"";
+                    if (column == "from.title") line += " from=\"from.title\"";
+                }
+            }
+            for (const auto& [name, value] : held_by(parts, ns, button)) line += " " + name + "=" + (value.starts_with("\"") ? value : "{" + value + "}");
+            out.line(line + " />");
+        }
+
+        // Whose roles may take each step a button goes along: the step's list of the
+        // project's roles, the view of the person's roles, and where they're held,
+        // each as a property and its JavaScript.
+        std::vector<std::pair<std::string, std::string>> held_by(screen_parts& parts, const std::string& ns, const language::button_item& button) {
+            std::vector<std::pair<std::string, std::string>> props;
+            const language::view_declaration* view = nullptr;
+            if (auto scope = views_.find(ns); scope != views_.end()) {
+                if (auto it = scope->second.find(button.along->parts.back()); it != scope->second.end()) view = it->second;
+            }
+            for (std::size_t at = 0; view && at < view->each.size(); ++at) {
+                const auto& each = view->each[at];
+                if (!each.name || *each.name != button.along_list) continue;
                 auto* source = std::get_if<language::name_expression>(&each.source->node);
                 const language::entity_declaration* step = nullptr;
                 if (auto scope = entities_.find(ns); source && scope != entities_.end()) {
@@ -1155,21 +1197,72 @@ namespace one::generators {
                 }
                 for (const auto& row : each.rows) {
                     std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
-                    if (column == "title") line += " shown=\"title\"";
-                    if (column == "to.title") line += " to=\"to.title\"";
-                    if (column == "from.title") line += " from=\"from.title\"";
                     for (const auto& held : held_) {
                         if (held.allows.empty() || held.ns != ns || !step || !names_parameter(route_, held.within)) continue;
                         for (const auto& f : step->fields) {
                             if (f.name == column && f.list && f.type && f.type->text() == held.record) {
                                 parts.params.insert(held.within);
-                                line += " held=" + web_detail::js_string(column) + " roles={" + view_variable(parts, held.view) + "} within={" +
-                                        web_detail::js_name(held.within + "_id") + "} place=" + web_detail::js_string(held.field) + " role=" +
-                                        web_detail::js_string(held.allows.substr(0, held.allows.find('.')));
+                                props = {{"held", web_detail::js_string(column)},
+                                         {"roles", view_variable(parts, held.view)},
+                                         {"within", web_detail::js_name(held.within + "_id")},
+                                         {"place", web_detail::js_string(held.field)},
+                                         {"role", web_detail::js_string(held.allows.substr(0, held.allows.find('.')))}};
                             }
                         }
                     }
                 }
+            }
+            return props;
+        }
+
+        // board project_page.issues by phase over project_page.phases: the list's rows
+        // as cards in the over list's columns, showing what its block names, and with
+        // a move, dragged along the steps the person's roles may take.
+        void board(stream& out, screen_parts& parts, const std::string& ns, const language::board_item& board) {
+            parts.components.insert("Board");
+            const language::entity_declaration* entity = listed(ns, board.view.text(), board.list);
+            std::string columns, pictures, labels, shown;
+            for (const auto& column : board.columns) {
+                std::string key = web_detail::text_of(*column.value);
+                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
+                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+                if (key.ends_with(".picture")) pictures += (pictures.empty() ? "" : ", ") + web_detail::js_string(key);
+                for (const auto& f : entity ? entity->fields : nothing_) {
+                    if (f.name != key) continue;
+                    if (f.list && f.type && f.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
+                    if (!f.choices.empty()) {
+                        shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": Object.fromEntries(" +
+                                 choice_options(f) + ")";
+                    }
+                }
+            }
+            std::string line = "<Board view={" + view_variable(parts, full_view(ns, board.view.text())) + "} list=" + web_detail::js_string(*board.list) +
+                               " by=" + web_detail::js_string(board.by) + " over={" + view_variable(parts, full_view(ns, board.over.text())) +
+                               "} overList=" + web_detail::js_string(board.over_list);
+            for (const auto& column : listed_columns(ns, board.over.text(), board.over_list)) {
+                if (column == "title") line += " shown=\"title\"";
+            }
+            line += " columns={{ " + columns + " }}";
+            if (board.link) {
+                std::string target = full_route(ns, *board.link);
+                line += " link=" + web_detail::js_string(target);
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+            }
+            if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!shown.empty()) line += " choices={{ " + shown + " }}";
+            if (!labels.empty()) line += " labels={[" + labels + "]}";
+            if (board.move) {
+                std::string move = "command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: " +
+                                   view_variable(parts, full_view(ns, board.move->along->text())) + ", list: " + web_detail::js_string(board.move->along_list);
+                for (const auto& [name, value] : held_by(parts, ns, *board.move)) move += ", " + name + ": " + value;
+                line += " move={{ " + move + " }}";
             }
             out.line(line + " />");
         }

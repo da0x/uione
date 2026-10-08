@@ -169,6 +169,37 @@ export interface TableReorder {
   onMove: (from: number, to: number) => void;
 }
 
+// Cards in columns, like a project's issues in its phases, a column for each in
+// order. A card is moved to a column it may go to, by dragging it or with Alt+← and
+// Alt+→; while one is dragged, the columns it can't go to are dimmed.
+export interface BoardProps {
+  status: ViewStatus;
+  columns: BoardColumn[];
+  error?: string;
+  onMove?: (card: string, column: string) => void; // absent when no card can be moved
+}
+
+export interface BoardColumn {
+  id: string;
+  title: string;
+  cards: BoardCard[];
+}
+
+export interface BoardCard {
+  id: string;
+  title: ReactNode;
+  link?: LinkProps; // the page it opens
+  details: ReactNode[]; // what else it shows, like its priority and labels
+  reaches: string[]; // the columns it may be moved to
+}
+
+// One of a few ways to show the same thing, like a table or a board, the one
+// shown marked.
+export interface SwitchProps {
+  label: string; // what's switched, like "Show issues as"
+  options: { label: string; selected: boolean; onSelect: () => void }[];
+}
+
 // What goes between two of the same things, like the moves between a project's
 // phases: a row and a column for each, and a cell for each pair, the row's first.
 export interface GridProps {
@@ -301,6 +332,8 @@ export interface ComponentSet {
   Menu: ComponentType<MenuProps>;
   Table: ComponentType<TableProps>;
   Grid: ComponentType<GridProps>;
+  Board: ComponentType<BoardProps>;
+  Switch: ComponentType<SwitchProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;

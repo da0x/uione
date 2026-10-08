@@ -121,8 +121,8 @@ The language's own words, inside what a declaration says:
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `table`, `grid`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
-  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, and in a grid, `by … and … over`;
+- on a screen: `table`, `grid`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and in a grid or a board, `by … and … over`;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
 
@@ -742,6 +742,28 @@ form step::create "Allow" {
 }
 form step::update "Save" {
 	roles "Taken by"
+}
+```
+
+- `board project_page.issues by phase over project_page.phases` shows a list's
+  rows as cards in columns, a column for each phase in its order, with how many
+  cards it has, and each issue in the column its `phase` names. Its block says what
+  a card shows, its title first, and `link` opens a card's page as a table's does.
+- `move issue::move along project_page.steps` in its block lets a card be dragged,
+  or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one
+  of the person's roles; while it's dragged, the columns it can't go to are dimmed.
+  The card shows in its new column at once, and goes back if the move fails.
+- A table and a board of the same list, one right after the other, are one: the
+  person picks which they see, and their pick is remembered.
+
+```one
+table project_page.issues link /:project/issues/:issue {
+	number "#"  title  phase.title "Phase"
+}
+board project_page.issues by phase over project_page.phases link /:project/issues/:issue {
+	move issue::move along project_page.steps
+	title
+	number "#"  priority  labels
 }
 ```
 

@@ -32,7 +32,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
 syn keyword uioneKeyword   require permission clear create readers when was add remove to has of limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid over and reorder
+syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid board along over and reorder
 " each change of issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+of\>"
@@ -40,6 +40,7 @@ syn match   uioneType      "\<change\>\ze\s\+of\>"
 " called changes.
 syn match   uioneKeyword   "^\s*\zs\<changes\>\ze\s\+\h"
 syn match   uioneKeyword   "^\s*\zs\<input\>\ze\s\+\h\w*\s\+\h"
+syn match   uioneKeyword   "^\s*\zs\<move\>\ze\s\+\h\w*::"
 syn match   uioneKeyword   "^\s*\zs\<delete\>\ze\s\+each\>"
 " history only in an entity's header: entity issue history {.
 syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<history\>"

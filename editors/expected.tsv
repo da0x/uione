@@ -183,3 +183,6 @@ editors/fixtures/body.one	reorder position	reorder	keyword
 editors/fixtures/body.one	grid columns.arrows	grid	keyword
 editors/fixtures/body.one	by from and to over	and	keyword
 editors/fixtures/body.one	by from and to over	over	keyword
+editors/fixtures/body.one	board columns.cards	board	keyword
+editors/fixtures/body.one	move card::move along	move	keyword
+editors/fixtures/body.one	move card::move along	along	keyword

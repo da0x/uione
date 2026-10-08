@@ -19,6 +19,7 @@ namespace board {
 	entity card {
 		column  column
 		input   text
+		title   text
 	}
 
 	command column::delete {
@@ -31,6 +32,10 @@ namespace board {
 
 	command column::update
 
+	command card::move {
+		changes column
+	}
+
 	view columns {
 		columns = each column {
 			order by position
@@ -38,6 +43,9 @@ namespace board {
 		}
 		arrows = each arrow {
 			from  to
+		}
+		cards = each card {
+			column  title
 		}
 	}
 
@@ -48,6 +56,10 @@ namespace board {
 			delete "Remove"
 		}
 		grid columns.arrows by from and to over columns.columns
+		board columns.cards by column over columns.columns {
+			move card::move along columns.arrows
+			title
+		}
 	}
 
 }
