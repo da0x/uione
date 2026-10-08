@@ -120,6 +120,17 @@ func (r *registry) entity(name string) *schema {
 	return nil
 }
 
+// historyOf is the entity whose changes a schema holds, like issue for issue_change,
+// or nil for one that isn't a history.
+func (r *registry) historyOf(changes *schema) *schema {
+	for _, s := range r.schemas {
+		if s.history == changes {
+			return s
+		}
+	}
+	return nil
+}
+
 // schema is the entity a Go type holds, named after the type in snake_case, inside
 // the namespace it's used in: Signup in waitlist is waitlist::signup.
 func (r *registry) schema(t reflect.Type, ns string) *schema {

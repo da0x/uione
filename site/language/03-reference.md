@@ -814,6 +814,8 @@ board project_page.issues by phase over project_page.phases link /:project/issue
   to closed". Its rows need `field`, `before`, `after` and `created_at`, and name
   who made each change with `created_by.name`. With `action` too, a change a
   command of its own made says what that command did: "Ada closed this".
+  A change of a field that points at something, like an issue's phase, names what
+  it pointed at by its title or name: "Ada changed phase from Triage to Ready".
 - A timeline of many things' changes, like every issue's in a project, names what
   each change was to with the list's own columns, like `issue.number` and
   `issue.title`, and `link` opens it: `timeline project_page.timeline link

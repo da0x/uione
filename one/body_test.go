@@ -5,6 +5,7 @@ package one_test
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/da0x/uione/one"
@@ -37,7 +38,19 @@ type Lane struct {
 	Title string `firestore:"title" one:"required"`
 }
 
+// An errand in a lane, keeping its history.
+type Errand struct {
+	one.Record
+	one.History
+	Lane  string `firestore:"lane" one:"refers=boards::lane"`
+	Title string `firestore:"title"`
+}
+
 var boards = one.Module("boards",
+	one.Command[Errand]("errand::create").Allow(one.Anyone),
+	one.Command[Errand]("errand::update").Allow(one.Anyone),
+	one.View("errand_page").Public().Per(one.Entity[Errand]()).
+		List("changes", one.Where[one.ChangeOf[Errand]]("errand", one.Subject)).Order("created_at").Fields("field", "before", "after"),
 	one.Command[Lane]("lane::create").Allow(one.Anyone),
 	one.Command[Column]("column::create").Allow(one.Anyone),
 	one.Command[Card]("card::create").Allow(one.Anyone),
@@ -137,5 +150,24 @@ func TestAViewPerEntityListsWhatAFieldOfItsEntityPicks(t *testing.T) {
 	h.mustRun("boards/arrow/create", "", map[string]any{"from": todo, "to": todo})
 	if n := arrows(); n != 2 {
 		t.Fatalf("after another arrow out of its column, the card's page lists %d, not 2", n)
+	}
+}
+
+func TestAChangeOfWhatSomethingPointsAtSaysItsTitle(t *testing.T) {
+	h := start(t)
+	review := h.mustRun("boards/lane/create", "", map[string]any{"board": "b1", "title": "In review"})
+	done := h.mustRun("boards/lane/create", "", map[string]any{"board": "b1", "title": "Done"})
+	errand := h.mustRun("boards/errand/create", "", map[string]any{"lane": review, "title": "first"})
+	h.mustRun("boards/errand/update", "", map[string]any{"id": errand, "lane": done})
+	h.mustRun("boards/errand/update", "", map[string]any{"id": errand, "title": "second"})
+	var got [][]any
+	for _, change := range list(h.view("boards::errand_page:"+errand), "changes") {
+		if change["field"] != "" {
+			got = append(got, []any{change["field"], change["before"], change["after"]})
+		}
+	}
+	want := [][]any{{"lane", "In review", "Done"}, {"title", "first", "second"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("the errand's history is\n%v\nwant\n%v", got, want)
 	}
 }

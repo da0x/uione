@@ -710,6 +710,46 @@ func same(stored, wanted any) bool {
 	return reflect.DeepEqual(stored, wanted)
 }
 
+// called is what an id, or each in a list of them, names something by: its title, or
+// its name, or the id itself when it has neither or is gone.
+func (a *App) called(ctx context.Context, target *schema, value any, read map[string]map[string]any) (any, error) {
+	one := func(id string) (any, error) {
+		key := target.collection + "/" + id
+		if _, done := read[key]; !done {
+			fields, err := a.stored(ctx, target, id)
+			if err != nil {
+				return nil, err
+			}
+			read[key] = fields
+		}
+		for _, name := range []string{"title", "name"} {
+			if text, ok := read[key][name].(string); ok && text != "" {
+				return text, nil
+			}
+		}
+		return id, nil
+	}
+	switch ids := value.(type) {
+	case string:
+		if ids == "" {
+			return ids, nil
+		}
+		return one(ids)
+	case []any:
+		called := make([]any, 0, len(ids))
+		for _, item := range ids {
+			id, _ := item.(string)
+			name, err := one(id)
+			if err != nil {
+				return nil, err
+			}
+			called = append(called, name)
+		}
+		return called, nil
+	}
+	return value, nil
+}
+
 func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[string]any, error) {
 	data := map[string]any{}
 	// What the entity it's for holds, for lists picked by its fields.
@@ -856,6 +896,24 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 				row[name] = values
 			default:
 				row[name] = nil
+			}
+		}
+		// A change of a field that points at something, like an issue's phase, says what
+		// it pointed at before and after by its title or name, rather than its id.
+		if owner := a.reg.historyOf(each); owner != nil {
+			if f := owner.field(fmt.Sprint(doc.Data()["field"])); f != nil && f.refers != "" {
+				if target := a.reg.entity(f.refers); target != nil {
+					for _, side := range []string{"before", "after"} {
+						if _, shown := row[side]; !shown {
+							continue
+						}
+						called, err := a.called(ctx, target, doc.Data()[side], pointed)
+						if err != nil {
+							return nil, err
+						}
+						row[side] = called
+					}
+				}
 			}
 		}
 		for _, val := range l.values {
