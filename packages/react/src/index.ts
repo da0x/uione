@@ -31,3 +31,4 @@ export { label, shortAddress, show, useLinks, useParam, useUI } from "./ui.js";
 export { keyOf, partsOf } from "./keys.js";
 
 export type * from "./contract.js";
+export { footerLinks } from "./contract.js";

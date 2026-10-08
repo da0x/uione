@@ -250,6 +250,9 @@ A project without the setting counts no one and asks no one.
 as © and the year it's read. Beside it is the uione release the site was built
 with and the commit it was built from, so what's deployed can be told at a glance;
 the commit is git's where it's built, or `UIONE_COMMIT` when a deploy names it.
+The release links to its notes on GitHub, and the commit to itself in the site's
+repository, when that's on GitHub: git's `origin` where it's built, or
+`UIONE_REPOSITORY` when a deploy names it.
 
 `unread news.changes since news.seen` counts, on every page, what's new to the
 person signed in: the rows of a list of their own view made after a value of it,

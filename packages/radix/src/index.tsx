@@ -16,7 +16,8 @@ import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ComponentSet } from "@uione/react";
+import type { ButtonProps, ComponentSet, Footer } from "@uione/react";
+import { footerLinks } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -255,13 +256,15 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
 // What a page's foot says: © this year and who it's by, then the uione release and
-// the commit it was built from, each when known.
-function footerWords(footer: { copyright?: string; link?: string; version?: string; commit?: string }): string[] {
+// the commit it was built from, each when known, and each linked where it can be:
+// who it's by to their page, the release to its notes, the commit to its repository.
+function footerParts(footer: Footer): { before?: string; words: string; href?: string }[] {
+  const links = footerLinks(footer);
   return [
-    footer.copyright ? `© ${new Date().getFullYear()} ${footer.copyright}` : "",
-    footer.version ? `uione ${footer.version}` : "",
-    footer.commit ? footer.commit.slice(0, 7) : "",
-  ].filter(Boolean);
+    footer.copyright ? { before: `© ${new Date().getFullYear()} `, words: footer.copyright, href: footer.link } : undefined,
+    footer.version ? { before: "uione ", words: footer.version, href: links.release } : undefined,
+    footer.commit ? { words: footer.commit.slice(0, 7), href: links.commit } : undefined,
+  ].filter((part) => part !== undefined);
 }
 
 // How urgent a row, a card or a box of details is, as Trac colored a ticket's
@@ -361,18 +364,16 @@ export const radix: ComponentSet = {
       {footer && (
         <footer className="border-t border-line px-4 py-4 text-xs text-muted sm:px-6 lg:px-8">
           <p>
-            {footerWords(footer).map((words, at) => (
+            {footerParts(footer).map((part, at) => (
               <span key={at}>
                 {at > 0 && " · "}
-                {at === 0 && footer.copyright && footer.link ? (
-                  <>
-                    © {new Date().getFullYear()}{" "}
-                    <a href={footer.link} target="_blank" rel="noreferrer" className="underline-offset-4 hover:text-ink hover:underline">
-                      {footer.copyright}
-                    </a>
-                  </>
+                {part.before}
+                {part.href ? (
+                  <a href={part.href} target="_blank" rel="noreferrer" className="underline-offset-4 hover:text-ink hover:underline">
+                    {part.words}
+                  </a>
                 ) : (
-                  words
+                  part.words
                 )}
               </span>
             ))}

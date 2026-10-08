@@ -44,6 +44,16 @@ export interface Footer {
   link?: string; // where the name links, like their LinkedIn
   version?: string; // like 0.7.0
   commit?: string; // like d9d95fd
+  repository?: string; // where the commit can be read, like https://github.com/da0x/neotrac
+}
+
+// Where a foot's uione release and commit link: the release's notes on GitHub, and
+// the commit in the site's own repository, when it's known.
+export function footerLinks(footer: Footer): { release?: string; commit?: string } {
+  return {
+    ...(footer.version ? { release: `https://github.com/da0x/uione/releases/tag/v${footer.version}` } : {}),
+    ...(footer.commit && footer.repository ? { commit: `${footer.repository}/commit/${footer.commit}` } : {}),
+  };
 }
 
 export interface AccountProps {

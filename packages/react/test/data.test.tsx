@@ -918,13 +918,22 @@ describe("what's on screen, in the path", () => {
 });
 
 describe("a site's foot", () => {
-  it("says who it's by, linked, and the uione and commit it was built from", () => {
+  it("says who it's by, and the uione and commit it was built from, each linked", () => {
     const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
     render(
-      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ copyright: "Ada Lovelace", link: "https://www.linkedin.com/in/ada", version: "0.7.0", commit: "d9d95fd0aaaa" }} />,
+      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ copyright: "Ada Lovelace", link: "https://www.linkedin.com/in/ada", version: "0.7.0", commit: "d9d95fd0aaaa", repository: "https://github.com/da0x/neotrac" }} />,
     );
     const foot = screen.getByRole("contentinfo");
     expect(foot.textContent).toBe(`© ${new Date().getFullYear()} Ada Lovelace · uione 0.7.0 · d9d95fd`);
     expect(screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
+    expect(screen.getByRole("link", { name: "0.7.0" }).getAttribute("href")).toBe("https://github.com/da0x/uione/releases/tag/v0.7.0");
+    expect(screen.getByRole("link", { name: "d9d95fd" }).getAttribute("href")).toBe("https://github.com/da0x/neotrac/commit/d9d95fd0aaaa");
+  });
+
+  it("links no commit when where it can be read isn't known", () => {
+    const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
+    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ version: "0.7.0", commit: "d9d95fd0aaaa" }} />);
+    expect(screen.getByRole("contentinfo").textContent).toBe("uione 0.7.0 · d9d95fd");
+    expect(screen.queryByRole("link", { name: "d9d95fd" })).toBeNull();
   });
 });

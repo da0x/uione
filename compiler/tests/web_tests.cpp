@@ -610,6 +610,21 @@ TEST_CASE("a project's theme, corners and appearance are on its page from the fi
     CHECK(page->content.find(R"(<html lang="en" data-palette="papercolor" data-corners="square" data-appearance="light" data-theme="light">)") != std::string::npos);
 }
 
+TEST_CASE("a site's foot says who it's by, and the uione, commit and repository it was built from") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-foot";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "import one\nproject shop {\n\tcopyright  \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n"
+                                                      "screen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* app = find(files, "src/app.tsx");
+    REQUIRE(app != nullptr);
+    CHECK(app->content.find(std::string("footer: { copyright: \"Ada Lovelace\", link: \"https://www.linkedin.com/in/ada\", version: \"") + std::string(one::version) +
+                            "\", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }") != std::string::npos);
+}
+
 TEST_CASE("a screen's title can show what the page does, once it's arrived") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-live-title";

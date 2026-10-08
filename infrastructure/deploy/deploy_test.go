@@ -325,3 +325,29 @@ func TestTheCommitIsTheDeploysOrGits(t *testing.T) {
 		t.Errorf("in this repository, the commit is %q", got)
 	}
 }
+
+// Where a build's commits can be read: as the deploy names it, or the folder's
+// origin, written as its GitHub page; a remote elsewhere isn't linked.
+func TestTheRepositoryIsItsGitHubPage(t *testing.T) {
+	for remote, want := range map[string]string{
+		"git@github.com:da0x/neotrac.git":       "https://github.com/da0x/neotrac",
+		"https://github.com/da0x/neotrac.git":   "https://github.com/da0x/neotrac",
+		"https://github.com/da0x/neotrac/":      "https://github.com/da0x/neotrac",
+		"ssh://git@github.com/da0x/neotrac.git": "https://github.com/da0x/neotrac",
+		"https://gitlab.com/da0x/neotrac.git":   "",
+		"https://github.com/da0x":               "",
+		"/home/da/neotrac":                      "",
+	} {
+		if got := webAddress(remote); got != want {
+			t.Errorf("%s is %q, not %q", remote, got, want)
+		}
+	}
+	t.Setenv("UIONE_REPOSITORY", "git@github.com:da0x/neotrac.git")
+	if got := repositoryOf(t.TempDir()); got != "https://github.com/da0x/neotrac" {
+		t.Errorf("named by the deploy, the repository is %q", got)
+	}
+	t.Setenv("UIONE_REPOSITORY", "")
+	if got := repositoryOf(t.TempDir()); got != "" {
+		t.Errorf("outside git, the repository is %q", got)
+	}
+}

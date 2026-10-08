@@ -2399,7 +2399,7 @@ namespace one::generators {
                 // uione and commit it was built from, so what's deployed can be told.
                 std::string footer = ", footer: { " + (copyright_.empty() ? "" : "copyright: " + web_detail::js_string(copyright_) + ", ") +
                                      (copyright_link_.empty() ? "" : "link: " + web_detail::js_string(copyright_link_) + ", ") +
-                                     "version: " + web_detail::js_string(std::string(one::version)) + ", commit: import.meta.env.VITE_UIONE_COMMIT }";
+                                     "version: " + web_detail::js_string(std::string(one::version)) + ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + (analytics_ ? ", analytics" : "") + unread + footer + " };");
             }

@@ -7,6 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ComponentSet, DialogProps } from "./contract.js";
+import { footerLinks } from "./contract.js";
 
 // Read by screen readers, not shown.
 const hidden: CSSProperties = {
@@ -86,13 +87,19 @@ export const plain: ComponentSet = {
       </main>
       {footer && (
         <footer>
-          {footer.copyright && (
-            <>
-              © {new Date().getFullYear()} {footer.link ? <a href={footer.link}>{footer.copyright}</a> : footer.copyright}
-              {(footer.version || footer.commit) && " · "}
-            </>
-          )}
-          {[footer.version ? `uione ${footer.version}` : "", footer.commit?.slice(0, 7) ?? ""].filter(Boolean).join(" · ")}
+          {[
+            footer.copyright ? { before: `© ${new Date().getFullYear()} `, words: footer.copyright, href: footer.link } : undefined,
+            footer.version ? { before: "uione ", words: footer.version, href: footerLinks(footer).release } : undefined,
+            footer.commit ? { words: footer.commit.slice(0, 7), href: footerLinks(footer).commit } : undefined,
+          ]
+            .filter((part) => part !== undefined)
+            .map((part, at) => (
+              <span key={at}>
+                {at > 0 && " · "}
+                {part.before}
+                {part.href ? <a href={part.href}>{part.words}</a> : part.words}
+              </span>
+            ))}
         </footer>
       )}
     </>
