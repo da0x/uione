@@ -254,6 +254,10 @@ namespace one::language {
     struct entity_declaration {
         std::string name;
         bool history = false;  // entity issue history: every change is kept
+        // entity comment history of issue: each change to a comment is kept in its
+        // issue's history, through its field pointing at the issue.
+        std::optional<std::string> history_of;
+        location history_of_where;
         std::vector<field> fields;
     };
 
@@ -393,6 +397,14 @@ namespace one::language {
         std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
         bool hide_empty = false;             // hide when empty: not there at all while it has no rows
         location reorder_where;
+        // only due <= 2 weeks from now: the rows it keeps, worked out when it's shown,
+        // like a card's filter.
+        expression_ptr only;
+        location only_where;
+        // tint by priority: each row colored by how urgent its choice is, the first of
+        // the field's choices the most, as Trac colored a ticket's priority.
+        std::optional<std::string> tint;
+        location tint_where;
     };
 
     // grid project_page.steps by from and to over project_page.phases { roles.title }:
@@ -459,6 +471,8 @@ namespace one::language {
         std::optional<button_item> move;
         std::vector<table_column> columns;  // what a card shows, its title first
         std::vector<std::string> search;    // search title labels: a box that finds cards by these
+        std::optional<std::string> tint;    // tint by priority: each card colored as a table's row
+        location tint_where;
     };
 
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as
@@ -530,12 +544,33 @@ namespace one::language {
     struct details_item {
         qualified_name view;
         std::vector<table_column> fields;
+        std::optional<std::string> tint;  // tint by priority: the box colored as a table's row
+        location tint_where;
+    };
+
+    // find "Search this project" { project_page.issues "Issues" link /:project/:issue by
+    // number title labels }: a box that finds rows of several lists as it's typed in,
+    // each list's under its own label, each row a link.
+    struct find_source {
+        location where;
+        qualified_name view;
+        std::string list;
+        std::string label;
+        std::optional<std::string> link;
+        location link_where;
+        std::vector<std::string> by;  // the fields it's found by, the first shown, a number before it
+    };
+
+    struct find_item {
+        std::string label;
+        std::vector<find_source> sources;
     };
 
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item, cards_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item, cards_item,
+                     find_item>
             node;
     };
 

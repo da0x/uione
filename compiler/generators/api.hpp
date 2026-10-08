@@ -389,6 +389,8 @@ namespace one::generators {
             if (web_detail::text_of(*f.initial) == "me.username") return std::string("default=me.username");
             // slug(title): made from the title when it isn't given.
             if (auto* call = std::get_if<language::call_expression>(&f.initial->node); call && call->arguments.size() == 1) {
+                // mentions(body): the people the body names.
+                if (web_detail::text_of(*call->callee) == "mentions") return "mentions=" + web_detail::text_of(*call->arguments[0]);
                 return "from=" + web_detail::text_of(*call->arguments[0]);
             }
             unsupported(path_, f.initial->where, "a starting value that's worked out, rather than me, now, true, false or a choice");
@@ -429,6 +431,8 @@ namespace one::generators {
                     if (f.after) rules.push_back("after=" + *f.after);
                     if (f.type && f.type->parts.size() == 1 && entity(pkg, f.type->parts[0])) {
                         rules.push_back("refers=" + web_detail::join(ns, f.type->parts[0]));
+                        // entity comment history of issue: its issue keeps its changes.
+                        if (e->history_of && *e->history_of == f.type->parts[0]) rules.push_back("history");
                     } else if (f.type && f.type->text() == "user") {
                         rules.push_back("refers=user");  // a person, whose name and picture a view can show
                     }
@@ -1455,6 +1459,15 @@ namespace one::generators {
                         return std::nullopt;
                     }
                     f = field(*entity(pkg, f->type->text()), inside);
+                }
+                // A change of an issue can come from a comment kept in its history, and
+                // holds what the comment points at, like the people it mentions.
+                if (changes && !f && !field_name.empty()) {
+                    for (const auto* child : pkg.entities) {
+                        if (child->history_of && *child->history_of == e->name) {
+                            if (const language::field* own = field(*child, field_name)) f = own;
+                        }
+                    }
                 }
                 if (changes && inside.empty()) {
                     // Who made a change, like created_by != user.id for someone else's.

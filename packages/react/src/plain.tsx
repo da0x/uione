@@ -160,6 +160,21 @@ export const plain: ComponentSet = {
       </ol>
     ),
 
+  Find: ({ label, query, onChange, groups }) => (
+    <section>
+      <input type="search" aria-label={label} placeholder={label} value={query} onChange={(event) => onChange(event.target.value)} />
+      {groups.map((group) => (
+        <ul key={group.label} aria-label={group.label}>
+          {group.results.map((result) => (
+            <li key={result.id}>{result.link ? <a {...result.link}>{result.text}</a> : result.text}</li>
+          ))}
+          {group.more > 0 && <li>and {group.more} more</li>}
+        </ul>
+      ))}
+      {query.trim() && groups.length === 0 && <p>Nothing matches.</p>}
+    </section>
+  ),
+
   Timeline: ({ status, entries, title, fresh }) =>
     status !== "live" || entries.length === 0 ? null : (
       <ul aria-label={fresh ? `${title ?? "Changes"}, ${fresh} new` : title}>
@@ -586,7 +601,7 @@ export const plain: ComponentSet = {
                 />
               ) : field.choices ? (
                 <select {...common} onChange={(event) => field.onChange(event.target.value)}>
-                  <option value="">Choose one</option>
+                  {!field.required && <option value="">Choose one</option>}
                   {field.choices.map(([value, shown]) => (
                     <option key={value} value={value}>
                       {shown}

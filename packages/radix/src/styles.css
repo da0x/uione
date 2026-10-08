@@ -35,6 +35,17 @@
   --color-accent-soft: #e8eefc;
   --color-danger: #c2312d;
   --color-grid: rgba(36, 87, 214, 0.07);
+  /* How urgent something is, as Trac colored a ticket's priority: the most urgent
+     red, then yellow, then plain, then cyan and blue for what can wait. Each has a
+     fill and a stronger edge. */
+  --color-tone-1: #ffddcc;
+  --color-tone-1-edge: #ee8888;
+  --color-tone-2: #ffffbb;
+  --color-tone-2-edge: #e0d070;
+  --color-tone-4: #e7ffff;
+  --color-tone-4-edge: #99dddd;
+  --color-tone-5: #e7eeff;
+  --color-tone-5-edge: #aabbee;
   --radius-box: 10px;
   --radius-control: 8px;
   --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
@@ -60,11 +71,27 @@
     --color-accent-soft: #16244a;
     --color-danger: #ff7b72;
     --color-grid: rgba(126, 166, 255, 0.06);
+    --color-tone-1: rgba(255, 120, 100, 0.16);
+    --color-tone-1-edge: rgba(255, 120, 100, 0.55);
+    --color-tone-2: rgba(240, 220, 90, 0.13);
+    --color-tone-2-edge: rgba(240, 220, 90, 0.5);
+    --color-tone-4: rgba(90, 220, 230, 0.1);
+    --color-tone-4-edge: rgba(90, 220, 230, 0.4);
+    --color-tone-5: rgba(120, 150, 255, 0.12);
+    --color-tone-5-edge: rgba(120, 150, 255, 0.45);
     --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
     --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
   }
 }
 :root[data-theme="dark"] {
+  --color-tone-1: rgba(255, 120, 100, 0.16);
+  --color-tone-1-edge: rgba(255, 120, 100, 0.55);
+  --color-tone-2: rgba(240, 220, 90, 0.13);
+  --color-tone-2-edge: rgba(240, 220, 90, 0.5);
+  --color-tone-4: rgba(90, 220, 230, 0.1);
+  --color-tone-4-edge: rgba(90, 220, 230, 0.4);
+  --color-tone-5: rgba(120, 150, 255, 0.12);
+  --color-tone-5-edge: rgba(120, 150, 255, 0.45);
   --color-page: #0a101c;
   --color-ink: #e6ebf3;
   --color-muted: #94a0b4;

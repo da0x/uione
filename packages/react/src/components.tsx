@@ -5,7 +5,7 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, cloneElement, isValidElement, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
@@ -129,11 +129,13 @@ export function Details({
   fields,
   choices = {},
   labels = [],
+  tint,
 }: {
   view: ViewState;
   fields: readonly (readonly [name: string, label: string])[];
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
+  tint?: Tint; // the box colored by how urgent what it's about is, like its priority
 }) {
   const ui = useUI();
   if (view.status !== "live") return null;
@@ -146,7 +148,7 @@ export function Details({
     const said = typeof value === "string" ? (choices[name]?.[value] ?? value) : show(value);
     return said === "" ? [] : [{ label, value: said }];
   });
-  return items.length ? <ui.Details items={items} /> : null;
+  return items.length ? <ui.Details items={items} tone={toneOf(view.data ?? {}, tint)} /> : null;
 }
 
 // One region of a screen's layout, like main: what's in it, which Layout places.
@@ -220,6 +222,17 @@ export function done(action: string): string {
 // cleared or changed, or, made by a command of its own like close, what that
 // command did. [before, after] the thing, like ["changed title of", "from a to b"].
 export function phrase(field: unknown, before: unknown, after: unknown, command?: unknown): [string, string] {
+  // A change kept for something of its own, like a comment on an issue: its field
+  // names what the command made, and it says so, like added a comment to.
+  const parts = typeof command === "string" ? command.split("::") : [];
+  const made = parts.length >= 2 ? parts[parts.length - 2] : "";
+  if (typeof field === "string" && field !== "" && field === made) {
+    const thing = made.replaceAll("_", " ");
+    const did = parts[parts.length - 1];
+    if (did === "create") return [`added a ${thing} to`, ""];
+    if (did === "delete") return [`removed a ${thing} from`, ""];
+    return [`changed a ${thing} on`, ""];
+  }
   const verb = typeof command === "string" ? action(command) : "";
   // A command of its own says what it did, and from what to what when it says
   // that, like moved this from Reported to Triaged.
@@ -254,7 +267,10 @@ function onceEach(rows: Row[]): Row[] {
   // A field that went from nothing to nothing, as an older backend recorded when it
   // first wrote one empty, didn't change.
   const nothing = (value: unknown) => value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
-  rows = rows.filter((row) => !(typeof row.field === "string" && row.field !== "" && "before" in row && "after" in row && nothing(row.before) && nothing(row.after)));
+  // A change kept for something of its own, like a comment, says so with nothing
+  // before or after, and stays.
+  const made = (row: Row) => typeof row.action === "string" && row.action.split("::").at(-2) === row.field;
+  rows = rows.filter((row) => made(row) || !(typeof row.field === "string" && row.field !== "" && "before" in row && "after" in row && nothing(row.before) && nothing(row.after)));
   return rows.filter((row, i) => {
     const before = rows[i - 1];
     const own = typeof row.action === "string" && !["create", "update", "delete"].includes(action(row.action));
@@ -320,6 +336,86 @@ export function Timeline({
     return { ...entry, what: head, subject: words.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
   return <ui.Timeline status={view.status} entries={entries} title={title} fresh={since ? freshCount : undefined} />;
+}
+
+// The names in an address that say what's on screen, like which tab is open, rather
+// than what a list is filtered by: find, and a list's own tab, view, page and
+// column, like issues.tab.
+export function shownState(name: string): boolean {
+  return name === "find" || /\.(tab|view|page|column|search)$/.test(name);
+}
+
+// What's on screen kept in the page's address, under a name, like ?find=dates, so a
+// link to the page shows what the person sees: setting it replaces the address
+// rather than adding a step to go back through, and the default isn't written.
+export function useAddressState(name: string, fallback = ""): [string, (value: string) => void] {
+  const { search, pathname, hash } = useLocation();
+  const navigate = useNavigate();
+  const inAddress = new URLSearchParams(search).get(name) ?? fallback;
+  // Shown at once as it's set, since the address changes a moment later, and taken
+  // from the address when that changes some other way, like going back.
+  const [value, setValue] = useState(inAddress);
+  const written = useRef(inAddress);
+  useEffect(() => {
+    if (inAddress !== written.current) {
+      written.current = inAddress;
+      setValue(inAddress);
+    }
+  }, [inAddress]);
+  if (pending && pending.path === pathname && pending.search === search) pending = undefined;
+  const set = (next: string) => {
+    setValue(next);
+    written.current = next === "" ? fallback : next;
+    // From any change still on its way, so two set together both stay.
+    const query = new URLSearchParams(pending && pending.path === pathname ? pending.search : search);
+    if (next === fallback || next === "") query.delete(name);
+    else query.set(name, next);
+    const after = query.toString() ? `?${query.toString()}` : "";
+    pending = { path: pathname, search: after };
+    void navigate(`${pathname}${after}${hash}`, { replace: true });
+  };
+  return [value, set];
+}
+
+// An address being written, which the page hasn't caught up with yet.
+let pending: { path: string; search: string } | undefined;
+
+// A box finding rows of several lists as it's typed in, like a project's issues by
+// number, title and labels, and its wiki pages by title: each list's first eight,
+// under its label, each opening its page. #12 or 12 finds the twelfth by number.
+// What's typed is kept in the address, so a link shows the same results.
+export function Find({
+  label: words,
+  sources,
+}: {
+  label: string;
+  sources: { view: ViewState; list: string; label: string; link?: string; keyed?: string[]; by: string[] }[];
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const [query, setQuery] = useAddressState("find");
+  const wanted = query.trim().toLowerCase();
+  const number = /^#?(\d+)$/.exec(wanted)?.[1];
+  const groups = !wanted
+    ? []
+    : sources.flatMap((source) => {
+        const numbered = source.by.find((field) => field === "number" || field.endsWith(".number"));
+        const named = source.by.find((field) => field !== numbered) ?? source.by[0];
+        const found = rowsOf(source.view.data?.[source.list]).filter((row) =>
+          number !== undefined && numbered
+            ? String(row[numbered]) === number || source.by.some((field) => field !== numbered && show(row[field]).toLowerCase().includes(wanted))
+            : source.by.some((field) => show(row[field]).toLowerCase().includes(wanted)),
+        );
+        if (found.length === 0) return [];
+        const results = found.slice(0, 8).map((row) => {
+          const to = source.link ? links(rowLink(source.link, row, params, source.keyed)) : undefined;
+          const text = [numbered && row[numbered] !== undefined ? `#${show(row[numbered])}` : "", named ? show(row[named]) : ""].filter(Boolean).join(" ");
+          return { id: row.id, text: text || row.id, link: to && { href: to.href, onClick: to.onClick } };
+        });
+        return [{ label: source.label, results, more: found.length - results.length }];
+      });
+  return <ui.Find label={words} query={query} onChange={setQuery} groups={groups} />;
 }
 
 // What a view holds, as Markdown to paste somewhere else whole: the page's title,
@@ -657,6 +753,32 @@ export function keptByTime(held: unknown, op: string, offset: string, now = Date
   return op === "<" ? at < then : op === ">" ? at > then : op === "<=" ? at <= then : at >= then;
 }
 
+// A row's tone, as Trac colored a ticket's priority: where its choice is among the
+// field's choices, the first the most urgent, spread over 1 to 5, so three choices
+// are 1, 3 and 5. A row without one is plain, 3.
+export interface Tint {
+  field: string; // like priority
+  order: string[]; // its choices, the most urgent first
+}
+export function toneOf(row: Record<string, unknown>, tint: Tint | undefined): number | undefined {
+  if (!tint) return undefined;
+  const at = tint.order.indexOf(String(row[tint.field] ?? ""));
+  if (at < 0) return 3;
+  return tint.order.length === 1 ? 3 : Math.round(1 + (at * 4) / (tint.order.length - 1));
+}
+
+// Whether a row is kept by a filter's parts, each a field and what it holds, like
+// author=me, or a time it's before or after, like updated_at>=-7d.
+function kept(row: Row, picks: [string, string][], me: string): boolean {
+  return picks.every(([name, wanted]) => {
+    const compared = /^(.*?)(<=|>=|<|>)$/.exec(name);
+    if (compared) return keptByTime(row[compared[1]], compared[2], wanted);
+    const value = wanted === "me" ? me : wanted;
+    const held = row[name];
+    return Array.isArray(held) ? held.includes(value) : held === value;
+  });
+}
+
 // What a list is filtered by from the page's address, as a card's link opens it:
 // ?is=Opened by me&author=me keeps the rows whose author is whoever is reading, and
 // says so in words that can be cleared. Without one, every row is kept.
@@ -665,15 +787,8 @@ function useFilter() {
   const navigate = useNavigate();
   const auth = useAuth();
   const query = new URLSearchParams(search);
-  const picks = [...query.entries()].filter(([name]) => name !== "is");
-  const matches = (row: Row) =>
-    picks.every(([name, wanted]) => {
-      const compared = /^(.*?)(<=|>=|<|>)$/.exec(name);
-      if (compared) return keptByTime(row[compared[1]], compared[2], wanted);
-      const value = wanted === "me" ? (auth?.person?.uid ?? "") : wanted;
-      const held = row[name];
-      return Array.isArray(held) ? held.includes(value) : held === value;
-    });
+  const picks = [...query.entries()].filter(([name]) => name !== "is" && !shownState(name));
+  const matches = (row: Row) => kept(row, picks, auth?.person?.uid ?? "");
   const filtered: Filtered | undefined =
     picks.length > 0 ? { label: query.get("is") ?? picks.map(([name, value]) => `${label(name)}: ${value}`).join(", "), onClear: () => void navigate(pathname) } : undefined;
   return { matches, filtered };
@@ -730,6 +845,8 @@ export function Table({
   reorder,
   tools,
   hideEmpty = false,
+  only,
+  tint,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -750,22 +867,31 @@ export function Table({
   reorder?: { command: string; field: string; allowed?: boolean };
   tools?: ReactNode; // buttons beside its search, like New issue
   hideEmpty?: boolean; // not there at all while the list has no rows, like a person's reports
+  only?: Record<string, string>; // the rows it keeps, worked out as it's shown, like { "due<=": "+2w" }
+  tint?: Tint; // each row colored by how urgent it is, like its priority
 }) {
   const ui = useUI();
   const auth = useAuth();
   const links = useLinks();
   const params = useParams();
-  // What's typed in the search box, over the fields it searches, as they're shown.
-  const [query, setQuery] = useState("");
-  const [at, setAt] = useState(1);
+  // What's typed in the search box, over the fields it searches, as they're shown,
+  // the tab that's open and the page it's on, kept in the address under the list's
+  // name, like issues.tab=done, so a link shows the same.
+  const [query, setQuery] = useAddressState(`${list}.search`);
+  const [page_, setPage_] = useAddressState(`${list}.page`);
+  const at = Math.max(1, Number(page_) || 1);
+  const setAt = (n: number) => setPage_(n <= 1 ? "" : String(n));
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
-  const found = rowsOf(view.data?.[list]).filter(matches).filter(
+  const own = rowsOf(view.data?.[list]).filter((row) => !only || kept(row, Object.entries(only), auth?.person?.uid ?? ""));
+  const found = own.filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   // With tabs, the first choice is shown first, like Open before Closed.
   const options = by ? Object.keys(choices[by] ?? {}) : [];
-  const [picked, setPicked] = useState<string | undefined>();
+  const [tab, setTab] = useAddressState(`${list}.tab`);
+  const picked = options.includes(tab) ? tab : undefined;
+  const setPicked = (option: string) => setTab(option === options[0] ? "" : option);
   const chosen = picked ?? options[0];
   const tabbed = by && chosen !== undefined ? found.filter((row) => row[by] === chosen) : found;
   const sorted = sort ? [...tabbed].sort(ordering(sort)) : tabbed;
@@ -790,7 +916,7 @@ export function Table({
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
-  if (hideEmpty && view.status === "live" && rowsOf(view.data?.[list]).length === 0) return null;
+  if (hideEmpty && view.status === "live" && own.length === 0) return null;
   // Put in order only when every row is shown, so a row's neighbors are its own.
   const arranged = reorder && reorder.allowed !== false && !by && !wanted && !page && !sort ? reorder : undefined;
   const move = (from: number, to: number) => {
@@ -841,6 +967,7 @@ export function Table({
           id: row.id,
           link: link ? links(rowLink(link, row, params, keyed, named)) : undefined,
           cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })),
+          tone: toneOf(row, tint),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
             disabled: runner.busy(a.name),
@@ -908,6 +1035,7 @@ export function Board({
   move,
   search = [],
   tools,
+  tint,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -925,6 +1053,7 @@ export function Board({
   move?: BoardMove;
   search?: string[]; // fields a box finds cards by, like title and labels
   tools?: ReactNode; // buttons beside its search, like New issue
+  tint?: Tint; // each card colored by how urgent it is, like its priority
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -932,7 +1061,9 @@ export function Board({
   const runner = useConfirmedRunner();
   // Where each card moved is until the view says so too.
   const [moved, setMoved] = useState<Record<string, string>>({});
-  const [query, setQuery] = useState("");
+  // What's typed, kept in the address under the list's name, the same as its table's.
+  const [query, setQuery] = useAddressState(`${list}.search`);
+  const [column, setColumn] = useAddressState(`${list}.column`);
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
   const all = rowsOf(view.data?.[list]);
@@ -963,6 +1094,8 @@ export function Board({
       error={move ? runner.error(move.command) : undefined}
       tools={tools}
       filtered={filtered}
+      column={column || undefined}
+      onColumn={setColumn}
       search={
         search.length
           ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
@@ -991,6 +1124,7 @@ export function Board({
             link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
             details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
             reaches: reaches(where(card)),
+            tone: toneOf(card, tint),
           })),
       }))}
     />
@@ -1014,22 +1148,32 @@ export function Switched({
 }) {
   const ui = useUI();
   const key = `uione:switch:${id}`;
-  const [picked, setPicked] = useState(() => {
-    try {
-      const kept = Number(localStorage.getItem(key));
-      return Number.isInteger(kept) && kept >= 0 && kept < options.length ? kept : 0;
-    } catch {
-      return 0;
-    }
-  });
+  // What's shown is in the address, like issues.view=board, so a link shows the same;
+  // the person's last pick is remembered too, and put in the address when they come
+  // back without one.
+  const named = (at: number) => (options[at] ?? "").toLowerCase();
+  const [inAddress, setInAddress] = useAddressState(`${id.slice(id.lastIndexOf(".") + 1)}.view`);
+  const fromAddress = options.findIndex((_, at) => named(at) === inAddress);
+  const picked = fromAddress >= 0 ? fromAddress : 0;
   const pick = (at: number) => {
-    setPicked(at);
+    setInAddress(at === 0 ? "" : named(at));
     try {
       localStorage.setItem(key, String(at));
     } catch {
-      // Without storage, the pick lasts as long as the page.
+      // Without storage, the pick lasts as long as the address.
     }
   };
+  useEffect(() => {
+    if (inAddress) return;
+    try {
+      const kept = Number(localStorage.getItem(key));
+      if (Number.isInteger(kept) && kept > 0 && kept < options.length) setInAddress(named(kept));
+    } catch {
+      // Nothing remembered.
+    }
+    // Once, as the page opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const switcher = (
     <ui.Switch label={says} options={options.map((option, at) => ({ label: option, icon: icons[at], selected: at === picked, onSelect: () => pick(at) }))} />
   );
@@ -1268,6 +1412,7 @@ export interface FieldSpec {
   hint?: string;
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   start?: string; // what a new one starts as, like the field's starting choice
+  required?: boolean; // a choice that's always one of them, like a priority
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
@@ -1367,6 +1512,7 @@ export function Form({
           label: f.label ?? label(f.name),
           type: f.type ?? "text",
           choices: f.choices,
+          required: f.required,
           value: values[f.name] ?? "",
           hint: f.hint,
           onChange: (value) => {

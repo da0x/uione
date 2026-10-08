@@ -54,6 +54,9 @@ namespace board {
 			card::move "Move" icon edit
 		}
 		subtitle "The columns"
+		find "Find a column" {
+			columns.columns "Columns" by title
+		}
 		timeline columns.changes "What's new" {
 			new since columns.seen
 			seen glance::create

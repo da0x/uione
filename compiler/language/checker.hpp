@@ -747,6 +747,19 @@ namespace one::language {
         }
 
         void verify(const std::string& ns, location where, const entity_declaration& e) {
+            // entity comment history of issue: the issue keeps its history, and the
+            // comment points at it.
+            if (e.history_of) {
+                const entity_declaration* parent = find_entity(ns, qualified_name{{*e.history_of}, e.history_of_where});
+                bool points = std::any_of(e.fields.begin(), e.fields.end(), [&](const field& f) { return f.type && f.type->text() == *e.history_of && !f.list; });
+                if (!parent) {
+                    error(e.history_of_where, "there's no entity " + *e.history_of + " " + in_namespace(ns) + " to keep " + e.name + "'s changes");
+                } else if (!parent->history) {
+                    error(e.history_of_where, "entity " + *e.history_of + " keeps no history to keep " + e.name + "'s in; say entity " + *e.history_of + " history");
+                } else if (!points) {
+                    error(e.history_of_where, "a " + e.name + " is kept in its " + *e.history_of + "'s history, so it points at one, like " + *e.history_of + "  " + *e.history_of + "  required");
+                }
+            }
             snake(e.name, where);
             std::set<std::string, std::less<>> seen;
             for (const auto& f : e.fields) {
@@ -776,8 +789,17 @@ namespace one::language {
                     auto* callee = std::get_if<name_expression>(&call->callee->node);
                     auto* from = call->arguments.size() == 1 ? std::get_if<name_expression>(&call->arguments[0]->node) : nullptr;
                     const field* source = from && from->name.parts.size() == 1 ? find_field(e, from->name.parts[0]) : nullptr;
-                    if (!callee || callee->name.text() != "slug" || !from) {
-                        error(f.initial->where, "a field starts as a value, me, me.username, now, or a name made from another field, like slug(title)");
+                    if (callee && callee->name.text() == "mentions" && from) {
+                        // mentions(body): the people its text names with @username.
+                        if (!source || !source->type || (source->type->text() != "text" && source->type->text() != "markdown")) {
+                            error(f.initial->where, "mentions finds people named in a text or markdown field of entity " + e.name + ", like mentions(body)");
+                        } else if (!f.list || !f.type || f.type->text() != "user") {
+                            error(f.initial->where, f.name + " holds the people " + source->name + " mentions, so it's a list of user");
+                        } else {
+                            mean_field(from->name.where, source);
+                        }
+                    } else if (!callee || callee->name.text() != "slug" || !from) {
+                        error(f.initial->where, "a field starts as a value, me, me.username, now, a name made from another field, like slug(title), or the people a field mentions, like mentions(body)");
                     } else if (!source || !source->type || source->type->text() != "text") {
                         error(f.initial->where, "slug makes a name from a text field of entity " + e.name + ", like slug(title)");
                     } else if (!f.type || (f.type->text() != "text" && f.type->text() != "slug")) {
@@ -820,7 +842,12 @@ namespace one::language {
             if (held != "text" && held != "user" && held != "permission" && !(f.type && find_entity(ns, *f.type))) {
                 error(f.where, f.name + " is a list, which holds text, people or entities, like list of label or list of user");
             }
-            if (f.key || f.unique || f.after || f.initial) {
+            // A list can be the people a field mentions, like mentions(body), and nothing
+            // else worked out.
+            auto* call = f.initial ? std::get_if<call_expression>(&f.initial->node) : nullptr;
+            auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+            bool mentions = callee && callee->name.text() == "mentions";
+            if (f.key || f.unique || f.after || (f.initial && !mentions)) {
                 error(f.where, f.name + " is a list, so it can't be a key, unique, after a field, or start with a value");
             }
         }
@@ -1272,6 +1299,23 @@ namespace one::language {
                 copy.type = f.type;
                 copy.list = f.list;
                 change.fields.push_back(std::move(copy));
+            }
+            // A change can come from something kept in this one's history, like a
+            // comment on an issue, and holds what that points at too, like the people
+            // it mentions.
+            for (const auto& [_, sc] : scopes_) {
+                for (const auto& [name, child] : sc.entities) {
+                    if (!child.node->history_of || *child.node->history_of != e.name) continue;
+                    for (const auto& f : child.node->fields) {
+                        bool taken = std::any_of(change.fields.begin(), change.fields.end(), [&](const field& c) { return c.name == f.name; });
+                        if (taken || !f.type || (f.type->text() != "user" && !pointed(ns, f))) continue;
+                        field copy;
+                        copy.name = f.name;
+                        copy.type = f.type;
+                        copy.list = f.list;
+                        change.fields.push_back(std::move(copy));
+                    }
+                }
             }
             for (const char* name : {"field", "action", "before", "after"}) {
                 field f;
@@ -1817,6 +1861,17 @@ namespace one::language {
                         }
                     }
                     screen_items(ns, block->items, route);
+                } else if (auto* box = std::get_if<find_item>(&item.node)) {
+                    for (const auto& source : box->sources) {
+                        const view_each* list = named_list(ns, source.view, source.list, route);
+                        if (!list) continue;
+                        for (const auto& name : source.by) {
+                            if (!in_rows(*list, name)) error(source.where, "view " + source.view.text() + " has no " + name + " in its " + source.list + " to find by; add it to the list's block");
+                        }
+                        if (source.link && !routes_.contains(full_route(ns, *source.link))) {
+                            error(source.link_where, "there's no screen at " + full_route(ns, *source.link) + " for what's found to open");
+                        }
+                    }
                 } else if (auto* details = std::get_if<details_item>(&item.node)) {
                     snake(details->view);
                     const view_declaration* view = find(ns, details->view, &scope::views);
@@ -1829,6 +1884,9 @@ namespace one::language {
                             bool has = false;
                             for (const auto& v : view->values) has = has || (v.name ? *v.name : written(*v.value)) == key;
                             if (!has) error(f.where, "view " + details->view.text() + " has no " + key + " to show");
+                        }
+                        if (details->tint && std::none_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == *details->tint; })) {
+                            error(details->tint_where, "view " + details->view.text() + " has no " + *details->tint + " to tint by");
                         }
                     }
                 } else if (auto* copy = std::get_if<copy_item>(&item.node)) {
@@ -1880,6 +1938,13 @@ namespace one::language {
                     }
                     if (table->sort && !in_rows(*table->sort)) error(table->sort_where, "the table is sorted by " + *table->sort + ", which its rows don't have");
                     if (table->page && *table->page < 1) error(table->page_where, "a page has at least one row");
+                    if (list) verify_tint(ns, *list, table->view.text(), table->tint, table->tint_where);
+                    if (table->only) {
+                        verify_filter(*table->only, table->only_where);
+                        auto* b = std::get_if<binary_expression>(&table->only->node);
+                        auto* n = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+                        if (n && !in_rows(n->name.text())) error(table->only_where, "the table keeps only rows by " + n->name.text() + ", which its rows don't have");
+                    }
                     // reorder position: rows dragged into order, which an update sets.
                     if (table->reorder && list) {
                         const entity_declaration* rows_of = listed_entity(ns, *list);
@@ -2094,6 +2159,7 @@ namespace one::language {
             } else if (!in_rows(*cards, board.by)) {
                 error(board.by_where, "view " + board.view.text() + " has no " + board.by + " in its " + *board.list + "; add it to the list's block");
             }
+            verify_tint(ns, *cards, board.view.text(), board.tint, board.tint_where);
             if (!in_rows(*columns, "title") && !in_rows(*columns, "name")) {
                 error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
             }
@@ -2149,20 +2215,7 @@ namespace one::language {
                     }
                 }
             }
-            for (const auto& f : cards.filters) {
-                auto* b = std::get_if<binary_expression>(&f.condition->node);
-                auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
-                auto* literal = b ? std::get_if<literal_expression>(&b->right->node) : nullptr;
-                bool time = literal && literal->type == literal_expression::kind::time;
-                bool compared = b && (b->op == token_kind::less || b->op == token_kind::greater || b->op == token_kind::less_equal ||
-                                      b->op == token_kind::greater_equal);
-                if (!b || !(b->op == token_kind::equal || compared) || !field || field->name.parts.size() != 1) {
-                    error(f.where, "a filter is a field and the value it holds, like author == me, or a time it's after, like updated_at > 7 days ago");
-                } else if (compared != time) {
-                    error(f.where, compared ? "a filter compares a time with one counted from now, like updated_at > 7 days ago"
-                                            : "a filter keeps a time before or after one, like updated_at > 7 days ago");
-                }
-            }
+            for (const auto& f : cards.filters) verify_filter(*f.condition, f.where);
             if (cards.filters.size() > 3) error(cards.filters[3].where, "a card has three filters at most, the ones most used");
         }
 
@@ -2173,6 +2226,36 @@ namespace one::language {
             const field* f = rows ? find_field(*rows, last) : nullptr;
             if (!f || !f->type || f->type->parts.size() != 1 || !find_entity(ns, *f->type)) return target;
             return target.substr(0, target.rfind("/:") + 2) + f->type->parts[0] + target.substr(target.rfind("/:") + 2 + last.size());
+        }
+
+        // tint by priority: a field of the rows with choices, in the list, which colors
+        // each row by how urgent its choice is.
+        void verify_tint(const std::string& ns, const view_each& list, const std::string& view, const std::optional<std::string>& tint, location where) {
+            if (!tint) return;
+            const entity_declaration* rows = listed_entity(ns, list);
+            const field* f = rows ? find_field(*rows, *tint) : nullptr;
+            if (!f || f->choices.empty()) {
+                error(where, "a tint is by a field with choices, like priority, the first the most urgent, and " + *tint + " isn't one");
+            } else if (!in_rows(list, *tint)) {
+                error(where, "view " + view + " has no " + *tint + " in this list; add it to the list's block");
+            }
+        }
+
+        // A filter, a card's or a table's only: a field and the value it holds, or a
+        // time it's before or after, counted from now.
+        void verify_filter(const expression& condition, location where) {
+            auto* b = std::get_if<binary_expression>(&condition.node);
+            auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+            auto* literal = b ? std::get_if<literal_expression>(&b->right->node) : nullptr;
+            bool time = literal && literal->type == literal_expression::kind::time;
+            bool compared = b && (b->op == token_kind::less || b->op == token_kind::greater || b->op == token_kind::less_equal ||
+                                  b->op == token_kind::greater_equal);
+            if (!b || !(b->op == token_kind::equal || compared) || !field || field->name.parts.size() != 1) {
+                error(where, "a filter is a field and the value it holds, like author == me, or a time it's after, like updated_at > 7 days ago");
+            } else if (compared != time) {
+                error(where, compared ? "a filter compares a time with one counted from now, like updated_at > 7 days ago"
+                                      : "a filter keeps a time before or after one, like updated_at > 7 days ago");
+            }
         }
 
         // The entity a #12 names: numbered within the scope, keyed by the scope and its

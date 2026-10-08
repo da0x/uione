@@ -4,6 +4,7 @@
 package one_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -45,6 +46,14 @@ type Trick struct {
 	Dealt []string `firestore:"dealt" one:"refers=user"`
 }
 
+// A note on a trick, kept in the trick's history, naming people with @username.
+type Aside struct {
+	one.Record
+	Trick     string   `firestore:"trick" one:"required,refers=club::trick,history"`
+	Body      string   `firestore:"body" one:"required"`
+	Mentioned []string `firestore:"mentioned" one:"refers=user,mentions=body"`
+}
+
 // When a person last looked at their news, one for each person.
 type Glance struct {
 	one.Record
@@ -69,6 +78,8 @@ var clubs = one.Module("club",
 		return nil
 	}),
 	one.Command[Trick]("trick::create"),
+	one.Command[Aside]("aside::create").Allow(one.SignedIn),
+	one.Command[Aside]("aside::update").Allow(one.Owner),
 	one.Command[Trick]("trick::update"),
 	one.Role("player", "club:update", "seating:create", "seating:delete", "rack:create", "trick:create", "trick:update").
 		Per(one.Entity[Club](), one.Entity[Seating]()),
@@ -76,7 +87,8 @@ var clubs = one.Module("club",
 		Copy("title", "title"),
 	one.View("news").PerUser().
 		List("news", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer).Has("rack.followers", one.Viewer).
-			Or(one.All[one.ChangeOf[Trick]]().Has("dealt", one.Viewer).Except("created_by", one.Viewer))).
+			Or(one.All[one.ChangeOf[Trick]]().Has("dealt", one.Viewer).Except("created_by", one.Viewer)).
+			Or(one.All[one.ChangeOf[Trick]]().Has("mentioned", one.Viewer).Except("created_by", one.Viewer))).
 		Fields("trick", "field", "after").
 		FirstOf("seen", one.Where[Glance]("person", one.Viewer), "seen_at"),
 	// The two newest changes someone else made, however many of their own came after.
@@ -243,4 +255,31 @@ func TestRowsThatTieInAListsOwnOrderStayInTheOrderTheyWereMade(t *testing.T) {
 	if want := []string{"First", "Second", "Third"}; !slices.Equal(got, want) {
 		t.Errorf("the racks are in the order %v, want %v, as they were made", got, want)
 	}
+}
+
+func TestANoteMentioningSomeoneIsInTheirNewsAsAChangeOfItsTrick(t *testing.T) {
+	h := start(t)
+	ada, adaToken := h.signUp("ada@example.com")
+	grace, _ := h.signUp("grace@example.com")
+	if _, err := h.store.Collection("users").Doc(grace).Set(context.Background(), map[string]any{"username": "GraceH"}); err != nil {
+		t.Fatal(err)
+	}
+	h.mustRun("club/club/create", adaToken, map[string]any{"slug": "whist"})
+	rack := h.mustRun("club/rack/create", adaToken, map[string]any{"club": "whist", "name": "Leads"})
+	trick := h.mustRun("club/trick/create", adaToken, map[string]any{"club": "whist", "rack": rack, "title": "Lead low"})
+	if got := h.news(grace); len(got) != 0 {
+		t.Fatalf("before she's named, Grace's news is %v", got)
+	}
+	note := h.mustRun("club/aside/create", adaToken, map[string]any{"trick": trick, "body": "What do you think, @gracehg? And @nobody, and ada@example.com."})
+	if got := h.stored("club_aside", note)["mentioned"]; got != nil && len(got.([]any)) != 0 {
+		t.Errorf("a name nobody has, and an address, mention %v", got)
+	}
+	note = h.mustRun("club/aside/create", adaToken, map[string]any{"trick": trick, "body": "What do you think, @GraceH?"})
+	if got := h.stored("club_aside", note)["mentioned"]; fmt.Sprint(got) != fmt.Sprint([]any{grace}) {
+		t.Errorf("the note mentions %v, want Grace", got)
+	}
+	if got := h.news(grace); !slices.Equal(got, []string{"aside:"}) {
+		t.Errorf("Grace's news is %v, want the note that named her", got)
+	}
+	_ = ada
 }

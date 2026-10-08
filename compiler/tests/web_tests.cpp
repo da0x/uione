@@ -1259,3 +1259,37 @@ TEST_CASE("a link and a toolbar's button can be drawn as icons, and a subtitle s
     CHECK(tsx.find("<Subtitle>") != std::string::npos);
     CHECK(tsx.find("<Subtitle>") < tsx.find("<Layout"));
 }
+
+TEST_CASE("a table keeps only some rows, rows are tinted by a choice, and a box finds across lists") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-only-tint-find";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "enum priority {\n\tcritical \"Critical\"\n\tnormal \"Normal\"\n\tlow \"Low\"\n}\n"
+                         "entity project {\n\tslug  text  required  unique  key\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tpriority  priority  required = priority::normal\n}\n"
+                         "entity milestone {\n\tproject  project  required\n\ttitle  text\n\tdue  date\n}\n"
+                         "command issue::create\n"
+                         "view project_page per project {\n"
+                         "\tissues = each issue where project == project.id {\n\t\tnumber  title  priority\n\t}\n"
+                         "\tmilestones = each milestone where project == project.id {\n\t\ttitle  due\n\t}\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tpriority = issue.priority\n}\n"
+                         "screen \"Project\" /:project {\n"
+                         "\tfind \"Search this project\" {\n\t\tproject_page.issues \"Issues\" link /:project/:issue by number title\n\t}\n"
+                         "\ttable project_page.milestones {\n\t\tonly due <= 2 weeks from now\n\t\ttitle\n\t}\n"
+                         "\ttable project_page.issues link /:project/:issue {\n\t\ttint by priority\n\t\ttitle\n\t\tissue::create \"New issue\"\n\t}\n"
+                         "\tform issue::create {\n\t\ttitle  priority\n\t}\n}\n"
+                         "screen \"Issue\" /:project/:issue {\n\tdetails issue_page {\n\t\ttint by priority\n\t\tpriority\n\t}\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    fs::remove_all(dir);
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Find label="Search this project" sources={[{ view: projectPage, list: "issues", label: "Issues", link: "/:project/:issue", keyed: ["project"], by: ["number", "title"] }]} />)") != std::string::npos);
+    CHECK(tsx.find(R"(only={{ "due<=": "+2w" }})") != std::string::npos);
+    CHECK(tsx.find(R"(tint={{ field: "priority", order: ["critical", "normal", "low"] }})") != std::string::npos);
+    CHECK(tsx.find(R"(<Details view={issuePage} fields={[["priority", "Priority"]]} choices={{ priority: Object.fromEntries([["critical", "Critical"], ["normal", "Normal"], ["low", "Low"]]) }} tint={{ field: "priority", order: ["critical", "normal", "low"] }} />)") != std::string::npos);
+    CHECK(tsx.find(R"(start: "normal", required: true)") != std::string::npos);
+}

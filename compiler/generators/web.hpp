@@ -1169,6 +1169,29 @@ namespace one::generators {
                 } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
                     parts.components.insert("Thread");
                     out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
+                } else if (auto* box = std::get_if<language::find_item>(&item.node)) {
+                    // A box finding rows of several lists, each with where it opens.
+                    parts.components.insert("Find");
+                    std::string sources;
+                    for (const auto& source : box->sources) {
+                        std::string one = "{ view: " + view_variable(parts, full_view(ns, source.view.text())) + ", list: " + web_detail::js_string(source.list) +
+                                          ", label: " + web_detail::js_string(source.label);
+                        if (source.link) {
+                            std::string target = full_route(ns, *source.link);
+                            one += ", link: " + web_detail::js_string(target);
+                            std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                            auto keyed = keyed_by(ns, last, target);
+                            if (!keyed.empty()) {
+                                std::string names;
+                                for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                                one += ", keyed: [" + names + "]";
+                            }
+                        }
+                        std::string by;
+                        for (const auto& name : source.by) by += (by.empty() ? "" : ", ") + web_detail::js_string(name);
+                        sources += (sources.empty() ? "" : ", ") + one + ", by: [" + by + "] }";
+                    }
+                    out.line("<Find label=" + web_detail::js_string(box->label) + " sources={[" + sources + "]} />");
                 } else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) {
                     parts.components.insert("Timeline");
                     std::string line = "<Timeline view={" + view_variable(parts, full_view(ns, timeline->view.text())) + "} list=" + web_detail::js_string(timeline->list);
@@ -1387,6 +1410,7 @@ namespace one::generators {
                 if (column == "title") line += " shown=\"title\"";
             }
             line += " columns={{ " + columns + " }}";
+            line += tint_on(ns, board.view, board.list, board.tint);
             if (board.link) {
                 std::string target = full_route(ns, *board.link);
                 line += " link=" + web_detail::js_string(target);
@@ -1513,6 +1537,16 @@ namespace one::generators {
             std::string line = "<Details view={" + view_variable(parts, full) + "} fields={[" + fields + "]}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
+            // tint by priority: a value of the view holding a choice of the entity's.
+            if (details.tint && view && entity) {
+                for (const auto& value : view->values) {
+                    if ((value.name ? *value.name : web_detail::text_of(*value.value)) != *details.tint) continue;
+                    auto* member = std::get_if<language::member_expression>(&value.value->node);
+                    for (const auto& field : entity->fields) {
+                        if (member && field.name == member->member) line += tint_of(*details.tint, field);
+                    }
+                }
+            }
             out.line(line + " />");
         }
 
@@ -1701,29 +1735,33 @@ namespace one::generators {
             if (!cards.filters.empty()) {
                 std::string filters;
                 for (const auto& f : cards.filters) {
-                    auto* b = std::get_if<language::binary_expression>(&f.condition->node);
-                    if (!b) continue;
-                    std::string field = web_detail::text_of(*b->left);
-                    // A time is kept by comparing, named in the address: updated_at> is after.
-                    switch (b->op) {
-                        case language::token_kind::less: field += "<"; break;
-                        case language::token_kind::greater: field += ">"; break;
-                        case language::token_kind::less_equal: field += "<="; break;
-                        case language::token_kind::greater_equal: field += ">="; break;
-                        default: break;
-                    }
-                    std::string value;
-                    if (auto* named = std::get_if<language::name_expression>(&b->right->node)) {
-                        value = named->name.parts.back();  // me, or a choice like priority::high
-                    } else if (auto* literal = std::get_if<language::literal_expression>(&b->right->node)) {
-                        value = literal->value;
-                    }
-                    filters += (filters.empty() ? "" : ", ") + std::string("{ label: ") + web_detail::js_string(f.label) + ", query: { " +
-                               (web_detail::is_identifier(field) ? field : web_detail::js_string(field)) + ": " + web_detail::js_string(value) + " } }";
+                    filters += (filters.empty() ? "" : ", ") + std::string("{ label: ") + web_detail::js_string(f.label) + ", query: " + filter_query(*f.condition) + " }";
                 }
                 line += " filters={[" + filters + "]}";
             }
             out.line(line + " />");
+        }
+
+        // A filter as the address says it, like { author: "me" }, or, for a time,
+        // { "updated_at>": "-7d" }: after seven days ago.
+        static std::string filter_query(const language::expression& condition) {
+            auto* b = std::get_if<language::binary_expression>(&condition.node);
+            if (!b) return "{}";
+            std::string field = web_detail::text_of(*b->left);
+            switch (b->op) {
+                case language::token_kind::less: field += "<"; break;
+                case language::token_kind::greater: field += ">"; break;
+                case language::token_kind::less_equal: field += "<="; break;
+                case language::token_kind::greater_equal: field += ">="; break;
+                default: break;
+            }
+            std::string value;
+            if (auto* named = std::get_if<language::name_expression>(&b->right->node)) {
+                value = named->name.parts.back();  // me, or a choice like priority::high
+            } else if (auto* literal = std::get_if<language::literal_expression>(&b->right->node)) {
+                value = literal->value;
+            }
+            return "{ " + (web_detail::is_identifier(field) ? field : web_detail::js_string(field)) + ": " + web_detail::js_string(value) + " }";
         }
 
         // A toolbar's buttons: each command named in a table's or a board's block, like
@@ -1918,6 +1956,8 @@ namespace one::generators {
             }
             if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
             if (table.page) line += " page={" + std::to_string(*table.page) + "}";
+            if (table.only) line += " only={" + filter_query(*table.only) + "}";
+            line += tint_on(ns, table.view, table.list, table.tint);
             if (table.hide_empty) line += " hideEmpty";
             line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.
@@ -1931,6 +1971,24 @@ namespace one::generators {
         }
 
         // A choice field's choices, each with how it's shown: [["mit", "MIT"], ...].
+        // tint={{ field: "priority", order: [...] }}: the field's choices, the first
+        // the most urgent, which color what shows it.
+        static std::string tint_of(const std::string& name, const language::field& f) {
+            std::string order;
+            for (const auto& c : f.choices) order += (order.empty() ? "" : ", ") + web_detail::js_string(c);
+            return " tint={{ field: " + web_detail::js_string(name) + ", order: [" + order + "] }}";
+        }
+
+        // A list's tint, from the field of its rows' entity that the block names.
+        std::string tint_on(const std::string& ns, const language::qualified_name& view, const std::optional<std::string>& list, const std::optional<std::string>& tint) {
+            if (!tint) return "";
+            const language::entity_declaration* rows = listed(ns, view.text(), list);
+            for (const auto& f : rows ? rows->fields : nothing_) {
+                if (f.name == *tint) return tint_of(*tint, f);
+            }
+            return "";
+        }
+
         static std::string choice_options(const language::field& f) {
             std::string options;
             for (std::size_t i = 0; i < f.choices.size(); ++i) {
@@ -2039,6 +2097,8 @@ namespace one::generators {
                             if (auto* start = field.initial ? std::get_if<language::name_expression>(&field.initial->node) : nullptr) {
                                 choices += ", start: " + web_detail::js_string(start->name.parts.back());
                             }
+                            // A required choice is always one of them, so there's no empty one.
+                            if (field.required) choices += ", required: true";
                         }
                     }
                 }

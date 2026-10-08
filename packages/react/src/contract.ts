@@ -157,6 +157,7 @@ export interface TableRow {
   link?: LinkProps; // the page this row opens, when the table has a link
   cells: ReactNode[];
   actions: RowAction[];
+  tone?: number; // how urgent it is, as Trac colored a ticket's priority: 1 the most, up to 5
 }
 
 export interface TableProps {
@@ -196,6 +197,10 @@ export interface BoardProps {
   search?: TableSearch; // a box that finds cards by what's typed
   tools?: ReactNode; // buttons beside its search, like New issue
   filtered?: Filtered;
+  // On a phone, the column shown, one a page, by its id, and how to show another, so
+  // the address can say which.
+  column?: string;
+  onColumn?: (column: string) => void;
 }
 
 // Large cards, a third of a wide page each and the whole of a narrow one, like a
@@ -228,6 +233,7 @@ export interface BoardCard {
   link?: LinkProps; // the page it opens
   details: ReactNode[]; // what else it shows, like its priority and labels
   reaches: string[]; // the columns it may be moved to
+  tone?: number; // how urgent it is, 1 the most, up to 5, as a table's row
 }
 
 // Where a page is among the pages above it, like Projects › neotrac › Product:
@@ -308,8 +314,28 @@ export interface TableTab {
 
 // A thing's values, each beside what it is, like an issue's status and who
 // implemented it; the ones with nothing in them aren't given.
+// A box that finds rows of several lists as it's typed in, like a project's issues
+// and wiki pages: each list's results under its label, each a link, the first few.
+export interface FindResult {
+  id: string;
+  text: string; // what it's called, like #12 Copy an issue whole
+  link?: LinkProps;
+}
+export interface FindGroup {
+  label: string; // like Issues
+  results: FindResult[];
+  more: number; // how many more were found than are shown
+}
+export interface FindProps {
+  label: string; // what it finds, like Search this project
+  query: string;
+  onChange: (query: string) => void;
+  groups: FindGroup[]; // only the lists with something found
+}
+
 export interface DetailsProps {
   items: { label: string; value: ReactNode }[];
+  tone?: number; // how urgent what it's about is, 1 the most, up to 5, as a table's row
 }
 
 // A few words, each on its own, like an issue's labels.
@@ -322,6 +348,7 @@ export interface FieldProps {
   label: string;
   type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), choice, or pick (one of a list's records, however many)
   choices?: [string, string][]; // for a choice: each one, and how it's shown
+  required?: boolean; // a choice that's always one of them, offering no empty one
   value: string;
   hint?: string;
   onChange: (value: string) => void;
@@ -406,6 +433,7 @@ export interface ComponentSet {
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;
+  Find: ComponentType<FindProps>;
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;
   Actions: ComponentType<ActionsProps>;

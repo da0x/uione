@@ -106,7 +106,7 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 		if !changed {
 			return nil
 		}
-		kept, err := a.keep(tx, schema, id, before, after, body.command, "", now)
+		kept, err := a.keep(body.Context, tx, schema, id, before, after, body.command, "", now)
 		if err != nil {
 			return err
 		}

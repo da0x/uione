@@ -70,7 +70,8 @@ example        ::= "example" PATTERN END
 
 /* entity */
 
-entity         ::= "entity" NAME "history"? "{" NEWLINE? field* "}" END
+/* entity comment history of issue: a comment's changes are kept in its issue's history */
+entity         ::= "entity" NAME ("history" ("of" NAME)?)? "{" NEWLINE? field* "}" END
 field          ::= NAME (enum | type) rule* ("=" expression)? END
 enum           ::= "enum" (choice ("|" choice)* | "{" NEWLINE? (choice+ END)* "}")
 choice         ::= NAME STRING?
@@ -154,13 +155,15 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "thread" qualified "." NAME END
                  | "timeline" qualified "." NAME STRING? ("link" ROUTE)? ("{" NEWLINE timeline_line* "}")? END
                  | "copy" qualified STRING? END
-                 | "details" qualified "{" NEWLINE? (column+ END)* "}" END
+                 | "details" qualified "{" NEWLINE? (("tint" "by" NAME | column+) END)* "}" END
+                 /* a box finding rows of several lists as it's typed in */
+                 | "find" STRING "{" NEWLINE? find_line* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter | column+) END
-board_line     ::= ("move" qualified "along" qualified "." NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
+board_line     ::= ("move" qualified "along" qualified "." NAME | "tint" "by" NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
@@ -199,6 +202,7 @@ time           ::= NUMBER ("hour" | "hours" | "day" | "days" | "week" | "weeks")
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 
+find_line      ::= qualified "." NAME STRING ("link" ROUTE)? "by" NAME+ END
 table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? ("icon" NAME)? END
                  | "reorder" NAME END
@@ -206,4 +210,6 @@ table_line     ::= "by" NAME tabs_over? END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END
+                 | "only" filter END
+                 | "tint" "by" NAME END
                  | column+ ("when" condition)? END

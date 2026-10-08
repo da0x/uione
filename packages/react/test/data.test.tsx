@@ -4,6 +4,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { useLocation } from "react-router";
 import {
   App,
   Command,
@@ -694,6 +695,8 @@ describe("threads and timelines", () => {
     expect(changed("status", "closed", "open", "tracker::issue::reopen")).toBe("reopened this");
     expect(changed("title", "a", "b", "tracker::issue::update")).toBe("changed title from a to b");
     expect(changed("", null, null, "tracker::issue::create")).toBe("created this");
+    expect(changed("comment", null, null, "tracker::comment::create")).toBe("added a comment to this");
+    expect(phrase("comment", null, null, "tracker::comment::create")).toEqual(["added a comment to", ""]);
     expect([done("take"), done("drop"), done("assign"), done("copy"), done("take_over")]).toEqual(["took", "dropped", "assigned", "copied", "took over"]);
     expect([done("transfer"), done("offer"), done("submit"), done("visit")]).toEqual(["transferred", "offered", "submitted", "visited"]);
   });
@@ -860,5 +863,53 @@ describe("what's new", () => {
     expect(screen.getByRole("list", { name: "What's new" })).toBeTruthy();
     await new Promise((done) => setTimeout(done, 20));
     expect(source.runs).toEqual([]);
+  });
+});
+
+describe("comments in a history", () => {
+  it("says a comment was added, though nothing came before or after it", () => {
+    const view: ViewState = {
+      status: "live",
+      data: { history: [{ id: "a", field: "comment", before: null, after: null, action: "tracker::comment::create", "created_by.name": "Ada", created_at: new Date("2026-10-08T09:00:00Z") }] },
+    };
+    renderScreen(memorySource(), () => <Timeline view={view} list="history" />);
+    expect(screen.getByText(/added a comment to this/)).toBeTruthy();
+  });
+});
+
+describe("what's on screen, in the address", () => {
+  const view = {
+    status: "live" as const,
+    data: {
+      issues: [
+        { id: "1", title: "Tabs too wide", status: "open" },
+        { id: "3", title: "Old bug", status: "closed" },
+      ],
+    },
+  };
+  function Where() {
+    return <output aria-label="address">{useLocation().search}</output>;
+  }
+  const table = () => (
+    <>
+      <Table view={view} list="issues" columns={{ title: "Title" }} by="status" choices={{ status: { open: "Open", closed: "Closed" } }} />
+      <Where />
+    </>
+  );
+
+  it("puts the tab that's open in the address, and not the first", async () => {
+    renderScreen(memorySource(), table);
+    expect(screen.getByLabelText("address").textContent).toBe("");
+    fireEvent.click(screen.getByRole("tab", { name: "Closed 1" }));
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("?issues.tab=closed"));
+    fireEvent.click(screen.getByRole("tab", { name: "Open 1" }));
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe(""));
+  });
+
+  it("opens on the tab an address names, as a shared link does", () => {
+    const only = defineScreen({ title: "Test", route: "/" }, table);
+    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/?issues.tab=closed" />);
+    expect(screen.getByText("Old bug")).toBeTruthy();
+    expect(screen.queryByText("Tabs too wide")).toBeNull();
   });
 });

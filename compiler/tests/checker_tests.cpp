@@ -350,7 +350,7 @@ TEST_CASE("a key can be made from another field when it isn't given, like a phas
 
     std::string other = lane;
     other.replace(other.find("slug(title)"), 11, "upper(title)");
-    CHECK(only_error(other).message == "a field starts as a value, me, me.username, now, or a name made from another field, like slug(title)");
+    CHECK(only_error(other).message == "a field starts as a value, me, me.username, now, a name made from another field, like slug(title), or the people a field mentions, like mentions(body)");
 }
 
 TEST_CASE("a command's inputs, and the entities it changes or deletes with it, are checked where they're named") {
@@ -1165,4 +1165,27 @@ TEST_CASE("a subtitle sits under the title of a screen laid out in regions") {
     CHECK(check_source("namespace work {\nscreen \"Home\" / layout two_columns {\n\tsubtitle \"Everything at a glance\"\n\tmain {\n\t\ttext \"a\"\n\t}\n"
                        "\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n")
               .empty());
+}
+
+TEST_CASE("only, tint by and find name what their rows hold") {
+    std::string code = "namespace work {\n"
+                       "entity issue {\n\ttitle  text\n\tdue  date\n\tpriority  enum { high  low }\n}\n"
+                       "view issues {\n\tall = each issue {\n\t\ttitle  due  priority\n\t}\n}\n"
+                       "screen \"Issue\" /issues/:issue {\n\ttext \"a\"\n}\n";
+    CHECK(check_source(code + "screen \"Issues\" /issues {\n\ttable issues.all {\n\t\tonly due <= 2 weeks from now\n\t\ttint by priority\n\t\ttitle\n\t}\n"
+                              "\tfind \"Find\" {\n\t\tissues.all \"Issues\" link /issues/:issue by title\n\t}\n}\n}\n")
+              .empty());
+    CHECK(only_error(code + "screen \"Issues\" /issues {\n\ttable issues.all {\n\t\ttint by title\n\t\ttitle\n\t}\n}\n}\n").message ==
+          "a tint is by a field with choices, like priority, the first the most urgent, and title isn't one");
+    CHECK(only_error(code + "screen \"Issues\" /issues {\n\tfind \"Find\" {\n\t\tissues.all \"Issues\" by body\n\t}\n}\n}\n").message ==
+          "view issues has no body in its all to find by; add it to the list's block");
+}
+
+TEST_CASE("a comment is kept in its issue's history, and mentions the people its body names") {
+    std::string issue = "namespace work {\nentity issue history {\n\ttitle  text\n}\n";
+    CHECK(check_source(issue + "entity comment history of issue {\n\tissue  issue  required\n\tbody  markdown\n\tmentioned  list of user = mentions(body)\n}\n}\n").empty());
+    CHECK(only_error("namespace work {\nentity issue {\n\ttitle  text\n}\nentity comment history of issue {\n\tissue  issue  required\n}\n}\n").message ==
+          "entity issue keeps no history to keep comment's in; say entity issue history");
+    CHECK(only_error(issue + "entity comment {\n\tissue  issue\n\tbody  markdown\n\tmentioned  user = mentions(body)\n}\n}\n").message ==
+          "mentioned holds the people body mentions, so it's a list of user");
 }

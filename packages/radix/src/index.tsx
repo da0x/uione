@@ -199,6 +199,16 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
   danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
+// How urgent a row, a card or a box of details is, as Trac colored a ticket's
+// priority: a fill, and an edge down its left side. 3 is plain, as Trac's normal was.
+const tones: Record<number, string> = {
+  1: "bg-tone-1 shadow-[inset_3px_0_0_var(--color-tone-1-edge)]",
+  2: "bg-tone-2 shadow-[inset_3px_0_0_var(--color-tone-2-edge)]",
+  4: "bg-tone-4 shadow-[inset_3px_0_0_var(--color-tone-4-edge)]",
+  5: "bg-tone-5 shadow-[inset_3px_0_0_var(--color-tone-5-edge)]",
+};
+const toned = (tone: number | undefined) => (tone ? (tones[tone] ?? "") : "");
+
 const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
 
 // A label's hue: the one people expect for the usual ones, like red for a bug, and
@@ -536,7 +546,7 @@ export const radix: ComponentSet = {
                       }
                     : undefined
                 }
-                className={`flex items-start gap-2 px-3 py-2.5 ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
+                className={`flex items-start gap-2 px-3 py-2.5 ${toned(row.tone)} ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
               >
                 {reorder && (
                   <button
@@ -662,7 +672,7 @@ export const radix: ComponentSet = {
                     }
                   : undefined
               }
-              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${row.link ? "cursor-pointer" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
+              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${toned(row.tone)} ${row.link ? "cursor-pointer" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
             >
               {reorder && (
                 <td className="w-0 py-1.5 pl-2">
@@ -800,7 +810,7 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
-  Board: function RadixBoard({ status, columns, error, onMove, search, tools, filtered }) {
+  Board: function RadixBoard({ status, columns, error, onMove, search, tools, filtered, column, onColumn }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();
     const reachable = (column: string) => !dragged || column === dragged.from || dragged.reaches.includes(column);
@@ -811,13 +821,29 @@ export const radix: ComponentSet = {
     // On a phone, a phase a page: swiped between, or picked from the tabs above, which
     // follow the swiping.
     const strip = useRef<HTMLDivElement>(null);
-    const [shown, setShown] = useState(0);
+    // Which, as the address says when it says, so a link opens on the same phase.
+    const [own, setOwn] = useState(0);
+    const asked = column === undefined ? -1 : columns.findIndex((c) => c.id === column);
+    const shown = asked >= 0 ? asked : own;
+    const setShown = (at: number) => {
+      setOwn(at);
+      const id = columns[at]?.id;
+      if (onColumn && id !== undefined) onColumn(at === 0 ? "" : id);
+    };
     const turnTo = (at: number) => {
       const box = strip.current;
       const page = box?.children[at] as HTMLElement | undefined;
       if (box && page) box.scrollTo?.({ left: page.offsetLeft - box.offsetLeft, behavior: "smooth" });
       setShown(at);
     };
+    // Opened on a phase the address names, it starts there.
+    const opened = useRef(false);
+    useEffect(() => {
+      if (opened.current || asked <= 0 || !strip.current) return;
+      const page = strip.current.children[asked] as HTMLElement | undefined;
+      if (page) strip.current.scrollTo?.({ left: page.offsetLeft - strip.current.offsetLeft });
+      opened.current = true;
+    }, [asked]);
     return (
       <div className="flex flex-col gap-2">
         {(search || tools || filtered) && (
@@ -906,7 +932,7 @@ export const radix: ComponentSet = {
                           return;
                         }
                       }}
-                      className={`rounded-box border border-line bg-surface px-3 py-2 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+                      className={`rounded-box border border-line ${toned(card.tone) || "bg-surface shadow-panel"} px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
                         movable ? "cursor-grab active:cursor-grabbing" : ""
                       } ${dragged?.card === card.id ? "opacity-40" : ""}`}
                     >
@@ -1289,7 +1315,7 @@ export const radix: ComponentSet = {
                 aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
                 className="h-10 rounded-control border border-control-line/60 bg-surface px-3 text-base shadow-panel transition-colors hover:border-control-line focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none sm:text-sm"
               >
-                <option value="">Choose one</option>
+                {!field.required && <option value="">Choose one</option>}
                 {field.choices.map(([value, shown]) => (
                   <option key={value} value={value}>
                     {shown}
@@ -1411,8 +1437,8 @@ export const radix: ComponentSet = {
   ),
 
   // What a thing is, label beside value, in a quiet panel.
-  Details: ({ items }) => (
-    <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-box border border-line bg-surface px-4 py-3 text-sm">
+  Details: ({ items, tone }) => (
+    <dl className={`grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-box border border-line px-4 py-3 text-sm ${toned(tone) || "bg-surface"}`}>
       {items.map((item) => (
         <div key={item.label} className="contents">
           <dt className="text-muted">{item.label}</dt>
@@ -1486,6 +1512,45 @@ export const radix: ComponentSet = {
     ),
 
   // What happened, oldest first, down a line, each change one sentence.
+  // A box that finds as it's typed in; what it finds sits under it, list by list,
+  // each result a link.
+  Find: ({ label, query, onChange, groups }) => (
+    <div className="flex flex-col gap-2">
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={`${label}…`}
+        aria-label={label}
+        className="w-full rounded-control border border-control-line bg-page px-3 py-2 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
+      />
+      {query.trim() && (
+        <div className="flex flex-col gap-3 rounded-box border border-line bg-surface p-3 text-sm shadow-panel" role="region" aria-label={`${label}: what's found`}>
+          {groups.length === 0 && <p className="text-muted">Nothing matches.</p>}
+          {groups.map((group) => (
+            <div key={group.label} className="flex flex-col gap-1">
+              <h3 className="text-[0.8rem] font-medium text-muted">{group.label}</h3>
+              <ul className="flex flex-col gap-1" aria-label={group.label}>
+                {group.results.map((result) => (
+                  <li key={result.id}>
+                    {result.link ? (
+                      <a {...result.link} className="font-medium text-accent hover:underline">
+                        {result.text}
+                      </a>
+                    ) : (
+                      result.text
+                    )}
+                  </li>
+                ))}
+                {group.more > 0 && <li className="text-muted">and {group.more} more</li>}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  ),
+
   Timeline: ({ status, entries, title, fresh }) => {
     if (status !== "live" || entries.length === 0) return null;
     const changes = (

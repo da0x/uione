@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -191,7 +192,7 @@ func (c *Ctx) save() ([]event, error) {
 		if err := c.tx.Delete(g.ref); err != nil {
 			return nil, err
 		}
-		kept, err := c.app.keep(c.tx, g.schema, g.ref.ID, g.before, nil, c.command, c.me, c.now)
+		kept, err := c.app.keep(c.Context, c.tx, g.schema, g.ref.ID, g.before, nil, c.command, c.me, c.now)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +209,7 @@ func (c *Ctx) save() ([]event, error) {
 		if err := c.tx.Set(m.ref, after); err != nil {
 			return nil, err
 		}
-		kept, err := c.app.keep(c.tx, m.schema, m.ref.ID, m.before, after, c.command, c.me, c.now)
+		kept, err := c.app.keep(c.Context, c.tx, m.schema, m.ref.ID, m.before, after, c.command, c.me, c.now)
 		if err != nil {
 			return nil, err
 		}
@@ -235,7 +236,7 @@ func (c *Ctx) save() ([]event, error) {
 		if err := c.tx.Set(r.ref, after); err != nil {
 			return nil, err
 		}
-		kept, err := c.app.keep(c.tx, r.schema, r.ref.ID, r.stored, after, c.command, c.me, c.now)
+		kept, err := c.app.keep(c.Context, c.tx, r.schema, r.ref.ID, r.stored, after, c.command, c.me, c.now)
 		if err != nil {
 			return nil, err
 		}
@@ -255,7 +256,67 @@ func (c *Ctx) save() ([]event, error) {
 // keep writes the changes of an entity that keeps its history, in the command's
 // transaction, and returns their events. before is nil for something just made,
 // and after nil for something deleted; either way that's one change with no field.
-func (a *App) keep(tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
+func (a *App) keep(ctx context.Context, tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
+	events, err := a.keepOwn(tx, s, id, before, after, action, me, now)
+	if err != nil {
+		return nil, err
+	}
+	more, err := a.keepInParent(ctx, tx, s, id, before, after, action, me, now)
+	return append(events, more...), err
+}
+
+// keepInParent keeps a change to an entity in the history of what it points at,
+// when that keeps it, as an issue does its comments': one entry naming the issue,
+// what the issue points at, like its board and assignees, and what the comment
+// points at, like the people it mentions, with its field the comment's own name.
+// What the issue points at is read as it's stored.
+func (a *App) keepInParent(ctx context.Context, tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
+	current := after
+	if current == nil {
+		current = before
+	}
+	var events []event
+	for _, f := range s.fields {
+		if !f.history {
+			continue
+		}
+		parent := a.reg.entity(f.refers)
+		if parent == nil || parent.history == nil {
+			continue
+		}
+		parentID, _ := current[f.name].(string)
+		if parentID == "" {
+			continue
+		}
+		stored, err := a.stored(ctx, parent, parentID)
+		if err != nil {
+			return nil, err
+		}
+		doc := map[string]any{
+			parent.name: parentID, s.name: id, "field": s.name, "action": action, "before": nil, "after": nil,
+			"created_at": now, "created_by": me, "updated_at": now, "updated_by": me,
+		}
+		for _, pf := range parent.fields {
+			if pf.refers != "" {
+				doc[pf.name] = stored[pf.name]
+			}
+		}
+		for _, own := range s.fields {
+			if _, taken := doc[own.name]; own.refers != "" && !taken {
+				doc[own.name] = current[own.name]
+			}
+		}
+		ref := a.store.Collection(parent.history.collection).NewDoc()
+		doc["id"] = ref.ID
+		if err := tx.Set(ref, doc); err != nil {
+			return nil, err
+		}
+		events = append(events, event{Type: parent.history.name + ".updated", Entity: parent.history.entity, ID: ref.ID, Version: now.UnixNano(), After: doc})
+	}
+	return events, nil
+}
+
+func (a *App) keepOwn(tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
 	if s.history == nil {
 		return nil, nil
 	}
@@ -587,6 +648,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 			madeFrom := s.start(v, c.me, username, now)
 			s.normalize(v)
+			if err := a.mentionsIn(ctx, tx, s, v); err != nil {
+				return err
+			}
 			if within {
 				if err := a.permittedWithin(tx, c.me, permission, &owned{s, v}); err != nil {
 					return err
@@ -654,7 +718,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err != nil {
 				return err
 			}
-			kept, err := a.keep(tx, s, ref.ID, before, after, body.command, c.me, now)
+			kept, err := a.keep(ctx, tx, s, ref.ID, before, after, body.command, c.me, now)
 			if err != nil {
 				return err
 			}
@@ -698,7 +762,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err != nil {
 				return err
 			}
-			kept, err := a.keep(tx, s, id, before, nil, body.command, c.me, now)
+			kept, err := a.keep(ctx, tx, s, id, before, nil, body.command, c.me, now)
 			if err != nil {
 				return err
 			}
@@ -723,6 +787,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 			s.normalize(v)
+			if err := a.mentionsIn(ctx, tx, s, v); err != nil {
+				return err
+			}
 		}
 		if do != nil {
 			if err := do(body, entity); err != nil {
@@ -745,7 +812,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if err != nil {
 			return err
 		}
-		kept, err := a.keep(tx, s, id, before, after, body.command, c.me, now)
+		kept, err := a.keep(ctx, tx, s, id, before, after, body.command, c.me, now)
 		if err != nil {
 			return err
 		}
@@ -1089,4 +1156,59 @@ func (a *App) grants(ctx context.Context, me, permission string) bool {
 		}
 	}
 	return false
+}
+
+// mentionPattern is an @username in text: a GitHub username's letters, digits and
+// single dashes, not part of an email address.
+var mentionPattern = regexp.MustCompile(`(?:^|[^\w@.])@([A-Za-z0-9](?:[A-Za-z0-9]|-[A-Za-z0-9]){0,38})\b`)
+
+// mentionsIn fills each list of people an entity's text names, like a comment's
+// mentioned from its body: whoever's username follows an @, once each, in the order
+// first named. A name nobody has is left out.
+func (a *App) mentionsIn(ctx context.Context, tx *firestore.Transaction, s *schema, v reflect.Value) error {
+	for _, f := range s.fields {
+		if f.mentions == "" {
+			continue
+		}
+		source := s.field(f.mentions)
+		if source == nil {
+			continue
+		}
+		// Each name as written and in lowercase, since a username is stored as
+		// GitHub gives it; who it is is known by its lowercase.
+		var names, asked []any
+		seen := map[string]bool{}
+		for _, m := range mentionPattern.FindAllStringSubmatch(v.FieldByIndex(source.index).String(), -1) {
+			name := strings.ToLower(m[1])
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+				asked = append(asked, name)
+			}
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				asked = append(asked, m[1])
+			}
+		}
+		found := map[string]string{}
+		for start := 0; start < len(asked); start += 30 {
+			docs, err := tx.Documents(a.store.Collection("users").Where("username", "in", asked[start:min(start+30, len(asked))])).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, doc := range docs {
+				if name, _ := doc.Data()["username"].(string); name != "" {
+					found[strings.ToLower(name)] = doc.Ref.ID
+				}
+			}
+		}
+		people := []string{}
+		for _, name := range names {
+			if id, ok := found[name.(string)]; ok && !contains(people, id) {
+				people = append(people, id)
+			}
+		}
+		v.FieldByIndex(f.index).Set(reflect.ValueOf(people))
+	}
+	return nil
 }

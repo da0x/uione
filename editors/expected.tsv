@@ -197,6 +197,7 @@ editors/fixtures/body.one	subtitle "The columns"	subtitle	keyword
 editors/fixtures/body.one	new since columns.seen	new	keyword
 editors/fixtures/body.one	new since columns.seen	since	keyword
 editors/fixtures/body.one	seen glance::create	seen	keyword
+editors/fixtures/body.one	find "Find a column"	find	keyword
 editors/fixtures/environments.one	unread  news.changes	unread	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword

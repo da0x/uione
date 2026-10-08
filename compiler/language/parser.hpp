@@ -306,7 +306,13 @@ namespace one::language {
             entity.name = expect(token_kind::identifier, "the entity's name").text;
             if (at_word("history")) {
                 advance();
-                entity.history = true;
+                if (at_word("of")) {
+                    advance();
+                    entity.history_of_where = peek().where;
+                    entity.history_of = expect(token_kind::identifier, "the entity whose history keeps this one's changes, like issue").text;
+                } else {
+                    entity.history = true;
+                }
             }
             expect(token_kind::left_brace, "'{'");
             while (in_block()) {
@@ -910,6 +916,25 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // tint by priority
+                        if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            advance();
+                            advance();
+                            table.tint_where = peek().where;
+                            table.tint = expect(token_kind::identifier, "the field whose choice colors it, like priority").text;
+                            end_line();
+                            continue;
+                        }
+                        // only due <= 2 weeks from now
+                        if (at_word("only")) {
+                            advance();
+                            table.only_where = peek().where;
+                            relative_times_ = true;
+                            table.only = parse_expression();
+                            relative_times_ = false;
+                            end_line();
+                            continue;
+                        }
                         if (at_word("page") && peek(1).kind == token_kind::number) {
                             advance();
                             table.page_where = peek().where;
@@ -977,6 +1002,15 @@ namespace one::language {
                             expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
                             move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
                             board.move = std::move(move);
+                            end_line();
+                            continue;
+                        }
+                        // tint by priority
+                        if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            advance();
+                            advance();
+                            board.tint_where = peek().where;
+                            board.tint = expect(token_kind::identifier, "the field whose choice colors it, like priority").text;
                             end_line();
                             continue;
                         }
@@ -1106,6 +1140,16 @@ namespace one::language {
                 details.view = parse_qualified_name("the view whose values it shows");
                 expect(token_kind::left_brace, "'{'");
                 while (in_block()) {
+                    // tint by priority
+                    if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                        advance();
+                        advance();
+                        details.tint_where = peek().where;
+                        details.tint = expect(token_kind::identifier, "the field whose choice colors it, like priority").text;
+                        end_line();
+                        continue;
+                    }
+
                     while (!at_line_end()) {
                         table_column field;
                         field.where = peek().where;
@@ -1118,6 +1162,35 @@ namespace one::language {
                 expect(token_kind::right_brace, "'}'");
                 end_line();
                 return {where, std::move(details)};
+            }
+            // find "Search this project" { project_page.issues "Issues" link /:project/:issue by number title }
+            if (at_word("find") && peek(1).kind == token_kind::string) {
+                advance();
+                find_item find;
+                find.label = advance().text;
+                expect(token_kind::left_brace, "'{' and the lists it finds in, one a line");
+                while (in_block()) {
+                    find_source source;
+                    source.where = peek().where;
+                    source.view = parse_qualified_name("the view whose list it finds in, like project_page");
+                    expect(token_kind::dot, "'.' and the view's list, like project_page.issues");
+                    source.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                    source.label = expect(token_kind::string, "what its results are called, like \"Issues\"").text;
+                    if (at_word("link")) {
+                        advance();
+                        source.link_where = peek().where;
+                        source.link = expect(token_kind::route, "the screen each result opens, like /:project/:issue").text;
+                    }
+                    if (!at_word("by")) fail_expecting("by and the fields it's found by, like by number title");
+                    advance();
+                    while (at(token_kind::identifier)) source.by.push_back(advance().text);
+                    if (source.by.empty()) fail_expecting("the fields it's found by, like by number title");
+                    find.sources.push_back(std::move(source));
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(find)};
             }
             if (at_word("copy") && peek(1).kind != token_kind::scope) {
                 advance();

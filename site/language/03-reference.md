@@ -336,6 +336,11 @@ entity loan {
   it was before and after, the command that changed it, and who ran it and when.
   Making an issue is one change with no field. The changes are kept in the same
   step as the change itself, so none is ever missed or made up.
+- `entity comment history of issue { ... }` keeps each change to a comment in its
+  issue's history instead, through its field pointing at the issue: "Ada added a
+  comment to #12". The entry holds what the issue points at, like its board, and
+  what the comment points at, like the people it mentions, so a person's news can
+  pick it by either.
 - `= value` sets the value a new entity starts with. `me` is the person running the
   command, `me.username` is their GitHub username, `now` is the time it runs, and
   `none` is no value. A field that starts as `me` or `me.username` always does, so
@@ -345,6 +350,9 @@ entity loan {
   for the title. The name is made once, so a rename changes only the title, and a
   second phase whose title makes the same name is refused rather than taken for the
   first.
+- `mentioned  list of user = mentions(body)` holds the people a text names with
+  @username, like @da0x, worked out each time the text is written. A name nobody
+  has is left out, and so is an email address.
 
 ## Built-in types
 
@@ -740,7 +748,22 @@ screen "Book" /books/:book {
 - A table's block can start with its own settings: `search title labels` gives it a
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
-  can go there too.
+  can go there too. `only due <= 2 weeks from now` keeps only the rows a filter
+  picks, worked out as it's shown, and `tint by priority` colors each row by its
+  choice, as Trac colored a ticket's priority: the field's first choice red, then
+  yellow, plain, cyan and blue. A board's block and a details block can say `tint by`
+  too.
+- What a table shows is in the page's address, so a link shows the same: its tab,
+  like `?issues.tab=closed`, what's typed in its search, and its page. So is a
+  table and board's switch, `?issues.view=board`, and the phase a board shows on a
+  phone. A default isn't written, and a card's filters stay as they are.
+- A required choice, like `priority  priority  required = priority::normal`, is
+  always one of its choices: a form offers no empty one.
+- `find "Search this project" { project_page.issues "Issues" link /:project/:issue by
+  number title labels }` is a box that finds rows of several lists, one a line, as
+  it's typed in: each list's first eight under its label, each opening its page.
+  `#12` or `12` finds the twelfth by number. What's typed is in the address, as
+  `?find=`.
 - A form's field holding a person, or a list of people, picks them from a list on
   the screen whose rows hold a person and their name, like a project's members, each
   person once; a form making one of those rows, like adding a member, doesn't.

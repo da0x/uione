@@ -884,3 +884,33 @@ view project_page per project {
 }
 )");
 }
+
+TEST_CASE("a comment kept in its issue's history, mentioning people, is tagged so") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace tracker {
+entity issue history {
+	title  text
+}
+entity comment history of issue {
+	issue      issue     required
+	body       markdown
+	mentioned  list of user = mentions(body)
+}
+view news per user {
+	changes = each change of issue where mentioned has user.id {
+		field
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    const auto* file = find(generated.files, "tracker/tracker.go");
+    REQUIRE(file != nullptr);
+    CHECK(file->content.find(R"(one:"required,refers=tracker::issue,history")") != std::string::npos);
+    CHECK(file->content.find(R"(one:"refers=user,mentions=body")") != std::string::npos);
+    CHECK(file->content.find(R"(one.All[one.ChangeOf[Issue]]().Has("mentioned", one.Viewer))") != std::string::npos);
+}
