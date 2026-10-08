@@ -1877,9 +1877,36 @@ namespace one::generators {
         // A list of an entity, like a project's roles, in a view per something the
         // screen's address names, like project_page: the view, the list, and what each
         // is shown by, its title or its name: projectPage, "roles", "title".
-        std::optional<std::string> listed_on_screen(screen_parts& parts, const std::string& ns, const std::string& entity) {
+        std::optional<std::string> listed_on_screen(screen_parts& parts, const std::string& ns, const std::string& entity, const std::string& asking = "") {
             auto scope = views_.find(ns);
             if (scope == views_.end()) return std::nullopt;
+            // A person: from a list whose rows hold one, with their name, like a
+            // project's members, each person offered once.
+            if (entity == "user") {
+                for (const auto& [name, view] : scope->second) {
+                    if (!view->per || !names_parameter(route_, *view->per)) continue;
+                    for (const auto& each : view->each) {
+                        auto* source = std::get_if<language::name_expression>(&each.source->node);
+                        // Not from a list of what the form makes, like adding someone to a
+                        // project from its members, who are there already.
+                        if (!each.name || each.changes || !source || source->name.text() == asking) continue;
+                        auto listed = entities_.find(ns);
+                        if (listed == entities_.end() || !listed->second.contains(source->name.text())) continue;
+                        std::vector<std::string> columns;
+                        for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
+                        for (const auto& f : listed->second.at(source->name.text())->fields) {
+                            if (f.list || !f.type || f.type->text() != "user") continue;
+                            bool both = std::find(columns.begin(), columns.end(), f.name) != columns.end() &&
+                                        std::find(columns.begin(), columns.end(), f.name + ".name") != columns.end();
+                            if (!both) continue;
+                            parts.params.insert(*view->per);
+                            return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name) + ", " +
+                                   web_detail::js_string(f.name + ".name") + ", " + web_detail::js_string(f.name);
+                        }
+                    }
+                }
+                return std::nullopt;
+            }
             for (const auto& [name, view] : scope->second) {
                 if (!view->per || !names_parameter(route_, *view->per)) continue;
                 for (const auto& each : view->each) {
@@ -1932,7 +1959,7 @@ namespace one::generators {
                         // Another entity, like a person's role or a step's phases: one
                         // of those a view on the screen lists, or several for a list.
                         if (field.name == f.name && field.type && choices.empty()) {
-                            if (auto list = listed_on_screen(parts, ns, field.type->text())) {
+                            if (auto list = listed_on_screen(parts, ns, field.type->text(), entity->name)) {
                                 type = field.list ? "choices" : "pick";
                                 parts.components.insert("listChoices");
                                 choices = ", choices: listChoices(" + *list + ")";

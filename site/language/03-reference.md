@@ -713,6 +713,11 @@ screen "Book" /books/:book {
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too.
+- A form's field holding a person, or a list of people, picks them from a list on
+  the screen whose rows hold a person and their name, like a project's members, each
+  person once; a form making one of those rows, like adding a member, doesn't.
+- A view reads a person's `name`, `picture` or `username` through a list of people
+  too, like `assigned = issue.assignees.name`.
 - `hide when empty` leaves a table out while it has no rows, like a person's
   reports on a front page they may never have used.
 - `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and

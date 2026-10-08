@@ -779,6 +779,24 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 				data[c.name] = fields[c.field]
 				continue
 			}
+			// Through each in a list it holds, like the names of an issue's assignees.
+			if ids, ok := fields[through].([]any); ok {
+				target := a.reg.entity(a.reg.schemas[v.per].field(through).refers)
+				values := []any{}
+				for _, item := range ids {
+					id, _ := item.(string)
+					if id == "" || target == nil {
+						continue
+					}
+					held, err := a.stored(ctx, target, id)
+					if err != nil {
+						return nil, err
+					}
+					values = append(values, held[field])
+				}
+				data[c.name] = values
+				continue
+			}
 			// Through what the entity points at, like its project's lifecycle.
 			id, _ := fields[through].(string)
 			if id == "" {

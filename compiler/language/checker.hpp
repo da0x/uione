@@ -2472,8 +2472,9 @@ namespace one::language {
                 if (std::holds_alternative<member_expression>(m->object->node)) {
                     const field* inner = resolve(in, *m->object);
                     if (!inner) return nullptr;
-                    // issue.implemented_by.name: a person's name, picture or username.
-                    if (inner->type && inner->type->text() == "user" && !inner->list) return profile_field(in, *inner, m->member, where);
+                    // issue.implemented_by.name: a person's name, picture or username, or
+                    // each one's, like issue.assignees.name.
+                    if (inner->type && inner->type->text() == "user") return profile_field(in, *inner, m->member, where);
                     const entity_declaration* through = pointed(in.ns, *inner);
                     if (!through) {
                         error(where, inner->name + " isn't another entity, so it has no fields to read");

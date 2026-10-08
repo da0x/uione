@@ -410,9 +410,19 @@ export function holds(roles: ViewState, field: string, within: string | undefine
 
 // A view's list as a form's choices: each row's id, shown by one of its values, like
 // a project's roles by their titles.
-export function listChoices(view: ViewState, list: string, shown: string): [string, string][] {
+// value: the field each row offers, like a member's person, rather than the row
+// itself; each one once, however many rows hold it.
+export function listChoices(view: ViewState, list: string, shown: string, value?: string): [string, string][] {
   if (view.status !== "live") return [];
-  return rowsOf(view.data?.[list]).map((row) => [row.id, show(row[shown]) || row.id]);
+  const seen = new Set<string>();
+  const choices: [string, string][] = [];
+  for (const row of rowsOf(view.data?.[list])) {
+    const offered = value ? row[value] : row.id;
+    if (typeof offered !== "string" || offered === "" || seen.has(offered)) continue;
+    seen.add(offered);
+    choices.push([offered, show(row[shown]) || offered]);
+  }
+  return choices;
 }
 
 // Whether a person may run a command within something, like an issue's project,
