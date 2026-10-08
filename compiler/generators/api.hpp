@@ -1349,7 +1349,6 @@ namespace one::generators {
             // The changes of an entity are asked by what each holds: the entity's id
             // under its own name, and what it points at.
             std::string type = changes ? "one.ChangeOf[" + api_detail::go_name(e->name) + "]" : api_detail::go_name(e->name);
-            static const language::field itself{};
             std::vector<const language::expression*> parts;
             std::function<void(const language::expression&)> split = [&](const language::expression& x) {
                 if (auto* b = std::get_if<language::binary_expression>(&x.node); b && b->op == language::token_kind::logical_and) {
@@ -1360,9 +1359,57 @@ namespace one::generators {
                 }
             };
             if (condition) split(*condition);
+            // One of the conditions can be ways joined by ||, like
+            // board.followers has user.id || assignees has user.id: each is a query of
+            // its own, with the other conditions, and the view lists what any picks.
+            const language::binary_expression* either = nullptr;
+            std::vector<const language::expression*> rest;
+            for (const auto* part : parts) {
+                auto* b = std::get_if<language::binary_expression>(&part->node);
+                if (b && b->op == language::token_kind::logical_or) {
+                    if (either || kind != "Where") {
+                        unsupported(path_, part->where, either ? "a view condition with two sets of ways joined by ||" : "first(...) with ||");
+                        return std::nullopt;
+                    }
+                    either = b;
+                } else {
+                    rest.push_back(part);
+                }
+            }
+            if (either) {
+                std::vector<const language::expression*> ways;
+                std::function<void(const language::expression&)> each_way = [&](const language::expression& x) {
+                    if (auto* b = std::get_if<language::binary_expression>(&x.node); b && b->op == language::token_kind::logical_or) {
+                        each_way(*b->left);
+                        each_way(*b->right);
+                    } else {
+                        ways.push_back(&x);
+                    }
+                };
+                each_way(*either->left);
+                each_way(*either->right);
+                std::string out;
+                for (const auto* way : ways) {
+                    parts = rest;
+                    split(*way);
+                    auto q = conditions(pkg, *e, type, parts, kind, row_entity, changes, source.where);
+                    if (!q) return std::nullopt;
+                    out += out.empty() ? *q : ".Or(" + *q + ")";
+                }
+                return out;
+            }
+            return conditions(pkg, *e, type, parts, kind, row_entity, changes, source.where);
+        }
+
+        // The query that meets every one of parts, each a condition on a field.
+        std::optional<std::string> conditions(const package& pkg, const language::entity_declaration& entity_, const std::string& type,
+                                              const std::vector<const language::expression*>& parts, const std::string& kind,
+                                              const std::string& row_entity, bool changes, const language::location& where) {
+            const language::entity_declaration* e = &entity_;
+            static const language::field itself{};
             if (parts.empty()) {
                 if (kind != "Where") {
-                    unsupported(path_, source.where, "first(...) without a condition");
+                    unsupported(path_, where, "first(...) without a condition");
                     return std::nullopt;
                 }
                 return "one.All[" + type + "]()";
@@ -1378,14 +1425,40 @@ namespace one::generators {
                 }
                 // The field, written plainly (returned_at) or through the entity (loan.book).
                 std::string field_name;
+                // Or through what it points at, like board.followers: the field it's
+                // stored in is board, and the condition reads the board's followers.
+                std::string inside;
                 if (auto* n = std::get_if<language::name_expression>(&b->left->node); n && n->name.parts.size() == 1) {
                     field_name = n->name.parts[0];
+                } else if (auto* n2 = std::get_if<language::name_expression>(&b->left->node); n2 && n2->name.parts.size() == 2) {
+                    const language::field* pointer = field(*e, n2->name.parts[0]);
+                    const language::entity_declaration* target = pointer && pointer->type ? entity(pkg, pointer->type->text()) : nullptr;
+                    if (target && field(*target, n2->name.parts[1])) {
+                        field_name = n2->name.parts[0];
+                        inside = n2->name.parts[1];
+                    }
                 } else if (auto* m = std::get_if<language::member_expression>(&b->left->node)) {
-                    if (web_detail::text_of(*m->object) == e->name) field_name = m->member;
+                    std::string object = web_detail::text_of(*m->object);
+                    const language::field* pointer = object == e->name ? nullptr : field(*e, object);
+                    const language::entity_declaration* target = pointer && pointer->type ? entity(pkg, pointer->type->text()) : nullptr;
+                    if (object == e->name) {
+                        field_name = m->member;
+                    } else if (target && field(*target, m->member)) {
+                        field_name = object;
+                        inside = m->member;
+                    }
                 }
                 const language::field* f = field_name.empty() ? nullptr : field(*e, field_name);
-                if (changes) {
-                    if (field_name == e->name) f = &itself;
+                if (!inside.empty() && f) {
+                    if (except || kind != "Where") {
+                        unsupported(path_, part->where, "a view condition through " + field_name + " other than == or has");
+                        return std::nullopt;
+                    }
+                    f = field(*entity(pkg, f->type->text()), inside);
+                }
+                if (changes && inside.empty()) {
+                    // Who made a change, like created_by != user.id for someone else's.
+                    if (field_name == e->name || field_name == "created_by") f = &itself;
                     else if (f && !(f->type && (f->type->text() == "user" || entity(pkg, f->type->text())))) f = nullptr;
                 }
                 if (!f) {
@@ -1417,7 +1490,8 @@ namespace one::generators {
                     unsupported(path_, part->where, "a view condition comparing with " + right);
                     return std::nullopt;
                 }
-                std::string args = "(" + api_detail::go_string(f == &itself ? field_name : f->name) + ", " + value + ")";
+                std::string stored = f == &itself ? field_name : inside.empty() ? f->name : field_name + "." + inside;
+                std::string args = "(" + api_detail::go_string(stored) + ", " + value + ")";
                 if (out.empty()) {
                     if ((except || has) && kind != "Where") {
                         unsupported(path_, part->where, "first(...) whose first condition is != or has");

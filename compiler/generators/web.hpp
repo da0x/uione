@@ -158,6 +158,7 @@ namespace one::generators {
         // be worked out.
         web_generator(const std::vector<language::file>& files, std::string project_dir, std::string out_dir)
             : files_(files), project_dir_(std::move(project_dir)), out_dir_(std::move(out_dir)), held_(roles_of(files).held) {
+            for (const auto& f : files_) place("", f.declarations);
             for (const auto& f : files_) {
                 indexing_ = f.path;
                 index("", f.declarations);
@@ -256,10 +257,19 @@ namespace one::generators {
             code::source from;
         };
 
-        void index(const std::string& ns, const std::vector<language::declaration>& declarations) {
+        // Where each namespace is, read first, since one of its files says it for all.
+        void place(const std::string& ns, const std::vector<language::declaration>& declarations) {
             for (const auto& d : declarations) {
                 if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
                     if (n->at) prefixes_[web_detail::join(ns, n->name)] = *n->at == "/" ? "" : *n->at;
+                    place(web_detail::join(ns, n->name), n->declarations);
+                }
+            }
+        }
+
+        void index(const std::string& ns, const std::vector<language::declaration>& declarations) {
+            for (const auto& d : declarations) {
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
                     index(web_detail::join(ns, n->name), n->declarations);
                 } else if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
                     name_ = p->name;
@@ -1163,6 +1173,7 @@ namespace one::generators {
                         if (!said.contains(column) && !through) subject += (subject.empty() ? "" : ", ") + web_detail::js_string(column);
                     }
                     if (!subject.empty()) line += " subject={[" + subject + "]}";
+                    if (timeline->title) line += " title=" + web_detail::js_string(*timeline->title);
                     if (timeline->link) {
                         std::string target = full_route(ns, *timeline->link);
                         line += " link=" + web_detail::js_string(target);
@@ -1653,6 +1664,14 @@ namespace one::generators {
                     auto* b = std::get_if<language::binary_expression>(&f.condition->node);
                     if (!b) continue;
                     std::string field = web_detail::text_of(*b->left);
+                    // A time is kept by comparing, named in the address: updated_at> is after.
+                    switch (b->op) {
+                        case language::token_kind::less: field += "<"; break;
+                        case language::token_kind::greater: field += ">"; break;
+                        case language::token_kind::less_equal: field += "<="; break;
+                        case language::token_kind::greater_equal: field += ">="; break;
+                        default: break;
+                    }
                     std::string value;
                     if (auto* named = std::get_if<language::name_expression>(&b->right->node)) {
                         value = named->name.parts.back();  // me, or a choice like priority::high
@@ -1820,6 +1839,13 @@ namespace one::generators {
                 line += " link=" + web_detail::js_string(target);
                 // What it opens is named by its key's parts, like /:owner/:project.
                 std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                // Or by a field of the rows that points at it, like a link's to in
+                // /:project/:to, which opens an issue.
+                if (const auto* rows = listed(ns, table.view.text(), table.list)) {
+                    for (const auto& f : rows->fields) {
+                        if (f.name == last && f.type && f.type->parts.size() == 1 && entity_named(ns, f.type->parts[0])) last = f.type->parts[0];
+                    }
+                }
                 auto keyed = keyed_by(ns, last, target);
                 if (!keyed.empty()) {
                     std::string names;

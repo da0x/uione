@@ -18,6 +18,7 @@ import {
   changed,
   done,
   holds,
+  keptByTime,
   markdownOf,
   phrase,
   memorySource,
@@ -694,6 +695,7 @@ describe("threads and timelines", () => {
     expect(changed("title", "a", "b", "tracker::issue::update")).toBe("changed title from a to b");
     expect(changed("", null, null, "tracker::issue::create")).toBe("created this");
     expect([done("take"), done("drop"), done("assign"), done("copy"), done("take_over")]).toEqual(["took", "dropped", "assigned", "copied", "took over"]);
+    expect([done("transfer"), done("offer"), done("submit"), done("visit")]).toEqual(["transferred", "offered", "submitted", "visited"]);
   });
 
   it("shows what people wrote, each with who and when, and an entity's changes as sentences", () => {
@@ -814,5 +816,19 @@ describe("a table's search, order and pages", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Search title" }), { target: { value: "editor" } });
     expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual(["4Editor tabs", "2Editor tabs"]);
     expect(screen.queryByText(/Page 1 of/)).toBeNull();
+  });
+});
+
+describe("filters by time", () => {
+  it("keeps a time after or before one counted from now", () => {
+    const now = Date.parse("2026-10-08T12:00:00Z");
+    const twoDaysAgo = new Date(now - 2 * 24 * 3600 * 1000);
+    const tenDaysAgo = new Date(now - 10 * 24 * 3600 * 1000);
+    expect(keptByTime(twoDaysAgo, ">", "-7d", now)).toBe(true);
+    expect(keptByTime(tenDaysAgo, ">", "-7d", now)).toBe(false);
+    expect(keptByTime(tenDaysAgo.toISOString(), "<", "-1w", now)).toBe(true);
+    expect(keptByTime(new Date(now + 3 * 3600 * 1000), "<=", "+4h", now)).toBe(true);
+    expect(keptByTime(undefined, ">", "-7d", now)).toBe(false);
+    expect(keptByTime(twoDaysAgo, ">", "seven days", now)).toBe(false);
   });
 });

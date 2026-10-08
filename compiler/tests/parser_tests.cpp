@@ -625,3 +625,9 @@ TEST_CASE("a view's readers come from one entity") {
     REQUIRE(!out.empty());
     CHECK(out[0].message == "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
 }
+
+TEST_CASE("a time counted from now is said with ago or from now, in a filter") {
+    auto out = parse_errors("screen \"Boards\" / {\n\tcards board_list.boards link /boards/:board {\n\t\tfilter \"Recent\" updated_at > 7 days\n\t}\n}\n");
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected ago or from now, like 7 days ago, found the end of the line");
+}

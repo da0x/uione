@@ -66,6 +66,7 @@ namespace board {
 			title
 			tally columns.cards by column and column
 			filter "Untitled" title == "x"
+			filter "Recent" updated_at > 7 days ago
 		}
 		board columns.cards by column over columns.columns {
 			move card::move along columns.arrows

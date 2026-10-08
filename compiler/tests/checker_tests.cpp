@@ -1039,6 +1039,16 @@ TEST_CASE("a namespace's screens can be at another address") {
     CHECK(e.message.starts_with("two screens are at /;"));
 }
 
+TEST_CASE("a namespace says where it is once, in any of its files") {
+    // The file that says at comes last, and the screens before it are there too.
+    CHECK(check_files({{"a.one", "namespace studio {\nscreen \"Projects\" / {\n\tlink /settings \"Settings\"\n}\n}\n"},
+                       {"b.one", "namespace studio at / {\nscreen \"Settings\" /settings {\n\ttext \"a\"\n}\n}\n"}})
+              .empty());
+    auto out = check_files({{"a.one", "namespace studio at /docs {\n}\n"}, {"b.one", "namespace studio at / {\n}\n"}});
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "namespace studio is at /docs in a.one:1 but at / here; say where it is once");
+}
+
 TEST_CASE("a screen's title can show a view the screen can read") {
     CHECK(check_source("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
                        "screen \"{issue_page.title}\" /issues/:issue {\n\ttext \"hi\"\n}\n}\n")
@@ -1111,4 +1121,18 @@ TEST_CASE("a table searches and sorts by what its rows have") {
     CHECK(check_source(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsearch title\n\t\tsort by number descending\n\t\tpage 10\n\t\ttitle\n\t}\n}\n}\n").empty());
     CHECK(only_error(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsearch body\n\t\ttitle\n\t}\n}\n}\n").message == "the table searches body, which its rows don't have");
     CHECK(only_error(start + "screen \"I\" /i {\n\ttable issues {\n\t\tsort by created_at descending\n\t\ttitle\n\t}\n}\n}\n").message == "the table is sorted by created_at, which its rows don't have");
+}
+
+TEST_CASE("a card's filter keeps what changed since a time counted from now") {
+    std::string code = "namespace work at / {\n"
+                       "entity board {\n\ttitle  text\n}\n"
+                       "entity issue {\n\tboard  board\n\tdue  date\n}\n"
+                       "view board_list {\n\tboards = each board {\n\t\ttitle\n\t}\n}\n"
+                       "screen \"Board\" /boards/:board {\n\ttext \"hi\"\n}\n"
+                       "screen \"Boards\" / {\n\tcards board_list.boards link /boards/:board {\n\t\ttitle\n";
+    CHECK(check_source(code + "\t\tfilter \"Changed this week\" updated_at > 7 days ago\n\t\tfilter \"Due soon\" due <= 2 weeks from now\n\t}\n}\n}\n").empty());
+    CHECK(only_error(code + "\t\tfilter \"Recent\" updated_at > 7\n\t}\n}\n}\n").message ==
+          "a filter compares a time with one counted from now, like updated_at > 7 days ago");
+    CHECK(only_error(code + "\t\tfilter \"Recent\" updated_at == 7 days ago\n\t}\n}\n}\n").message ==
+          "a filter keeps a time before or after one, like updated_at > 7 days ago");
 }

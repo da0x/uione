@@ -159,9 +159,9 @@ export const plain: ComponentSet = {
       </ol>
     ),
 
-  Timeline: ({ status, entries }) =>
+  Timeline: ({ status, entries, title }) =>
     status !== "live" || entries.length === 0 ? null : (
-      <ul>
+      <ul aria-label={title}>
         {entries.map((entry) => (
           <li key={entry.id}>
             {entry.who} {entry.what} {entry.subject && (entry.link ? <a {...entry.link}>{entry.subject}</a> : entry.subject)} {entry.after}, {entry.when}

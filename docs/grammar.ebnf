@@ -150,7 +150,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
-                 | "timeline" qualified "." NAME ("link" ROUTE)? END
+                 | "timeline" qualified "." NAME STRING? ("link" ROUTE)? END
                  | "copy" qualified STRING? END
                  | "details" qualified "{" NEWLINE? (column+ END)* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
@@ -186,7 +186,9 @@ product        ::= unary ("*" unary)*
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
-primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+primary        ::= STRING | NUMBER | time | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+/* a time counted from when it's read, in a card's filter: 7 days ago, 2 weeks from now */
+time           ::= NUMBER ("hour" | "hours" | "day" | "days" | "week" | "weeks") ("ago" | "from" "now")
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 

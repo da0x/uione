@@ -51,6 +51,7 @@ namespace one::language {
         std::vector<token> tokens_;
         std::vector<int> depth_;  // how many braces are open before each token
         std::size_t pos_ = 0;
+        bool relative_times_ = false;  // while reading a filter, where 7 days ago is a time
 
         // reading tokens
 
@@ -770,7 +771,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(text)};
             }
-            if (at_word("link")) {
+            if (at_word("link") && peek(1).kind != token_kind::scope) {
                 advance();
                 content_link link;
                 if (at(token_kind::route)) {
@@ -1017,7 +1018,9 @@ namespace one::language {
                             cards_filter f;
                             f.where = peek().where;
                             f.label = advance().text;
+                            relative_times_ = true;
                             f.condition = parse_expression();
+                            relative_times_ = false;
                             cards.filters.push_back(std::move(f));
                             end_line();
                             continue;
@@ -1102,7 +1105,8 @@ namespace one::language {
                     end_line();
                     return {where, thread_item{std::move(view), std::move(list)}};
                 }
-                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}};
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt};
+                if (at(token_kind::string)) timeline.title = advance().text;
                 if (at_word("link")) {
                     advance();
                     timeline.link_where = peek().where;
@@ -1545,11 +1549,35 @@ namespace one::language {
             return e;
         }
 
+        // The units a time is counted in, as its offset writes them.
+        static const char* unit_of(std::string_view word) {
+            if (word == "hour" || word == "hours") return "h";
+            if (word == "day" || word == "days") return "d";
+            if (word == "week" || word == "weeks") return "w";
+            return nullptr;
+        }
+
         expression_ptr parse_primary() {
             auto e = std::make_unique<expression>();
             e->where = peek().where;
             if (at(token_kind::string)) {
                 e->node = literal_expression{literal_expression::kind::string, advance().text};
+            } else if (at(token_kind::number) && relative_times_ && peek(1).kind == token_kind::identifier && unit_of(peek(1).text)) {
+                // 7 days ago, 2 weeks from now: a time counted from when it's read.
+                std::string amount = advance().text;
+                const token& unit = advance();
+                std::string sign;
+                if (at_word("ago")) {
+                    advance();
+                    sign = "-";
+                } else if (at_word("from") && peek(1).kind == token_kind::identifier && peek(1).text == "now") {
+                    advance();
+                    advance();
+                    sign = "+";
+                } else {
+                    fail_expecting("ago or from now, like " + amount + " " + unit.text + " ago");
+                }
+                e->node = literal_expression{literal_expression::kind::time, sign + amount + unit_of(unit.text)};
             } else if (at(token_kind::number)) {
                 e->node = literal_expression{literal_expression::kind::number, advance().text};
             } else if (at(token_kind::identifier)) {

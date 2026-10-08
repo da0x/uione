@@ -71,10 +71,30 @@ type condition struct {
 }
 
 // Query picks the entities a view reads: all of them, or those that meet every
-// condition.
+// condition, or every condition of one of its alternatives.
+//
+// A condition's field can be read through what the entity points at, like
+// board.followers: Has("board.followers", Viewer) picks the changes of issues on
+// the boards the person reading follows.
 type Query struct {
 	typ        reflect.Type
 	conditions []condition
+	or         []Query
+}
+
+// Or adds another way to be picked, as in
+// Has[Change]("board.followers", Viewer).Or(All[Change]().Has("assignees", Viewer)):
+// the changes on boards the person follows, or of issues assigned to them.
+func (q Query) Or(other Query) Query {
+	q.or = append(append([]Query(nil), q.or...), other)
+	return q
+}
+
+// ways is the query as each of its alternatives, every one on its own.
+func (q Query) ways() []Query {
+	first := q
+	first.or = nil
+	return append([]Query{first}, q.or...)
 }
 
 // All picks every entity of type E.
@@ -148,6 +168,17 @@ type list struct {
 	values []value
 	order  []ordering
 	limit  int // how many rows it keeps, once ordered; 0 keeps them all
+	// In a person's own view, the pages that say who may read each row, like an
+	// issue's page for the issues assigned to them: a row they may no longer read,
+	// since they left its project or it turned private, is left out.
+	guards []guard
+}
+
+// guard is a page that says who may read a row of a list: the page for the row's
+// own entity, or for the entity a change is of, named by the row's field.
+type guard struct {
+	page  *ViewSpec
+	field string // the row's field naming the page's entity, or "" for the row itself
 }
 
 // ViewSpec is a view, made with View and described by the calls that follow it.
@@ -380,6 +411,26 @@ func (v *ViewSpec) resolve(r *registry) error {
 		target := r.entity(f.refers)
 		v.reads[target.entity] = target
 	}
+	for _, q := range v.queries() {
+		each := r.schemas[q.typ]
+		for _, c := range q.conditions {
+			through, _, ok := strings.Cut(c.field, ".")
+			if !ok {
+				continue
+			}
+			f := each.through(through)
+			if f == nil || r.entity(f.refers) == nil {
+				return fmt.Errorf("one: view %s picks by %s, but %s doesn't point at another entity", v.full, c.field, through)
+			}
+			target := r.entity(f.refers)
+			v.reads[target.entity] = target
+		}
+	}
+	if v.perUser {
+		if err := v.guard(r); err != nil {
+			return err
+		}
+	}
 	for _, l := range v.lists {
 		each := r.schemas[l.query.typ]
 		for _, name := range l.fields {
@@ -396,6 +447,36 @@ func (v *ViewSpec) resolve(r *registry) error {
 				return fmt.Errorf("one: view %s reads %s, but there's no entity %s", v.full, name, f.refers)
 			}
 			v.reads[target.entity] = target
+		}
+	}
+	return nil
+}
+
+// guard finds, for each list of a person's own view, the pages that say who may
+// read its rows: a view per the rows' entity, or per the entity a change is of,
+// with readers or public when. What those pages read, like who belongs to a
+// project, the view reads too, so a change to it rebuilds the documents it touches.
+func (v *ViewSpec) guard(r *registry) error {
+	for _, l := range v.lists {
+		each := r.schemas[l.query.typ]
+		target, field := each, ""
+		if owner := r.historyOf(each); owner != nil {
+			target, field = owner, owner.name
+		}
+		l.guards = nil
+		for _, page := range r.views {
+			if page.per == nil || r.schemas[page.per] != target || (page.readers == nil && len(page.people) == 0 && page.open == nil) {
+				continue
+			}
+			if err := page.held(r); err != nil {
+				return err
+			}
+			l.guards = append(l.guards, guard{page: page, field: field})
+			v.reads[page.scope.entity] = page.scope
+			if page.readers != nil {
+				member := r.schemas[page.readers]
+				v.reads[member.entity] = member
+			}
 		}
 	}
 	return nil
@@ -460,7 +541,7 @@ func (v *ViewSpec) queries() []Query {
 		qs = append(qs, c.query)
 	}
 	for _, l := range v.lists {
-		qs = append(qs, l.query)
+		qs = append(qs, l.query.ways()...)
 		for _, val := range l.values {
 			qs = append(qs, val.query)
 		}
@@ -516,57 +597,102 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 			}
 		}
 	}
-	listed, everywhere := false, false
+	// Who may read a person's own list changed: someone joined or left a project,
+	// so their own documents change, or a project turned public or private, so
+	// anyone's may.
 	for _, l := range v.lists {
-		if a.reg.schemas[l.query.typ].entity != ev.Entity {
-			continue
-		}
-		listed = true
-		var field string
-		var through *subjectField
-		for _, c := range l.query.conditions {
-			if c.value == Viewer || c.value == Subject {
-				field = c.field
+		for _, g := range l.guards {
+			if g.page.readers == nil || a.reg.schemas[g.page.readers].entity != ev.Entity {
+				continue
 			}
-			if sf, ok := c.value.(*subjectField); ok && v.per != nil {
-				field, through = c.field, sf
-			}
-		}
-		if field == "" {
-			everywhere = true
-		}
-		// Picked by a field of the entity each document is for, like the steps of an
-		// issue's board: the documents of every entity holding what it was and is.
-		if through != nil {
-			per := a.reg.schemas[v.per]
-			for _, data := range []map[string]any{ev.Before, ev.After} {
-				value, _ := data[field].(string)
-				if value == "" {
+			for _, f := range a.reg.schemas[g.page.readers].fields {
+				if f.refers != "user" {
 					continue
 				}
-				refs, err := a.store.Collection(per.collection).Where(through.field, "==", value).Documents(ctx).GetAll()
-				if err != nil {
-					return nil, err
-				}
-				for _, ref := range refs {
-					add(ref.Ref.ID)
+				for _, data := range []map[string]any{ev.Before, ev.After} {
+					person, _ := data[f.name].(string)
+					add(person)
 				}
 			}
-			continue
+			return subjects, nil
 		}
-		for _, data := range []map[string]any{ev.Before, ev.After} {
-			switch key := data[field].(type) {
-			case string:
-				add(key)
-			case []any: // everyone in a list, like an issue's assignees
-				for _, item := range key {
-					text, _ := item.(string)
-					add(text)
+	}
+	listed, everywhere := false, false
+	for _, l := range v.lists {
+		for _, way := range l.query.ways() {
+			each := a.reg.schemas[way.typ]
+			// Picked through what it points at, like the changes on the boards a person
+			// follows: a change to a board changes the documents of its followers, before
+			// and after.
+			for _, c := range way.conditions {
+				through, field, hop := strings.Cut(c.field, ".")
+				if !hop || (c.value != Viewer && c.value != Subject) {
+					continue
 				}
-			case []string:
-				for _, text := range key {
-					add(text)
+				target := a.reg.entity(each.through(through).refers)
+				if target.entity == ev.Entity {
+					listed = true
+					for _, data := range []map[string]any{ev.Before, ev.After} {
+						addAll(add, data[field])
+					}
 				}
+			}
+			if each.entity != ev.Entity {
+				continue
+			}
+			listed = true
+			var field string
+			var through *subjectField
+			for _, c := range way.conditions {
+				// Leaving the person out, like their own changes, doesn't say whose it is.
+				if (c.value == Viewer || c.value == Subject) && !c.except {
+					field = c.field
+				}
+				if sf, ok := c.value.(*subjectField); ok && v.per != nil {
+					field, through = c.field, sf
+				}
+			}
+			if field == "" {
+				everywhere = true
+			}
+			// Through what it points at: everyone the change's board names now, like
+			// its followers when an issue on it changes.
+			if pointer, inside, hop := strings.Cut(field, "."); hop && through == nil {
+				target := a.reg.entity(each.through(pointer).refers)
+				for _, data := range []map[string]any{ev.Before, ev.After} {
+					id, _ := data[pointer].(string)
+					if id == "" {
+						continue
+					}
+					held, err := a.stored(ctx, target, id)
+					if err != nil {
+						return nil, err
+					}
+					addAll(add, held[inside])
+				}
+				continue
+			}
+			// Picked by a field of the entity each document is for, like the steps of an
+			// issue's board: the documents of every entity holding what it was and is.
+			if through != nil {
+				per := a.reg.schemas[v.per]
+				for _, data := range []map[string]any{ev.Before, ev.After} {
+					value, _ := data[field].(string)
+					if value == "" {
+						continue
+					}
+					refs, err := a.store.Collection(per.collection).Where(through.field, "==", value).Documents(ctx).GetAll()
+					if err != nil {
+						return nil, err
+					}
+					for _, ref := range refs {
+						add(ref.Ref.ID)
+					}
+				}
+				continue
+			}
+			for _, data := range []map[string]any{ev.Before, ev.After} {
+				addAll(add, data[field])
 			}
 		}
 	}
@@ -615,22 +741,92 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	return subjects, nil
 }
 
+// addAll adds each key a stored value names: one, or everyone in a list, like an
+// issue's assignees.
+func addAll(add func(string), value any) {
+	switch key := value.(type) {
+	case string:
+		add(key)
+	case []any:
+		for _, item := range key {
+			text, _ := item.(string)
+			add(text)
+		}
+	case []string:
+		for _, text := range key {
+			add(text)
+		}
+	}
+}
+
 // find reads the entities a query picks. subject is the person a per-person view
 // is for, and row the id of the row a value is worked out for.
 func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firestore.DocumentSnapshot, error) {
+	if len(q.or) > 0 {
+		// Each way on its own, and what any of them picks, once.
+		var all []*firestore.DocumentSnapshot
+		seen := map[string]bool{}
+		for _, way := range q.ways() {
+			docs, err := a.find(ctx, way, subject, row)
+			if err != nil {
+				return nil, err
+			}
+			for _, doc := range docs {
+				if !seen[doc.Ref.Path] {
+					seen[doc.Ref.Path] = true
+					all = append(all, doc)
+				}
+			}
+		}
+		return all, nil
+	}
 	s := a.reg.schemas[q.typ]
 	query := a.store.Collection(s.collection).Query
+	// A condition read through what the entity points at, like board.followers,
+	// first finds what it points at, the boards the person follows, then picks the
+	// entities pointing at one of them, at most 30 to a query as Firestore allows.
+	var pointing string
+	var among []any
 	for _, c := range q.conditions {
+		through, field, hop := strings.Cut(c.field, ".")
 		switch {
+		case hop:
+			target := a.reg.entity(s.through(through).refers)
+			op := "=="
+			if c.has {
+				op = "array-contains"
+			}
+			found, err := a.store.Collection(target.collection).Where(field, op, givenIn(ctx, c.value, subject, row)).Documents(ctx).GetAll()
+			if err != nil {
+				return nil, err
+			}
+			if len(found) == 0 {
+				return nil, nil
+			}
+			pointing, among = through, nil
+			for _, doc := range found {
+				among = append(among, doc.Ref.ID)
+			}
 		case c.has:
 			query = query.Where(c.field, "array-contains", givenIn(ctx, c.value, subject, row))
 		case !c.except:
 			query = query.Where(c.field, "==", givenIn(ctx, c.value, subject, row))
 		}
 	}
-	docs, err := query.Documents(ctx).GetAll()
-	if err != nil {
-		return nil, err
+	var docs []*firestore.DocumentSnapshot
+	if pointing == "" {
+		var err error
+		if docs, err = query.Documents(ctx).GetAll(); err != nil {
+			return nil, err
+		}
+	}
+	for start := 0; start < len(among); start += 30 {
+		end := min(start+30, len(among))
+		some, err := query.Where(pointing, "in", among[start:end]).Documents(ctx).GetAll()
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, some...)
 	}
 	kept := docs[:0]
 	for _, doc := range docs {
@@ -651,7 +847,7 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 // unless an Except has to be checked on each one.
 func (a *App) count(ctx context.Context, q Query, subject string) (int64, error) {
 	for _, c := range q.conditions {
-		if c.except {
+		if c.except || strings.Contains(c.field, ".") || len(q.or) > 0 {
 			docs, err := a.find(ctx, q, subject, "")
 			return int64(len(docs)), err
 		}
@@ -840,6 +1036,11 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 	if err != nil {
 		return nil, err
 	}
+	if len(l.guards) > 0 {
+		if docs, err = a.readable(ctx, l, subject, docs); err != nil {
+			return nil, err
+		}
+	}
 	// Newest first, by when each was made, so the order never depends on the store.
 	sort.SliceStable(docs, func(i, j int) bool {
 		if c := compare(docs[i].Data()["created_at"], docs[j].Data()["created_at"]); c != 0 {
@@ -969,6 +1170,49 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 	return rows, nil
 }
 
+// readable keeps the rows of a person's own list that they may read: those whose
+// page, by any of the list's guards, is public or names them as a reader.
+func (a *App) readable(ctx context.Context, l *list, subject string, docs []*firestore.DocumentSnapshot) ([]*firestore.DocumentSnapshot, error) {
+	ctx = context.WithValue(ctx, readersRead{}, map[string][]string{})
+	decided := map[string]bool{} // by the page's entity's id, read once
+	kept := docs[:0]
+	for _, doc := range docs {
+		ok := false
+		for _, g := range l.guards {
+			id := doc.Ref.ID
+			if g.field != "" {
+				id, _ = doc.Data()[g.field].(string)
+			}
+			key := g.page.full + ":" + id
+			may, known := decided[key]
+			if !known && id != "" {
+				fields, err := a.stored(ctx, a.reg.schemas[g.page.per], id)
+				if err != nil {
+					return nil, err
+				}
+				data := map[string]any{}
+				if len(fields) > 0 {
+					if err := a.access(ctx, g.page, id, fields, data); err != nil {
+						return nil, err
+					}
+				}
+				readers, _ := data["readers"].([]string)
+				may = data["public"] == true || contains(readers, subject)
+				decided[key] = may
+			}
+			ok = ok || may
+		}
+		if ok {
+			kept = append(kept, doc)
+		}
+	}
+	return kept, nil
+}
+
+// readersRead holds, while a list's rows are checked, the readers already found
+// for each place, so a project's members are read once however many rows are in it.
+type readersRead struct{}
+
 func (a *App) stored(ctx context.Context, s *schema, id string) (map[string]any, error) {
 	if id == "" {
 		return map[string]any{}, nil
@@ -1033,13 +1277,21 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 					person = f.name
 				}
 			}
-			docs, err := a.store.Collection(member.collection).Where(place, "==", within).Documents(ctx).GetAll()
-			if err != nil {
-				return err
-			}
-			for _, doc := range docs {
-				if id, _ := doc.Data()[person].(string); id != "" && !contains(readers, id) {
-					readers = append(readers, id)
+			memo, _ := ctx.Value(readersRead{}).(map[string][]string)
+			if known, ok := memo[member.entity+":"+within]; ok && memo != nil {
+				readers = append(readers, known...)
+			} else {
+				docs, err := a.store.Collection(member.collection).Where(place, "==", within).Documents(ctx).GetAll()
+				if err != nil {
+					return err
+				}
+				for _, doc := range docs {
+					if id, _ := doc.Data()[person].(string); id != "" && !contains(readers, id) {
+						readers = append(readers, id)
+					}
+				}
+				if memo != nil {
+					memo[member.entity+":"+within] = append([]string(nil), readers...)
 				}
 			}
 		}
@@ -1197,11 +1449,15 @@ func (v *ViewSpec) definition() string {
 		return fmt.Sprintf("%T:%v", x, x)
 	}
 	query := func(q Query) string {
-		s := typeName(q.typ) + "("
-		for _, c := range q.conditions {
-			s += fmt.Sprintf("%s=%s,except=%t,has=%t;", c.field, val(c.value), c.except, c.has)
+		var ways []string
+		for _, way := range q.ways() {
+			s := typeName(way.typ) + "("
+			for _, c := range way.conditions {
+				s += fmt.Sprintf("%s=%s,except=%t,has=%t;", c.field, val(c.value), c.except, c.has)
+			}
+			ways = append(ways, s+")")
 		}
-		return s + ")"
+		return strings.Join(ways, "|")
 	}
 	fmt.Fprintf(&out, "view %s public=%t per_user=%t per=%s readers=%s people=%q permission=%q secrets=%q\n",
 		v.full, v.public, v.perUser, typeName(v.per), typeName(v.readers), v.people, v.permission, v.secrets)
@@ -1230,7 +1486,7 @@ func (v *ViewSpec) definition() string {
 // composing changes whenever how views are put together changes in a way their
 // stored documents need rebuilding for, like building a new view per entity for the
 // entities already stored.
-const composing = "2"
+const composing = "3"
 
 // rebuildChanged rebuilds the stored documents of every view whose definition
 // changed since the backend last started, as when a deploy adds a field to a view,

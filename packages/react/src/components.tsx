@@ -193,12 +193,15 @@ const irregular: Record<string, string> = {
   take: "took", make: "made", give: "gave", send: "sent", leave: "left", begin: "began", write: "wrote", set: "set", put: "put",
   run: "ran", find: "found", hold: "held", keep: "kept", get: "got", bring: "brought", buy: "bought", pay: "paid", lead: "led",
 };
+const stressedLast = new Set(["transfer", "refer", "prefer", "defer", "confer", "infer", "admit", "commit", "submit", "permit", "omit", "compel", "expel", "occur", "recur", "regret", "control"]);
 export function done(action: string): string {
   const [verb = "", ...rest] = action.split("_");
   const past = irregular[verb]
     ?? (verb.endsWith("e") ? `${verb}d`
     : /[^aeiou]y$/.test(verb) ? `${verb.slice(0, -1)}ied`
     : /^[^aeiou]*[aeiou][^aeiouwxy]$/.test(verb) ? `${verb}${verb.at(-1)}ed`
+    // Words stressed on their last syllable double it too, though offer and visit don't.
+    : stressedLast.has(verb) ? `${verb}${verb.at(-1)}ed`
     : `${verb}ed`);
   return [past, ...rest].join(" ");
 }
@@ -259,9 +262,11 @@ export function Timeline({
   link,
   keyed,
   named,
+  title,
 }: {
   view: ViewState;
   list: string;
+  title?: string; // what it's of, like "What's new", shown only while it holds something
   subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
   link?: string; // where each change's subject is, like /:project/issues/:issue
   keyed?: string[]; // the key's parts before the last, when the link names them, like project
@@ -281,7 +286,7 @@ export function Timeline({
     const to = link ? links(rowLink(link, row, params, keyed, named)) : undefined;
     return { ...entry, what: head, subject: words.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
-  return <ui.Timeline status={view.status} entries={entries} />;
+  return <ui.Timeline status={view.status} entries={entries} title={title} />;
 }
 
 // What a view holds, as Markdown to paste somewhere else whole: the page's title,
@@ -607,6 +612,18 @@ export interface RowAction {
   form?: { fields: (string | FieldSpec)[]; submit?: string };
 }
 
+// Whether a row's time is before or after one counted from now, as a filter like
+// updated_at > 7 days ago asks with updated_at>=-7d: hours, days or weeks, ago (-)
+// or from now (+). A row with no time is kept by neither.
+export function keptByTime(held: unknown, op: string, offset: string, now = Date.now()): boolean {
+  const counted = /^([+-])(\d+)([hdw])$/.exec(offset);
+  const at = held instanceof Date ? held.getTime() : typeof held === "string" || typeof held === "number" ? new Date(held).getTime() : Number.NaN;
+  if (!counted || Number.isNaN(at)) return false;
+  const hours = { h: 1, d: 24, w: 24 * 7 }[counted[3] as "h" | "d" | "w"];
+  const then = now + (counted[1] === "-" ? -1 : 1) * Number(counted[2]) * hours * 3600 * 1000;
+  return op === "<" ? at < then : op === ">" ? at > then : op === "<=" ? at <= then : at >= then;
+}
+
 // What a list is filtered by from the page's address, as a card's link opens it:
 // ?is=Opened by me&author=me keeps the rows whose author is whoever is reading, and
 // says so in words that can be cleared. Without one, every row is kept.
@@ -618,6 +635,8 @@ function useFilter() {
   const picks = [...query.entries()].filter(([name]) => name !== "is");
   const matches = (row: Row) =>
     picks.every(([name, wanted]) => {
+      const compared = /^(.*?)(<=|>=|<|>)$/.exec(name);
+      if (compared) return keptByTime(row[compared[1]], compared[2], wanted);
       const value = wanted === "me" ? (auth?.person?.uid ?? "") : wanted;
       const held = row[name];
       return Array.isArray(held) ? held.includes(value) : held === value;

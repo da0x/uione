@@ -57,6 +57,10 @@ namespace one::language {
         void check(const std::vector<file>& files) {
             for (const auto& f : files) {
                 path_ = f.path;
+                place("", f.declarations);
+            }
+            for (const auto& f : files) {
+                path_ = f.path;
                 collect("", f.declarations);
             }
             for (const auto& f : files) {
@@ -156,6 +160,8 @@ namespace one::language {
         // Where a namespace's screens are: under its name, like /docs, unless it says
         // otherwise with at, like namespace studio at /.
         std::map<std::string, std::string> prefixes_;
+        std::map<std::string, std::string> placed_;  // where each namespace's at was first said
+        std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
 
         std::string prefix_of(const std::string& ns) const {
@@ -181,14 +187,32 @@ namespace one::language {
             return false;
         }
 
+        // Where each namespace is, read before anything else, so a namespace says at
+        // once, in any of its files, and its screens in every file are there.
+        void place(const std::string& ns, const std::vector<declaration>& declarations) {
+            for (const auto& d : declarations) {
+                auto* n = std::get_if<namespace_declaration>(&d.node);
+                if (!n) continue;
+                std::string name = join(ns, n->name);
+                if (n->at) {
+                    if (!n->at->starts_with("/")) error(d.where, "a namespace is at an address, like / or /docs");
+                    std::string prefix = *n->at == "/" ? "" : *n->at;
+                    auto [it, added] = prefixes_.emplace(name, prefix);
+                    auto [first, placed] = placed_.emplace(name, path_ + ":" + std::to_string(d.where.line));
+                    if (!added && it->second != prefix && !conflicted_.contains(name)) {
+                        conflicted_.insert(name);
+                        error(d.where, "namespace " + n->name + " is at " + (it->second.empty() ? "/" : it->second) + " in " + first->second +
+                                           " but at " + *n->at + " here; say where it is once");
+                    }
+                }
+                place(name, n->declarations);
+            }
+        }
+
         void collect(const std::string& ns, const std::vector<declaration>& declarations) {
             scope& here = scopes_[ns];
             for (const auto& d : declarations) {
                 if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
-                    if (n->at) {
-                        if (!n->at->starts_with("/")) error(d.where, "a namespace is at an address, like / or /docs");
-                        prefixes_[join(ns, n->name)] = *n->at == "/" ? "" : *n->at;
-                    }
                     collect(join(ns, n->name), n->declarations);
                 } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
                     add(here.entities, e->name, *e, d.where, "entity", ns);
@@ -1891,7 +1915,7 @@ namespace one::language {
                             error(table->link_where, "a table's link ends with a :parameter, which each row's id fills, like /books/:book");
                         } else if (!missing.empty()) {
                             error(table->link_where, "this table's link needs :" + missing + ", which neither this screen's address nor its rows have");
-                        } else if (!routes_.contains(target)) {
+                        } else if (!routes_.contains(target) && !routes_.contains(pointed_at(ns, list, target, names.back()))) {
                             error(table->link_where, "there's no screen at " + target + " for this table's rows to open");
                         }
                     }
@@ -2081,11 +2105,27 @@ namespace one::language {
             for (const auto& f : cards.filters) {
                 auto* b = std::get_if<binary_expression>(&f.condition->node);
                 auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
-                if (!b || b->op != token_kind::equal || !field || field->name.parts.size() != 1) {
-                    error(f.where, "a filter is a field and the value it holds, like author == me");
+                auto* literal = b ? std::get_if<literal_expression>(&b->right->node) : nullptr;
+                bool time = literal && literal->type == literal_expression::kind::time;
+                bool compared = b && (b->op == token_kind::less || b->op == token_kind::greater || b->op == token_kind::less_equal ||
+                                      b->op == token_kind::greater_equal);
+                if (!b || !(b->op == token_kind::equal || compared) || !field || field->name.parts.size() != 1) {
+                    error(f.where, "a filter is a field and the value it holds, like author == me, or a time it's after, like updated_at > 7 days ago");
+                } else if (compared != time) {
+                    error(f.where, compared ? "a filter compares a time with one counted from now, like updated_at > 7 days ago"
+                                            : "a filter keeps a time before or after one, like updated_at > 7 days ago");
                 }
             }
             if (cards.filters.size() > 3) error(cards.filters[3].where, "a card has three filters at most, the ones most used");
+        }
+
+        // A link whose last parameter is a field of the rows pointing at something,
+        // like a link's to in /:project/:to, opens that thing's screen, /:project/:issue.
+        std::string pointed_at(const std::string& ns, const view_each* list, const std::string& target, const std::string& last) {
+            const entity_declaration* rows = list ? listed_entity(ns, *list) : nullptr;
+            const field* f = rows ? find_field(*rows, last) : nullptr;
+            if (!f || !f->type || f->type->parts.size() != 1 || !find_entity(ns, *f->type)) return target;
+            return target.substr(0, target.rfind("/:") + 2) + f->type->parts[0] + target.substr(target.rfind("/:") + 2 + last.size());
         }
 
         // The entity a #12 names: numbered within the scope, keyed by the scope and its

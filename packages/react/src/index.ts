@@ -6,7 +6,7 @@
 export { App, Crumbs, Heading, Subtitle, accentOf, screen, usePageTitle, useSignIn, useTitle } from "./app.js";
 export type { AppProps, Screen, ScreenInfo, TitlePart } from "./app.js";
 
-export { Actions, Board, Cards, Code, Command, Copy, Details, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Thread, Timeline, changed, done, holds, allows, listChoices, listHas, markdownOf, phrase } from "./components.js";
+export { Actions, Board, Cards, Code, Command, Copy, Details, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Thread, Timeline, changed, done, holds, keptByTime, allows, listChoices, listHas, markdownOf, phrase } from "./components.js";
 export type { BoardMove, CopiedField, Tally, CopiedList, DocPage, FieldSpec, GridCommand, RowAction } from "./components.js";
 
 export { useAuth, useCommand, useRunner, useView } from "./data.js";

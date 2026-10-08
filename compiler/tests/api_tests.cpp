@@ -804,3 +804,33 @@ TEST_CASE("a view per entity can show a field of what it points at") {
     REQUIRE(tracker != nullptr);
     CHECK(tracker->content.find(R"(Copy("visibility", "project.visibility"))") != std::string::npos);
 }
+
+TEST_CASE("a person's news is the changes on boards they follow or of what's assigned them, not their own") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace tracker {
+entity board {
+	title      text
+	followers  list of user
+}
+entity issue history {
+	board      board  required
+	title      text
+	assignees  list of user
+}
+view news per user {
+	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+		issue  field  after
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    const auto* file = find(generated.files, "tracker/tracker.go");
+    REQUIRE(file != nullptr);
+    CHECK(file->content.find(R"(List("changes", one.All[one.ChangeOf[Issue]]().Except("created_by", one.Viewer).Has("board.followers", one.Viewer).)"
+                             R"(Or(one.All[one.ChangeOf[Issue]]().Except("created_by", one.Viewer).Has("assignees", one.Viewer))).)") != std::string::npos);
+}

@@ -982,7 +982,8 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "\theading {\n\t\tproject::update \"Edit project\" icon edit\n\t\tform project::update \"Save\" {\n\t\t\tname\n\t\t}\n\t}\n"
                          "\tsubtitle \"{project_page.summary}\"\n"
                          "\tcards project_page.boards link /:project/boards/:board {\n\t\ttitle\n\t\ttally project_page.issues by board and phase\n"
-                         "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high\n\t}\n"
+                         "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high\n"
+                         "\t\tfilter \"Changed this week\" updated_at > 7 days ago\n\t}\n"
                          "}\n"
                          "screen \"Board\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
                          "}\n");
@@ -993,7 +994,8 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
     CHECK(tsx.find(R"( button opener="Edit project" icon="edit" )") != std::string::npos);
     CHECK(tsx.find(R"(<Cards view={projectPage} list="boards" columns={{ title: "Title" }} link="/:project/boards/:board" keyed={["project"]} named={{ project: 1 }})") == std::string::npos);
     CHECK(tsx.find(R"(tally={{ view: projectPage, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }})") != std::string::npos);
-    CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" } }]})") != std::string::npos);
+    CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" } }, )"
+                   R"({ label: "Changed this week", query: { "updated_at>": "-7d" } }]})") != std::string::npos);
     fs::remove_all(dir);
 }
 
@@ -1158,5 +1160,29 @@ TEST_CASE("a choice is picked from a list in a form, and shown by its label") {
     CHECK(tsx.find(R"(choices={{ license: Object.fromEntries([["mit", "MIT"], ["apache_2_0", "Apache-2.0"], ["none", "None"]]) }})") != std::string::npos);
     // A form can say what its button does.
     CHECK(tsx.find(R"( submit="Start a project")") != std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("a timeline can say what it's of, and a row can open what it points at") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-news-links";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
+                         "entity issue history {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tassignees  list of user\n}\n"
+                         "entity link {\n\tproject  project  required\n\tfrom  issue  required\n\tto  issue  required\n}\n"
+                         "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tproject  issue  issue.title  field  before  after  created_at\n\t}\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tlinks = each link where from == issue.id {\n\t\tto  to.title\n\t}\n}\n"
+                         "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" link /:project/:issue\n}\n"
+                         "screen \"{issue_page.title}\" /:project/:issue {\n\ttable issue_page.links link /:project/:to {\n\t\tto.title \"Issue\"\n\t}\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Timeline view={news} list="changes" subject={["project", "issue.title"]} title="What's new" link="/:project/:issue" keyed={["project"]})") !=
+          std::string::npos);
+    CHECK(tsx.find(R"(list="links" link="/:project/:to" keyed={["project"]})") != std::string::npos);
     fs::remove_all(dir);
 }

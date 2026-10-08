@@ -225,7 +225,8 @@ is at the root.
 
 `namespace studio at /` puts the namespace's screens somewhere else, here at the
 site's root, so its `/:owner/:project` screen is at `/da0x/neotrac` rather than
-`/studio/da0x/neotrac`.
+`/studio/da0x/neotrac`. A namespace written in several files says where it is in
+one of them, and every file's screens are there.
 
 `::` reaches into a namespace or an entity: `waitlist::signup::create`,
 `library::book`.
@@ -533,11 +534,26 @@ view issue_page per issue {
   under `issue`, and what it points at, so a view can list one issue's changes,
   `where issue == issue.id`, or every change in a project, `where project ==
   project.id`. A change's rows can show `field`, `before`, `after`, `action`,
-  `created_at` and `created_by.name`.
+  `created_at` and `created_by.name`, and `created_by != user.id` leaves out the
+  person's own.
+- A condition can read through what each row points at: `board.followers has
+  user.id` picks the changes to issues on the boards the person follows. `||` joins
+  ways to be picked, and a row any of them picks is listed once.
+- A list in a view `per user` holds only what the person may read: a row whose own
+  page, like an issue's, is private to a project they aren't in, or no longer in,
+  is left out, and comes back when they join it or it turns public.
 - `limit 50` keeps only the first rows of a list, once ordered, so a list that keeps
   growing, like a project's timeline, stays small enough to be one document.
 
 ```one
+view news per user {
+	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+		order by created_at descending
+		limit 30
+		project  issue  issue.number  issue.title  field  before  after  created_by.name  created_at
+	}
+}
+
 view project_page per project {
 	timeline = each change of issue where project == project.id {
 		order by created_at descending
@@ -708,7 +724,8 @@ screen "Book" /books/:book {
   a book or a membership of a project. Parameters before the last, like the
   project in `/projects/:project/issues/:issue`, come from the screen's own address,
   or from the row when it holds them, like a list of one person's issues across
-  projects.
+  projects. The last can be a field of the rows that points at what the screen is
+  for: `table issue_page.links link /:project/:to` opens the issue each link is to.
 - A table's block can start with its own settings: `search title labels` gives it a
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
@@ -796,7 +813,9 @@ form step::update "Save" {
   phase` sums up what each card holds, counting the list's rows whose `board` is the
   card by their `phase`, named and ordered by `phase.title` and `phase.position` when
   the list has them. `filter "Opened by me" author == me` is a link that opens the
-  card filtered; three at most.
+  card filtered; three at most. A filter can keep the rows whose time is after or
+  before one counted from when it's opened: `filter "Changed this week" updated_at
+  > 7 days ago`, or `due <= 2 weeks from now`, in hours, days or weeks.
 - A table or a board opened with a filter in its address, as a card's filter opens
   it, keeps only the rows it picks, and says so, with a way to clear it.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's
@@ -854,6 +873,8 @@ board project_page.issues by phase over project_page.phases link /:project/issue
   each change was to with the list's own columns, like `issue.number` and
   `issue.title`, and `link` opens it: `timeline project_page.timeline link
   /:project/issues/:issue` reads "Ada closed #12 Copy an issue whole".
+- `timeline news.changes "What's new"` says what a timeline is of above it. Like
+  every timeline, it isn't shown while it has nothing in it.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

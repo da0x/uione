@@ -1269,8 +1269,9 @@ export const radix: ComponentSet = {
     ),
 
   // What happened, oldest first, down a line, each change one sentence.
-  Timeline: ({ status, entries }) =>
-    status !== "live" || entries.length === 0 ? null : (
+  Timeline: ({ status, entries, title }) => {
+    if (status !== "live" || entries.length === 0) return null;
+    const changes = (
       <ol className="relative ml-1.5 flex flex-col gap-3 border-l border-line pl-5 text-sm">
         {entries.map((entry) => (
           <li key={entry.id} className="relative">
@@ -1293,7 +1294,16 @@ export const radix: ComponentSet = {
           </li>
         ))}
       </ol>
-    ),
+    );
+    return title ? (
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {changes}
+      </section>
+    ) : (
+      changes
+    );
+  },
 
   Picture: ({ source }) => (
     <img

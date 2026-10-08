@@ -41,7 +41,9 @@ namespace one::language {
     using expression_ptr = std::unique_ptr<expression>;
 
     struct literal_expression {
-        enum class kind { string, number };
+        // A time is one relative to when it's read, like 7 days ago or 2 weeks from
+        // now, written as its offset: -7d, +14d.
+        enum class kind { string, number, time };
         kind type = kind::string;
         std::string value;
     };
@@ -501,6 +503,7 @@ namespace one::language {
         std::string list;
         std::optional<std::string> link;  // timeline project_page.timeline link /:project/issues/:issue: what each change was to
         location link_where;
+        std::optional<std::string> title;  // timeline news.changes "What's new": said above it, shown while it holds something
     };
 
     // copy issue_page "Copy issue": a button that copies everything a view holds, as

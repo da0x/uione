@@ -82,6 +82,7 @@ export interface TimelineEntry {
 export interface TimelineProps {
   status: ViewStatus;
   entries: TimelineEntry[];
+  title?: string; // what it's of, said above it, like "What's new"; with none, nothing is shown while it's empty
 }
 
 // A screen laid out in regions, like two_columns' main and side: what's in each, by
