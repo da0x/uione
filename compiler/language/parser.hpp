@@ -779,7 +779,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(component)};
             }
-            if (at_word("table")) {
+            if (at_word("table") && peek(1).kind != token_kind::scope) {
                 advance();
                 table_item table;
                 table.view = parse_qualified_name("the view to list");
@@ -892,7 +892,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(table)};
             }
-            if (at_word("board")) {
+            if (at_word("board") && peek(1).kind != token_kind::scope) {
                 advance();
                 board_item board;
                 board.view = parse_qualified_name("the view whose list it shows, like project_page");
@@ -955,7 +955,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(board)};
             }
-            if (at_word("grid")) {
+            if (at_word("grid") && peek(1).kind != token_kind::scope) {
                 advance();
                 grid_item grid;
                 grid.view = parse_qualified_name("the view whose list it shows, like project_page");
@@ -986,7 +986,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(grid)};
             }
-            if (at_word("details")) {
+            if (at_word("details") && peek(1).kind != token_kind::scope) {
                 advance();
                 details_item details;
                 details.view = parse_qualified_name("the view whose values it shows");
@@ -1005,14 +1005,14 @@ namespace one::language {
                 end_line();
                 return {where, std::move(details)};
             }
-            if (at_word("copy")) {
+            if (at_word("copy") && peek(1).kind != token_kind::scope) {
                 advance();
                 copy_item copy{parse_qualified_name("the view to copy"), std::nullopt};
                 if (at(token_kind::string)) copy.label = advance().text;
                 end_line();
                 return {where, std::move(copy)};
             }
-            if (at_word("thread") || at_word("timeline")) {
+            if ((at_word("thread") || at_word("timeline")) && peek(1).kind != token_kind::scope) {
                 bool thread = advance().text == "thread";
                 qualified_name view = parse_qualified_name("the view whose list it shows");
                 expect(token_kind::dot, thread ? "'.' and the view's list, like issue_page.comments" : "'.' and the view's list, like issue_page.history");
@@ -1030,7 +1030,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(timeline)};
             }
-            if (at_word("form")) {
+            if (at_word("form") && peek(1).kind != token_kind::scope) {
                 advance();
                 form_item form;
                 do {
@@ -1045,7 +1045,7 @@ namespace one::language {
                 end_line();
                 return {where, std::move(form)};
             }
-            if (at_word("confirm")) {
+            if (at_word("confirm") && peek(1).kind != token_kind::scope) {
                 advance();
                 confirm_item confirm;
                 confirm.command = parse_qualified_name("the command to confirm");

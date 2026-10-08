@@ -347,6 +347,15 @@ TEST_CASE("a once is named, and holds its steps in order, each a body for what i
     CHECK(out[0].message == "expected each and what it changes, like each project { ... }, found 'crew'");
 }
 
+TEST_CASE("an entity named like a screen item has its commands as buttons, like board::update") {
+    auto f = parse_ok("screen \"Board\" /boards/:board {\n\tboard::update \"Edit board\"\n\ttable::create\n\tform::delete\n}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    REQUIRE(screen.items.size() == 3);
+    CHECK(std::get<button_item>(screen.items[0].node).command.text() == "board::update");
+    CHECK(std::get<button_item>(screen.items[1].node).command.text() == "table::create");
+    CHECK(std::get<button_item>(screen.items[2].node).command.text() == "form::delete");
+}
+
 TEST_CASE("a when block holds a condition a line, and all of them must hold") {
     auto f = parse_ok("screen \"Issue\" /issues/:issue {\n"
                       "\tissue::verify \"Verify\" when {\n"
