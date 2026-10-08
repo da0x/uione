@@ -369,6 +369,8 @@ namespace one::language {
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;
+        std::string hue;  // section "Wiki" color violet: one of the library's hues, or none
+        location hue_where;
         std::vector<screen_item> items;
     };
 
@@ -506,6 +508,8 @@ namespace one::language {
         std::string label;
         location where;
         expression_ptr condition;  // author == me
+        std::string hue;           // color red: one of the library's hues, or none
+        location hue_where;
     };
 
     struct cards_item {

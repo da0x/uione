@@ -1155,6 +1155,7 @@ namespace one::generators {
                     std::string tag = hero ? "Hero" : "Section";
                     parts.components.insert(tag);
                     std::string id = block->anchor ? " id=" + web_detail::js_string(*block->anchor) : "";
+                    if (!block->hue.empty()) id += " hue=" + web_detail::js_string(block->hue);
                     out.open("<" + tag + " title=" + web_detail::js_string(block->title) + id + ">");
                     ++in_block_;
                     screen_items(out, parts, ns, block->items, screen);
@@ -1743,7 +1744,8 @@ namespace one::generators {
             if (!cards.filters.empty()) {
                 std::string filters;
                 for (const auto& f : cards.filters) {
-                    filters += (filters.empty() ? "" : ", ") + std::string("{ label: ") + web_detail::js_string(f.label) + ", query: " + filter_query(*f.condition) + " }";
+                    filters += (filters.empty() ? "" : ", ") + std::string("{ label: ") + web_detail::js_string(f.label) + ", query: " + filter_query(*f.condition) +
+                               (f.hue.empty() ? "" : ", hue: " + web_detail::js_string(f.hue)) + " }";
                 }
                 line += " filters={[" + filters + "]}";
             }

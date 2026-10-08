@@ -166,6 +166,167 @@
   --shadow-panel: none;
 }
 
+/*
+ * The colors a section or a filter is drawn in, section "Wiki" color violet: each a
+ * shade that reads on the page, a darker one for hover, and a soft one to sit
+ * behind it, light and dark, for each palette. Inside something with a hue, it
+ * takes the accent's place, so its links, tables and buttons all follow.
+ */
+:root {
+  --hue-blue: #2457d6;
+  --hue-blue-hover: #1c47b8;
+  --hue-blue-soft: #e8eefc;
+  --hue-teal: #0f766e;
+  --hue-teal-hover: #0b5e58;
+  --hue-teal-soft: #dff3f0;
+  --hue-green: #2f7d32;
+  --hue-green-hover: #24622a;
+  --hue-green-soft: #e3f2e4;
+  --hue-amber: #a15c00;
+  --hue-amber-hover: #874d00;
+  --hue-amber-soft: #fbefd9;
+  --hue-red: #c2312d;
+  --hue-red-hover: #a32724;
+  --hue-red-soft: #fbe5e4;
+  --hue-violet: #7a3fd1;
+  --hue-violet-hover: #6431b2;
+  --hue-violet-soft: #f0e8fc;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hue-blue: #7ea6ff;
+    --hue-blue-hover: #a3c0ff;
+    --hue-blue-soft: #16244a;
+    --hue-teal: #4fd1c5;
+    --hue-teal-hover: #81e6d9;
+    --hue-teal-soft: #0f2e2c;
+    --hue-green: #7bd389;
+    --hue-green-hover: #a3e4ad;
+    --hue-green-soft: #15301a;
+    --hue-amber: #f2b45a;
+    --hue-amber-hover: #f7cb87;
+    --hue-amber-soft: #33240d;
+    --hue-red: #ff7b72;
+    --hue-red-hover: #ffa198;
+    --hue-red-soft: #3a1716;
+    --hue-violet: #b794f6;
+    --hue-violet-hover: #cdb4fa;
+    --hue-violet-soft: #2a1d47;
+  }
+}
+:root[data-theme="dark"] {
+  --hue-blue: #7ea6ff;
+  --hue-blue-hover: #a3c0ff;
+  --hue-blue-soft: #16244a;
+  --hue-teal: #4fd1c5;
+  --hue-teal-hover: #81e6d9;
+  --hue-teal-soft: #0f2e2c;
+  --hue-green: #7bd389;
+  --hue-green-hover: #a3e4ad;
+  --hue-green-soft: #15301a;
+  --hue-amber: #f2b45a;
+  --hue-amber-hover: #f7cb87;
+  --hue-amber-soft: #33240d;
+  --hue-red: #ff7b72;
+  --hue-red-hover: #ffa198;
+  --hue-red-soft: #3a1716;
+  --hue-violet: #b794f6;
+  --hue-violet-hover: #cdb4fa;
+  --hue-violet-soft: #2a1d47;
+}
+:root[data-palette="papercolor"] {
+  --hue-blue: #005faf;
+  --hue-blue-hover: #004b8c;
+  --hue-blue-soft: #dbe6f5;
+  --hue-teal: #007a7a;
+  --hue-teal-hover: #006060;
+  --hue-teal-soft: #d7eeee;
+  --hue-green: #008700;
+  --hue-green-hover: #006f00;
+  --hue-green-soft: #dcefdc;
+  --hue-amber: #af5f00;
+  --hue-amber-hover: #8f4d00;
+  --hue-amber-soft: #f4e4d2;
+  --hue-red: #af0000;
+  --hue-red-hover: #8c0000;
+  --hue-red-soft: #f2dada;
+  --hue-violet: #8700af;
+  --hue-violet-hover: #6c008c;
+  --hue-violet-soft: #ecdcf2;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-palette="papercolor"]:not([data-theme="light"]) {
+    --hue-blue: #5fafd7;
+    --hue-blue-hover: #87d7ff;
+    --hue-blue-soft: #1f3540;
+    --hue-teal: #5fd7d7;
+    --hue-teal-hover: #87ffff;
+    --hue-teal-soft: #1a3636;
+    --hue-green: #87d75f;
+    --hue-green-hover: #afff87;
+    --hue-green-soft: #26361a;
+    --hue-amber: #ffaf00;
+    --hue-amber-hover: #ffd75f;
+    --hue-amber-soft: #3a2c10;
+    --hue-red: #ff5f87;
+    --hue-red-hover: #ff87af;
+    --hue-red-soft: #3d1a24;
+    --hue-violet: #d787ff;
+    --hue-violet-hover: #e4afff;
+    --hue-violet-soft: #33203d;
+  }
+}
+:root[data-palette="papercolor"][data-theme="dark"] {
+  --hue-blue: #5fafd7;
+  --hue-blue-hover: #87d7ff;
+  --hue-blue-soft: #1f3540;
+  --hue-teal: #5fd7d7;
+  --hue-teal-hover: #87ffff;
+  --hue-teal-soft: #1a3636;
+  --hue-green: #87d75f;
+  --hue-green-hover: #afff87;
+  --hue-green-soft: #26361a;
+  --hue-amber: #ffaf00;
+  --hue-amber-hover: #ffd75f;
+  --hue-amber-soft: #3a2c10;
+  --hue-red: #ff5f87;
+  --hue-red-hover: #ff87af;
+  --hue-red-soft: #3d1a24;
+  --hue-violet: #d787ff;
+  --hue-violet-hover: #e4afff;
+  --hue-violet-soft: #33203d;
+}
+[data-hue="blue"] {
+  --color-accent: var(--hue-blue);
+  --color-accent-hover: var(--hue-blue-hover);
+  --color-accent-soft: var(--hue-blue-soft);
+}
+[data-hue="teal"] {
+  --color-accent: var(--hue-teal);
+  --color-accent-hover: var(--hue-teal-hover);
+  --color-accent-soft: var(--hue-teal-soft);
+}
+[data-hue="green"] {
+  --color-accent: var(--hue-green);
+  --color-accent-hover: var(--hue-green-hover);
+  --color-accent-soft: var(--hue-green-soft);
+}
+[data-hue="amber"] {
+  --color-accent: var(--hue-amber);
+  --color-accent-hover: var(--hue-amber-hover);
+  --color-accent-soft: var(--hue-amber-soft);
+}
+[data-hue="red"] {
+  --color-accent: var(--hue-red);
+  --color-accent-hover: var(--hue-red-hover);
+  --color-accent-soft: var(--hue-red-soft);
+}
+[data-hue="violet"] {
+  --color-accent: var(--hue-violet);
+  --color-accent-hover: var(--hue-violet-hover);
+  --color-accent-soft: var(--hue-violet-soft);
+}
+
 /* Square corners, for a sharper look: panels, controls, and the chips that are
    otherwise round. A person's picture stays a circle: it's a face, not a panel. */
 :root[data-corners="square"] {

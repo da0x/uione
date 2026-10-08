@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
-import type { FieldProps, Filtered } from "./contract.js";
+import type { FieldProps, Filtered, Hue } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -20,10 +20,10 @@ export function Hero({ title, children }: { title: string; children: ReactNode }
   return <ui.Hero title={title}>{children}</ui.Hero>;
 }
 
-export function Section({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
+export function Section({ title, id, hue, children }: { title: string; id?: string; hue?: Hue; children: ReactNode }) {
   const ui = useUI();
   return (
-    <ui.Section title={title} id={id}>
+    <ui.Section title={title} id={id} {...(hue ? { hue } : {})}>
       {children}
     </ui.Section>
   );
@@ -1309,7 +1309,7 @@ export function Cards({
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   tally?: Tally;
-  filters?: { label: string; query: Record<string, string> }[];
+  filters?: { label: string; query: Record<string, string>; hue?: Hue }[];
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1340,7 +1340,7 @@ export function Cards({
           details: rest.map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
           tally: sum(row),
           noun: tally?.noun,
-          filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`) })) : [],
+          filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],
         };
       })}
     />

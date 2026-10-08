@@ -116,9 +116,14 @@ export interface HeroProps {
   children: ReactNode;
 }
 
+// The colors a section or a filter is drawn in, from uione's library, each in the
+// component set's own shade of it, light and dark.
+export type Hue = "blue" | "teal" | "green" | "amber" | "red" | "violet";
+
 export interface SectionProps {
   title: string;
   id?: string;
+  hue?: Hue; // its heading and links in this color, rather than the site's own
   children: ReactNode;
 }
 
@@ -228,7 +233,7 @@ export interface Card {
   details: ReactNode[];
   tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by phase
   noun?: string; // what it holds, counted, like issues
-  filters: { label: string; link: LinkProps }[];
+  filters: { label: string; link: LinkProps; hue?: Hue }[];
 }
 
 export interface BoardColumn {

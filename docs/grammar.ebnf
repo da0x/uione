@@ -151,7 +151,7 @@ function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
 
 screen         ::= "screen" (STRING | NAME) ROUTE ("under" ROUTE STRING)? ("layout" NAME)? screen_block END
 screen_block   ::= "{" NEWLINE? screen_item* "}"
-screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
+screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_block END
                  | "menu" screen_block END
                  | ("main" | "side") screen_block END
                  | "heading" screen_block END
@@ -173,7 +173,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "component" NAME END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
-cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter | column+) END
+cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | column+) END
 board_line     ::= ("move" qualified "along" qualified "." NAME | "tint" "by" NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"

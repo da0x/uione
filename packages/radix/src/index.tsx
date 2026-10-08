@@ -390,9 +390,11 @@ export const radix: ComponentSet = {
     </section>
   ),
 
-  Section: ({ title, id, children }) => (
-    <section id={id} className="flex scroll-mt-24 flex-col gap-4">
-      <h2 className="text-[1.5rem] font-semibold tracking-[-0.02em]">{title}</h2>
+  // A section with a hue has its heading in it, and the accent's place inside, so
+  // its links and tables follow.
+  Section: ({ title, id, hue, children }) => (
+    <section id={id} data-hue={hue} className="flex scroll-mt-24 flex-col gap-4">
+      <h2 className={`text-[1.5rem] font-semibold tracking-[-0.02em]${hue ? " text-accent" : ""}`}>{title}</h2>
       {children}
     </section>
   ),
@@ -826,7 +828,16 @@ export const radix: ComponentSet = {
             {card.filters.length > 0 && (
               <nav aria-label="Filters" className="mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
                 {card.filters.map((f) => (
-                  <a key={f.label} {...f.link} className="rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-muted hover:border-accent hover:text-accent">
+                  <a
+                    key={f.label}
+                    {...f.link}
+                    data-hue={f.hue}
+                    className={
+                      f.hue
+                        ? "rounded-full border border-accent/35 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent hover:border-accent hover:text-accent-hover"
+                        : "rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-muted hover:border-accent hover:text-accent"
+                    }
+                  >
                     {f.label}
                   </a>
                 ))}

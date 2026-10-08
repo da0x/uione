@@ -801,6 +801,11 @@ namespace one::language {
                 advance();
                 block.title = expect(token_kind::string, "a title").text;
                 if (at(token_kind::anchor)) block.anchor = advance().text;
+                if (at_word("color")) {
+                    advance();
+                    block.hue_where = peek().where;
+                    block.hue = expect(token_kind::identifier, "one of the library's hues, like color violet").text;
+                }
                 block.items = parse_screen_block();
                 end_line();
                 return {where, std::move(block)};
@@ -1122,6 +1127,11 @@ namespace one::language {
                             relative_times_ = true;
                             f.condition = parse_expression();
                             relative_times_ = false;
+                            if (at_word("color")) {
+                                advance();
+                                f.hue_where = peek().where;
+                                f.hue = expect(token_kind::identifier, "one of the library's hues, like color red").text;
+                            }
                             cards.filters.push_back(std::move(f));
                             end_line();
                             continue;

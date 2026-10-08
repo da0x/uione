@@ -948,6 +948,12 @@ form step::update "Save" {
   card filtered; three at most. A filter can keep the rows whose time is after or
   before one counted from when it's opened: `filter "Changed this week" updated_at
   > 7 days ago`, or `due <= 2 weeks from now`, in hours, days or weeks.
+- A filter and a section can each have a color, so the parts of a page can be told
+  apart at a glance: `filter "High priority" priority == priority::high color red`,
+  `section "Wiki" color violet { ... }`. A section's heading, links and tables
+  take its color in place of the site's own. The colors are the library's `hue`:
+  `blue`, `teal`, `green`, `amber`, `red` and `violet`, each drawn in the
+  component set's own shade of it, light and dark.
 - A table or a board opened with a filter in its address, as a card's filter opens
   it, keeps only the rows it picks, and says so, with a way to clear it.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's

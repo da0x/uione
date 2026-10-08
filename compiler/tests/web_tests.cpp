@@ -982,10 +982,10 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "\theading {\n\t\tproject::update \"Edit project\" icon edit\n\t\tform project::update \"Save\" {\n\t\t\tname\n\t\t}\n\t}\n"
                          "\tsubtitle \"{project_page.summary}\"\n"
                          "\tcards project_page.boards link /:project/boards/:board {\n\t\ttitle\n\t\ttally project_page.issues by board and phase\n"
-                         "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high\n"
-                         "\t\tfilter \"Changed this week\" updated_at > 7 days ago\n\t}\n"
+                         "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high  color red\n"
+                         "\t\tfilter \"Changed this week\" updated_at > 7 days ago  color green\n\t}\n"
                          "}\n"
-                         "screen \"Board\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
+                         "screen \"Board\" /:project/boards/:board {\n\tsection \"Wiki\" color violet {\n\t\ttext \"hi\"\n\t}\n}\n"
                          "}\n");
     const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
@@ -994,8 +994,9 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
     CHECK(tsx.find(R"( button opener="Edit project" icon="edit" )") != std::string::npos);
     CHECK(tsx.find(R"(<Cards view={projectPage} list="boards" columns={{ title: "Title" }} link="/:project/boards/:board" keyed={["project"]} named={{ project: 1 }})") == std::string::npos);
     CHECK(tsx.find(R"(tally={{ view: projectPage, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }})") != std::string::npos);
-    CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" } }, )"
-                   R"({ label: "Changed this week", query: { "updated_at>": "-7d" } }]})") != std::string::npos);
+    CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" }, hue: "red" }, )"
+                   R"({ label: "Changed this week", query: { "updated_at>": "-7d" }, hue: "green" }]})") != std::string::npos);
+    CHECK(tsx.find(R"(<Section title="Wiki" hue="violet">)") != std::string::npos);
     fs::remove_all(dir);
 }
 

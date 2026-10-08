@@ -1161,6 +1161,13 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
           "there's no icon flow; there are add, edit, follow, following and workflow");
 }
 
+TEST_CASE("a section is drawn in one of the library's colors") {
+    std::string code = "namespace work {\nscreen \"Home\" / layout two_columns {\n\tside {\n\t\tsection \"Wiki\" color ";
+    CHECK(check_source(code + "violet {\n\t\t\ttext \"a\"\n\t\t}\n\t}\n}\n}\n").empty());
+    CHECK(only_error(code + "purple {\n\t\t\ttext \"a\"\n\t\t}\n\t}\n}\n}\n").message ==
+          "there's no color purple; there are blue, teal, green, amber, red and violet");
+}
+
 TEST_CASE("a subtitle sits under the title of a screen laid out in regions") {
     CHECK(check_source("namespace work {\nscreen \"Home\" / layout two_columns {\n\tsubtitle \"Everything at a glance\"\n\tmain {\n\t\ttext \"a\"\n\t}\n"
                        "\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n")

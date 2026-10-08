@@ -1977,9 +1977,25 @@ namespace one::language {
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + "; there are " + join_words({known.begin(), known.end()}));
         }
 
+        // The colors a section or a filter can be drawn in, the library's hues, which
+        // each component set draws in its own shade, light and dark.
+        void hue(const std::string& name, location where) {
+            if (name.empty()) return;
+            const scope& library = scopes_["one"];
+            auto e = library.enums.find("hue");
+            if (e == library.enums.end()) return;
+            const auto& choices = e->second.node->choices;
+            if (std::find(choices.begin(), choices.end(), name) == choices.end()) {
+                error(where, "there's no color " + name + "; there are " + join_words(choices));
+                return;
+            }
+            mean(where, name.size(), "color " + name + ": " + choice_shown(*e->second.node, name), e->second.from, "screen");
+        }
+
         void screen_items(const std::string& ns, const std::vector<screen_item>& items, const std::string& route) {
             for (const auto& item : items) {
                 if (auto* b = std::get_if<button_item>(&item.node)) icon(b->icon, b->icon_where);
+                if (auto* block = std::get_if<content_block>(&item.node)) hue(block->hue, block->hue_where);
                 if (auto* l = std::get_if<content_link>(&item.node)) icon(l->icon, l->icon_where);
                 if (auto* t = std::get_if<table_item>(&item.node)) {
                     for (const auto& c : t->columns) icon(c.icon, c.icon_where);
@@ -2350,7 +2366,10 @@ namespace one::language {
                     }
                 }
             }
-            for (const auto& f : cards.filters) verify_filter(*f.condition, f.where);
+            for (const auto& f : cards.filters) {
+                verify_filter(*f.condition, f.where);
+                hue(f.hue, f.hue_where);
+            }
             if (cards.filters.size() > 3) error(cards.filters[3].where, "a card has three filters at most, the ones most used");
         }
 

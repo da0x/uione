@@ -44,6 +44,18 @@ namespace one {
 		google  "Firebase Analytics"
 	}
 
+	// The colors a section or a filter is drawn in, section "Wiki" color violet, each
+	// in the component set's own shade of it, light and dark. Without one, it's the
+	// site's own color.
+	enum hue {
+		blue    "Blue"
+		teal    "Teal"
+		green   "Green"
+		amber   "Amber"
+		red     "Red"
+		violet  "Violet"
+	}
+
 	// What a project says about itself: where it runs, how people sign in, and how it
 	// looks. Each line is one of these, and only a list may be said more than once.
 	settings project {
