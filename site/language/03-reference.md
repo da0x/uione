@@ -122,7 +122,7 @@ The language's own words, inside what a declaration says:
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
 - on a screen: `table`, `grid`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
-  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and in a grid or a board, `by … and … over`;
+  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
 
