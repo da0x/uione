@@ -1147,9 +1147,12 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 		}
 	}
 	// Newest first, by when each was made, so the order never depends on the store.
+	// A list in an order of its own, like by position, keeps the ones that tie in the
+	// order they were made, so a new one goes after the others.
+	oldestFirst := len(l.order) > 0
 	sort.SliceStable(docs, func(i, j int) bool {
 		if c := compare(docs[i].Data()["created_at"], docs[j].Data()["created_at"]); c != 0 {
-			return c > 0
+			return (c > 0) != oldestFirst
 		}
 		return docs[i].Ref.ID < docs[j].Ref.ID
 	})

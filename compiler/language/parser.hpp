@@ -802,6 +802,11 @@ namespace one::language {
                     fail_expecting("where the link goes, like /docs, #waitlist, namespace projects or \"https://example.com\"");
                 }
                 link.label = expect(token_kind::string, "the link's text").text;
+                if (at_word("icon")) {
+                    advance();
+                    link.icon_where = peek().where;
+                    link.icon = expect(token_kind::identifier, "the icon it's drawn as, like workflow").text;
+                }
                 end_line();
                 return {where, std::move(link)};
             }
@@ -917,6 +922,11 @@ namespace one::language {
                             column.where = peek().where;
                             column.value = parse_postfix();
                             if (at(token_kind::string)) column.label = advance().text;
+                            if (at_word("icon")) {
+                                advance();
+                                column.icon_where = peek().where;
+                                column.icon = expect(token_kind::identifier, "the icon it's drawn as, like add").text;
+                            }
                             if (at_word("when")) {
                                 advance();
                                 std::size_t begin = peek().begin;
@@ -960,7 +970,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
                             if (!at_word("along")) fail_expecting("along and the view's list of steps, like along project_page.steps");
                             advance();
                             move.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -988,6 +998,11 @@ namespace one::language {
                             column.where = peek().where;
                             column.value = parse_postfix();
                             if (at(token_kind::string)) column.label = advance().text;
+                            if (at_word("icon")) {
+                                advance();
+                                column.icon_where = peek().where;
+                                column.icon = expect(token_kind::identifier, "the icon it's drawn as, like add").text;
+                            }
                             board.columns.push_back(std::move(column));
                         }
                         end_line();
@@ -1183,7 +1198,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -1195,6 +1210,7 @@ namespace one::language {
                 if (at(token_kind::string)) button.label = expect(token_kind::string, "what the button says").text;
                 if (at_word("icon")) {
                     advance();
+                    button.icon_where = peek().where;
                     button.icon = expect(token_kind::identifier, "the icon it's drawn as, like edit").text;
                 }
                 if (at_word("when")) {

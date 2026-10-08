@@ -1150,3 +1150,19 @@ TEST_CASE("what's new is counted from a person's own view, since a value of it")
     CHECK(only_error("project tracker {\n\tunread  feed.changes since feed.seen\n}\n" + views).message ==
           "unread counts a list of a view per user, and there's no such view feed");
 }
+
+TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist") {
+    std::string code = "namespace work {\nentity issue {\n\ttitle  text\n}\ncommand issue::create\nview issues {\n\teach issue {\n\t\ttitle\n\t}\n}\n"
+                       "screen \"Workflow\" /workflow {\n\ttext \"a\"\n}\n";
+    CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon workflow\n\ttable issues {\n\t\ttitle\n\t\tissue::create \"New issue\" icon add\n\t}\n"
+                              "\tform issue::create {\n\t\ttitle\n\t}\n}\n}\n")
+              .empty());
+    CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message ==
+          "there's no icon flow; there are add, edit, follow, following and workflow");
+}
+
+TEST_CASE("a subtitle sits under the title of a screen laid out in regions") {
+    CHECK(check_source("namespace work {\nscreen \"Home\" / layout two_columns {\n\tsubtitle \"Everything at a glance\"\n\tmain {\n\t\ttext \"a\"\n\t}\n"
+                       "\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n")
+              .empty());
+}

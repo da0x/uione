@@ -680,6 +680,13 @@ namespace one::generators {
                     auto* block = std::get_if<language::content_block>(&item.node);
                     if (block && block->type == language::content_block::kind::region) regions.push_back(block);
                 }
+                // A subtitle goes under the title, outside the regions of a screen laid out in them.
+                if (!regions.empty()) {
+                    for (std::size_t at = 0; at < s->items.size(); ++at) {
+                        auto* text = std::get_if<language::content_text>(&s->items[at].node);
+                        if (text && text->subtitle) screen_items(items, parts, ns, s->items, s->items, at, 1);
+                    }
+                }
                 if (layout == "single" && regions.empty()) {
                     screen_items(items, parts, ns, s->items, s->items);
                 } else {
@@ -1081,7 +1088,7 @@ namespace one::generators {
 
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
                           const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
-                          std::size_t first = 0) {
+                          std::size_t first = 0, std::size_t count = std::string::npos) {
             // Buttons one after another sit in a row: a command's own, and a form's that
             // opens it, and so do links. A command's line whose form draws its button is
             // passed over.
@@ -1099,7 +1106,8 @@ namespace one::generators {
                 return b && has_form_for(screen, b->command);
             };
             bool in_row = false;
-            for (std::size_t at = first; at < items.size(); ++at) {
+            std::size_t end = count == std::string::npos ? items.size() : std::min(items.size(), first + count);
+            for (std::size_t at = first; at < end; ++at) {
                 const auto& item = items[at];
                 if (in_row && !presses(item) && !passed(item)) {
                     out.close("</Actions>");
@@ -1152,7 +1160,8 @@ namespace one::generators {
                     std::string target = link->namespace_name ? full_route(link->namespace_name->text(), "/")
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
-                    out.line("<Link to=" + web_detail::js_string(target) + ">" + web_detail::jsx_text(link->label) + "</Link>");
+                    std::string icon = link->icon ? " icon=" + web_detail::js_string(*link->icon) : "";
+                    out.line("<Link to=" + web_detail::js_string(target) + icon + ">" + web_detail::jsx_text(link->label) + "</Link>");
                 } else if (auto* details = std::get_if<language::details_item>(&item.node)) {
                     this->details(out, parts, ns, *details);
                 } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
@@ -1446,6 +1455,12 @@ namespace one::generators {
                     out.line(markdown);
                     return;
                 }
+                // A subtitle in words of its own, like "Everything at a glance".
+                if (text.subtitle) {
+                    parts.components.insert("Subtitle");
+                    out.line("<Subtitle>" + live_text(parts, ns, text.value) + "</Subtitle>");
+                    return;
+                }
                 // Named for where the pages live: /docs is docs, /guides/api is guides-api.
                 std::string name = docs_base_.empty() ? "pages" : docs_base_.substr(1);
                 std::replace(name.begin(), name.end(), '/', '-');
@@ -1719,7 +1734,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", std::nullopt};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);

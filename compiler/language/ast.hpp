@@ -356,6 +356,8 @@ namespace one::language {
         std::string label;
         std::string target;                            // a route inside the link's namespace, #anchor, or https:// address
         std::optional<qualified_name> namespace_name;  // link namespace projects "See the projects"
+        std::optional<std::string> icon;               // icon workflow: drawn as that, its words still naming it
+        location icon_where;
     };
 
     struct table_column {
@@ -366,6 +368,8 @@ namespace one::language {
         // where it holds, read from the row's own fields, and its text as written.
         expression_ptr when;
         std::string when_written;
+        std::optional<std::string> icon;  // issue::create "New issue" icon add: a toolbar's button drawn as that
+        location icon_where;
     };
 
     struct table_item {
@@ -436,6 +440,7 @@ namespace one::language {
         std::optional<qualified_name> along;  // the view, like project_page
         std::string along_list;               // its list of steps, like steps
         std::optional<std::string> icon;      // icon edit: drawn as that, its words still naming it
+        location icon_where;
     };
 
     // board project_page.issues by phase over project_page.phases { ... }: a list's

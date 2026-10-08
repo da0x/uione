@@ -484,3 +484,18 @@ describe("on a phone", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("icons", () => {
+  it("draws a link as an icon, still named by its words", () => {
+    const Link = radix.Link;
+    render(
+      <Link href="/neotrac/boards/main/workflow" icon="workflow">
+        Workflow
+      </Link>,
+    );
+    const link = screen.getByRole("link", { name: "Workflow" });
+    expect(link.getAttribute("title")).toBe("Workflow");
+    expect(link.querySelector("svg")).toBeTruthy();
+    expect(link.textContent).toBe("");
+  });
+});

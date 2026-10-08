@@ -150,6 +150,30 @@ const buttonIcons: Record<string, ReactNode> = {
       <path d="M10 3.5l2 2" />
     </svg>
   ),
+  add: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+  ),
+  follow: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 11.5V7.2a4 4 0 0 1 8 0v4.3l1.2 1.2H2.8z" />
+      <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" />
+    </svg>
+  ),
+  following: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 11.5V7.2a4 4 0 0 1 8 0v4.3l1.2 1.2H2.8z" />
+      <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" fill="none" />
+    </svg>
+  ),
+  workflow: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="2" width="4.5" height="4" rx="1" />
+      <rect x="10" y="10" width="4.5" height="4" rx="1" />
+      <path d="M6 4h2.5a1.5 1.5 0 0 1 1.5 1.5V10" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 // The pictures a switch draws for what it switches between: rows for a table, and
@@ -333,8 +357,19 @@ export const radix: ComponentSet = {
 
   Text: ({ children }) => <p className="max-w-3xl leading-7 text-ink/90">{children}</p>,
 
-  Link: ({ href, onClick, external, children }) =>
-    external ? (
+  Link: ({ href, onClick, external, icon, children }) =>
+    // Drawn as an icon, like a button's, its words still naming it.
+    icon && buttonIcons[icon] ? (
+      <a
+        href={href}
+        onClick={onClick}
+        aria-label={typeof children === "string" ? children : undefined}
+        title={typeof children === "string" ? children : undefined}
+        className={`self-start ${pressable} ${button.secondary} !px-2`}
+      >
+        {buttonIcons[icon]}
+      </a>
+    ) : external ? (
       <a
         href={href}
         target="_blank"
@@ -1405,7 +1440,9 @@ export const radix: ComponentSet = {
     name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
         <div className="flex min-w-0 flex-col gap-10">{regions.main}</div>
-        <aside className="flex min-w-0 flex-col gap-6">{regions.side}</aside>
+        {/* Beside the page, a section is a glance at something, so its heading is a
+            label's size and its parts sit close. */}
+        <aside className="flex min-w-0 flex-col gap-8 [&_section]:gap-2.5 [&_section>h2]:text-base [&_section>h2]:tracking-normal">{regions.side}</aside>
       </div>
     ) : (
       <div className="flex flex-col gap-10">

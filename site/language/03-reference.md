@@ -817,7 +817,13 @@ form step::update "Save" {
 - `subtitle "{project_page.summary}"` puts a screen's words about itself under its
   title, as running words rather than a document in a frame.
 - A button line can say `icon edit`, like `project::update "Edit project" icon edit`:
-  it's drawn as the icon, and its words still name it.
+  it's drawn as the icon, and its words still name it, shown when it's pointed at.
+  So can a link, `link /:project/boards/:board/workflow "Workflow" icon workflow`,
+  and a button in a table's or a board's toolbar, `issue::create "New issue" icon
+  add`. The icons are `add`, `edit`, `follow`, `following` and `workflow`.
+- A screen laid out in regions keeps its `heading` and `subtitle` outside them,
+  under its title. Beside the page, in `side`, a `section` is a glance at
+  something, with a smaller heading.
 - `cards project_page.boards link /:project/boards/:board { ... }` shows a list's
   rows as large cards, three across a wide page and one on a narrow one, each with
   what its block shows, its title first. `tally project_page.issues by board and

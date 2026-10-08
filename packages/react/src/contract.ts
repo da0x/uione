@@ -118,6 +118,7 @@ export interface TextProps {
 
 export interface LinkViewProps extends LinkProps {
   children: ReactNode;
+  icon?: string; // drawn as an icon, like a button's, its words still naming it
 }
 
 export interface CodeProps {

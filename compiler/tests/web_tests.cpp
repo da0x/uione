@@ -1235,3 +1235,27 @@ TEST_CASE("a person's news marks what came since they looked, and is counted bes
     REQUIRE(site != nullptr);
     CHECK(site->content.find(R"(unread: { view: "work::news", list: "changes", since: "seen" })") != std::string::npos);
 }
+
+TEST_CASE("a link and a toolbar's button can be drawn as icons, and a subtitle sits outside a layout") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-icons";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work {\n"
+                         "entity issue {\n\ttitle  text\n}\ncommand issue::create\n"
+                         "view issues {\n\teach issue {\n\t\ttitle\n\t}\n}\n"
+                         "screen \"Workflow\" /workflow {\n\ttext \"a\"\n}\n"
+                         "screen \"Issues\" /issues layout two_columns {\n\tsubtitle \"All of them\"\n"
+                         "\tmain {\n\t\ttable issues {\n\t\t\ttitle\n\t\t\tissue::create \"New issue\" icon add\n\t\t}\n\t\tform issue::create {\n\t\t\ttitle\n\t\t}\n\t}\n"
+                         "\tside {\n\t\tlink /workflow \"Workflow\" icon workflow\n\t}\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    fs::remove_all(dir);
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Link to="/work/workflow" icon="workflow">Workflow</Link>)") != std::string::npos);
+    CHECK(tsx.find(R"(opener="New issue" icon="add")") != std::string::npos);
+    CHECK(tsx.find("<Subtitle>") != std::string::npos);
+    CHECK(tsx.find("<Subtitle>") < tsx.find("<Layout"));
+}

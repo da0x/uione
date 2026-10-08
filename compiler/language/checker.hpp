@@ -1465,6 +1465,10 @@ namespace one::language {
             if (any_region) {
                 for (const auto& item : s.items) {
                     auto* block = std::get_if<content_block>(&item.node);
+                    // A heading's buttons and a subtitle's words go under the screen's
+                    // title, whatever its layout, so they're outside its regions.
+                    auto* text = std::get_if<content_text>(&item.node);
+                    if (text && text->subtitle) continue;
                     if (!block || (block->type != content_block::kind::region && block->type != content_block::kind::heading)) {
                         error(item.where, "this screen puts its items in regions, so this goes in one too, like main { ... }");
                     }
@@ -1787,8 +1791,23 @@ namespace one::language {
             }
         }
 
+        // The icons a button or a link can be drawn as; one they don't have would show
+        // nothing but its words, so a misspelled one is an error.
+        void icon(const std::optional<std::string>& name, location where) {
+            static const std::set<std::string, std::less<>> known{"edit", "add", "follow", "following", "workflow"};
+            if (name && !known.contains(*name)) error(where, "there's no icon " + *name + "; there are " + join_words({known.begin(), known.end()}));
+        }
+
         void screen_items(const std::string& ns, const std::vector<screen_item>& items, const std::string& route) {
             for (const auto& item : items) {
+                if (auto* b = std::get_if<button_item>(&item.node)) icon(b->icon, b->icon_where);
+                if (auto* l = std::get_if<content_link>(&item.node)) icon(l->icon, l->icon_where);
+                if (auto* t = std::get_if<table_item>(&item.node)) {
+                    for (const auto& c : t->columns) icon(c.icon, c.icon_where);
+                }
+                if (auto* bo = std::get_if<board_item>(&item.node)) {
+                    for (const auto& c : bo->columns) icon(c.icon, c.icon_where);
+                }
                 if (auto* block = std::get_if<content_block>(&item.node)) {
                     if (block->type == content_block::kind::menu) {
                         for (const auto& inside : block->items) {

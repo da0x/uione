@@ -83,6 +83,9 @@ var clubs = one.Module("club",
 	one.View("others").PerUser().
 		List("others", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer)).Order("-created_at").Limit(2).
 		Fields("created_by", "trick"),
+	// A club's racks in an order of their own, by club, which every rack here ties on.
+	one.View("racks").Per(one.Entity[Club]()).Readers(one.Entity[Seating]()).PublicWhen("visibility", "public").
+		List("racks", one.Where[Rack]("club", one.Subject)).Order("club").Fields("name"),
 	one.View("dealt").PerUser().Each(one.All[Trick]().Has("dealt", one.Viewer)).Fields("title"),
 )
 
@@ -223,5 +226,21 @@ func TestTheNewestRowsOfAListAreFoundPastPagesOfOnesLeftOut(t *testing.T) {
 	}
 	if want := []string{"true " + second, "true " + first}; !slices.Equal(got, want) {
 		t.Errorf("the two newest changes Ada didn't make are %v, want %v", got, want)
+	}
+}
+
+func TestRowsThatTieInAListsOwnOrderStayInTheOrderTheyWereMade(t *testing.T) {
+	h := start(t)
+	_, adaToken := h.signUp("ada@example.com")
+	h.mustRun("club/club/create", adaToken, map[string]any{"slug": "bridge"})
+	for _, name := range []string{"First", "Second", "Third"} {
+		h.mustRun("club/rack/create", adaToken, map[string]any{"club": "bridge", "name": name})
+	}
+	var got []string
+	for _, row := range list(h.view("club::racks:bridge"), "racks") {
+		got = append(got, row["name"].(string))
+	}
+	if want := []string{"First", "Second", "Third"}; !slices.Equal(got, want) {
+		t.Errorf("the racks are in the order %v, want %v, as they were made", got, want)
 	}
 }

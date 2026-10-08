@@ -147,7 +147,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "cards" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? cards_line* "}")? END
                  | "text" STRING ("when" condition)? END
                  | ("code" | "markdown") STRING END
-                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING ("icon" NAME)? END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
@@ -160,7 +160,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter | column+) END
-board_line     ::= ("move" qualified "along" qualified "." NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? | column+) END
+board_line     ::= ("move" qualified "along" qualified "." NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
@@ -200,7 +200,7 @@ built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 
 table_line     ::= "by" NAME tabs_over? END
-                 | NAME "::" NAME STRING? END
+                 | NAME "::" NAME STRING? ("icon" NAME)? END
                  | "reorder" NAME END
                  | "hide" "when" "empty" END
                  | "search" (NAME ("." NAME)*)+ END
