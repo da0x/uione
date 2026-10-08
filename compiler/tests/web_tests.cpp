@@ -922,6 +922,46 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
     fs::remove_all(dir);
 }
 
+TEST_CASE("a screen's trail is the pages its address goes on from, or the page it's under, called as it says") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-under";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
+                         "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\ttitle  text\n}\n"
+                         "view project_page per project {\n\tname = project.name\n}\n"
+                         "view board_page per board {\n\ttitle = board.title\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tboard = issue.board\n\tboard_title = issue.board.title\n}\n"
+                         "screen \"{project_page.name}\" /:project {\n\ttext \"hi\"\n}\n"
+                         "screen \"{board_page.title}\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
+                         "screen \"{issue_page.title}\" /:project/:issue under /:project/boards/:board \"{issue_page.board_title}\" {\n\ttext \"hi\"\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Crumbs items={[{ to: "/:project", title: [[projectPage, "name"]] }]} />)") != std::string::npos);
+    CHECK(tsx.find(R"(<Crumbs items={[{ to: "/:project", title: [[projectPage, "name"]] }, { to: "/:project/boards/:board", title: [[issuePage, "board_title"]], fill: { board: [issuePage, "board", 2] } }]} />)") !=
+          std::string::npos);
+    fs::remove_all(dir);
+
+    // What fills the page above's parameters is held by a view of this one.
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace work {\n"
+                                                "entity board {\n\ttitle  text\n}\n"
+                                                "entity issue {\n\ttitle  text\n}\n"
+                                                "view issue_page per issue {\n\ttitle = issue.title\n}\n"
+                                                "screen \"Board\" /boards/:board {\n\ttext \"hi\"\n}\n"
+                                                "screen \"Issue\" /issues/:issue under /boards/:board \"Board\" {\n\ttext \"hi\"\n}\n"
+                                                "}\n", out));
+    language::check(files, out);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "this screen's address has no :board, so a view per what it shows holds it, like board = issue.board");
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

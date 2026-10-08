@@ -505,6 +505,11 @@ namespace one::language {
         std::string route;
         std::optional<std::string> layout;  // layout two_columns: how its regions are laid out
         location layout_where;
+        // under /:project/boards/:board "{issue_page.board_title}": the page above it,
+        // though its address doesn't say so, and what that page is called from here.
+        std::optional<std::string> under;
+        std::string under_title;
+        location under_where;
         std::vector<screen_item> items;
     };
 

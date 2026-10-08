@@ -679,6 +679,12 @@ namespace one::language {
                 fail_expecting("the screen's title, like \"Shelf\"");
             }
             screen.route = expect(token_kind::route, "the screen's route, like /shelf").text;
+            if (at_word("under")) {
+                advance();
+                screen.under_where = peek().where;
+                screen.under = expect(token_kind::route, "the page above it, like /:project/boards/:board").text;
+                screen.under_title = expect(token_kind::string, "what that page is called from here, like \"{issue_page.board_title}\"").text;
+            }
             if (at_word("layout")) {
                 advance();
                 screen.layout_where = peek().where;

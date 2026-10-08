@@ -11,6 +11,7 @@ import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, use
 import type { Analytics, ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
+import { partsOf } from "./keys.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
 
 export interface ScreenInfo {
@@ -282,15 +283,31 @@ const CrumbsSlot = createContext<HTMLElement | null>(null);
 
 // The pages above a screen, each by its address and its title, which may be read
 // from the page's views, like a project's name; the page itself comes last.
-export function Crumbs({ items }: { items: readonly { to: string; title: readonly TitlePart[] }[] }) {
+export function Crumbs({
+  items,
+}: {
+  // fill: a parameter the page's address doesn't have, from a view, like an issue's
+  // board, with how many parts the id is keyed by, so its own part fills it.
+  items: readonly { to: string; title: readonly TitlePart[]; fill?: Record<string, readonly [ViewState, string, number]> }[];
+}) {
   const slot = useContext(CrumbsSlot);
   const ui = useUI();
   const link = useLinks();
   const params = useParams();
   const current = usePageTitle();
-  const shown = items.map(({ to, title }) => ({
+  const filled = (name: string, fill: Record<string, readonly [ViewState, string, number]> = {}) => {
+    if (params[name] !== undefined) return params[name];
+    const from = fill[name];
+    const id = from ? from[0].data?.[from[1]] : undefined;
+    if (typeof id !== "string" || id === "") return undefined;
+    return from[2] > 1 ? (partsOf(id, from[2])?.at(-1) ?? id) : id;
+  };
+  const shown = items.map(({ to, title, fill }) => ({
     label: title.map((part) => (typeof part === "string" ? part : String(part[0].data?.[part[1]] ?? ""))).join("").trim() || "…",
-    link: link(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => (params[name] === undefined ? written : encodeURIComponent(params[name])))),
+    link: link(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+      const value = filled(name, fill);
+      return value === undefined ? written : encodeURIComponent(value);
+    })),
   }));
   return slot ? createPortal(<ui.Crumbs items={shown} current={current} />, slot) : null;
 }

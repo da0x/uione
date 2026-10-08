@@ -135,7 +135,7 @@ function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
 
 /* screen */
 
-screen         ::= "screen" (STRING | NAME) ROUTE ("layout" NAME)? screen_block END
+screen         ::= "screen" (STRING | NAME) ROUTE ("under" ROUTE STRING)? ("layout" NAME)? screen_block END
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END

@@ -696,7 +696,7 @@ export const radix: ComponentSet = {
     const over = (x: number, y: number) => nodes.find((_, i) => x >= left(i) && x <= left(i) + width && y >= top && y <= top + height);
     return (
       <div className="flex flex-col gap-2">
-        <div className="overflow-x-auto rounded-box border border-line bg-surface p-2 shadow-panel">
+        <div className="w-fit max-w-full overflow-x-auto rounded-box border border-line bg-surface p-2 shadow-panel">
           <svg
             width={total.w}
             height={total.h}

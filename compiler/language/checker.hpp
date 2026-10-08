@@ -1432,6 +1432,35 @@ namespace one::language {
             screen_ = nullptr;
             // A title can show what the page does: screen "#{issue_page.number} {issue_page.title}".
             if (!s.title_is_name) verify_live_text(ns, s.title, full_route(ns, s.route), where);
+            if (s.under) verify_under(ns, s);
+        }
+
+        // under /:project/boards/:board "{issue_page.board_title}": a page there, what
+        // it's called read like a title, and each of its parameters this address
+        // doesn't have held by a view per entity this one does, like issue_page.board.
+        void verify_under(const std::string& ns, const screen_declaration& s) {
+            std::string route = full_route(ns, s.route);
+            std::string above = full_route(ns, *s.under);
+            if (!routes_.contains(above)) {
+                error(s.under_where, "there's no screen at " + above + " for this one to be under");
+                return;
+            }
+            verify_live_text(ns, s.under_title, route, s.under_where);
+            for (std::size_t at = above.find("/:"); at != std::string::npos; at = above.find("/:", at + 1)) {
+                std::size_t end = above.find('/', at + 1);
+                std::string name = above.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
+                if (route.find("/:" + name) != std::string::npos) continue;
+                bool held = false;
+                if (auto scope = scopes_.find(ns); scope != scopes_.end()) {
+                    for (const auto& [_, view] : scope->second.views) {
+                        if (!view.node->per || route.find("/:" + *view.node->per) == std::string::npos) continue;
+                        for (const auto& value : view.node->values) held = held || (value.name && *value.name == name);
+                    }
+                }
+                if (!held) {
+                    error(s.under_where, "this screen's address has no :" + name + ", so a view per what it shows holds it, like " + name + " = issue." + name);
+                }
+            }
         }
 
         // A view per entity is shown for one entity at a time, the one the screen's

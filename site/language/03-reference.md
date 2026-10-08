@@ -773,6 +773,10 @@ form step::update "Save" {
 - A screen whose address goes on from another's, like `/:project/boards/:board`
   from `/:project`, shows the trail of pages above it, each by its title and
   linked, above its own title: Projects › neotrac › Product.
+- `screen "#{issue_page.number}" /:project/:issue under /:project/boards/:board
+  "{issue_page.board_title}"` puts a screen under a page its address doesn't name:
+  its trail is that page's, then that page, called as it says, with what its
+  address needs taken from the screen's views, like `board = issue.board`.
 - A link that names something keyed by several parts, like a board in
   `/:project/boards/:board`, is filled from a row's id of it by its own part.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's

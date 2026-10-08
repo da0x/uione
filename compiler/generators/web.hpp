@@ -575,7 +575,10 @@ namespace one::generators {
         // The pages above a screen: those whose address its own goes on from, like
         // /projects/:project above /projects/:project/boards/:board, nearest last,
         // each by its address and its title. The app's home isn't one; its name is.
-        std::string crumbs(screen_parts& parts, const std::string& route) {
+        std::string crumbs(screen_parts& parts, const std::string& ns, const language::screen_declaration& screen, const std::string& here) {
+            // Under a page its address doesn't name, like an issue under its board: that
+            // page's trail, then that page, called as this screen says.
+            std::string route = screen.under ? full_route(ns, *screen.under) : here;
             auto segments = [](const std::string& path) {
                 std::vector<std::string> out;
                 for (std::size_t at = 0; at < path.size();) {
@@ -596,8 +599,35 @@ namespace one::generators {
                 std::string spoken = title.find('{') != std::string::npos ? title_parts(parts, ns, title) : web_detail::js_string(title);
                 above.emplace_back(theirs.size(), "{ to: " + web_detail::js_string(theirs_route) + ", title: [" + spoken + "] }");
             }
-            if (above.empty()) return "";
             std::sort(above.begin(), above.end());
+            if (screen.under) {
+                std::string spoken = screen.under_title.find('{') != std::string::npos ? title_parts(parts, ns, screen.under_title) : web_detail::js_string(screen.under_title);
+                // Its parameters this address doesn't have, from the view holding them,
+                // like the issue's board, by its own part when it's keyed by several.
+                std::string fill;
+                for (std::size_t at = route.find("/:"); at != std::string::npos; at = route.find("/:", at + 1)) {
+                    std::size_t end = route.find('/', at + 1);
+                    std::string name = route.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
+                    if (names_parameter(here, name)) continue;
+                    int keys = 1;
+                    if (auto scope = entities_.find(ns); scope != entities_.end() && scope->second.contains(name)) {
+                        keys = 0;
+                        for (const auto& f : scope->second.at(name)->fields) keys += f.key ? 1 : 0;
+                    }
+                    if (auto scope = views_.find(ns); scope != views_.end()) {
+                        for (const auto& [view_name, view] : scope->second) {
+                            if (!view->per || !names_parameter(here, *view->per)) continue;
+                            bool holds = std::any_of(view->values.begin(), view->values.end(), [&](const language::view_value& v) { return v.name && *v.name == name; });
+                            if (!holds) continue;
+                            fill += (fill.empty() ? "" : ", ") + name + ": [" + view_variable(parts, web_detail::join(ns, view_name)) + ", " + web_detail::js_string(name) +
+                                    ", " + std::to_string(std::max(keys, 1)) + "]";
+                            break;
+                        }
+                    }
+                }
+                above.emplace_back(above.size() + 1000, "{ to: " + web_detail::js_string(route) + ", title: [" + spoken + "]" + (fill.empty() ? "" : ", fill: { " + fill + " }") + " }");
+            }
+            if (above.empty()) return "";
             std::string items;
             for (const auto& [_, item] : above) items += (items.empty() ? "" : ", ") + item;
             parts.components.insert("Crumbs");
@@ -620,7 +650,7 @@ namespace one::generators {
                 stream items;
                 auto from_items = items.from(f.path, where.line);
                 items.open("<>");
-                if (std::string trail = crumbs(parts, route); !trail.empty()) items.line(trail);
+                if (std::string trail = crumbs(parts, ns, *s, route); !trail.empty()) items.line(trail);
                 // Laid out in regions, like main and side: as the screen puts its items
                 // in them, or with everything in main.
                 // What sits beside the title, like Edit project.
