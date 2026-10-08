@@ -8,7 +8,7 @@ import { Component, createContext, useCallback, useContext, useEffect, useMemo, 
 import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
-import type { Analytics, ComponentSet } from "./contract.js";
+import type { Analytics, ComponentSet, Footer } from "./contract.js";
 import { DataProvider, useAuth, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
@@ -45,6 +45,7 @@ export interface AppProps {
   // What's new to the person reading, counted beside the app's name on every page: the
   // rows of a list of their own view made since a value of it, like when they last looked.
   unread?: Unread;
+  footer?: Footer; // at the foot of every page: who it's by, and what it was built from
 }
 
 export interface Unread {
@@ -54,6 +55,7 @@ export interface Unread {
 }
 
 const UnreadSpec = createContext<Unread | undefined>(undefined);
+const FooterSpec = createContext<Footer | undefined>(undefined);
 
 // Counts what's new to the person, and says how many to its parent.
 function CountUnread({ spec, onCount }: { spec: Unread; onCount: (n: number) => void }) {
@@ -197,7 +199,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread, footer }: AppProps) {
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}
@@ -213,6 +215,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
   return (
     <UIContext.Provider value={ui}>
       <UnreadSpec.Provider value={unread}>
+      <FooterSpec.Provider value={footer}>
       <DataProvider source={data}>
         <SignInProvider offered={authentication}>
           {location === undefined ? (
@@ -222,6 +225,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
           )}
         </SignInProvider>
       </DataProvider>
+      </FooterSpec.Provider>
       </UnreadSpec.Provider>
     </UIContext.Provider>
   );
@@ -247,6 +251,7 @@ function Shell({
   const signIn = useSignIn();
   const [signOutError, setSignOutError] = useState<string | undefined>();
   const unreadSpec = useContext(UnreadSpec);
+  const footer = useContext(FooterSpec);
   const [unread, setUnread] = useState(0);
   // Where a screen's Heading puts its buttons, on the title's row.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -277,6 +282,7 @@ function Shell({
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
       unread={unreadSpec && auth?.person ? unread : undefined}
+      footer={footer}
       account={
         signIn.offered &&
         auth && (

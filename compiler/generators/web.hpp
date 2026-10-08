@@ -214,6 +214,8 @@ namespace one::generators {
         std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
+        std::string copyright_;  // copyright "Daher Alfawares": who it's by, at the foot of every page
+        std::string copyright_link_;  // and where their name links, like their LinkedIn
         std::pair<std::string, std::string> unread_;  // unread news.changes since news.seen, as news.changes and news.seen
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
@@ -285,6 +287,7 @@ namespace one::generators {
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
+                        if (s.key == "copyright") copyright_ = s.value, copyright_link_ = s.to;
                         if (s.key == "unread") unread_ = {s.value, s.to};
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
@@ -2386,8 +2389,13 @@ namespace one::generators {
                     unread = ", unread: { view: " + web_detail::js_string(full) + ", list: " + web_detail::js_string(unread_.first.substr(unread_.first.find('.') + 1)) +
                              ", since: " + web_detail::js_string(unread_.second.substr(unread_.second.find('.') + 1)) + " }";
                 }
+                // At the foot of every page: who it's by, when the project says, and the
+                // uione and commit it was built from, so what's deployed can be told.
+                std::string footer = ", footer: { " + (copyright_.empty() ? "" : "copyright: " + web_detail::js_string(copyright_) + ", ") +
+                                     (copyright_link_.empty() ? "" : "link: " + web_detail::js_string(copyright_link_) + ", ") +
+                                     "version: " + web_detail::js_string(std::string(one::version)) + ", commit: import.meta.env.VITE_UIONE_COMMIT }";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ ? ", analytics" : "") + unread + " };");
+                         ", data" + offered + (analytics_ ? ", analytics" : "") + unread + footer + " };");
             }
             out.line();
             out.open("export default function Site() {");

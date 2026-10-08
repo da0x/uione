@@ -184,6 +184,11 @@ is asked once whether it may use cookies, and until they agree, they're counted
 without them, as Google's consent mode does; their answer is kept in their browser.
 A project without the setting counts no one and asks no one.
 
+`copyright "Daher Alfawares"` says who the site is by at the foot of every page,
+as © and the year it's read. Beside it is the uione release the site was built
+with and the commit it was built from, so what's deployed can be told at a glance;
+the commit is git's where it's built, or `UIONE_COMMIT` when a deploy names it.
+
 `unread news.changes since news.seen` counts, on every page, what's new to the
 person signed in: the rows of a list of their own view made after a value of it,
 said beside the site's name.

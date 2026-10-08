@@ -573,7 +573,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics", "unread"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics", "unread", "copyright"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -668,7 +668,9 @@ namespace one::language {
                         s.to.find_first_of("\" \\") != std::string::npos || s.value.find_first_of("\" \\") != std::string::npos) {
                         error(s.where, "redirect takes an address of this site and where it goes, like redirect \"/install.sh\" \"https://www.uione.io/install.sh\"");
                     }
-                } else if (!s.to.empty() && s.key != "unread") {
+                } else if (s.key == "copyright" && !s.to.empty() && !s.to.starts_with("https://")) {
+                    error(s.where, "copyright's second value is where its name links, like copyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"");
+                } else if (!s.to.empty() && s.key != "unread" && s.key != "copyright") {
                     error(s.where, s.key + " takes one value");
                 }
                 if (s.key == "serve") {

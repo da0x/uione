@@ -33,7 +33,17 @@ export interface PageProps {
   crumbs?: ReactNode; // where the pages above a screen go, above its title
   subtitle?: ReactNode; // where a screen's words about itself go, under its title
   unread?: number; // how many things are new to the person reading, said beside the app's name
+  footer?: Footer; // at the foot of the page: who it's by, and what it was built from
   children: ReactNode;
+}
+
+// What a site says at the foot of every page: who it's by, as © and this year, and
+// the uione release and commit it was built from, so what's deployed can be told.
+export interface Footer {
+  copyright?: string; // like Daher Alfawares
+  link?: string; // where the name links, like their LinkedIn
+  version?: string; // like 0.6.29
+  commit?: string; // like d9d95fd
 }
 
 export interface AccountProps {

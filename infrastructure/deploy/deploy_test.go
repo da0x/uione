@@ -309,3 +309,19 @@ func TestTheWebAppIsBuiltWithItsMeasurementIDOnlyWhenThereIsOne(t *testing.T) {
 		t.Errorf("an empty measurement ID is written: %q", empty)
 	}
 }
+
+// The commit a build is of, for the foot of every page: as the deploy names it, or
+// as git says of the folder, or none outside git.
+func TestTheCommitIsTheDeploysOrGits(t *testing.T) {
+	t.Setenv("UIONE_COMMIT", "d9d95fd0aaaa")
+	if got := commitOf(t.TempDir()); got != "d9d95fd0aaaa" {
+		t.Errorf("named by the deploy, the commit is %q", got)
+	}
+	t.Setenv("UIONE_COMMIT", "")
+	if got := commitOf(t.TempDir()); got != "" {
+		t.Errorf("outside git, the commit is %q", got)
+	}
+	if got := commitOf("."); len(got) != 40 {
+		t.Errorf("in this repository, the commit is %q", got)
+	}
+}

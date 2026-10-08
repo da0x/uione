@@ -6,6 +6,7 @@
 import { App } from "@uione/react";
 import { firebaseSource } from "@uione/react/firebase";
 import { radix } from "@uione/radix";
+import { about } from "./screens/about";
 import { home } from "./screens/home";
 import { install } from "./screens/install";
 import { language } from "./screens/language";
@@ -29,7 +30,7 @@ const cloud = {
 };
 const data = firebaseSource({ ...(import.meta.env.DEV ? local : cloud), personal: ["studio::projects"] });
 
-export const site = { name: "uione", icon: "/icon.svg", screens: [home, install, language, mission, releases], ui: radix, data, authentication: false };
+export const site = { name: "uione", icon: "/icon.svg", screens: [about, home, install, language, mission, releases], ui: radix, data, authentication: false, footer: { copyright: "Daher Alfawares", link: "https://www.linkedin.com/in/dalfawares", version: "0.6.29", commit: import.meta.env.VITE_UIONE_COMMIT } };
 
 export default function Site() {
   return <App {...site} />;

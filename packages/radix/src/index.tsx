@@ -199,6 +199,16 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
   danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
+// What a page's foot says: © this year and who it's by, then the uione release and
+// the commit it was built from, each when known.
+function footerWords(footer: { copyright?: string; link?: string; version?: string; commit?: string }): string[] {
+  return [
+    footer.copyright ? `© ${new Date().getFullYear()} ${footer.copyright}` : "",
+    footer.version ? `uione ${footer.version}` : "",
+    footer.commit ? footer.commit.slice(0, 7) : "",
+  ].filter(Boolean);
+}
+
 // How urgent a row, a card or a box of details is, as Trac colored a ticket's
 // priority: a fill, and an edge down its left side. 3 is plain, as Trac's normal was.
 const tones: Record<number, string> = {
@@ -238,7 +248,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, footer, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
     <div className="min-h-screen overflow-x-clip bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
@@ -292,6 +302,28 @@ export const radix: ComponentSet = {
         </div>
         <div className="flex flex-col gap-7">{children}</div>
       </main>
+      {/* Quietly, at the foot: who it's by, and the uione and commit it was built from. */}
+      {footer && (
+        <footer className="border-t border-line px-4 py-4 text-xs text-muted sm:px-6 lg:px-8">
+          <p>
+            {footerWords(footer).map((words, at) => (
+              <span key={at}>
+                {at > 0 && " · "}
+                {at === 0 && footer.copyright && footer.link ? (
+                  <>
+                    © {new Date().getFullYear()}{" "}
+                    <a href={footer.link} target="_blank" rel="noreferrer" className="underline-offset-4 hover:text-ink hover:underline">
+                      {footer.copyright}
+                    </a>
+                  </>
+                ) : (
+                  words
+                )}
+              </span>
+            ))}
+          </p>
+        </footer>
+      )}
     </div>
   ),
 

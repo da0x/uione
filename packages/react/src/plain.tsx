@@ -60,7 +60,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 }
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, footer, children }) => (
     <>
       <header>
         <a {...home}>
@@ -84,6 +84,17 @@ export const plain: ComponentSet = {
         {heading}
         {children}
       </main>
+      {footer && (
+        <footer>
+          {footer.copyright && (
+            <>
+              © {new Date().getFullYear()} {footer.link ? <a href={footer.link}>{footer.copyright}</a> : footer.copyright}
+              {(footer.version || footer.commit) && " · "}
+            </>
+          )}
+          {[footer.version ? `uione ${footer.version}` : "", footer.commit?.slice(0, 7) ?? ""].filter(Boolean).join(" · ")}
+        </footer>
+      )}
     </>
   ),
 

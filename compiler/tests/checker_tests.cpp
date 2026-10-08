@@ -1210,3 +1210,10 @@ TEST_CASE("on signin does each step as the person signing in, with me.email thei
                        "on signin {\n\teach note where email == me.email {\n\t\ttext = \"seen\"\n\t}\n\tdelete each note where email == me.email\n}\n}\n")
               .empty());
 }
+
+TEST_CASE("a copyright says who a site is by, and where their name links") {
+    CHECK(check_source("project shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").empty());
+    CHECK(check_source("project shop {\n\tcopyright \"Ada Lovelace\"\n}\n").empty());
+    CHECK(only_error("project shop {\n\tcopyright \"Ada Lovelace\" \"linkedin.com/in/ada\"\n}\n").message ==
+          "copyright's second value is where its name links, like copyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"");
+}

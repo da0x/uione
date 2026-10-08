@@ -49,10 +49,12 @@ declaration    ::= project | namespace | format | enum_type | entity | command |
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
+                 /* who it's by, and where their name links */
+                 | "copyright" STRING STRING END
                  /* what's new to a person, counted beside the app's name */
                  | "unread" NAME "." NAME "since" NAME "." NAME END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
-                 | "title" | "one" | "analytics" | "theme" | "corners"
+                 | "title" | "one" | "analytics" | "theme" | "corners" | "copyright"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
  * the place of the shared ones. `one build --for staging` builds for it. */

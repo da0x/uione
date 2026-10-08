@@ -18,6 +18,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -136,6 +137,11 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		if err != nil {
 			return err
 		}
+		// The commit it's built from, at the foot of every page, so what's deployed
+		// can be told: as the deploy says, or as git does where it's built.
+		if commit := commitOf(o.Build); commit != "" {
+			env += "VITE_UIONE_COMMIT=" + commit + "\n"
+		}
 		if err := os.WriteFile(filepath.Join(web, ".env.production"), []byte(env), 0o644); err != nil {
 			return err
 		}
@@ -216,4 +222,17 @@ func records(outputs map[string]any) string {
 func text(outputs map[string]any, name string) string {
 	value, _ := outputs[name].(string)
 	return value
+}
+
+// commitOf is the commit a build is of: UIONE_COMMIT when the deploy names it, as a
+// build from a snapshot without git does, or what git says of the folder, or none.
+func commitOf(dir string) string {
+	if commit := os.Getenv("UIONE_COMMIT"); commit != "" {
+		return commit
+	}
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

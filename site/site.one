@@ -15,4 +15,5 @@ project uione {
 	ui        radix
 	icon      "assets/icon.svg"
 	serve     "public"
+	copyright "Daher Alfawares" "https://www.linkedin.com/in/dalfawares"
 }
