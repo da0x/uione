@@ -685,6 +685,15 @@ export function Table({
     const after = rest[to]?.[arranged.field];
     const number = (value: unknown) => (typeof value === "number" ? value : undefined);
     const [low, high] = [number(before), number(after)];
+    // Between two at the same place, like phases added one after another, there's no
+    // number between them: every row is numbered again in its new order instead.
+    if (low !== undefined && low === high) {
+      const order = [...rest.slice(0, to), rows[from], ...rest.slice(to)];
+      order.forEach((row, at) => {
+        if (row[arranged.field] !== at + 1) void runner.run(arranged.command, { id: row.id, [arranged.field]: at + 1 });
+      });
+      return;
+    }
     const place = low !== undefined && high !== undefined ? (low + high) / 2 : low !== undefined ? low + 1 : high !== undefined ? high - 1 : 1;
     void runner.run(arranged.command, { id: rows[from].id, [arranged.field]: place });
   };
@@ -726,7 +735,10 @@ export function Table({
         <ui.Dialog open title={says} onClose={() => setAsking(undefined)}>
           <Form
             command={asking.action.name}
-            fields={asked.fields}
+            // A row isn't offered as a pick in a form about itself, like a phase removed into itself.
+            fields={asked.fields.map((field) =>
+              typeof field === "string" || field.type !== "pick" ? field : { ...field, choices: field.choices?.filter(([value]) => value !== asking.row.id) },
+            )}
             from={{ status: "live", data: asking.row }}
             id={asking.row.id}
             submit={asked.submit ?? says}

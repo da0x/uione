@@ -88,6 +88,24 @@ describe("a table's row actions", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("don't offer a row as a pick in a form about itself", () => {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    const source = memorySource({ views: { "projects::workflow": { rows: [{ id: "p1", title: "Triage" }, { id: "p2", title: "Done" }] } } });
+    const phases: [string, string][] = [["p1", "Triage"], ["p2", "Done"]];
+    renderScreen(source, () => (
+      <Table
+        view={useView("projects::workflow")}
+        columns={{ title: "Phase" }}
+        actions={[{ name: "projects::phase::delete", label: "Remove", form: { fields: [{ name: "into", label: "Move its issues to", type: "pick", choices: phases }] } }]}
+      />
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Triage" }));
+    const into = screen.getByLabelText("Move its issues to");
+    expect(Array.from(into.querySelectorAll("option")).map((o) => o.textContent)).toEqual(["Choose one", "Done"]);
+  });
+
   it("are only on the rows their when holds for, each row keeping its cells", () => {
     const source = memorySource({
       views: {
@@ -328,6 +346,30 @@ describe("a table put in order", () => {
     expect(source.runs).toEqual([{ command: "projects::phase::update", input: { id: "p3", position: 1.5 } }]);
     await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Triage" }), { key: "ArrowUp", altKey: true }));
     expect(source.runs.length).toBe(1);
+  });
+
+  it("numbers every row again when a row is put between two at the same place", async () => {
+    const source = memorySource({
+      views: {
+        "projects::workflow": {
+          phases: [
+            { id: "p1", title: "Triage", position: 1 },
+            { id: "p2", title: "Ready", position: 1000 },
+            { id: "p3", title: "Done", position: 1000 },
+            { id: "p4", title: "Closed", position: 1000 },
+          ],
+        },
+      },
+    });
+    renderScreen(source, () => (
+      <Table view={useView("projects::workflow")} list="phases" columns={{ title: "Phase" }} reorder={{ command: "projects::phase::update", field: "position" }} />
+    ));
+    await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Closed" }), { key: "ArrowUp", altKey: true }));
+    expect(source.runs.map((run) => run.input)).toEqual([
+      { id: "p2", position: 2 },
+      { id: "p4", position: 3 },
+      { id: "p3", position: 4 },
+    ]);
   });
 });
 
