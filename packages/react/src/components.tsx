@@ -965,33 +965,24 @@ export interface GridCommand {
 // the entry from the row's to the column's, if there is one. Pressing an empty cell
 // asks create's form, with the two filled in; pressing a full one asks update's,
 // started from the entry, with remove beside it.
-export function Grid({
-  view,
-  list,
-  from,
-  to,
-  cell,
-  over,
-  overList,
-  shown = "title",
-  corner,
-  create,
-  update,
-  remove,
-}: {
+// What goes between two of a list's things, as a grid and a diagram both show it:
+// the things, the entries between them, and the dialog that adds one between two,
+// or changes or removes one.
+interface Between {
   view: ViewState;
   list: string; // the entries, like steps
-  from: string; // the field naming an entry's row, like from
-  to: string; // the field naming its column, like to
-  cell?: string; // what a cell shows of its entry, like roles.title
+  from: string; // the field naming where an entry goes from, like from
+  to: string; // the field naming where it goes to, like to
+  cell?: string; // what's shown of an entry, like roles.title
   over: ViewState;
   overList: string; // the things, like phases
   shown?: string; // what a thing is called, like title
-  corner?: string;
   create?: GridCommand;
   update?: GridCommand;
   remove?: GridCommand;
-}) {
+}
+
+function useBetween({ view, list, from, to, cell, over, overList, shown = "title", create, update, remove }: Between) {
   const ui = useUI();
   const runner = useConfirmedRunner();
   const [asking, setAsking] = useState<{ a: Row; b: Row; entry?: Row }>();
@@ -1000,51 +991,100 @@ export function Grid({
   const may = (command?: GridCommand) => (command && command.allowed !== false ? command : undefined);
   const [adds, changes, removes] = [may(create), may(update), may(remove)];
   const name = (thing: Row) => show(thing[shown]) || thing.id;
-  const status = over.status === "live" ? view.status : over.status;
+  const between = (a: Row, b: Row) => entries.find((e) => e[from] === a.id && e[to] === b.id);
+  const says = (entry: Row) => (cell ? show(entry[cell]) : "") || "✓";
+  // Pressing what's between two opens what may be done there, if anything may.
+  const opens = (a: Row, b: Row) => {
+    const entry = between(a, b);
+    return (entry ? changes || removes : adds) ? () => setAsking({ a, b, entry }) : undefined;
+  };
   const close = () => setAsking(undefined);
   const entry = asking?.entry;
+  const dialog = asking && (
+    <ui.Dialog open title={`${name(asking.a)} to ${name(asking.b)}`} onClose={close}>
+      {entry && changes && <Form command={changes.name} fields={changes.fields ?? []} from={{ status: "live", data: entry }} id={entry.id} submit={changes.submit} onDone={close} />}
+      {!entry && adds && (
+        <Form command={adds.name} fields={adds.fields ?? []} given={{ ...adds.given, [from]: asking.a.id, [to]: asking.b.id }} submit={adds.submit} onDone={close} />
+      )}
+      {entry && removes && (
+        <ui.Button
+          kind="secondary"
+          disabled={runner.busy(removes.name)}
+          error={runner.error(removes.name)}
+          onClick={() => void runner.run(removes.name, { id: entry.id }, entry).then((done) => done && close())}
+        >
+          {removes.submit ?? "Remove"}
+        </ui.Button>
+      )}
+    </ui.Dialog>
+  );
+  return {
+    things,
+    entries,
+    name,
+    between,
+    says,
+    opens,
+    dialog,
+    status: over.status === "live" ? view.status : over.status,
+    error: [create, update, remove].map((c) => (c ? runner.error(c.name) : undefined)).find((e) => e !== undefined),
+  };
+}
+
+// What goes between two of a list's things, like the moves between a project's
+// phases: a row and a column for each thing, in the list's order, and in each cell
+// the entry from the row's to the column's, if there is one. Pressing an empty cell
+// asks create's form, with the two filled in; pressing a full one asks update's,
+// started from the entry, with remove beside it.
+export function Grid({ corner, ...between }: Between & { corner?: string }) {
+  const ui = useUI();
+  const { things, name, between: entryOf, says, opens, dialog, status, error } = useBetween(between);
   return (
     <>
       <ui.Grid
         status={status}
-        corner={corner ?? `${label(from)}, ${label(to).toLowerCase()}`}
+        corner={corner ?? `${label(between.from)}, ${label(between.to).toLowerCase()}`}
         columns={things.map(name)}
-        error={[create, update, remove].map((c) => (c ? runner.error(c.name) : undefined)).find((e) => e !== undefined)}
+        error={error}
         rows={things.map((a) => ({
           label: name(a),
           cells: things.map((b) => {
             if (a.id === b.id) return { text: "", label: `${name(a)} to itself`, self: true };
-            const found = entries.find((e) => e[from] === a.id && e[to] === b.id);
-            const text = found ? (cell ? show(found[cell]) : "") || "✓" : "";
-            const open = found ? changes || removes : adds;
-            return {
-              text,
-              label: found ? `${name(a)} to ${name(b)}: ${text}` : `Add ${name(a)} to ${name(b)}`,
-              onClick: open ? () => setAsking({ a, b, entry: found }) : undefined,
-            };
+            const found = entryOf(a, b);
+            const text = found ? says(found) : "";
+            return { text, label: found ? `${name(a)} to ${name(b)}: ${text}` : `Add ${name(a)} to ${name(b)}`, onClick: opens(a, b) };
           }),
         }))}
       />
-      {asking && (
-        <ui.Dialog open title={`${name(asking.a)} to ${name(asking.b)}`} onClose={close}>
-          {entry && changes && (
-            <Form command={changes.name} fields={changes.fields ?? []} from={{ status: "live", data: entry }} id={entry.id} submit={changes.submit} onDone={close} />
-          )}
-          {!entry && adds && (
-            <Form command={adds.name} fields={adds.fields ?? []} given={{ ...adds.given, [from]: asking.a.id, [to]: asking.b.id }} submit={adds.submit} onDone={close} />
-          )}
-          {entry && removes && (
-            <ui.Button
-              kind="secondary"
-              disabled={runner.busy(removes.name)}
-              error={runner.error(removes.name)}
-              onClick={() => void runner.run(removes.name, { id: entry.id }, entry).then((done) => done && close())}
-            >
-              {removes.submit ?? "Remove"}
-            </ui.Button>
-          )}
-        </ui.Dialog>
-      )}
+      {dialog}
+    </>
+  );
+}
+
+// The same drawn: each thing a box, in the list's order, and each entry an arrow
+// from one to another, labelled with what it shows. Pressing an arrow changes or
+// removes it; drawing one from a box to another adds it.
+export function Diagram(between: Between) {
+  const ui = useUI();
+  const { things, entries, name, says, opens, dialog, status, error } = useBetween(between);
+  const thing = (id: unknown) => things.find((t) => t.id === id);
+  return (
+    <>
+      <ui.Diagram
+        status={status}
+        error={error}
+        nodes={things.map((t) => ({ id: t.id, label: name(t) }))}
+        edges={entries.flatMap((entry) => {
+          const [a, b] = [thing(entry[between.from]), thing(entry[between.to])];
+          if (!a || !b) return [];
+          return [{ from: a.id, to: b.id, label: says(entry), title: `${name(a)} to ${name(b)}: ${says(entry)}`, onClick: opens(a, b) }];
+        })}
+        onConnect={(from, to) => {
+          const [a, b] = [thing(from), thing(to)];
+          if (a && b && a.id !== b.id) opens(a, b)?.();
+        }}
+      />
+      {dialog}
     </>
   );
 }

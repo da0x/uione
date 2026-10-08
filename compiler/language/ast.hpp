@@ -398,6 +398,8 @@ namespace one::language {
         qualified_name over;
         std::string over_list;
         expression_ptr cell;   // what a cell shows, or none for a mark
+        // diagram ...: the same drawn, each thing a box and each entry an arrow.
+        bool drawn = false;
     };
 
     struct form_field {

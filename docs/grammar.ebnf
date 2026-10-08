@@ -151,7 +151,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "timeline" qualified "." NAME ("link" ROUTE)? END
                  | "copy" qualified STRING? END
                  | "details" qualified "{" NEWLINE? (column+ END)* "}" END
-                 | "grid" qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
+                 | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END

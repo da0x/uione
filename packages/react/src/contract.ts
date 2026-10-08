@@ -205,6 +205,25 @@ export interface CrumbsProps {
   current: string;
 }
 
+// Things as boxes in a row, in order, and what goes between them as arrows, like a
+// workflow's phases and the moves between them: forward above, back below. An
+// arrow is pressed to change it, and one is drawn from a box to another to add it.
+export interface DiagramProps {
+  status: ViewStatus;
+  nodes: { id: string; label: string }[];
+  edges: DiagramEdge[];
+  onConnect?: (from: string, to: string) => void;
+  error?: string;
+}
+
+export interface DiagramEdge {
+  from: string;
+  to: string;
+  label: string; // what it shows, like the roles that may take a move
+  title: string; // what it is, said in full, like Triage to Ready: Product owner
+  onClick?: () => void;
+}
+
 // One of a few ways to show the same thing, like a table or a board, the one
 // shown marked.
 export interface SwitchProps {
@@ -347,6 +366,7 @@ export interface ComponentSet {
   Board: ComponentType<BoardProps>;
   Switch: ComponentType<SwitchProps>;
   Crumbs: ComponentType<CrumbsProps>;
+  Diagram: ComponentType<DiagramProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;

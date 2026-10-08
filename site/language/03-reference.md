@@ -121,7 +121,7 @@ The language's own words, inside what a declaration says:
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `heading`, `table`, `grid`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+- on a screen: `heading`, `table`, `grid`, `diagram`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
@@ -789,6 +789,11 @@ board project_page.issues by phase over project_page.phases link /:project/issue
 }
 ```
 
+- `diagram project_page.steps by from and to over project_page.phases { roles.title }`
+  draws the same as a grid: each phase a box in a row, in order, and each step an
+  arrow, forward above and back below, labelled with what its block shows. An arrow
+  is pressed to change or remove it, and dragged from one box to another, a new
+  one is added, by the same forms as a grid's.
 - A command on a line of its own is a button, and `form` lists the fields it asks
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a

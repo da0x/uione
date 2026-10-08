@@ -187,3 +187,4 @@ editors/fixtures/body.one	board columns.cards	board	keyword
 editors/fixtures/body.one	move card::move along	move	keyword
 editors/fixtures/body.one	move card::move along	along	keyword
 editors/fixtures/body.one	heading {	heading	keyword
+editors/fixtures/body.one	diagram columns.arrows	diagram	keyword

@@ -59,6 +59,7 @@ namespace board {
 			delete "Remove"
 		}
 		grid columns.arrows by from and to over columns.columns
+		diagram columns.arrows by from and to over columns.columns
 		board columns.cards by column over columns.columns {
 			move card::move along columns.arrows
 			title

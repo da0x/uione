@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Form, Grid, Live, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Diagram, Form, Grid, Live, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -258,6 +258,44 @@ describe("a grid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Triage to Done: Member" }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Remove" })));
     expect(source.runs).toEqual([{ command: "projects::step::delete", input: { id: "s1" } }]);
+  });
+});
+
+describe("a diagram", () => {
+  it("lists each arrow to press, and adds one between two picked", async () => {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    const page = {
+      status: "live" as const,
+      data: {
+        phases: [
+          { id: "p1", title: "Triage" },
+          { id: "p2", title: "Done" },
+        ],
+        steps: [{ id: "s1", from: "p1", to: "p2", "roles.title": ["Member"] }],
+      },
+    };
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Diagram
+        view={page}
+        list="steps"
+        from="from"
+        to="to"
+        cell="roles.title"
+        over={page}
+        overList="phases"
+        create={{ name: "projects::step::create", fields: [], submit: "Allow" }}
+        remove={{ name: "projects::step::delete" }}
+      />
+    ));
+    expect(screen.getByRole("button", { name: "Triage to Done: Member" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "p2" } });
+    fireEvent.change(screen.getByLabelText("to"), { target: { value: "p1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Done to Triage" }));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Allow" })));
+    expect(source.runs).toEqual([{ command: "projects::step::create", input: { from: "p2", to: "p1" } }]);
   });
 });
 

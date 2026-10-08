@@ -226,7 +226,7 @@ namespace one::driver {
                         out.kind = "details";
                         out.subject = n.view.text();
                     } else if constexpr (std::is_same_v<T, language::grid_item>) {
-                        out.kind = "grid";
+                        out.kind = n.drawn ? "diagram" : "grid";
                         out.subject = named(n.view, n.list);
                     }
                 },

@@ -955,9 +955,9 @@ namespace one::language {
                 end_line();
                 return {where, std::move(board)};
             }
-            if (at_word("grid") && peek(1).kind != token_kind::scope) {
-                advance();
+            if ((at_word("grid") || at_word("diagram")) && peek(1).kind != token_kind::scope) {
                 grid_item grid;
+                grid.drawn = advance().text == "diagram";
                 grid.view = parse_qualified_name("the view whose list it shows, like project_page");
                 expect(token_kind::dot, "'.' and the view's list, like project_page.steps");
                 grid.list = expect(token_kind::identifier, "the view's list, like steps").text;

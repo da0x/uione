@@ -1589,9 +1589,10 @@ namespace one::generators {
         // each pair, opening the entity's create where there's nothing, and its update
         // and delete where there's something, each as its form on the screen asks.
         void grid(stream& out, screen_parts& parts, const std::string& ns, const language::grid_item& grid, const std::vector<language::screen_item>& screen) {
-            parts.components.insert("Grid");
+            std::string tag = grid.drawn ? "Diagram" : "Grid";
+            parts.components.insert(tag);
             const language::entity_declaration* entry = listed(ns, grid.view.text(), grid.list);
-            std::string line = "<Grid view={" + view_variable(parts, full_view(ns, grid.view.text())) + "} list=" + web_detail::js_string(*grid.list) +
+            std::string line = "<" + tag + " view={" + view_variable(parts, full_view(ns, grid.view.text())) + "} list=" + web_detail::js_string(*grid.list) +
                                " from=" + web_detail::js_string(grid.from) + " to=" + web_detail::js_string(grid.to);
             if (grid.cell) line += " cell=" + web_detail::js_string(web_detail::text_of(*grid.cell));
             line += " over={" + view_variable(parts, full_view(ns, grid.over.text())) + "} overList=" + web_detail::js_string(grid.over_list);

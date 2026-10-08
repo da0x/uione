@@ -4,7 +4,7 @@
 // A component set that draws everything as plain, semantic HTML with no styling. The
 // tests use it, and it shows that nothing in @uione/react depends on any one look.
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ComponentSet, DialogProps } from "./contract.js";
 
@@ -381,6 +381,63 @@ export const plain: ComponentSet = {
       </ol>
     </nav>
   ),
+
+  // The arrows as a list, each a button, and a form that adds one between two.
+  Diagram: function PlainDiagram({ status, nodes, edges, onConnect, error }) {
+    const [from, setFrom] = useState("");
+    const [to, setTo] = useState("");
+    const named = (id: string) => nodes.find((n) => n.id === id)?.label ?? id;
+    return (
+      <div aria-busy={status === "loading"}>
+        <ul>
+          {edges.map((edge) => (
+            <li key={`${edge.from}-${edge.to}`}>
+              {edge.onClick ? (
+                <button type="button" onClick={edge.onClick}>
+                  {edge.title}
+                </button>
+              ) : (
+                edge.title
+              )}
+            </li>
+          ))}
+        </ul>
+        {onConnect && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (from && to) onConnect(from, to);
+            }}
+          >
+            <label>
+              From{" "}
+              <select value={from} onChange={(event) => setFrom(event.target.value)}>
+                <option value="">Choose one</option>
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.label}
+                  </option>
+                ))}
+              </select>
+            </label>{" "}
+            <label>
+              to{" "}
+              <select value={to} onChange={(event) => setTo(event.target.value)}>
+                <option value="">Choose one</option>
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.label}
+                  </option>
+                ))}
+              </select>
+            </label>{" "}
+            <button type="submit">Add{from && to ? ` ${named(from)} to ${named(to)}` : ""}</button>
+          </form>
+        )}
+        {error && <p role="alert">{error}</p>}
+      </div>
+    );
+  },
 
   Switch: ({ label, options }) => (
     <div role="group" aria-label={label}>

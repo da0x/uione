@@ -791,6 +791,30 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
     CHECK(tsx.find("<Form ") == std::string::npos);
     fs::remove_all(dir);
 
+    // A diagram is the same, drawn.
+    {
+        fs::create_directories(dir);
+        platform::write_file((dir / "main.one").string(),
+                             "namespace board {\n"
+                             "entity board {\n\ttitle  text\n}\n"
+                             "entity column {\n\tboard  board  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
+                             "entity arrow {\n\tboard  board  required  key\n\tfrom  column  required  key\n\tto  column  required  key\n}\n"
+                             "command arrow::delete\n"
+                             "view board_page per board {\n"
+                             "\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n"
+                             "\tarrows = each arrow where board == board.id {\n\t\tfrom  to\n\t}\n"
+                             "}\n"
+                             "screen \"Board\" /boards/:board {\n"
+                             "\tdiagram board_page.arrows by from and to over board_page.columns\n"
+                             "}\n"
+                             "}\n");
+        const auto* drawn = find(generate_at(dir.string()), "src/screens/main.tsx");
+        REQUIRE(drawn != nullptr);
+        CHECK(drawn->content.find(R"(<Diagram view={boardPage} list="arrows" from="from" to="to" over={boardPage} overList="columns" shown="title" remove={{ name: "board::arrow::delete" }} />)") !=
+              std::string::npos);
+        fs::remove_all(dir);
+    }
+
     // What the grid's entries point at is what its rows and columns are.
     language::diagnostics out;
     std::vector<language::file> wrong;

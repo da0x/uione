@@ -661,6 +661,142 @@ export const radix: ComponentSet = {
     );
   },
 
+  // Each thing a box in a row, in order, and each arrow between two an arc: forward
+  // above, back below, higher the farther it goes, its label at its top. An arrow
+  // is pressed, or focused and Enter pressed, to change it; dragging from a box to
+  // another draws a new one.
+  Diagram: function RadixDiagram({ status, nodes, edges, onConnect, error }) {
+    const [drawing, setDrawing] = useState<{ from: string; x: number; y: number }>();
+    const width = 132;
+    const height = 40;
+    const gap = 64;
+    const at = (id: string) => nodes.findIndex((n) => n.id === id);
+    const span = (from: string, to: string) => Math.abs(at(to) - at(from));
+    const rise = (n: number) => 22 + 26 * n;
+    const above = Math.max(0, ...edges.filter((e) => at(e.to) > at(e.from)).map((e) => rise(span(e.from, e.to))));
+    const below = Math.max(0, ...edges.filter((e) => at(e.to) < at(e.from)).map((e) => rise(span(e.from, e.to))));
+    const top = above + 24;
+    const total = { w: Math.max(1, nodes.length * (width + gap) - gap) + 24, h: top + height + below + 24 };
+    const left = (i: number) => 12 + i * (width + gap);
+    // An arc from one box to another, leaving and arriving a little apart from its
+    // reverse, so a step and its way back don't sit on each other.
+    const arc = (from: string, to: string) => {
+      const [i, j] = [at(from), at(to)];
+      const forward = j > i;
+      const y = forward ? top : top + height;
+      const x1 = left(i) + width / 2 + (forward ? 10 : -10);
+      const x2 = left(j) + width / 2 + (forward ? -10 : 10);
+      const peak = forward ? y - rise(Math.abs(j - i)) : y + rise(Math.abs(j - i));
+      return { d: `M ${x1} ${y} C ${x1} ${peak}, ${x2} ${peak}, ${x2} ${y}`, lx: (x1 + x2) / 2, ly: forward ? peak + 18 : peak - 8 };
+    };
+    const point = (event: React.PointerEvent<SVGSVGElement>) => {
+      const box = event.currentTarget.getBoundingClientRect();
+      return { x: event.clientX - box.left, y: event.clientY - box.top };
+    };
+    const over = (x: number, y: number) => nodes.find((_, i) => x >= left(i) && x <= left(i) + width && y >= top && y <= top + height);
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="overflow-x-auto rounded-box border border-line bg-surface p-2 shadow-panel">
+          <svg
+            width={total.w}
+            height={total.h}
+            role="group"
+            aria-busy={status === "loading"}
+            className="touch-none select-none text-muted"
+            onPointerMove={(event) => drawing && setDrawing({ ...drawing, ...point(event) })}
+            onPointerUp={(event) => {
+              if (!drawing) return;
+              const { x, y } = point(event);
+              const target = over(x, y);
+              setDrawing(undefined);
+              if (target && target.id !== drawing.from) onConnect?.(drawing.from, target.id);
+            }}
+            onPointerLeave={() => setDrawing(undefined)}
+          >
+            <defs>
+              <marker id="one-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" />
+              </marker>
+            </defs>
+            {edges.map((edge) => {
+              const { d, lx, ly } = arc(edge.from, edge.to);
+              return (
+                <g
+                  key={`${edge.from}-${edge.to}`}
+                  role={edge.onClick ? "button" : undefined}
+                  aria-label={edge.title}
+                  tabIndex={edge.onClick ? 0 : undefined}
+                  onClick={edge.onClick}
+                  onKeyDown={(event) => {
+                    if (edge.onClick && (event.key === "Enter" || event.key === " ")) {
+                      event.preventDefault();
+                      edge.onClick();
+                    }
+                  }}
+                  className={`${edge.onClick ? "cursor-pointer hover:text-accent focus-visible:text-accent focus-visible:outline-none" : ""}`}
+                >
+                  <title>{edge.title}</title>
+                  <path d={d} fill="none" stroke="transparent" strokeWidth="14" />
+                  <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" markerEnd="url(#one-arrow)" />
+                  <text x={lx} y={ly} textAnchor="middle" fontSize="11" fill="currentColor" stroke="var(--color-surface)" strokeWidth="4" paintOrder="stroke">
+                    {edge.label.length > 28 ? `${edge.label.slice(0, 27)}…` : edge.label}
+                  </text>
+                </g>
+              );
+            })}
+            {nodes.map((node, i) => (
+              <g
+                key={node.id}
+                onPointerDown={
+                  onConnect
+                    ? (event) => {
+                        const svg = (event.currentTarget as SVGGElement).ownerSVGElement;
+                        if (!svg) return;
+                        const box = svg.getBoundingClientRect();
+                        setDrawing({ from: node.id, x: event.clientX - box.left, y: event.clientY - box.top });
+                      }
+                    : undefined
+                }
+                className={onConnect ? "cursor-crosshair" : undefined}
+              >
+                <rect
+                  x={left(i)}
+                  y={top}
+                  width={width}
+                  height={height}
+                  rx="6"
+                  className={`fill-[var(--color-sunken)] ${drawing?.from === node.id ? "stroke-[var(--color-accent)]" : "stroke-[var(--color-line)]"}`}
+                  strokeWidth="1.5"
+                />
+                <text x={left(i) + width / 2} y={top + height / 2 + 4} textAnchor="middle" fontSize="13" fontWeight="500" className="fill-[var(--color-ink)]">
+                  {node.label.length > 18 ? `${node.label.slice(0, 17)}…` : node.label}
+                </text>
+              </g>
+            ))}
+            {drawing && (
+              <line
+                x1={left(at(drawing.from)) + width / 2}
+                y1={top + height / 2}
+                x2={drawing.x}
+                y2={drawing.y}
+                stroke="var(--color-accent)"
+                strokeWidth="1.5"
+                strokeDasharray="4 3"
+                markerEnd="url(#one-arrow)"
+              />
+            )}
+          </svg>
+        </div>
+        {onConnect && <p className="text-sm text-muted">Drag from one box to another to add an arrow between them; press an arrow to change it.</p>}
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  },
+
   // The pages above this one, small, above its title, each a link and the last this
   // page itself.
   Crumbs: ({ items, current }) => (
