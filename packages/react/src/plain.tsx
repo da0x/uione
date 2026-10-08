@@ -351,7 +351,8 @@ export const plain: ComponentSet = {
           ))}
           {card.tally && (
             <p>
-              {card.tally.reduce((n, part) => n + part.count, 0)} {card.noun ?? "in all"}
+              {card.tally.reduce((n, part) => n + part.count, 0)}{" "}
+              {card.noun ? (card.tally.reduce((n, part) => n + part.count, 0) === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
               {card.tally.map((part) => `, ${part.label} ${part.count}`).join("")}
             </p>
           )}

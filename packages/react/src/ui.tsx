@@ -67,8 +67,14 @@ export function label(name: string): string {
 }
 
 // How a value from a view is shown: a date as a date, anything else as text.
+// A date picked without a time is stored at midnight UTC, so it's shown as that day
+// wherever the reader is, not the evening before.
+export function dateOnly(value: Date): boolean {
+  return value.getUTCHours() === 0 && value.getUTCMinutes() === 0 && value.getUTCSeconds() === 0 && value.getUTCMilliseconds() === 0;
+}
+
 export function show(value: unknown): string {
-  if (value instanceof Date) return value.toLocaleDateString(undefined, { dateStyle: "medium" });
+  if (value instanceof Date) return value.toLocaleDateString(undefined, { dateStyle: "medium", ...(dateOnly(value) ? { timeZone: "UTC" } : {}) });
   if (Array.isArray(value)) return value.map(show).filter((item) => item !== "").join(", ");
   return String(value ?? "");
 }

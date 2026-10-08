@@ -603,7 +603,7 @@ export const radix: ComponentSet = {
             {card.tally && (
               <div className="flex flex-col gap-1.5">
                 <p className="text-sm text-muted">
-                  <span className="font-semibold text-ink tabular-nums">{total}</span> {card.noun ?? "in all"}
+                  <span className="font-semibold text-ink tabular-nums">{total}</span> {card.noun ? (total === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
                 </p>
                 {total > 0 && (
                   <div className="flex h-2 overflow-hidden rounded-full bg-sunken" aria-hidden="true">

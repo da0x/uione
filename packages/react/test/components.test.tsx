@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { App, Code, Hero, Link, Menu, Pages, useParam, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
 import { changed } from "../src/index.js";
+import { show } from "../src/ui.js";
 import type { DocPage } from "../src/index.js";
 import { label } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -126,5 +127,16 @@ describe("what a change says", () => {
     expect(changed("phase", "Reported", "Triaged", "projects::issue::move")).toBe("moved this from Reported to Triaged");
     expect(changed("status", "open", "closed", "tracker::issue::close")).toBe("closed this");
     expect(changed("status", "closed", "open", "tracker::issue::reopen")).toBe("reopened this");
+  });
+
+  it("says only that something long changed, like a page's text", () => {
+    expect(changed("body", "# Setup\n\nInstall it.", "# Setup\n\nInstall it, then run it.")).toBe("changed body");
+    expect(changed("body", "", "# Setup\n\nInstall it.")).toBe("wrote body");
+  });
+});
+
+describe("a date", () => {
+  it("picked without a time shows as that day, wherever the reader is", () => {
+    expect(show(new Date(Date.UTC(2026, 10, 1)))).toBe(new Date(2026, 10, 1).toLocaleDateString(undefined, { dateStyle: "medium" }));
   });
 });

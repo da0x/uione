@@ -1008,7 +1008,10 @@ namespace one::generators {
                 // add me to assignees, remove me from assignees.
                 const language::field* list = field(e, l->list);
                 if (!list) return;
-                auto value = expression(e, *l->value, me, nullptr);
+                // A command a role allows, or one of the project's own by its name, as
+                // a list of them is given: add issue::move to may.
+                auto value = own_named(e, me, *list, *l->value);
+                if (!value) value = expression(e, *l->value, me, nullptr);
                 if (!value) return;
                 std::string target = me + "." + api_detail::go_name(list->name);
                 out.line(target + " = one." + (l->adds ? "Add" : "Remove") + "(" + target + ", " + *value + ")");

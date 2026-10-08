@@ -13,7 +13,7 @@ import { fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
 import type { FieldProps, Filtered } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
-import { action, label, shortAddress, show, useLinks, useUI } from "./ui.js";
+import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
 
 export function Hero({ title, children }: { title: string; children: ReactNode }) {
   const ui = useUI();
@@ -220,6 +220,9 @@ export function phrase(field: unknown, before: unknown, after: unknown, command?
   const name = field.replaceAll("_", " ");
   const was = show(before);
   const is = show(after);
+  // Something long, like a page's text, isn't said over: only that it changed.
+  const long = (text: string) => text.length > 80 || text.includes("\n");
+  if (long(was) || long(is)) return [was === "" ? `wrote ${name} of` : is === "" ? `cleared ${name} of` : `changed ${name} of`, ""];
   if (was === "") return [`set ${name} of`, `to ${is}`];
   if (is === "") return [`cleared ${name} of`, ""];
   return [`changed ${name} of`, `from ${was} to ${is}`];
@@ -1220,6 +1223,7 @@ export interface FieldSpec {
 function asField(value: unknown): string {
   if (value instanceof Date) {
     const pad = (n: number) => String(n).padStart(2, "0");
+    if (dateOnly(value)) return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
     return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
   }
   if (Array.isArray(value)) return value.map(asField).join(", ");
