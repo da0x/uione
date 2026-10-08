@@ -1,16 +1,17 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { CompletionContext } from "@codemirror/autocomplete";
 import { insertTab } from "@codemirror/commands";
 import { diagnosticCount, forceLinting } from "@codemirror/lint";
 import { EditorState, Text } from "@codemirror/state";
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { Built, Checked, Compiler, Definition, Files } from "@uione/compiler";
+import type { Built, Checked, Compiler, Completions, Definition, Files } from "@uione/compiler";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Diff, Editor, Generated, Workbench, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs, themesOf, lightThemes, darkThemes, loadThemes, LookControls } from "../src/index.js";
+import { Diff, Editor, Generated, Workbench, completionsFrom, readSpot, writeSpot, fromLine, highlighting, placed, problems, setTabWidth, tabs, themesOf, lightThemes, darkThemes, loadThemes, LookControls } from "../src/index.js";
 import { colorsOf } from "../src/highlight.js";
 
 // jsdom lays nothing out, so the editor's measuring of text gets empty boxes.
@@ -113,10 +114,11 @@ describe("a workbench, with the real compiler", async () => {
       return {};
     },
   });
-  const compiler: Pick<Compiler, "check" | "build" | "define"> = {
+  const compiler: Pick<Compiler, "check" | "build" | "define" | "complete"> = {
     check: async (files) => run(one, { kind: "check", files }) as Checked,
     build: async (files) => run(one, { kind: "build", files }) as Built,
     define: async (files, path, line, column) => run(one, { kind: "define", files, path, line, column }) as Definition,
+    complete: async (text, line, column) => run(one, { kind: "complete", text, line, column }) as Completions,
   };
 
   it("marks the code a line becomes, once the project is built", async () => {
@@ -164,6 +166,21 @@ describe("a workbench, with the real compiler", async () => {
     act(() => editor.dispatch({ selection: { anchor: line7.from + line7.text.indexOf("project") + 1 } }));
     fireEvent.keyDown(alone.container.querySelector(".cm-content")!, { key: "F12" });
     await waitFor(() => expect(editor.state.doc.lineAt(editor.state.selection.main.head).number).toBe(3));
+  });
+
+  it("offers a project's settings as they're typed, and an enum setting's choices", async () => {
+    const offered = async (doc: string, explicit = false) => {
+      const state = EditorState.create({ doc });
+      return completionsFrom({ compiler })(new CompletionContext(state, doc.length, explicit));
+    };
+    const settings = await offered("import one\nproject shop {\n\tcor");
+    expect(settings?.from).toBe("import one\nproject shop {\n\t".length);
+    expect(settings?.options).toContainEqual({ label: "corners", detail: "corners", info: "How corners are drawn." });
+    const choices = await offered("import one\nproject shop {\n\tcorners  ", true);
+    expect(choices?.options.map((o) => o.label)).toEqual(["square", "round"]);
+    // Nothing is offered before a word is begun, unless it's asked for.
+    expect(await offered("import one\nproject shop {\n\tcorners  ")).toBeNull();
+    expect(await offered("entity book {\n\tti")).toBeNull();
   });
 
   it("colors only a .one file with uione's words", () => {

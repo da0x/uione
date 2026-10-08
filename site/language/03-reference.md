@@ -66,6 +66,7 @@ Each declaration starts a line with the word for what it declares, then its name
 
 | Declaration | Declares |
 |---|---|
+| [`import`](#import) | a library whose names the files may use |
 | [`project`](#project) | where the app runs and what it's built with |
 | [`namespace`](#namespace) | a group of declarations, and the address its screens are at |
 | [`enum`](#enum) | choices any field of its type can hold |
@@ -123,14 +124,37 @@ The language's own words, inside what a declaration says:
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
-- in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
-  `signin`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
+- in a project: the settings `one`'s library defines, below.
+
+## import
+
+`import one` lets a file use uione's own library, `one`, which says what a project
+may say: the settings a project block takes, the type each holds, and the choices
+an enum setting picks from. It's the only library there is, and a file with a
+project block says it, at the top:
+
+```one
+import one
+
+project shop {
+	ui       radix
+	corners  square
+}
+```
+
+The library is written in uione, in `compiler/library/one.one`, and is part of the
+compiler, so it's always the one the project's `one` version came with. Its names
+are in the namespace `one`, which a project can't declare itself. An editor reads
+it to offer each setting as it's typed, with what it's for, and each choice of an
+enum setting.
 
 ## project
 
 One per project, naming where it runs and what it is built with.
 
 ```one
+import one
+
 project uione {
 	domain          "uione.io"
 	firebase        "uione-web"
@@ -142,6 +166,39 @@ project uione {
 	serve           "public"
 }
 ```
+
+Each setting is a line, its name and then its value, and each is defined in the
+library's `settings project`, with its type:
+
+```one
+namespace one {
+	enum corners {
+		square  "Square"
+		round   "Round"
+	}
+
+	settings project {
+		// Where it's served, like "neotrac.org".
+		domain   domain
+		// The ways people sign in, one to a line.
+		signin   list of signin
+		// How corners are drawn.
+		corners  corners
+	}
+}
+```
+
+The value is checked by its type. An enum setting takes one of its choices,
+written plainly, `corners square`, since the type says which enum it is; it can
+be written in full too, `corners one::corners::square`. A `domain` is a domain name,
+a `slug` lowercase letters, digits and dashes, a `version` like "0.7.0", a
+`color` #rrggbb, a `file` and a `folder` are next to the project's `.one` files,
+an `address` is one of the site's own, starting with /, and a `link` is an https
+address. A setting whose
+type is another `settings`, like `redirect` or `copyright`, takes its fields in
+order, `redirect "/old" "https://example.com/new"`. A setting is said once,
+unless its type is a `list of`, whose lines each add one. A name the library
+doesn't define isn't a setting, and the checker says so with the ones there are.
 
 `one "0.4.0"` is the compiler the project is for, the last version it was checked
 clean with. Any `one` run on the project hands the work to that version, fetching
@@ -199,9 +256,12 @@ A project can run in more than one place, each deployed on its own: production
 for everyone, staging to try a change first. Each `environment` is one of them,
 with what's its own there: `domain`, `firebase` and `region`. Each is its own
 Firebase project, so their data never mixes. Settings outside the environments are
-shared by all of them, and one inside takes the place of a shared one.
+shared by all of them, and one inside takes the place of a shared one. Which
+settings an environment takes is the library's `settings environment`.
 
 ```one
+import one
+
 project shop {
 	region  "us-east4"
 	ui      radix

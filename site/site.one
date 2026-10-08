@@ -7,13 +7,15 @@
 // (React, yarn), site/build/api (Go), site/build/infrastructure (Pulumi) and the
 // Firestore rules, and nothing in site/build is edited by hand.
 
+import one
+
 project uione {
-	one       "0.6.30"
-	domain    "www.uione.io"
-	firebase  "uione-web"
-	region    "us-east4"
-	ui        radix
-	icon      "assets/icon.svg"
-	serve     "public"
-	copyright "Daher Alfawares" "https://www.linkedin.com/in/dalfawares"
+	one        "0.6.30"
+	domain     "www.uione.io"
+	firebase   "uione-web"
+	region     "us-east4"
+	ui         radix
+	icon       "assets/icon.svg"
+	serve      "public"
+	copyright  "Daher Alfawares" "https://www.linkedin.com/in/dalfawares"
 }

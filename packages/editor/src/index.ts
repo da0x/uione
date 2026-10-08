@@ -4,6 +4,8 @@
 // An editor for .one files. The CodeMirror extensions work on their own; the React
 // components put them together with the code each line becomes.
 
+export { completions, completionsFrom } from "./completions.js";
+export type { CompletionsOptions } from "./completions.js";
 export { definitions, reference } from "./definitions.js";
 export type { DefinitionsOptions } from "./definitions.js";
 export { fromLine } from "./generated.js";

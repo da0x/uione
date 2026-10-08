@@ -43,7 +43,7 @@ marker() {
 		# manifests and lockfiles, which tools rewrite, and images: an SVG is
 		# text, but a header in it would be downloaded with every page it's on.
 		LICENSE|COPYING|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg) echo exempt ;;
-		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.h|*.rules) echo '//' ;;
+		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.hpp.in|*.h|*.rules) echo '//' ;;
 		*.vim) echo '"' ;;
 		# CSS and the EBNF grammar have only block comments: the header sits inside
 		# /* ... */, each line starting with " *".

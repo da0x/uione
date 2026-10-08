@@ -11,6 +11,13 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# uione's own library, library/one.one, built into the compiler as text: what a
+# project block may say, and the values it takes. Changing it configures again.
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/library/one.one ONE_LIBRARY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/library/library.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/generated/language/library.hpp @ONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/library/one.one)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
+
 # Warnings are errors, so a warning can't be ignored until it becomes a bug.
 add_library(one_warnings INTERFACE)
 target_compile_options(one_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
@@ -53,7 +60,7 @@ if(EMSCRIPTEN)
         -sALLOW_MEMORY_GROWTH=1
         -sFORCE_FILESYSTEM=1 -lnodefs.js
         -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString
-        -sEXPORTED_FUNCTIONS=_one_version,_one_check,_one_build,_one_show,_one_define)
+        -sEXPORTED_FUNCTIONS=_one_version,_one_check,_one_build,_one_show,_one_define,_one_complete)
 endif()
 
 option(ONE_TESTS "Build the compiler's tests" ON)
@@ -78,6 +85,7 @@ if(ONE_TESTS)
         tests/infrastructure_tests.cpp
         tests/sources_tests.cpp
         tests/grammar_tests.cpp
+        tests/complete_tests.cpp
         tests/examples_tests.cpp
         tests/upgrade_tests.cpp
         tests/environments_tests.cpp

@@ -1,0 +1,18 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// uione's own library, library/one.one, as text, put here by CMake when it
+// configures, so every project is checked against it wherever the compiler runs.
+
+#pragma once
+
+#include <string_view>
+
+namespace one::language {
+
+    // Where its declarations are said to be, as a file of its own.
+    inline constexpr std::string_view library_path = "one.one";
+
+    inline constexpr std::string_view library_source = R"library(@ONE_LIBRARY@)library";
+
+} // namespace one::language

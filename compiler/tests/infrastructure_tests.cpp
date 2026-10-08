@@ -85,7 +85,7 @@ TEST_CASE("a project outside this repository deploys with the released library")
     fs::path dir = fs::temp_directory_path() / "uione-outside-the-repository";
     fs::create_directories(dir);
     REQUIRE(platform::write_file((dir / "main.one").string(),
-                                 "project p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"));
+                                 "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"));
     auto generated = generate_at(dir.string());
     CHECK(generated.skipped.empty());
     const auto* mod = find(generated.files, "infrastructure/go.mod");
@@ -109,7 +109,7 @@ TEST_CASE("a project that takes GitHub's webhook routes it to the backend and is
     fs::path dir = fs::path(root) / "compiler" / "build" / "webhook-project";
     fs::create_directories(dir);
     REQUIRE(platform::write_file((dir / "main.one").string(),
-                                 "project p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"
+                                 "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"
                                  "namespace code {\n"
                                  "\tentity project {\n\t\tslug  text  required  key\n\t\trepository  text  unique\n\t}\n"
                                  "\tentity issue {\n\t\tproject  project  required  key\n\t\tnumber  serial  per project  key\n\t}\n"
@@ -137,7 +137,7 @@ TEST_CASE("a redirect goes into Hosting's settings") {
     fs::remove_all(dir);
     fs::create_directories(dir);
     REQUIRE(platform::write_file((dir / "main.one").string(),
-                                 "project p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n"
+                                 "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n"
                                  "\tredirect \"/install.sh\" \"https://www.p.io/install.sh\"\n}\n"));
     auto generated = generate_at(dir.string());
     const auto* hosting = find(generated.files, "web/firebase.json");

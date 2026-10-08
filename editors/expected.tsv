@@ -70,11 +70,11 @@ examples/tasks/main.one	order by done  created_at descending	descending	keyword
 examples/tasks/main.one	screen "Tasks" / {	/	route
 site/site.one	project uione {	project	declare
 site/site.one	project uione {	uione	name
-site/site.one	domain    "www.uione.io"	domain	keyword
-site/site.one	domain    "www.uione.io"	"www	string
-site/site.one	ui        radix	ui	keyword
-site/site.one	ui        radix	radix	plain
-site/site.one	serve     "public"	serve	keyword
+site/site.one	domain     "www.uione.io"	domain	keyword
+site/site.one	domain     "www.uione.io"	"www	string
+site/site.one	ui         radix	ui	keyword
+site/site.one	ui         radix	radix	plain
+site/site.one	serve      "public"	serve	keyword
 site/waitlist.one	email  email  required  key	email  required	type
 site/waitlist.one	email  email  required  key	email	variable
 site/waitlist.one	email  email  required  key	key	modifier
@@ -125,7 +125,7 @@ examples/tracker/main.one	for project by repository	for	keyword
 examples/tracker/main.one	for project by repository	by	keyword
 examples/tracker/main.one	on commit {	on	keyword
 examples/library/main.one	component opening_hours	component	keyword
-site/site.one	one       "0.6.30"	one	keyword
+site/site.one	one        "0.6.30"	one	keyword
 examples/tracker/main.one	visibility  enum  public	public	plain
 examples/tracker/main.one	= visibility::public	public	plain
 examples/tracker/main.one	view projects public	public	modifier
@@ -204,3 +204,13 @@ editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/roles.one	entity invitation invites seat {	invites	keyword
 editors/fixtures/roles.one	email  email  required  key	email	variable
+editors/fixtures/environments.one	import one	import	declare
+editors/fixtures/environments.one	import one	one	namespace
+editors/fixtures/environments.one	corners one::corners::square	corners	keyword
+editors/fixtures/environments.one	corners one::corners::square	one	namespace
+editors/fixtures/environments.one	corners one::corners::square	square	plain
+compiler/library/one.one	settings project {	settings	declare
+compiler/library/one.one	settings project {	project	name
+compiler/library/one.one	one        version	one	variable
+compiler/library/one.one	signin     list of signin	list	type
+compiler/library/one.one	enum corners {	enum	declare

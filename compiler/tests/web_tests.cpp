@@ -439,7 +439,7 @@ TEST_CASE("a project's title is the name at the top of its pages") {
     fs::path dir = fs::temp_directory_path() / "uione-title";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "project studio {\n\ttitle \"uione & co\"\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(), "import one\nproject studio {\n\ttitle \"uione & co\"\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* app = find(files, "src/app.tsx");
@@ -602,7 +602,7 @@ TEST_CASE("a project's theme and corners are on its page from the first paint") 
     fs::path dir = fs::temp_directory_path() / "uione-theme";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "project tracker {\n\ttheme    papercolor\n\tcorners  square\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(), "import one\nproject tracker {\n\ttheme    papercolor\n\tcorners  square\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* page = find(files, "index.html");
@@ -1098,7 +1098,7 @@ TEST_CASE("an app offers the ways of signing in its project names, in its order,
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "project p {\n\tsignin github\n\tsignin microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+                         "import one\nproject p {\n\tsignin github\n\tsignin microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto app = find(generate_at(dir.string()), "src/app.tsx");
     REQUIRE(app != nullptr);
     CHECK(app->content.find(R"(import { firebaseSource, github as signInWithGitHub, microsoft as signInWithMicrosoft } from "@uione/react/firebase";)") !=
@@ -1110,7 +1110,7 @@ TEST_CASE("an app offers the ways of signing in its project names, in its order,
 
     // A project that names no way offers none.
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "project p {\n\tui radix\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(), "import one\nproject p {\n\tui radix\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto none = find(generate_at(dir.string()), "src/app.tsx");
     REQUIRE(none != nullptr);
     CHECK(none->content.find(", authentication: false") != std::string::npos);
@@ -1217,7 +1217,7 @@ TEST_CASE("a person's news marks what came since they looked, and is counted bes
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "project tracker {\n\tunread  news.changes since news.seen\n}\n"
+                         "import one\nproject tracker {\n\tunread  news.changes since news.seen\n}\n"
                          "namespace work at / {\n"
                          "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
                          "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"

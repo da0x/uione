@@ -181,6 +181,24 @@ namespace one::language {
             location where = peek().where;
             const std::string& word = peek().text;
             if (word == "project") return {where, parse_project()};
+            // import one
+            if (word == "import" && peek(1).kind == token_kind::identifier) {
+                advance();
+                import_declaration import{advance().text, where};
+                end_line();
+                return {where, std::move(import)};
+            }
+            // settings project { ... }
+            if (word == "settings" && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace) {
+                advance();
+                settings_declaration settings;
+                settings.name = advance().text;
+                expect(token_kind::left_brace, "'{'");
+                while (in_block()) settings.fields.push_back(parse_field());
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(settings)};
+            }
             if (word == "namespace") return {where, parse_namespace()};
             if (word == "format") return {where, parse_format()};
             if (word == "entity") return {where, parse_entity()};
@@ -234,12 +252,16 @@ namespace one::language {
                     end_line();
                     return s;
                 }
+                s.value_where = peek().where;
                 if (at(token_kind::string)) {
                     s.value = advance().text;
                     s.is_string = true;
                     if (at(token_kind::string)) s.to = advance().text;  // redirect "/from" "to"
                 } else {
-                    s.value = expect(token_kind::identifier, "the setting's value").text;
+                    // corners square, or in full, corners one::corners::square.
+                    qualified_name value = parse_qualified_name("the setting's value");
+                    s.value = value.parts.back();
+                    if (value.parts.size() > 1) s.qualified = value.text();
                 }
                 end_line();
                 return s;
@@ -1753,7 +1775,27 @@ namespace one::language {
     // Reads one .one file. Anything wrong is added to `out`; the tree holds whatever
     // could be read.
     inline file parse(std::string path, std::string_view source, diagnostics& out) {
-        return parser(std::move(path), source, out).parse();
+        file parsed = parser(std::move(path), source, out).parse();
+        // The first line that isn't a comment or blank, moved up over the comment just
+        // above it, when nothing parts them.
+        std::vector<std::string_view> lines;
+        for (std::size_t at = 0; at <= source.size();) {
+            std::size_t end = source.find('\n', at);
+            if (end == std::string_view::npos) end = source.size();
+            lines.push_back(source.substr(at, end - at));
+            at = end + 1;
+        }
+        auto kind = [&](std::size_t i) {
+            std::size_t start = lines[i].find_first_not_of(" \t\r");
+            if (start == std::string_view::npos) return 'b';
+            return lines[i].substr(start).starts_with("//") ? 'c' : 'd';
+        };
+        std::size_t first = 0;
+        while (first < lines.size() && kind(first) != 'd') ++first;
+        if (first == lines.size()) return parsed;
+        while (first > 0 && kind(first - 1) == 'c') --first;
+        parsed.imports_at = location{static_cast<int>(first) + 1, 1};
+        return parsed;
     }
 
 } // namespace one::language

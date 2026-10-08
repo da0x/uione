@@ -536,6 +536,40 @@
   text-decoration: underline;
 }
 
+/* Tooltips, what a name means and what can be written, in the editor's own colors,
+   light or dark. */
+.uione-editor .cm-editor .cm-tooltip {
+  background: var(--uione-surface);
+  color: var(--uione-ink);
+  border: 1px solid var(--uione-line);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--uione-ink) 12%, transparent);
+}
+.uione-editor .cm-editor .cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--uione-accent-soft);
+  color: var(--uione-ink);
+}
+
+/* What can be written there, as it's typed: each setting or choice in the code's
+   font, with its type or how it's shown beside it, and what it's for. */
+.uione-editor .cm-tooltip-autocomplete > ul {
+  font-family: var(--uione-code-font, ui-monospace, monospace);
+  font-size: 0.82rem;
+}
+.uione-editor .cm-tooltip-autocomplete .cm-completionDetail {
+  margin-left: 0.75rem;
+  font-family: var(--uione-ui-font, system-ui, sans-serif);
+  font-style: normal;
+  opacity: 0.65;
+}
+.uione-editor .cm-completionInfo {
+  max-width: min(22rem, 70vw);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--uione-ui-font, system-ui, sans-serif);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 /* A theme other than GitHub brings its own background and text color, light and
    dark, which follow the page the way the tokens' colors do. */
 .uione-editor .cm-editor.uione-themed,

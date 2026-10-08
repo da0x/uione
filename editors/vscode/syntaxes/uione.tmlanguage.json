@@ -98,7 +98,7 @@
           }
         },
         {
-          "match": "^\\s*(namespace)\\b(?!::|\\s*=)(?:\\s+([A-Za-z_]\\w*))?",
+          "match": "^\\s*(namespace|import)\\b(?!::|\\s*=)(?:\\s+([A-Za-z_]\\w*))?",
           "captures": {
             "1": {
               "name": "storage.type.uione"
@@ -362,7 +362,7 @@
     },
     "entity": {
       "comment": "An entity's block: each line is a field, its name first, then its type, built in or another entity, so `project  project  required  key` is a field named project holding a project. Inside it, words that start declarations elsewhere are names.",
-      "begin": "^\\s*(entity)\\s+([A-Za-z_]\\w*)(?:\\s+(invites)\\s+([A-Za-z_]\\w*))?(?:\\s+(history)(?:\\s+(of)\\s+([A-Za-z_]\\w*))?)?\\s*(\\{)",
+      "begin": "^\\s*(entity|settings)\\s+([A-Za-z_]\\w*)(?:\\s+(invites)\\s+([A-Za-z_]\\w*))?(?:\\s+(history)(?:\\s+(of)\\s+([A-Za-z_]\\w*))?)?\\s*(\\{)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.uione"
@@ -506,6 +506,9 @@
               "include": "#project-body"
             }
           ]
+        },
+        {
+          "include": "#namespaces"
         },
         {
           "include": "#constants"

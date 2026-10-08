@@ -176,6 +176,16 @@
     "@babel/helper-string-parser" "^7.29.7"
     "@babel/helper-validator-identifier" "^7.29.7"
 
+"@codemirror/autocomplete@^6.20.3":
+  version "6.20.3"
+  resolved "https://registry.yarnpkg.com/@codemirror/autocomplete/-/autocomplete-6.20.3.tgz#696b740312c6a962e14567b49a3661b5924bc5ae"
+  integrity sha512-tlosUqb+3BbxCxZdu4tKeRghPFC+QM7q4X5YhKV2eCmPG+1r2F3f4AaSz5sCrFqUtX4Jh20VFTKecl16MgiV9g==
+  dependencies:
+    "@codemirror/language" "^6.0.0"
+    "@codemirror/state" "^6.0.0"
+    "@codemirror/view" "^6.17.0"
+    "@lezer/common" "^1.0.0"
+
 "@codemirror/commands@^6.11.1":
   version "6.11.1"
   resolved "https://registry.yarnpkg.com/@codemirror/commands/-/commands-6.11.1.tgz#1ec31ffb4d87babd096b5857e68cdba3bb989abd"
@@ -1643,6 +1653,24 @@
   version "2.0.11"
   resolved "https://registry.yarnpkg.com/@types/unist/-/unist-2.0.11.tgz#11af57b127e32487774841f7a4e54eab166d03c4"
   integrity sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==
+
+"@uione/radix@0.6.18":
+  version "0.6.18"
+  resolved "https://registry.yarnpkg.com/@uione/radix/-/radix-0.6.18.tgz#46c1c8a3d270db395e782c66fb37b4a781433013"
+  integrity sha512-aEmsLvfRP/EomYy5EZtN3wbiETFPi+48xp44u5WcUjEvyGNHUa5zvJQRZDNTkLryyYWDLFzgSsRPNaxr5RMgCQ==
+  dependencies:
+    "@fontsource-variable/ibm-plex-sans" "5.3.0"
+    "@fontsource/ibm-plex-mono" "5.3.0"
+    "@radix-ui/react-dialog" "^1.1.23"
+    "@shikijs/themes" "^4.4.3"
+    react-markdown "^10.1.0"
+    remark-gfm "^4.0.1"
+    shiki "^4.4.3"
+
+"@uione/react@0.6.18":
+  version "0.6.18"
+  resolved "https://registry.yarnpkg.com/@uione/react/-/react-0.6.18.tgz#a38e721a51163a8f903c9268d928b4b465f17a11"
+  integrity sha512-ShPTiNrhOY0tLj3GmiV0QZIcUL4d5m6Euo8/Ea71hI7W55vgjhqmjoCHBF5o+TacaM+/7TJHrSRrcscStltMoA==
 
 "@ungap/structured-clone@^1.0.0":
   version "1.4.0"

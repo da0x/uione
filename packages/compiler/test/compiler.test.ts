@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createCompiler } from "../src/index.js";
 import type { Port } from "../src/index.js";
 import { run } from "../src/project.js";
-import type { Built, Checked, Module, Shown } from "../src/project.js";
+import type { Built, Checked, Completions, Module, Shown } from "../src/project.js";
 
 const repository = fileURLToPath(new URL("../../..", import.meta.url));
 // The Emscripten build, made by tools/wasm/build.
@@ -105,7 +105,7 @@ describe("the compiler in the browser", () => {
 
   it("outlines the project block, and builds for the environment named", () => {
     const shop =
-      'project shop {\n\tregion "us-east4"\n' +
+      'import one\nproject shop {\n\tregion "us-east4"\n' +
       '\tenvironment production {\n\t\tdomain "shop.example"\n\t\tfirebase "shop"\n\t}\n' +
       '\tenvironment staging {\n\t\tdomain "staging.shop.example"\n\t\tfirebase "shop-staging"\n\t}\n}\n' +
       "namespace shop {\n\tentity order {\n\t\ttotal  number\n\t}\n}\n";
@@ -113,12 +113,12 @@ describe("the compiler in the browser", () => {
     expect(checked.project).toEqual({
       path: "shop.one",
       name: "shop",
-      line: 1,
-      end: 11,
-      settings: [{ key: "region", value: "us-east4", line: 2 }],
+      line: 2,
+      end: 12,
+      settings: [{ key: "region", value: "us-east4", line: 3 }],
       environments: [
-        { name: "production", line: 3, end: 6, settings: [{ key: "domain", value: "shop.example", line: 4 }, { key: "firebase", value: "shop", line: 5 }] },
-        { name: "staging", line: 7, end: 10, settings: [{ key: "domain", value: "staging.shop.example", line: 8 }, { key: "firebase", value: "shop-staging", line: 9 }] },
+        { name: "production", line: 4, end: 7, settings: [{ key: "domain", value: "shop.example", line: 5 }, { key: "firebase", value: "shop", line: 6 }] },
+        { name: "staging", line: 8, end: 11, settings: [{ key: "domain", value: "staging.shop.example", line: 9 }, { key: "firebase", value: "shop-staging", line: 10 }] },
       ],
     });
     expect((run(one, { kind: "check", files: tasks }) as Checked).project).toBeNull();
@@ -140,6 +140,16 @@ describe("the compiler in the browser", () => {
     const built = run(one, { kind: "define", files, path: "reports.one", line: 6, column: 15 });
     expect(built).toMatchObject({ found: true, says: "built-in permission signed_in: anyone signed in", path: "", section: "command" });
     expect(run(one, { kind: "define", files, path: "reports.one", line: 1, column: 1 })).toEqual({ found: false });
+  });
+
+  it("offers a project's settings in its block, and an enum setting's choices", () => {
+    const text = "import one\nproject shop {\n\tcorners  s\n\tth\n}\n";
+    const choices = run(one, { kind: "complete", text, line: 3, column: 12 }) as Completions;
+    expect(choices.from).toBe(11);
+    expect(choices.items[0]).toMatchObject({ label: "square", detail: "Square" });
+    const settings = run(one, { kind: "complete", text, line: 4, column: 4 }) as Completions;
+    expect(settings.from).toBe(2);
+    expect(settings.items).toContainEqual({ label: "theme", detail: "theme", info: "The site's colors, light and dark." });
   });
 
   it("keeps a project's files inside it", () => {

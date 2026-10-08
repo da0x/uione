@@ -41,13 +41,18 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= project | namespace | format | enum_type | entity | command | view | role | roles
-                 | function | screen | picker | webhook | backend | once | signin
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | roles
+                 | function | screen | picker | webhook | backend | once | signin | settings
+
+/* import one: a library a file uses, like uione's own, which says what a project may say */
+import         ::= "import" NAME END
+/* settings project { ... }: what a block of settings may say, declared in a library */
+settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 
 /* project */
 
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
-setting        ::= setting_name (STRING | NAME) END
+setting        ::= setting_name (STRING | qualified) END
                  | "redirect" STRING STRING END
                  /* who it's by, and where their name links */
                  | "copyright" STRING STRING END

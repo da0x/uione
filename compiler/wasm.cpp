@@ -255,6 +255,25 @@ EMSCRIPTEN_KEEPALIVE const char* one_define(const char* project, const char* pat
     return answer.c_str();
 }
 
+// What can be written at a line and column of a file's text, both counted from 1:
+// the column the word being written starts at, and each item with its type and what
+// the library says of it.
+EMSCRIPTEN_KEEPALIVE const char* one_complete(const char* source, int line, int column) {
+    auto c = one::driver::complete(std::string(source), line, column);
+    answer = "{\"from\":" + std::to_string(c.from) + ",\"items\":[";
+    for (std::size_t i = 0; i < c.items.size(); ++i) {
+        answer += i ? ",{\"label\":" : "{\"label\":";
+        text(answer, c.items[i].label);
+        answer += ",\"detail\":";
+        text(answer, c.items[i].detail);
+        answer += ",\"info\":";
+        text(answer, c.items[i].info);
+        answer += "}";
+    }
+    answer += "]}";
+    return answer.c_str();
+}
+
 // where is file:line or file:line-line, the way `one show` takes it.
 EMSCRIPTEN_KEEPALIVE const char* one_show(const char* where) {
     auto shown = one::driver::show(where);

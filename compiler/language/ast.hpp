@@ -198,7 +198,19 @@ namespace one::language {
         bool is_string = false;
         location where;
         std::string to;  // redirect "/install.sh" "https://www.uione.io/install.sh": where it goes
+        // corners one::corners::square: the value written in full, whose last part is
+        // value; empty when it's written plainly.
+        std::string qualified;
+        location value_where;
     };
+
+    // import one: a library a file uses, like uione's own, which says what a project
+    // block may say.
+    struct import_declaration {
+        std::string name;
+        location where;
+    };
+
 
     // A place the project runs, with what's its own there: environment staging {
     // domain "staging.neotrac.org" ... }.
@@ -263,6 +275,13 @@ namespace one::language {
         // the one signing in, and it's deleted, both at once.
         std::optional<std::string> invites;
         location invites_where;
+        std::vector<field> fields;
+    };
+
+    // settings project { domain domain ... }: what a block of settings may say, each
+    // line one of these fields, with a value of its type. Written in a library.
+    struct settings_declaration {
+        std::string name;
         std::vector<field> fields;
     };
 
@@ -662,13 +681,17 @@ namespace one::language {
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
-                     webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration>
+                     webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
+                     import_declaration, settings_declaration>
             node;
     };
 
     struct file {
         std::string path;
         std::vector<declaration> declarations;
+        // Where an import goes: before the first declaration, and the comment that's
+        // its own, below the comments that open the file, like its license.
+        location imports_at{1, 1};
     };
 
     // The choice a name stands for, when it's one of a field's: written with the

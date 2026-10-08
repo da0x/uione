@@ -12,6 +12,7 @@ import type { CSSProperties } from "react";
 import { fromLine } from "./generated.js";
 import { highlighting, loadThemes } from "./highlight.js";
 import { themesOf } from "./themes.js";
+import { completions } from "./completions.js";
 import { definitions } from "./definitions.js";
 import { problems } from "./problems.js";
 import { place, spotOf } from "./spot.js";
@@ -27,8 +28,9 @@ export interface EditorProps {
   onChange: (value: string) => void;
   files: Files; // the whole project, this file included
   // With define, hovering over a name says what it is, and Ctrl or Cmd and a click,
-  // or F12, goes to it.
-  compiler: Pick<Compiler, "check"> & Partial<Pick<Compiler, "define">>;
+  // or F12, goes to it. With complete, a project's settings and their choices are
+  // offered as they're typed.
+  compiler: Pick<Compiler, "check"> & Partial<Pick<Compiler, "define" | "complete">>;
   tabWidth?: TabWidth;
   onLine?: (line: number) => void; // the line the cursor is on, numbered from 1
   // Going to a definition in another file, or this one: its path, line and column.
@@ -117,6 +119,7 @@ export function Editor({ path, value, onChange, files, compiler, tabWidth = 4, o
           colors.current.of(highlighting(themesOf(themes?.light, themes?.dark), path.endsWith(".one"))),
           tabs(tabWidth),
           problems({ compiler, path, files: () => latest.current.files }),
+          ...(compiler.complete && path.endsWith(".one") && !readOnly ? [completions({ compiler: compiler as Pick<Compiler, "complete"> })] : []),
           ...(compiler.define && path.endsWith(".one")
             ? [
                 definitions({
@@ -276,7 +279,7 @@ export function Generated({ files, path, line, tabWidth = 4 }: GeneratedProps) {
 }
 
 export interface WorkbenchProps {
-  compiler: Pick<Compiler, "check" | "build"> & Partial<Pick<Compiler, "define">>;
+  compiler: Pick<Compiler, "check" | "build"> & Partial<Pick<Compiler, "define" | "complete">>;
   files: Files;
   path: string;
   onChange: (path: string, value: string) => void;

@@ -31,6 +31,8 @@
 
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
+#include "language/library.hpp"
+#include "language/parser.hpp"
 #include "language/names.hpp"
 #include "platform/files.hpp"
 
@@ -50,27 +52,65 @@ namespace one::language {
     };
     using meanings = std::vector<meaning>;
 
+    // What the library says of what's declared on a line of it, from the comments just
+    // above, like what a setting is for, or "" when nothing is said.
+    inline std::string library_comment(int line) {
+        std::vector<std::string_view> lines;
+        std::string_view text = library_source;
+        for (std::size_t at = 0; at <= text.size();) {
+            std::size_t end = text.find('\n', at);
+            if (end == std::string_view::npos) end = text.size();
+            lines.push_back(text.substr(at, end - at));
+            at = end + 1;
+        }
+        std::string said;
+        for (int at = line - 2; at >= 0 && at < static_cast<int>(lines.size()); --at) {
+            std::string_view l = lines[static_cast<std::size_t>(at)];
+            std::size_t start = l.find_first_not_of(" \t");
+            if (start == std::string_view::npos || !l.substr(start).starts_with("//")) break;
+            std::string words(l.substr(start + 2));
+            if (!words.empty() && words.front() == ' ') words.erase(0, 1);
+            said = words + (said.empty() ? "" : " " + said);
+        }
+        return said;
+    }
+
     class checker {
     public:
         explicit checker(diagnostics& out, meanings* meant = nullptr) : out_(out), meant_(meant) {}
 
         void check(const std::vector<file>& files) {
-            for (const auto& f : files) {
-                path_ = f.path;
-                place("", f.declarations);
+            // uione's own library comes first, so what it declares, like the settings a
+            // project may say, is there for every file.
+            const file& own = library_file();
+            std::vector<const file*> all{&own};
+            for (const auto& f : files) all.push_back(&f);
+            for (const auto* f : all) {
+                path_ = f->path;
+                place("", f->declarations);
             }
-            for (const auto& f : files) {
-                path_ = f.path;
-                collect("", f.declarations);
+            for (const auto* f : all) {
+                path_ = f->path;
+                collect("", f->declarations);
             }
-            for (const auto& f : files) {
-                path_ = f.path;
-                give_enums("", f.declarations);
+            for (const auto* f : all) {
+                path_ = f->path;
+                give_enums("", f->declarations);
             }
-            for (const auto& f : files) {
-                path_ = f.path;
-                verify("", f.declarations);
+            for (const auto* f : all) {
+                path_ = f->path;
+                imports_at_ = f->imports_at;
+                verify("", f->declarations);
             }
+        }
+
+        // uione's own library, read once.
+        static const file& library_file() {
+            static const file parsed = [] {
+                diagnostics ignored;
+                return parse(std::string(library_path), library_source, ignored);
+            }();
+            return parsed;
         }
 
     private:
@@ -97,6 +137,7 @@ namespace one::language {
             std::vector<const role_declaration*> roles;
             std::vector<const roles_declaration*> defined;  // roles each project defines for itself
             std::map<std::string, origin> role_names;  // so a role is declared once
+            std::map<std::string, const settings_declaration*, std::less<>> settings;  // what a block of settings may say, in a library
         };
 
         // What a name can mean where it's written.
@@ -160,6 +201,8 @@ namespace one::language {
         // Where a namespace's screens are: under its name, like /docs, unless it says
         // otherwise with at, like namespace studio at /.
         std::map<std::string, std::string> prefixes_;
+        std::map<std::string, std::set<std::string>> imports_;  // what each file imports, by its path
+        location imports_at_;                                    // where the file being verified would say one
         std::map<std::string, std::string> placed_;  // where each namespace's at was first said
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
@@ -213,7 +256,16 @@ namespace one::language {
             scope& here = scopes_[ns];
             for (const auto& d : declarations) {
                 if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
+                    // namespace one is uione's own library.
+                    if (ns.empty() && n->name == "one" && path_ != library_path) {
+                        error(d.where, "namespace one is uione's own library; name yours something else");
+                        continue;
+                    }
                     collect(join(ns, n->name), n->declarations);
+                } else if (auto* st = std::get_if<settings_declaration>(&d.node)) {
+                    here.settings[st->name] = st;
+                } else if (auto* im = std::get_if<import_declaration>(&d.node)) {
+                    imports_[path_].insert(im->name);
                 } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
                     add(here.entities, e->name, *e, d.where, "entity", ns);
                 } else if (auto* v = std::get_if<view_declaration>(&d.node)) {
@@ -558,6 +610,50 @@ namespace one::language {
             return out;
         }
 
+        // unread news.changes since news.seen: a list of a view per user, and a value of
+        // the same view saying when the person last looked.
+        void check_unread(const setting& s) {
+            auto [view, list] = std::pair{s.value.substr(0, s.value.find('.')), s.value.substr(s.value.find('.') + 1)};
+            auto [since_view, since] = std::pair{s.to.substr(0, s.to.find('.')), s.to.substr(s.to.find('.') + 1)};
+            const view_declaration* found = nullptr;
+            for (const auto& [ns, sc] : scopes_) {
+                if (auto it = sc.views.find(view); it != sc.views.end()) found = it->second.node;
+            }
+            bool listed = found && std::any_of(found->each.begin(), found->each.end(), [&](const view_each& e) { return e.name && *e.name == list; });
+            bool held = found && std::any_of(found->values.begin(), found->values.end(), [&](const view_value& v) { return v.name && *v.name == since; });
+            if (!found || found->per != std::optional<std::string>{"user"}) {
+                error(s.where, "unread counts a list of a view per user, and there's no such view " + view);
+            } else if (!listed) {
+                error(s.where, "view " + view + " has no list " + list + " to count");
+            } else if (since_view != view || !held) {
+                error(s.where, "unread counts since a value of view " + view + ", like since " + view + ".seen");
+            }
+        }
+
+        // What the library says of a setting, like "domain: where it's served".
+        static std::string doc_of(int line, const std::string& name) {
+            std::string said = library_comment(line);
+            return said.empty() ? name : name + ": " + said;
+        }
+
+        // How a choice of an enum is shown, like Square.
+        static std::string choice_shown(const enum_declaration& e, const std::string& value) {
+            for (std::size_t i = 0; i < e.choices.size(); ++i) {
+                if (e.choices[i] == value) return i < e.choice_labels.size() && !e.choice_labels[i].empty() ? e.choice_labels[i] : value;
+            }
+            return value;
+        }
+
+        // import one: uione's own library is the one there is.
+        void verify(const std::string&, location where, const import_declaration& i) {
+            if (i.name != "one") error(where, "there's no library " + i.name + "; uione's own is one, as in import one");
+        }
+
+        // What a block of settings may say is declared in a library, like uione's own.
+        void verify(const std::string&, location where, const settings_declaration& st) {
+            if (path_ != library_path) error(where, "settings " + st.name + " is declared in a library, like uione's own one, which a project imports");
+        }
+
         // How much a color stands out from white, as WCAG measures it: 21 for black, 1
         // for white itself.
         static double contrast_with_white(const std::string& hex) {
@@ -573,122 +669,123 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics", "unread", "copyright"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
             static constexpr std::string_view id = "abcdefghijklmnopqrstuvwxyz0123456789-";
             static constexpr std::string_view host = "abcdefghijklmnopqrstuvwxyz0123456789-.";
+            // A project's file says it uses uione's own library, which says what a
+            // project may say.
+            if (!imports_[path_].contains("one")) {
+                error(imports_at_, "a project's file says import one, uione's own library, which says what a project may say",
+                      fix{imports_at_, 0, "import one\n\n"});
+            }
+            const scope& library = scopes_["one"];
+            auto settings_of = [&](std::string_view name) -> const settings_declaration* {
+                auto it = library.settings.find(name);
+                return it == library.settings.end() ? nullptr : it->second;
+            };
             std::vector<std::string> deploy;
-            std::set<std::string> methods;  // the ways people sign in, each named once
-            auto check_setting = [&](const setting& s, std::vector<std::string>& where_it_runs) {
-                if (!known.contains(s.key)) {
-                    error(s.where, "'" + s.key + "' isn't a project setting; expected domain, firebase, "
-                                   "region, ui, signin, icon, color, layout, serve, redirect, title, one or analytics");
+            std::set<std::string> said;  // each setting that isn't a list, said once
+            std::set<std::string> listed;  // each value of a list, said once, like signin github
+            // A value, checked as its type says: one of an enum's choices, written plainly
+            // or in full, or text of a kind, like a version or a domain.
+            auto check_value = [&](const setting& s, const field& f, const std::string& value, bool string) {
+                std::string type = f.type ? f.type->text() : "text";
+                const std::string dir = path_.substr(0, path_.find_last_of('/') == std::string::npos ? 0 : path_.find_last_of('/'));
+                if (auto e = library.enums.find(type); e != library.enums.end()) {
+                    const auto& choices = e->second.node->choices;
+                    bool known = std::find(choices.begin(), choices.end(), value) != choices.end();
+                    std::string names;
+                    for (std::size_t i = 0; i < choices.size(); ++i) names += (i == 0 ? "" : i + 1 == choices.size() ? " or " : ", ") + choices[i];
+                    if (string || !known) {
+                        error(s.value_where, s.key + " is " + names + ", written plainly, like " + s.key + " " + choices.front());
+                    } else if (!s.qualified.empty() && s.qualified != "one::" + type + "::" + value) {
+                        error(s.value_where, s.key + " " + value + " is one::" + type + "::" + value + " in full, or " + value + " plainly");
+                    } else {
+                        mean(s.value_where, (s.qualified.empty() ? value : s.qualified).size(), s.key + " " + value + ": " + choice_shown(*e->second.node, value),
+                             e->second.from, "project");
+                    }
                     return;
                 }
-                if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
-                // The compiler the project was last checked clean with: one "0.4.0".
-                if (s.key == "one" && !std::regex_match(s.value, std::regex(R"(\d+\.\d+\.\d+)"))) {
-                    error(s.where, "one names the compiler's version, like one \"0.4.0\"");
-                }
-                if ((s.key == "firebase" || s.key == "region") && !only(s.value, id)) {
+                if (type == "version" && !std::regex_match(value, std::regex(R"(\d+\.\d+\.\d+)"))) {
+                    error(s.where, s.key + " names the compiler's version, like " + s.key + " \"0.7.0\"");
+                } else if (type == "slug" && !only(value, id)) {
                     error(s.where, s.key + " has to be lowercase letters, digits and dashes, like ui-one or us-east4");
-                }
-                // How people sign in, one way to a line: signin google, then signin
-                // github. For a while it was called authentication.
-                if (s.key == "authentication") {
-                    error(s.where, "authentication is called signin, like signin " + s.value, fix{s.where, s.key.size(), "signin"});
-                }
-                if (s.key == "signin") {
-                    if (s.value != "google" && s.value != "github" && s.value != "microsoft") {
-                        error(s.where, "signin is google, github or microsoft, one to a line");
-                    } else if (!methods.insert(s.value).second) {
-                        error(s.where, "signin " + s.value + " is named twice");
-                    }
-                }
-                // How screens are laid out unless they say: single or two_columns.
-                if (s.key == "layout" && !regions_of(s.value)) {
-                    error(s.where, "layout is single or two_columns");
-                }
-                // The site's own color, for its buttons and links, as #rrggbb: dark enough
-                // to read as text on a white page.
-                if (s.key == "color") {
-                    if (!std::regex_match(s.value, std::regex("#[0-9a-fA-F]{6}"))) {
-                        error(s.where, "color is written #rrggbb, like color \"#0f766e\"");
-                    } else if (double contrast = contrast_with_white(s.value); contrast < 4.5) {
+                } else if (type == "domain" && (!only(value, host) || value.find('.') == std::string::npos)) {
+                    error(s.where, s.key + " has to be a domain name, like uione.io");
+                } else if (type == "color") {
+                    if (!std::regex_match(value, std::regex("#[0-9a-fA-F]{6}"))) {
+                        error(s.where, s.key + " is written #rrggbb, like " + s.key + " \"#0f766e\"");
+                    } else if (double contrast = contrast_with_white(value); contrast < 4.5) {
                         char shown[8];
                         std::snprintf(shown, sizeof shown, "%.1f", contrast);
-                        error(s.where, "color " + s.value + " is too light to read as a link on a white page (" + shown + ":1, and it needs 4.5:1); choose a darker one");
+                        error(s.where, s.key + " " + value + " is too light to read as a link on a white page (" + shown + ":1, and it needs 4.5:1); choose a darker one");
                     }
-                }
-                // The site's colors, light and dark, as a theme of its component set's.
-                if (s.key == "theme" && s.value != "papercolor") {
-                    error(s.where, "theme is papercolor, or left out for the component set's own");
-                }
-                // Corners square, for a sharper look, or round, as they are unless it says.
-                if (s.key == "corners" && s.value != "square" && s.value != "round") {
-                    error(s.where, "corners are square or round");
-                }
-                // What's new to a person, counted beside the app's name: a list of their own
-                // view, and a value of the same view saying when they last looked.
-                if (s.key == "unread") {
-                    auto [view, list] = std::pair{s.value.substr(0, s.value.find('.')), s.value.substr(s.value.find('.') + 1)};
-                    auto [since_view, since] = std::pair{s.to.substr(0, s.to.find('.')), s.to.substr(s.to.find('.') + 1)};
-                    const view_declaration* found = nullptr;
-                    for (const auto& [ns, sc] : scopes_) {
-                        if (auto it = sc.views.find(view); it != sc.views.end()) found = it->second.node;
-                    }
-                    bool listed = found && std::any_of(found->each.begin(), found->each.end(), [&](const view_each& e) { return e.name && *e.name == list; });
-                    bool held = found && std::any_of(found->values.begin(), found->values.end(), [&](const view_value& v) { return v.name && *v.name == since; });
-                    if (!found || found->per != std::optional<std::string>{"user"}) {
-                        error(s.where, "unread counts a list of a view per user, and there's no such view " + view);
-                    } else if (!listed) {
-                        error(s.where, "view " + view + " has no list " + list + " to count");
-                    } else if (since_view != view || !held) {
-                        error(s.where, "unread counts since a value of view " + view + ", like since " + view + ".seen");
-                    }
-                }
-                // Visitors counted with Firebase Analytics, once they agree to it.
-                if (s.key == "analytics" && s.value != "google") {
-                    error(s.where, "analytics is google, for Firebase Analytics");
-                }
-                if (s.key == "domain" && (!only(s.value, host) || s.value.find('.') == std::string::npos)) {
-                    error(s.where, "domain has to be a domain name, like uione.io");
-                }
-                // The app's icon is an SVG file next to the project's .one files, so it's
-                // sharp at any size and part of the project like everything else.
-                // Files served as they are, at the site's root: serve "public" puts
-                // public/install.sh at /install.sh.
-                // redirect "/install.sh" "https://www.uione.io/install.sh": an address of
-                // this site that sends whoever asks for it somewhere else.
-                if (s.key == "redirect") {
-                    if (!s.value.starts_with("/") || s.to.empty() ||
-                        !(s.to.starts_with("https://") || s.to.starts_with("/")) ||
-                        s.to.find_first_of("\" \\") != std::string::npos || s.value.find_first_of("\" \\") != std::string::npos) {
-                        error(s.where, "redirect takes an address of this site and where it goes, like redirect \"/install.sh\" \"https://www.uione.io/install.sh\"");
-                    }
-                } else if (s.key == "copyright" && !s.to.empty() && !s.to.starts_with("https://")) {
-                    error(s.where, "copyright's second value is where its name links, like copyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"");
-                } else if (!s.to.empty() && s.key != "unread" && s.key != "copyright") {
-                    error(s.where, s.key + " takes one value");
-                }
-                if (s.key == "serve") {
-                    std::string dir = path_.substr(0, path_.find_last_of('/') == std::string::npos ? 0 : path_.find_last_of('/'));
-                    if (!std::filesystem::is_directory(platform::resolve(dir.empty() ? "." : dir, s.value))) {
-                        error(s.where, "there's no folder " + s.value + " to serve; it's looked for next to this .one file");
-                    }
-                }
-                if (s.key == "icon") {
-                    std::string dir = path_.substr(0, path_.find_last_of('/') == std::string::npos ? 0 : path_.find_last_of('/'));
-                    if (!s.value.ends_with(".svg")) {
-                        error(s.where, "icon has to be an .svg file, like \"assets/icon.svg\"");
-                    } else if (!platform::read_file(platform::resolve(dir.empty() ? "." : dir, s.value))) {
-                        error(s.where, "there's no icon file at " + s.value + "; it's looked for next to this .one file");
-                    }
+                } else if (type == "folder" && !std::filesystem::is_directory(platform::resolve(dir.empty() ? "." : dir, value))) {
+                    error(s.where, "there's no folder " + value + " to " + s.key + "; it's looked for next to this .one file");
+                } else if (type == "file" && !platform::read_file(platform::resolve(dir.empty() ? "." : dir, value))) {
+                    error(s.where, "there's no " + s.key + " file at " + value + "; it's looked for next to this .one file");
+                } else if (type == "address" && (!value.starts_with("/") || value.find_first_of("\" \\") != std::string::npos)) {
+                    error(s.where, s.key + " takes an address of this site, like \"/install.sh\"");
+                } else if (type == "link" && (!(value.starts_with("https://") || (s.key == "redirect" && value.starts_with("/"))) ||
+                                              value.find_first_of("\" \\") != std::string::npos)) {
+                    error(s.where, s.key + "'s " + f.name + " is an https address, like \"https://www.uione.io\"");
                 }
             };
-            for (const auto& s : p.settings) check_setting(s, deploy);
+            auto check_setting = [&](const setting& s, const settings_declaration& in, std::vector<std::string>& where_it_runs) {
+                // How people sign in was called authentication for a while.
+                if (s.key == "authentication") {
+                    error(s.where, "authentication is called signin, like signin " + s.value, fix{s.where, s.key.size(), "signin"});
+                    return;
+                }
+                const field* f = nullptr;
+                for (const auto& candidate : in.fields) {
+                    if (candidate.name == s.key) f = &candidate;
+                }
+                if (!f) {
+                    std::string names;
+                    for (std::size_t i = 0; i < in.fields.size(); ++i) {
+                        names += (i == 0 ? "" : i + 1 == in.fields.size() ? " or " : ", ") + in.fields[i].name;
+                    }
+                    error(s.where, "'" + s.key + "' isn't a setting " + (in.name == "project" ? "of a project" : "of an environment") + "; it says " + names);
+                    return;
+                }
+                mean(s.where, s.key.size(), doc_of(f->where.line, s.key), origin{std::string(library_path), f->where}, "project");
+                if (s.key == "firebase" || s.key == "region" || s.key == "domain") where_it_runs.push_back(s.key);
+                if (!f->list && !said.insert(s.key).second) {
+                    error(s.where, s.key + " is said once");
+                }
+                if (f->list && !listed.insert(s.key + " " + s.value).second) {
+                    error(s.where, s.key + " " + s.value + " is named twice");
+                }
+                std::string type = f->type ? f->type->text() : "text";
+                // A setting of several values, like copyright's name and link, in their order.
+                if (const settings_declaration* parts = settings_of(type)) {
+                    if (type == "unread") {
+                        check_unread(s);
+                        return;
+                    }
+                    const field* second = parts->fields.size() > 1 ? &parts->fields[1] : nullptr;
+                    if (!parts->fields.empty()) check_value(s, parts->fields[0], s.value, s.is_string);
+                    if (second && !s.to.empty()) check_value(s, *second, s.to, true);
+                    if (type == "redirect" && s.to.empty()) {
+                        error(s.where, "redirect takes an address of this site and where it goes, like redirect \"/install.sh\" \"https://www.uione.io/install.sh\"");
+                    }
+                    return;
+                }
+                if (!s.to.empty()) error(s.where, s.key + " takes one value");
+                // The icon is an SVG, so it's sharp at any size.
+                if (s.key == "icon" && !s.value.ends_with(".svg")) {
+                    error(s.where, "icon has to be an .svg file, like \"assets/icon.svg\"");
+                    return;
+                }
+                check_value(s, *f, s.value, s.is_string);
+            };
+            const settings_declaration* project_settings = settings_of("project");
+            const settings_declaration* environment_settings = settings_of("environment");
+            if (!project_settings || !environment_settings) return;  // the library is uione's own, and has them
+            for (const auto& s : p.settings) check_setting(s, *project_settings, deploy);
             auto missing_from = [](const std::vector<std::string>& have) {
                 std::string missing;
                 for (const char* key : {"firebase", "region", "domain"}) {
@@ -729,12 +826,14 @@ namespace one::language {
                     error(environment.where, "there are two environments called " + environment.name);
                 }
                 std::vector<std::string> runs = deploy;
+                said.clear();
                 for (const auto& s : environment.settings) {
-                    if (s.key != "domain" && s.key != "firebase" && s.key != "region") {
+                    bool own = std::any_of(environment_settings->fields.begin(), environment_settings->fields.end(), [&](const field& f) { return f.name == s.key; });
+                    if (!own) {
                         error(s.where, s.key + " is the same in every environment, so it goes outside them; an environment has its own domain, firebase and region");
                         continue;
                     }
-                    check_setting(s, runs);
+                    check_setting(s, *environment_settings, runs);
                 }
                 std::sort(runs.begin(), runs.end());
                 runs.erase(std::unique(runs.begin(), runs.end()), runs.end());

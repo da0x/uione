@@ -19,9 +19,9 @@ syn match   uioneComment "//.*$" contains=uioneTodo,@Spell
 syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
-syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|settings\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
 syn match uioneDeclare "^\s*\zs\<once\>\ze\s\+\""
-syn match uioneDeclare "^\s*\zs\<namespace\>\%(::\|\s*=\)\@!" nextgroup=uioneNamespaceName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(namespace\|import\)\>\%(::\|\s*=\)\@!" nextgroup=uioneNamespaceName skipwhite
 syn match uioneDeclare "^\s*\zs\<format\>\ze\s" nextgroup=uioneFormatName skipwhite
 syn match uioneNamespaceName "\h\w*\%(::\h\w*\)*" contained contains=uioneScope
 syn match uioneName       "\h\w*" contained
@@ -69,7 +69,7 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 " or another entity, so `project  project  required  key` is a field named project
 " holding a project, not a declaration. Inside it, words that start declarations
 " elsewhere are names.
-syn region uioneFields start="\%(^\s*entity\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\%(\s\+history\%(\s\+of\s\+\h\w*\)\=\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf
+syn region uioneFields start="\%(^\s*\%(entity\|settings\)\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\%(\s\+history\%(\s\+of\s\+\h\w*\)\=\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf
 syn match   uioneFieldName "^\s*\zs\h\w*" contained nextgroup=uioneUserType,uioneType skipwhite
 syn match   uioneUserType  "\h\w*\%(::\h\w*\)*" contained
 syn match   uioneFieldWord "\<\%(per\|of\)\>" contained
@@ -92,7 +92,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 " A project's block: its settings, each a word at the start of its line, and its
 " environments, whose blocks hold settings too. Elsewhere those words are names, like
 " a column called title.
-syn cluster uioneProjectItems contains=uioneSetting,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
+syn cluster uioneProjectItems contains=uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
 syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|corners\|layout\|serve\|redirect\|title\|one\|analytics\|unread\|copyright\)\>" contained

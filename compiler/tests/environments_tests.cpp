@@ -21,7 +21,7 @@ using namespace one;
 
 namespace {
 
-    const std::string shop = "project shop {\n"
+    const std::string shop = "import one\nproject shop {\n"
                              "\tregion  \"us-east4\"\n"
                              "\tui      radix\n"
                              "\tenvironment production {\n"
@@ -70,7 +70,7 @@ TEST_CASE("environments are written in the project block, with what's their own"
     language::diagnostics out;
     auto file = language::parse("main.one", shop, out);
     REQUIRE(out.empty());
-    const auto& p = std::get<language::project_declaration>(file.declarations.at(0).node);
+    const auto& p = std::get<language::project_declaration>(file.declarations.at(1).node);  // after import one
     REQUIRE(p.settings.size() == 2);  // region and ui, shared
     REQUIRE(p.environments.size() == 2);
     CHECK(p.environments[0].name == "production");
@@ -82,20 +82,20 @@ TEST_CASE("environments are written in the project block, with what's their own"
 }
 
 TEST_CASE("an environment has only its own place, and all of it, its own or shared") {
-    CHECK(only_error("project shop {\n\tenvironment production {\n\t\tdomain \"shop.example\"\n\t\tfirebase \"shop\"\n\t\tregion \"us-east4\"\n\t\tui radix\n\t}\n}\n") ==
+    CHECK(only_error("import one\nproject shop {\n\tenvironment production {\n\t\tdomain \"shop.example\"\n\t\tfirebase \"shop\"\n\t\tregion \"us-east4\"\n\t\tui radix\n\t}\n}\n") ==
           "ui is the same in every environment, so it goes outside them; an environment has its own domain, firebase and region");
-    CHECK(only_error("project shop {\n\tenvironment staging {\n\t\tdomain \"shop.example\"\n\t}\n}\n") ==
+    CHECK(only_error("import one\nproject shop {\n\tenvironment staging {\n\t\tdomain \"shop.example\"\n\t}\n}\n") ==
           "environment staging needs firebase, region and domain, its own or shared; it has no firebase and region");
-    CHECK(only_error("project shop {\n\tregion \"us-east4\"\n"
+    CHECK(only_error("import one\nproject shop {\n\tregion \"us-east4\"\n"
                      "\tenvironment staging {\n\t\tdomain \"a.example\"\n\t\tfirebase \"a\"\n\t}\n"
                      "\tenvironment staging {\n\t\tdomain \"b.example\"\n\t\tfirebase \"b\"\n\t}\n}\n") == "there are two environments called staging");
     // Two environments in one Google Cloud project would deploy over each other.
-    CHECK(only_error("project shop {\n\tregion \"us-east4\"\n\tfirebase \"shop\"\n"
+    CHECK(only_error("import one\nproject shop {\n\tregion \"us-east4\"\n\tfirebase \"shop\"\n"
                      "\tenvironment production {\n\t\tdomain \"shop.example\"\n\t}\n"
                      "\tenvironment staging {\n\t\tdomain \"staging.shop.example\"\n\t}\n}\n") ==
           "environments production and staging both run in the Google Cloud project shop; each needs its own, so their data and deploys never mix");
     // What's checked of a setting outside an environment is checked inside one too.
-    CHECK(only_error("project shop {\n\tregion \"us-east4\"\n\tenvironment staging {\n\t\tdomain \"a.example\"\n\t\tfirebase \"a; rm -rf ~\"\n\t}\n}\n") ==
+    CHECK(only_error("import one\nproject shop {\n\tregion \"us-east4\"\n\tenvironment staging {\n\t\tdomain \"a.example\"\n\t\tfirebase \"a; rm -rf ~\"\n\t}\n}\n") ==
           "firebase has to be lowercase letters, digits and dashes, like ui-one or us-east4");
 }
 
@@ -133,7 +133,7 @@ TEST_CASE("a build is for one environment: the one named, or the first") {
 }
 
 TEST_CASE("a project without environments is built as it always was, and --for is refused") {
-    auto dir = project("uione-no-environments", "project shop {\n\tdomain \"shop.example\"\n\tfirebase \"shop\"\n\tregion \"us-east4\"\n}\n"
+    auto dir = project("uione-no-environments", "import one\nproject shop {\n\tdomain \"shop.example\"\n\tfirebase \"shop\"\n\tregion \"us-east4\"\n}\n"
                                                 "namespace shop {\n\tentity order {\n\t\ttotal  number\n\t}\n}\n");
     auto built = driver::build(dir.string(), (dir / "build").string());
     REQUIRE(built.refusal.empty());
@@ -147,7 +147,7 @@ TEST_CASE("a project without environments is built as it always was, and --for i
 
 TEST_CASE("a project counts its visitors with Firebase Analytics only when it says so") {
     auto app = [](const std::string& settings) {
-        auto dir = project("uione-analytics", "project shop {\n\tdomain \"shop.example\"\n\tfirebase \"shop\"\n\tregion \"us-east4\"\n" + settings +
+        auto dir = project("uione-analytics", "import one\nproject shop {\n\tdomain \"shop.example\"\n\tfirebase \"shop\"\n\tregion \"us-east4\"\n" + settings +
                                                   "}\nnamespace shop {\n\tentity order {\n\t\ttotal  number\n\t}\n}\nscreen \"Shop\" / {\n\ttext \"Welcome\"\n}\n");
         auto built = driver::build(dir.string(), (dir / "build").string());
         for (const auto& d : built.problems) CAPTURE(language::format(d));

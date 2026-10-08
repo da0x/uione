@@ -32,7 +32,7 @@ TEST_CASE("an upgrade renames authentication and authenticated, and keeps the se
                        "entity order {\n\ttitle text\n}\ncommand order::create {\n\tpermission authenticated\n}\n");
     auto done = driver::upgrade(dir.string(), "9.9.9");
     REQUIRE(done.problems.empty());
-    CHECK(done.fixes == 2);
+    CHECK(done.fixes == 3);  // and import one
     const auto& text = done.changed.begin()->second;
     CHECK(text.find("\tone             \"9.9.9\"\n\tregion          \"us-east4\"\n\tsignin          google\n") != std::string::npos);
     CHECK(text.find("\t\tdomain    \"shop.example\"") != std::string::npos);  // an environment's settings are its own
@@ -46,7 +46,7 @@ TEST_CASE("an upgrade applies the fixes, records the version, and checks clean")
                                         "command order::ship {\n\trequire status == open  \"shipped already\"\n\tstatus = shipped\n}\n");
     auto done = driver::upgrade(dir.string(), "9.9.9");
     REQUIRE(done.problems.empty());
-    CHECK(done.fixes == 5);
+    CHECK(done.fixes == 6);  // and import one
     CHECK(done.recorded);
     REQUIRE(done.changed.size() == 1);
     const auto& text = done.changed.begin()->second;
@@ -122,11 +122,11 @@ TEST_CASE("a project's version says which compiler to hand to, unless it's this 
 }
 
 TEST_CASE("a project names its compiler's version as one, like one \"0.4.0\"") {
-    driver::sources bad{{"main.one", "project shop {\n\tone  \"latest\"\n}\n"}};
+    driver::sources bad{{"main.one", "import one\nproject shop {\n\tone  \"latest\"\n}\n"}};
     language::diagnostics found;
     driver::check_sources(bad, found);
     REQUIRE(found.size() == 1);
-    CHECK(found[0].message == "one names the compiler's version, like one \"0.4.0\"");
+    CHECK(found[0].message == "one names the compiler's version, like one \"0.7.0\"");
 }
 
 TEST_CASE("each screen is outlined by line: its layout, its regions and their items") {
@@ -236,4 +236,15 @@ TEST_CASE("a table is outlined with its columns, its settings and what its rows 
     CHECK(t.sort == "-title");
     CHECK(t.page == 25);
     CHECK(t.link == "/issues/:issue");
+}
+
+TEST_CASE("an upgrade says import one below the file's opening comments, and above the project's own") {
+    auto dir = project("uione-upgrade-import", "// Copyright 2026 Ada\n// SPDX-License-Identifier: MIT\n\n"
+                                               "// The shop.\nproject shop {\n\tui  radix\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    CHECK(done.changed.begin()->second == "// Copyright 2026 Ada\n// SPDX-License-Identifier: MIT\n\n"
+                                          "import one\n\n// The shop.\nproject shop {\n\tone \"9.9.9\"\n\tui  radix\n}\n");
+    std::filesystem::remove_all(dir);
 }

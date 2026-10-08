@@ -199,11 +199,11 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 }
 
 TEST_CASE("one project block, with known settings") {
-    CHECK(only_error("project a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a project setting; expected domain, firebase, region, ui, signin, icon, color, layout, serve, redirect, title, one or analytics");
-    CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
-    CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
-    CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
+    CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, corners, layout, serve, redirect, analytics, unread or copyright");
+    CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
+    CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
+    CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
         "a project has one project block"));
 }
 
@@ -224,19 +224,19 @@ TEST_CASE("a name is looked up in its own namespace, then at the top level") {
 }
 
 TEST_CASE("where a project runs is checked, so it can't break the code it goes into") {
-    CHECK(check_source("project p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"uione.io\"\n}\n").empty());
-    CHECK(only_error("project p {\n\tfirebase \"ui-one; rm -rf ~\"\n\tregion \"us-east4\"\n\tdomain \"uione.io\"\n}\n").message ==
+    CHECK(check_source("import one\nproject p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"uione.io\"\n}\n").empty());
+    CHECK(only_error("import one\nproject p {\n\tfirebase \"ui-one; rm -rf ~\"\n\tregion \"us-east4\"\n\tdomain \"uione.io\"\n}\n").message ==
           "firebase has to be lowercase letters, digits and dashes, like ui-one or us-east4");
-    CHECK(only_error("project p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"$(whoami).io\"\n}\n").message ==
+    CHECK(only_error("import one\nproject p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"$(whoami).io\"\n}\n").message ==
           "domain has to be a domain name, like uione.io");
-    CHECK(only_error("project p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"localhost\"\n}\n").message ==
+    CHECK(only_error("import one\nproject p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n\tdomain \"localhost\"\n}\n").message ==
           "domain has to be a domain name, like uione.io");
 }
 
 TEST_CASE("a project names all of where it runs, or none of it") {
-    CHECK(only_error("project p {\n\tfirebase \"ui-one\"\n\tdomain \"uione.io\"\n}\n").message ==
+    CHECK(only_error("import one\nproject p {\n\tfirebase \"ui-one\"\n\tdomain \"uione.io\"\n}\n").message ==
           "a project that says where it runs needs firebase, region and domain; this one has no region");
-    CHECK(check_source("project p {\n\tui radix\n}\n").empty());
+    CHECK(check_source("import one\nproject p {\n\tui radix\n}\n").empty());
 }
 
 
@@ -497,9 +497,9 @@ view crew_page per crew {
 }
 
 TEST_CASE("a theme and corners are ones the component set has") {
-    CHECK(only_error("project p {\n\ttheme  solarized\n}\n").message == "theme is papercolor, or left out for the component set's own");
-    CHECK(only_error("project p {\n\tcorners  sharp\n}\n").message == "corners are square or round");
-    CHECK(check_source("project p {\n\ttheme  papercolor\n\tcorners  square\n}\n").size() == 0);
+    CHECK(only_error("import one\nproject p {\n\ttheme  solarized\n}\n").message == "theme is papercolor, written plainly, like theme papercolor");
+    CHECK(only_error("import one\nproject p {\n\tcorners  sharp\n}\n").message == "corners is square or round, written plainly, like corners square");
+    CHECK(check_source("import one\nproject p {\n\ttheme  papercolor\n\tcorners  square\n}\n").size() == 0);
 }
 
 TEST_CASE("an enum declared on its own gives any field of its type its choices, named with the enum") {
@@ -618,8 +618,8 @@ TEST_CASE("the old clipped words are pointed at the whole ones") {
 }
 
 TEST_CASE("a project's icon is an .svg file that's there") {
-    CHECK(only_error("project p {\n\ticon \"assets/icon.png\"\n}\n").message == "icon has to be an .svg file, like \"assets/icon.svg\"");
-    CHECK(only_error("project p {\n\ticon \"assets/nowhere.svg\"\n}\n").message ==
+    CHECK(only_error("import one\nproject p {\n\ticon \"assets/icon.png\"\n}\n").message == "icon has to be an .svg file, like \"assets/icon.svg\"");
+    CHECK(only_error("import one\nproject p {\n\ticon \"assets/nowhere.svg\"\n}\n").message ==
           "there's no icon file at assets/nowhere.svg; it's looked for next to this .one file");
 }
 
@@ -948,7 +948,7 @@ TEST_CASE("an enum says so, and its choices are named with it") {
 }
 
 TEST_CASE("serve names a folder next to the project") {
-    CHECK(only_error("project a {\n\tserve \"no-such-folder\"\n}\n").message ==
+    CHECK(only_error("import one\nproject a {\n\tserve \"no-such-folder\"\n}\n").message ==
           "there's no folder no-such-folder to serve; it's looked for next to this .one file");
 }
 
@@ -997,10 +997,10 @@ TEST_CASE("a backend is a Go file of the namespace's package, beside the .one fi
 }
 
 TEST_CASE("a project can redirect an address that moved, and a link can go to another site") {
-    CHECK(check_source("project p {\n\tredirect \"/install.sh\" \"https://www.uione.io/install.sh\"\n}\n").empty());
-    CHECK(only_error("project p {\n\tredirect \"install.sh\" \"https://www.uione.io/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
-    CHECK(only_error("project p {\n\tredirect \"/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
-    CHECK(only_error("project p {\n\tdomain \"a.io\" \"b.io\"\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n}\n").message == "domain takes one value");
+    CHECK(check_source("import one\nproject p {\n\tredirect \"/install.sh\" \"https://www.uione.io/install.sh\"\n}\n").empty());
+    CHECK(only_error("import one\nproject p {\n\tredirect \"install.sh\" \"https://www.uione.io/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
+    CHECK(only_error("import one\nproject p {\n\tredirect \"/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
+    CHECK(only_error("import one\nproject p {\n\tdomain \"a.io\" \"b.io\"\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n}\n").message == "domain takes one value");
     CHECK(check_source("screen \"Home\" / {\n\tlink \"https://uione.io/studio\" \"Open the studio\"\n}\n").empty());
     CHECK(only_error("screen \"Home\" / {\n\tlink \"http://uione.io\" \"Open\"\n}\n").message ==
           "a link to another site is an https:// address, like \"https://uione.io/studio\"");
@@ -1008,12 +1008,12 @@ TEST_CASE("a project can redirect an address that moved, and a link can go to an
 }
 
 TEST_CASE("people sign in with Google, GitHub or Microsoft, each named once") {
-    CHECK(check_source("project p {\n\tsignin google\n}\n").empty());
-    CHECK(check_source("project p {\n\tsignin github\n\tsignin google\n\tsignin microsoft\n}\n").empty());
-    CHECK(only_error("project p {\n\tsignin twitter\n}\n").message == "signin is google, github or microsoft, one to a line");
-    CHECK(only_error("project p {\n\tsignin github\n\tsignin github\n}\n").message == "signin github is named twice");
+    CHECK(check_source("import one\nproject p {\n\tsignin google\n}\n").empty());
+    CHECK(check_source("import one\nproject p {\n\tsignin github\n\tsignin google\n\tsignin microsoft\n}\n").empty());
+    CHECK(only_error("import one\nproject p {\n\tsignin twitter\n}\n").message == "signin is google, github or microsoft, written plainly, like signin google");
+    CHECK(only_error("import one\nproject p {\n\tsignin github\n\tsignin github\n}\n").message == "signin github is named twice");
     // What they were called for a while, each with its fix.
-    auto signin = only_error("project p {\n\tauthentication github\n}\n");
+    auto signin = only_error("import one\nproject p {\n\tauthentication github\n}\n");
     CHECK(signin.message == "authentication is called signin, like signin github");
     REQUIRE(signin.fix);
     CHECK(signin.fix->text == "signin");
@@ -1094,9 +1094,9 @@ TEST_CASE("a table's tabs are by a choice it shows") {
 }
 
 TEST_CASE("a project's color is dark enough to read on a white page") {
-    CHECK(check_source("project p {\n\tcolor  \"#0f766e\"\n}\n").empty());
-    CHECK(only_error("project p {\n\tcolor  \"teal\"\n}\n").message == "color is written #rrggbb, like color \"#0f766e\"");
-    CHECK(only_error("project p {\n\tcolor  \"#fde047\"\n}\n").message ==
+    CHECK(check_source("import one\nproject p {\n\tcolor  \"#0f766e\"\n}\n").empty());
+    CHECK(only_error("import one\nproject p {\n\tcolor  \"teal\"\n}\n").message == "color is written #rrggbb, like color \"#0f766e\"");
+    CHECK(only_error("import one\nproject p {\n\tcolor  \"#fde047\"\n}\n").message ==
           "color #fde047 is too light to read as a link on a white page (1.3:1, and it needs 4.5:1); choose a darker one");
 }
 
@@ -1113,7 +1113,7 @@ TEST_CASE("a screen's regions are its layout's, and hold everything once there a
     CHECK(only_error(start + "screen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").message == "layout single has no region side; its regions are main");
     CHECK(only_error(start + "screen \"S\" /s layout two_columns {\n\tmain {\n\t\ttext \"a\"\n\t}\n\ttext \"b\"\n}\n}\n").message ==
           "this screen puts its items in regions, so this goes in one too, like main { ... }");
-    CHECK(check_source("project p {\n\tlayout  two_columns\n}\nnamespace a {\nscreen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
+    CHECK(check_source("import one\nproject p {\n\tlayout  two_columns\n}\nnamespace a {\nscreen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
 }
 
 TEST_CASE("a table searches and sorts by what its rows have") {
@@ -1143,11 +1143,11 @@ TEST_CASE("what's new is counted from a person's own view, since a value of it")
                         "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
                         "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tfield\n\t}\n"
                         "\tseen = first(reader where person == user.id).seen_at\n}\n}\n";
-    CHECK(check_source("project tracker {\n\tunread  news.changes since news.seen\n}\n" + views).empty());
-    CHECK(only_error("project tracker {\n\tunread  news.comments since news.seen\n}\n" + views).message == "view news has no list comments to count");
-    CHECK(only_error("project tracker {\n\tunread  news.changes since news.looked\n}\n" + views).message ==
+    CHECK(check_source("import one\nproject tracker {\n\tunread  news.changes since news.seen\n}\n" + views).empty());
+    CHECK(only_error("import one\nproject tracker {\n\tunread  news.comments since news.seen\n}\n" + views).message == "view news has no list comments to count");
+    CHECK(only_error("import one\nproject tracker {\n\tunread  news.changes since news.looked\n}\n" + views).message ==
           "unread counts since a value of view news, like since news.seen");
-    CHECK(only_error("project tracker {\n\tunread  feed.changes since feed.seen\n}\n" + views).message ==
+    CHECK(only_error("import one\nproject tracker {\n\tunread  feed.changes since feed.seen\n}\n" + views).message ==
           "unread counts a list of a view per user, and there's no such view feed");
 }
 
@@ -1212,8 +1212,8 @@ TEST_CASE("on signin does each step as the person signing in, with me.email thei
 }
 
 TEST_CASE("a copyright says who a site is by, and where their name links") {
-    CHECK(check_source("project shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").empty());
-    CHECK(check_source("project shop {\n\tcopyright \"Ada Lovelace\"\n}\n").empty());
-    CHECK(only_error("project shop {\n\tcopyright \"Ada Lovelace\" \"linkedin.com/in/ada\"\n}\n").message ==
-          "copyright's second value is where its name links, like copyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"");
+    CHECK(check_source("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").empty());
+    CHECK(check_source("import one\nproject shop {\n\tcopyright \"Ada Lovelace\"\n}\n").empty());
+    CHECK(only_error("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"linkedin.com/in/ada\"\n}\n").message ==
+          "copyright's link is an https address, like \"https://www.uione.io\"");
 }

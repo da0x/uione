@@ -100,6 +100,13 @@ export type Definition =
       to: number;
     };
 
+// What can be written at a place in a file, from uione's library: a project's
+// settings in its block, and an enum setting's choices after its name.
+export interface Completions {
+  from: number; // the column the word being written starts at
+  items: { label: string; detail: string; info: string }[]; // detail: its type, or how a choice is shown
+}
+
 export interface Checked {
   problems: Problem[];
   files: number;
@@ -130,9 +137,10 @@ export type Request =
   | { kind: "check"; files: Files }
   | { kind: "build"; files: Files; environment?: string }
   | { kind: "define"; files: Files; path: string; line: number; column: number }
-  | { kind: "show"; files: Files; path: string; from: number; to?: number };
+  | { kind: "show"; files: Files; path: string; from: number; to?: number }
+  | { kind: "complete"; text: string; line: number; column: number };
 
-export type Answer = string | Checked | Built | Shown | Definition;
+export type Answer = string | Checked | Built | Shown | Definition | Completions;
 
 // The parts of the Emscripten module this uses.
 export interface Module {
@@ -152,6 +160,9 @@ const project = "/project";
 
 export function run(one: Module, request: Request): Answer {
   if (request.kind === "version") return one.ccall("one_version", "string", [], []);
+  if (request.kind === "complete") {
+    return JSON.parse(one.ccall("one_complete", "string", ["string", "number", "number"], [request.text, request.line, request.column])) as Completions;
+  }
   place(one, request.files);
   const call = (name: string, ...args: string[]) => JSON.parse(one.ccall(name, "string", args.map(() => "string"), args));
   if (request.kind === "check") {
