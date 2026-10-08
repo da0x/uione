@@ -848,10 +848,12 @@ board project_page.issues by phase over project_page.phases link /:project/issue
   holding them: `implementer = issue.implemented_by.name`.
 - `copy issue_page "Copy issue"` is a button that copies everything the view
   holds, as Markdown, to paste somewhere else whole: the page's title, each value
-  but the ones the title shows, a markdown value as it was written, then each list,
-  a conversation as who wrote what and when, changes as what happened, and other
-  rows as their values. As the view gains fields, so does what it copies. The ids of
-  people are left out, since they mean nothing pasted elsewhere.
+  but the ones the title shows, a markdown value as it was written, then each list
+  the screen shows, a conversation as who wrote what and when, changes as what
+  happened, and other rows as their values. As the view gains fields, so does what
+  it copies. The ids of people are left out, since they mean nothing pasted
+  elsewhere, and so is a list only buttons go by, like the steps of an issue's Move
+  buttons.
 - `layout two_columns` after a screen's address lays it out in two columns: `main`,
   wide, for what the page is about, and `side`, narrow, beside it on a wide screen
   and after it on a phone. A screen puts its items in them with `main { ... }` and

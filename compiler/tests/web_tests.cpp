@@ -1186,3 +1186,27 @@ TEST_CASE("a timeline can say what it's of, and a row can open what it points at
     CHECK(tsx.find(R"(list="links" link="/:project/:to" keyed={["project"]})") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go by") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-copy-shown";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work {\n"
+                         "entity phase {\n\ttitle  text\n}\n"
+                         "entity step {\n\tfrom  phase\n\tto  phase\n\ttitle  text\n}\n"
+                         "entity issue {\n\ttitle  text\n\tphase  phase\n}\n"
+                         "entity comment {\n\tissue  issue\n\tbody  text\n}\n"
+                         "command issue::move {\n\tchanges phase\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tphase = issue.phase\n"
+                         "\tsteps = each step {\n\t\tfrom  to  title\n\t}\n"
+                         "\tcomments = each comment where issue == issue.id {\n\t\tbody\n\t}\n}\n"
+                         "screen \"{issue_page.title}\" /issues/:issue {\n\tissue::move along issue_page.steps\n\ttable issue_page.comments {\n\t\tbody\n\t}\n"
+                         "\tcopy issue_page \"Copy issue\"\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(lists={[["comments", "Comments", "rows", ["body"]]]})") != std::string::npos);
+    fs::remove_all(dir);
+}

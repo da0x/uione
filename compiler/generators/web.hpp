@@ -1526,6 +1526,23 @@ namespace one::generators {
             }
         }
 
+        // The lists of a view a screen shows to be read: in a table, a thread, a
+        // timeline, cards or a board. A list only buttons are worked out from, like the
+        // steps an issue's Move buttons go along, isn't one.
+        static void lists_on(const std::vector<language::screen_item>& items, const std::string& view, std::set<std::string>& out) {
+            auto take = [&](const language::qualified_name& named, const std::optional<std::string>& list) {
+                if (named.text() == view && list) out.insert(*list);
+            };
+            for (const auto& item : items) {
+                if (auto* table = std::get_if<language::table_item>(&item.node)) take(table->view, table->list);
+                else if (auto* thread = std::get_if<language::thread_item>(&item.node)) take(thread->view, thread->list);
+                else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) take(timeline->view, timeline->list);
+                else if (auto* cards = std::get_if<language::cards_item>(&item.node)) take(cards->view, cards->list);
+                else if (auto* board = std::get_if<language::board_item>(&item.node)) take(board->view, board->list);
+                else if (auto* block = std::get_if<language::content_block>(&item.node)) lists_on(block->items, view, out);
+            }
+        }
+
         // The field a value reads, through what the entity points at: issue.status is
         // the issue's status, and issue.project.lifecycle the project's lifecycle.
         const language::field* field_through(const std::string& ns, const language::entity_declaration* from, const language::member_expression& m) {
@@ -1595,8 +1612,10 @@ namespace one::generators {
                               web_detail::js_string(label != called.end() ? label->second : web_detail::label(key)) +
                               (kind.empty() ? "" : ", " + web_detail::js_string(kind)) + "]";
                 }
+                std::set<std::string> shown_lists;
+                lists_on(screen, copy.view.text(), shown_lists);
                 for (const auto& each : view->each) {
-                    if (!each.name) continue;
+                    if (!each.name || !shown_lists.contains(*each.name)) continue;
                     std::vector<std::string> columns;
                     for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
                     auto has = [&](const std::string& c) { return std::find(columns.begin(), columns.end(), c) != columns.end(); };
