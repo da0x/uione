@@ -298,6 +298,18 @@ describe("cards", () => {
   });
 });
 
+describe("a table hidden when empty", () => {
+  it("isn't there while it has no rows, and is once it has", () => {
+    const empty = { status: "live" as const, data: { rows: [] } };
+    const one = { status: "live" as const, data: { rows: [{ id: "r1", title: "Lost" }] } };
+    const { unmount } = renderScreen(memorySource(), () => <Table view={empty} columns={{ title: "Your reports" }} hideEmpty />);
+    expect(screen.queryByRole("table")).toBeNull();
+    unmount();
+    renderScreen(memorySource(), () => <Table view={one} columns={{ title: "Your reports" }} hideEmpty />);
+    expect(screen.getByRole("table")).toBeTruthy();
+  });
+});
+
 describe("a table opened filtered", () => {
   it("keeps only the rows the address picks, and says so in words that clear it", () => {
     const source = memorySource({ views: { "projects::issues": { rows: [{ id: "i1", title: "Crash", priority: "high" }, { id: "i2", title: "Typo", priority: "low" }] } } });

@@ -192,3 +192,5 @@ editors/fixtures/body.one	cards columns.columns	cards	keyword
 editors/fixtures/body.one	tally columns.cards	tally	keyword
 editors/fixtures/body.one	filter "Untitled"	filter	keyword
 editors/fixtures/body.one	subtitle "The columns"	subtitle	keyword
+editors/fixtures/body.one	hide when empty	hide	keyword
+editors/fixtures/body.one	hide when empty	hide	keyword

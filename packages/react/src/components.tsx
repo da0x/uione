@@ -664,6 +664,7 @@ export function Table({
   page,
   reorder,
   tools,
+  hideEmpty = false,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -683,6 +684,7 @@ export function Table({
   // between its new neighbors', like a phase's position; the list is ordered by it.
   reorder?: { command: string; field: string; allowed?: boolean };
   tools?: ReactNode; // buttons beside its search, like New issue
+  hideEmpty?: boolean; // not there at all while the list has no rows, like a person's reports
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -723,6 +725,7 @@ export function Table({
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
+  if (hideEmpty && view.status === "live" && rowsOf(view.data?.[list]).length === 0) return null;
   // Put in order only when every row is shown, so a row's neighbors are its own.
   const arranged = reorder && reorder.allowed !== false && !by && !wanted && !page && !sort ? reorder : undefined;
   const move = (from: number, to: number) => {

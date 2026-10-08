@@ -713,6 +713,8 @@ screen "Book" /books/:book {
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too.
+- `hide when empty` leaves a table out while it has no rows, like a person's
+  reports on a front page they may never have used.
 - `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and
   Alt+↓ on a row's handle, for whoever may update them. A drop gives the row a
   position between its new neighbors', so only it changes. The list is ordered by

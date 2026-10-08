@@ -56,6 +56,7 @@ namespace board {
 		subtitle "The columns"
 		table columns.columns {
 			reorder position
+			hide when empty
 			title
 			delete "Remove"
 		}

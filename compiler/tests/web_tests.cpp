@@ -774,7 +774,7 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
                          "\tarrows = each arrow where board == board.id {\n\t\tfrom  to  says\n\t}\n"
                          "}\n"
                          "screen \"Board\" /boards/:board {\n"
-                         "\ttable board_page.columns {\n\t\treorder position\n\t\ttitle\n\t}\n"
+                         "\ttable board_page.columns {\n\t\treorder position\n\t\thide when empty\n\t\ttitle\n\t}\n"
                          "\tgrid board_page.arrows by from and to over board_page.columns {\n\t\tsays\n\t}\n"
                          "\tform arrow::create \"Allow\" {\n\t\tfrom  to  says\n\t}\n"
                          "\tform arrow::update \"Save\" {\n\t\tsays\n\t}\n"
@@ -785,6 +785,7 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(reorder={{ command: "board::column::update", field: "position" }})") != std::string::npos);
+    CHECK(tsx.find(R"( hideEmpty)") != std::string::npos);
     // The cell gives the row and column, so create asks only the rest, and sends the board from the address.
     CHECK(tsx.find(R"(<Grid view={boardPage} list="arrows" from="from" to="to" cell="says" over={boardPage} overList="columns" shown="title" create={{ name: "board::arrow::create", fields: ["says"], submit: "Allow", given: { board: boardId } }} update={{ name: "board::arrow::update", fields: ["says"], submit: "Save" }} remove={{ name: "board::arrow::delete" }} />)") != std::string::npos);
     // Their forms open from the cells, not on their own.

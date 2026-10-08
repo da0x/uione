@@ -833,6 +833,16 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // hide when empty: not shown while it has no rows, like a person's reports.
+                        if (at_word("hide") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                            advance();
+                            advance();
+                            if (!at_word("empty")) fail_expecting("empty, as in hide when empty");
+                            advance();
+                            table.hide_empty = true;
+                            end_line();
+                            continue;
+                        }
                         if (at_word("reorder") && peek(1).kind == token_kind::identifier) {
                             advance();
                             table.reorder_where = peek().where;

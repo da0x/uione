@@ -385,6 +385,7 @@ namespace one::language {
         std::optional<int> page;          // page 25: this many rows at a time
         location page_where;
         std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
+        bool hide_empty = false;             // hide when empty: not there at all while it has no rows
         location reorder_where;
     };
 

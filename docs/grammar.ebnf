@@ -193,6 +193,7 @@ qualified      ::= NAME ("::" NAME)*
 table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? END
                  | "reorder" NAME END
+                 | "hide" "when" "empty" END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END

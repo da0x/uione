@@ -1852,6 +1852,7 @@ namespace one::generators {
             }
             if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
             if (table.page) line += " page={" + std::to_string(*table.page) + "}";
+            if (table.hide_empty) line += " hideEmpty";
             line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.
             if (table.reorder && entity) {
