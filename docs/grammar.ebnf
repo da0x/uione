@@ -157,7 +157,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "component" NAME END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
-cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING expression | column+) END
+cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter | column+) END
 board_line     ::= ("move" qualified "along" qualified "." NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
@@ -186,8 +186,10 @@ product        ::= unary ("*" unary)*
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
-primary        ::= STRING | NUMBER | time | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
-/* a time counted from when it's read, in a card's filter: 7 days ago, 2 weeks from now */
+primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+/* a card's filter: a field and what it holds, or a time it's before or after, counted
+   from when it's opened: updated_at > 7 days ago, due <= 2 weeks from now */
+filter         ::= NAME "==" expression | NAME ("<" | ">" | "<=" | ">=") time
 time           ::= NUMBER ("hour" | "hours" | "day" | "days" | "week" | "weeks") ("ago" | "from" "now")
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
