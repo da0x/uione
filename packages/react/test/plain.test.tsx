@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Diagram, Form, Grid, Live, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -258,6 +258,14 @@ describe("a grid", () => {
     fireEvent.click(screen.getByRole("button", { name: "Triage to Done: Member" }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Remove" })));
     expect(source.runs).toEqual([{ command: "projects::step::delete", input: { id: "s1" } }]);
+  });
+});
+
+describe("a timeline", () => {
+  it("says a change no one made, like a migration's, was made by the system", () => {
+    const view = { status: "live" as const, data: { history: [{ id: "c1", field: "board", before: null, after: "Product", created_at: new Date(2026, 9, 8) }] } };
+    renderScreen(memorySource(), () => <Timeline view={view} list="history" />);
+    expect(screen.getByText(/System/)).toBeTruthy();
   });
 });
 

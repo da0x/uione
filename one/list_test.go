@@ -21,13 +21,13 @@ type Ticket struct {
 }
 
 var desk = one.Module("desk",
-	one.Command[Ticket]("ticket::create").Allow(one.Authenticated),
-	one.Command[Ticket]("ticket::update").Allow(one.Authenticated),
-	one.Command[Ticket]("ticket::take").Allow(one.Authenticated).Do(func(c *one.Ctx, t *Ticket) error {
+	one.Command[Ticket]("ticket::create").Allow(one.SignedIn),
+	one.Command[Ticket]("ticket::update").Allow(one.SignedIn),
+	one.Command[Ticket]("ticket::take").Allow(one.SignedIn).Do(func(c *one.Ctx, t *Ticket) error {
 		t.Assignees = one.Add(t.Assignees, c.Me())
 		return nil
 	}),
-	one.Command[Ticket]("ticket::drop").Allow(one.Authenticated).Do(func(c *one.Ctx, t *Ticket) error {
+	one.Command[Ticket]("ticket::drop").Allow(one.SignedIn).Do(func(c *one.Ctx, t *Ticket) error {
 		t.Assignees = one.Remove(t.Assignees, c.Me())
 		return nil
 	}),

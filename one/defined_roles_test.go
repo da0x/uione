@@ -57,7 +57,7 @@ type Leg struct {
 }
 
 var crews = one.Module("crew",
-	one.Command[Crew]("crew::create").Allow(one.Authenticated).Do(func(c *one.Ctx, x *Crew) error {
+	one.Command[Crew]("crew::create").Allow(one.SignedIn).Do(func(c *one.Ctx, x *Crew) error {
 		return one.Create(c, &Hand{Crew: x.ID, Person: c.Me(), Rank: one.Key(x.ID, "captain")})
 	}),
 	one.Command[Hand]("hand::create"),

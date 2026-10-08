@@ -386,8 +386,8 @@ namespace one::driver {
     }
 
     // A project block whose settings' values were lined up stays lined up when an
-    // upgrade renames a setting, like signin to authentication: its values move out
-    // to the column the longest name needs, and no further.
+    // upgrade renames a setting, like authentication to signin: its values stay in
+    // their column, or move out to the one the longest name needs, and no further.
     inline std::string align_settings(const std::string& before, const std::string& after) {
         static const std::regex opens(R"(^[ \t]*project[ \t]+\w+[ \t]*\{[ \t]*$)");
         static const std::regex setting(R"(^([ \t]+)([a-z_]+)([ \t]+)([^ \t{][^{]*)$)");
@@ -426,9 +426,10 @@ namespace one::driver {
         for (const auto& s : was) {
             if (s.column != column) return after;  // not lined up to begin with
         }
+        // A name made longer moves the column out; one made shorter stays in it.
         std::size_t needed = column;
         for (const auto& s : now) needed = std::max(needed, s.indent.size() + s.key.size() + 2);
-        if (needed == column) return after;
+        if (std::all_of(now.begin(), now.end(), [&](const line_setting& s) { return s.column == needed; })) return after;
         for (const auto& s : now) lines[s.line] = s.indent + s.key + std::string(needed - s.indent.size() - s.key.size(), ' ') + s.value;
         std::string out;
         for (std::size_t i = 0; i < lines.size(); ++i) out += (i ? "\n" : "") + lines[i];

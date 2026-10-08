@@ -477,7 +477,7 @@ roles rank per crew from hand {
 	captain "Captain"  hand::create  rank::create
 }
 command crew::create {
-	permission authenticated
+	permission signed_in
 	create hand {
 		crew = id  person = me  rank = rank::captain
 	}
@@ -1061,7 +1061,7 @@ TEST_CASE("an app offers the ways of signing in its project names, in its order,
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "project p {\n\tauthentication github\n\tauthentication microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+                         "project p {\n\tsignin github\n\tsignin microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto app = find(generate_at(dir.string()), "src/app.tsx");
     REQUIRE(app != nullptr);
     CHECK(app->content.find(R"(import { firebaseSource, github as signInWithGitHub, microsoft as signInWithMicrosoft } from "@uione/react/firebase";)") !=
@@ -1089,7 +1089,7 @@ TEST_CASE("a namespace can put its screens at the root, and an address can name 
     platform::write_file((dir / "main.one").string(),
                          "namespace studio at / {\n"
                          "entity project {\n\towner  text  key  = me.username\n\tslug  text  required  key\n\tname  text\n}\n"
-                         "command project::create {\n\tpermission authenticated\n}\n"
+                         "command project::create {\n\tpermission signed_in\n}\n"
                          "view all {\n\teach project {\n\t\tname\n\t}\n}\n"
                          "view page per project {\n\tname = project.name\n}\n"
                          "screen \"Projects\" / {\n\ttable all link /:owner/:project {\n\t\tname\n\t}\n}\n"

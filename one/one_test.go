@@ -89,9 +89,9 @@ var modules = []one.Item{
 		one.View("signups").Public().Count("total", one.All[Signup]()),
 	),
 	one.Module("studio",
-		one.Command[Project]("project::create").Allow(one.Authenticated),
+		one.Command[Project]("project::create").Allow(one.SignedIn),
 		one.Command[Project]("project::delete").Allow(one.Owner),
-		one.Command[Handle]("handle::create").Allow(one.Authenticated),
+		one.Command[Handle]("handle::create").Allow(one.SignedIn),
 		one.View("projects").PerUser().Each(one.Where[Project]("owner", one.Viewer)).Fields("name", "created_at"),
 	),
 	one.Module("notes",
@@ -99,7 +99,7 @@ var modules = []one.Item{
 		one.Role("writer", "note:create"),
 	),
 	one.Module("tasks",
-		one.Command[Task]("task::create").Allow(one.Authenticated),
+		one.Command[Task]("task::create").Allow(one.SignedIn),
 		one.View("list").PerUser().Each(one.Where[Task]("owner", one.Viewer)).Order("done", "-created_at").Fields("title", "done"),
 		one.Command[Task]("task::complete").Allow(one.Owner).Do(func(c *one.Ctx, t *Task) error {
 			if t.Done {

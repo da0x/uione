@@ -272,7 +272,7 @@ namespace one::generators {
                         if (s.key == "theme") theme_ = s.value;
                         if (s.key == "corners") corners_ = s.value;
                         if (s.key == "layout") layout_ = s.value;
-                        if (s.key == "authentication") authentication_.push_back(s.value);
+                        if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();

@@ -57,7 +57,7 @@ namespace one::generators {
             std::map<std::string, const language::entity_declaration*> entities;  // by namespace::name
             std::vector<std::pair<std::string, const language::role_declaration*>> roles;  // with their namespace
             std::vector<std::pair<std::string, const language::roles_declaration*>> defined;  // with their namespace
-            std::set<std::string> open;  // commands that say who may run them, like permission authenticated
+            std::set<std::string> open;  // commands that say who may run them, like permission signed_in
         };
 
         inline std::string join(const std::string& ns, const std::string& name) { return ns.empty() ? name : ns + "::" + name; }

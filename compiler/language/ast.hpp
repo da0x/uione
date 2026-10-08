@@ -98,7 +98,7 @@ namespace one::language {
         std::string message;
     };
 
-    struct permission_statement {  // anyone, authenticated, owner, or a permission
+    struct permission_statement {  // anyone, signed_in, owner, or a permission
         qualified_name permission;
     };
 

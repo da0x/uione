@@ -13,7 +13,7 @@ import (
 // tasks, as the next deploy has them: the list shows each task's owner too.
 func tasksShowingOwners() one.Item {
 	return one.Module("tasks",
-		one.Command[Task]("task::create").Allow(one.Authenticated),
+		one.Command[Task]("task::create").Allow(one.SignedIn),
 		one.View("list").PerUser().Each(one.Where[Task]("owner", one.Viewer)).Order("done", "-created_at").Fields("title", "done", "owner"),
 	)
 }
@@ -65,7 +65,7 @@ func TestAViewWhoseDefinitionChangedIsRebuiltWhenTheBackendStarts(t *testing.T) 
 // studio, as a later deploy has it: with a view per project it didn't have before.
 func studioWithCards() one.Item {
 	return one.Module("studio",
-		one.Command[Project]("project::create").Allow(one.Authenticated),
+		one.Command[Project]("project::create").Allow(one.SignedIn),
 		one.View("card").Per(one.Entity[Project]()).Public().Copy("name", "name"),
 	)
 }

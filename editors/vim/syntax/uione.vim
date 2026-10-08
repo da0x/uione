@@ -55,7 +55,7 @@ syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$
 syn keyword uioneBuiltin   now me none true false
 " Who may run a command: words only after `permission`, so a field called owner
 " stays a name.
-syn match   uioneBuiltin   "\%(\<permission\s\+\)\@<=\%(anyone\|authenticated\|owner\)\>"
+syn match   uioneBuiltin   "\%(\<permission\s\+\)\@<=\%(anyone\|signed_in\|owner\)\>"
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("
@@ -93,7 +93,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 syn cluster uioneProjectItems contains=uioneSetting,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
-syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|authentication\|icon\|color\|theme\|corners\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|corners\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

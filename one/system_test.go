@@ -38,7 +38,7 @@ var started struct {
 }
 
 var builds = one.Module("builds",
-	one.Command[Build]("build::create").Allow(one.Authenticated).After(func(s *one.System, b *Build) error {
+	one.Command[Build]("build::create").Allow(one.SignedIn).After(func(s *one.System, b *Build) error {
 		started.Lock()
 		defer started.Unlock()
 		started.builds = append(started.builds, *b)

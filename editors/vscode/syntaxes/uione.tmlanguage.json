@@ -256,7 +256,7 @@
           ]
         },
         {
-          "match": "\\b(permission)\\s+(anyone|authenticated|owner)\\b",
+          "match": "\\b(permission)\\s+(anyone|signed_in|owner)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"
@@ -482,7 +482,7 @@
           "include": "#strings"
         },
         {
-          "match": "^\\s*(domain|firebase|region|ui|authentication|icon|color|theme|corners|layout|serve|redirect|title|one|analytics)\\b",
+          "match": "^\\s*(domain|firebase|region|ui|signin|icon|color|theme|corners|layout|serve|redirect|title|one|analytics)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"

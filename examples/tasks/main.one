@@ -13,7 +13,7 @@ namespace tasks {
 	}
 
 	command task::create {
-		permission authenticated
+		permission signed_in
 	}
 
 	command task::complete {

@@ -13,7 +13,7 @@ type Project struct {
 	Owner string `firestore:"owner" one:"refers=user,default=me"`
 }
 
-var Create = one.Command[Project]("project::create").Allow(one.Authenticated)
+var Create = one.Command[Project]("project::create").Allow(one.SignedIn)
 
 var Projects = one.View("projects").PerUser().
 	Each(one.Where[Project]("owner", one.Viewer)).

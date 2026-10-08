@@ -609,7 +609,7 @@ namespace one::generators {
                     const auto& parts = p->permission.parts;
                     if (parts.size() == 1) {
                         if (parts[0] == "anyone") return "one.Anyone";
-                        if (parts[0] == "authenticated") return "one.Authenticated";
+                        if (parts[0] == "signed_in") return "one.SignedIn";
                         if (parts[0] == "owner") return "one.Owner";
                     }
                     std::string text = p->permission.text();

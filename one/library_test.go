@@ -45,16 +45,16 @@ func SortTitle(title string) string {
 }
 
 var library = one.Module("library",
-	one.Command[Book]("book::create").Allow(one.Authenticated),
-	one.Command[Book]("book::update").Allow(one.Authenticated),
-	one.Command[Book]("book::withdraw").Allow(one.Authenticated).Do(func(c *one.Ctx, b *Book) error {
+	one.Command[Book]("book::create").Allow(one.SignedIn),
+	one.Command[Book]("book::update").Allow(one.SignedIn),
+	one.Command[Book]("book::withdraw").Allow(one.SignedIn).Do(func(c *one.Ctx, b *Book) error {
 		if b.Status != StatusOnShelf {
 			return c.Fail("only a book on the shelf can be withdrawn")
 		}
 		b.Status = StatusWithdrawn
 		return nil
 	}),
-	one.Command[Loan]("loan::create").Allow(one.Authenticated).Do(func(c *one.Ctx, l *Loan) error {
+	one.Command[Loan]("loan::create").Allow(one.SignedIn).Do(func(c *one.Ctx, l *Loan) error {
 		book, err := one.Read[Book](c, l.Book)
 		if err != nil {
 			return err
@@ -65,7 +65,7 @@ var library = one.Module("library",
 		book.Status = StatusLent
 		return nil
 	}),
-	one.Command[Loan]("loan::checkin").Allow(one.Authenticated).Do(func(c *one.Ctx, l *Loan) error {
+	one.Command[Loan]("loan::checkin").Allow(one.SignedIn).Do(func(c *one.Ctx, l *Loan) error {
 		if !l.ReturnedAt.IsZero() {
 			return c.Fail("that book is already back")
 		}
@@ -79,7 +79,7 @@ var library = one.Module("library",
 	}),
 	// Returns a book while leaving it in a state its rules refuse, so the whole
 	// command has to be refused, the loan's change included.
-	one.Command[Loan]("loan::spoil").Allow(one.Authenticated).Do(func(c *one.Ctx, l *Loan) error {
+	one.Command[Loan]("loan::spoil").Allow(one.SignedIn).Do(func(c *one.Ctx, l *Loan) error {
 		l.ReturnedAt = c.Now()
 		book, err := one.Read[Book](c, l.Book)
 		if err != nil {
@@ -97,7 +97,7 @@ var library = one.Module("library",
 		Each(one.Where[Loan]("returned_at", nil)).
 		Fields("book.title", "member"),
 	// Returns a loan without touching its book, so only the loan changes.
-	one.Command[Loan]("loan::close").Allow(one.Authenticated).Do(func(c *one.Ctx, l *Loan) error {
+	one.Command[Loan]("loan::close").Allow(one.SignedIn).Do(func(c *one.Ctx, l *Loan) error {
 		l.ReturnedAt = c.Now()
 		return nil
 	}),

@@ -242,7 +242,7 @@ entity phase {
 	project  project  required
 }
 command project::create {
-	permission authenticated
+	permission signed_in
 	board::create { project = id  name = "main"  title = slug  preset = preset }
 }
 command board::create {
@@ -421,7 +421,7 @@ entity leg {
 	ranks  list of rank
 }
 command crew::create {
-	permission authenticated
+	permission signed_in
 	if workflow == workflow::steady {
 		create rank { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
 		create stage { crew = id  name = "todo" }
@@ -467,7 +467,7 @@ entity leg {
 	to    stage  required  key
 }
 command crew::create {
-	permission authenticated
+	permission signed_in
 	create stage { crew = id  name = "todo" }
 	create leg { crew = id  from = stage::todo  to = stage::dnoe }
 }
@@ -568,7 +568,7 @@ roles rank per crew from hand {
 	deckhand "Deckhand"  hand::create
 }
 command crew::create {
-	permission authenticated
+	permission signed_in
 	create hand {
 		crew = id  person = me  rank = rank::captain
 	}
@@ -656,7 +656,7 @@ TEST_CASE("a command names its entity's fields plainly, or with the entity's nam
         files.push_back(language::parse("main.one", "namespace tracker {\n"
                                                     "entity project {\n\tname  text  required\n\ttakes_reports  boolean = false\n}\n"
                                                     "entity report {\n\tproject  project  required\n\ttitle  text  required\n}\n"
-                                                    "command report::create {\n\tpermission authenticated\n"
+                                                    "command report::create {\n\tpermission signed_in\n"
                                                     "\trequire " + condition + "  \"this project doesn't take reports\"\n}\n}\n", out));
         language::check(files, out);
         for (const auto& d : out) FAIL_CHECK(language::format(d));

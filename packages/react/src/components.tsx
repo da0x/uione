@@ -269,7 +269,8 @@ export function Timeline({
   const params = useParams();
   const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
   const entries = onceEach(rows).map((row) => {
-    const entry = { id: row.id, who: show(row["created_by.name"]), when: when(row.created_at) };
+    // A change no one made, like a migration's, was made by the system.
+    const entry = { id: row.id, who: show(row["created_by.name"]) || "System", when: when(row.created_at) };
     if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
     // A number is said as one, like #12.
     const words = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
@@ -315,7 +316,7 @@ export function markdownOf(
       if (kind === "thread") {
         out.push(`**${show(row["author.name"])}** · ${when(row.created_at)}`, "", String(row.body ?? "").trim(), "");
       } else if (kind === "changes") {
-        out.push(`- ${show(row["created_by.name"])} ${changed(row.field, row.before, row.after, row.action)} · ${when(row.created_at)}`);
+        out.push(`- ${show(row["created_by.name"]) || "System"} ${changed(row.field, row.before, row.after, row.action)} · ${when(row.created_at)}`);
       } else {
         out.push(`- ${columns.map((column) => show(row[column])).filter((value) => value !== "").join(" · ")}`);
       }

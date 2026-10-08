@@ -32,7 +32,7 @@ namespace notes {
 	}
 
 	command note::create {
-		permission authenticated
+		permission signed_in
 	}
 
 	view mine per user {

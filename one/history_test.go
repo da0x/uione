@@ -30,10 +30,10 @@ type Case struct {
 }
 
 var cases = one.Module("log",
-	one.Command[Folder]("folder::create").Allow(one.Authenticated),
-	one.Command[Case]("case::create").Allow(one.Authenticated),
-	one.Command[Case]("case::update").Allow(one.Authenticated),
-	one.Command[Case]("case::close").Allow(one.Authenticated).Do(func(c *one.Ctx, k *Case) error {
+	one.Command[Folder]("folder::create").Allow(one.SignedIn),
+	one.Command[Case]("case::create").Allow(one.SignedIn),
+	one.Command[Case]("case::update").Allow(one.SignedIn),
+	one.Command[Case]("case::close").Allow(one.SignedIn).Do(func(c *one.Ctx, k *Case) error {
 		k.Status = "closed"
 		return nil
 	}),

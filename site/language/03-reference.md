@@ -44,7 +44,7 @@ What a name means depends on where it's written:
 - **Everywhere**, `me`, `now`, `none`, `true` and `false` are the language's own
   [values](#built-in-values). A choice is named with its enum, like
   `status::open`. `permission` takes one of the language's own words: `anyone`,
-  `authenticated` or `owner`.
+  `signed_in` or `owner`.
 
 A name that means nothing where it's written is an error that says what's in scope
 there, and suggests the nearest name that is.
@@ -124,7 +124,7 @@ The language's own words, inside what a declaration says:
 - on a screen: `heading`, `table`, `grid`, `diagram`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
-  `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
+  `signin`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
 
 ## project
 
@@ -136,8 +136,8 @@ project uione {
 	firebase        "uione-web"
 	region          "us-east4"
 	ui              radix
-	authentication  google
-	authentication  github
+	signin          google
+	signin          github
 	icon            "assets/icon.svg"
 	serve           "public"
 }
@@ -154,7 +154,7 @@ nothing otherwise. `UIONE_TOOLCHAIN=local` keeps the `one` you ran.
 `title "uione"` is the name at the top of every page and in the browser's tab, when
 it isn't the project's own: the studio's project is `studio`, which names what it
 runs on in Google Cloud, and its pages say uione. `ui` picks the component adapter
-that renders every screen. `authentication` names a way people sign in: `google`,
+that renders every screen. `signin` names a way people sign in: `google`,
 `github` or `microsoft`, one to a line. With one, the Sign in button goes straight
 to it; with more, it offers each, in the order they're written. A project that names
 none signs no one in. Each way is turned on for the project in Firebase, which the
@@ -402,7 +402,7 @@ command loan::checkin {
 - A command may change an entity it points at, as `book.status` does here. Both
   changes are made together or not at all.
 - `permission` overrides the permission the command needs. `anyone` means no
-  sign-in, `authenticated` means anyone signed in, any way the project offers, and
+  sign-in, `signed_in` means anyone signed in, any way the project offers, and
   `owner` means the person in the entity's `owner` field.
 - `add me to assignees` and `remove me from assignees` change a list. Adding what's
   already there, or removing what isn't, changes nothing. A list is never given a
@@ -464,7 +464,7 @@ command phase::delete {
 
 ```one
 command project::create {
-	permission authenticated
+	permission signed_in
 	create member {
 		project = id  person = me  role = role::maintainer
 	}
@@ -633,7 +633,7 @@ roles role per project from member {
 }
 
 command project::create {
-	permission authenticated
+	permission signed_in
 	create member {
 		project = id  person = me  role = role::maintainer
 	}

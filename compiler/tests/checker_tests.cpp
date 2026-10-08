@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("project a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a project setting; expected domain, firebase, region, ui, authentication, icon, color, layout, serve, redirect, title, one or analytics");
+          "'colour' isn't a project setting; expected domain, firebase, region, ui, signin, icon, color, layout, serve, redirect, title, one or analytics");
     CHECK(check_source("project p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("project p {\n\tanalytics plausible\n}\n").message == "analytics is google, for Firebase Analytics");
     CHECK(only_error("project a {\n\tui shadcn\n}\nproject b {\n\tui shadcn\n}\n").message.starts_with(
@@ -466,7 +466,7 @@ roles rank per crew from hand {
 	deckhand "Deckhand"  job::create
 }
 command crew::create {
-	permission authenticated
+	permission signed_in
 	create hand {
 		crew = id  person = me  rank = rank::captain
 	}
@@ -1008,21 +1008,21 @@ TEST_CASE("a project can redirect an address that moved, and a link can go to an
 }
 
 TEST_CASE("people sign in with Google, GitHub or Microsoft, each named once") {
-    CHECK(check_source("project p {\n\tauthentication google\n}\n").empty());
-    CHECK(check_source("project p {\n\tauthentication github\n\tauthentication google\n\tauthentication microsoft\n}\n").empty());
-    CHECK(only_error("project p {\n\tauthentication twitter\n}\n").message == "authentication is google, github or microsoft, one to a line");
-    CHECK(only_error("project p {\n\tauthentication github\n\tauthentication github\n}\n").message == "authentication github is named twice");
-    // Earlier versions' words, each with its fix.
-    auto signin = only_error("project p {\n\tsignin github\n}\n");
-    CHECK(signin.message == "signin is called authentication now, like authentication github");
+    CHECK(check_source("project p {\n\tsignin google\n}\n").empty());
+    CHECK(check_source("project p {\n\tsignin github\n\tsignin google\n\tsignin microsoft\n}\n").empty());
+    CHECK(only_error("project p {\n\tsignin twitter\n}\n").message == "signin is google, github or microsoft, one to a line");
+    CHECK(only_error("project p {\n\tsignin github\n\tsignin github\n}\n").message == "signin github is named twice");
+    // What they were called for a while, each with its fix.
+    auto signin = only_error("project p {\n\tauthentication github\n}\n");
+    CHECK(signin.message == "authentication is called signin, like signin github");
     REQUIRE(signin.fix);
-    CHECK(signin.fix->text == "authentication");
-    CHECK(signin.fix->length == 6);
-    auto signed_in = only_error("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission signed_in\n}\n");
-    CHECK(signed_in.message == "signed_in is called authenticated now");
+    CHECK(signin.fix->text == "signin");
+    CHECK(signin.fix->length == 14);
+    auto signed_in = only_error("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission authenticated\n}\n");
+    CHECK(signed_in.message == "authenticated is called signed_in");
     REQUIRE(signed_in.fix);
-    CHECK(signed_in.fix->text == "authenticated");
-    CHECK(check_source("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission authenticated\n}\n").empty());
+    CHECK(signed_in.fix->text == "signed_in");
+    CHECK(check_source("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission signed_in\n}\n").empty());
 }
 
 TEST_CASE("a field can start as the person's username") {
