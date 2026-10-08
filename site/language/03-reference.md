@@ -753,17 +753,19 @@ screen "Book" /books/:book {
   choice, as Trac colored a ticket's priority: the field's first choice red, then
   yellow, plain, cyan and blue. A board's block and a details block can say `tint by`
   too.
-- What a table shows is in the page's address, so a link shows the same: its tab,
-  like `?issues.tab=closed`, what's typed in its search, and its page. So is a
-  table and board's switch, `?issues.view=board`, and the phase a board shows on a
-  phone. A default isn't written, and a card's filters stay as they are.
+- What a page shows is in its path, after its own, so a link shows the same: a
+  table's tab, like `/neotrac/boards/main/in_progress`, a table and board's switch,
+  `/board`, which phase a board shows on a phone, the same part as the tab, and a
+  page of rows, `/page/2`, in any order, a default left out. Only what's typed to
+  find something is a query: a table's search, `?search=old`, and a `find` box's,
+  `?find=date`. A card's filters are queries too, as they pick rows.
 - A required choice, like `priority  priority  required = priority::normal`, is
   always one of its choices: a form offers no empty one.
 - `find "Search this project" { project_page.issues "Issues" link /:project/:issue by
   number title labels }` is a box that finds rows of several lists, one a line, as
   it's typed in: each list's first eight under its label, each opening its page.
   `#12` or `12` finds the twelfth by number. What's typed is in the address, as
-  `?find=`.
+  `?find=date`.
 - A form's field holding a person, or a list of people, picks them from a list on
   the screen whose rows hold a person and their name, like a project's members, each
   person once; a form making one of those rows, like adding a member, doesn't.

@@ -18,6 +18,9 @@ export interface ScreenInfo {
   title: string;
   route: string;
   nav?: string; // the label in the navigation; a screen without one isn't listed
+  // It shows something its address says after its own path, like a tab or a board
+  // rather than a table: /neotrac/boards/main/board/in_progress.
+  shown?: boolean;
 }
 
 export type Screen = ComponentType & { info: ScreenInfo };
@@ -201,7 +204,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
       {analytics && <Counting analytics={analytics} />}
       <Routes>
       {screens.map((s) => (
-        <Route key={s.info.route} path={routerPath(s.info.route)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
+        <Route key={s.info.route} path={routerPath(s.info.route, s.info.shown)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
       ))}
       <Route path="*" element={<NotFound name={name} icon={icon} screens={screens} />} />
       </Routes>
@@ -374,9 +377,16 @@ function signInMessage(e: unknown): string | undefined {
 // /code/:file*, which the router writes as *.
 const restOf = /\/:([A-Za-z_]\w*)\*$/;
 
-function routerPath(route: string): string {
-  return route.replace(restOf, "/*");
+function routerPath(route: string, shown = false): string {
+  if (restOf.test(route)) return route.replace(restOf, "/*");
+  return shown ? `${route === "/" ? "" : route}/*` : route;
 }
+
+// What a page's address says after its own path, about what it shows, like
+// board/in_progress, and the path it's after, for the hooks that read and write it.
+// A screen whose path doesn't take more, like a hand-written one, keeps what it
+// shows in the page instead.
+export const ShownPath = createContext<{ base: string; parts: string[]; open: boolean }>({ base: "", parts: [], open: false });
 
 // Every route's element is a Page, so going from /books/a to /books/b keeps the
 // same one mounted. The body is keyed by the address, so what was typed about one
@@ -387,11 +397,17 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
   const { pathname } = useLocation();
   const [titled, setTitled] = useState<string | undefined>();
   const rest = restOf.exec(Body.info.route)?.[1];
-  const taken = rest ? matchPath(routerPath(Body.info.route), pathname)?.params["*"] : undefined;
-  const key = taken ? pathname.split("/").slice(0, -taken.split("/").length).join("/") : pathname;
+  const shown = Boolean(Body.info.shown) && !rest;
+  const taken = rest || shown ? matchPath(routerPath(Body.info.route, shown), pathname)?.params["*"] : undefined;
+  const key = taken ? pathname.split("/").slice(0, -taken.split("/").length).join("/") : pathname.replace(/\/$/, "");
+  // A tab or a board in the address is what the page shows, not another page, so
+  // changing it keeps the page as it is.
+  const parts = shown && taken ? taken.split("/").filter(Boolean).map(decodeURIComponent) : [];
+  const base = shown ? key || "/" : pathname;
   return (
     <Shell name={name} icon={icon} title={titled ?? Body.info.title} screens={screens}>
       <Rest.Provider value={rest}>
+        <ShownPath.Provider value={{ base, parts, open: shown }}>
         <Titling.Provider value={setTitled}>
           <Titled.Provider value={titled ?? Body.info.title}>
             <Contained key={key}>
@@ -399,6 +415,7 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
             </Contained>
           </Titled.Provider>
         </Titling.Provider>
+        </ShownPath.Provider>
       </Rest.Provider>
     </Shell>
   );

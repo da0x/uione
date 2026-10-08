@@ -5,11 +5,11 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, cloneElement, isValidElement, useEffect, useRef, useState } from "react";
+import { Children, cloneElement, isValidElement, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
+import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
 import type { FieldProps, Filtered } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
@@ -338,11 +338,19 @@ export function Timeline({
   return <ui.Timeline status={view.status} entries={entries} title={title} fresh={since ? freshCount : undefined} />;
 }
 
-// The names in an address that say what's on screen, like which tab is open, rather
-// than what a list is filtered by: find, and a list's own tab, view, page and
-// column, like issues.tab.
+// The names in an address's query that are what's typed to find something, rather
+// than what a list is filtered by: find, and a table's search.
 export function shownState(name: string): boolean {
-  return name === "find" || /\.(tab|view|page|column|search)$/.test(name);
+  return name === "find" || name === "search";
+}
+
+// What several names share at their start, up to the last dash in it, like a
+// board's phases' project and board: a-main- of a-main-to_do and a-main-done.
+function sharedStart(names: string[]): string {
+  if (names.length < 2) return "";
+  let start = names[0] ?? "";
+  for (const name of names) while (!name.startsWith(start)) start = start.slice(0, -1);
+  return start.slice(0, start.lastIndexOf("-") + 1);
 }
 
 // What's on screen kept in the page's address, under a name, like ?find=dates, so a
@@ -362,23 +370,87 @@ export function useAddressState(name: string, fallback = ""): [string, (value: s
       setValue(inAddress);
     }
   }, [inAddress]);
-  if (pending && pending.path === pathname && pending.search === search) pending = undefined;
+  caughtUp(pathname, search);
   const set = (next: string) => {
     setValue(next);
     written.current = next === "" ? fallback : next;
     // From any change still on its way, so two set together both stay.
-    const query = new URLSearchParams(pending && pending.path === pathname ? pending.search : search);
+    const now = pending ?? { path: pathname, search };
+    const query = new URLSearchParams(now.search);
     if (next === fallback || next === "") query.delete(name);
     else query.set(name, next);
     const after = query.toString() ? `?${query.toString()}` : "";
-    pending = { path: pathname, search: after };
-    void navigate(`${pathname}${after}${hash}`, { replace: true });
+    pending = { path: now.path, search: after };
+    void navigate(`${now.path}${after}${hash}`, { replace: true });
   };
   return [value, set];
 }
 
-// An address being written, which the page hasn't caught up with yet.
+// The address last written, path and query, which the page hasn't caught up with
+// yet: a second change made with the first, like a search and going back to its
+// first page, starts from it rather than from the address as it was.
 let pending: { path: string; search: string } | undefined;
+function caughtUp(pathname: string, search: string) {
+  if (pending && pending.path === pathname && pending.search === search) pending = undefined;
+}
+
+// What a page shows, said in its path after its own, like /neotrac/boards/main/board:
+// the part of it that's one of these options, or the fallback when none is. Setting
+// it writes that part, or takes it out for the fallback, keeping the others, and
+// replaces the address rather than adding a step to go back through.
+export function usePathPart(options: string[], fallback = ""): [string, (value: string) => void] {
+  const { base, parts, open } = useContext(ShownPath);
+  const [own, setOwn] = useState(fallback);
+  const inPath = parts.find((part) => options.includes(part)) ?? fallback;
+  const write = usePathWriter((now) => {
+    const at = now.findIndex((part) => options.includes(part));
+    const kept = now.filter((part) => !options.includes(part));
+    return (value) => {
+      if (value === fallback || value === "") return kept;
+      const next = [...kept];
+      next.splice(at < 0 ? next.length : Math.min(at, next.length), 0, value);
+      return next;
+    };
+  }, base);
+  return open ? [inPath, write] : [own, setOwn];
+}
+
+// A part said by its name and then its value, like page/2: the value, or "" when
+// it's not there.
+export function usePathNamed(name: string): [string, (value: string) => void] {
+  const { base, parts, open } = useContext(ShownPath);
+  const [own, setOwn] = useState("");
+  const at = parts.indexOf(name);
+  const inPath = at >= 0 ? (parts[at + 1] ?? "") : "";
+  const write = usePathWriter((now) => {
+    const where = now.indexOf(name);
+    const kept = where >= 0 ? [...now.slice(0, where), ...now.slice(where + 2)] : now;
+    return (value) => (value ? [...kept, name, value] : kept);
+  }, base);
+  return open ? [inPath, write] : [own, setOwn];
+}
+
+// Writes what a page shows into its path from the parts as they are now, counting
+// a change still on its way, so two set together both stay.
+function usePathWriter(change: (now: string[]) => (value: string) => string[], base: string): (value: string) => void {
+  const { pathname, search, hash } = useLocation();
+  const navigate = useNavigate();
+  const { parts } = useContext(ShownPath);
+  caughtUp(pathname, search);
+  if (pendingParts && pendingParts.base === base && pendingParts.path === pathname) pendingParts = undefined;
+  return (value) => {
+    const now = pendingParts && pendingParts.base === base ? pendingParts.parts : parts;
+    const next = change(now)(value);
+    const path = `${base === "/" ? "" : base}/${next.map(encodeURIComponent).join("/")}`.replace(/\/$/, "") || "/";
+    const query = pending ? pending.search : search;
+    pendingParts = { base, parts: next, path };
+    pending = { path, search: query };
+    void navigate(`${path}${query}${hash}`, { replace: true });
+  };
+}
+
+// The parts of a page's path last written, which it hasn't caught up with yet.
+let pendingParts: { base: string; parts: string[]; path: string } | undefined;
 
 // A box finding rows of several lists as it's typed in, like a project's issues by
 // number, title and labels, and its wiki pages by title: each list's first eight,
@@ -877,8 +949,8 @@ export function Table({
   // What's typed in the search box, over the fields it searches, as they're shown,
   // the tab that's open and the page it's on, kept in the address under the list's
   // name, like issues.tab=done, so a link shows the same.
-  const [query, setQuery] = useAddressState(`${list}.search`);
-  const [page_, setPage_] = useAddressState(`${list}.page`);
+  const [query, setQuery] = useAddressState("search");
+  const [page_, setPage_] = usePathNamed("page");
   const at = Math.max(1, Number(page_) || 1);
   const setAt = (n: number) => setPage_(n <= 1 ? "" : String(n));
   const wanted = query.trim().toLowerCase();
@@ -889,9 +961,12 @@ export function Table({
   );
   // With tabs, the first choice is shown first, like Open before Closed.
   const options = by ? Object.keys(choices[by] ?? {}) : [];
-  const [tab, setTab] = useAddressState(`${list}.tab`);
-  const picked = options.includes(tab) ? tab : undefined;
-  const setPicked = (option: string) => setTab(option === options[0] ? "" : option);
+  // A tab is named in the address by what sets it apart from the others, so a tab of
+  // records, like a board's phases, is in_progress rather than its whole id.
+  const common = sharedStart(options);
+  const [tab, setTab] = usePathPart(options.map((option) => option.slice(common.length)));
+  const picked = options.find((option) => option.slice(common.length) === tab);
+  const setPicked = (option: string) => setTab(option === options[0] ? "" : option.slice(common.length));
   const chosen = picked ?? options[0];
   const tabbed = by && chosen !== undefined ? found.filter((row) => row[by] === chosen) : found;
   const sorted = sort ? [...tabbed].sort(ordering(sort)) : tabbed;
@@ -1062,8 +1137,7 @@ export function Board({
   // Where each card moved is until the view says so too.
   const [moved, setMoved] = useState<Record<string, string>>({});
   // What's typed, kept in the address under the list's name, the same as its table's.
-  const [query, setQuery] = useAddressState(`${list}.search`);
-  const [column, setColumn] = useAddressState(`${list}.column`);
+  const [query, setQuery] = useAddressState("search");
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
   const all = rowsOf(view.data?.[list]);
@@ -1071,6 +1145,12 @@ export function Board({
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   const things = rowsOf(over.data?.[overList]);
+  // On a phone, the phase shown is in the path, the same part as its table's tab, so
+  // /in_progress opens on it either way.
+  const startOf = sharedStart(things.map((thing) => thing.id));
+  const [part, setPart] = usePathPart(things.map((thing) => thing.id.slice(startOf.length)));
+  const column = part ? startOf + part : "";
+  const setColumn = (id: string) => setPart(id ? id.slice(startOf.length) : "");
   const mine = move ? rolesHeld(move.roles, move.within, move.place ?? "project", move.role ?? "role") : new Set<unknown>();
   const steps = move?.steps.status === "live" ? rowsOf(move.steps.data?.[move.list]) : [];
   const where = (card: Row) => moved[card.id] ?? card[by];
@@ -1152,7 +1232,7 @@ export function Switched({
   // the person's last pick is remembered too, and put in the address when they come
   // back without one.
   const named = (at: number) => (options[at] ?? "").toLowerCase();
-  const [inAddress, setInAddress] = useAddressState(`${id.slice(id.lastIndexOf(".") + 1)}.view`);
+  const [inAddress, setInAddress] = usePathPart(options.map((_, at) => named(at)).slice(1));
   const fromAddress = options.findIndex((_, at) => named(at) === inAddress);
   const picked = fromAddress >= 0 ? fromAddress : 0;
   const pick = (at: number) => {

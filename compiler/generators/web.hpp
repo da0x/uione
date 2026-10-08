@@ -580,6 +580,9 @@ namespace one::generators {
             std::vector<std::string> imports;                        // extra import lines
             bool optional_page = false;
             bool viewer = false;  // a button's when reads who's reading, as me
+            // It shows something its address says after its own, like a tab, a page of
+            // rows, or a board rather than a table: /neotrac/boards/main/board/in_progress.
+            bool shown_in_path = false;
         };
 
         std::vector<found_screen> every_screen_;
@@ -727,6 +730,7 @@ namespace one::generators {
                 }
                 // The app's own name is its home, which its logo already links to.
                 if (!ns.empty() && !needs_parameter && title != name_) info += ", nav: " + web_detail::js_string(title);
+                if (parts.shown_in_path) info += ", shown: true";
                 info += " }";
 
                 // A file with one screen names it after the file (home.one gives home);
@@ -1403,6 +1407,7 @@ namespace one::generators {
                     }
                 }
             }
+            parts.shown_in_path = true;
             std::string line = "<Board view={" + view_variable(parts, full_view(ns, board.view.text())) + "} list=" + web_detail::js_string(*board.list) +
                                " by=" + web_detail::js_string(board.by) + " over={" + view_variable(parts, full_view(ns, board.over.text())) +
                                "} overList=" + web_detail::js_string(board.over_list);
@@ -1956,6 +1961,7 @@ namespace one::generators {
             }
             if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
             if (table.page) line += " page={" + std::to_string(*table.page) + "}";
+            if (table.page || table.by) parts.shown_in_path = true;
             if (table.only) line += " only={" + filter_query(*table.only) + "}";
             line += tint_on(ns, table.view, table.list, table.tint);
             if (table.hide_empty) line += " hideEmpty";

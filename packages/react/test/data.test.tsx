@@ -877,7 +877,7 @@ describe("comments in a history", () => {
   });
 });
 
-describe("what's on screen, in the address", () => {
+describe("what's on screen, in the path", () => {
   const view = {
     status: "live" as const,
     data: {
@@ -888,27 +888,30 @@ describe("what's on screen, in the address", () => {
     },
   };
   function Where() {
-    return <output aria-label="address">{useLocation().search}</output>;
+    const { pathname, search } = useLocation();
+    return <output aria-label="address">{pathname + search}</output>;
   }
   const table = () => (
     <>
-      <Table view={view} list="issues" columns={{ title: "Title" }} by="status" choices={{ status: { open: "Open", closed: "Closed" } }} />
+      <Table view={view} list="issues" columns={{ title: "Title" }} by="status" choices={{ status: { open: "Open", closed: "Closed" } }} search={["title"]} />
       <Where />
     </>
   );
+  const issues = defineScreen({ title: "Issues", route: "/issues", shown: true }, table);
+  const open = (location: string) => render(<App name="app" screens={[issues]} ui={plain} data={memorySource()} location={location} />);
 
-  it("puts the tab that's open in the address, and not the first", async () => {
-    renderScreen(memorySource(), table);
-    expect(screen.getByLabelText("address").textContent).toBe("");
+  it("puts the tab that's open in the path, and not the first, and what's typed in the query", async () => {
+    open("/issues");
     fireEvent.click(screen.getByRole("tab", { name: "Closed 1" }));
-    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("?issues.tab=closed"));
-    fireEvent.click(screen.getByRole("tab", { name: "Open 1" }));
-    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe(""));
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("/issues/closed"));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "old" } });
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("/issues/closed?search=old"));
+    fireEvent.click(screen.getByRole("tab", { name: "Open 0" }));
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("/issues?search=old"));
   });
 
-  it("opens on the tab an address names, as a shared link does", () => {
-    const only = defineScreen({ title: "Test", route: "/" }, table);
-    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/?issues.tab=closed" />);
+  it("opens on the tab a path names, as a shared link does", () => {
+    open("/issues/closed");
     expect(screen.getByText("Old bug")).toBeTruthy();
     expect(screen.queryByText("Tabs too wide")).toBeNull();
   });
