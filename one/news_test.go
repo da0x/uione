@@ -6,6 +6,7 @@ package one_test
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/da0x/uione/one"
 )
@@ -43,7 +44,18 @@ type Trick struct {
 	Dealt []string `firestore:"dealt" one:"refers=user"`
 }
 
+// When a person last looked at their news, one for each person.
+type Glance struct {
+	one.Record
+	Person string    `firestore:"person" one:"key,default=me,refers=user"`
+	SeenAt time.Time `firestore:"seen_at"`
+}
+
 var clubs = one.Module("club",
+	one.Command[Glance]("glance::create").Allow(one.SignedIn).Do(func(c *one.Ctx, g *Glance) error {
+		g.SeenAt = time.Now()
+		return nil
+	}),
 	one.Command[Club]("club::create").Allow(one.SignedIn).Do(func(c *one.Ctx, k *Club) error {
 		return one.Create(c, &Seating{Club: k.ID, Person: c.Me()})
 	}),
@@ -64,7 +76,8 @@ var clubs = one.Module("club",
 	one.View("news").PerUser().
 		List("news", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer).Has("rack.followers", one.Viewer).
 			Or(one.All[one.ChangeOf[Trick]]().Has("dealt", one.Viewer).Except("created_by", one.Viewer))).
-		Fields("trick", "field", "after"),
+		Fields("trick", "field", "after").
+		FirstOf("seen", one.Where[Glance]("person", one.Viewer), "seen_at"),
 	one.View("dealt").PerUser().Each(one.All[Trick]().Has("dealt", one.Viewer)).Fields("title"),
 )
 
@@ -159,5 +172,29 @@ func TestNewsAndWhatsDealtLeaveOutWhatAPersonMayNoLongerRead(t *testing.T) {
 	}
 	if got := list(h.view("club::dealt:"+grace), "rows"); len(got) != 1 {
 		t.Errorf("once the club is public, Grace is shown the tricks %v", got)
+	}
+}
+
+func TestNewsSaysWhenThePersonLastLookedAtIt(t *testing.T) {
+	h := start(t)
+	grace, graceToken := h.signUp("grace@example.com")
+	ada, adaToken := h.signUp("ada@example.com")
+	h.mustRun("club/club/create", adaToken, map[string]any{"slug": "chess"})
+	rack := h.mustRun("club/rack/create", adaToken, map[string]any{"club": "chess", "name": "Openings"})
+	h.mustRun("club/rack/follow", graceToken, map[string]any{"id": rack})
+	if seen := h.view("club::news:" + grace)["seen"]; seen != nil {
+		t.Fatalf("before she's looked, Grace's news says she looked at %v", seen)
+	}
+	h.mustRun("club/glance/create", graceToken, map[string]any{})
+	first, ok := h.view("club::news:" + grace)["seen"].(time.Time)
+	if !ok {
+		t.Fatalf("after looking, Grace's news says she looked at %v", h.view("club::news:" + grace)["seen"])
+	}
+	h.mustRun("club/glance/create", graceToken, map[string]any{})
+	if again, _ := h.view("club::news:" + grace)["seen"].(time.Time); !again.After(first) {
+		t.Errorf("looking again moved when she looked from %v to %v", first, again)
+	}
+	if seen := h.view("club::news:" + ada)["seen"]; seen != nil {
+		t.Errorf("Ada's news says she looked, when only Grace did: %v", seen)
 	}
 }

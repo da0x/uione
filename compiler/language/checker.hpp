@@ -573,7 +573,7 @@ namespace one::language {
         // to be the kind of name it says it is, and nothing that could break out of a
         // quote. A project names all three or none, since a deploy needs all of them.
         void verify(const std::string&, location where, const project_declaration& p) {
-            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics"};
+            static const std::set<std::string, std::less<>> known{"domain", "firebase", "region", "ui", "authentication", "signin", "icon", "color", "theme", "corners", "layout", "serve", "redirect", "title", "one", "analytics", "unread"};
             auto only = [](const std::string& value, std::string_view allowed) {
                 return !value.empty() && value.find_first_not_of(allowed) == std::string::npos;
             };
@@ -630,6 +630,25 @@ namespace one::language {
                 if (s.key == "corners" && s.value != "square" && s.value != "round") {
                     error(s.where, "corners are square or round");
                 }
+                // What's new to a person, counted beside the app's name: a list of their own
+                // view, and a value of the same view saying when they last looked.
+                if (s.key == "unread") {
+                    auto [view, list] = std::pair{s.value.substr(0, s.value.find('.')), s.value.substr(s.value.find('.') + 1)};
+                    auto [since_view, since] = std::pair{s.to.substr(0, s.to.find('.')), s.to.substr(s.to.find('.') + 1)};
+                    const view_declaration* found = nullptr;
+                    for (const auto& [ns, sc] : scopes_) {
+                        if (auto it = sc.views.find(view); it != sc.views.end()) found = it->second.node;
+                    }
+                    bool listed = found && std::any_of(found->each.begin(), found->each.end(), [&](const view_each& e) { return e.name && *e.name == list; });
+                    bool held = found && std::any_of(found->values.begin(), found->values.end(), [&](const view_value& v) { return v.name && *v.name == since; });
+                    if (!found || found->per != std::optional<std::string>{"user"}) {
+                        error(s.where, "unread counts a list of a view per user, and there's no such view " + view);
+                    } else if (!listed) {
+                        error(s.where, "view " + view + " has no list " + list + " to count");
+                    } else if (since_view != view || !held) {
+                        error(s.where, "unread counts since a value of view " + view + ", like since " + view + ".seen");
+                    }
+                }
                 // Visitors counted with Firebase Analytics, once they agree to it.
                 if (s.key == "analytics" && s.value != "google") {
                     error(s.where, "analytics is google, for Firebase Analytics");
@@ -649,7 +668,7 @@ namespace one::language {
                         s.to.find_first_of("\" \\") != std::string::npos || s.value.find_first_of("\" \\") != std::string::npos) {
                         error(s.where, "redirect takes an address of this site and where it goes, like redirect \"/install.sh\" \"https://www.uione.io/install.sh\"");
                     }
-                } else if (!s.to.empty()) {
+                } else if (!s.to.empty() && s.key != "unread") {
                     error(s.where, s.key + " takes one value");
                 }
                 if (s.key == "serve") {
@@ -1807,6 +1826,15 @@ namespace one::language {
                     if (timeline->link && !routes_.contains(full_route(ns, *timeline->link))) {
                         error(timeline->link_where, "there's no screen at " + full_route(ns, *timeline->link) + " for this timeline's changes to open");
                     }
+                    if (timeline->since) {
+                        const view_declaration* view = find(ns, *timeline->since, &scope::views);
+                        bool held = view && std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return v.name && *v.name == timeline->since_field; });
+                        if (!held) error(timeline->since_where, "view " + timeline->since->text() + " has no value " + timeline->since_field + " saying when the person last looked");
+                    }
+                    if (timeline->seen && !find_command(ns, *timeline->seen)) {
+                        error(timeline->seen_where, "there's no command " + timeline->seen->text() + " " + in_namespace(ns));
+                    }
+                    if (timeline->seen && !timeline->since) error(timeline->seen_where, "a timeline runs seen once its new changes are looked at; say since when, like new since news.seen");
                 } else if (auto* table = std::get_if<table_item>(&item.node)) {
                     snake(table->view);
                     const view_declaration* view = find(ns, table->view, &scope::views);

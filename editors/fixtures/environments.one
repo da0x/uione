@@ -6,6 +6,7 @@
 project shop {
 	region  "us-east4"
 	ui      radix
+	unread  news.changes since news.seen
 	environment production {
 		domain    "shop.example"
 		firebase  "shop-production"

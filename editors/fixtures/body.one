@@ -54,6 +54,10 @@ namespace board {
 			card::move "Move" icon edit
 		}
 		subtitle "The columns"
+		timeline columns.changes "What's new" {
+			new since columns.seen
+			seen glance::create
+		}
 		table columns.columns {
 			reorder position
 			hide when empty

@@ -9,7 +9,7 @@ import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
 import type { Analytics, ComponentSet } from "./contract.js";
-import { DataProvider, useAuth } from "./data.js";
+import { DataProvider, useAuth, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
@@ -39,6 +39,31 @@ export interface AppProps {
   authentication?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
   color?: string; // the site's own color, as #rrggbb, for its buttons and links in place of the component set's
   analytics?: Analytics; // counting visitors, once they agree; none counts no one, and asks no one
+  // What's new to the person reading, counted beside the app's name on every page: the
+  // rows of a list of their own view made since a value of it, like when they last looked.
+  unread?: Unread;
+}
+
+export interface Unread {
+  view: string; // like projects::news
+  list: string; // like changes
+  since: string; // like seen
+}
+
+const UnreadSpec = createContext<Unread | undefined>(undefined);
+
+// Counts what's new to the person, and says how many to its parent.
+function CountUnread({ spec, onCount }: { spec: Unread; onCount: (n: number) => void }) {
+  const view = useView(spec.view);
+  const since = view.status === "live" ? view.data?.[spec.since] : undefined;
+  const after = since instanceof Date ? since.getTime() : typeof since === "string" ? Date.parse(since) : Number.NEGATIVE_INFINITY;
+  const rows = view.status === "live" && Array.isArray(view.data?.[spec.list]) ? (view.data?.[spec.list] as Record<string, unknown>[]) : [];
+  const count = rows.filter((row) => {
+    const made = row.created_at instanceof Date ? row.created_at.getTime() : typeof row.created_at === "string" ? Date.parse(row.created_at) : Number.NaN;
+    return made > after;
+  }).length;
+  useEffect(() => onCount(count), [count, onCount]);
+  return null;
 }
 
 // The visitor's answer to being counted, kept in their browser: agreed, refused, or
@@ -169,7 +194,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread }: AppProps) {
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}
@@ -184,6 +209,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
   );
   return (
     <UIContext.Provider value={ui}>
+      <UnreadSpec.Provider value={unread}>
       <DataProvider source={data}>
         <SignInProvider offered={authentication}>
           {location === undefined ? (
@@ -193,6 +219,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
           )}
         </SignInProvider>
       </DataProvider>
+      </UnreadSpec.Provider>
     </UIContext.Provider>
   );
 }
@@ -216,6 +243,8 @@ function Shell({
   const auth = useAuth();
   const signIn = useSignIn();
   const [signOutError, setSignOutError] = useState<string | undefined>();
+  const unreadSpec = useContext(UnreadSpec);
+  const [unread, setUnread] = useState(0);
   // Where a screen's Heading puts its buttons, on the title's row.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   // And where its Crumbs put the pages above it.
@@ -244,6 +273,7 @@ function Shell({
       heading={<div ref={setSlot} style={{ display: "contents" }} />}
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
+      unread={unreadSpec && auth?.person ? unread : undefined}
       account={
         signIn.offered &&
         auth && (
@@ -264,6 +294,7 @@ function Shell({
         )
       }
     >
+      {unreadSpec && auth?.person && <CountUnread spec={unreadSpec} onCount={setUnread} />}
       <HeadingSlot.Provider value={slot}>
         <CrumbsSlot.Provider value={trail}>
           <SubtitleSlot.Provider value={under}>

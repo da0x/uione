@@ -832,3 +832,33 @@ describe("filters by time", () => {
     expect(keptByTime(twoDaysAgo, ">", "seven days", now)).toBe(false);
   });
 });
+
+describe("what's new", () => {
+  it("marks the changes since the person last looked, and says they've looked once", async () => {
+    const source = memorySource();
+    const looked = new Date("2026-10-08T10:00:00Z");
+    const view: ViewState = {
+      status: "live",
+      data: {
+        seen: looked,
+        changes: [
+          { id: "b", field: "", action: "tracker::issue::create", created_at: new Date("2026-10-08T11:00:00Z"), "created_by.name": "Ada" },
+          { id: "a", field: "", action: "tracker::issue::create", created_at: new Date("2026-10-08T09:00:00Z"), "created_by.name": "Ada" },
+        ],
+      },
+    };
+    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" since={{ view, field: "seen" }} seen="tracker::reader::create" />);
+    expect(screen.getByRole("list", { name: "What's new, 1 new" })).toBeTruthy();
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent?.startsWith("New: "))).toEqual([true, false]);
+    await waitFor(() => expect(source.runs).toEqual([{ command: "tracker::reader::create", input: {} }]));
+  });
+
+  it("says nothing was looked at when nothing is new", async () => {
+    const source = memorySource();
+    const view: ViewState = { status: "live", data: { seen: new Date("2026-10-08T12:00:00Z"), changes: [{ id: "a", field: "", created_at: new Date("2026-10-08T09:00:00Z") }] } };
+    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" since={{ view, field: "seen" }} seen="tracker::reader::create" />);
+    expect(screen.getByRole("list", { name: "What's new" })).toBeTruthy();
+    await new Promise((done) => setTimeout(done, 20));
+    expect(source.runs).toEqual([]);
+  });
+});

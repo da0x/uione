@@ -214,6 +214,7 @@ namespace one::generators {
         std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
+        std::pair<std::string, std::string> unread_;  // unread news.changes since news.seen, as news.changes and news.seen
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
@@ -284,6 +285,7 @@ namespace one::generators {
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
+                        if (s.key == "unread") unread_ = {s.value, s.to};
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
@@ -1174,6 +1176,10 @@ namespace one::generators {
                     }
                     if (!subject.empty()) line += " subject={[" + subject + "]}";
                     if (timeline->title) line += " title=" + web_detail::js_string(*timeline->title);
+                    if (timeline->since) {
+                        line += " since={{ view: " + view_variable(parts, full_view(ns, timeline->since->text())) + ", field: " + web_detail::js_string(timeline->since_field) + " }}";
+                    }
+                    if (timeline->seen) line += " seen=" + web_detail::js_string(full_command(ns, *timeline->seen));
                     if (timeline->link) {
                         std::string target = full_route(ns, *timeline->link);
                         line += " link=" + web_detail::js_string(target);
@@ -2287,8 +2293,20 @@ namespace one::generators {
                 // A project that names no way of signing in offers none.
                 std::string offered = has_project_ && authentication_.empty() ? ", authentication: false" : "";
                 if (!color_.empty()) icon += ", color: " + web_detail::js_string(color_);
+                // What's new to the person, counted beside the name: their own view, by its
+                // full name, wherever it's declared.
+                std::string unread;
+                if (!unread_.first.empty()) {
+                    std::string view = unread_.first.substr(0, unread_.first.find('.'));
+                    std::string full = view;
+                    for (const auto& [ns, declared] : views_) {
+                        if (declared.contains(view)) full = web_detail::join(ns, view);
+                    }
+                    unread = ", unread: { view: " + web_detail::js_string(full) + ", list: " + web_detail::js_string(unread_.first.substr(unread_.first.find('.') + 1)) +
+                             ", since: " + web_detail::js_string(unread_.second.substr(unread_.second.find('.') + 1)) + " }";
+                }
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ ? ", analytics" : "") + " };");
+                         ", data" + offered + (analytics_ ? ", analytics" : "") + unread + " };");
             }
             out.line();
             out.open("export default function Site() {");

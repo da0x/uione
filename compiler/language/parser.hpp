@@ -215,6 +215,21 @@ namespace one::language {
                 const token& key = expect(token_kind::identifier, "a setting, like domain");
                 s.key = key.text;
                 s.where = key.where;
+                // unread news.changes since news.seen: how many of a person's own list are
+                // newer than a value of theirs, said beside the app's name.
+                if (key.text == "unread") {
+                    auto dotted = [&](const std::string& what) {
+                        std::string view = expect(token_kind::identifier, what).text;
+                        expect(token_kind::dot, "'.' after " + view);
+                        return view + "." + expect(token_kind::identifier, what).text;
+                    };
+                    s.value = dotted("the person's own list, like news.changes");
+                    if (!at_word("since")) fail_expecting("since and when they last looked, like since news.seen");
+                    advance();
+                    s.to = dotted("when they last looked, like news.seen");
+                    end_line();
+                    return s;
+                }
                 if (at(token_kind::string)) {
                     s.value = advance().text;
                     s.is_string = true;
@@ -1105,12 +1120,36 @@ namespace one::language {
                     end_line();
                     return {where, thread_item{std::move(view), std::move(list)}};
                 }
-                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt};
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, std::nullopt, {}, {}, std::nullopt, {}};
                 if (at(token_kind::string)) timeline.title = advance().text;
                 if (at_word("link")) {
                     advance();
                     timeline.link_where = peek().where;
                     timeline.link = expect(token_kind::route, "the screen each change opens, like /:project/issues/:issue").text;
+                }
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        // new since news.seen
+                        if (at_word("new")) {
+                            advance();
+                            if (!at_word("since")) fail_expecting("since and when the person last looked, like new since news.seen");
+                            advance();
+                            timeline.since_where = peek().where;
+                            timeline.since = parse_qualified_name("the view holding when the person last looked, like news");
+                            expect(token_kind::dot, "'.' and its value, like news.seen");
+                            timeline.since_field = expect(token_kind::identifier, "the view's value, like seen").text;
+                        } else if (at_word("seen")) {
+                            // seen reader::create
+                            advance();
+                            timeline.seen_where = peek().where;
+                            timeline.seen = parse_qualified_name("the command that says they've looked, like reader::create");
+                        } else {
+                            fail_expecting("new since or seen");
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
                 }
                 end_line();
                 return {where, std::move(timeline)};

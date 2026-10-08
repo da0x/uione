@@ -204,7 +204,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
     <div className="min-h-screen overflow-x-clip bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
@@ -215,6 +215,12 @@ export const radix: ComponentSet = {
           <a {...home} className="flex shrink-0 items-center gap-2.5 py-0 text-[1.05rem] font-semibold tracking-[-0.01em] sm:py-3.5">
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
+            {unread ? (
+              <span className="rounded-full bg-accent px-1.5 text-xs font-medium text-accent-ink tabular-nums">
+                {unread}
+                <span className="sr-only"> new</span>
+              </span>
+            ) : null}
           </a>
           <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto">
             {nav.map((item) => (
@@ -1443,13 +1449,17 @@ export const radix: ComponentSet = {
     ),
 
   // What happened, oldest first, down a line, each change one sentence.
-  Timeline: ({ status, entries, title }) => {
+  Timeline: ({ status, entries, title, fresh }) => {
     if (status !== "live" || entries.length === 0) return null;
     const changes = (
       <ol className="relative ml-1.5 flex flex-col gap-3 border-l border-line pl-5 text-sm">
         {entries.map((entry) => (
           <li key={entry.id} className="relative">
-            <span aria-hidden="true" className="absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-page bg-muted" />
+            <span
+              aria-hidden="true"
+              className={`absolute top-1.5 -left-[1.6rem] size-2.5 rounded-full border-2 border-page ${entry.fresh ? "bg-accent" : "bg-muted"}`}
+            />
+            {entry.fresh && <span className="sr-only">New: </span>}
             <span className="font-medium">{entry.who}</span> <span className="text-muted">{entry.what}</span>
             {entry.subject && (
               <>
@@ -1471,7 +1481,10 @@ export const radix: ComponentSet = {
     );
     return title ? (
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          {title}
+          {fresh ? <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-ink tabular-nums">{fresh} new</span> : null}
+        </h2>
         {changes}
       </section>
     ) : (

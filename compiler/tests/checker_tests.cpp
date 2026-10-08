@@ -1136,3 +1136,17 @@ TEST_CASE("a card's filter keeps what changed since a time counted from now") {
     CHECK(only_error(code + "\t\tfilter \"Recent\" updated_at == 7 days ago\n\t}\n}\n}\n").message ==
           "a filter keeps a time before or after one, like updated_at > 7 days ago");
 }
+
+TEST_CASE("what's new is counted from a person's own view, since a value of it") {
+    std::string views = "namespace work {\n"
+                        "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
+                        "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
+                        "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tfield\n\t}\n"
+                        "\tseen = first(reader where person == user.id).seen_at\n}\n}\n";
+    CHECK(check_source("project tracker {\n\tunread  news.changes since news.seen\n}\n" + views).empty());
+    CHECK(only_error("project tracker {\n\tunread  news.comments since news.seen\n}\n" + views).message == "view news has no list comments to count");
+    CHECK(only_error("project tracker {\n\tunread  news.changes since news.looked\n}\n" + views).message ==
+          "unread counts since a value of view news, like since news.seen");
+    CHECK(only_error("project tracker {\n\tunread  feed.changes since feed.seen\n}\n" + views).message ==
+          "unread counts a list of a view per user, and there's no such view feed");
+}

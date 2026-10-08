@@ -32,6 +32,7 @@ export interface PageProps {
   heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
   crumbs?: ReactNode; // where the pages above a screen go, above its title
   subtitle?: ReactNode; // where a screen's words about itself go, under its title
+  unread?: number; // how many things are new to the person reading, said beside the app's name
   children: ReactNode;
 }
 
@@ -71,6 +72,7 @@ export interface ThreadProps {
 // what they did, like "closed this", and when.
 export interface TimelineEntry {
   id: string;
+  fresh?: boolean; // made since the person last looked
   who: string;
   what: string; // like "closed this", or, with a subject, the words before it, like "closed"
   when: string;
@@ -83,6 +85,7 @@ export interface TimelineProps {
   status: ViewStatus;
   entries: TimelineEntry[];
   title?: string; // what it's of, said above it, like "What's new"; with none, nothing is shown while it's empty
+  fresh?: number; // how many are new since the person last looked
 }
 
 // A screen laid out in regions, like two_columns' main and side: what's in each, by

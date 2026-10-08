@@ -1210,3 +1210,28 @@ TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go 
     CHECK(screens->content.find(R"(lists={[["comments", "Comments", "rows", ["body"]]]})") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a person's news marks what came since they looked, and is counted beside the app's name") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-unread";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "project tracker {\n\tunread  news.changes since news.seen\n}\n"
+                         "namespace work at / {\n"
+                         "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
+                         "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
+                         "command reader::create {\n\tseen_at = now\n}\n"
+                         "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tissue  field  before  after  created_at\n\t}\n"
+                         "\tseen = first(reader where person == user.id).seen_at\n}\n"
+                         "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" {\n\t\tnew since news.seen\n\t\tseen reader::create\n\t}\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(title="What's new" since={{ view: news, field: "seen" }} seen="work::reader::create")") != std::string::npos);
+    const auto* site = find(files, "src/app.tsx");
+    REQUIRE(site != nullptr);
+    CHECK(site->content.find(R"(unread: { view: "work::news", list: "changes", since: "seen" })") != std::string::npos);
+}

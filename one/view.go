@@ -188,6 +188,7 @@ type ViewSpec struct {
 	perUser bool
 	per     reflect.Type // the entity each document is for, in a view per entity
 	counts  []count
+	firsts  []value // fields of the earliest of something, like when a person last looked
 	lists   []*list
 	copies  []copied
 	secrets []string     // values holding the document's project's GitHub webhook secret
@@ -321,6 +322,14 @@ func (v *ViewSpec) Fields(names ...string) *ViewSpec {
 	return v
 }
 
+// FirstOf holds a field of the first entity the query finds, the earliest made,
+// as in FirstOf("seen", Where[Reader]("person", Viewer), "seen_at"): when the
+// person reading last looked. With nothing found, it holds none.
+func (v *ViewSpec) FirstOf(name string, q Query, field string) *ViewSpec {
+	v.firsts = append(v.firsts, value{name, q, field})
+	return v
+}
+
 // Value adds to each row of a list a field of the first entity the query finds,
 // the earliest made, as in Value("lent_to", First[Loan]("book",
 // Row).And("returned_at", nil), "member"). With nothing found, the row holds none.
@@ -343,6 +352,9 @@ func (v *ViewSpec) register(r *registry, ns string) {
 	}
 	for _, c := range v.counts {
 		names = append(names, c.name)
+	}
+	for _, f := range v.firsts {
+		names = append(names, f.name)
 	}
 	names = append(names, v.secrets...)
 	for _, l := range v.lists {
@@ -540,6 +552,9 @@ func (v *ViewSpec) queries() []Query {
 	for _, c := range v.counts {
 		qs = append(qs, c.query)
 	}
+	for _, f := range v.firsts {
+		qs = append(qs, f.query)
+	}
 	for _, l := range v.lists {
 		qs = append(qs, l.query.ways()...)
 		for _, val := range l.values {
@@ -618,8 +633,15 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 		}
 	}
 	listed, everywhere := false, false
+	picked := []Query{}
 	for _, l := range v.lists {
-		for _, way := range l.query.ways() {
+		picked = append(picked, l.query)
+	}
+	for _, f := range v.firsts {
+		picked = append(picked, f.query)
+	}
+	for _, q := range picked {
+		for _, way := range q.ways() {
 			each := a.reg.schemas[way.typ]
 			// Picked through what it points at, like the changes on the boards a person
 			// follows: a change to a board changes the documents of its followers, before
@@ -1020,6 +1042,19 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 			return nil, err
 		}
 		data[c.name] = n
+	}
+	for _, f := range v.firsts {
+		found, err := a.find(ctx, f.query, subject, "")
+		if err != nil {
+			return nil, err
+		}
+		data[f.name] = nil
+		if len(found) > 0 {
+			sort.SliceStable(found, func(i, j int) bool {
+				return compare(found[i].Data()["created_at"], found[j].Data()["created_at"]) < 0
+			})
+			data[f.name] = found[0].Data()[f.field]
+		}
 	}
 	for _, l := range v.lists {
 		rows, err := a.rows(ctx, l, subject)
@@ -1469,6 +1504,9 @@ func (v *ViewSpec) definition() string {
 	}
 	for _, c := range v.copies {
 		fmt.Fprintf(&out, "copy %s %s\n", c.name, c.field)
+	}
+	for _, f := range v.firsts {
+		fmt.Fprintf(&out, "first %s %s %s\n", f.name, query(f.query), f.field)
 	}
 	for _, l := range v.lists {
 		fmt.Fprintf(&out, "list %s %s fields=%q limit=%d\n", l.name, query(l.query), l.fields, l.limit)

@@ -166,6 +166,12 @@ export function Actions({ children }: { children: ReactNode }) {
   return <ui.Actions>{children}</ui.Actions>;
 }
 
+// A time as milliseconds, from a date, its text or a number, or undefined.
+function timeOf(value: unknown): number | undefined {
+  const at = value instanceof Date ? value.getTime() : typeof value === "string" || typeof value === "number" ? new Date(value).getTime() : Number.NaN;
+  return Number.isNaN(at) ? undefined : at;
+}
+
 // When something was written or changed, with the time of day, as a thread or a
 // timeline says it.
 function when(value: unknown): string {
@@ -263,10 +269,15 @@ export function Timeline({
   keyed,
   named,
   title,
+  since,
+  seen,
 }: {
   view: ViewState;
   list: string;
   title?: string; // what it's of, like "What's new", shown only while it holds something
+  // When the person last looked, a value of a view: the changes after it are new.
+  since?: { view: ViewState; field: string };
+  seen?: string; // the command that says they've looked, run once there's something new
   subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
   link?: string; // where each change's subject is, like /:project/issues/:issue
   keyed?: string[]; // the key's parts before the last, when the link names them, like project
@@ -275,10 +286,28 @@ export function Timeline({
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
+  const runner = useRunner();
   const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
+  // When they last looked, as it was when the page opened: saying they've looked
+  // moves it on, but what was new stays marked until they leave. Never is before
+  // everything.
+  const [looked, setLooked] = useState<{ at: number }>();
+  const [said, setSaid] = useState(false);
+  const sinceStatus = since?.view.status;
+  const sinceValue = since ? since.view.data?.[since.field] : undefined;
+  useEffect(() => {
+    if (since && !looked && sinceStatus === "live") setLooked({ at: timeOf(sinceValue) ?? Number.NEGATIVE_INFINITY });
+  }, [since, looked, sinceStatus, sinceValue]);
+  const fresh = (row: Row) => looked !== undefined && (timeOf(row.created_at) ?? 0) > looked.at;
+  const freshCount = view.status === "live" ? onceEach(rows).filter(fresh).length : 0;
+  useEffect(() => {
+    if (!seen || said || freshCount === 0) return;
+    setSaid(true);
+    void runner.run(seen, {});
+  }, [seen, said, freshCount, runner]);
   const entries = onceEach(rows).map((row) => {
     // A change no one made, like a migration's, was made by the system.
-    const entry = { id: row.id, who: show(row["created_by.name"]) || "System", when: when(row.created_at) };
+    const entry = { id: row.id, who: show(row["created_by.name"]) || "System", when: when(row.created_at), fresh: fresh(row) || undefined };
     if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
     // A number is said as one, like #12.
     const words = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
@@ -286,7 +315,7 @@ export function Timeline({
     const to = link ? links(rowLink(link, row, params, keyed, named)) : undefined;
     return { ...entry, what: head, subject: words.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
-  return <ui.Timeline status={view.status} entries={entries} title={title} />;
+  return <ui.Timeline status={view.status} entries={entries} title={title} fresh={since ? freshCount : undefined} />;
 }
 
 // What a view holds, as Markdown to paste somewhere else whole: the page's title,

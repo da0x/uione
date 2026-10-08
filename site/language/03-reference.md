@@ -184,6 +184,10 @@ is asked once whether it may use cookies, and until they agree, they're counted
 without them, as Google's consent mode does; their answer is kept in their browser.
 A project without the setting counts no one and asks no one.
 
+`unread news.changes since news.seen` counts, on every page, what's new to the
+person signed in: the rows of a list of their own view made after a value of it,
+said beside the site's name.
+
 ### environment
 
 A project can run in more than one place, each deployed on its own: production
@@ -509,6 +513,9 @@ view book_page per book {
   showing it reads it for the entity its address names, so its route has that
   entity as a parameter: `screen "Book" /books/:book`. `per user` makes one
   document per person, readable only by that person.
+- `total = count(signup)` counts what a view's query picks, and `seen =
+  first(reader where person == user.id).seen_at` holds a field of the earliest it
+  picks, or none, like when the person reading last looked at their news.
 - `public` lets anyone read it, signed in or not.
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public
@@ -876,7 +883,11 @@ board project_page.issues by phase over project_page.phases link /:project/issue
   `issue.title`, and `link` opens it: `timeline project_page.timeline link
   /:project/issues/:issue` reads "Ada closed #12 Copy an issue whole".
 - `timeline news.changes "What's new"` says what a timeline is of above it. Like
-  every timeline, it isn't shown while it has nothing in it.
+  every timeline, it isn't shown while it has nothing in it. Its block can say
+  `new since news.seen`, which marks the changes made after a value of a view, like
+  when the person last looked, and counts them beside its title, and `seen
+  reader::create`, which runs once there's something new, to say they've looked.
+  What was new stays marked until they leave the page.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

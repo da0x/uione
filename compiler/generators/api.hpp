@@ -1794,8 +1794,22 @@ namespace one::generators {
                     calls.push_back({"GitHubSecret(" + api_detail::go_string(*value.name) + ")", value.where.line});
                     continue;
                 }
+                // A field of the earliest of something: seen = first(reader where person ==
+                // user.id).seen_at, when the person reading last looked.
+                if (auto* m = std::get_if<language::member_expression>(&value.value->node)) {
+                    auto* first = std::get_if<language::call_expression>(&m->object->node);
+                    auto* named = first ? std::get_if<language::name_expression>(&first->callee->node) : nullptr;
+                    auto* w = first && first->arguments.size() == 1 ? std::get_if<language::where_expression>(&first->arguments[0]->node) : nullptr;
+                    if (named && named->name.text() == "first" && w) {
+                        auto q = query(pkg, *w->source, w->condition.get());
+                        if (!q) return false;
+                        calls.push_back({"FirstOf(" + api_detail::go_string(*value.name) + ", " + *q + ", " + api_detail::go_string(m->member) + ")",
+                                         value.where.line});
+                        continue;
+                    }
+                }
                 if (!callee || callee->name.text() != "count" || call->arguments.size() != 1) {
-                    unsupported(path_, value.where, "a view value other than count(...), or a field of the entity a view per entity is for, or of what it points at");
+                    unsupported(path_, value.where, "a view value other than count(...), first(...).field, or a field of the entity a view per entity is for, or of what it points at");
                     return false;
                 }
                 const auto& argument = *call->arguments[0];

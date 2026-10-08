@@ -32,7 +32,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
 syn keyword uioneKeyword   require permission clear create readers when was add remove to has of limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks
+syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen unread
 " each change of issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+of\>"
@@ -93,7 +93,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 syn cluster uioneProjectItems contains=uioneSetting,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
-syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|corners\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|corners\|layout\|serve\|redirect\|title\|one\|analytics\|unread\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

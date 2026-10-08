@@ -617,7 +617,7 @@ view orders {
     auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
     CHECK(generated.files.empty());
     REQUIRE(generated.errors.size() == 1);
-    CHECK(generated.errors[0].message == "not supported yet: a view value other than count(...), or a field of the entity a view per entity is for, or of what it points at");
+    CHECK(generated.errors[0].message == "not supported yet: a view value other than count(...), first(...).field, or a field of the entity a view per entity is for, or of what it points at");
     CHECK(generated.errors[0].where.line == 6);
 }
 

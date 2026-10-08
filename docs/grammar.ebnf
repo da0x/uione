@@ -49,6 +49,8 @@ declaration    ::= project | namespace | format | enum_type | entity | command |
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | NAME) END
                  | "redirect" STRING STRING END
+                 /* what's new to a person, counted beside the app's name */
+                 | "unread" NAME "." NAME "since" NAME "." NAME END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
                  | "title" | "one" | "analytics" | "theme" | "corners"
 
@@ -150,7 +152,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
-                 | "timeline" qualified "." NAME STRING? ("link" ROUTE)? END
+                 | "timeline" qualified "." NAME STRING? ("link" ROUTE)? ("{" NEWLINE timeline_line* "}")? END
                  | "copy" qualified STRING? END
                  | "details" qualified "{" NEWLINE? (column+ END)* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
@@ -187,6 +189,9 @@ unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
 primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+/* the changes since a person last looked are new, and seen runs once they've looked */
+timeline_line  ::= "new" "since" qualified "." NAME END
+                 | "seen" qualified END
 /* a card's filter: a field and what it holds, or a time it's before or after, counted
    from when it's opened: updated_at > 7 days ago, due <= 2 weeks from now */
 filter         ::= NAME "==" expression | NAME ("<" | ">" | "<=" | ">=") time
