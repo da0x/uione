@@ -1398,6 +1398,10 @@ namespace one::generators {
                     value = "one.Row";
                 } else if (!subject_.empty() && right == subject_ + ".id") {
                     value = "one.Subject";
+                } else if (const language::entity_declaration* per = subject_.empty() ? nullptr : entity(pkg, subject_);
+                           per && right.starts_with(subject_ + ".") && field(*per, right.substr(subject_.size() + 1))) {
+                    // issue.board, in a view per issue: what the issue it's for holds.
+                    value = "one.SubjectField(" + api_detail::go_string(right.substr(subject_.size() + 1)) + ")";
                 } else if (right == "none") {
                     value = "nil";
                 } else if (auto* lit = std::get_if<language::literal_expression>(&b->right->node)) {

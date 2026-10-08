@@ -42,6 +42,8 @@ var boards = one.Module("boards",
 	one.Command[Column]("column::create").Allow(one.Anyone),
 	one.Command[Card]("card::create").Allow(one.Anyone),
 	one.Command[Arrow]("arrow::create").Allow(one.Anyone),
+	// A card's page lists the arrows out of its column.
+	one.View("card_page").Public().Per(one.Entity[Card]()).List("arrows", one.Where[Arrow]("from", one.SubjectField("column"))).Fields("to"),
 	one.Command[Column]("column::delete").Allow(one.Anyone).Inputs("into").Do(func(c *one.Ctx, x *Column) error {
 		into, _ := c.Input("into").(string)
 		if into == x.ID {
@@ -114,5 +116,26 @@ func TestAKeyMadeFromATitleNamesANewOneAndIsntTakenTwice(t *testing.T) {
 	// A name that's given is used as it is.
 	if id := h.mustRun("boards/lane/create", "", map[string]any{"board": "b1", "name": "done", "title": "Finished"}); id != "b1-done" {
 		t.Fatalf("the lane is %s, not b1-done", id)
+	}
+}
+
+func TestAViewPerEntityListsWhatAFieldOfItsEntityPicks(t *testing.T) {
+	h := start(t)
+	todo := h.mustRun("boards/column/create", "", map[string]any{"title": "To do"})
+	done := h.mustRun("boards/column/create", "", map[string]any{"title": "Done"})
+	card := h.mustRun("boards/card/create", "", map[string]any{"column": todo, "title": "first"})
+	h.mustRun("boards/arrow/create", "", map[string]any{"from": todo, "to": done})
+	h.mustRun("boards/arrow/create", "", map[string]any{"from": done, "to": todo})
+	arrows := func() int {
+		rows, _ := h.view("boards::card_page:" + card)["arrows"].([]any)
+		return len(rows)
+	}
+	if n := arrows(); n != 1 {
+		t.Fatalf("the card's page lists %d arrows out of its column, not 1", n)
+	}
+	// Another arrow out of its column is on its page once it's made.
+	h.mustRun("boards/arrow/create", "", map[string]any{"from": todo, "to": todo})
+	if n := arrows(); n != 2 {
+		t.Fatalf("after another arrow out of its column, the card's page lists %d, not 2", n)
 	}
 }

@@ -38,6 +38,17 @@ var Row = &marker{"row"}
 // Where[Loan]("book", Subject) in a view per book: that book's loans.
 var Subject = &marker{"subject"}
 
+// SubjectField stands for a field of the entity a view per entity is for, as in
+// Where[Step]("board", SubjectField("board")) in a view per issue: the steps of the
+// issue's board.
+func SubjectField(field string) any { return &subjectField{field} }
+
+type subjectField struct{ field string }
+
+// What the entity a document is for holds, for the conditions that name its fields,
+// carried with the request that builds the document.
+type subjectFields struct{}
+
 // Kind names an entity type, for a view that has one document per entity of it.
 type Kind struct{ typ reflect.Type }
 
@@ -512,13 +523,36 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 		}
 		listed = true
 		var field string
+		var through *subjectField
 		for _, c := range l.query.conditions {
 			if c.value == Viewer || c.value == Subject {
 				field = c.field
 			}
+			if sf, ok := c.value.(*subjectField); ok && v.per != nil {
+				field, through = c.field, sf
+			}
 		}
 		if field == "" {
 			everywhere = true
+		}
+		// Picked by a field of the entity each document is for, like the steps of an
+		// issue's board: the documents of every entity holding what it was and is.
+		if through != nil {
+			per := a.reg.schemas[v.per]
+			for _, data := range []map[string]any{ev.Before, ev.After} {
+				value, _ := data[field].(string)
+				if value == "" {
+					continue
+				}
+				refs, err := a.store.Collection(per.collection).Where(through.field, "==", value).Documents(ctx).GetAll()
+				if err != nil {
+					return nil, err
+				}
+				for _, ref := range refs {
+					add(ref.Ref.ID)
+				}
+			}
+			continue
 		}
 		for _, data := range []map[string]any{ev.Before, ev.After} {
 			switch key := data[field].(type) {
@@ -589,9 +623,9 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 	for _, c := range q.conditions {
 		switch {
 		case c.has:
-			query = query.Where(c.field, "array-contains", given(c.value, subject, row))
+			query = query.Where(c.field, "array-contains", givenIn(ctx, c.value, subject, row))
 		case !c.except:
-			query = query.Where(c.field, "==", given(c.value, subject, row))
+			query = query.Where(c.field, "==", givenIn(ctx, c.value, subject, row))
 		}
 	}
 	docs, err := query.Documents(ctx).GetAll()
@@ -602,7 +636,7 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 	for _, doc := range docs {
 		keep := true
 		for _, c := range q.conditions {
-			if c.except && same(doc.Data()[c.field], given(c.value, subject, row)) {
+			if c.except && same(doc.Data()[c.field], givenIn(ctx, c.value, subject, row)) {
 				keep = false
 			}
 		}
@@ -628,7 +662,7 @@ func (a *App) count(ctx context.Context, q Query, subject string) (int64, error)
 		if c.has {
 			op = "array-contains"
 		}
-		query = query.Where(c.field, op, given(c.value, subject, ""))
+		query = query.Where(c.field, op, givenIn(ctx, c.value, subject, ""))
 	}
 	result, err := query.NewAggregationQuery().WithCount("n").Get(ctx)
 	if err != nil {
@@ -639,6 +673,16 @@ func (a *App) count(ctx context.Context, q Query, subject string) (int64, error)
 		return 0, fmt.Errorf("one: counting %s gave %T, not a number", a.reg.schemas[q.typ].entity, result["n"])
 	}
 	return n.GetIntegerValue(), nil
+}
+
+// givenIn is given, with a field of the entity the document is for, which the
+// request building it carries.
+func givenIn(ctx context.Context, v any, subject, row string) any {
+	if sf, ok := v.(*subjectField); ok {
+		fields, _ := ctx.Value(subjectFields{}).(map[string]any)
+		return fields[sf.field]
+	}
+	return given(v, subject, row)
 }
 
 // given is the value a condition compares with, once Viewer and Row are known.
@@ -668,6 +712,21 @@ func same(stored, wanted any) bool {
 
 func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[string]any, error) {
 	data := map[string]any{}
+	// What the entity it's for holds, for lists picked by its fields.
+	picksByItsFields := false
+	for _, q := range v.queries() {
+		for _, c := range q.conditions {
+			_, ok := c.value.(*subjectField)
+			picksByItsFields = picksByItsFields || ok
+		}
+	}
+	if picksByItsFields && v.per != nil {
+		fields, err := a.stored(ctx, a.reg.schemas[v.per], subject)
+		if err != nil {
+			return nil, err
+		}
+		ctx = context.WithValue(ctx, subjectFields{}, fields)
+	}
 	if len(v.copies) > 0 || v.scope != nil || len(v.people) > 0 {
 		// The entity the view is for. Once it's gone, its fields read as none.
 		fields, err := a.stored(ctx, a.reg.schemas[v.per], subject)

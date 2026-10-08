@@ -559,6 +559,9 @@ view project_page per project {
   lists that belong to it. Each item in a list is its own entity, so a long list
   never makes one item too big to store. A table names the list it shows:
   `table book_page.loans`.
+- In a view per entity, a list can be picked by a field of that entity:
+  `steps = each step where board == issue.board` in a view per issue lists the
+  steps of the issue's board, and is rebuilt when any of them changes.
 - A view is rebuilt whenever an entity it reads changes: `desk` reads books through
   `book.title`, so renaming a book updates the desk.
 

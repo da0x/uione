@@ -282,6 +282,38 @@ once "2026-10-08 boards" {
     CHECK(wrong[0].message.starts_with("expected"));
 }
 
+TEST_CASE("a view per entity lists what a field of that entity picks, like the steps of an issue's board") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace work {
+entity board {
+	title  text
+}
+entity step {
+	board  board
+	title  text
+}
+entity issue {
+	board  board
+	title  text
+}
+view issue_page per issue {
+	title = issue.title
+	steps = each step where board == issue.board {
+		title
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "work/work.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(List("steps", one.Where[Step]("board", one.SubjectField("board"))))") != std::string::npos);
+}
+
 TEST_CASE("a key made from another field tells the library which") {
     language::diagnostics out;
     std::vector<language::file> files;

@@ -579,6 +579,13 @@ export interface RowAction {
   form?: { fields: (string | FieldSpec)[]; submit?: string };
 }
 
+// What a search box says it finds by, in words: Search title, labels, phase and
+// priority. A field read through another, like phase.title, is called by that other.
+function searchLabel(search: string[], columns: Record<string, string>): string {
+  const words = search.map((field) => (columns[field] ?? label(field.includes(".") ? field.slice(0, field.lastIndexOf(".")) : field)).toLowerCase());
+  return `Search ${words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words.join("")}`;
+}
+
 // A row's value as a table's cell or a card shows it: a choice as it's shown, a list
 // of words each on its own, a web address as a short link, a person's picture as
 // the picture, and anything else as text.
@@ -710,7 +717,7 @@ export function Table({
           search.length
             ? {
                 value: query,
-                label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`,
+                label: searchLabel(search, columns),
                 onChange: (value: string) => {
                   setQuery(value);
                   setAt(1);
@@ -847,7 +854,7 @@ export function Board({
       tools={tools}
       search={
         search.length
-          ? { value: query, label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`, onChange: setQuery }
+          ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
           : undefined
       }
       onMove={
