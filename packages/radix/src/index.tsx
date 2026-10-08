@@ -14,7 +14,7 @@ import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
@@ -24,6 +24,41 @@ import { ThemeToggle } from "./theme.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // The box code sits in, on its own or inside a page of docs.
+// Whether the page is a phone's width, narrower than Tailwind's sm, as it changes.
+// Where it can't be told, as in tests, it isn't.
+function useNarrow(): boolean {
+  const query = "(max-width: 39.99rem)";
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(query);
+    const change = () => setNarrow(media.matches);
+    change();
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  return narrow;
+}
+
+// The column a row is called by, on a phone: the one headed Title or Name, or else
+// the first that isn't only numbers, like a #.
+function leadColumn(columns: string[], rows: { cells: ReactNode[] }[]): number {
+  const named = columns.findIndex((column) => /^(title|name)$/i.test(column.trim()));
+  if (named >= 0) return named;
+  const plain = columns.findIndex((_, i) => !rows.every((row) => typeof row.cells[i] === "number" || (typeof row.cells[i] === "string" && /^\d*$/.test(row.cells[i] as string))));
+  return plain >= 0 ? plain : 0;
+}
+
+// Whether the first column is a number said before the lead, like #12.
+function numbered(columns: string[], lead: number): boolean {
+  return lead > 0 && /^(#|number|no\.?)$/i.test((columns[0] ?? "").trim());
+}
+
+// A cell with nothing in it, left off a phone's line rather than shown as a gap.
+function blank(cell: ReactNode): boolean {
+  return cell === null || cell === undefined || cell === false || cell === "" || (Array.isArray(cell) && cell.length === 0);
+}
+
 const box = "one-code overflow-x-auto rounded-box border border-line bg-surface p-4 text-[0.84rem] leading-6 shadow-panel [&_pre]:!bg-transparent";
 
 // The reader's controls for how code looks: how wide a tab is, and how names are
@@ -400,6 +435,7 @@ export const radix: ComponentSet = {
     // The row being dragged, and the place it would go.
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
+    const narrow = useNarrow();
     return (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
@@ -441,6 +477,88 @@ export const radix: ComponentSet = {
           )}
         </div>
       )}
+      {/* On a phone, each row is one entry: what it's called across the whole width,
+          and the rest on a line under it, rather than columns squeezed side by side. */}
+      {narrow && (
+        <ul className="divide-y divide-line text-sm" aria-busy={status === "loading"}>
+          {rows.map((row, at) => {
+            const lead = leadColumn(columns, rows);
+            const rest = row.cells.map((cell, i) => ({ cell, i })).filter(({ cell, i }) => i !== lead && !(i === 0 && numbered(columns, lead)) && !blank(cell));
+            return (
+              <li
+                key={row.id}
+                onClick={
+                  row.link
+                    ? (event) => {
+                        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                        event.currentTarget.querySelector("a")?.click();
+                      }
+                    : undefined
+                }
+                className={`flex items-start gap-2 px-3 py-2.5 ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
+              >
+                {reorder && (
+                  <button
+                    type="button"
+                    aria-label={`${reorder.label} ${typeof row.cells[lead] === "string" ? row.cells[lead] : ""}`.trim()}
+                    onKeyDown={(event) => {
+                      if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                      event.preventDefault();
+                      reorder.onMove(at, event.key === "ArrowUp" ? at - 1 : at + 1);
+                    }}
+                    className="rounded-control px-1 text-muted"
+                  >
+                    ⠿
+                  </button>
+                )}
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <div className="leading-snug">
+                    {numbered(columns, lead) && !blank(row.cells[0]) && <span className="mr-1.5 text-muted tabular-nums">#{row.cells[0]}</span>}
+                    {row.link ? (
+                      <a {...row.link} className="font-medium text-accent hover:underline">
+                        {row.cells[lead]}
+                      </a>
+                    ) : (
+                      <span className="font-medium">{row.cells[lead]}</span>
+                    )}
+                  </div>
+                  {rest.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.8rem] text-muted">
+                      {rest.map(({ cell, i }) => (
+                        // A cell that draws nothing, or only an empty box, like labels when there are
+                          // none, takes no room.
+                        <span key={i} className="inline-flex items-center has-[>[data-cell]:empty]:hidden has-[>[data-cell]>:only-child:empty]:hidden">
+                          <span className="sr-only">{columns[i]}: </span>
+                          <span data-cell className="inline-flex items-center gap-1">
+                            {cell}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {row.actions.length > 0 && (
+                  <div className="flex shrink-0 gap-3">
+                    {row.actions.map((a) => (
+                      <button
+                        key={a.label}
+                        type="button"
+                        disabled={a.disabled}
+                        onClick={a.onClick}
+                        aria-label={typeof row.cells[lead] === "string" && row.cells[lead] ? `${a.label} ${row.cells[lead]}` : undefined}
+                        className="font-medium text-accent hover:underline disabled:opacity-50"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {!narrow && (
       <table className="w-full text-left text-sm" aria-busy={status === "loading"}>
         <thead className="border-b border-line bg-sunken text-[0.8rem] text-muted">
           <tr>
@@ -554,6 +672,7 @@ export const radix: ComponentSet = {
           ))}
         </tbody>
       </table>
+      )}
       {rows.length === 0 && (
         <p className="px-4 py-6 text-center text-sm text-muted">
           {status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : search?.value.trim() ? "Nothing matches." : "Nothing here yet."}
@@ -648,6 +767,16 @@ export const radix: ComponentSet = {
       setDragged(undefined);
       setOver(undefined);
     };
+    // On a phone, a phase a page: swiped between, or picked from the tabs above, which
+    // follow the swiping.
+    const strip = useRef<HTMLDivElement>(null);
+    const [shown, setShown] = useState(0);
+    const turnTo = (at: number) => {
+      const box = strip.current;
+      const page = box?.children[at] as HTMLElement | undefined;
+      if (box && page) box.scrollTo?.({ left: page.offsetLeft - box.offsetLeft, behavior: "smooth" });
+      setShown(at);
+    };
     return (
       <div className="flex flex-col gap-2">
         {(search || tools || filtered) && (
@@ -666,7 +795,34 @@ export const radix: ComponentSet = {
             {tools}
           </div>
         )}
-        <div className="flex items-start gap-3 overflow-x-auto pb-2" aria-busy={status === "loading"}>
+        {columns.length > 1 && (
+          <div role="tablist" aria-label="Phases" className="-mx-1 flex gap-1 overflow-x-auto px-1 sm:hidden">
+            {columns.map((column, at) => (
+              <button
+                key={column.id}
+                type="button"
+                role="tab"
+                aria-selected={shown === at}
+                onClick={() => turnTo(at)}
+                className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 pt-1 pb-1.5 text-sm ${shown === at ? "border-accent font-medium text-ink" : "border-transparent text-muted"}`}
+              >
+                {column.title}
+                <span className="rounded-full bg-sunken px-1.5 text-xs tabular-nums text-muted">{column.cards.length}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          ref={strip}
+          onScroll={(event) => {
+            const box = event.currentTarget;
+            if (box.clientWidth === 0 || window.matchMedia("(min-width: 40rem)").matches) return;
+            const at = Math.round(box.scrollLeft / box.clientWidth);
+            if (at !== shown && at >= 0 && at < columns.length) setShown(at);
+          }}
+          className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-2 sm:snap-none"
+          aria-busy={status === "loading"}
+        >
           {columns.map((column, at) => (
             <section
               key={column.id}
@@ -681,7 +837,7 @@ export const radix: ComponentSet = {
                 if (dragged && onMove && dragged.reaches.includes(column.id)) onMove(dragged.card, column.id);
                 drop();
               }}
-              className={`flex w-72 shrink-0 flex-col rounded-box border bg-sunken/70 transition-opacity ${reachable(column.id) ? "" : "opacity-40"} ${
+              className={`flex w-full shrink-0 snap-start flex-col rounded-box border bg-sunken/70 transition-opacity sm:w-72 ${reachable(column.id) ? "" : "opacity-40"} ${
                 over === column.id ? "border-accent ring-2 ring-accent/30" : "border-line"
               }`}
             >
@@ -728,6 +884,24 @@ export const radix: ComponentSet = {
                             </span>
                           ))}
                         </div>
+                      )}
+                      {/* A finger can't drag one, so on a phone a card says where it can go. */}
+                      {movable && onMove && (
+                        <select
+                          value=""
+                          onChange={(event) => event.target.value && onMove(card.id, event.target.value)}
+                          aria-label={`Move ${card.title}`}
+                          className="mt-2 w-full rounded-control border border-control-line bg-page px-2 py-1 text-xs text-muted sm:hidden"
+                        >
+                          <option value="">Move to…</option>
+                          {columns
+                            .filter((other) => card.reaches.includes(other.id))
+                            .map((other) => (
+                              <option key={other.id} value={other.id}>
+                                {other.title}
+                              </option>
+                            ))}
+                        </select>
                       )}
                     </li>
                   );

@@ -440,3 +440,47 @@ describe("asking to count visits", () => {
     expect(answers).toEqual([false, true]);
   });
 });
+
+describe("on a phone", () => {
+  const phone = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("max-width"), addEventListener: () => {}, removeEventListener: () => {} }));
+
+  it("lists a table's rows by their title, with the rest on a line under it", () => {
+    phone();
+    const Table = radix.Table;
+    render(
+      <Table
+        status="live"
+        columns={["#", "Title", "Labels", "Priority"]}
+        rows={[{ id: "a", cells: ["12", "Copy an issue whole", "", "High"], actions: [] }]}
+      />,
+    );
+    expect(screen.queryByRole("table")).toBeNull();
+    const entry = screen.getByRole("listitem");
+    expect(entry.textContent).toBe("#12Copy an issue wholePriority: High");
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a board's phases a page at a time, and moves a card with a picker", () => {
+    phone();
+    const Board = radix.Board;
+    const onMove = vi.fn();
+    render(
+      <Board
+        status="live"
+        onMove={onMove}
+        columns={[
+          { id: "todo", title: "To Do", cards: [{ id: "a", title: "Copy an issue whole", details: [], reaches: ["doing"] }] },
+          { id: "doing", title: "Doing", cards: [] },
+        ]}
+      />,
+    );
+    const phases = screen.getByRole("tablist", { name: "Phases" });
+    expect(within(phases).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["To Do1", "Doing0"]);
+    fireEvent.click(within(phases).getByRole("tab", { name: "Doing 0" }));
+    expect(within(phases).getByRole("tab", { name: "Doing 0" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.change(screen.getByLabelText("Move Copy an issue whole"), { target: { value: "doing" } });
+    expect(onMove).toHaveBeenCalledWith("a", "doing");
+    vi.unstubAllGlobals();
+  });
+});
