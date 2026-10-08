@@ -713,6 +713,15 @@ namespace one::language {
                 end_line();
                 return {where, std::move(region)};
             }
+            // heading { project::update "Edit project" }: beside the screen's title.
+            if (at_word("heading") && peek(1).kind == token_kind::left_brace) {
+                advance();
+                content_block block;
+                block.type = content_block::kind::heading;
+                block.items = parse_screen_block();
+                end_line();
+                return {where, std::move(block)};
+            }
             if (at_word("menu") && peek(1).kind == token_kind::left_brace) {
                 advance();
                 content_block block;
@@ -778,10 +787,18 @@ namespace one::language {
                     advance();
                     table.list = expect(token_kind::identifier, "which of the view's lists, like comments").text;
                 }
+                auto by_over = [&]() {
+                    if (!at_word("over")) return;
+                    advance();
+                    table.by_over = parse_qualified_name("the view whose list its tabs are, like project_page");
+                    expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
+                    table.by_over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                };
                 if (at_word("by")) {
                     advance();
                     table.by_where = peek().where;
                     table.by = expect(token_kind::identifier, "the choice its rows are sorted into tabs by, like status").text;
+                    by_over();
                 }
                 if (at_word("link")) {
                     advance();
@@ -796,6 +813,7 @@ namespace one::language {
                             advance();
                             table.by_where = peek().where;
                             table.by = advance().text;
+                            by_over();
                             end_line();
                             continue;
                         }
@@ -907,6 +925,19 @@ namespace one::language {
                             expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
                             move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
                             board.move = std::move(move);
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("search") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            while (at(token_kind::identifier)) {
+                                std::string name = advance().text;
+                                while (at(token_kind::dot)) {
+                                    advance();
+                                    name += "." + expect(token_kind::identifier, "a field").text;
+                                }
+                                board.search.push_back(name);
+                            }
                             end_line();
                             continue;
                         }

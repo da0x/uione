@@ -95,6 +95,24 @@ const choiceIcons: Record<string, ReactNode> = {
 // A choice of a few is a row of cards to pick from; more than that is a list.
 const fewChoices = 3;
 
+// The pictures a switch draws for what it switches between: rows for a table, and
+// columns of cards for a board.
+const switchIcons: Record<string, ReactNode> = {
+  table: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+      <path d="M2 6h12M2 9.5h12" />
+    </svg>
+  ),
+  board: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="2.5" width="3.5" height="11" rx="1" />
+      <rect x="6.25" y="2.5" width="3.5" height="7" rx="1" />
+      <rect x="10.5" y="2.5" width="3.5" height="9" rx="1" />
+    </svg>
+  ),
+};
+
 const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   primary: "bg-accent text-accent-ink shadow-panel hover:bg-accent-hover",
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
@@ -129,7 +147,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, children }) => (
     <div className="min-h-screen bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
@@ -164,7 +182,11 @@ export const radix: ComponentSet = {
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
       <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
-        {title !== name && <h1 className="mb-5 text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
+        {/* The title, and a screen's own buttons at the end of its row. */}
+        <div className={`flex flex-wrap items-center gap-3 ${title !== name ? "mb-5" : ""}`}>
+          {title !== name && <h1 className="mr-auto text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
+          <div className="ml-auto flex items-center gap-2 empty:hidden">{heading}</div>
+        </div>
         <div className="flex flex-col gap-7">{children}</div>
       </main>
     </div>
@@ -346,7 +368,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder }) {
+  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools }) {
     // The row being dragged, and the place it would go.
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
@@ -354,7 +376,7 @@ export const radix: ComponentSet = {
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
           and the search box at the end of the same row. */}
-      {(tabs || search) && (
+      {(tabs || search || tools) && (
         <div className="flex flex-wrap items-end gap-x-3 border-b border-line px-2">
           {tabs && (
             <div role="tablist" className="flex gap-1 pt-1.5">
@@ -373,16 +395,19 @@ export const radix: ComponentSet = {
               ))}
             </div>
           )}
-          {search && (
-            <div className="ml-auto w-full py-1.5 sm:w-80">
-              <input
-            type="search"
-            value={search.value}
-            onChange={(event) => search.onChange(event.target.value)}
-            placeholder={`${search.label}…`}
-            aria-label={search.label}
-            className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent"
-              />
+          {(search || tools) && (
+            <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 py-1.5 sm:w-auto">
+              {search && (
+                <input
+                  type="search"
+                  value={search.value}
+                  onChange={(event) => search.onChange(event.target.value)}
+                  placeholder={`${search.label}…`}
+                  aria-label={search.label}
+                  className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:w-72"
+                />
+              )}
+              {tools}
             </div>
           )}
         </div>
@@ -530,7 +555,7 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
-  Board: function RadixBoard({ status, columns, error, onMove }) {
+  Board: function RadixBoard({ status, columns, error, onMove, search, tools }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();
     const reachable = (column: string) => !dragged || column === dragged.from || dragged.reaches.includes(column);
@@ -540,6 +565,21 @@ export const radix: ComponentSet = {
     };
     return (
       <div className="flex flex-col gap-2">
+        {(search || tools) && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {search && (
+              <input
+                type="search"
+                value={search.value}
+                onChange={(event) => search.onChange(event.target.value)}
+                placeholder={`${search.label}…`}
+                aria-label={search.label}
+                className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:w-72"
+              />
+            )}
+            {tools}
+          </div>
+        )}
         <div className="flex items-start gap-3 overflow-x-auto pb-2" aria-busy={status === "loading"}>
           {columns.map((column, at) => (
             <section
@@ -629,11 +669,13 @@ export const radix: ComponentSet = {
           type="button"
           aria-pressed={option.selected}
           onClick={option.onSelect}
-          className={`rounded-control px-3 py-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+          aria-label={option.icon ? option.label : undefined}
+          title={option.icon ? option.label : undefined}
+          className={`inline-flex items-center rounded-control px-2 py-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
             option.selected ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"
           }`}
         >
-          {option.label}
+          {(option.icon && switchIcons[option.icon]) || option.label}
         </button>
       ))}
     </div>

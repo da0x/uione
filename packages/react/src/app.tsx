@@ -6,6 +6,7 @@
 
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } from "react-router";
 import type { Analytics, ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
@@ -214,6 +215,8 @@ function Shell({
   const auth = useAuth();
   const signIn = useSignIn();
   const [signOutError, setSignOutError] = useState<string | undefined>();
+  // Where a screen's Heading puts its buttons, on the title's row.
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => {
     document.title = !title || title === name ? name : `${title} · ${name}`;
   }, [title, name]);
@@ -233,6 +236,7 @@ function Shell({
       home={link("/")}
       nav={nav}
       title={title}
+      heading={<div ref={setSlot} style={{ display: "contents" }} />}
       account={
         signIn.offered &&
         auth && (
@@ -253,9 +257,20 @@ function Shell({
         )
       }
     >
-      <Confirmations>{children}</Confirmations>
+      <HeadingSlot.Provider value={slot}>
+        <Confirmations>{children}</Confirmations>
+      </HeadingSlot.Provider>
     </ui.Page>
   );
+}
+
+const HeadingSlot = createContext<HTMLElement | null>(null);
+
+// A screen's own buttons on its title's row, at its end, like Edit project. They're
+// drawn there from wherever the screen has them, keeping what's around them.
+export function Heading({ children }: { children: ReactNode }) {
+  const slot = useContext(HeadingSlot);
+  return slot ? createPortal(children, slot) : null;
 }
 
 // What to tell someone whose sign-in didn't work. Closing the sign-in window is a

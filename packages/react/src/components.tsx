@@ -5,7 +5,7 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, isValidElement, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useParams } from "react-router";
 import { partsOf } from "./keys.js";
@@ -620,6 +620,7 @@ export function Table({
   sort,
   page,
   reorder,
+  tools,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -637,6 +638,7 @@ export function Table({
   // Rows put in order by dragging, which runs the command with a number for the field
   // between its new neighbors', like a phase's position; the list is ordered by it.
   reorder?: { command: string; field: string; allowed?: boolean };
+  tools?: ReactNode; // buttons beside its search, like New issue
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -718,6 +720,7 @@ export function Table({
         }
         pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
         reorder={arranged ? { label: "Move", onMove: move } : undefined}
+        tools={tools}
         columns={Object.values(columns)}
         error={[...pressed.map((a) => a.name), ...(arranged ? [arranged.command] : [])].map((name) => runner.error(name)).find((e) => e !== undefined)}
         rows={rows.map((row) => ({
@@ -788,6 +791,8 @@ export function Board({
   choices = {},
   labels = [],
   move,
+  search = [],
+  tools,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -802,6 +807,8 @@ export function Board({
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   move?: BoardMove;
+  search?: string[]; // fields a box finds cards by, like title and labels
+  tools?: ReactNode; // buttons beside its search, like New issue
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -809,7 +816,12 @@ export function Board({
   const runner = useConfirmedRunner();
   // Where each card moved is until the view says so too.
   const [moved, setMoved] = useState<Record<string, string>>({});
-  const cards = rowsOf(view.data?.[list]);
+  const [query, setQuery] = useState("");
+  const wanted = query.trim().toLowerCase();
+  const all = rowsOf(view.data?.[list]);
+  const cards = all.filter(
+    (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
+  );
   const things = rowsOf(over.data?.[overList]);
   const mine = move ? rolesHeld(move.roles, move.within, move.place ?? "project", move.role ?? "role") : new Set<unknown>();
   const steps = move?.steps.status === "live" ? rowsOf(move.steps.data?.[move.list]) : [];
@@ -820,7 +832,7 @@ export function Board({
       .map((step) => String(step.to));
   useEffect(() => {
     setMoved((now) => {
-      const settled = Object.keys(now).filter((id) => cards.some((card) => card.id === id && card[by] === now[id]));
+      const settled = Object.keys(now).filter((id) => all.some((card) => card.id === id && card[by] === now[id]));
       if (settled.length === 0) return now;
       return Object.fromEntries(Object.entries(now).filter(([id]) => !settled.includes(id)));
     });
@@ -832,10 +844,16 @@ export function Board({
     <ui.Board
       status={status}
       error={move ? runner.error(move.command) : undefined}
+      tools={tools}
+      search={
+        search.length
+          ? { value: query, label: `Search ${search.map((field) => (columns[field] ?? label(field)).toLowerCase()).join(" and ")}`, onChange: setQuery }
+          : undefined
+      }
       onMove={
         move
           ? (id, to) => {
-              const card = cards.find((c) => c.id === id);
+              const card = all.find((c) => c.id === id);
               if (!card || !reaches(where(card)).includes(to)) return;
               setMoved((now) => ({ ...now, [id]: to }));
               void runner.run(move.command, { id, [by]: to }, card).then((done) => {
@@ -863,7 +881,19 @@ export function Board({
 
 // One of a few ways to show the same list, like a table and a board, as the person
 // picks; their pick is remembered in their browser.
-export function Switched({ id, label: says, options, children }: { id: string; label: string; options: string[]; children: ReactNode }) {
+export function Switched({
+  id,
+  label: says,
+  options,
+  icons = [],
+  children,
+}: {
+  id: string;
+  label: string;
+  options: string[];
+  icons?: string[]; // drawn for each option instead of its name, like table and board
+  children: ReactNode;
+}) {
   const ui = useUI();
   const key = `uione:switch:${id}`;
   const [picked, setPicked] = useState(() => {
@@ -882,12 +912,20 @@ export function Switched({ id, label: says, options, children }: { id: string; l
       // Without storage, the pick lasts as long as the page.
     }
   };
-  return (
-    <>
-      <ui.Switch label={says} options={options.map((option, at) => ({ label: option, selected: at === picked, onSelect: () => pick(at) }))} />
-      {Children.toArray(children)[picked]}
-    </>
+  const switcher = (
+    <ui.Switch label={says} options={options.map((option, at) => ({ label: option, icon: icons[at], selected: at === picked, onSelect: () => pick(at) }))} />
   );
+  // It sits in the toolbar of what's shown, beside its own buttons.
+  const shown = Children.toArray(children)[picked];
+  if (!isValidElement<{ tools?: ReactNode }>(shown)) return shown ?? null;
+  return cloneElement(shown, {
+    tools: (
+      <>
+        {shown.props.tools}
+        {switcher}
+      </>
+    ),
+  });
 }
 
 // A command a grid's cell runs: the form it asks with, and whether the person may.

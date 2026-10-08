@@ -334,7 +334,8 @@ namespace one::language {
     struct content_block {
         // A menu holds links, with the rest of the screen beside it; a region is one
         // part of the screen's layout, like main or side, named in title.
-        enum class kind { hero, section, menu, region };
+        // A heading's items sit on the screen's title row, at its end.
+        enum class kind { hero, section, menu, region, heading };
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;
@@ -372,6 +373,9 @@ namespace one::language {
         location link_where;
         std::optional<std::string> by;    // table project_page.issues by status: a tab for each of its choices
         location by_where;
+        // by phase over project_page.phases: a tab for each of a list's records, in its order.
+        std::optional<qualified_name> by_over;
+        std::string by_over_list;
         std::vector<std::string> search;  // search title labels: a box that finds rows by these
         location search_where;
         std::optional<std::string> sort;  // sort -number: rows in this order, - for largest or latest first
@@ -442,6 +446,7 @@ namespace one::language {
         location link_where;
         std::optional<button_item> move;
         std::vector<table_column> columns;  // what a card shows, its title first
+        std::vector<std::string> search;    // search title labels: a box that finds cards by these
     };
 
     // component workbench: a hand-written React component, components/workbench.tsx

@@ -181,7 +181,7 @@ namespace one::driver {
                     using T = std::decay_t<decltype(n)>;
                     if constexpr (std::is_same_v<T, language::content_block>) {
                         using kind = language::content_block::kind;
-                        out.kind = n.type == kind::region ? "region" : n.type == kind::menu ? "menu" : n.type == kind::hero ? "hero" : "section";
+                        out.kind = n.type == kind::region ? "region" : n.type == kind::menu ? "menu" : n.type == kind::hero ? "hero" : n.type == kind::heading ? "heading" : "section";
                         out.subject = n.type == kind::region ? n.title : "";
                         if (n.type != kind::region) out.label = n.title;
                         for (const auto& inner : n.items) out.items.push_back(item_of(inner, known));

@@ -1422,7 +1422,7 @@ namespace one::language {
             if (any_region) {
                 for (const auto& item : s.items) {
                     auto* block = std::get_if<content_block>(&item.node);
-                    if (!block || block->type != content_block::kind::region) {
+                    if (!block || (block->type != content_block::kind::region && block->type != content_block::kind::heading)) {
                         error(item.where, "this screen puts its items in regions, so this goes in one too, like main { ... }");
                     }
                 }
@@ -1600,6 +1600,11 @@ namespace one::language {
                            const table_column& column) {
             std::string key = written(*column.value);
             if (key.empty()) return;
+            // issue::create "New issue": a button in the table's toolbar.
+            if (auto* named = std::get_if<name_expression>(&column.value->node); named && named->name.parts.size() == 2) {
+                verify_command_use(ns, named->name);
+                return;
+            }
             if (auto* source = std::get_if<name_expression>(&each.source->node); source && key.find('.') == std::string::npos) {
                 qualified_name command{{source->name.parts.back(), key}, column.where};
                 if (find_command(ns, command)) {
@@ -1791,7 +1796,22 @@ namespace one::language {
                         }
                     }
                     // Tabs by a choice the table shows, like status: one for each of its choices.
-                    if (table->by) {
+                    if (table->by && table->by_over) {
+                        // by phase over project_page.phases: a tab for each phase, the rows
+                        // holding which they're in.
+                        const view_each* tabs = named_list(ns, *table->by_over, table->by_over_list, route);
+                        const entity_declaration* rows_of = list ? listed_entity(ns, *list) : nullptr;
+                        const field* chosen = rows_of ? find_field(*rows_of, *table->by) : nullptr;
+                        const entity_declaration* tab = tabs ? listed_entity(ns, *tabs) : nullptr;
+                        if (rows_of && (!chosen || !tab || pointed(ns, *chosen) != tab)) {
+                            error(table->by_where, "a table's tabs over " + table->by_over->text() + "." + table->by_over_list + " are by a field pointing at what it lists" +
+                                                       (tab ? ", a " + tab->name : ""));
+                        } else if (list && !in_rows(*table->by)) {
+                            error(table->by_where, "the table's tabs are by " + *table->by + ", which its rows don't have");
+                        } else if (tabs && !this->in_rows(*tabs, "title") && !this->in_rows(*tabs, "name")) {
+                            error(table->by_over->where, "a table's tabs are called by their title or name, so " + table->by_over->text() + "." + table->by_over_list + " needs one");
+                        }
+                    } else if (table->by) {
                         bool shown = false;
                         for (const auto& column : table->columns) shown = shown || written(*column.value) == *table->by;
                         const entity_declaration* rows_of = list ? listed_entity(ns, *list) : nullptr;
@@ -1975,9 +1995,21 @@ namespace one::language {
             if (!in_rows(*columns, "title") && !in_rows(*columns, "name")) {
                 error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
             }
-            if (board.columns.empty()) error(board.view.where, "a board's cards show something, its title first, like title");
+            if (std::none_of(board.columns.begin(), board.columns.end(), [](const table_column& c) {
+                    auto* named = std::get_if<name_expression>(&c.value->node);
+                    return !named || named->name.parts.size() != 2;
+                })) {
+                error(board.view.where, "a board's cards show something, its title first, like title");
+            }
+            for (const auto& name : board.search) {
+                if (!in_rows(*cards, name)) error(board.view.where, "the board searches " + name + ", which its cards don't have");
+            }
             for (const auto& shown : board.columns) {
                 std::string key = written(*shown.value);
+                if (auto* named = std::get_if<name_expression>(&shown.value->node); named && named->name.parts.size() == 2) {
+                    verify_command_use(ns, named->name);  // a button in its toolbar
+                    continue;
+                }
                 if (!in_rows(*cards, key)) error(shown.where, "view " + board.view.text() + " has no " + key + " in its " + *board.list + "; add it to the list's block");
             }
             if (board.link && !routes_.contains(full_route(ns, *board.link))) {

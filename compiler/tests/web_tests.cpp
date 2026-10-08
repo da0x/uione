@@ -834,7 +834,7 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"(<Switched id="work::project_page.issues" label="Show issues as" options={["Table", "Board"]}>)") != std::string::npos);
+    CHECK(tsx.find(R"(<Switched id="work::project_page.issues" label="Show issues as" options={["Table", "Board"]} icons={["table", "board"]}>)") != std::string::npos);
     CHECK(tsx.find(R"(<Board view={projectPage} list="issues" by="phase" over={projectPage} overList="phases" shown="title" columns={{ title: "Title", number: "#" }} move={{ command: "work::issue::move", steps: projectPage, list: "steps" }} />)") !=
           std::string::npos);
     CHECK(tsx.find("</Switched>") != std::string::npos);
@@ -858,6 +858,42 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     language::check(wrong, out);
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "issue.project is a card's column, so it points at a phase, what project_page.phases lists");
+}
+
+TEST_CASE("a table's tabs can be a list's records, a command in its block is in its toolbar, and a heading sits beside the title") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-toolbar";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work {\n"
+                         "entity project {\n\ttitle  text\n}\n"
+                         "entity phase {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
+                         "entity issue {\n\tproject  project  required\n\ttitle  text\n\tphase  phase\n}\n"
+                         "command issue::create\ncommand project::update\n"
+                         "view project_page per project {\n"
+                         "\ttitle = project.title\n"
+                         "\tphases = each phase where project == project.id {\n\t\ttitle\n\t}\n"
+                         "\tissues = each issue where project == project.id {\n\t\ttitle  phase\n\t}\n"
+                         "}\n"
+                         "screen \"Project\" /projects/:project {\n"
+                         "\theading {\n\t\tproject::update \"Edit project\"\n\t\tform project::update \"Save\" {\n\t\t\ttitle\n\t\t}\n\t}\n"
+                         "\ttable project_page.issues by phase over project_page.phases {\n\t\tsearch title\n\t\ttitle\n\t\tissue::create \"New issue\"\n\t}\n"
+                         "\tboard project_page.issues by phase over project_page.phases {\n\t\ttitle\n\t}\n"
+                         "\tform issue::create \"Open issue\" {\n\t\ttitle\n\t}\n"
+                         "}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(choices={{ phase: Object.fromEntries(listChoices(projectPage, "phases", "title")) }})") != std::string::npos);
+    CHECK(tsx.find(R"( by="phase")") != std::string::npos);
+    CHECK(tsx.find(R"(tools={<><Form command="work::issue::create" fields={["title"]} given={{ project: projectId }} submit="Open issue" button opener="New issue" authenticated /></>})") != std::string::npos);
+    // The board beside it takes its search and its toolbar.
+    CHECK(tsx.find(R"(search={["title"]} tools={<><Form command="work::issue::create")") != std::string::npos);
+    CHECK(tsx.find("<Heading>") < tsx.find("<Switched"));
+    CHECK(tsx.find(R"(<Form command="work::project::update" fields={["title"]} from={projectPage} id={projectId} submit="Save" button opener="Edit project" authenticated />)") != std::string::npos);
+    fs::remove_all(dir);
 }
 
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {

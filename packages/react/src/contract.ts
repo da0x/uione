@@ -29,6 +29,7 @@ export interface PageProps {
   nav: NavItem[];
   title: string;
   account?: ReactNode; // who's signed in, drawn with Account, when the app has sign-in
+  heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
   children: ReactNode;
 }
 
@@ -160,6 +161,7 @@ export interface TableProps {
   search?: TableSearch; // a box that finds rows by what's typed
   pages?: TablePages; // its rows a page at a time
   reorder?: TableReorder; // its rows put in order by the person, when they may
+  tools?: ReactNode; // buttons beside its search, like New issue
 }
 
 // Rows a person puts in order: dragged by their handles, or moved with Alt+↑ and
@@ -177,6 +179,8 @@ export interface BoardProps {
   columns: BoardColumn[];
   error?: string;
   onMove?: (card: string, column: string) => void; // absent when no card can be moved
+  search?: TableSearch; // a box that finds cards by what's typed
+  tools?: ReactNode; // buttons beside its search, like New issue
 }
 
 export interface BoardColumn {
@@ -197,7 +201,7 @@ export interface BoardCard {
 // shown marked.
 export interface SwitchProps {
   label: string; // what's switched, like "Show issues as"
-  options: { label: string; selected: boolean; onSelect: () => void }[];
+  options: { label: string; icon?: string; selected: boolean; onSelect: () => void }[]; // icon: table or board, drawn instead of the label
 }
 
 // What goes between two of the same things, like the moves between a project's

@@ -50,6 +50,9 @@ namespace board {
 	}
 
 	screen "Columns" /columns {
+		heading {
+			card::move "Move"
+		}
 		table columns.columns {
 			reorder position
 			title

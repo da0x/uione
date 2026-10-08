@@ -121,7 +121,7 @@ The language's own words, inside what a declaration says:
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `table`, `grid`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+- on a screen: `heading`, `table`, `grid`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `authentication`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
@@ -717,6 +717,12 @@ screen "Book" /books/:book {
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.
+- `by phase over project_page.phases` makes the tabs a list's records instead, one
+  for each phase in its order, called by its title, with the rows holding which
+  phase they're in.
+- A command in a table's block, like `issue::create "New issue"`, is a button in
+  its toolbar, beside its search, opening its form when the screen has one; the form
+  isn't drawn anywhere else. A board's block takes one too, and `search` as well.
 - A column holding a list of words, like an issue's `labels`, shows each on its
   own.
 - `table <view>` lists a view's rows. A line naming a command, such as `update` or
@@ -759,7 +765,10 @@ form step::update "Save" {
   of the person's roles; while it's dragged, the columns it can't go to are dimmed.
   The card shows in its new column at once, and goes back if the move fails.
 - A table and a board of the same list, one right after the other, are one: the
-  person picks which they see, and their pick is remembered.
+  person picks which they see with a switch in the toolbar, and their pick is
+  remembered. The board takes the table's search and toolbar when it has none.
+- `heading { project::update "Edit project" }` puts its buttons on the screen's
+  title row, at its end, with their forms.
 
 ```one
 table project_page.issues link /:project/issues/:issue {

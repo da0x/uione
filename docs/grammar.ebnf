@@ -140,10 +140,11 @@ screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "menu" screen_block END
                  | ("main" | "side") screen_block END
+                 | "heading" screen_block END
                  | "text" STRING ("when" condition)? END
                  | ("code" | "markdown") STRING END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING END
-                 | "table" qualified ("." NAME)? ("by" NAME)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
+                 | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
                  | "thread" qualified "." NAME END
@@ -154,7 +155,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? screen_block END
                  | "component" NAME END
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("when" condition)?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
-board_line     ::= ("move" qualified "along" qualified "." NAME | column+) END
+board_line     ::= ("move" qualified "along" qualified "." NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? | column+) END
+tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
 form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint?) END
@@ -185,7 +187,8 @@ primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" |
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 
-table_line     ::= "by" NAME END
+table_line     ::= "by" NAME tabs_over? END
+                 | NAME "::" NAME STRING? END
                  | "reorder" NAME END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END

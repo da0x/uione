@@ -301,15 +301,25 @@ describe("a board", () => {
   });
 });
 
+// A table or a board as far as a switch is concerned: something with a toolbar.
+function Shown({ name, tools }: { name: string; tools?: ReactNode }) {
+  return (
+    <div>
+      <p>{name}</p>
+      {tools}
+    </div>
+  );
+}
+
 describe("a switch between a table and a board", () => {
   it("shows the one picked, and remembers it", () => {
     const kept = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) });
     const shown = () =>
       renderScreen(memorySource(), () => (
-        <Switched id="projects::project_page.issues" label="Show issues as" options={["Table", "Board"]}>
-          <p>the table</p>
-          <p>the board</p>
+        <Switched id="projects::project_page.issues" label="Show issues as" options={["Table", "Board"]} icons={["table", "board"]}>
+          <Shown name="the table" />
+          <Shown name="the board" />
         </Switched>
       ));
     const { unmount } = shown();

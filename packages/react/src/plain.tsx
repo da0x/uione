@@ -60,7 +60,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 }
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, children }) => (
     <>
       <header>
         <a {...home}>
@@ -78,6 +78,7 @@ export const plain: ComponentSet = {
       </header>
       <main>
         {title !== name && <h1>{title}</h1>}
+        {heading}
         {children}
       </main>
     </>
@@ -242,11 +243,12 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error, tabs, search, pages, reorder }) => {
+  Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
         {search && <input type="search" value={search.value} aria-label={search.label} placeholder={search.label} onChange={(event) => search.onChange(event.target.value)} />}
+        {tools}
         {pages && (
           <p>
             <button type="button" disabled={pages.page <= 1} onClick={() => pages.onPage(pages.page - 1)}>
@@ -329,8 +331,10 @@ export const plain: ComponentSet = {
     );
   },
 
-  Board: ({ status, columns, error, onMove }) => (
+  Board: ({ status, columns, error, onMove, search, tools }) => (
     <>
+      {search && <input type="search" value={search.value} aria-label={search.label} placeholder={search.label} onChange={(event) => search.onChange(event.target.value)} />}
+      {tools}
       <div aria-busy={status === "loading"}>
         {columns.map((column) => (
           <section key={column.id} aria-label={column.title}>

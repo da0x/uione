@@ -568,6 +568,15 @@ namespace one::generators {
                 items.open("<>");
                 // Laid out in regions, like main and side: as the screen puts its items
                 // in them, or with everything in main.
+                // What sits beside the title, like Edit project.
+                for (const auto& item : s->items) {
+                    auto* block = std::get_if<language::content_block>(&item.node);
+                    if (!block || block->type != language::content_block::kind::heading) continue;
+                    parts.components.insert("Heading");
+                    items.open("<Heading>");
+                    screen_items(items, parts, ns, block->items, s->items);
+                    items.close("</Heading>");
+                }
                 std::string layout = s->layout ? *s->layout : layout_;
                 std::vector<const language::content_block*> regions;
                 for (const auto& item : s->items) {
@@ -826,6 +835,17 @@ namespace one::generators {
                         if (command == web_detail::join(ns, entry->name + "::create") || command == web_detail::join(ns, entry->name + "::update")) return true;
                     }
                 }
+                // A command in a table's or a board's block is a button in its toolbar.
+                std::vector<const language::table_column*> tools;
+                if (auto* t = std::get_if<language::table_item>(&item.node)) {
+                    for (const auto& column : t->columns) tools.push_back(&column);
+                } else if (auto* b = std::get_if<language::board_item>(&item.node)) {
+                    for (const auto& column : b->columns) tools.push_back(&column);
+                }
+                for (const auto* column : tools) {
+                    std::string key = web_detail::text_of(*column->value);
+                    if (key.find("::") != std::string::npos && web_detail::join(ns, key) == command) return true;
+                }
                 if (auto* table = std::get_if<language::table_item>(&item.node)) {
                     for (const auto& column : table->columns) {
                         std::string key = web_detail::text_of(*column.value);
@@ -1014,6 +1034,9 @@ namespace one::generators {
                     out.close("</Menu>");
                     return;
                 }
+                if (auto* block = std::get_if<language::content_block>(&item.node); block && block->type == language::content_block::kind::heading) {
+                    continue;  // drawn on the title row, before the rest
+                }
                 if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     bool hero = block->type == language::content_block::kind::hero;
                     std::string tag = hero ? "Hero" : "Section";
@@ -1077,9 +1100,9 @@ namespace one::generators {
                         std::string words = web_detail::label(list);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
                         out.open("<Switched id=" + web_detail::js_string(full_view(ns, table->view.text()) + "." + list) + " label=" +
-                                 web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]}>");
+                                 web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]} icons={[\"table\", \"board\"]}>");
                         this->table(out, parts, ns, *table, screen);
-                        this->board(out, parts, ns, *board);
+                        this->board(out, parts, ns, *board, screen, table);
                         out.close("</Switched>");
                         ++at;
                         continue;
@@ -1088,7 +1111,7 @@ namespace one::generators {
                 } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
                     this->grid(out, parts, ns, *grid, screen);
                 } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
-                    this->board(out, parts, ns, *board);
+                    this->board(out, parts, ns, *board, screen);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
                     if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
@@ -1218,12 +1241,16 @@ namespace one::generators {
         // board project_page.issues by phase over project_page.phases: the list's rows
         // as cards in the over list's columns, showing what its block names, and with
         // a move, dragged along the steps the person's roles may take.
-        void board(stream& out, screen_parts& parts, const std::string& ns, const language::board_item& board) {
+        // Beside a table of the same list, it takes the table's toolbar and search when it
+        // has none of its own.
+        void board(stream& out, screen_parts& parts, const std::string& ns, const language::board_item& board, const std::vector<language::screen_item>& screen,
+                   const language::table_item* beside = nullptr) {
             parts.components.insert("Board");
             const language::entity_declaration* entity = listed(ns, board.view.text(), board.list);
             std::string columns, pictures, labels, shown;
             for (const auto& column : board.columns) {
                 std::string key = web_detail::text_of(*column.value);
+                if (key.find("::") != std::string::npos) continue;  // a button in its toolbar
                 std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
                            web_detail::js_string(column.label ? *column.label : web_detail::label(name));
@@ -1258,6 +1285,15 @@ namespace one::generators {
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
+            const std::vector<std::string>& search = board.search.empty() && beside ? beside->search : board.search;
+            if (!search.empty()) {
+                std::string fields;
+                for (const auto& f : search) fields += (fields.empty() ? "" : ", ") + web_detail::js_string(f);
+                line += " search={[" + fields + "]}";
+            }
+            std::string tools = toolbar(parts, ns, board.columns, screen);
+            if (tools.empty() && beside) tools = toolbar(parts, ns, beside->columns, screen);
+            line += tools;
             if (board.move) {
                 std::string move = "command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: " +
                                    view_variable(parts, full_view(ns, board.move->along->text())) + ", list: " + web_detail::js_string(board.move->along_list);
@@ -1468,6 +1504,30 @@ namespace one::generators {
             out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]}" + choices + " />");
         }
 
+        // A toolbar's buttons: each command named in a table's or a board's block, like
+        // issue::create "New issue", opening its form when the screen has one.
+        std::string toolbar(screen_parts& parts, const std::string& ns, const std::vector<language::table_column>& columns, const std::vector<language::screen_item>& screen) {
+            std::string tools;
+            for (const auto& column : columns) {
+                auto* named = std::get_if<language::name_expression>(&column.value->node);
+                if (!named || named->name.parts.size() != 2) continue;
+                std::string command = full_command(ns, named->name);
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, ""};
+                stream jsx("\t");
+                if (const language::form_item* form = form_for(ns, screen, command)) {
+                    this->form(jsx, parts, ns, *form, &button);
+                } else {
+                    parts.components.insert("Command");
+                    std::string label = column.label ? " label=" + web_detail::js_string(*column.label) : "";
+                    jsx.line("<Command name=" + web_detail::js_string(command) + label + allowed(parts, ns, command) + " />");
+                }
+                std::string line = jsx.str();
+                while (!line.empty() && (line.back() == '\n' || line.back() == ' ' || line.back() == '\t')) line.pop_back();
+                tools += line;
+            }
+            return tools.empty() ? "" : " tools={<>" + tools + "</>}";
+        }
+
         // grid project_page.steps by from and to over project_page.phases: a cell for
         // each pair, opening the entity's create where there's nothing, and its update
         // and delete where there's something, each as its form on the screen asks.
@@ -1536,6 +1596,7 @@ namespace one::generators {
             const language::entity_declaration* entity = listed(ns, table.view.text(), table.list);
             for (const auto& column : table.columns) {
                 std::string key = web_detail::text_of(*column.value);
+                if (key.find("::") != std::string::npos) continue;  // a button in its toolbar
                 // member.picture, where member is a person: shown as their picture.
                 if (entity && key.ends_with(".picture") && key.find('.') == key.rfind('.')) {
                     std::string person = key.substr(0, key.find('.'));
@@ -1602,6 +1663,17 @@ namespace one::generators {
                     line += " keyed={[" + names + "]}";
                 }
             }
+            // Tabs by a list's records, like phases: each one's id and title, in order.
+            if (table.by && table.by_over) {
+                std::string tabs_shown = "title";
+                auto columns_over = listed_columns(ns, table.by_over->text(), table.by_over_list);
+                if (std::find(columns_over.begin(), columns_over.end(), "title") == columns_over.end()) tabs_shown = "name";
+                parts.components.insert("listChoices");
+                std::string tabs = (web_detail::is_identifier(*table.by) ? *table.by : web_detail::js_string(*table.by)) + ": Object.fromEntries(listChoices(" +
+                                   view_variable(parts, full_view(ns, table.by_over->text())) + ", " + web_detail::js_string(table.by_over_list) + ", " +
+                                   web_detail::js_string(tabs_shown) + "))";
+                shown += (shown.empty() ? "" : ", ") + tabs;
+            }
             line += " columns={{ " + columns + " }}";
             if (!actions.empty()) line += " actions={[" + actions + "]}";
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
@@ -1615,6 +1687,7 @@ namespace one::generators {
             }
             if (table.sort) line += " sort=" + web_detail::js_string((table.sort_descending ? "-" : "") + *table.sort);
             if (table.page) line += " page={" + std::to_string(*table.page) + "}";
+            line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.
             if (table.reorder && entity) {
                 std::string command = web_detail::join(ns, entity->name + "::update");
