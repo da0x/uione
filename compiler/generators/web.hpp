@@ -210,6 +210,7 @@ namespace one::generators {
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string color_;  // the site's own color, for its buttons and links, like #0f766e
         std::string theme_;    // the component set's theme the site's colors are, like papercolor
+        std::string appearance_;  // light or dark, which the site opens in; empty for the system's
         std::string corners_;  // square or round
         std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
@@ -283,6 +284,7 @@ namespace one::generators {
                         if (s.key == "title") title_ = s.value;
                         if (s.key == "color") color_ = s.value;
                         if (s.key == "theme") theme_ = s.value;
+                        if (s.key == "appearance" && s.value != "system") appearance_ = s.value;
                         if (s.key == "corners") corners_ = s.value;
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
@@ -2251,6 +2253,8 @@ namespace one::generators {
             std::string look;
             if (!theme_.empty()) look += " data-palette=\"" + theme_ + "\"";
             if (!corners_.empty()) look += " data-corners=\"" + corners_ + "\"";
+            // Light or dark from the first paint, which a visitor's own pick replaces.
+            if (!appearance_.empty()) look += " data-appearance=\"" + appearance_ + "\" data-theme=\"" + appearance_ + "\"";
             out.open("<html lang=\"en\"" + look + ">");
             out.open("<head>");
             out.line("<meta charset=\"utf-8\" />");

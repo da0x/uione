@@ -597,17 +597,17 @@ screen "Steps" /:project/steps {
     CHECK(tsx.find(R"(<Copy view={issuePage} fields={[]})") != std::string::npos);
 }
 
-TEST_CASE("a project's theme and corners are on its page from the first paint") {
+TEST_CASE("a project's theme, corners and appearance are on its page from the first paint") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-theme";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "import one\nproject tracker {\n\ttheme    papercolor\n\tcorners  square\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(), "import one\nproject tracker {\n\ttheme    papercolor\n\tcorners  square\n\tappearance  light\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* page = find(files, "index.html");
     REQUIRE(page != nullptr);
-    CHECK(page->content.find(R"(<html lang="en" data-palette="papercolor" data-corners="square">)") != std::string::npos);
+    CHECK(page->content.find(R"(<html lang="en" data-palette="papercolor" data-corners="square" data-appearance="light" data-theme="light">)") != std::string::npos);
 }
 
 TEST_CASE("a screen's title can show what the page does, once it's arrived") {

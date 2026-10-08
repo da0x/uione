@@ -441,6 +441,30 @@ describe("asking to count visits", () => {
   });
 });
 
+describe("a table's rows", () => {
+  it("sit closer with Compact rows, which every table follows and the browser keeps", () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => kept.set(k, v) });
+    const Table = radix.Table;
+    const rows = [{ id: "a", cells: ["12", "Copy an issue whole"], actions: [] }];
+    render(
+      <>
+        <Table status="live" columns={["#", "Title"]} rows={rows} tools={<span />} />
+        <Table status="live" columns={["#", "Title"]} rows={rows} />
+      </>,
+    );
+    const cells = () => screen.getAllByRole("cell").filter((cell) => cell.textContent === "12");
+    expect(cells().every((cell) => cell.className.includes("py-1"))).toBe(true);
+    const compact = screen.getByRole("button", { name: "Compact rows" });
+    expect(compact.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(compact);
+    expect(compact.getAttribute("aria-pressed")).toBe("true");
+    expect(cells().every((cell) => cell.className.includes("py-0.5"))).toBe(true);
+    expect(kept.get("uione-density")).toBe("compact");
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("on a phone", () => {
   const phone = () =>
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("max-width"), addEventListener: () => {}, removeEventListener: () => {} }));

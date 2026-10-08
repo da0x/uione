@@ -59,7 +59,7 @@ setting        ::= setting_name (STRING | qualified) END
                  /* what's new to a person, counted beside the app's name */
                  | "unread" NAME "." NAME "since" NAME "." NAME END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
-                 | "title" | "one" | "analytics" | "theme" | "corners" | "copyright"
+                 | "title" | "one" | "analytics" | "theme" | "appearance" | "corners" | "copyright"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
  * the place of the shared ones. `one build --for staging` builds for it. */

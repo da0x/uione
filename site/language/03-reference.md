@@ -234,6 +234,11 @@ dark: a warm gray page with graphite text, and panels that sit flat on it. A
 squares the corners of panels, buttons and labels, for a sharper look; they're
 round unless it says. A person's picture stays a circle either way.
 
+`appearance light` opens the site light, whatever the visitor's system prefers, and
+`appearance dark` opens it dark; without it, or with `appearance system`, it
+follows the system. Either way, a visitor who picks the other with the toggle at the
+top of the page keeps their pick.
+
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google
 Analytics account of the owner's. It records each screen as it's opened. A visitor
@@ -954,6 +959,8 @@ form step::update "Save" {
   take its color in place of the site's own. The colors are the library's `hue`:
   `blue`, `teal`, `green`, `amber`, `red` and `violet`, each drawn in the
   component set's own shade of it, light and dark.
+- A table's toolbar has a button for compact rows, which every table on the site
+  follows once a reader picks it, in their browser.
 - A table or a board opened with a filter in its address, as a card's filter opens
   it, keeps only the rows it picks, and says so, with a way to clear it.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's

@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, corners, layout, serve, redirect, analytics, unread or copyright");
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect, analytics, unread or copyright");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(

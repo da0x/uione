@@ -3,8 +3,9 @@
 
 import { useEffect, useState } from "react";
 
-// Light or dark. The page follows the system until the reader picks one with the
-// toggle, and then keeps their pick, in this browser only.
+// Light or dark. The page opens as the site says, with appearance light or dark,
+// or else follows the system, until the reader picks one with the toggle, and then
+// keeps their pick, in this browser only.
 
 export type Theme = "light" | "dark";
 
@@ -19,6 +20,13 @@ function stored(): Theme | undefined {
   }
 }
 
+// What the site opens in, from data-appearance on the page, when it says.
+function site(): Theme | undefined {
+  if (typeof document === "undefined") return undefined;
+  const value = document.documentElement.dataset.appearance;
+  return value === "light" || value === "dark" ? value : undefined;
+}
+
 function system(): Theme {
   return globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
@@ -31,16 +39,16 @@ function apply(theme: Theme | undefined) {
 
 // A pick made before is in place before anything is drawn, so the page never
 // shows the other theme first.
-apply(stored());
+apply(stored() ?? site());
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>(() => stored() ?? system());
-  // Without a pick, the page keeps following the system as it changes.
+  const [theme, setTheme] = useState<Theme>(() => stored() ?? site() ?? system());
+  // Without a pick, or one of the site's, the page keeps following the system as it changes.
   useEffect(() => {
     const media = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
     if (!media) return;
     const follow = () => {
-      if (!stored()) setTheme(system());
+      if (!stored() && !site()) setTheme(system());
     };
     media.addEventListener("change", follow);
     return () => media.removeEventListener("change", follow);

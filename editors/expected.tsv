@@ -211,8 +211,8 @@ editors/fixtures/environments.one	corners one::corners::square	one	namespace
 editors/fixtures/environments.one	corners one::corners::square	square	plain
 compiler/library/one.one	settings project {	settings	declare
 compiler/library/one.one	settings project {	project	name
-compiler/library/one.one	one        version	one	variable
-compiler/library/one.one	signin     list of signin	list	type
+compiler/library/one.one	one         version	one	variable
+compiler/library/one.one	signin      list of signin	list	type
 compiler/library/one.one	enum corners {	enum	declare
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	color	keyword
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	green	plain

@@ -40,6 +40,61 @@ function useNarrow(): boolean {
   return narrow;
 }
 
+// How close a table's rows sit: the reader's pick, from the button on a table's
+// toolbar, kept in this browser and followed by every table on the site.
+type Density = "comfortable" | "compact";
+const densityKey = "uione-density";
+const densityChange = "uione-density";
+
+function storedDensity(): Density {
+  try {
+    return globalThis.localStorage?.getItem(densityKey) === "compact" ? "compact" : "comfortable";
+  } catch {
+    return "comfortable"; // storage can be off, as in a private window
+  }
+}
+
+function useDensity(): [Density, (next: Density) => void] {
+  const [density, setDensity] = useState<Density>(storedDensity);
+  useEffect(() => {
+    const follow = () => setDensity(storedDensity());
+    window.addEventListener(densityChange, follow);
+    return () => window.removeEventListener(densityChange, follow);
+  }, []);
+  const choose = (next: Density) => {
+    try {
+      globalThis.localStorage?.setItem(densityKey, next);
+    } catch {
+      // the pick lasts until the page is left
+    }
+    setDensity(next);
+    window.dispatchEvent(new Event(densityChange));
+  };
+  return [density, choose];
+}
+
+function DensityToggle({ density, onChange }: { density: Density; onChange: (next: Density) => void }) {
+  const compact = density === "compact";
+  return (
+    <div className="inline-flex rounded-control border border-line bg-surface p-0.5 shadow-panel">
+      <button
+        type="button"
+        aria-pressed={compact}
+        aria-label="Compact rows"
+        title="Compact rows"
+        onClick={() => onChange(compact ? "comfortable" : "compact")}
+        className={`inline-flex items-center rounded-control px-2 py-1 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+          compact ? "bg-accent text-accent-ink" : "text-muted hover:text-ink"
+        }`}
+      >
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+          <path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h11" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 // The column a row is called by, on a phone: the one headed Title or Name, or else
 // the first that isn't only numbers, like a #.
 function leadColumn(columns: string[], rows: { cells: ReactNode[] }[]): number {
@@ -521,6 +576,10 @@ export const radix: ComponentSet = {
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
     const narrow = useNarrow();
+    const [density, setDensity] = useDensity();
+    // A cell's room above and below, and a phone's entry's, by how close rows sit.
+    const room = density === "compact" ? "py-0.5" : "py-1";
+    const entry = density === "compact" ? "py-1.5" : "py-2.5";
     return (
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
@@ -558,6 +617,7 @@ export const radix: ComponentSet = {
                 />
               )}
               {tools}
+              <DensityToggle density={density} onChange={setDensity} />
             </div>
           )}
         </div>
@@ -580,7 +640,7 @@ export const radix: ComponentSet = {
                       }
                     : undefined
                 }
-                className={`flex items-start gap-2 px-3 py-2.5 ${toned(row.tone)} ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
+                className={`flex items-start gap-2 px-3 ${entry} ${toned(row.tone)} ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
               >
                 {reorder && (
                   <button
@@ -709,7 +769,7 @@ export const radix: ComponentSet = {
               className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${toned(row.tone)} ${row.link ? "cursor-pointer" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
             >
               {reorder && (
-                <td className="w-0 py-1.5 pl-2">
+                <td className={`w-0 pl-2 ${room}`}>
                   <button
                     type="button"
                     aria-label={`${reorder.label} ${typeof row.cells[0] === "string" ? row.cells[0] : ""}`.trim()}
@@ -726,7 +786,7 @@ export const radix: ComponentSet = {
                 </td>
               )}
               {row.cells.map((cell, i) => (
-                <td key={i} className="px-3 py-1.5">
+                <td key={i} className={`px-3 ${room}`}>
                   {i === 0 && row.link ? (
                     <a {...row.link} className="font-medium text-accent hover:underline">
                       {cell}
@@ -737,7 +797,7 @@ export const radix: ComponentSet = {
                 </td>
               ))}
               {rows.some((other) => other.actions.length > 0) && (
-                <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                <td className={`px-3 text-right whitespace-nowrap ${room}`}>
                   {row.actions.map((a) => (
                     <button
                       key={a.label}

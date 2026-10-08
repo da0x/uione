@@ -25,6 +25,14 @@ namespace one {
 		papercolor  "PaperColor"
 	}
 
+	// Whether a site opens light or dark: as the visitor's system is, unless it says.
+	// A visitor's own pick, with the toggle at the top of every page, still wins.
+	enum appearance {
+		system  "As the system is"
+		light   "Light"
+		dark    "Dark"
+	}
+
 	// How corners are drawn: square for a sharper look, or round, as they are unless
 	// it says.
 	enum corners {
@@ -60,41 +68,43 @@ namespace one {
 	// looks. Each line is one of these, and only a list may be said more than once.
 	settings project {
 		// The uione it's built with, like "0.7.0", which one upgrade moves on.
-		one        version
+		one         version
 		// What the site is called, when it isn't the project's own name.
-		title      text
+		title       text
 		// Where it's served, like "neotrac.org".
-		domain     domain
+		domain      domain
 		// The Firebase project, and so the Google Cloud project, it runs in.
-		firebase   slug
+		firebase    slug
 		// The Google Cloud region its backend runs in, like "us-east4".
-		region     slug
+		region      slug
 		// The component set it's drawn with.
-		ui         ui
+		ui          ui
 		// The ways people sign in, one to a line.
-		signin     list of signin
+		signin      list of signin
 		// The site's icon: an SVG file beside the project's .one files.
-		icon       file
+		icon        file
 		// The site's own color for its buttons and links, as "#rrggbb", dark enough to
 		// read on a white page.
-		color      color
+		color       color
 		// The site's colors, light and dark.
-		theme      theme
+		theme       theme
+		// Whether it opens light or dark, rather than as the visitor's system is.
+		appearance  appearance
 		// How corners are drawn.
-		corners    corners
+		corners     corners
 		// How screens are laid out unless one says.
-		layout     layout
+		layout      layout
 		// A folder of files served as they are, at the site's root.
-		serve      folder
+		serve       folder
 		// An address of the site that sends whoever asks for it somewhere else, one to
 		// a line.
-		redirect   list of redirect
+		redirect    list of redirect
 		// Counting the site's visitors, once each agrees to it.
-		analytics  analytics
+		analytics   analytics
 		// What's new to the person signed in, counted beside the site's name.
-		unread     unread
+		unread      unread
 		// Who the site is by, at the foot of every page, and where their name links.
-		copyright  copyright
+		copyright   copyright
 	}
 
 	// What a place the project runs has of its own: environment staging { ... }.
