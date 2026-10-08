@@ -22,7 +22,10 @@ vi.mock("firebase/auth", () => {
   const refused = (id: string) => (e: { credential?: string }) => (e.credential ? { providerId: id, token: e.credential } : null);
   return {
     GoogleAuthProvider: Object.assign(class extends Provider { constructor() { super("google.com"); } }, { credentialFromError: refused("google.com") }),
-    GithubAuthProvider: Object.assign(class extends Provider { constructor() { super("github.com"); } }, { credentialFromError: refused("github.com") }),
+    GithubAuthProvider: Object.assign(class extends Provider { constructor() { super("github.com"); } }, {
+      credentialFromError: refused("github.com"),
+      credentialFromResult: (signedIn: { access?: string }) => (signedIn.access ? { accessToken: signedIn.access } : null),
+    }),
     OAuthProvider: Object.assign(class extends Provider {}, { credentialFromError: refused("microsoft.com") }),
     connectAuthEmulator: () => {},
     getAuth: () => ({}),
@@ -49,6 +52,22 @@ describe("signing in with Firebase", () => {
     expect((popup.mock.calls[0]![1] as { providerId: string }).providerId).toBe("microsoft.com");
     await source.auth!.signIn();
     expect(popup.mock.calls[1]![1]).toMatchObject({ providerId: "github.com", scopes: ["user:email"] }); // their email, even a private one
+  });
+
+  it("sends GitHub's access once after a GitHub sign-in, so the backend can ask which emails it has verified", async () => {
+    const sent: { url: string; body: unknown; auth: string }[] = [];
+    const fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      sent.push({ url: String(url), body: JSON.parse(String(init?.body)), auth: (init?.headers as Record<string, string>).Authorization });
+      return new Response("{}");
+    };
+    const source = firebaseSource({ config: {}, authentication: [github, google], fetch: fetch as typeof globalThis.fetch });
+    popup.mockResolvedValueOnce({ user: { uid: "ada", getIdToken: async () => "ada-token" }, access: "gho_ada" });
+    await source.auth!.signIn("github");
+    expect(sent).toEqual([{ url: "/api/signin", body: { github: "gho_ada" }, auth: "Bearer ada-token" }]);
+    // A Google sign-in has nothing of the kind to send.
+    popup.mockResolvedValueOnce({ user: { uid: "ada", getIdToken: async () => "ada-token" } });
+    await source.auth!.signIn("google");
+    expect(sent).toHaveLength(1);
   });
 
   it("is Google when the project doesn't say", () => {

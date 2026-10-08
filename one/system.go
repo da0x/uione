@@ -20,9 +20,10 @@ import (
 type System struct {
 	app *App
 	ctx context.Context
-	// Who it works for, when it's what someone signing in brings about, and the email
-	// their sign-in vouches for.
-	me, email string
+	// Who it works for, when it's what someone signing in brings about, and the
+	// emails they're known to have, lowercase.
+	me     string
+	emails []string
 }
 
 // Context is the request the system is working for.
@@ -97,10 +98,14 @@ func fetch[E any, P entityPointer[E]](s *System, field *string, value any) ([]*E
 		return nil, &Failure{Status: 500, Message: "this backend has no " + reflect.TypeFor[E]().Name()}
 	}
 	query := s.app.store.Collection(schema.collection).Query
-	if value == MyEmail {
-		value = s.email
-	}
-	if field != nil {
+	switch {
+	case value == MyEmail && field != nil:
+		// Any of their addresses, at most 30, as Firestore asks of an in.
+		if len(s.emails) == 0 {
+			return nil, nil
+		}
+		query = query.Where(*field, "in", anyOf(s.emails[:min(len(s.emails), 30)]))
+	case field != nil:
 		query = query.Where(*field, "==", value)
 	}
 	docs, err := query.Documents(s.ctx).GetAll()
@@ -137,4 +142,12 @@ func Route(pattern string, handle func(s *System, w http.ResponseWriter, r *http
 	routesMu.Lock()
 	defer routesMu.Unlock()
 	routes = append(routes, route{pattern, handle})
+}
+
+func anyOf(words []string) []any {
+	out := make([]any, len(words))
+	for i, w := range words {
+		out[i] = w
+	}
+	return out
 }

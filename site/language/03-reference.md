@@ -356,8 +356,10 @@ entity loan {
   role, with the member's one person field, the user it doesn't start as a value,
   the one signing in, and the invitation is deleted, both at once. From then on
   they're a member by who they are, not by their email, so changing it later
-  changes nothing. Only a sign-in that vouches for its email, like Google's, takes
-  one, and the email is matched whatever its capitals. The invitation has one email
+  changes nothing. Only an email someone is known to have takes one: the one their
+  sign-in vouches for, like Google's, or, for a GitHub account, any address GitHub
+  has verified, asked of GitHub with the access given when signing in, which is
+  checked to be that account's. The email is matched whatever its capitals. The invitation has one email
   field, and everything else the member needs, by the same name and kind.
 
 ```one

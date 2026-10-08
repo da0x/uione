@@ -28,4 +28,7 @@ export const github: FirebaseAuthenticationMethod = {
     return provider;
   },
   credentialFrom: (refused) => GithubAuthProvider.credentialFromError(refused as FirebaseError),
+  // GitHub's own access, which the backend uses once to ask which emails GitHub has
+  // verified, since Firebase doesn't vouch for a GitHub account's email.
+  access: { name: "github", from: (signedIn) => GithubAuthProvider.credentialFromResult(signedIn)?.accessToken },
 };

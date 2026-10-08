@@ -131,6 +131,17 @@ export function firebaseSource(options: FirebaseSourceOptions): DataSource {
         await linkWithCredential(signedIn.user, waiting.credential).catch(() => {});
       }
       waiting = undefined;
+      // What only the provider can say, like a GitHub account's verified emails, is
+      // asked once, now, while its access is at hand; the backend keeps the answer.
+      const access = method.access?.from(signedIn);
+      if (method.access && access) {
+        const token = await signedIn.user.getIdToken();
+        await (options.fetch ?? fetch)(`${options.api ?? "/api"}/signin`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ [method.access.name]: access }),
+        }).catch(() => undefined);
+      }
     },
     async signOut() {
       await signOut(connect().auth);

@@ -52,3 +52,43 @@ func TestSigningInWithGitHubKeepsTheUsername(t *testing.T) {
 		t.Errorf("a Google sign-in gave %v, and GitHub was asked %d times", snap.Data(), asked)
 	}
 }
+
+func TestAGitHubAccountsVerifiedEmailsAreKnownWhenItsOwnAccessSaysSo(t *testing.T) {
+	if os.Getenv("FIRESTORE_EMULATOR_HOST") == "" {
+		t.Skip("needs the Firestore emulator")
+	}
+	request, _ := http.NewRequest(http.MethodDelete, "http://"+os.Getenv("FIRESTORE_EMULATOR_HOST")+"/emulator/v1/projects/demo-uione/databases/(default)/documents", nil)
+	http.DefaultClient.Do(request)
+	ctx := context.Background()
+	app, err := New(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Close()
+	githubLogin = func(context.Context, string) (string, error) { return "octocat", nil }
+	githubEmails = func(_ context.Context, access string) (string, []string, error) {
+		if access == "someone-elses" {
+			return "1", []string{"intruder@example.com"}, nil
+		}
+		return "583231", []string{"octocat@github.com", "mona@example.com"}, nil
+	}
+	token := &auth.Token{UID: "u1", Claims: map[string]any{"email": "octocat@github.com", "email_verified": false},
+		Firebase: auth.FirebaseInfo{Identities: map[string]any{"github.com": []any{"583231"}}}}
+
+	// Access to another GitHub account adds nothing.
+	if got := app.emailsOf(ctx, token, "someone-elses"); len(got) != 0 {
+		t.Errorf("another account's access gave %v", got)
+	}
+	// Their own access gives GitHub's verified addresses, and they're kept.
+	if got := app.emailsOf(ctx, token, "theirs"); len(got) != 2 || got[0] != "octocat@github.com" || got[1] != "mona@example.com" {
+		t.Errorf("their own access gave %v", got)
+	}
+	if got := app.emailsOf(ctx, token, ""); len(got) != 2 {
+		t.Errorf("opening the app again, without GitHub's access, knows %v", got)
+	}
+	// A Google sign-in vouches for its own email, and has no GitHub addresses.
+	google := &auth.Token{UID: "u2", Claims: map[string]any{"email": "Ada@Example.com", "email_verified": true}}
+	if got := app.emailsOf(ctx, google, "theirs"); len(got) != 1 || got[0] != "ada@example.com" {
+		t.Errorf("a Google sign-in knows %v", got)
+	}
+}

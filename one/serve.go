@@ -387,8 +387,11 @@ func Serve(items ...Item) {
 }
 
 // serveSignIn is told once each time someone opens the app signed in: it keeps their
-// profile up to date and does the work OnSignIn asks, with the email their sign-in
-// vouches for, which only a verified one does.
+// profile up to date and does the work OnSignIn asks, with the emails they're known
+// to have. Those are their sign-in's email, when it vouches for it, and, for a
+// GitHub account, the addresses GitHub has verified: sent once, as the access the
+// person gave GitHub signing in, which is checked to be theirs, and kept on their
+// profile, out of every view, until they sign in with GitHub again.
 func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
 	token, err := a.auth.VerifyIDToken(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 	if err != nil {
@@ -396,14 +399,54 @@ func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.remember(r.Context(), token)
-	email, _ := token.Claims["email"].(string)
-	if verified, _ := token.Claims["email_verified"].(bool); !verified {
-		email = ""
+	var sent struct {
+		GitHub string `json:"github"`
 	}
-	if err := a.signedIn(r.Context(), token.UID, email); err != nil {
+	_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&sent)
+	emails := a.emailsOf(r.Context(), token, sent.GitHub)
+	if err := a.signedIn(r.Context(), token.UID, emails); err != nil {
 		a.log.Printf("one: what signing in brings about for %s failed: %v", token.UID, err)
 		reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong; try again"})
 		return
 	}
 	reply(w, http.StatusOK, map[string]any{})
+}
+
+// emailsOf is the emails someone signing in is known to have: their sign-in's, when
+// it vouches for it, and, for a GitHub account, the addresses GitHub has verified,
+// kept on their profile when they send access that GitHub says is their account's.
+func (a *App) emailsOf(ctx context.Context, token *auth.Token, githubAccess string) []string {
+	var emails []string
+	if email, _ := token.Claims["email"].(string); email != "" {
+		if verified, _ := token.Claims["email_verified"].(bool); verified {
+			emails = append(emails, strings.ToLower(email))
+		}
+	}
+	github := githubID(token)
+	if github == "" {
+		return emails
+	}
+	ref := a.store.Collection("users").Doc(token.UID)
+	if githubAccess != "" {
+		account, verified, err := githubEmails(ctx, githubAccess)
+		switch {
+		case err != nil:
+			a.log.Printf("one: GitHub's emails for %s weren't found: %v", token.UID, err)
+		case account != github:
+			a.log.Printf("one: %s sent access to GitHub account %s, not their own", token.UID, account)
+		default:
+			if _, err := ref.Set(ctx, map[string]any{"emails": verified}, firestore.MergeAll); err != nil {
+				a.log.Printf("one: GitHub's emails for %s weren't kept: %v", token.UID, err)
+			}
+		}
+	}
+	if snap, err := ref.Get(ctx); err == nil {
+		kept, _ := snap.Data()["emails"].([]any)
+		for _, e := range kept {
+			if email, ok := e.(string); ok && email != "" && !contains(emails, email) {
+				emails = append(emails, email)
+			}
+		}
+	}
+	return emails
 }

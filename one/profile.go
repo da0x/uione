@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -52,6 +53,49 @@ var githubLogin = func(ctx context.Context, id string) (string, error) {
 		return "", err
 	}
 	return account.Login, nil
+}
+
+// githubEmails asks GitHub, with the access a person gave it when signing in, which
+// account that access is for, by its numeric id, and the email addresses it has
+// verified. The access is used for this and kept nowhere. Tests replace it.
+var githubEmails = func(ctx context.Context, access string) (string, []string, error) {
+	ask := func(path string, into any) error {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com"+path, nil)
+		if err != nil {
+			return err
+		}
+		request.Header.Set("Accept", "application/vnd.github+json")
+		request.Header.Set("Authorization", "Bearer "+access)
+		response, err := (&http.Client{Timeout: 10 * time.Second}).Do(request)
+		if err != nil {
+			return err
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("GitHub answered %s for %s", response.Status, path)
+		}
+		return json.NewDecoder(response.Body).Decode(into)
+	}
+	var account struct {
+		ID int64 `json:"id"`
+	}
+	if err := ask("/user", &account); err != nil {
+		return "", nil, err
+	}
+	var listed []struct {
+		Email    string `json:"email"`
+		Verified bool   `json:"verified"`
+	}
+	if err := ask("/user/emails", &listed); err != nil {
+		return "", nil, err
+	}
+	var verified []string
+	for _, e := range listed {
+		if e.Verified && e.Email != "" {
+			verified = append(verified, strings.ToLower(e.Email))
+		}
+	}
+	return fmt.Sprint(account.ID), verified, nil
 }
 
 // usernameOf reads a person's username from their profile. Something that starts

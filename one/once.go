@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -147,7 +146,8 @@ func (a *App) doOnce(ctx context.Context) error {
 }
 
 // MyEmail is the email of the person signing in, in work done OnSignIn, as in
-// Each[Invitation]("email", MyEmail, ...): the invitations sent to them.
+// Each[Invitation]("email", MyEmail, ...): the invitations sent to them, at any of
+// the addresses they're known to have.
 var MyEmail = &marker{"my email"}
 
 // SignInSpec is work done each time someone opens the app signed in, made with
@@ -185,13 +185,13 @@ func DeleteEach[E any, P entityPointer[E]](field string, value any) func(*System
 	}
 }
 
-// signedIn does each OnSignIn's work for someone who's opened the app, when their
-// sign-in vouches for an email.
-func (a *App) signedIn(ctx context.Context, me, email string) error {
-	if email == "" {
+// signedIn does each OnSignIn's work for someone who's opened the app, when they're
+// known to have an email.
+func (a *App) signedIn(ctx context.Context, me string, emails []string) error {
+	if len(emails) == 0 {
 		return nil
 	}
-	s := &System{app: a, ctx: ctx, me: me, email: strings.ToLower(email)}
+	s := &System{app: a, ctx: ctx, me: me, emails: emails}
 	for _, o := range a.reg.signin {
 		for _, work := range o.work {
 			if err := work(s); err != nil {
