@@ -7,7 +7,7 @@
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation } from "react-router";
+import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
 import type { Analytics, ComponentSet } from "./contract.js";
 import { DataProvider, useAuth } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
@@ -217,6 +217,8 @@ function Shell({
   const [signOutError, setSignOutError] = useState<string | undefined>();
   // Where a screen's Heading puts its buttons, on the title's row.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  // And where its Crumbs put the pages above it.
+  const [trail, setTrail] = useState<HTMLElement | null>(null);
   useEffect(() => {
     document.title = !title || title === name ? name : `${title} · ${name}`;
   }, [title, name]);
@@ -237,6 +239,7 @@ function Shell({
       nav={nav}
       title={title}
       heading={<div ref={setSlot} style={{ display: "contents" }} />}
+      crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       account={
         signIn.offered &&
         auth && (
@@ -258,7 +261,9 @@ function Shell({
       }
     >
       <HeadingSlot.Provider value={slot}>
-        <Confirmations>{children}</Confirmations>
+        <CrumbsSlot.Provider value={trail}>
+          <Confirmations>{children}</Confirmations>
+        </CrumbsSlot.Provider>
       </HeadingSlot.Provider>
     </ui.Page>
   );
@@ -271,6 +276,23 @@ const HeadingSlot = createContext<HTMLElement | null>(null);
 export function Heading({ children }: { children: ReactNode }) {
   const slot = useContext(HeadingSlot);
   return slot ? createPortal(children, slot) : null;
+}
+
+const CrumbsSlot = createContext<HTMLElement | null>(null);
+
+// The pages above a screen, each by its address and its title, which may be read
+// from the page's views, like a project's name; the page itself comes last.
+export function Crumbs({ items }: { items: readonly { to: string; title: readonly TitlePart[] }[] }) {
+  const slot = useContext(CrumbsSlot);
+  const ui = useUI();
+  const link = useLinks();
+  const params = useParams();
+  const current = usePageTitle();
+  const shown = items.map(({ to, title }) => ({
+    label: title.map((part) => (typeof part === "string" ? part : String(part[0].data?.[part[1]] ?? ""))).join("").trim() || "…",
+    link: link(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => (params[name] === undefined ? written : encodeURIComponent(params[name])))),
+  }));
+  return slot ? createPortal(<ui.Crumbs items={shown} current={current} />, slot) : null;
 }
 
 // What to tell someone whose sign-in didn't work. Closing the sign-in window is a

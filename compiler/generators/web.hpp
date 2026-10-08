@@ -167,6 +167,8 @@ namespace one::generators {
         std::vector<output_file> generate() {
             std::vector<output_file> out;
             std::vector<screen_import> screens;
+            // Every screen, for the trail of pages above each.
+            for (const auto& f : files_) find_screens("", f.declarations, every_screen_);
             for (const auto& f : files_) {
                 std::vector<found_screen> found;
                 find_screens("", f.declarations, found);
@@ -389,6 +391,24 @@ namespace one::generators {
             return keys;
         }
 
+        // The parameters of a link before its last that name something keyed by
+        // several parts, like a board by its project and name, with how many: a row
+        // holding its id fills the parameter with its last part.
+        std::string named_by(const std::string& ns, const std::string& route) const {
+            std::string named;
+            std::size_t last = route.rfind("/:");
+            for (std::size_t at = route.find("/:"); at != std::string::npos && at < last; at = route.find("/:", at + 1)) {
+                std::size_t end = route.find('/', at + 1);
+                std::string name = route.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
+                auto scope = entities_.find(ns);
+                if (scope == entities_.end() || !scope->second.contains(name)) continue;
+                int keys = 0;
+                for (const auto& f : scope->second.at(name)->fields) keys += f.key ? 1 : 0;
+                if (keys > 1) named += (named.empty() ? "" : ", ") + name + ": " + std::to_string(keys);
+            }
+            return named.empty() ? "" : " named={{ " + named + " }}";
+        }
+
         static bool names_parameter(const std::string& route, const std::string& name) {
             std::string wanted = "/:" + name;
             for (std::size_t at = route.find(wanted); at != std::string::npos; at = route.find(wanted, at + 1)) {
@@ -550,6 +570,40 @@ namespace one::generators {
             bool viewer = false;  // a button's when reads who's reading, as me
         };
 
+        std::vector<found_screen> every_screen_;
+
+        // The pages above a screen: those whose address its own goes on from, like
+        // /projects/:project above /projects/:project/boards/:board, nearest last,
+        // each by its address and its title. The app's home isn't one; its name is.
+        std::string crumbs(screen_parts& parts, const std::string& route) {
+            auto segments = [](const std::string& path) {
+                std::vector<std::string> out;
+                for (std::size_t at = 0; at < path.size();) {
+                    std::size_t end = path.find('/', at + 1);
+                    std::string part = path.substr(at + 1, end == std::string::npos ? std::string::npos : end - at - 1);
+                    if (!part.empty()) out.push_back(part);
+                    at = end == std::string::npos ? path.size() : end;
+                }
+                return out;
+            };
+            auto mine = segments(route);
+            std::vector<std::pair<std::size_t, std::string>> above;
+            for (const auto& [ns, s, _] : every_screen_) {
+                std::string theirs_route = full_route(ns, s->route);
+                auto theirs = segments(theirs_route);
+                if (theirs.empty() || theirs.size() >= mine.size() || !std::equal(theirs.begin(), theirs.end(), mine.begin())) continue;
+                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title;
+                std::string spoken = title.find('{') != std::string::npos ? title_parts(parts, ns, title) : web_detail::js_string(title);
+                above.emplace_back(theirs.size(), "{ to: " + web_detail::js_string(theirs_route) + ", title: [" + spoken + "] }");
+            }
+            if (above.empty()) return "";
+            std::sort(above.begin(), above.end());
+            std::string items;
+            for (const auto& [_, item] : above) items += (items.empty() ? "" : ", ") + item;
+            parts.components.insert("Crumbs");
+            return "<Crumbs items={[" + items + "]} />";
+        }
+
         stream screen_file(const language::file& f, const std::vector<found_screen>& found, std::vector<screen_import>& screens,
                            const std::string& stem) {
             std::set<std::string> components{"screen"};
@@ -566,6 +620,7 @@ namespace one::generators {
                 stream items;
                 auto from_items = items.from(f.path, where.line);
                 items.open("<>");
+                if (std::string trail = crumbs(parts, route); !trail.empty()) items.line(trail);
                 // Laid out in regions, like main and side: as the screen puts its items
                 // in them, or with everything in main.
                 // What sits beside the title, like Edit project.
@@ -1088,6 +1143,7 @@ namespace one::generators {
                             for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
                             line += " keyed={[" + names + "]}";
                         }
+                        line += named_by(ns, target);
                     }
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
@@ -1281,6 +1337,7 @@ namespace one::generators {
                     for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
                     line += " keyed={[" + names + "]}";
                 }
+                line += named_by(ns, target);
             }
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
@@ -1662,6 +1719,7 @@ namespace one::generators {
                     for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
                     line += " keyed={[" + names + "]}";
                 }
+                line += named_by(ns, target);
             }
             // Tabs by a list's records, like phases: each one's id and title, in order.
             if (table.by && table.by_over) {

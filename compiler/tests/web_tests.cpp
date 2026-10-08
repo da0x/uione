@@ -627,7 +627,9 @@ TEST_CASE("a screen's title can show what the page does, once it's arrived") {
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(export const issues = screen({ title: "", route: "/tracker/issues/:issue" }, () => {)") != std::string::npos);
     CHECK(tsx.find(R"(useTitle(["#", [issuePage, "number"], " ", [issuePage, "title"]]);)") != std::string::npos);
-    CHECK(tsx.find("import { Live, Text, screen, useParam, useTitle, useView }") != std::string::npos);
+    CHECK(tsx.find("import { Crumbs, Live, Text, screen, useParam, useTitle, useView }") != std::string::npos);
+    // The pages above it, by address: the home of its namespace.
+    CHECK(tsx.find(R"(<Crumbs items={[{ to: "/tracker", title: ["Home"] }]} />)") != std::string::npos);
     fs::remove_all(dir);
 }
 

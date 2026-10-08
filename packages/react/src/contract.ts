@@ -30,6 +30,7 @@ export interface PageProps {
   title: string;
   account?: ReactNode; // who's signed in, drawn with Account, when the app has sign-in
   heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
+  crumbs?: ReactNode; // where the pages above a screen go, above its title
   children: ReactNode;
 }
 
@@ -197,6 +198,13 @@ export interface BoardCard {
   reaches: string[]; // the columns it may be moved to
 }
 
+// Where a page is among the pages above it, like Projects › neotrac › Product:
+// each of those linked, and the page itself last.
+export interface CrumbsProps {
+  items: { label: string; link: LinkProps }[];
+  current: string;
+}
+
 // One of a few ways to show the same thing, like a table or a board, the one
 // shown marked.
 export interface SwitchProps {
@@ -338,6 +346,7 @@ export interface ComponentSet {
   Grid: ComponentType<GridProps>;
   Board: ComponentType<BoardProps>;
   Switch: ComponentType<SwitchProps>;
+  Crumbs: ComponentType<CrumbsProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;

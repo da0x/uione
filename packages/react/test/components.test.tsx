@@ -4,6 +4,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { App, Code, Hero, Link, Menu, Pages, useParam, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
+import { changed } from "../src/index.js";
 import type { DocPage } from "../src/index.js";
 import { label } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -117,5 +118,13 @@ describe("labels", () => {
     expect(label("created_at")).toBe("Created at");
     expect(label("email")).toBe("Email");
     expect(label("checkin")).toBe("Checkin");
+  });
+});
+
+describe("what a change says", () => {
+  it("says from what to what a command of its own moved something, unless what it did says it already", () => {
+    expect(changed("phase", "Reported", "Triaged", "projects::issue::move")).toBe("moved this from Reported to Triaged");
+    expect(changed("status", "open", "closed", "tracker::issue::close")).toBe("closed this");
+    expect(changed("status", "closed", "open", "tracker::issue::reopen")).toBe("reopened this");
   });
 });

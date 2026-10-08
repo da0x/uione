@@ -770,6 +770,11 @@ form step::update "Save" {
 - A table and a board of the same list, one right after the other, are one: the
   person picks which they see with a switch in the toolbar, and their pick is
   remembered. The board takes the table's search and toolbar when it has none.
+- A screen whose address goes on from another's, like `/:project/boards/:board`
+  from `/:project`, shows the trail of pages above it, each by its title and
+  linked, above its own title: Projects › neotrac › Product.
+- A link that names something keyed by several parts, like a board in
+  `/:project/boards/:board`, is filled from a row's id of it by its own part.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's
   title row, at its end, with their forms.
 

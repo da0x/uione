@@ -60,7 +60,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 }
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, children }) => (
     <>
       <header>
         <a {...home}>
@@ -77,6 +77,7 @@ export const plain: ComponentSet = {
         {account}
       </header>
       <main>
+        {crumbs}
         {title !== name && <h1>{title}</h1>}
         {heading}
         {children}
@@ -366,6 +367,19 @@ export const plain: ComponentSet = {
       </div>
       {error && <p role="alert">{error}</p>}
     </>
+  ),
+
+  Crumbs: ({ items, current }) => (
+    <nav aria-label="Breadcrumb">
+      <ol>
+        {items.map((item, at) => (
+          <li key={at}>
+            <a {...item.link}>{item.label}</a>
+          </li>
+        ))}
+        <li aria-current="page">{current}</li>
+      </ol>
+    </nav>
   ),
 
   Switch: ({ label, options }) => (

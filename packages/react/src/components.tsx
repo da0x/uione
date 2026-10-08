@@ -208,7 +208,14 @@ export function done(action: string): string {
 // command did. [before, after] the thing, like ["changed title of", "from a to b"].
 export function phrase(field: unknown, before: unknown, after: unknown, command?: unknown): [string, string] {
   const verb = typeof command === "string" ? action(command) : "";
-  if (verb && verb !== "create" && verb !== "update" && verb !== "delete") return [done(verb), ""];
+  // A command of its own says what it did, and from what to what when it says
+  // that, like moved this from Reported to Triaged.
+  if (verb && verb !== "create" && verb !== "update" && verb !== "delete") {
+    // Where what it did says it already, like closed or reopened, it isn't said again.
+    const [was, is] = [show(before), show(after)];
+    const says = typeof field === "string" && field !== "" && was !== "" && is !== "" && !done(verb).toLowerCase().includes(is.toLowerCase());
+    return [done(verb), says ? `from ${was} to ${is}` : ""];
+  }
   if (typeof field !== "string" || field === "") return ["created", ""];
   const name = field.replaceAll("_", " ");
   const was = show(before);
@@ -248,12 +255,14 @@ export function Timeline({
   subject = [],
   link,
   keyed,
+  named,
 }: {
   view: ViewState;
   list: string;
   subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
   link?: string; // where each change's subject is, like /:project/issues/:issue
   keyed?: string[]; // the key's parts before the last, when the link names them, like project
+  named?: Record<string, number>; // parameters a row fills with the last part of an id keyed by that many, like a board in /:project/boards/:board
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -263,10 +272,10 @@ export function Timeline({
     const entry = { id: row.id, who: show(row["created_by.name"]), when: when(row.created_at) };
     if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
     // A number is said as one, like #12.
-    const named = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
+    const words = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
     const [head, tail] = phrase(row.field, row.before, row.after, row.action);
-    const to = link ? links(rowLink(link, row, params, keyed)) : undefined;
-    return { ...entry, what: head, subject: named.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
+    const to = link ? links(rowLink(link, row, params, keyed, named)) : undefined;
+    return { ...entry, what: head, subject: words.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
   return <ui.Timeline status={view.status} entries={entries} />;
 }
@@ -543,7 +552,7 @@ function ordering(sort: string): (a: Row, b: Row) => number {
 // When what it opens is named by its key's parts, like /:owner/:project for a
 // project keyed by its owner and its name, keyed lists the parts before the last,
 // and the row's id is split into them.
-function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>, keyed: readonly string[] = []): string {
+function rowLink(route: string, row: Row, params: Readonly<Record<string, string | undefined>>, keyed: readonly string[] = [], named: Record<string, number> = {}): string {
   const parameter = /:([A-Za-z_]\w*)/g;
   const names = [...route.matchAll(parameter)].map((m) => m[1] as string);
   const last = names[names.length - 1];
@@ -559,7 +568,10 @@ function rowLink(route: string, row: Row, params: Readonly<Record<string, string
   if (parts) keyed.forEach((name, i) => (values[name] = parts[i] as string));
   return route.replace(parameter, (_, name: string) => {
     if (name === last) return encodeURIComponent(parts ? (parts[parts.length - 1] as string) : opened);
-    return encodeURIComponent(values[name] ?? params[name] ?? own(name) ?? row.id);
+    // A row's board, by its id, fills /:board with the board's own name.
+    const held = own(name);
+    const part = held && named[name] ? partsOf(held, named[name])?.at(-1) : undefined;
+    return encodeURIComponent(values[name] ?? params[name] ?? part ?? held ?? row.id);
   });
 }
 
@@ -619,6 +631,7 @@ export function Table({
   actions = [],
   link,
   keyed,
+  named,
   pictures = [],
   choices = {},
   labels = [],
@@ -635,6 +648,7 @@ export function Table({
   actions?: (string | RowAction)[];
   link?: string; // a route like /books/:book, which each row's id fills
   keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
+  named?: Record<string, number>; // parameters a row fills with the last part of an id keyed by that many, like a board in /:project/boards/:board
   pictures?: string[];
   choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
   labels?: string[]; // columns holding a list of words, each shown on its own, like an issue's labels
@@ -732,7 +746,7 @@ export function Table({
         error={[...pressed.map((a) => a.name), ...(arranged ? [arranged.command] : [])].map((name) => runner.error(name)).find((e) => e !== undefined)}
         rows={rows.map((row) => ({
           id: row.id,
-          link: link ? links(rowLink(link, row, params, keyed)) : undefined,
+          link: link ? links(rowLink(link, row, params, keyed, named)) : undefined,
           cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
@@ -794,6 +808,7 @@ export function Board({
   columns,
   link,
   keyed,
+  named,
   pictures = [],
   choices = {},
   labels = [],
@@ -810,6 +825,7 @@ export function Board({
   columns: Record<string, string>; // what a card shows, its title first
   link?: string;
   keyed?: string[];
+  named?: Record<string, number>; // parameters a row fills with the last part of an id keyed by that many, like a board in /:project/boards/:board
   pictures?: string[];
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
@@ -877,7 +893,7 @@ export function Board({
           .map((card) => ({
             id: card.id,
             title: title ? cellOf(ui, links, card, title, { choices, labels, pictures }) : card.id,
-            link: link ? links(rowLink(link, card, params, keyed)) : undefined,
+            link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
             details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
             reaches: reaches(where(card)),
           })),

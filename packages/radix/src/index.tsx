@@ -147,7 +147,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, children }) => (
     <div className="min-h-screen bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
@@ -182,6 +182,7 @@ export const radix: ComponentSet = {
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
       <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
+        {crumbs}
         {/* The title, and a screen's own buttons at the end of its row. */}
         <div className={`flex flex-wrap items-center gap-3 ${title !== name ? "mb-5" : ""}`}>
           {title !== name && <h1 className="mr-auto text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
@@ -659,6 +660,26 @@ export const radix: ComponentSet = {
       </div>
     );
   },
+
+  // The pages above this one, small, above its title, each a link and the last this
+  // page itself.
+  Crumbs: ({ items, current }) => (
+    <nav aria-label="Breadcrumb" className="mb-1.5 text-sm text-muted">
+      <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        {items.map((item, at) => (
+          <li key={at} className="flex items-center gap-1.5">
+            <a {...item.link} className="hover:text-ink hover:underline">
+              {item.label}
+            </a>
+            <span aria-hidden="true">›</span>
+          </li>
+        ))}
+        <li aria-current="page" className="max-w-[40ch] truncate text-ink">
+          {current}
+        </li>
+      </ol>
+    </nav>
+  ),
 
   // A few ways to show the same thing, side by side, the one shown filled in.
   Switch: ({ label, options }) => (
