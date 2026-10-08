@@ -10,7 +10,7 @@
 # and puts it in ~/.local/bin. Nothing else is changed: no profile is edited, and
 # nothing runs as root.
 #
-#   UIONE_VERSION=0.6.18   a particular release, rather than the latest
+#   UIONE_VERSION=0.6.19   a particular release, rather than the latest
 #   UIONE_INSTALL=dir     where to put one, rather than ~/.local/bin
 #   UIONE_DOWNLOAD=url    where the release's files are, for trying a release first
 
