@@ -362,7 +362,7 @@
     },
     "entity": {
       "comment": "An entity's block: each line is a field, its name first, then its type, built in or another entity, so `project  project  required  key` is a field named project holding a project. Inside it, words that start declarations elsewhere are names.",
-      "begin": "^\\s*(entity)\\s+([A-Za-z_]\\w*)(?:\\s+(history))?\\s*(\\{)",
+      "begin": "^\\s*(entity)\\s+([A-Za-z_]\\w*)(?:\\s+(invites)\\s+([A-Za-z_]\\w*))?(?:\\s+(history)(?:\\s+(of)\\s+([A-Za-z_]\\w*))?)?\\s*(\\{)",
       "beginCaptures": {
         "1": {
           "name": "storage.type.uione"
@@ -371,6 +371,12 @@
           "name": "entity.name.type.uione"
         },
         "3": {
+          "name": "keyword.other.uione"
+        },
+        "5": {
+          "name": "keyword.other.uione"
+        },
+        "6": {
           "name": "keyword.other.uione"
         }
       },

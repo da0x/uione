@@ -747,6 +747,40 @@ namespace one::language {
         }
 
         void verify(const std::string& ns, location where, const entity_declaration& e) {
+            // entity invitation invites member: one email to match, the member's one
+            // person to fill, and everything else the member needs, by the same name.
+            if (e.invites) {
+                const entity_declaration* made = find_entity(ns, qualified_name{{*e.invites}, e.invites_where});
+                std::vector<const field*> emails, people;
+                for (const auto& f : e.fields) {
+                    if (f.type && f.type->text() == "email" && !f.list) emails.push_back(&f);
+                }
+                if (made) {
+                    for (const auto& f : made->fields) {
+                        if (f.type && f.type->text() == "user" && !f.list && !f.initial) people.push_back(&f);
+                    }
+                }
+                if (!made) {
+                    error(e.invites_where, "there's no entity " + *e.invites + " " + in_namespace(ns) + " for " + e.name + " to invite to be");
+                } else if (emails.size() != 1) {
+                    error(e.invites_where, "an invitation is to one email, so " + e.name + " has one email field, like email  email  required");
+                } else if (people.size() != 1) {
+                    error(e.invites_where, "a " + made->name + " made from an invitation is for one person, so " + made->name + " has one user field that doesn't start as a value, like person  user  required");
+                } else if (find_field(e, people[0]->name)) {
+                    error(e.invites_where, e.name + " doesn't say who " + people[0]->name + " is; whoever signs in with its email is");
+                } else {
+                    for (const auto& f : made->fields) {
+                        if (&f == people[0] || !f.required || f.initial) continue;
+                        const field* same = find_field(e, f.name);
+                        if (!same) {
+                            error(e.invites_where, "a " + made->name + " needs its " + f.name + ", so " + e.name + " has it too, like " + f.name + "  " +
+                                                       (f.type ? f.type->text() : "text"));
+                        } else if (!same->type || !f.type || same->type->text() != f.type->text() || same->list != f.list) {
+                            error(same->where, e.name + "." + f.name + " becomes " + made->name + "." + f.name + ", so it's the same kind");
+                        }
+                    }
+                }
+            }
             // entity comment history of issue: the issue keeps its history, and the
             // comment points at it.
             if (e.history_of) {
@@ -2279,12 +2313,13 @@ namespace one::language {
         // checked as an update's on its entity, and may name what's already stored, as
         // role::developer, as well as what it makes. A where picks by a field's value.
         void verify(const std::string& ns, location where, const once_declaration& o) {
+            std::string what = o.signin ? "on signin" : "once \"" + o.name + "\"";
             if (ns.empty()) {
-                error(where, "once \"" + o.name + "\" changes a namespace's entities, so it goes inside a namespace");
+                error(where, what + " changes a namespace's entities, so it goes inside a namespace");
                 return;
             }
-            if (o.name.empty()) error(where, "a once has a name of its own, like \"2026-10-07 workflows\", so it's known to be done");
-            if (o.steps.empty()) error(where, "once \"" + o.name + "\" does nothing; give it a step, like each project { ... }");
+            if (o.name.empty() && !o.signin) error(where, "a once has a name of its own, like \"2026-10-07 workflows\", so it's known to be done");
+            if (o.steps.empty()) error(where, what + " does nothing; give it a step, like each project { ... }");
             for (const auto& step : o.steps) {
                 snake(step.entity, step.entity_where);
                 const entity_declaration* entity = find_entity(ns, qualified_name{{step.entity}, step.entity_where});
@@ -2303,12 +2338,17 @@ namespace one::language {
                 if (step.where) {
                     auto* b = std::get_if<binary_expression>(&step.where->node);
                     auto* name = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+                    // On signing in, me.email is the email the person's sign-in vouches for.
+                    bool email = o.signin && b && written(*b->right) == "me.email";
                     if (!b || b->op != token_kind::equal || !name || name->name.parts.size() != 1) {
                         error(step.where->where, "a once's where picks by a field's value, like where name == \"developer\"");
-                    } else {
+                    } else if (!email) {
                         resolve(in, *step.where);
+                    } else if (!find_field(*entity, name->name.parts[0])) {
+                        error(name->name.where, "entity " + entity->name + " has no field " + name->name.parts[0]);
                     }
                 }
+                if (step.remove && !o.signin) error(step.entity_where, "a once changes what's there; delete each is for on signin");
                 statements(ns, step.body, entity, in);
             }
         }

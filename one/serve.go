@@ -101,9 +101,10 @@ type registry struct {
 	commands map[string]func(*App, *call) (string, error)
 	views    []*ViewSpec
 	roles    map[string][]string
-	scoped   []*RoleSpec  // roles held within an entity, like a project
-	defined  []*RolesSpec // roles each project, or the like, defines for itself as records
-	once     []*OnceSpec  // work done the first time a backend with it starts
+	scoped   []*RoleSpec   // roles held within an entity, like a project
+	defined  []*RolesSpec  // roles each project, or the like, defines for itself as records
+	once     []*OnceSpec   // work done the first time a backend with it starts
+	signin   []*SignInSpec // work done each time someone opens the app signed in
 	named    map[string]bool
 	twice    []string // roles given more than once, which is a mistake
 	hooks    []*GitHubSpec
@@ -303,6 +304,7 @@ func (a *App) Handler() http.Handler {
 		w.Write([]byte("ok\n"))
 	})
 	mux.HandleFunc("POST /api/", a.serveCommand)
+	mux.HandleFunc("POST /api/signin", a.serveSignIn)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
 	}
@@ -382,4 +384,26 @@ func Serve(items ...Item) {
 		IdleTimeout:       2 * time.Minute,
 	}
 	log.Fatal(server.ListenAndServe())
+}
+
+// serveSignIn is told once each time someone opens the app signed in: it keeps their
+// profile up to date and does the work OnSignIn asks, with the email their sign-in
+// vouches for, which only a verified one does.
+func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
+	token, err := a.auth.VerifyIDToken(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if err != nil {
+		reply(w, http.StatusUnauthorized, map[string]any{"error": "your sign-in has expired; sign in again"})
+		return
+	}
+	a.remember(r.Context(), token)
+	email, _ := token.Claims["email"].(string)
+	if verified, _ := token.Claims["email_verified"].(bool); !verified {
+		email = ""
+	}
+	if err := a.signedIn(r.Context(), token.UID, email); err != nil {
+		a.log.Printf("one: what signing in brings about for %s failed: %v", token.UID, err)
+		reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong; try again"})
+		return
+	}
+	reply(w, http.StatusOK, map[string]any{})
 }

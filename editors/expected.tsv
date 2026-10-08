@@ -201,3 +201,5 @@ editors/fixtures/body.one	find "Find a column"	find	keyword
 editors/fixtures/environments.one	unread  news.changes	unread	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
+editors/fixtures/roles.one	entity invitation invites seat {	invites	keyword
+editors/fixtures/roles.one	email  email  required  key	email	variable

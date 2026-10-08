@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -80,7 +81,7 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 		record.ID = id
 		before = snap.Data()
 		was := schema.data(v)
-		body := &Ctx{Context: ctx, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: schema.entity + "::update", before: before}
+		body := &Ctx{Context: ctx, me: s.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: schema.entity + "::update", before: before}
 		body.entity = &owned{schema, v}
 		if err := do(body, entity); err != nil {
 			return err
@@ -143,4 +144,101 @@ func (a *App) doOnce(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// MyEmail is the email of the person signing in, in work done OnSignIn, as in
+// Each[Invitation]("email", MyEmail, ...): the invitations sent to them.
+var MyEmail = &marker{"my email"}
+
+// SignInSpec is work done each time someone opens the app signed in, made with
+// OnSignIn.
+type SignInSpec struct {
+	work []func(*System) error
+}
+
+// OnSignIn is work done each time someone opens the app signed in, as them: what
+// it makes, it makes in their name, and MyEmail is the email their sign-in vouches
+// for, like joining the projects invitations to that email asked them to. Someone
+// whose sign-in vouches for no email, like a GitHub account Firebase doesn't
+// verify, brings nothing about. It's done in the order it's given, made with Each
+// and DeleteEach.
+func OnSignIn(work ...func(*System) error) *SignInSpec { return &SignInSpec{work: work} }
+
+func (o *SignInSpec) register(r *registry, _ string) { r.signin = append(r.signin, o) }
+
+// DeleteEach is work that deletes every stored entity of a kind whose field holds a
+// value, each in a transaction of its own and kept in its history, as a delete
+// command would: like the invitations to someone who's now joined.
+func DeleteEach[E any, P entityPointer[E]](field string, value any) func(*System) error {
+	return func(s *System) error {
+		all, err := fetch[E, P](s, &field, value)
+		if err != nil {
+			return err
+		}
+		for _, entity := range all {
+			id := P(entity).record().ID
+			if err := change[E, P](s, id, func(c *Ctx, _ *E) error { return DeleteWhere[E, P](c, "id", id) }); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// signedIn does each OnSignIn's work for someone who's opened the app, when their
+// sign-in vouches for an email.
+func (a *App) signedIn(ctx context.Context, me, email string) error {
+	if email == "" {
+		return nil
+	}
+	s := &System{app: a, ctx: ctx, me: me, email: strings.ToLower(email)}
+	for _, o := range a.reg.signin {
+		for _, work := range o.work {
+			if err := work(s); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Invites makes an entity an invitation to become another, like an invitation to be
+// a project's member: when someone signs in with its email, the other is made from
+// its fields of the same name, like the project and the role, with its person
+// field the one signing in, and the invitation is deleted, both in one transaction,
+// so neither happens without the other. Who joins is then known by who they are,
+// not by their email, so changing it later changes nothing. Only a sign-in that
+// vouches for its email takes one; the email is matched whatever its capitals.
+func Invites[I any, M any, PI entityPointer[I], PM entityPointer[M]](email, person string) *SignInSpec {
+	return OnSignIn(func(s *System) error {
+		all, err := fetch[I, PI](s, &email, MyEmail)
+		if err != nil {
+			return err
+		}
+		for _, invitation := range all {
+			id := PI(invitation).record().ID
+			err := change[I, PI](s, id, func(c *Ctx, i *I) error {
+				made := new(M)
+				from, to := reflect.ValueOf(i).Elem(), reflect.ValueOf(made).Elem()
+				ownSchema, madeSchema := c.app.reg.schemas[reflect.TypeFor[I]()], c.app.reg.schemas[reflect.TypeFor[M]()]
+				for _, f := range madeSchema.fields {
+					if f.name == person {
+						to.FieldByIndex(f.index).SetString(c.Me())
+						continue
+					}
+					if same := ownSchema.field(f.name); same != nil && same.typ == f.typ {
+						to.FieldByIndex(f.index).Set(from.FieldByIndex(same.index))
+					}
+				}
+				if err := Create[M, PM](c, made); err != nil {
+					return err
+				}
+				return DeleteWhere[I, PI](c, "id", id)
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

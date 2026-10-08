@@ -356,3 +356,23 @@ describe("a backend that throws rather than failing", () => {
     expect(view.last()).toEqual({ status: "denied", data: undefined });
   });
 });
+
+describe("signing in", () => {
+  it("tells the backend once each person opens the app signed in", async () => {
+    const fake = fakeBackend(null);
+    const asked: { url: string; auth: string | undefined }[] = [];
+    const fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      asked.push({ url: String(url), auth: (init?.headers as Record<string, string> | undefined)?.Authorization });
+      return new Response("{}", { status: 200 });
+    };
+    untracked(fake.backend, { fetch: fetch as typeof globalThis.fetch });
+    fake.become({ uid: "ada", name: "Ada" });
+    fake.become({ uid: "ada", name: "Ada" });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(asked).toEqual([{ url: "/api/signin", auth: "Bearer token-for-ada" }]);
+    fake.become(null);
+    fake.become({ uid: "grace", name: "Grace" });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(asked.map((a) => a.auth)).toEqual(["Bearer token-for-ada", "Bearer token-for-grace"]);
+  });
+});

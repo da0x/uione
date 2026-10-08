@@ -194,6 +194,10 @@ namespace one::language {
             if (word == "enum") return {where, parse_enum()};
             if (word == "webhook") return {where, parse_webhook()};
             if (word == "once" && peek(1).kind == token_kind::string) return {where, parse_once()};
+            if (word == "on" && peek(1).kind == token_kind::identifier && peek(1).text == "signin") {
+                advance();
+                return {where, parse_once(true)};
+            }
             if (word == "backend") {
                 advance();
                 backend_declaration backend{expect(token_kind::identifier, "the backend's name, like deploy").text};
@@ -304,6 +308,11 @@ namespace one::language {
             advance();
             entity_declaration entity;
             entity.name = expect(token_kind::identifier, "the entity's name").text;
+            if (at_word("invites")) {
+                advance();
+                entity.invites_where = peek().where;
+                entity.invites = expect(token_kind::identifier, "what it invites to be, like member").text;
+            }
             if (at_word("history")) {
                 advance();
                 if (at_word("of")) {
@@ -409,22 +418,28 @@ namespace one::language {
             return command;
         }
 
-        once_declaration parse_once() {
+        once_declaration parse_once(bool signin = false) {
             advance();
             once_declaration once;
-            once.name = advance().text;
+            once.signin = signin;
+            if (!signin) once.name = advance().text;
             expect(token_kind::left_brace, "'{'");
             while (in_block()) {
+                // delete each invitation where email == me.email
+                once_step step;
+                if (at_word("delete") && peek(1).kind == token_kind::identifier && peek(1).text == "each") {
+                    advance();
+                    step.remove = true;
+                }
                 if (!at_word("each")) fail_expecting("each and what it changes, like each project { ... }");
                 advance();
-                once_step step;
                 step.entity_where = peek().where;
                 step.entity = expect(token_kind::identifier, "the entity it changes, like project").text;
                 if (at_word("where")) {
                     advance();
                     step.where = parse_expression();
                 }
-                step.body = parse_statement_block();
+                if (!step.remove) step.body = parse_statement_block();
                 end_line();
                 once.steps.push_back(std::move(step));
             }

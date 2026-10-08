@@ -29,3 +29,19 @@ namespace tracker {
 	}
 
 } // namespace tracker
+
+namespace guild {
+	entity hall {
+		slug  text  required  key
+	}
+
+	entity seat {
+		hall    hall  required  key
+		person  user  required  key
+	}
+
+	entity invitation invites seat {
+		hall   hall   required  key
+		email  email  required  key
+	}
+}

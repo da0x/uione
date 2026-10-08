@@ -258,6 +258,11 @@ namespace one::language {
         // issue's history, through its field pointing at the issue.
         std::optional<std::string> history_of;
         location history_of_where;
+        // entity invitation invites member: when someone signs in with its email, a
+        // member is made from its fields of the same names, with the member's person
+        // the one signing in, and it's deleted, both at once.
+        std::optional<std::string> invites;
+        location invites_where;
         std::vector<field> fields;
     };
 
@@ -624,6 +629,7 @@ namespace one::language {
         location entity_where;
         expression_ptr where;  // name == "developer", or none for all of them
         std::vector<statement> body;
+        bool remove = false;  // delete each invitation where email == me.email
     };
 
     // once "2026-10-07 workflows" { each project { ... } }: a change to what's stored
@@ -632,6 +638,9 @@ namespace one::language {
     struct once_declaration {
         std::string name;
         std::vector<once_step> steps;
+        // on signin { ... }: done each time someone opens the app signed in, as them,
+        // with me.email the email their sign-in vouches for, rather than once.
+        bool signin = false;
     };
 
     // The file a backend is written in, beside the .one file that names it.

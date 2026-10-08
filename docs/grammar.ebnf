@@ -42,7 +42,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= project | namespace | format | enum_type | entity | command | view | role | roles
-                 | function | screen | picker | webhook | backend | once
+                 | function | screen | picker | webhook | backend | once | signin
 
 /* project */
 
@@ -71,7 +71,8 @@ example        ::= "example" PATTERN END
 /* entity */
 
 /* entity comment history of issue: a comment's changes are kept in its issue's history */
-entity         ::= "entity" NAME ("history" ("of" NAME)?)? "{" NEWLINE? field* "}" END
+/* entity invitation invites member: when someone signs in with its email, they become one */
+entity         ::= "entity" NAME ("invites" NAME)? ("history" ("of" NAME)?)? "{" NEWLINE? field* "}" END
 field          ::= NAME (enum | type) rule* ("=" expression)? END
 enum           ::= "enum" (choice ("|" choice)* | "{" NEWLINE? (choice+ END)* "}")
 choice         ::= NAME STRING?
@@ -89,6 +90,9 @@ backend        ::= "backend" NAME END
 
 once           ::= "once" STRING "{" NEWLINE? once_step* "}" END
 once_step      ::= "each" NAME ("where" expression)? block END
+/* done each time someone opens the app signed in, as them, me.email the email their
+   sign-in vouches for */
+signin         ::= "on" "signin" "{" NEWLINE? (once_step | "delete" "each" NAME ("where" expression)? END)* "}" END
 
 /* command */
 

@@ -1189,3 +1189,24 @@ TEST_CASE("a comment is kept in its issue's history, and mentions the people its
     CHECK(only_error(issue + "entity comment {\n\tissue  issue\n\tbody  markdown\n\tmentioned  user = mentions(body)\n}\n}\n").message ==
           "mentioned holds the people body mentions, so it's a list of user");
 }
+
+TEST_CASE("an invitation invites to be something with one person, and has what it needs") {
+    std::string code = "namespace work {\n"
+                       "entity team {\n\tslug  text  required  key\n}\n"
+                       "entity seat {\n\tteam  team  required  key\n\tperson  user  required  key\n\trole  enum { lead  helper }\n}\n";
+    CHECK(check_source(code + "entity invitation invites seat {\n\tteam  team  required  key\n\temail  email  required  key\n}\n}\n").empty());
+    CHECK(only_error(code + "entity invitation invites seat {\n\temail  email  required  key\n}\n}\n").message ==
+          "a seat needs its team, so invitation has it too, like team  team");
+    CHECK(only_error(code + "entity invitation invites seat {\n\tteam  team  required  key\n}\n}\n").message ==
+          "an invitation is to one email, so invitation has one email field, like email  email  required");
+    CHECK(only_error(code + "entity invitation invites seat {\n\tteam  team  required  key\n\temail  email  required\n\tperson  user\n}\n}\n").message ==
+          "invitation doesn't say who person is; whoever signs in with its email is");
+    CHECK(only_error(code + "entity invitation invites chair {\n\temail  email\n}\n}\n").message ==
+          "there's no entity chair in namespace work for invitation to invite to be");
+}
+
+TEST_CASE("on signin does each step as the person signing in, with me.email theirs") {
+    CHECK(check_source("namespace work {\nentity note {\n\temail  email\n\ttext  text\n}\n"
+                       "on signin {\n\teach note where email == me.email {\n\t\ttext = \"seen\"\n\t}\n\tdelete each note where email == me.email\n}\n}\n")
+              .empty());
+}

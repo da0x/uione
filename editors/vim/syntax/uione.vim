@@ -43,7 +43,9 @@ syn match   uioneKeyword   "^\s*\zs\<input\>\ze\s\+\h\w*\s\+\h"
 syn match   uioneKeyword   "^\s*\zs\<move\>\ze\s\+\h\w*::"
 syn match   uioneKeyword   "^\s*\zs\<delete\>\ze\s\+each\>"
 " history only in an entity's header: entity issue history {.
-syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<history\>"
+syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\s\+\)\@<=\<history\>"
+" invites only there too: entity invitation invites member {.
+syn match   uioneKeyword   "\%(^\s*entity\s\+\h\w*\s\+\)\@<=\<invites\>"
 syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite
 syn keyword uioneStatement if else return
 " A field's rules, only in an entity's block; elsewhere these words are names, like a
@@ -67,7 +69,7 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 " or another entity, so `project  project  required  key` is a field named project
 " holding a project, not a declaration. Inside it, words that start declarations
 " elsewhere are names.
-syn region uioneFields start="\%(^\s*entity\s\+\h\w*\%(\s\+history\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf
+syn region uioneFields start="\%(^\s*entity\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\%(\s\+history\%(\s\+of\s\+\h\w*\)\=\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf
 syn match   uioneFieldName "^\s*\zs\h\w*" contained nextgroup=uioneUserType,uioneType skipwhite
 syn match   uioneUserType  "\h\w*\%(::\h\w*\)*" contained
 syn match   uioneFieldWord "\<\%(per\|of\)\>" contained

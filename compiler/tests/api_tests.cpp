@@ -914,3 +914,34 @@ view news per user {
     CHECK(file->content.find(R"(one:"refers=user,mentions=body")") != std::string::npos);
     CHECK(file->content.find(R"(one.All[one.ChangeOf[Issue]]().Has("mentioned", one.Viewer))") != std::string::npos);
 }
+
+TEST_CASE("an invitation, and steps on signing in, become what the library does then") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace work {
+entity team {
+	slug  text  required  key
+}
+entity seat {
+	team    team  required  key
+	person  user  required  key
+}
+entity invitation invites seat {
+	team   team   required  key
+	email  email  required  key
+}
+on signin {
+	delete each invitation where email == me.email
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    const auto* file = find(generated.files, "work/work.go");
+    REQUIRE(file != nullptr);
+    CHECK(file->content.find(R"(var InvitationInvites = one.Invites[Invitation, Seat]("email", "person"))") != std::string::npos);
+    CHECK(file->content.find(R"(one.DeleteEach[Invitation]("email", one.MyEmail),)") != std::string::npos);
+    CHECK(file->content.find("var OnSignIn = one.OnSignIn(") != std::string::npos);
+}

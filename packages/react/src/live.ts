@@ -72,6 +72,20 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
   const api = options.api ?? "/api";
   const page = typeof document === "undefined" ? undefined : document;
 
+  // Once someone's signed in, the backend is told, once for each person each time
+  // the app opens: it does what signing in brings about, like joining the projects
+  // an invitation to their email asked them to.
+  let told: string | undefined;
+  backend.auth.watch((person) => {
+    if (!person || told === person.uid) return;
+    told = person.uid;
+    void (async () => {
+      const token = await backend.token().catch(() => undefined);
+      if (!token) return;
+      await (options.fetch ?? fetch)(`${api}/signin`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => undefined);
+    })();
+  });
+
   return {
     auth: backend.auth,
 

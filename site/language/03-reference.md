@@ -350,6 +350,29 @@ entity loan {
   for the title. The name is made once, so a rename changes only the title, and a
   second phase whose title makes the same name is refused rather than taken for the
   first.
+- `entity invitation invites member { ... }` makes an invitation to become a
+  member, by email. When someone opens the app signed in with that email, a member
+  is made from the invitation's fields of the same names, like its project and
+  role, with the member's one person field, the user it doesn't start as a value,
+  the one signing in, and the invitation is deleted, both at once. From then on
+  they're a member by who they are, not by their email, so changing it later
+  changes nothing. Only a sign-in that vouches for its email, like Google's, takes
+  one, and the email is matched whatever its capitals. The invitation has one email
+  field, and everything else the member needs, by the same name and kind.
+
+```one
+entity invitation invites member {
+	project  project  required  key
+	email    email    required  key
+	role     role     required
+}
+```
+
+- `on signin { ... }` is done each time someone opens the app signed in, as them:
+  its steps are a once's, `each invitation where email == me.email { ... }`, and
+  `delete each invitation where email == me.email`, with `me.email` the email their
+  sign-in vouches for, and `me` the person. An invitation is the usual reason, and
+  `invites` says it whole.
 - `mentioned  list of user = mentions(body)` holds the people a text names with
   @username, like @da0x, worked out each time the text is written. A name nobody
   has is left out, and so is an email address.

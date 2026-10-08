@@ -20,6 +20,9 @@ import (
 type System struct {
 	app *App
 	ctx context.Context
+	// Who it works for, when it's what someone signing in brings about, and the email
+	// their sign-in vouches for.
+	me, email string
 }
 
 // Context is the request the system is working for.
@@ -94,6 +97,9 @@ func fetch[E any, P entityPointer[E]](s *System, field *string, value any) ([]*E
 		return nil, &Failure{Status: 500, Message: "this backend has no " + reflect.TypeFor[E]().Name()}
 	}
 	query := s.app.store.Collection(schema.collection).Query
+	if value == MyEmail {
+		value = s.email
+	}
 	if field != nil {
 		query = query.Where(*field, "==", value)
 	}

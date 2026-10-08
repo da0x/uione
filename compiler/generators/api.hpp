@@ -501,9 +501,29 @@ namespace one::generators {
                 body.line();
             }
 
+            // entity invitation invites member: done each time someone signs in.
+            for (auto* e : pkg.entities) {
+                if (!e->invites) continue;
+                const language::entity_declaration* made = entity(pkg, *e->invites);
+                if (!made) continue;
+                std::string email, person;
+                for (const auto& f : e->fields) {
+                    if (f.type && f.type->text() == "email" && !f.list && email.empty()) email = f.name;
+                }
+                for (const auto& f : made->fields) {
+                    if (f.type && f.type->text() == "user" && !f.list && !f.initial && person.empty()) person = f.name;
+                }
+                std::string var = api_detail::go_name(e->name) + "Invites";
+                members.push_back(var);
+                auto from_entity = in(body, at(e), at(e).line);
+                body.line("var " + var + " = one.Invites[" + api_detail::go_name(e->name) + ", " + api_detail::go_name(made->name) + "](" +
+                          api_detail::go_string(email) + ", " + api_detail::go_string(person) + ")");
+                body.line();
+            }
+
             for (const auto& [o, where] : pkg.onces) {
-                // Named for its words, like Once20261007Workflows.
-                std::string var = "Once";
+                // Named for its words, like Once20261007Workflows, or OnSignIn.
+                std::string var = o->signin ? "OnSignIn" : "Once";
                 bool upper = true;
                 for (char ch : o->name) {
                     if (!std::isalnum(static_cast<unsigned char>(ch))) {
@@ -829,7 +849,7 @@ namespace one::generators {
         // once "2026-10-07 workflows" { each project { ... } }: one.Once with a
         // one.Each for each step, in order.
         void once(stream& out, const language::once_declaration& o, const std::string& var, bool& uses_time) {
-            out.open("var " + var + " = one.Once(" + api_detail::go_string(o.name) + ",");
+            out.open("var " + var + (o.signin ? " = one.OnSignIn(" : " = one.Once(" + api_detail::go_string(o.name) + ","));
             for (const auto& step : o.steps) {
                 auto from_step = in(out, at(&o), step.entity_where.line);
                 const language::entity_declaration* e = pkg_ ? entity(*pkg_, step.entity) : nullptr;
@@ -843,13 +863,19 @@ namespace one::generators {
                     auto* b = std::get_if<language::binary_expression>(&step.where->node);
                     auto* name = b ? std::get_if<language::name_expression>(&b->left->node) : nullptr;
                     const language::field* f = name ? this->field(*e, name->name.text()) : nullptr;
-                    auto picked = f ? expression(*e, *b->right, me, f) : std::nullopt;
+                    auto picked = f && web_detail::text_of(*b->right) == "me.email" ? std::optional<std::string>{"one.MyEmail"}
+                                  : f                                               ? expression(*e, *b->right, me, f)
+                                                                                    : std::nullopt;
                     if (!picked) {
                         unsupported(path_, step.where->where, "a once's where that isn't a field's value");
                         continue;
                     }
                     field = api_detail::go_string(f->name);
                     value = *picked;
+                }
+                if (step.remove) {
+                    out.line("one.DeleteEach[" + api_detail::go_name(e->name) + "](" + field + ", " + value + "),");
+                    continue;
                 }
                 std::vector<const language::statement*> body;
                 for (const auto& s : step.body) body.push_back(&s);
