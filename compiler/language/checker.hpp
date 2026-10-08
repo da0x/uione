@@ -1899,6 +1899,8 @@ namespace one::language {
                     verify_grid(ns, *grid, route);
                 } else if (auto* board = std::get_if<board_item>(&item.node)) {
                     verify_board(ns, *board, route);
+                } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
+                    verify_cards(ns, *cards, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
                     this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
@@ -2051,6 +2053,39 @@ namespace one::language {
                 }
                 verify_along(ns, *board.move, route);
             }
+        }
+
+        // cards project_page.boards link /:project/boards/:board { ... }: the rows hold
+        // what the cards show; a tally counts a list's rows by a field naming the card
+        // and another; a filter is one of the cards' rows' fields and the value it holds.
+        void verify_cards(const std::string& ns, const cards_item& cards, const std::string& route) {
+            const view_each* rows = named_list(ns, cards.view, *cards.list, route);
+            if (!rows) return;
+            if (cards.columns.empty()) error(cards.view.where, "cards show something, their title first, like title");
+            for (const auto& shown : cards.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*rows, key)) error(shown.where, "view " + cards.view.text() + " has no " + key + " in its " + *cards.list + "; add it to the list's block");
+            }
+            if (cards.link && !routes_.contains(full_route(ns, *cards.link))) {
+                error(cards.link_where, "there's no screen at " + full_route(ns, *cards.link) + " for these cards to open");
+            }
+            if (cards.tally) {
+                if (const view_each* counted = named_list(ns, *cards.tally, cards.tally_list, route)) {
+                    for (const auto& field : {cards.tally_by, cards.tally_and}) {
+                        if (!in_rows(*counted, field)) {
+                            error(cards.tally_where, "view " + cards.tally->text() + " has no " + field + " in its " + cards.tally_list + "; add it to the list's block");
+                        }
+                    }
+                }
+            }
+            for (const auto& f : cards.filters) {
+                auto* b = std::get_if<binary_expression>(&f.condition->node);
+                auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+                if (!b || b->op != token_kind::equal || !field || field->name.parts.size() != 1) {
+                    error(f.where, "a filter is a field and the value it holds, like author == me");
+                }
+            }
+            if (cards.filters.size() > 3) error(cards.filters[3].where, "a card has three filters at most, the ones most used");
         }
 
         // The entity a #12 names: numbered within the scope, keyed by the scope and its

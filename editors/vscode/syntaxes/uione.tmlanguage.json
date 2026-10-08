@@ -307,7 +307,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|was|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|grid|diagram|board|under|along|over|and|reorder|heading|layout|main|side|search|sort|ascending|descending|page|link|markdown|at)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|was|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|along|over|and|reorder|heading|layout|main|side|search|sort|ascending|descending|page|link|markdown|at)\\b",
           "name": "keyword.other.uione"
         },
         {

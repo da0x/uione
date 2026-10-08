@@ -121,7 +121,7 @@ The language's own words, inside what a declaration says:
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `heading`, `table`, `grid`, `diagram`, `board`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+- on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: `one`, `title`, `domain`, `firebase`, `region`, `ui`,
   `signin`, `icon`, `color`, `theme`, `corners`, `serve`, `redirect`.
@@ -779,6 +779,19 @@ form step::update "Save" {
   address needs taken from the screen's views, like `board = issue.board`.
 - A link that names something keyed by several parts, like a board in
   `/:project/boards/:board`, is filled from a row's id of it by its own part.
+- `subtitle "{project_page.summary}"` puts a screen's words about itself under its
+  title, as running words rather than a document in a frame.
+- A button line can say `icon edit`, like `project::update "Edit project" icon edit`:
+  it's drawn as the icon, and its words still name it.
+- `cards project_page.boards link /:project/boards/:board { ... }` shows a list's
+  rows as large cards, three across a wide page and one on a narrow one, each with
+  what its block shows, its title first. `tally project_page.issues by board and
+  phase` sums up what each card holds, counting the list's rows whose `board` is the
+  card by their `phase`, named and ordered by `phase.title` and `phase.position` when
+  the list has them. `filter "Opened by me" author == me` is a link that opens the
+  card filtered; three at most.
+- A table or a board opened with a filter in its address, as a card's filter opens
+  it, keeps only the rows it picks, and says so, with a way to clear it.
 - `heading { project::update "Edit project" }` puts its buttons on the screen's
   title row, at its end, with their forms.
 

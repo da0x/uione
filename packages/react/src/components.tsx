@@ -7,10 +7,10 @@
 
 import { Children, cloneElement, isValidElement, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useLocation, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
-import type { FieldProps } from "./contract.js";
+import type { FieldProps, Filtered } from "./contract.js";
 import { useAuth, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -112,10 +112,10 @@ export function Menu({ links, children }: { links: { to: string; label: string }
 }
 
 // A Markdown field of a view, shown rendered by the component set.
-export function Markdown({ view, field }: { view: ViewState; field: string }) {
+export function Markdown({ view, field, plain }: { view: ViewState; field: string; plain?: boolean }) {
   const ui = useUI();
   const value = view.data?.[field];
-  return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} />;
+  return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} plain={plain} />;
 }
 
 // A view's values, each beside what it is: a choice as it's shown, a list of words
@@ -433,18 +433,20 @@ export function Command({
   label: says,
   when = true,
   allowed = true,
+  icon,
 }: {
   name: string;
   id?: string;
   label?: string;
   when?: boolean;
   allowed?: boolean; // whether the person reading may run it; while they may not, it isn't there
+  icon?: string; // drawn as this, like edit, its words still naming it
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
   if (!when || !allowed) return null;
   return (
-    <ui.Button kind="primary" disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
+    <ui.Button kind={icon ? "secondary" : "primary"} icon={icon} disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
       {says ?? label(action(name))}
     </ui.Button>
   );
@@ -592,6 +594,26 @@ export interface RowAction {
   form?: { fields: (string | FieldSpec)[]; submit?: string };
 }
 
+// What a list is filtered by from the page's address, as a card's link opens it:
+// ?is=Opened by me&author=me keeps the rows whose author is whoever is reading, and
+// says so in words that can be cleared. Without one, every row is kept.
+function useFilter() {
+  const { search, pathname } = useLocation();
+  const navigate = useNavigate();
+  const auth = useAuth();
+  const query = new URLSearchParams(search);
+  const picks = [...query.entries()].filter(([name]) => name !== "is");
+  const matches = (row: Row) =>
+    picks.every(([name, wanted]) => {
+      const value = wanted === "me" ? (auth?.person?.uid ?? "") : wanted;
+      const held = row[name];
+      return Array.isArray(held) ? held.includes(value) : held === value;
+    });
+  const filtered: Filtered | undefined =
+    picks.length > 0 ? { label: query.get("is") ?? picks.map(([name, value]) => `${label(name)}: ${value}`).join(", "), onClear: () => void navigate(pathname) } : undefined;
+  return { matches, filtered };
+}
+
 // What a search box says it finds by, in words: Search title, labels, phase and
 // priority. A field read through another, like phase.title, is called by that other.
 function searchLabel(search: string[], columns: Record<string, string>): string {
@@ -670,7 +692,8 @@ export function Table({
   const [query, setQuery] = useState("");
   const [at, setAt] = useState(1);
   const wanted = query.trim().toLowerCase();
-  const found = rowsOf(view.data?.[list]).filter(
+  const { matches, filtered } = useFilter();
+  const found = rowsOf(view.data?.[list]).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   // With tabs, the first choice is shown first, like Open before Closed.
@@ -743,6 +766,7 @@ export function Table({
         pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
         reorder={arranged ? { label: "Move", onMove: move } : undefined}
         tools={tools}
+        filtered={filtered}
         columns={Object.values(columns)}
         error={[...pressed.map((a) => a.name), ...(arranged ? [arranged.command] : [])].map((name) => runner.error(name)).find((e) => e !== undefined)}
         rows={rows.map((row) => ({
@@ -842,8 +866,9 @@ export function Board({
   const [moved, setMoved] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const wanted = query.trim().toLowerCase();
+  const { matches, filtered } = useFilter();
   const all = rowsOf(view.data?.[list]);
-  const cards = all.filter(
+  const cards = all.filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   const things = rowsOf(over.data?.[overList]);
@@ -869,6 +894,7 @@ export function Board({
       status={status}
       error={move ? runner.error(move.command) : undefined}
       tools={tools}
+      filtered={filtered}
       search={
         search.length
           ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
@@ -950,6 +976,83 @@ export function Switched({
       </>
     ),
   });
+}
+
+// How a card sums up what it holds, like a board's issues: the list they're in, the
+// field naming the card, and the field they're split by, shown by its title and in
+// its order when the list has them.
+export interface Tally {
+  view: ViewState;
+  list: string;
+  by: string; // like board
+  and: string; // like phase
+  shown?: string; // like phase.title
+  order?: string; // like phase.position
+  noun?: string; // what's counted, like issues
+}
+
+// A list's rows as large cards, like a project's boards: each its title and link,
+// what else it shows, a tally of what it holds, and links that open it filtered,
+// like Opened by me.
+export function Cards({
+  view,
+  list,
+  columns,
+  link,
+  keyed,
+  named,
+  pictures = [],
+  choices = {},
+  labels = [],
+  tally,
+  filters = [],
+}: {
+  view: ViewState;
+  list: string;
+  columns: Record<string, string>; // what a card shows, its title first
+  link?: string;
+  keyed?: string[];
+  named?: Record<string, number>;
+  pictures?: string[];
+  choices?: Record<string, Record<string, string>>;
+  labels?: string[];
+  tally?: Tally;
+  filters?: { label: string; query: Record<string, string> }[];
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const [title, ...rest] = Object.keys(columns);
+  const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
+  const sum = (card: Row) => {
+    if (!tally) return undefined;
+    const mine = counted.filter((row) => row[tally.by] === card.id);
+    const groups = new Map<unknown, { label: string; count: number; order: number }>();
+    for (const row of mine) {
+      const key = row[tally.and];
+      const group = groups.get(key) ?? { label: show(tally.shown ? row[tally.shown] : key) || "None", count: 0, order: Number(tally.order ? row[tally.order] : 0) || 0 };
+      group.count += 1;
+      groups.set(key, group);
+    }
+    return [...groups.values()].sort((a, b) => a.order - b.order).map(({ label: name, count }) => ({ label: name, count }));
+  };
+  return (
+    <ui.Cards
+      status={view.status}
+      cards={rowsOf(view.data?.[list]).map((row) => {
+        const to = link ? rowLink(link, row, params, keyed, named) : undefined;
+        return {
+          id: row.id,
+          title: title ? cellOf(ui, links, row, title, { choices, labels, pictures }) : row.id,
+          link: to ? links(to) : undefined,
+          details: rest.map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
+          tally: sum(row),
+          noun: tally?.noun,
+          filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`) })) : [],
+        };
+      })}
+    />
+  );
 }
 
 // A command a grid's cell runs: the form it asks with, and whether the person may.
@@ -1136,6 +1239,7 @@ export function Form({
   allowed,
   authenticated = false,
   onDone,
+  icon,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -1149,6 +1253,7 @@ export function Form({
   allowed?: boolean; // whether the person reading may send it, when only some people may; while they may not, it isn't there
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
   onDone?: () => void; // called once what it sent is done, like closing the dialog a row's button opened it in
+  icon?: string; // the button that opens it drawn as this, like edit, its words still naming it
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -1227,7 +1332,7 @@ export function Form({
   if (!button) return form;
   return (
     <>
-      <ui.Button kind="primary" onClick={() => setOpen(true)}>
+      <ui.Button kind={icon ? "secondary" : "primary"} icon={icon} onClick={() => setOpen(true)}>
         {opener ?? says ?? label(action(command))}
       </ui.Button>
       <ui.Dialog

@@ -31,6 +31,7 @@ export interface PageProps {
   account?: ReactNode; // who's signed in, drawn with Account, when the app has sign-in
   heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
   crumbs?: ReactNode; // where the pages above a screen go, above its title
+  subtitle?: ReactNode; // where a screen's words about itself go, under its title
   children: ReactNode;
 }
 
@@ -163,6 +164,13 @@ export interface TableProps {
   pages?: TablePages; // its rows a page at a time
   reorder?: TableReorder; // its rows put in order by the person, when they may
   tools?: ReactNode; // buttons beside its search, like New issue
+  filtered?: Filtered; // the filter its rows are picked by, like Opened by me, which can be cleared
+}
+
+// What a list is filtered by, from the page's address, and how to stop filtering.
+export interface Filtered {
+  label: string;
+  onClear: () => void;
 }
 
 // Rows a person puts in order: dragged by their handles, or moved with Alt+↑ and
@@ -182,6 +190,25 @@ export interface BoardProps {
   onMove?: (card: string, column: string) => void; // absent when no card can be moved
   search?: TableSearch; // a box that finds cards by what's typed
   tools?: ReactNode; // buttons beside its search, like New issue
+  filtered?: Filtered;
+}
+
+// Large cards, a third of a wide page each and the whole of a narrow one, like a
+// project's boards: each with its title, a summary of what's in it, and a few links
+// that open it filtered.
+export interface CardsProps {
+  status: ViewStatus;
+  cards: Card[];
+}
+
+export interface Card {
+  id: string;
+  title: ReactNode;
+  link?: LinkProps;
+  details: ReactNode[];
+  tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by phase
+  noun?: string; // what it holds, counted, like issues
+  filters: { label: string; link: LinkProps }[];
 }
 
 export interface BoardColumn {
@@ -309,6 +336,7 @@ export interface ButtonProps {
   error?: string; // why the last press failed
   onClick: () => void;
   children: ReactNode;
+  icon?: string; // drawn instead of its words, which still name it, like edit
 }
 
 export interface DialogProps {
@@ -330,6 +358,7 @@ export interface MarkdownProps {
   // set must render it without any raw HTML in it, and keep only links to safe
   // protocols (https, http, mailto), never javascript: or data:.
   source: string | undefined;
+  plain?: boolean; // as running words, like a page's subtitle, rather than a document in a frame
 }
 
 export interface LiveProps {
@@ -367,6 +396,7 @@ export interface ComponentSet {
   Switch: ComponentType<SwitchProps>;
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;
+  Cards: ComponentType<CardsProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;

@@ -220,6 +220,8 @@ function Shell({
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   // And where its Crumbs put the pages above it.
   const [trail, setTrail] = useState<HTMLElement | null>(null);
+  // And where its Subtitle puts its words about itself.
+  const [under, setUnder] = useState<HTMLElement | null>(null);
   useEffect(() => {
     document.title = !title || title === name ? name : `${title} · ${name}`;
   }, [title, name]);
@@ -241,6 +243,7 @@ function Shell({
       title={title}
       heading={<div ref={setSlot} style={{ display: "contents" }} />}
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
+      subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
       account={
         signIn.offered &&
         auth && (
@@ -263,7 +266,9 @@ function Shell({
     >
       <HeadingSlot.Provider value={slot}>
         <CrumbsSlot.Provider value={trail}>
-          <Confirmations>{children}</Confirmations>
+          <SubtitleSlot.Provider value={under}>
+            <Confirmations>{children}</Confirmations>
+          </SubtitleSlot.Provider>
         </CrumbsSlot.Provider>
       </HeadingSlot.Provider>
     </ui.Page>
@@ -280,6 +285,13 @@ export function Heading({ children }: { children: ReactNode }) {
 }
 
 const CrumbsSlot = createContext<HTMLElement | null>(null);
+const SubtitleSlot = createContext<HTMLElement | null>(null);
+
+// A screen's words about itself, like a project's summary, under its title.
+export function Subtitle({ children }: { children: ReactNode }) {
+  const slot = useContext(SubtitleSlot);
+  return slot ? createPortal(children, slot) : null;
+}
 
 // The pages above a screen, each by its address and its title, which may be read
 // from the page's views, like a project's name; the page itself comes last.

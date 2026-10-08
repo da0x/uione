@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Cards, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -266,6 +266,47 @@ describe("a timeline", () => {
     const view = { status: "live" as const, data: { history: [{ id: "c1", field: "board", before: null, after: "Product", created_at: new Date(2026, 9, 8) }] } };
     renderScreen(memorySource(), () => <Timeline view={view} list="history" />);
     expect(screen.getByText(/System/)).toBeTruthy();
+  });
+});
+
+describe("cards", () => {
+  it("sum up what each holds, and link to it filtered", () => {
+    const page = {
+      status: "live" as const,
+      data: {
+        boards: [{ id: "ark-main", title: "Product" }],
+        issues: [
+          { id: "i1", board: "ark-main", phase: "p1", "phase.title": "Triage", "phase.position": 1 },
+          { id: "i2", board: "ark-main", phase: "p2", "phase.title": "Done", "phase.position": 2 },
+          { id: "i3", board: "ark-main", phase: "p1", "phase.title": "Triage", "phase.position": 1 },
+        ],
+      },
+    };
+    renderScreen(memorySource(), () => (
+      <Cards
+        view={page}
+        list="boards"
+        columns={{ title: "Title" }}
+        link="/:project/boards/:board"
+        keyed={["project"]}
+        tally={{ view: page, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }}
+        filters={[{ label: "High priority", query: { priority: "high" } }]}
+      />
+    ));
+    expect(screen.getByText("3 issues, Triage 2, Done 1")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "High priority" }).getAttribute("href")).toBe("/ark/boards/main?is=High+priority&priority=high");
+  });
+});
+
+describe("a table opened filtered", () => {
+  it("keeps only the rows the address picks, and says so in words that clear it", () => {
+    const source = memorySource({ views: { "projects::issues": { rows: [{ id: "i1", title: "Crash", priority: "high" }, { id: "i2", title: "Typo", priority: "low" }] } } });
+    const only = defineScreen({ title: "Test", route: "/" }, () => <Table view={useView("projects::issues")} columns={{ title: "Title" }} />);
+    render(<App name="app" screens={[only]} ui={plain} data={source} location="/?is=High+priority&priority=high" />);
+    expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(["Crash"]);
+    expect(screen.getByText(/High priority/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(["Crash", "Typo"]);
   });
 });
 

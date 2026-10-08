@@ -746,6 +746,16 @@ namespace one::language {
                 end_line();
                 return {where, std::move(block)};
             }
+            // subtitle "{project_page.summary}": under the title, as running words.
+            if (string_follows && at_word("subtitle")) {
+                advance();
+                content_text text;
+                text.type = content_text::kind::markdown;
+                text.subtitle = true;
+                text.value = advance().text;
+                end_line();
+                return {where, std::move(text)};
+            }
             if (string_follows && (at_word("text") || at_word("code") || at_word("markdown"))) {
                 content_text text;
                 const std::string& word = advance().text;
@@ -924,7 +934,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, ""};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt};
                             if (!at_word("along")) fail_expecting("along and the view's list of steps, like along project_page.steps");
                             advance();
                             move.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -960,6 +970,61 @@ namespace one::language {
                 }
                 end_line();
                 return {where, std::move(board)};
+            }
+            if (at_word("cards") && peek(1).kind != token_kind::scope) {
+                advance();
+                cards_item cards;
+                cards.view = parse_qualified_name("the view whose list it shows, like project_page");
+                expect(token_kind::dot, "'.' and the view's list, like project_page.boards");
+                cards.list = expect(token_kind::identifier, "the view's list, like boards").text;
+                if (at_word("link")) {
+                    advance();
+                    cards.link_where = peek().where;
+                    cards.link = expect(token_kind::route, "the screen each card opens, like /:project/boards/:board").text;
+                }
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        // tally project_page.issues by board and phase
+                        if (at_word("tally") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            cards.tally_where = peek().where;
+                            cards.tally = parse_qualified_name("the view whose list it counts, like project_page");
+                            expect(token_kind::dot, "'.' and the view's list, like project_page.issues");
+                            cards.tally_list = expect(token_kind::identifier, "the view's list, like issues").text;
+                            if (!at_word("by")) fail_expecting("by and the field naming each one's card, like by board");
+                            advance();
+                            cards.tally_by = expect(token_kind::identifier, "the field naming each one's card, like board").text;
+                            if (!at_word("and")) fail_expecting("and the field they're counted by, like and phase");
+                            advance();
+                            cards.tally_and = expect(token_kind::identifier, "the field they're counted by, like phase").text;
+                            end_line();
+                            continue;
+                        }
+                        // filter "Opened by me" author == me
+                        if (at_word("filter") && peek(1).kind == token_kind::string) {
+                            advance();
+                            cards_filter f;
+                            f.where = peek().where;
+                            f.label = advance().text;
+                            f.condition = parse_expression();
+                            cards.filters.push_back(std::move(f));
+                            end_line();
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            cards.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(cards)};
             }
             if ((at_word("grid") || at_word("diagram")) && peek(1).kind != token_kind::scope) {
                 grid_item grid;
@@ -1065,7 +1130,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, ""};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -1075,6 +1140,10 @@ namespace one::language {
                     return {where, std::move(button)};
                 }
                 if (at(token_kind::string)) button.label = expect(token_kind::string, "what the button says").text;
+                if (at_word("icon")) {
+                    advance();
+                    button.icon = expect(token_kind::identifier, "the icon it's drawn as, like edit").text;
+                }
                 if (at_word("when")) {
                     advance();
                     button.when = parse_when();

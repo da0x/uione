@@ -60,7 +60,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 }
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, children }) => (
     <>
       <header>
         <a {...home}>
@@ -79,6 +79,7 @@ export const plain: ComponentSet = {
       <main>
         {crumbs}
         {title !== name && <h1>{title}</h1>}
+        {subtitle}
         {heading}
         {children}
       </main>
@@ -244,10 +245,18 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools }) => {
+  Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
+        {filtered && (
+          <p>
+            {filtered.label}{" "}
+            <button type="button" onClick={filtered.onClear}>
+              Clear
+            </button>
+          </p>
+        )}
         {search && <input type="search" value={search.value} aria-label={search.label} placeholder={search.label} onChange={(event) => search.onChange(event.target.value)} />}
         {tools}
         {pages && (
@@ -332,8 +341,44 @@ export const plain: ComponentSet = {
     );
   },
 
-  Board: ({ status, columns, error, onMove, search, tools }) => (
+  Cards: ({ status, cards }) => (
+    <div aria-busy={status === "loading"}>
+      {cards.map((card) => (
+        <article key={card.id}>
+          <h2>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</h2>
+          {card.details.map((detail, i) => (
+            <p key={i}>{detail}</p>
+          ))}
+          {card.tally && (
+            <p>
+              {card.tally.reduce((n, part) => n + part.count, 0)} {card.noun ?? "in all"}
+              {card.tally.map((part) => `, ${part.label} ${part.count}`).join("")}
+            </p>
+          )}
+          {card.filters.length > 0 && (
+            <ul>
+              {card.filters.map((f) => (
+                <li key={f.label}>
+                  <a {...f.link}>{f.label}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
+      ))}
+    </div>
+  ),
+
+  Board: ({ status, columns, error, onMove, search, tools, filtered }) => (
     <>
+      {filtered && (
+        <p>
+          {filtered.label}{" "}
+          <button type="button" onClick={filtered.onClear}>
+            Clear
+          </button>
+        </p>
+      )}
       {search && <input type="search" value={search.value} aria-label={search.label} placeholder={search.label} onChange={(event) => search.onChange(event.target.value)} />}
       {tools}
       <div aria-busy={status === "loading"}>

@@ -962,6 +962,40 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
     CHECK(out[0].message == "this screen's address has no :board, so a view per what it shows holds it, like board = issue.board");
 }
 
+TEST_CASE("cards show a list's rows large, with a tally and filters, under a subtitle and an icon to edit") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-cards";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity project {\n\tslug  text  required  unique  key\n\tname  text\n\tsummary  markdown\n}\n"
+                         "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
+                         "entity phase {\n\tboard  board  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\tphase  phase\n\tauthor  user = me\n\tpriority  enum { low  high }\n}\n"
+                         "command project::update\n"
+                         "view project_page per project {\n\tname = project.name\n\tsummary = project.summary\n"
+                         "\tboards = each board where project == project.id {\n\t\ttitle\n\t}\n"
+                         "\tissues = each issue where project == project.id {\n\t\tboard  phase  phase.title  phase.position\n\t}\n}\n"
+                         "screen \"{project_page.name}\" /:project {\n"
+                         "\theading {\n\t\tproject::update \"Edit project\" icon edit\n\t\tform project::update \"Save\" {\n\t\t\tname\n\t\t}\n\t}\n"
+                         "\tsubtitle \"{project_page.summary}\"\n"
+                         "\tcards project_page.boards link /:project/boards/:board {\n\t\ttitle\n\t\ttally project_page.issues by board and phase\n"
+                         "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high\n\t}\n"
+                         "}\n"
+                         "screen \"Board\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
+                         "}\n");
+    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Subtitle><Markdown view={projectPage} field="summary" plain /></Subtitle>)") != std::string::npos);
+    CHECK(tsx.find(R"( button opener="Edit project" icon="edit" )") != std::string::npos);
+    CHECK(tsx.find(R"(<Cards view={projectPage} list="boards" columns={{ title: "Title" }} link="/:project/boards/:board" keyed={["project"]} named={{ project: 1 }})") == std::string::npos);
+    CHECK(tsx.find(R"(tally={{ view: projectPage, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }})") != std::string::npos);
+    CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" } }]})") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

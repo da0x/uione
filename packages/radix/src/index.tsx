@@ -95,6 +95,28 @@ const choiceIcons: Record<string, ReactNode> = {
 // A choice of a few is a row of cards to pick from; more than that is a list.
 const fewChoices = 3;
 
+// What a list is filtered by, like Opened by me, with a cross that clears it.
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 py-0.5 pr-1 pl-2.5 text-xs font-medium text-accent">
+      {label}
+      <button type="button" onClick={onClear} aria-label={`Clear ${label}`} className="rounded-full px-1 hover:bg-accent/20">
+        ×
+      </button>
+    </span>
+  );
+}
+
+// The icons a button can be drawn as, its words naming it.
+const buttonIcons: Record<string, ReactNode> = {
+  edit: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.2 2.3a1.4 1.4 0 0 1 2 2L5.6 11.9 2.8 12.7l.8-2.8z" />
+      <path d="M10 3.5l2 2" />
+    </svg>
+  ),
+};
+
 // The pictures a switch draws for what it switches between: rows for a table, and
 // columns of cards for a board.
 const switchIcons: Record<string, ReactNode> = {
@@ -147,8 +169,9 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, children }) => (
-    <div className="min-h-screen bg-page text-ink">
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, children }) => (
+    // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
+    <div className="min-h-screen overflow-x-clip bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
       <header className="sticky top-0 z-20 border-b border-line bg-page/80 backdrop-blur-md">
@@ -184,9 +207,13 @@ export const radix: ComponentSet = {
       <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
         {crumbs}
         {/* The title, and a screen's own buttons at the end of its row. */}
-        <div className={`flex flex-wrap items-center gap-3 ${title !== name ? "mb-5" : ""}`}>
-          {title !== name && <h1 className="mr-auto text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
-          <div className="ml-auto flex items-center gap-2 empty:hidden">{heading}</div>
+        <div className={`flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>
+          {/* The title, and under it what the screen says about itself, like a project's summary. */}
+          <div className="mr-auto flex min-w-0 flex-col gap-1">
+            {title !== name && <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
+            {subtitle}
+          </div>
+          <div className="ml-auto flex items-center gap-2 pt-1 empty:hidden">{heading}</div>
         </div>
         <div className="flex flex-col gap-7">{children}</div>
       </main>
@@ -369,7 +396,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools }) {
+  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered }) {
     // The row being dragged, and the place it would go.
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
@@ -377,7 +404,7 @@ export const radix: ComponentSet = {
     <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
           and the search box at the end of the same row. */}
-      {(tabs || search || tools) && (
+      {(tabs || search || tools || filtered) && (
         <div className="flex flex-wrap items-end gap-x-3 border-b border-line px-2">
           {tabs && (
             <div role="tablist" className="flex gap-1 pt-1.5">
@@ -396,8 +423,9 @@ export const radix: ComponentSet = {
               ))}
             </div>
           )}
-          {(search || tools) && (
+          {(search || tools || filtered) && (
             <div className="ml-auto flex w-full flex-wrap items-center justify-end gap-2 py-1.5 sm:w-auto">
+              {filtered && <FilterChip {...filtered} />}
               {search && (
                 <input
                   type="search"
@@ -553,10 +581,66 @@ export const radix: ComponentSet = {
     );
   },
 
+  // Large cards, three across a wide page and one on a narrow one: a title that opens
+  // what it's for, how many it holds and how they split, as a slim bar in the accent
+  // with its parts named under it, and a few links that open it filtered.
+  Cards: ({ status, cards }) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
+      {cards.map((card) => {
+        const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
+        return (
+          <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
+            <h2 className="text-lg leading-snug font-semibold">
+              {card.link ? (
+                <a {...card.link} className="text-ink hover:text-accent hover:underline">
+                  {card.title}
+                </a>
+              ) : (
+                card.title
+              )}
+            </h2>
+            {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
+            {card.tally && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-sm text-muted">
+                  <span className="font-semibold text-ink tabular-nums">{total}</span> {card.noun ?? "in all"}
+                </p>
+                {total > 0 && (
+                  <div className="flex h-2 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
+                    {card.tally.map((part, i) => (
+                      <div key={part.label} className="bg-accent" style={{ width: `${(100 * part.count) / total}%`, opacity: Math.max(0.25, 1 - i * 0.18) }} />
+                    ))}
+                  </div>
+                )}
+                <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
+                  {card.tally.map((part) => (
+                    <span key={part.label}>
+                      {part.label} <span className="tabular-nums text-ink">{part.count}</span>
+                    </span>
+                  ))}
+                </p>
+              </div>
+            )}
+            {card.filters.length > 0 && (
+              <nav aria-label="Filters" className="mt-auto flex flex-wrap gap-2 border-t border-line pt-3">
+                {card.filters.map((f) => (
+                  <a key={f.label} {...f.link} className="rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-muted hover:border-accent hover:text-accent">
+                    {f.label}
+                  </a>
+                ))}
+              </nav>
+            )}
+          </article>
+        );
+      })}
+      {cards.length === 0 && <p className="text-sm text-muted">{status === "loading" ? "Loading…" : "Nothing here yet."}</p>}
+    </div>
+  ),
+
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
-  Board: function RadixBoard({ status, columns, error, onMove, search, tools }) {
+  Board: function RadixBoard({ status, columns, error, onMove, search, tools, filtered }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();
     const reachable = (column: string) => !dragged || column === dragged.from || dragged.reaches.includes(column);
@@ -566,8 +650,9 @@ export const radix: ComponentSet = {
     };
     return (
       <div className="flex flex-col gap-2">
-        {(search || tools) && (
+        {(search || tools || filtered) && (
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {filtered && <FilterChip {...filtered} />}
             {search && (
               <input
                 type="search"
@@ -1031,15 +1116,19 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon }) => {
+    // Drawn as an icon, its words still name it, and show when it's pointed at.
+    const words = typeof children === "string" ? children : undefined;
     const pressed = (
       <button
         type="button"
         disabled={disabled}
         onClick={onClick}
-        className={`self-start ${pressable} ${button[kind]}`}
+        aria-label={icon ? words : undefined}
+        title={icon ? words : undefined}
+        className={`self-start ${pressable} ${button[kind]} ${icon && buttonIcons[icon] ? "!px-2" : ""}`}
       >
-        {children}
+        {(icon && buttonIcons[icon]) || children}
       </button>
     );
     if (!error) return pressed;
@@ -1074,8 +1163,12 @@ export const radix: ComponentSet = {
   ),
 
   // Nothing written, like an issue without a description, takes no room.
-  Markdown: ({ status, source }) =>
-    status === "live" && source?.trim() ? (
+  Markdown: ({ status, source, plain }) =>
+    status === "live" && source?.trim() && plain ? (
+      <div className="max-w-3xl text-base text-muted [&_p]:my-0">
+        <MarkdownText source={source} />
+      </div>
+    ) : status === "live" && source?.trim() ? (
       <div className="rounded-box border border-line bg-surface px-5 py-4 shadow-panel">
         <MarkdownText source={source} />
       </div>

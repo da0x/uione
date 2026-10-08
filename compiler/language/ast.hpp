@@ -347,6 +347,7 @@ namespace one::language {
         kind type = kind::text;
         std::string value;
         expression_ptr when;  // text "Implemented by {issue_page.implementer}" when issue_page.implementer != none
+        bool subtitle = false;  // subtitle "{project_page.summary}": under the screen's title, as running words
     };
 
     struct content_link {
@@ -431,6 +432,7 @@ namespace one::language {
         // entity is now that the person's roles may take, moving it to the step's to.
         std::optional<qualified_name> along;  // the view, like project_page
         std::string along_list;               // its list of steps, like steps
+        std::optional<std::string> icon;      // icon edit: drawn as that, its words still naming it
     };
 
     // board project_page.issues by phase over project_page.phases { ... }: a list's
@@ -449,6 +451,28 @@ namespace one::language {
         std::optional<button_item> move;
         std::vector<table_column> columns;  // what a card shows, its title first
         std::vector<std::string> search;    // search title labels: a box that finds cards by these
+    };
+
+    // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as
+    // large cards, each with what its block shows, its title first; a tally of what
+    // it holds, like its issues by phase; and filters, links that open it filtered.
+    struct cards_filter {
+        std::string label;
+        location where;
+        expression_ptr condition;  // author == me
+    };
+
+    struct cards_item {
+        qualified_name view;
+        std::optional<std::string> list;
+        std::optional<std::string> link;
+        location link_where;
+        std::vector<table_column> columns;
+        // tally project_page.issues by board and phase
+        std::optional<qualified_name> tally;
+        std::string tally_list, tally_by, tally_and;
+        location tally_where;
+        std::vector<cards_filter> filters;
     };
 
     // component workbench: a hand-written React component, components/workbench.tsx
@@ -495,7 +519,7 @@ namespace one::language {
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item>
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item, cards_item>
             node;
     };
 

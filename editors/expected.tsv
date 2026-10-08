@@ -188,3 +188,7 @@ editors/fixtures/body.one	move card::move along	move	keyword
 editors/fixtures/body.one	move card::move along	along	keyword
 editors/fixtures/body.one	heading {	heading	keyword
 editors/fixtures/body.one	diagram columns.arrows	diagram	keyword
+editors/fixtures/body.one	cards columns.columns	cards	keyword
+editors/fixtures/body.one	tally columns.cards	tally	keyword
+editors/fixtures/body.one	filter "Untitled"	filter	keyword
+editors/fixtures/body.one	subtitle "The columns"	subtitle	keyword

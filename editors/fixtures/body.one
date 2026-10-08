@@ -51,8 +51,9 @@ namespace board {
 
 	screen "Columns" /columns {
 		heading {
-			card::move "Move"
+			card::move "Move" icon edit
 		}
+		subtitle "The columns"
 		table columns.columns {
 			reorder position
 			title
@@ -60,6 +61,11 @@ namespace board {
 		}
 		grid columns.arrows by from and to over columns.columns
 		diagram columns.arrows by from and to over columns.columns
+		cards columns.columns {
+			title
+			tally columns.cards by column and column
+			filter "Untitled" title == "x"
+		}
 		board columns.cards by column over columns.columns {
 			move card::move along columns.arrows
 			title

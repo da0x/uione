@@ -706,7 +706,8 @@ namespace one::generators {
                     std::size_t end = route.find('/', at + 1);
                     if (route.substr(at, end == std::string::npos ? std::string::npos : end - at).back() != '?') needs_parameter = true;
                 }
-                if (!ns.empty() && !needs_parameter) info += ", nav: " + web_detail::js_string(title);
+                // The app's own name is its home, which its logo already links to.
+                if (!ns.empty() && !needs_parameter && title != name_) info += ", nav: " + web_detail::js_string(title);
                 info += " }";
 
                 // A file with one screen names it after the file (home.one gives home);
@@ -1196,6 +1197,8 @@ namespace one::generators {
                     this->table(out, parts, ns, *table, screen);
                 } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
                     this->grid(out, parts, ns, *grid, screen);
+                } else if (auto* cards = std::get_if<language::cards_item>(&item.node)) {
+                    this->cards(out, parts, ns, *cards);
                 } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
                     this->board(out, parts, ns, *board, screen);
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
@@ -1221,7 +1224,8 @@ namespace one::generators {
                     }
                     std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
                     std::string when = button->when ? " when={" + condition(parts, ns, *button->when) + "}" : "";
-                    out.line("<Command name=" + web_detail::js_string(command) + id + label + when + allowed(parts, ns, command) + " />");
+                    std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + when + allowed(parts, ns, command) + " />");
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
@@ -1416,7 +1420,13 @@ namespace one::generators {
                     std::size_t dot = inside.rfind('.');
                     std::string view = full_view(ns, inside.substr(0, dot));
                     parts.components.insert("Markdown");
-                    out.line("<Markdown view={" + view_variable(parts, view) + "} field=" + web_detail::js_string(inside.substr(dot + 1)) + " />");
+                    std::string markdown = "<Markdown view={" + view_variable(parts, view) + "} field=" + web_detail::js_string(inside.substr(dot + 1)) + (text.subtitle ? " plain" : "") + " />";
+                    // A subtitle, under the title, as running words.
+                    if (text.subtitle) {
+                        parts.components.insert("Subtitle");
+                        markdown = "<Subtitle>" + markdown + "</Subtitle>";
+                    }
+                    out.line(markdown);
                     return;
                 }
                 // Named for where the pages live: /docs is docs, /guides/api is guides-api.
@@ -1591,6 +1601,72 @@ namespace one::generators {
             out.line("<Copy view={" + variable + "}" + label + " fields={[" + fields + "]} lists={[" + lists + "]}" + choices + " />");
         }
 
+        // cards project_page.boards link /:project/boards/:board { ... }: a card for each
+        // row, its tally counted from another list, and its filters as links that open
+        // it filtered, each a field and the value it's to hold.
+        void cards(stream& out, screen_parts& parts, const std::string& ns, const language::cards_item& cards) {
+            parts.components.insert("Cards");
+            const language::entity_declaration* entity = listed(ns, cards.view.text(), cards.list);
+            std::string columns, pictures, labels, shown;
+            for (const auto& column : cards.columns) {
+                std::string key = web_detail::text_of(*column.value);
+                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
+                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+                if (key.ends_with(".picture")) pictures += (pictures.empty() ? "" : ", ") + web_detail::js_string(key);
+                for (const auto& f : entity ? entity->fields : nothing_) {
+                    if (f.name != key) continue;
+                    if (f.list && f.type && f.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
+                    if (!f.choices.empty()) shown += (shown.empty() ? "" : ", ") + key + ": Object.fromEntries(" + choice_options(f) + ")";
+                }
+            }
+            std::string line = "<Cards view={" + view_variable(parts, full_view(ns, cards.view.text())) + "} list=" + web_detail::js_string(*cards.list) +
+                               " columns={{ " + columns + " }}";
+            if (cards.link) {
+                std::string target = full_route(ns, *cards.link);
+                line += " link=" + web_detail::js_string(target);
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+                line += named_by(ns, target);
+            }
+            if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!shown.empty()) line += " choices={{ " + shown + " }}";
+            if (!labels.empty()) line += " labels={[" + labels + "]}";
+            if (cards.tally) {
+                std::string tally = "view: " + view_variable(parts, full_view(ns, cards.tally->text())) + ", list: " + web_detail::js_string(cards.tally_list) +
+                                    ", by: " + web_detail::js_string(cards.tally_by) + ", and: " + web_detail::js_string(cards.tally_and);
+                auto counted = listed_columns(ns, cards.tally->text(), cards.tally_list);
+                auto has = [&](const std::string& column) { return std::find(counted.begin(), counted.end(), column) != counted.end(); };
+                if (has(cards.tally_and + ".title")) tally += ", shown: " + web_detail::js_string(cards.tally_and + ".title");
+                if (has(cards.tally_and + ".position")) tally += ", order: " + web_detail::js_string(cards.tally_and + ".position");
+                tally += ", noun: " + web_detail::js_string(cards.tally_list);  // issues
+                line += " tally={{ " + tally + " }}";
+            }
+            if (!cards.filters.empty()) {
+                std::string filters;
+                for (const auto& f : cards.filters) {
+                    auto* b = std::get_if<language::binary_expression>(&f.condition->node);
+                    if (!b) continue;
+                    std::string field = web_detail::text_of(*b->left);
+                    std::string value;
+                    if (auto* named = std::get_if<language::name_expression>(&b->right->node)) {
+                        value = named->name.parts.back();  // me, or a choice like priority::high
+                    } else if (auto* literal = std::get_if<language::literal_expression>(&b->right->node)) {
+                        value = literal->value;
+                    }
+                    filters += (filters.empty() ? "" : ", ") + std::string("{ label: ") + web_detail::js_string(f.label) + ", query: { " +
+                               (web_detail::is_identifier(field) ? field : web_detail::js_string(field)) + ": " + web_detail::js_string(value) + " } }";
+                }
+                line += " filters={[" + filters + "]}";
+            }
+            out.line(line + " />");
+        }
+
         // A toolbar's buttons: each command named in a table's or a board's block, like
         // issue::create "New issue", opening its form when the screen has one.
         std::string toolbar(screen_parts& parts, const std::string& ns, const std::vector<language::table_column>& columns, const std::vector<language::screen_item>& screen) {
@@ -1599,7 +1675,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, ""};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", std::nullopt};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);
@@ -1935,6 +2011,7 @@ namespace one::generators {
             if (button) {
                 opens = " button";
                 if (button->label) opens += " opener=" + web_detail::js_string(*button->label);
+                if (button->icon) opens += " icon=" + web_detail::js_string(*button->icon);
                 if (button->when) opens += " when={" + condition(parts, ns, *button->when) + "}";
             }
             out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + opens + authenticated + allowed(parts, ns, command) +
