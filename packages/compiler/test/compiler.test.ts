@@ -133,12 +133,12 @@ describe("the compiler in the browser", () => {
       "projects.one": "namespace tracker {\n\tentity project {\n\t\ttakes_reports  boolean = false\n\t}\n}\n",
       "reports.one":
         "namespace tracker {\n\tentity report {\n\t\tproject  project  required\n\t}\n" +
-        '\tcommand report::create {\n\t\tpermission signed_in\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
+        '\tcommand report::create {\n\t\tby anyone signed in\n\t\trequire project.takes_reports  "no"\n\t}\n}\n',
     };
     const through = run(one, { kind: "define", files, path: "reports.one", line: 7, column: 20 });
     expect(through).toEqual({ found: true, says: "field takes_reports of project, a boolean", path: "projects.one", line: 3, column: 3, section: "", from: 19, to: 32 });
-    const built = run(one, { kind: "define", files, path: "reports.one", line: 6, column: 15 });
-    expect(built).toMatchObject({ found: true, says: "built-in permission signed_in: anyone signed in", path: "", section: "command" });
+    const built = run(one, { kind: "define", files, path: "reports.one", line: 6, column: 8 });
+    expect(built).toMatchObject({ found: true, says: "by anyone signed in: anyone signed in, any way the project offers", path: "", section: "command" });
     expect(run(one, { kind: "define", files, path: "reports.one", line: 1, column: 1 })).toEqual({ found: false });
   });
 
