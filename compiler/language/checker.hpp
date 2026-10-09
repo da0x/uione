@@ -965,7 +965,7 @@ namespace one::language {
                     return;
                 }
                 if (type == "version" && !std::regex_match(value, std::regex(R"(\d+\.\d+\.\d+)"))) {
-                    error(s.where, s.key + " names the compiler's version, like " + s.key + " \"0.7.3\"");
+                    error(s.where, s.key + " names the compiler's version, like " + s.key + " \"0.7.4\"");
                 } else if (type == "slug" && !only(value, id)) {
                     error(s.where, s.key + " has to be lowercase letters, digits and dashes, like ui-one or us-east4");
                 } else if (type == "domain" && (!only(value, host) || value.find('.') == std::string::npos)) {
