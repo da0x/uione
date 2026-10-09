@@ -1479,18 +1479,21 @@ export const radix: ComponentSet = {
   Dialog: ({ open, title, onClose, children }) => (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-ink/30 backdrop-blur-[2px]" />
+        {/* Above the page's header, which stays on top of everything else on the page. */}
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[2px]" />
+        {/* Its title and × stay in sight, and only what's under them scrolls, however
+            long it is on however short a screen. */}
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-box border border-line bg-surface p-6 text-ink shadow-raised"
+          className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-box border border-line bg-surface text-ink shadow-raised"
         >
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4">
             <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
             <Dialog.Close aria-label="Close" className="-mt-1 -mr-2 rounded-box px-2 text-xl leading-8 text-muted hover:text-ink">
               <span aria-hidden="true">×</span>
             </Dialog.Close>
           </div>
-          <div className="flex flex-col gap-4 [&>button]:self-auto">{children}</div>
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6 [&>button]:self-auto">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

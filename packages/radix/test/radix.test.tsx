@@ -588,3 +588,37 @@ describe("display settings", () => {
     expect(document.activeElement).toBe(button);
   });
 });
+
+describe("a dialog", () => {
+  // The z-index a Tailwind class like z-20 gives.
+  const layer = (element: Element | null) => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.getAttribute("class") ?? "")?.[1] ?? 0);
+
+  it("opens above the page's header, its background too, so its × can be reached on a phone", () => {
+    renderScreen(() => (
+      <radix.Dialog open title="New project" onClose={() => {}}>
+        <p>Its name.</p>
+      </radix.Dialog>
+    ));
+    // Hidden from the accessibility tree while the dialog is open, as it should be.
+    const header = screen.getByRole("banner", { hidden: true });
+    const dialog = screen.getByRole("dialog", { name: "New project" });
+    const overlay = document.querySelector("[data-state='open']:not([role='dialog'])");
+    expect(layer(header)).toBeGreaterThan(0);
+    expect(layer(dialog)).toBeGreaterThan(layer(header));
+    expect(layer(overlay)).toBeGreaterThan(layer(header));
+  });
+
+  it("keeps its title and × in sight, and scrolls only what's under them", () => {
+    renderScreen(() => (
+      <radix.Dialog open title="New project" onClose={() => {}}>
+        <p>Its name.</p>
+      </radix.Dialog>
+    ));
+    const dialog = screen.getByRole("dialog", { name: "New project" });
+    const scrolls = Array.from(dialog.querySelectorAll(".overflow-y-auto"));
+    expect(scrolls).toHaveLength(1);
+    expect(scrolls[0]!.textContent).toContain("Its name.");
+    expect(within(scrolls[0] as HTMLElement).queryByRole("heading", { name: "New project" })).toBeNull();
+    expect(within(scrolls[0] as HTMLElement).queryByRole("button", { name: "Close" })).toBeNull();
+  });
+});
