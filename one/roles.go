@@ -125,14 +125,22 @@ func (a *App) roleID(f *rolesFields, place, name string) (string, error) {
 // allowedByRoles says whether a role the person holds where the entity is held, as
 // its records define it, allows the permission.
 func (a *App) allowedByRoles(tx *firestore.Transaction, me string, p Permission, entity *owned) (bool, error) {
+	// What only services run, no role record gives, whatever its people made it say.
+	if a.onlyServices(p) {
+		return false, nil
+	}
 	for _, r := range a.reg.defined {
 		f, err := a.rolesFields(r)
 		if err != nil {
 			return false, err
 		}
+		// Roles of another kind of place, like a crew's for a desk's ticket, say nothing here.
 		within, err := a.within(tx, entity, f.scope)
-		if err != nil || within == "" {
+		if err != nil {
 			return false, err
+		}
+		if within == "" {
+			continue
 		}
 		query := a.store.Collection(f.member.collection).Where(f.memberPlace.name, "==", within).Where(f.memberPerson.name, "==", me).Limit(20)
 		docs, err := tx.Documents(query).GetAll()

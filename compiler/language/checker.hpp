@@ -139,6 +139,7 @@ namespace one::language {
             std::vector<const role_declaration*> roles;
             std::vector<const roles_declaration*> defined;  // roles each project defines for itself
             std::map<const roles_declaration*, origin> defined_at;  // and the file each is in
+            std::map<std::string, declared<define_service_declaration>> services;  // systems that run commands, by name
             std::map<std::string, origin> role_names;  // so a role is declared once
             std::map<std::string, const settings_declaration*, std::less<>> settings;  // what a block of settings may say, in a library
         };
@@ -278,6 +279,8 @@ namespace one::language {
                     add(here.views, v->name, *v, d.where, "view", ns);
                 } else if (auto* f = std::get_if<format_declaration>(&d.node)) {
                     add(here.formats, f->name, *f, d.where, "format", ns);
+                } else if (auto* sv = std::get_if<define_service_declaration>(&d.node)) {
+                    add(here.services, sv->name, *sv, d.where, "service", ns);
                 } else if (auto* rs = std::get_if<roles_declaration>(&d.node)) {
                     here.defined.push_back(rs);
                     here.defined_at[rs] = origin{path_, d.where};
@@ -512,6 +515,26 @@ namespace one::language {
             snake(r.name, r.where);
         }
 
+        // define service github "GitHub" in project { mention::create }: each is a
+        // command, and with in, one on what's in a project, as a role's are.
+        void verify(const std::string& ns, location, const define_service_declaration& v) {
+            snake(v.name, v.where);
+            const entity_declaration* scope = nullptr;
+            if (!v.in.empty()) {
+                scope = find_entity(ns, qualified_name{{v.in}, v.in_where});
+                if (!scope) error(v.in_where, "service " + v.name + " is connected in each " + v.in + ", which isn't an entity " + in_namespace(ns));
+            }
+            auto here = scopes_.find(ns);
+            for (const auto& p : v.permissions) {
+                snake(p);
+                if (p.parts.size() != 2 || here == scopes_.end() || !here->second.commands.contains(p.text())) {
+                    error(p.where, "service " + v.name + " runs " + p.text() + ", which isn't a command " + in_namespace(ns));
+                } else if (scope) {
+                    within_scope(ns, *scope, "service " + v.name, p);
+                }
+            }
+        }
+
         // Once a project defines its roles, every command is one a role allows, or
         // says itself who runs it, by anyone or by anyone signed in, so none is
         // left unguarded by accident; and one that says so isn't a role's to allow.
@@ -528,6 +551,12 @@ namespace one::language {
                     }
                 }
             }
+            for (const auto& [ns, here] : scopes_) {
+                for (const auto& [name, service] : here.services) {
+                    any = true;
+                    for (const auto& p : service.node->permissions) allowed[join(ns, p.text())].push_back({&p, service.from});
+                }
+            }
             if (!any) return;
             std::string kept = path_;
             for (const auto& [ns, here] : scopes_) {
@@ -541,11 +570,11 @@ namespace one::language {
                     if (by && grants != allowed.end()) {
                         for (const auto& [p, where] : grants->second) {
                             path_ = where.path;
-                            error(p->where, name + " says who runs it, by anyone or by anyone signed in, so no role allows it");
+                            error(p->where, name + " says who runs it, by anyone or by anyone signed in, so no role or service allows it");
                         }
                     } else if (!by && grants == allowed.end() && from != here.commands.end()) {
                         path_ = from->second.path;
-                        error(node->name.where, name + " isn't allowed by any role; add it to a define role, or say by anyone signed in in the command");
+                        error(node->name.where, name + " isn't allowed by any role or service; add it to a define role, or say by anyone signed in in the command");
                     }
                 }
             }
@@ -600,7 +629,7 @@ namespace one::language {
                     if (p.parts.size() != 2 || here == scopes_.end() || !here->second.commands.contains(p.text())) {
                         error(p.where, d.name + " allows " + p.text() + ", which isn't a command " + in_namespace(ns));
                     } else {
-                        within_scope(ns, *scope, d.name, p);
+                        within_scope(ns, *scope, "role " + d.name, p);
                     }
                 }
             }
@@ -1820,7 +1849,7 @@ namespace one::language {
         // A role held in a project allows commands on what's in one: the project, what
         // points at it, like an issue, or what points at that, like an issue's comment,
         // so a command can tell which project to look in.
-        void within_scope(const std::string& ns, const entity_declaration& scope, const std::string& role, const qualified_name& p) {
+        void within_scope(const std::string& ns, const entity_declaration& scope, const std::string& who, const qualified_name& p) {
             if (p.parts.size() < 2) return;
             const entity_declaration* on = find_entity(ns, qualified_name{{p.parts.begin(), p.parts.end() - 1}, p.where});
             if (!on || on == &scope) return;
@@ -1832,7 +1861,7 @@ namespace one::language {
                               return through && points_at_scope(*through);
                           });
             if (!points) {
-                error(p.where, "role " + role + " is held in a " + scope.name + ", but " + on->name + " doesn't point at one, " +
+                error(p.where, who + " is held in a " + scope.name + ", but " + on->name + " doesn't point at one, " +
                                    "so there's no " + scope.name + " to look in for " + p.text());
             }
         }
@@ -2837,6 +2866,22 @@ namespace one::language {
                 error(w.scope_where, "webhook github reads #12 as a " + scope->name + "'s issue 12, so an entity needs keys " +
                                          scope->name + " and a serial per " + scope->name + ", like issue");
             }
+            // It runs as a service, which says what it may do, in the same projects
+            // whose repositories it's told about.
+            const define_service_declaration* service = nullptr;
+            if (w.as.empty()) {
+                error(where, "webhook github runs as a service, which allows what it does, like webhook github " + w.route +
+                                 " as github, with define service github \"GitHub\" in " + w.scope + " { ... }");
+            } else if (auto found = scopes_.find(ns); found == scopes_.end() || !found->second.services.contains(w.as)) {
+                error(w.as_where, "there's no service " + w.as + " " + in_namespace(ns) + "; declare it, like define service " + w.as +
+                                      " \"GitHub\" in " + w.scope + " { ... }");
+            } else {
+                service = found->second.services.at(w.as).node;
+                if (service->in != w.scope) {
+                    error(w.as_where, "webhook github is told about each " + w.scope + "'s repository, so service " + w.as + " is connected in each " +
+                                          w.scope + ", like define service " + w.as + " \"" + service->title + "\" in " + w.scope + " { ... }");
+                }
+            }
             std::set<std::string, std::less<>> seen;
             for (const auto& h : w.handlers) {
                 std::vector<std::string> given;
@@ -2849,8 +2894,30 @@ namespace one::language {
                 if (!seen.insert(h.event).second) error(h.where, "webhook github handles " + h.event + " twice");
                 context in{ns, nullptr, nullptr, given, false, nullptr, true};
                 for (const auto& s : h.body) {
-                    if (auto* c = std::get_if<create_statement>(&s.node)) verify_create(ns, *c, in);
-                    else error(s.where, "a webhook makes things with create; it changes nothing else");
+                    if (auto* c = std::get_if<create_statement>(&s.node)) {
+                        qualified_name command{{c->entity, "create"}, c->entity_where};
+                        if (find_command(ns, command)) {
+                            error(s.where, "a record is made by its create command: dispatch " + c->entity + "::create { ... }",
+                                  fix{s.where, c->head_length, "dispatch " + c->entity + "::create"});
+                        } else {
+                            error(s.where, "a record is made by its create command, run with dispatch " + c->entity + "::create { ... }; declare command " +
+                                               c->entity + "::create, and let the webhook's service run it");
+                        }
+                    } else if (auto* d = std::get_if<dispatch_statement>(&s.node)) {
+                        if (d->command.parts.size() == 2 && d->command.parts[1] != "create") {
+                            error(d->command.where, "a webhook makes things, so it dispatches a create command, like " + d->command.parts[0] + "::create");
+                            continue;
+                        }
+                        verify_dispatch(ns, *d, in);
+                        // What it dispatches, its service runs, so the service allows it.
+                        if (service && std::none_of(service->permissions.begin(), service->permissions.end(),
+                                                    [&](const qualified_name& p) { return p.text() == d->command.text(); })) {
+                            error(d->command.where, "service " + service->name + " doesn't run " + d->command.text() + "; add it to define service " +
+                                                        service->name);
+                        }
+                    } else {
+                        error(s.where, "a webhook makes things with dispatch; it changes nothing else");
+                    }
                 }
             }
         }

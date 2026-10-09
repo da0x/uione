@@ -237,6 +237,27 @@ namespace one::language {
             if (word == "view") return {where, parse_view()};
             if (word == "role") return {where, parse_role()};
             if (word == "roles") return {where, parse_roles()};
+            if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "service") {
+                advance();
+                advance();
+                define_service_declaration service;
+                service.where = peek().where;
+                service.name = expect(token_kind::identifier, "the service's name, like github").text;
+                service.title = expect(token_kind::string, "how it's shown, like \"GitHub\"").text;
+                if (at_word("in")) {
+                    advance();
+                    service.in_where = peek().where;
+                    service.in = expect(token_kind::identifier, "what each connects its own of, like project").text;
+                }
+                expect(token_kind::left_brace, "'{' and the commands it may run, one a line");
+                while (in_block()) {
+                    service.permissions.push_back(parse_qualified_name("a command it may run, like mention::create"));
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(service)};
+            }
             if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "role") {
                 advance();
                 advance();
@@ -275,7 +296,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, define role, function, screen, picker, webhook, backend, header, footer or once");
+                        "format, enum, entity, command, view, define role, define service, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -1483,6 +1504,11 @@ namespace one::language {
             hook.provider_where = peek().where;
             hook.provider = expect(token_kind::identifier, "who sends it, like github").text;
             hook.route = expect(token_kind::route, "where it's received, like /hooks/github").text;
+            if (at_word("as")) {
+                advance();
+                hook.as_where = peek().where;
+                hook.as = expect(token_kind::identifier, "the service it runs as, like github").text;
+            }
             expect(token_kind::left_brace, "'{'");
             while (in_block()) {
                 if (at_word("for")) {

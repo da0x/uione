@@ -94,6 +94,14 @@ namespace tracker {
 
 	command comment::create
 
+	// Mentions are GitHub's to make, as each project's GitHub tells it about commits
+	// and pull requests; no person makes one.
+	command mention::create
+
+	define service github "GitHub" in project {
+		mention::create
+	}
+
 	// Each project's own roles, kept as its role records, and given to people by
 	// member records, one for each role a person holds there.
 	define role maintainer "Maintainer" in project {
@@ -116,16 +124,16 @@ namespace tracker {
 	}
 
 	// Every public project, newest first. A private one is listed nowhere.
-	webhook github /hooks/github {
+	webhook github /hooks/github as github {
 		for project by repository
 		on commit {
-			create mention {
+			dispatch mention::create {
 				issue = mentioned  url = url  kind = kind::commit
 				title = message  author = author
 			}
 		}
 		on pull_request {
-			create mention {
+			dispatch mention::create {
 				issue = mentioned  url = url  kind = kind::pull_request
 				title = title  author = author
 			}

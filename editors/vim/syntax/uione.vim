@@ -36,7 +36,7 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create dispatch readers when was add remove to has of in limit for by on component order each per where from table form confirm hint
+syn keyword uioneKeyword   require permission clear dispatch readers as when was add remove to has of in limit for by on component order each per where from table form confirm hint
 syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen badge find only tint color
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.
@@ -64,8 +64,9 @@ syn keyword uioneBuiltin   now me none true false
 " name.
 " by anyone signed in: who runs a command no role allows.
 syn match   uioneBuiltin   "\%(\<by\s\+\)\@<=\%(\<anyone\>\%(\s\+\<signed\>\s\+\<in\>\)\=\|\<owner\>\)"
-" define role maintainer "Maintainer" in project: a role each project starts with.
-syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\<role\>" nextgroup=uioneName skipwhite
+" define role maintainer "Maintainer" in project: a role each project starts with;
+" define service github "GitHub" in project, a system that runs commands.
+syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\%(role\|service\)\>" nextgroup=uioneName skipwhite
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("

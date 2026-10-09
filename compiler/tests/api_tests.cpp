@@ -705,9 +705,10 @@ TEST_CASE("a github webhook makes what each event's handler creates, and is part
     REQUIRE(file != nullptr);
     CHECK(file->content.find(R"(var WebhookGithub = one.GitHub("/hooks/github").For(one.Entity[Project](), "repository").Mentions(one.Entity[Issue]()).)") !=
           std::string::npos);
-    CHECK(file->content.find(R"(one.Create(c, &Mention{Issue: m.Issue, URL: m.URL, Kind: KindCommit, Title: m.Message, Author: m.Author}))") !=
+    CHECK(file->content.find(R"(one.DispatchCreate(c, &Mention{Issue: m.Issue, URL: m.URL, Kind: KindCommit, Title: m.Message, Author: m.Author}, nil, nil))") !=
           std::string::npos);
-    CHECK(file->content.find(", WebhookGithub)") != std::string::npos);
+    CHECK(file->content.find(R"(var ServiceGithub = one.Service("github", "GitHub", "mention::create"))") != std::string::npos);
+    CHECK(file->content.find(", ServiceGithub, WebhookGithub)") != std::string::npos);
 }
 
 TEST_CASE("a view shows a project's webhook secret through the library") {

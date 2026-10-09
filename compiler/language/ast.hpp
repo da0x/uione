@@ -372,6 +372,18 @@ namespace one::language {
         bool defined = false;  // made from define role, with the role and member the language declares
     };
 
+    // define service github "GitHub" in project { mention::create }: a system that
+    // runs commands, not a person, and the commands it may run, one a line. A webhook
+    // runs as one. No person may run a command only services allow.
+    struct define_service_declaration {
+        std::string name;
+        location where;
+        std::string title;
+        std::string in;  // project, when each project connects its own; empty for the app's
+        location in_where;
+        std::vector<qualified_name> permissions;
+    };
+
     // define role maintainer "Maintainer" in project { project::update ... }: a role
     // each project starts with, and the commands it allows, one a line. The language
     // keeps a project's roles as role records, and who holds them as member records.
@@ -671,6 +683,8 @@ namespace one::language {
         std::string repository;  // the field naming its repository
         location scope_where;
         std::vector<webhook_handler> handlers;
+        std::string as;          // the service it runs as, which allows what it dispatches
+        location as_where;
     };
 
     // backend deploy: Go written by hand, backend/deploy.go beside the .one file, built
@@ -742,7 +756,8 @@ namespace one::language {
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
-                     import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration>
+                     import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
+                     define_service_declaration>
             node;
     };
 

@@ -120,9 +120,9 @@ examples/tracker/main.one	entity issue history {	history	keyword
 examples/tracker/main.one	entity issue history {	issue	name
 examples/tracker/main.one	each change in issue in project	change	type
 examples/tracker/main.one	limit 50	limit	keyword
-examples/tracker/main.one	webhook github /hooks/github {	webhook	declare
-examples/tracker/main.one	webhook github /hooks/github {	github	name
-examples/tracker/main.one	webhook github /hooks/github {	/hooks/github	route
+examples/tracker/main.one	webhook github /hooks/github as github {	webhook	declare
+examples/tracker/main.one	webhook github /hooks/github as github {	github	name
+examples/tracker/main.one	webhook github /hooks/github as github {	/hooks/github	route
 examples/tracker/main.one	for project by repository	for	keyword
 examples/tracker/main.one	for project by repository	by	keyword
 examples/tracker/main.one	on commit {	on	keyword
@@ -224,3 +224,6 @@ editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	g
 editors/fixtures/environments.one	footer columns {	footer	declare
 editors/fixtures/environments.one	footer columns {	columns	keyword
 editors/fixtures/environments.one	link build.release "uione {build.version}"	build	constant
+examples/tracker/main.one	webhook github /hooks/github as github {	as	keyword
+examples/tracker/main.one	define service github "GitHub" in project {	service	declare
+examples/tracker/main.one	define service github "GitHub" in project {	github	name

@@ -76,6 +76,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`view`](#view) | a document built ahead of time for a screen |
 | [`role`](#role) | permissions a person can be given |
 | [`define role`](#define-role) | a role each project starts with, kept as records its people edit |
+| [`define service`](#define-service) | a system that runs commands, like GitHub, and the commands it may run |
 | [`function`](#function) | a value worked out from others |
 | [`screen`](#screen) | a page, at an address |
 | [`picker`](#picker) | how an entity is chosen in a form |
@@ -802,6 +803,27 @@ entity member {
   role from a list of the project's roles that a view on the screen holds, like
   `roles = each role in project { name  title }`.
 
+## define service
+
+A system that runs commands, not a person, like GitHub telling each project
+about the commits that mention its issues, and the commands it may run, one a
+line. A [webhook](#webhook) runs as one.
+
+```one
+define service github "GitHub" in project {
+	mention::create
+}
+```
+
+- `in project` says each project connects its own, as each project has its own
+  webhook secret, so one project's GitHub runs commands only on what's in that
+  project. A service runs commands on what's in its project, as a role does.
+- A command a service runs counts as allowed, as one a role allows does.
+- No person may run a command that only services run and no
+  [define role](#define-role) allows: not even by editing a project's role to say
+  so, since a role's record is its people's to edit, and what a service runs isn't
+  theirs to give.
+
 ## function
 
 A function, for the logic that is really yours.
@@ -1131,25 +1153,35 @@ picker book from shelf
 ## webhook
 
 Takes GitHub's webhook. A commit or pull request that mentions `#12` makes
-something on issue 12 of the project whose `repository` is that repository.
+something on issue 12 of the project whose `repository` is that repository, as
+the project's GitHub [service](#define-service), which allows what it makes.
 
 ```one
-webhook github /hooks/github {
+define service github "GitHub" in project {
+	mention::create
+}
+
+command mention::create
+
+webhook github /hooks/github as github {
 	for project by repository
 	on commit {
-		create mention {
-			issue = mentioned  url = url  kind = commit
+		dispatch mention::create {
+			issue = mentioned  url = url  kind = kind::commit
 			title = message  author = author
 		}
 	}
 	on pull_request {
-		create mention {
-			issue = mentioned  url = url  kind = pull_request
+		dispatch mention::create {
+			issue = mentioned  url = url  kind = kind::pull_request
 			title = title  author = author
 		}
 	}
 }
 ```
+
+- `as github` names the service it runs as. What it dispatches is a create its
+  service runs, and nothing else.
 
 - `for project by repository` finds the project whose `repository` field names
   the repository, like `da0x/uione`.
@@ -1158,7 +1190,7 @@ webhook github /hooks/github {
 - A commit gives `mentioned`, `message`, `url`, `author` and `sha`. A pull
   request gives `mentioned`, `title`, `url`, `author` and `number`, and is
   handled when it's opened, edited, closed or reopened.
-- A handler only creates. Give what it makes a key, like the issue and the
+- A handler only makes things. Give what it makes a key, like the issue and the
   address, so a delivery GitHub sends twice is stored once.
 - Every delivery has to be signed with its project's own secret, and one signed
   with another project's is refused. A project's repository is stored in

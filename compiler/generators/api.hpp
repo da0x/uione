@@ -126,6 +126,7 @@ namespace one::generators {
             std::vector<std::pair<const language::roles_declaration*, language::location>> defined;  // roles each project defines
             std::vector<std::pair<std::string, std::string>> backends;  // each name, and the file it's written in
             std::vector<std::pair<const language::once_declaration*, language::location>> onces;
+            std::vector<std::pair<const language::define_service_declaration*, language::location>> services;
         };
 
         const std::vector<language::file>& files_;
@@ -207,6 +208,8 @@ namespace one::generators {
                     pkg.roles.push_back(r);
                 } else if (auto* rs = std::get_if<language::roles_declaration>(&d.node)) {
                     pkg.defined.emplace_back(rs, d.where);
+                } else if (auto* sv = std::get_if<language::define_service_declaration>(&d.node)) {
+                    pkg.services.emplace_back(sv, d.where);
                 } else if (auto* fmt = std::get_if<language::format_declaration>(&d.node)) {
                     pkg.formats.push_back(fmt);
                 } else if (auto* function = std::get_if<language::function_declaration>(&d.node)) {
@@ -405,6 +408,9 @@ namespace one::generators {
             for (const auto& [o, _] : pkg.onces) {
                 for (const auto& step : o->steps) find_run(step.body);
             }
+            for (const auto& [w, _] : pkg.hooks) {
+                for (const auto& h : w->handlers) find_run(h.body);
+            }
             bool uses_time = false;
             stream body("\t");
 
@@ -577,6 +583,16 @@ namespace one::generators {
                 }
                 body.line();
                 members.push_back("Roles");
+            }
+            // Systems that run commands, which no person may run unless a role allows it.
+            for (const auto& [service, where] : pkg.services) {
+                auto from_service = in(body, at(service), where.line);
+                std::string line = "var Service" + api_detail::go_name(service->name) + " = one.Service(" + api_detail::go_string(service->name) + ", " +
+                                   api_detail::go_string(service->title);
+                for (const auto& p : service->permissions) line += ", " + api_detail::go_string(p.text());
+                body.line(line + ")");
+                body.line();
+                members.push_back("Service" + api_detail::go_name(service->name));
             }
             for (const auto& [hook, where] : pkg.hooks) {
                 auto from_hook = in(body, at(hook), where.line);
@@ -1742,15 +1758,24 @@ namespace one::generators {
                 auto from_handler = in(out, at(&w), h.where.line);
                 out.open(std::string(h.event == "commit" ? "OnCommit" : "OnPullRequest") + "(func(c *one.Ctx, m one.Mention) error {");
                 for (const auto& s : h.body) {
-                    auto* made = std::get_if<language::create_statement>(&s.node);
-                    const language::entity_declaration* target = made ? entity(pkg, made->entity) : nullptr;
+                    // dispatch mention::create { ... }: made as its command makes it, run as
+                    // the webhook's service.
+                    auto* d = std::get_if<language::dispatch_statement>(&s.node);
+                    const language::entity_declaration* target = d && d->command.parts.size() == 2 ? entity(pkg, d->command.parts[0]) : nullptr;
                     if (!target) {
                         unsupported(path_, s.where, "this statement in a webhook");
                         return false;
                     }
+                    const language::command_declaration* runs = nullptr;
+                    for (const auto& [command, _] : pkg.commands) {
+                        if (command->name.text() == d->command.text()) runs = command;
+                    }
+                    bool body = runs && std::any_of(runs->body.begin(), runs->body.end(), [](const language::statement& st) {
+                        return !std::holds_alternative<language::permission_statement>(st.node) && !std::holds_alternative<language::changes_statement>(st.node);
+                    });
                     auto from_statement = in(out, at(&w), s.where.line);
                     std::string fields;
-                    for (const auto& v : made->values) {
+                    for (const auto& v : d->values) {
                         const language::field* f = field(*target, v.name);
                         if (!f) continue;
                         auto value = mentioned(*v.value, *f);
@@ -1760,7 +1785,8 @@ namespace one::generators {
                         }
                         fields += (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value;
                     }
-                    out.open("if err := one.Create(c, &" + api_detail::go_name(target->name) + "{" + fields + "}); err != nil {");
+                    out.open("if err := one.DispatchCreate(c, &" + api_detail::go_name(target->name) + "{" + fields + "}, nil, " +
+                             (body ? body_function(d->command.text()) : std::string("nil")) + "); err != nil {");
                     out.line("return err");
                     out.close("}");
                 }

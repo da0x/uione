@@ -34,7 +34,9 @@ namespace {
     // The one error a source should produce.
     diagnostic only_error(const std::string& source) {
         auto out = check_source(source);
-        for (const auto& d : out) CAPTURE(format(d));
+        if (out.size() != 1) {
+            for (const auto& d : out) MESSAGE(format(d));
+        }
         REQUIRE(out.size() == 1);
         return out[0];
     }
@@ -478,11 +480,11 @@ view crew_page per crew {
     std::string ungranted = crew;
     ungranted.replace(ungranted.find("command job::create"), 19, "command job::create\ncommand job::update");
     auto e = only_error(ungranted);
-    CHECK(e.message == "job::update isn't allowed by any role; add it to a define role, or say by anyone signed in in the command");
+    CHECK(e.message == "job::update isn't allowed by any role or service; add it to a define role, or say by anyone signed in in the command");
 
     std::string both = crew;
     both.replace(both.find("\tmember::create\n\tjob::create"), 15, "\tmember::create\n\tcrew::create");
-    CHECK(only_error(both).message == "crew::create says who runs it, by anyone or by anyone signed in, so no role allows it");
+    CHECK(only_error(both).message == "crew::create says who runs it, by anyone or by anyone signed in, so no role or service allows it");
 
     std::string own = crew;
     own.replace(own.find("entity job {"), 12, "entity member {\n\tname  text\n}\nentity job {");
@@ -832,30 +834,62 @@ TEST_CASE("a view lists the changes an entity keeps, by the entity or by what it
     CHECK(e.message == "entity change has no field title");
 }
 
-TEST_CASE("a github webhook finds a project by its repository, and makes things from what each event sends") {
+TEST_CASE("a github webhook finds a project by its repository, and runs as its service, which allows what it dispatches") {
     const std::string start = "entity project {\n\tslug  text  required  key\n\trepository  text  unique\n}\n"
                               "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n}\n"
                               "entity mention {\n\tissue  issue  required  key\n\turl  text  required  key\n"
-                              "\tkind  enum commit | pull_request\n\ttitle  text\n}\n";
-    const std::string hook = "webhook github /hooks/github {\n\tfor project by repository\n";
-    CHECK(check_source(start + hook + "\ton commit {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  kind = kind::commit  title = message\n"
-                                      "\t\t}\n\t}\n\ton pull_request {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  title = title\n\t\t}\n\t}\n}\n")
+                              "\tkind  enum commit | pull_request\n\ttitle  text\n}\n"
+                              "command mention::create\ncommand mention::delete\n"
+                              "define service github \"GitHub\" in project {\n\tmention::create\n\tmention::delete\n}\n";
+    const std::string hook = "webhook github /hooks/github as github {\n\tfor project by repository\n";
+    CHECK(check_source(start + hook + "\ton commit {\n\t\tdispatch mention::create {\n\t\t\tissue = mentioned  url = url  kind = kind::commit  title = message\n"
+                                      "\t\t}\n\t}\n\ton pull_request {\n\t\tdispatch mention::create {\n\t\t\tissue = mentioned  url = url  title = title\n\t\t}\n\t}\n}\n")
               .empty());
 
     auto e = only_error(start + "webhook gitlab /hooks/gitlab {\n}\n");
     CHECK(e.message == "'gitlab' isn't a webhook uione knows; it knows github");
-    e = only_error(start + "webhook github /github {\n\tfor project by repository\n}\n");
+    e = only_error(start + "webhook github /github as github {\n\tfor project by repository\n}\n");
     CHECK(e.message == "a webhook is received under /hooks/, like /hooks/github");
-    e = only_error(start + "webhook github /hooks/github {\n\tfor project by slugg\n}\n");
+    e = only_error(start + "webhook github /hooks/github as github {\n\tfor project by slugg\n}\n");
     CHECK(e.message == "webhook github finds a project by slugg, so project needs a text field slugg, like slugg  text  unique");
     e = only_error(start + hook + "\ton push {\n\t}\n}\n");
     CHECK(e.message == "github sends commit and pull_request, not push");
-    e = only_error(start + hook + "\ton commit {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url  title = title\n\t\t}\n\t}\n}\n");
+    e = only_error(start + hook + "\ton commit {\n\t\tdispatch mention::create {\n\t\t\tissue = mentioned  url = url  title = title\n\t\t}\n\t}\n}\n");
     CHECK(e.message.starts_with("there's no title here"));
     e = only_error(start + hook + "\ton commit {\n\t\tslug = message\n\t}\n}\n");
-    CHECK(e.message == "a webhook makes things with create; it changes nothing else");
-    e = only_error("entity project {\n\tslug  text  required  key\n\trepository  text\n}\n" + hook + "}\n");
-    CHECK(e.message == "webhook github reads #12 as a project's issue 12, so an entity needs keys project and a serial per project, like issue");
+    CHECK(e.message == "a webhook makes things with dispatch; it changes nothing else");
+    auto errors = check_source("entity project {\n\tslug  text  required  key\n\trepository  text\n}\n" + hook + "}\n");
+    CHECK(std::any_of(errors.begin(), errors.end(), [](const diagnostic& d) { return d.message.starts_with("there's no service github"); }));
+    CHECK(std::any_of(errors.begin(), errors.end(), [](const diagnostic& d) {
+        return d.message == "webhook github reads #12 as a project's issue 12, so an entity needs keys project and a serial per project, like issue";
+    }));
+
+    // It runs as a service, which says what it may do, and nothing else.
+    e = only_error(start + "webhook github /hooks/github {\n\tfor project by repository\n}\n");
+    CHECK(e.message == "webhook github runs as a service, which allows what it does, like webhook github /hooks/github as github, "
+                       "with define service github \"GitHub\" in project { ... }");
+    std::string narrow = start;
+    narrow.replace(narrow.find("\tmention::create\n\tmention::delete\n}"), 35, "\tmention::delete\n}");
+    narrow += "define service gitlab \"GitLab\" in project {\n\tmention::create\n}\n";
+    e = only_error(narrow + hook + "\ton commit {\n\t\tdispatch mention::create {\n\t\t\tissue = mentioned  url = url\n\t\t}\n\t}\n}\n");
+    CHECK(e.message == "service github doesn't run mention::create; add it to define service github");
+    e = only_error(start + hook + "\ton commit {\n\t\tdispatch mention::delete {\n\t\t\tid = mentioned\n\t\t}\n\t}\n}\n");
+    CHECK(e.message == "a webhook makes things, so it dispatches a create command, like mention::create");
+    e = only_error(start + "define service github_app \"GitHub\" {\n\tmention::create\n}\n"
+                           "webhook github /hooks/github as github_app {\n\tfor project by repository\n}\n");
+    CHECK(e.message == "webhook github is told about each project's repository, so service github_app is connected in each project, "
+                       "like define service github_app \"GitHub\" in project { ... }");
+    e = only_error(start + hook + "\ton commit {\n\t\tcreate mention {\n\t\t\tissue = mentioned  url = url\n\t\t}\n\t}\n}\n");
+    CHECK(e.message == "a record is made by its create command: dispatch mention::create { ... }");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "dispatch mention::create");
+
+    // A service runs commands on what's in its project, as a role's are.
+    e = only_error(start + "entity note {\n\ttext  text\n}\ncommand note::create\n"
+                           "define service notes \"Notes\" in project {\n\tnote::create\n}\n");
+    CHECK(e.message == "service notes is held in a project, but note doesn't point at one, so there's no project to look in for note::create");
+    e = only_error(start + "define service other \"Other\" in project {\n\tmention::sink\n}\n");
+    CHECK(e.message == "service other runs mention::sink, which isn't a command at the top level");
 }
 
 TEST_CASE("a project's webhook secret is shown only to its own people") {

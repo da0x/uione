@@ -108,6 +108,7 @@ type registry struct {
 	named    map[string]bool
 	twice    []string // roles given more than once, which is a mistake
 	hooks    []*GitHubSpec
+	services []*ServiceSpec // systems that run commands, not people
 	schemas  map[reflect.Type]*schema
 }
 

@@ -114,8 +114,10 @@ TEST_CASE("a project that takes GitHub's webhook routes it to the backend and is
                                  "\tentity project {\n\t\tslug  text  required  key\n\t\trepository  text  unique\n\t}\n"
                                  "\tentity issue {\n\t\tproject  project  required  key\n\t\tnumber  serial  per project  key\n\t}\n"
                                  "\tentity mention {\n\t\tissue  issue  required  key\n\t\turl  text  required  key\n\t}\n"
-                                 "\twebhook github /hooks/github {\n\t\tfor project by repository\n"
-                                 "\t\ton commit {\n\t\t\tcreate mention {\n\t\t\t\tissue = mentioned  url = url\n\t\t\t}\n\t\t}\n\t}\n"
+                                 "\tcommand mention::create\n"
+                                 "\tdefine service github \"GitHub\" in project {\n\t\tmention::create\n\t}\n"
+                                 "\twebhook github /hooks/github as github {\n\t\tfor project by repository\n"
+                                 "\t\ton commit {\n\t\t\tdispatch mention::create {\n\t\t\t\tissue = mentioned  url = url\n\t\t\t}\n\t\t}\n\t}\n"
                                  "}\n"));
     auto generated = generate_at(dir.string());
     fs::remove_all(dir);
