@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -198,7 +199,8 @@ type App struct {
 	reg   *registry
 	log   *log.Logger
 
-	profiles sync.Map // each person's name and picture, as last saved
+	profiles sync.Map     // each person's name and picture, as last saved
+	rebuilt  atomic.Int64 // how many view documents have been worked out, which tests count
 }
 
 // New connects to the project's Firestore and Firebase Auth, writes its roles, and

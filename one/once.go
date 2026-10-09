@@ -117,9 +117,7 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 	if err != nil {
 		return fmt.Errorf("%s %s: %w", schema.name, id, err)
 	}
-	for _, ev := range events {
-		a.publish(s.ctx, ev)
-	}
+	a.publish(s.ctx, events...)
 	return nil
 }
 

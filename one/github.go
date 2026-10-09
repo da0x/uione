@@ -391,8 +391,6 @@ func (a *App) mention(ctx context.Context, issue *schema, id string, m Mention, 
 	if err != nil {
 		return false, err
 	}
-	for _, ev := range events {
-		a.publish(ctx, ev)
-	}
+	a.publish(ctx, events...)
 	return true, nil
 }

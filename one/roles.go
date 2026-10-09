@@ -260,9 +260,7 @@ func (a *App) seedEarlierRoles(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			for _, ev := range events {
-				a.publish(ctx, ev)
-			}
+			a.publish(ctx, events...)
 		}
 	}
 	return nil
@@ -373,8 +371,6 @@ func (a *App) grantIn(ctx context.Context, r *RolesSpec, f *rolesFields, place s
 	if err != nil {
 		return err
 	}
-	for _, ev := range events {
-		a.publish(ctx, ev)
-	}
+	a.publish(ctx, events...)
 	return nil
 }

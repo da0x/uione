@@ -142,3 +142,31 @@ func TestMistakesInDeclaringAModuleStopItStarting(t *testing.T) {
 	refused("a command named on another entity", Command[thing]("other::create"))
 	refused("a view with a value called public", View("page").Public().Count("public", All[thing]()))
 }
+
+// A command's changes rebuild each page they touch once, however many touch it: a
+// project made with its board, phases and steps rebuilds its page once, not once
+// for each of them.
+func TestACommandsChangesRebuildEachPageOnce(t *testing.T) {
+	if os.Getenv("FIRESTORE_EMULATOR_HOST") == "" {
+		os.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
+	}
+	ctx := context.Background()
+	a, err := New(ctx, Module("held",
+		Role("chair").Per(Entity[club](), Entity[place]()),
+		View("page").Per(Entity[club]()).Readers(Entity[place]()).Copy("slug", "slug"),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	// Five people seated, three in chess and two in rowing.
+	seated := func(club, person string) event {
+		return event{Type: "place.updated", Entity: "held::place", ID: club + "-" + person, After: map[string]any{"club": club, "person": person}}
+	}
+	before := a.rebuilt.Load()
+	a.publish(ctx, seated("chess", "ada"), seated("chess", "bo"), seated("rowing", "cy"), seated("chess", "di"), seated("rowing", "ed"))
+	if rebuilt := a.rebuilt.Load() - before; rebuilt != 2 {
+		t.Fatalf("five changes to two clubs rebuilt their pages %d times", rebuilt)
+	}
+}

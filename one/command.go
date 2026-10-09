@@ -846,17 +846,14 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		return "", err
 	}
 
-	a.publish(c.ctx, event{
+	a.publish(c.ctx, append([]event{{
 		Type:    s.name + ".updated",
 		Entity:  s.entity,
 		ID:      id,
 		Version: now.UnixNano(),
 		Before:  before,
 		After:   after,
-	})
-	for _, ev := range pointed {
-		a.publish(c.ctx, ev)
-	}
+	}}, pointed...)...)
 	for _, then := range afterwards {
 		then(&System{app: a, ctx: c.ctx}, saved)
 	}

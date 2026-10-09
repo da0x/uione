@@ -1729,24 +1729,18 @@ func (a *App) rebuildChanged(ctx context.Context) error {
 	return nil
 }
 
-// project rebuilds the documents of one view that an event touches.
-func (a *App) project(ctx context.Context, v *ViewSpec, ev event) error {
-	subjects, err := v.subjects(ctx, a, ev)
+// rebuild works out one view's document for one subject, like a project's page, and
+// stores it, saying which change caused it.
+func (a *App) rebuild(ctx context.Context, v *ViewSpec, subject, cause string) error {
+	// A document's version is when its data was read, not when the command that
+	// caused it began: of two rebuilds, the one that read later holds every change
+	// the other did, whichever command committed first.
+	version := time.Now().UnixNano()
+	a.rebuilt.Add(1)
+	data, err := a.compose(ctx, v, subject)
 	if err != nil {
 		return err
 	}
-	for _, subject := range subjects {
-		// A document's version is when its data was read, not when the command that
-		// caused it began: of two rebuilds, the one that read later holds every
-		// change the other did, whichever command committed first.
-		version := time.Now().UnixNano()
-		data, err := a.compose(ctx, v, subject)
-		if err != nil {
-			return err
-		}
-		if _, err := a.write(ctx, v, subject, data, version, ev.id()); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err = a.write(ctx, v, subject, data, version, cause)
+	return err
 }
