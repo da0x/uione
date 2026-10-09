@@ -52,6 +52,13 @@ namespace {
             text(out, d.message);
             out += ",\"text\":";
             text(out, one::language::format(d));
+            // The edit that fixes it, when there's one answer, as one upgrade makes it.
+            if (d.fix) {
+                out += ",\"fix\":{\"line\":" + std::to_string(d.fix->where.line) + ",\"column\":" + std::to_string(d.fix->where.column) +
+                       ",\"length\":" + std::to_string(d.fix->length) + ",\"text\":";
+                text(out, d.fix->text);
+                out += "}";
+            }
             out += "}";
         }
         out += "]";

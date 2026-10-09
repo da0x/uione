@@ -163,6 +163,13 @@ describe("the compiler in the browser", () => {
     expect(shown.themes.some((t) => t.name === "harbor" && t.own && t.path === "")).toBe(true);
   });
 
+  it("says how a mistake is fixed, when there's one answer", () => {
+    const files = { "main.one": 'import one\n\ndefine theme sea "Sea" from harbor {\n\taccent  #2383e2  dark #8cc4ff\n}\n' };
+    const checked = run(one, { kind: "check", files }) as Checked;
+    const accent = checked.problems.find((p) => p.message.startsWith("accent #2383e2 on page"))!;
+    expect(accent.fix).toEqual({ line: 4, column: 10, length: 7, text: "#0673d1" });
+  });
+
   it("keeps a project's files inside it", () => {
     expect(() => run(one, { kind: "check", files: { "../escape.one": "" } })).toThrow();
   });

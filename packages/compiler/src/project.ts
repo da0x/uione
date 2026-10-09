@@ -13,6 +13,9 @@ export interface Problem {
   line: number;
   column: number;
   message: string;
+  // The edit that fixes it, when there's one answer, as one upgrade makes it:
+  // replace length characters at line and column with text.
+  fix?: { line: number; column: number; length: number; text: string };
 }
 
 // Where a generated line came from: a line of a .one file, "same" for a line every
@@ -261,7 +264,7 @@ function inside(path: string): string {
   return path.startsWith(`${project}/`) ? path.slice(project.length + 1) : path;
 }
 
-function within<T extends { problems: { path: string; line: number; column: number; message: string }[] }>(answer: T): T {
-  answer.problems = answer.problems.map(({ path, line, column, message }) => ({ path: inside(path), line, column, message }));
+function within<T extends { problems: Problem[] }>(answer: T): T {
+  answer.problems = answer.problems.map(({ path, line, column, message, fix }) => ({ path: inside(path), line, column, message, ...(fix ? { fix } : {}) }));
   return answer;
 }
