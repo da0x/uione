@@ -8,7 +8,8 @@ import { Component, createContext, useCallback, useContext, useEffect, useMemo, 
 import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
-import type { Analytics, ComponentSet, Footer } from "./contract.js";
+import type { Analytics, Build, ComponentSet } from "./contract.js";
+import { buildLinks } from "./contract.js";
 import { DataProvider, useAuth, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
@@ -45,7 +46,14 @@ export interface AppProps {
   // What's new to the person reading, counted beside the app's name on every page: the
   // rows of a list of their own view made since a value of it, like when they last looked.
   unread?: Unread;
-  footer?: Footer; // at the foot of every page: who it's by, and what it was built from
+  build?: Build; // what it was built from, which its footer can show
+  footer?: SiteFooter; // at the foot of every page
+}
+
+// The site's footer: how it's laid out, and what it holds, drawn on every page.
+export interface SiteFooter {
+  layout: "bar" | "columns";
+  content: ComponentType;
 }
 
 export interface Unread {
@@ -55,7 +63,33 @@ export interface Unread {
 }
 
 const UnreadSpec = createContext<Unread | undefined>(undefined);
-const FooterSpec = createContext<Footer | undefined>(undefined);
+const FooterSpec = createContext<SiteFooter | undefined>(undefined);
+export const BuildSpec = createContext<Build | undefined>(undefined);
+
+// A value of what the site was built from, in a footer's words: the year it's read
+// in, its uione release, or its commit, shortened.
+export function Built({ value }: { value: "year" | "version" | "commit" }) {
+  const build = useContext(BuildSpec);
+  if (value === "year") return <>{new Date().getFullYear()}</>;
+  if (value === "version") return <>{build?.version ?? ""}</>;
+  return <>{build?.commit?.slice(0, 7) ?? ""}</>;
+}
+
+// A link to what the site was built from: its release's notes, or its commit in its
+// repository. Where that can't be told, like a build outside git, its words alone.
+export function BuiltLink({ to, children }: { to: "release" | "source"; children: ReactNode }) {
+  const ui = useUI();
+  const build = useContext(BuildSpec);
+  const href = build ? buildLinks(build)[to] : undefined;
+  if (to === "source" && !build?.commit) return null;
+  return href ? (
+    <ui.Link href={href} external>
+      {children}
+    </ui.Link>
+  ) : (
+    <span>{children}</span>
+  );
+}
 
 // Counts what's new to the person, and says how many to its parent.
 function CountUnread({ spec, onCount }: { spec: Unread; onCount: (n: number) => void }) {
@@ -199,7 +233,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread, footer }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread, build, footer }: AppProps) {
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}
@@ -216,6 +250,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
     <UIContext.Provider value={ui}>
       <UnreadSpec.Provider value={unread}>
       <FooterSpec.Provider value={footer}>
+      <BuildSpec.Provider value={build}>
       <DataProvider source={data}>
         <SignInProvider offered={authentication}>
           {location === undefined ? (
@@ -225,6 +260,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
           )}
         </SignInProvider>
       </DataProvider>
+      </BuildSpec.Provider>
       </FooterSpec.Provider>
       </UnreadSpec.Provider>
     </UIContext.Provider>
@@ -282,7 +318,7 @@ function Shell({
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
       unread={unreadSpec && auth?.person ? unread : undefined}
-      footer={footer}
+      footer={footer ? { layout: footer.layout, children: <footer.content /> } : undefined}
       account={
         signIn.offered &&
         auth && (

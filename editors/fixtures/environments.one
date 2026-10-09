@@ -10,7 +10,6 @@ project shop {
 	ui      radix
 	corners one::corners::square
 	unread  news.changes since news.seen
-	copyright  "Shop Ltd"
 	environment production {
 		domain    "shop.example"
 		firebase  "shop-production"
@@ -18,6 +17,13 @@ project shop {
 	environment staging {
 		domain    "staging.shop.example"
 		firebase  "shop-staging"
+	}
+}
+
+footer columns {
+	section "Shop" {
+		text "© {year} Shop Ltd"
+		link build.release "uione {build.version}"
 	}
 }
 

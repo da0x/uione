@@ -199,7 +199,6 @@ editors/fixtures/body.one	new since columns.seen	since	keyword
 editors/fixtures/body.one	seen glance::create	seen	keyword
 editors/fixtures/body.one	find "Find a column"	find	keyword
 editors/fixtures/environments.one	unread  news.changes	unread	keyword
-editors/fixtures/environments.one	copyright  "Shop Ltd"	copyright	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/body.one	hide when empty	hide	keyword
 editors/fixtures/roles.one	entity invitation invites seat {	invites	keyword
@@ -216,3 +215,6 @@ compiler/library/one.one	signin      list of signin	list	type
 compiler/library/one.one	enum corners {	enum	declare
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	color	keyword
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	green	plain
+editors/fixtures/environments.one	footer columns {	footer	declare
+editors/fixtures/environments.one	footer columns {	columns	keyword
+editors/fixtures/environments.one	link build.release "uione {build.version}"	build	constant

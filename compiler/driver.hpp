@@ -484,6 +484,34 @@ namespace one::driver {
         return out;
     }
 
+    // Moves who a site is by, once a setting, copyright "Ada" "https://...", into a
+    // footer below the project block, with what the site was built from, as the
+    // setting showed. How many it moved.
+    inline std::size_t move_copyright(sources& files) {
+        static const std::regex setting(R"re((^|\n)[ \t]+copyright[ \t]+"([^"\n]*)"(?:[ \t]+"([^"\n]*)")?[ \t]*(?=\n|$))re");
+        static const std::regex block(R"re((^|\n)project[ \t]+\w+[ \t]*\{)re");
+        std::size_t moved = 0;
+        for (auto& [path, text] : files) {
+            std::smatch opens;
+            if (!std::regex_search(text, opens, block)) continue;
+            std::size_t start = static_cast<std::size_t>(opens.position(0) + opens.length(0));
+            std::size_t end = text.find("\n}", start);
+            if (end == std::string::npos) continue;
+            std::string inside = text.substr(start, end - start);
+            std::smatch found;
+            if (!std::regex_search(inside, found, setting)) continue;
+            std::string name = found[2], link = found[3];
+            std::string by = link.empty() ? name : "[" + name + "](" + link + ")";
+            std::string footer = "\n\nfooter {\n\ttext \"© {year} " + by + "\"\n\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}";
+            std::size_t close = end + 2;  // just past the block's }
+            text.insert(close, footer);
+            text.erase(start + static_cast<std::size_t>(found.position(0)) + found[1].length(),
+                       static_cast<std::size_t>(found.length(0) - found[1].length()) + 1);
+            ++moved;
+        }
+        return moved;
+    }
+
     struct upgraded {
         sources changed;                 // the files it changed, as they are now
         language::diagnostics problems;  // what's left that has no fix; nothing is changed while there's any
@@ -499,6 +527,7 @@ namespace one::driver {
         auto files = read_sources(root, out.problems);
         if (!out.problems.empty()) return out;
         auto original = files;
+        out.fixes += move_copyright(files);
         for (int round = 0; round < 100; ++round) {
             language::diagnostics found;
             check_sources(files, found);

@@ -203,6 +203,7 @@ namespace one::language {
         std::map<std::string, std::string> prefixes_;
         std::map<std::string, std::set<std::string>> imports_;  // what each file imports, by its path
         location imports_at_;                                    // where the file being verified would say one
+        int footers_ = 0;                                        // the footers declared, of which a site has one
         std::map<std::string, std::string> placed_;  // where each namespace's at was first said
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
@@ -650,6 +651,30 @@ namespace one::language {
         }
 
         // What a block of settings may say is declared in a library, like uione's own.
+        // footer { ... }: one for the whole site, in a line or in columns, of words and
+        // links, and in columns, sections of them.
+        void verify(const std::string& ns, location where, const footer_declaration& f) {
+            if (++footers_ > 1) error(where, "a site has one footer, at the foot of every page");
+            if (f.layout != "bar" && f.layout != "columns") {
+                error(f.layout_where, "a footer is a bar, one line, or columns, each a section, like footer columns { ... }");
+            }
+            std::function<void(const std::vector<screen_item>&, bool)> items = [&](const std::vector<screen_item>& list, bool in_section) {
+                for (const auto& item : list) {
+                    auto* text = std::get_if<content_text>(&item.node);
+                    auto* block = std::get_if<content_block>(&item.node);
+                    if ((text && text->type == content_text::kind::text) || std::holds_alternative<content_link>(item.node)) {
+                        continue;
+                    } else if (block && block->type == content_block::kind::section && !in_section) {
+                        items(block->items, true);
+                    } else {
+                        error(item.where, "a footer holds text, links and sections of them, like text \"© {year} Ada Lovelace\"");
+                    }
+                }
+            };
+            items(f.items, false);
+            screen_items(ns, f.items, "");
+        }
+
         void verify(const std::string&, location where, const settings_declaration& st) {
             if (path_ != library_path) error(where, "settings " + st.name + " is declared in a library, like uione's own one, which a project imports");
         }
@@ -737,6 +762,12 @@ namespace one::language {
                 // How people sign in was called authentication for a while.
                 if (s.key == "authentication") {
                     error(s.where, "authentication is called signin, like signin " + s.value, fix{s.where, s.key.size(), "signin"});
+                    return;
+                }
+                // Who a site is by was a setting for a while, and is the footer's now.
+                if (s.key == "copyright" && in.name == "project") {
+                    error(s.where, "who a site is by is said in its footer, like footer { text \"© {year} " + s.value +
+                                       "\" }; one upgrade moves it there");
                     return;
                 }
                 const field* f = nullptr;
@@ -1569,6 +1600,7 @@ namespace one::language {
                 }
                 return;
             }
+            if (!link.built.empty()) return;  // what the site was built from, checked with the screen's items
             if (link.target.starts_with("https://") || link.target.starts_with("http://")) {
                 if (!link.target.starts_with("https://") || link.target.find_first_of("\" \\") != std::string::npos) {
                     error(where, "a link to another site is an https:// address, like \"https://uione.io/studio\"");
@@ -1763,6 +1795,13 @@ namespace one::language {
                 std::size_t close = text.find('}', open);
                 if (close == std::string::npos) break;
                 std::string inside = text.substr(open + 1, close - open - 1);
+                // What the site was built from, like {build.version}.
+                if (inside.starts_with("build.")) {
+                    if (inside != "build.version" && inside != "build.commit") {
+                        error(where, "{" + inside + "} isn't something a site is built from; it's {build.version} or {build.commit}");
+                    }
+                    continue;
+                }
                 std::size_t dot = inside.rfind('.');
                 if (dot == std::string::npos) continue;
                 qualified_name name{{}, where};
@@ -1996,7 +2035,12 @@ namespace one::language {
             for (const auto& item : items) {
                 if (auto* b = std::get_if<button_item>(&item.node)) icon(b->icon, b->icon_where);
                 if (auto* block = std::get_if<content_block>(&item.node)) hue(block->hue, block->hue_where);
-                if (auto* l = std::get_if<content_link>(&item.node)) icon(l->icon, l->icon_where);
+                if (auto* l = std::get_if<content_link>(&item.node)) {
+                    icon(l->icon, l->icon_where);
+                    if (!l->built.empty() && l->built != "release" && l->built != "source") {
+                        error(l->built_where, "a link to what the site was built from is build.release, its uione release's notes, or build.source, its commit");
+                    }
+                }
                 if (auto* t = std::get_if<table_item>(&item.node)) {
                     for (const auto& c : t->columns) icon(c.icon, c.icon_where);
                 }

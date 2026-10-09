@@ -80,6 +80,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`screen`](#screen) | a page, at an address |
 | [`picker`](#picker) | how an entity is chosen in a form |
 | [`webhook`](#webhook) | what's done when another service sends an event |
+| [`footer`](#footer) | what's at the foot of every page |
 | [`once`](#once) | a change to what's stored, done once, the first time the backend starts with it |
 | [`backend`](#backend) | Go written by hand beside what's generated |
 
@@ -124,7 +125,8 @@ The language's own words, inside what a declaration says:
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
-- in a project: the settings `one`'s library defines, below.
+- in a project: the settings `one`'s library defines, below;
+- in a footer: `bar`, `columns`, and in a link, `build.release` and `build.source`.
 
 ## import
 
@@ -195,7 +197,7 @@ a `slug` lowercase letters, digits and dashes, a `version` like "0.7.0", a
 `color` #rrggbb, a `file` and a `folder` are next to the project's `.one` files,
 an `address` is one of the site's own, starting with /, and a `link` is an https
 address. A setting whose
-type is another `settings`, like `redirect` or `copyright`, takes its fields in
+type is another `settings`, like `redirect`, takes its fields in
 order, `redirect "/old" "https://example.com/new"`. A setting is said once,
 unless its type is a `list of`, whose lines each add one. A name the library
 doesn't define isn't a setting, and the checker says so with the ones there are.
@@ -245,14 +247,6 @@ Analytics account of the owner's. It records each screen as it's opened. A visit
 is asked once whether it may use cookies, and until they agree, they're counted
 without them, as Google's consent mode does; their answer is kept in their browser.
 A project without the setting counts no one and asks no one.
-
-`copyright "Daher Alfawares"` says who the site is by at the foot of every page,
-as © and the year it's read. Beside it is the uione release the site was built
-with and the commit it was built from, so what's deployed can be told at a glance;
-the commit is git's where it's built, or `UIONE_COMMIT` when a deploy names it.
-The release links to its notes on GitHub, and the commit to itself in the site's
-repository, when that's on GitHub: git's `origin` where it's built, or
-`UIONE_REPOSITORY` when a deploy names it.
 
 `unread news.changes since news.seen` counts, on every page, what's new to the
 person signed in: the rows of a list of their own view made after a value of it,
@@ -1162,6 +1156,32 @@ view project_settings per project {
 - The deploy makes the master secret that every project's secret is derived
   from, keeps it in Secret Manager, and gives it only to the backend. It never
   goes into GitHub itself.
+
+## footer
+
+What's at the foot of every page, drawn with a screen's own items: text, links, and
+sections of them. A site has one, or none.
+
+```one
+footer {
+	text "© {year} [Daher Alfawares](https://www.linkedin.com/in/daheralfawares)"
+	link build.release "uione {build.version}"
+	link build.source "{build.commit}"
+}
+```
+
+`footer` alone, or `footer bar`, puts its items in one quiet line, apart; `footer
+columns` puts each `section` in a column of its own, its title above it, like a
+map of the site.
+
+Text anywhere can say `{year}`, the year it's read in, and link words as Markdown
+does, `[Ada Lovelace](https://...)`. What the site was built from can be said too:
+`{build.version}` is the uione release, and `{build.commit}` the commit, as git
+says where it's built, or as `UIONE_COMMIT` does when a deploy names it. `link
+build.release` goes to that release's notes, and `link build.source` to that
+commit in the site's repository, when it's on GitHub: as git's `origin` says, or
+`UIONE_REPOSITORY`. Where the repository isn't known, its words are shown
+unlinked, and without a commit, not at all.
 
 ## once
 

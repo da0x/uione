@@ -16,8 +16,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ComponentSet, Footer } from "@uione/react";
-import { footerLinks } from "@uione/react";
+import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -255,18 +254,6 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
   danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
-// What a page's foot says: © this year and who it's by, then the uione release and
-// the commit it was built from, each when known, and each linked where it can be:
-// who it's by to their page, the release to its notes, the commit to its repository.
-function footerParts(footer: Footer): { before?: string; words: string; href?: string }[] {
-  const links = footerLinks(footer);
-  return [
-    footer.copyright ? { before: `© ${new Date().getFullYear()} `, words: footer.copyright, href: footer.link } : undefined,
-    footer.version ? { before: "uione ", words: footer.version, href: links.release } : undefined,
-    footer.commit ? { words: footer.commit.slice(0, 7), href: links.commit } : undefined,
-  ].filter((part) => part !== undefined);
-}
-
 // How urgent a row, a card or a box of details is, as Trac colored a ticket's
 // priority: a fill, and an edge down its left side. 3 is plain, as Trac's normal was.
 const tones: Record<number, string> = {
@@ -360,24 +347,18 @@ export const radix: ComponentSet = {
         </div>
         <div className="flex flex-col gap-7">{children}</div>
       </main>
-      {/* Quietly, at the foot: who it's by, and the uione and commit it was built from. */}
+      {/* Quietly, at the foot of the page: in one line, its parts apart, or in
+          columns, each a section with a smaller heading. Its links are quiet too,
+          and leave the site without the mark that says so. */}
       {footer && (
-        <footer className="border-t border-line px-4 py-4 text-xs text-muted sm:px-6 lg:px-8">
-          <p>
-            {footerParts(footer).map((part, at) => (
-              <span key={at}>
-                {at > 0 && " · "}
-                {part.before}
-                {part.href ? (
-                  <a href={part.href} target="_blank" rel="noreferrer" className="underline-offset-4 hover:text-ink hover:underline">
-                    {part.words}
-                  </a>
-                ) : (
-                  part.words
-                )}
-              </span>
-            ))}
-          </p>
+        <footer
+          className={`border-t border-line px-4 py-4 text-xs text-muted sm:px-6 lg:px-8 [&_a]:font-normal [&_a]:text-muted [&_a]:underline-offset-4 [&_a:hover]:text-ink [&_a:hover]:underline [&_a_svg]:hidden ${
+            footer.layout === "columns"
+              ? "grid gap-6 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] [&_h2]:text-xs [&_h2]:font-semibold [&_h2]:tracking-normal [&_h2]:text-ink [&_section]:gap-1.5 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted"
+              : "flex flex-wrap items-baseline gap-x-2 gap-y-1 [&>*]:inline [&>*]:text-xs [&>*]:leading-5 [&>*]:text-muted [&>*+*]:before:mr-2 [&>*+*]:before:content-['·']"
+          }`}
+        >
+          {footer.children}
         </footer>
       )}
     </div>

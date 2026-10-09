@@ -199,6 +199,18 @@ namespace one::language {
                 end_line();
                 return {where, std::move(settings)};
             }
+            // footer { ... }, or footer columns { ... }
+            if (word == "footer" && (peek(1).kind == token_kind::left_brace || (peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace))) {
+                advance();
+                footer_declaration footer;
+                if (at(token_kind::identifier)) {
+                    footer.layout_where = peek().where;
+                    footer.layout = advance().text;
+                }
+                footer.items = parse_screen_block();
+                end_line();
+                return {where, std::move(footer)};
+            }
             if (word == "namespace") return {where, parse_namespace()};
             if (word == "format") return {where, parse_format()};
             if (word == "entity") return {where, parse_entity()};
@@ -224,7 +236,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend or once");
+                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend, footer or once");
         }
 
         project_declaration parse_project() {
@@ -846,6 +858,12 @@ namespace one::language {
                     link.namespace_name = parse_qualified_name("the namespace the link opens, like namespace projects");
                 } else if (at(token_kind::string)) {
                     link.target = advance().text;  // another site: link "https://uione.io/studio" "Open the studio"
+                } else if (at_word("build") && peek(1).kind == token_kind::dot) {
+                    // What the site was built from: link build.release "uione {build.version}"
+                    advance();
+                    advance();
+                    link.built_where = peek().where;
+                    link.built = expect(token_kind::identifier, "what the site was built from, release or source").text;
                 } else {
                     fail_expecting("where the link goes, like /docs, #waitlist, namespace projects or \"https://example.com\"");
                 }

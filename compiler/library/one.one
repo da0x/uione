@@ -103,8 +103,6 @@ namespace one {
 		analytics   analytics
 		// What's new to the person signed in, counted beside the site's name.
 		unread      unread
-		// Who the site is by, at the foot of every page, and where their name links.
-		copyright   copyright
 	}
 
 	// What a place the project runs has of its own: environment staging { ... }.
@@ -123,14 +121,6 @@ namespace one {
 		from  address
 		// Where whoever asks for it goes: an https address, or another of this site's.
 		to    link
-	}
-
-	// copyright "Ada Lovelace" "https://www.linkedin.com/in/ada"
-	settings copyright {
-		// Who the site is by.
-		name  text
-		// Where their name links, when it does.
-		link  link
 	}
 
 	// unread news.changes since news.seen

@@ -388,6 +388,8 @@ namespace one::language {
         std::optional<qualified_name> namespace_name;  // link namespace projects "See the projects"
         std::optional<std::string> icon;               // icon workflow: drawn as that, its words still naming it
         location icon_where;
+        std::string built;                             // link build.release: what the site was built from, release or source
+        location built_where;
     };
 
     struct table_column {
@@ -680,13 +682,21 @@ namespace one::language {
         std::optional<std::string> at;  // namespace studio at /: where its screens are, rather than /studio
     };
 
+    // footer { text "© {year} Ada" }: what's at the foot of every page, drawn with a
+    // screen's items, in one line (bar) or in columns, each a section.
+    struct footer_declaration {
+        std::string layout = "bar";
+        location layout_where;
+        std::vector<screen_item> items;
+    };
+
     struct declaration {
         location where;
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
-                     import_declaration, settings_declaration>
+                     import_declaration, settings_declaration, footer_declaration>
             node;
     };
 

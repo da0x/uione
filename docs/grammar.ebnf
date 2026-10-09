@@ -42,7 +42,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | roles
-                 | function | screen | picker | webhook | backend | once | signin | settings
+                 | function | screen | picker | webhook | backend | once | signin | settings | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
 import         ::= "import" NAME END
@@ -54,12 +54,10 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | qualified) END
                  | "redirect" STRING STRING END
-                 /* who it's by, and where their name links */
-                 | "copyright" STRING STRING END
                  /* what's new to a person, counted beside the app's name */
                  | "unread" NAME "." NAME "since" NAME "." NAME END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
-                 | "title" | "one" | "analytics" | "theme" | "appearance" | "corners" | "copyright"
+                 | "title" | "one" | "analytics" | "theme" | "appearance" | "corners"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
  * the place of the shared ones. `one build --for staging` builds for it. */
@@ -88,6 +86,11 @@ type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | 
 list           ::= "list" "of" ("text" | "user" | "permission" | qualified)
 serial         ::= "serial" ("per" NAME)?
 rule           ::= "required" | "unique" | "key" | "after" NAME
+
+/* footer: what's at the foot of every page, in one line or in columns of sections,
+ * drawn with a screen's text, links and sections */
+
+footer         ::= "footer" ("bar" | "columns")? screen_block END
 
 /* backend */
 
@@ -159,7 +162,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_bl
                  | "cards" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? cards_line* "}")? END
                  | "text" STRING ("when" condition)? END
                  | ("code" | "markdown") STRING END
-                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING) STRING ("icon" NAME)? END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END

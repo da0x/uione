@@ -10,6 +10,9 @@
       "include": "#comments"
     },
     {
+      "include": "#build"
+    },
+    {
       "include": "#project"
     },
     {
@@ -83,6 +86,17 @@
     },
     "declarations": {
       "patterns": [
+        {
+          "match": "^\\s*(footer)(?:\\s+(bar|columns))?(?=\\s*\\{)",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "keyword.other.uione"
+            }
+          }
+        },
         {
           "match": "^\\s*(format)\\s+([A-Za-z_]\\w*)(?:\\s+([^\\s{]+))?",
           "captures": {
@@ -488,7 +502,7 @@
           "include": "#strings"
         },
         {
-          "match": "^\\s*(domain|firebase|region|ui|signin|icon|color|theme|appearance|corners|layout|serve|redirect|title|one|analytics|unread|copyright)\\b",
+          "match": "^\\s*(domain|firebase|region|ui|signin|icon|color|theme|appearance|corners|layout|serve|redirect|title|one|analytics|unread)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"
@@ -520,6 +534,11 @@
           "include": "#operators"
         }
       ]
+    },
+    "build": {
+      "comment": "What a site was built from: link build.release.",
+      "match": "\\b(build)\\.(release|source)\\b",
+      "name": "constant.language.uione"
     }
   }
 }

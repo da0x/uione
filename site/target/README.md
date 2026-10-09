@@ -18,6 +18,7 @@ change to what gets generated is reviewed as a diff of the generated code.
 | `language.one` | `src/screens/language.tsx` |
 | `releases.one` | `src/screens/releases.tsx` |
 | `mission.one` | `src/screens/mission.tsx` |
+| `site.one`, its footer | `src/footer.tsx` |
 | `install.one` | `src/screens/install.tsx` |
 | every file | `src/app.tsx`, `src/main.tsx`, `package.json`, `tsconfig.json`, `vite.config.ts` |
 

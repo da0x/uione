@@ -56,7 +56,7 @@ TEST_CASE("the site is generated exactly as its targets say") {
     auto files = generate("/site");
     for (const char* path : {"package.json", "tsconfig.json", "vite.config.ts", "src/main.tsx", "src/app.tsx",
                              "src/screens/home.tsx", "src/screens/language.tsx",
-                             "src/screens/releases.tsx", "src/screens/mission.tsx", "src/screens/install.tsx"}) {
+                             "src/screens/releases.tsx", "src/screens/mission.tsx", "src/screens/install.tsx", "src/footer.tsx"}) {
         CAPTURE(path);
         auto target = platform::read_file(root + "/site/target/web/" + path);
         REQUIRE(target);
@@ -610,19 +610,29 @@ TEST_CASE("a project's theme, corners and appearance are on its page from the fi
     CHECK(page->content.find(R"(<html lang="en" data-palette="papercolor" data-corners="square" data-appearance="light" data-theme="light">)") != std::string::npos);
 }
 
-TEST_CASE("a site's foot says who it's by, and the uione, commit and repository it was built from") {
+TEST_CASE("a site's footer is drawn with a screen's items, and what it was built from") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-foot";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "import one\nproject shop {\n\tcopyright  \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n"
+    platform::write_file((dir / "main.one").string(), "import one\nproject shop {\n\tui  radix\n}\n"
+                                                      "footer {\n\ttext \"© {year} [Ada Lovelace](https://www.linkedin.com/in/ada)\"\n"
+                                                      "\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}\n"
                                                       "screen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* app = find(files, "src/app.tsx");
+    const auto* footer = find(files, "src/footer.tsx");
     REQUIRE(app != nullptr);
-    CHECK(app->content.find(std::string("footer: { copyright: \"Ada Lovelace\", link: \"https://www.linkedin.com/in/ada\", version: \"") + std::string(one::version) +
-                            "\", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }") != std::string::npos);
+    REQUIRE(footer != nullptr);
+    CHECK(app->content.find("import { SiteFooter } from \"./footer\";") != std::string::npos);
+    CHECK(app->content.find(std::string("build: { version: \"") + std::string(one::version) +
+                            "\", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }, footer: { layout: \"bar\" as const, content: SiteFooter }") !=
+          std::string::npos);
+    CHECK(footer->content.find("import { Built, BuiltLink, Link, Text } from \"@uione/react\";") != std::string::npos);
+    CHECK(footer->content.find(R"(<Text>© <Built value="year" /> <Link to="https://www.linkedin.com/in/ada">Ada Lovelace</Link></Text>)") != std::string::npos);
+    CHECK(footer->content.find(R"(<BuiltLink to="release">uione <Built value="version" /></BuiltLink>)") != std::string::npos);
+    CHECK(footer->content.find(R"(<BuiltLink to="source"><Built value="commit" /></BuiltLink>)") != std::string::npos);
 }
 
 TEST_CASE("a screen's title can show what the page does, once it's arrived") {

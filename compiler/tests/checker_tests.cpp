@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect, analytics, unread or copyright");
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect, analytics or unread");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
@@ -1218,9 +1218,22 @@ TEST_CASE("on signin does each step as the person signing in, with me.email thei
               .empty());
 }
 
-TEST_CASE("a copyright says who a site is by, and where their name links") {
-    CHECK(check_source("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").empty());
-    CHECK(check_source("import one\nproject shop {\n\tcopyright \"Ada Lovelace\"\n}\n").empty());
-    CHECK(only_error("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"linkedin.com/in/ada\"\n}\n").message ==
-          "copyright's link is an https address, like \"https://www.uione.io\"");
+TEST_CASE("a footer says who a site is by, and what it was built from, with a screen's items") {
+    std::string code = "import one\nproject shop {\n\tui  radix\n}\n";
+    CHECK(check_source(code + "footer {\n\ttext \"© {year} [Ada Lovelace](https://www.linkedin.com/in/ada)\"\n"
+                              "\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}\n")
+              .empty());
+    CHECK(check_source(code + "footer columns {\n\tsection \"Project\" {\n\t\tlink \"https://github.com/da0x/neotrac\" \"Source\"\n\t}\n}\n").empty());
+    CHECK(only_error(code + "footer {\n\tlink build.tag \"uione\"\n}\n").message ==
+          "a link to what the site was built from is build.release, its uione release's notes, or build.source, its commit");
+    CHECK(only_error(code + "footer {\n\ttext \"{build.date}\"\n}\n").message ==
+          "{build.date} isn't something a site is built from; it's {build.version} or {build.commit}");
+    CHECK(only_error(code + "footer grid {\n\ttext \"a\"\n}\n").message ==
+          "a footer is a bar, one line, or columns, each a section, like footer columns { ... }");
+    CHECK(only_error(code + "footer {\n\ttext \"a\"\n}\nfooter {\n\ttext \"b\"\n}\n").message == "a site has one footer, at the foot of every page");
+    CHECK(only_error("namespace shop {\nview stock {\n\teach item {\n\t\tname\n\t}\n}\nentity item {\n\tname  text\n}\n}\nfooter {\n\ttable shop::stock {\n\t\tname\n\t}\n}\n").message ==
+          "a footer holds text, links and sections of them, like text \"© {year} Ada Lovelace\"");
+    // Who a site is by was a setting for a while.
+    CHECK(only_error("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").message ==
+          "who a site is by is said in its footer, like footer { text \"© {year} Ada Lovelace\" }; one upgrade moves it there");
 }

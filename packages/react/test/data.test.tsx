@@ -7,12 +7,15 @@ import type { ReactNode } from "react";
 import { useLocation } from "react-router";
 import {
   App,
+  Built,
+  BuiltLink,
   Command,
   Confirm,
   Details,
   Form,
   Live,
   Table,
+  Link,
   Text,
   Thread,
   Timeline,
@@ -918,22 +921,52 @@ describe("what's on screen, in the path", () => {
 });
 
 describe("a site's foot", () => {
-  it("says who it's by, and the uione and commit it was built from, each linked", () => {
-    const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
+  const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
+  const Foot = () => (
+    <>
+      <Text>
+        © <Built value="year" /> <Link to="https://www.linkedin.com/in/ada">Ada Lovelace</Link>
+      </Text>
+      <BuiltLink to="release">
+        uione <Built value="version" />
+      </BuiltLink>
+      <BuiltLink to="source">
+        <Built value="commit" />
+      </BuiltLink>
+    </>
+  );
+
+  it("is what the site's footer says, with what it was built from, each linked", () => {
     render(
-      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ copyright: "Ada Lovelace", link: "https://www.linkedin.com/in/ada", version: "0.7.0", commit: "d9d95fd0aaaa", repository: "https://github.com/da0x/neotrac" }} />,
+      <App
+        name="app"
+        screens={[only]}
+        ui={plain}
+        data={memorySource()}
+        location="/"
+        build={{ version: "0.7.1", commit: "d9d95fd0aaaa", repository: "https://github.com/da0x/neotrac" }}
+        footer={{ layout: "bar", content: Foot }}
+      />,
     );
     const foot = screen.getByRole("contentinfo");
-    expect(foot.textContent).toBe(`© ${new Date().getFullYear()} Ada Lovelace · uione 0.7.0 · d9d95fd`);
+    expect(foot.textContent?.replaceAll(" ↗", "")).toBe(`© ${new Date().getFullYear()} Ada Lovelace` + "uione 0.7.1" + "d9d95fd");
     expect(screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
-    expect(screen.getByRole("link", { name: "0.7.0" }).getAttribute("href")).toBe("https://github.com/da0x/uione/releases/tag/v0.7.0");
+    expect(screen.getByRole("link", { name: "uione 0.7.1" }).getAttribute("href")).toBe("https://github.com/da0x/uione/releases/tag/v0.7.1");
     expect(screen.getByRole("link", { name: "d9d95fd" }).getAttribute("href")).toBe("https://github.com/da0x/neotrac/commit/d9d95fd0aaaa");
   });
 
-  it("links no commit when where it can be read isn't known", () => {
-    const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
-    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" footer={{ version: "0.7.0", commit: "d9d95fd0aaaa" }} />);
-    expect(screen.getByRole("contentinfo").textContent).toBe("uione 0.7.0 · d9d95fd");
-    expect(screen.queryByRole("link", { name: "d9d95fd" })).toBeNull();
+  it("links no commit where it can't be read, and shows none where it isn't known", () => {
+    const { unmount } = render(
+      <App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" build={{ version: "0.7.1", commit: "d9d95fd0aaaa" }} footer={{ layout: "bar", content: Foot }} />,
+    );
+    expect(screen.getByText("d9d95fd").closest("a")).toBeNull();
+    unmount();
+    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" build={{ version: "0.7.1" }} footer={{ layout: "bar", content: Foot }} />);
+    expect(screen.getByRole("contentinfo").textContent?.replaceAll(" ↗", "")).toBe(`© ${new Date().getFullYear()} Ada Lovelace` + "uione 0.7.1");
+  });
+
+  it("isn't there when the site has no footer", () => {
+    render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" build={{ version: "0.7.1" }} />);
+    expect(screen.queryByRole("contentinfo")).toBeNull();
   });
 });

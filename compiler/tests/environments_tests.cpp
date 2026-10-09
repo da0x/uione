@@ -162,7 +162,7 @@ TEST_CASE("a project counts its visitors with Firebase Analytics only when it sa
     CHECK(counted.find("import { firebaseAnalytics, firebaseSource } from \"@uione/react/firebase\";") != std::string::npos);
     CHECK(counted.find("measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,") != std::string::npos);
     CHECK(counted.find("const analytics = !import.meta.env.DEV && cloud.config.measurementId ? firebaseAnalytics(cloud.config) : undefined;") != std::string::npos);
-    CHECK(counted.find(", analytics, footer: {") != std::string::npos);
+    CHECK(counted.find(", analytics, build: {") != std::string::npos);
     auto quiet = app("");
     CHECK(quiet.find("firebaseAnalytics") == std::string::npos);
     CHECK(quiet.find(", analytics") == std::string::npos);

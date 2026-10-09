@@ -248,3 +248,14 @@ TEST_CASE("an upgrade says import one below the file's opening comments, and abo
                                           "import one\n\n// The shop.\nproject shop {\n\tone \"9.9.9\"\n\tui  radix\n}\n");
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("an upgrade moves who a site is by into a footer, with what it was built from") {
+    auto dir = project("uione-upgrade-footer", "import one\n\nproject shop {\n\tui         radix\n\tcopyright  \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    CHECK(done.changed.begin()->second == "import one\n\nproject shop {\n\tone        \"9.9.9\"\n\tui         radix\n}\n\n"
+                                          "footer {\n\ttext \"© {year} [Ada Lovelace](https://www.linkedin.com/in/ada)\"\n"
+                                          "\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}\n");
+    std::filesystem::remove_all(dir);
+}

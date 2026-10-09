@@ -33,27 +33,32 @@ export interface PageProps {
   crumbs?: ReactNode; // where the pages above a screen go, above its title
   subtitle?: ReactNode; // where a screen's words about itself go, under its title
   unread?: number; // how many things are new to the person reading, said beside the app's name
-  footer?: Footer; // at the foot of the page: who it's by, and what it was built from
+  footer?: FooterProps; // at the foot of the page, as the site's footer says
   children: ReactNode;
 }
 
-// What a site says at the foot of every page: who it's by, as © and this year, and
-// the uione release and commit it was built from, so what's deployed can be told.
-export interface Footer {
-  copyright?: string; // like Daher Alfawares
-  link?: string; // where the name links, like their LinkedIn
-  version?: string; // like 0.7.0
-  commit?: string; // like d9d95fd
+// What a site was built from: the uione release, and the commit and repository the
+// deploy found, which its footer can show and link.
+export interface Build {
+  version: string; // like 0.7.0
+  commit?: string; // like d9d95fd0...
   repository?: string; // where the commit can be read, like https://github.com/da0x/neotrac
 }
 
-// Where a foot's uione release and commit link: the release's notes on GitHub, and
-// the commit in the site's own repository, when it's known.
-export function footerLinks(footer: Footer): { release?: string; commit?: string } {
+// Where what a site was built from can be read: its uione release's notes on GitHub,
+// and its commit in its own repository, when that's known.
+export function buildLinks(build: Build): { release?: string; source?: string } {
   return {
-    ...(footer.version ? { release: `https://github.com/da0x/uione/releases/tag/v${footer.version}` } : {}),
-    ...(footer.commit && footer.repository ? { commit: `${footer.repository}/commit/${footer.commit}` } : {}),
+    ...(build.version ? { release: `https://github.com/da0x/uione/releases/tag/v${build.version}` } : {}),
+    ...(build.commit && build.repository ? { source: `${build.repository}/commit/${build.commit}` } : {}),
   };
+}
+
+// What's at the foot of every page, as the site's footer declares it: in one quiet
+// line, its parts apart, or in columns, each a section.
+export interface FooterProps {
+  layout: "bar" | "columns";
+  children: ReactNode;
 }
 
 export interface AccountProps {

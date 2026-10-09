@@ -177,6 +177,11 @@ namespace one::generators {
                 std::string stem = std::filesystem::path(f.path).stem().string();
                 out.push_back(file("src/screens/" + stem + ".tsx", screen_file(f, found, screens, stem)));
             }
+            for (const auto& f : files_) {
+                if (auto found = footer_in("", f.declarations); found.second) {
+                    out.push_back(file("src/footer.tsx", footer_file(f, found.first, *found.second)));
+                }
+            }
             for (auto& f : component_files()) out.push_back(std::move(f));
             out.push_back(file("package.json", package_json()));
             out.push_back(file("tsconfig.json", tsconfig_json()));
@@ -215,8 +220,8 @@ namespace one::generators {
         std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
-        std::string copyright_;  // copyright "Daher Alfawares": who it's by, at the foot of every page
-        std::string copyright_link_;  // and where their name links, like their LinkedIn
+        bool footer_ = false;  // whether the site has a footer, in src/footer.tsx
+        std::string footer_layout_;  // bar or columns
         std::pair<std::string, std::string> unread_;  // unread news.changes since news.seen, as news.changes and news.seen
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
@@ -289,7 +294,6 @@ namespace one::generators {
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
-                        if (s.key == "copyright") copyright_ = s.value, copyright_link_ = s.to;
                         if (s.key == "unread") unread_ = {s.value, s.to};
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
@@ -837,6 +841,52 @@ namespace one::generators {
             return out;
         }
 
+        // The site's footer, and the namespace it's declared in.
+        static std::pair<std::string, const language::declaration*> footer_in(const std::string& ns, const std::vector<language::declaration>& declarations) {
+            for (const auto& d : declarations) {
+                if (std::holds_alternative<language::footer_declaration>(d.node)) return {ns, &d};
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                    if (auto found = footer_in(web_detail::join(ns, n->name), n->declarations); found.second) return found;
+                }
+            }
+            return {"", nullptr};
+        }
+
+        // src/footer.tsx: what's at the foot of every page, drawn with the items a
+        // screen has.
+        stream footer_file(const language::file& f, const std::string& ns, const language::declaration& declared) {
+            const auto& footer = std::get<language::footer_declaration>(declared.node);
+            footer_ = true;
+            footer_layout_ = footer.layout;
+            screen_parts parts;
+            screen_path_ = f.path;
+            route_ = "";
+            stream items;
+            auto from_items = items.from(f.path, declared.where.line);
+            items.open("<>");
+            ++in_block_;  // its links are laid out by the footer, like a section's
+            screen_items(items, parts, ns, footer.items, footer.items);
+            --in_block_;
+            items.close("</>");
+            stream out;
+            auto from_footer = out.from(f.path, declared.where.line);
+            out.generated_from(std::filesystem::path(f.path).filename().string());
+            {
+                auto fixed = out.fixed();
+                std::string names;
+                for (const auto& c : parts.components) names += (names.empty() ? "" : ", ") + c;
+                if (!names.empty()) out.line("import { " + names + " } from \"@uione/react\";");
+                for (const auto& line : parts.imports) out.line(line);
+            }
+            out.line();
+            out.open("export function SiteFooter() {");
+            out.open("return (");
+            out.embed(items);
+            out.close(");");
+            out.close("}");
+            return out;
+        }
+
         template <typename F>
         static void for_each_line(const std::string& text, F each) {
             std::size_t at = 0;
@@ -886,6 +936,17 @@ namespace one::generators {
         // Text with {view.field} in it: the plain parts as they are, and each value as
         // a <Live> reading that view.
         std::string live_text(screen_parts& parts, const std::string& ns, std::string_view text) {
+            // Words linked as in Markdown, [Ada Lovelace](https://...), each a link.
+            for (std::size_t open = text.find('['); open != std::string_view::npos; open = text.find('[', open + 1)) {
+                std::size_t middle = text.find("](", open);
+                std::size_t close = middle == std::string_view::npos ? middle : text.find(')', middle);
+                if (close == std::string_view::npos || text.substr(open, middle - open).find(']') != std::string_view::npos) continue;
+                std::string_view to = text.substr(middle + 2, close - middle - 2);
+                if (!(to.starts_with("https://") || to.starts_with("http://") || to.starts_with("/") || to.starts_with("#"))) continue;
+                parts.components.insert("Link");
+                return live_text(parts, ns, text.substr(0, open)) + "<Link to=" + web_detail::js_string(to.starts_with("/") ? full_route(ns, std::string(to)) : std::string(to)) + ">" +
+                       live_text(parts, ns, text.substr(open + 1, middle - open - 1)) + "</Link>" + live_text(parts, ns, text.substr(close + 1));
+            }
             std::string out;
             std::size_t at = 0;
             while (at < text.size()) {
@@ -898,7 +959,11 @@ namespace one::generators {
                 out += web_detail::jsx_text(text.substr(at, open - at));
                 std::string_view value = text.substr(open + 1, close - open - 1);
                 std::size_t dot = value.rfind('.');
-                if (dot == std::string_view::npos) {
+                // The year it's read in, and what the site was built from.
+                if (value == "year" || value == "build.version" || value == "build.commit") {
+                    parts.components.insert("Built");
+                    out += "<Built value=" + web_detail::js_string(value == "year" ? "year" : value.substr(6)) + " />";
+                } else if (dot == std::string_view::npos) {
                     out += web_detail::jsx_text(text.substr(open, close - open + 1));
                 } else {
                     std::string view = full_view(ns, std::string(value.substr(0, dot)));
@@ -1166,12 +1231,18 @@ namespace one::generators {
                 } else if (auto* text = std::get_if<language::content_text>(&item.node)) {
                     content(out, parts, ns, *text);
                 } else if (auto* link = std::get_if<language::content_link>(&item.node)) {
-                    parts.components.insert("Link");
                     std::string target = link->namespace_name ? full_route(link->namespace_name->text(), "/")
                                          : link->target.starts_with("/") ? full_route(ns, link->target)
                                                                                          : link->target;
                     std::string icon = link->icon ? " icon=" + web_detail::js_string(*link->icon) : "";
-                    out.line("<Link to=" + web_detail::js_string(target) + icon + ">" + web_detail::jsx_text(link->label) + "</Link>");
+                    if (!link->built.empty()) {
+                        // What the site was built from: its release's notes, or its commit.
+                        parts.components.insert("BuiltLink");
+                        out.line("<BuiltLink to=" + web_detail::js_string(link->built) + ">" + live_text(parts, ns, link->label) + "</BuiltLink>");
+                    } else {
+                        parts.components.insert("Link");
+                        out.line("<Link to=" + web_detail::js_string(target) + icon + ">" + live_text(parts, ns, link->label) + "</Link>");
+                    }
                 } else if (auto* details = std::get_if<language::details_item>(&item.node)) {
                     this->details(out, parts, ns, *details);
                 } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
@@ -2333,6 +2404,7 @@ namespace one::generators {
                 out.line("import { " + list + " } from \"@uione/react/firebase\";");
             }
             out.line("import { " + ui_ + " } from \"@uione/" + ui_ + "\";");
+            if (footer_) out.line("import { SiteFooter } from \"./footer\";");
             std::string names;
             for (const auto& screen : screens) {
                 auto from_screen = out.from(screen.from.path, screen.from.line);
@@ -2395,11 +2467,11 @@ namespace one::generators {
                     unread = ", unread: { view: " + web_detail::js_string(full) + ", list: " + web_detail::js_string(unread_.first.substr(unread_.first.find('.') + 1)) +
                              ", since: " + web_detail::js_string(unread_.second.substr(unread_.second.find('.') + 1)) + " }";
                 }
-                // At the foot of every page: who it's by, when the project says, and the
-                // uione and commit it was built from, so what's deployed can be told.
-                std::string footer = ", footer: { " + (copyright_.empty() ? "" : "copyright: " + web_detail::js_string(copyright_) + ", ") +
-                                     (copyright_link_.empty() ? "" : "link: " + web_detail::js_string(copyright_link_) + ", ") +
-                                     "version: " + web_detail::js_string(std::string(one::version)) + ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
+                // What it was built from, which a footer can show: the uione release, and
+                // the commit and repository, as the deploy found them.
+                std::string footer = ", build: { version: " + web_detail::js_string(std::string(one::version)) +
+                                     ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
+                if (footer_) footer += ", footer: { layout: " + web_detail::js_string(footer_layout_) + " as const, content: SiteFooter }";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + (analytics_ ? ", analytics" : "") + unread + footer + " };");
             }
