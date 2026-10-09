@@ -1,7 +1,8 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
+import { Sheet } from "./sheet.js";
 
 // Display settings beside light and dark: what a reader can ask of the page, each
 // set on it as data-* and kept in their browser. What they leave as the system's
@@ -104,44 +105,22 @@ export function DisplaySettings() {
   const [open, setOpen] = useState(false);
   const [display, setDisplay] = useState<Display>(stored);
   const id = useId();
-  const button = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
   const change = (next: Display) => {
     setDisplay(next);
     apply(next);
     save(next);
   };
-  // Escape, or a click elsewhere, closes it, and focus goes back to its button.
-  useEffect(() => {
-    if (!open) return;
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      button.current?.focus();
-    };
-    const away = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (!panel.current?.contains(target) && !button.current?.contains(target)) setOpen(false);
-    };
-    document.addEventListener("keydown", key);
-    document.addEventListener("pointerdown", away);
-    return () => {
-      document.removeEventListener("keydown", key);
-      document.removeEventListener("pointerdown", away);
-    };
-  }, [open]);
   const changed = (Object.keys(defaults) as (keyof Display)[]).some((name) => display[name] !== defaults[name]);
   return (
-    <div className="relative">
+    <>
       <button
-        ref={button}
         type="button"
         aria-label="Display settings"
         title="Display settings"
+        aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={id}
         className="flex h-8 w-8 items-center justify-center rounded-box text-muted hover:bg-surface hover:text-ink"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen(true)}
       >
         {/* A person with open arms, in a circle: the sign for accessibility. */}
         <svg viewBox="0 0 24 24" width="18" height="18" style={{ width: "1.125rem", height: "1.125rem" }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -150,20 +129,15 @@ export function DisplaySettings() {
           <path d="M7 10.5l5 1 5-1M12 11.5v3.5M9.5 19l2.5-4 2.5 4" />
         </svg>
       </button>
-      {open && (
-        <div
-          ref={panel}
-          id={id}
-          role="group"
-          aria-label="Display settings"
-          className="absolute right-0 top-10 z-30 flex max-h-[80vh] w-[min(22rem,calc(100vw-2rem))] flex-col gap-4 overflow-y-auto rounded-box border border-line bg-surface p-4 text-sm text-ink shadow-raised"
-        >
+      {/* Opened as everything over the page is: a dialog, the whole screen on a phone. */}
+      <Sheet open={open} title="Display settings" onClose={() => setOpen(false)}>
+        <div className="flex flex-col gap-4 text-sm">
           {(Object.keys(choices) as (keyof Display)[]).map((name) => (
             <fieldset key={name} className="flex flex-col gap-1.5">
               <legend className="mb-1 font-medium">{legends[name]}</legend>
               <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                 {choices[name].map(([value, label]) => (
-                  <label key={value} className="flex items-center gap-1.5">
+                  <label key={value} className="flex min-h-8 items-center gap-1.5">
                     <input
                       type="radio"
                       name={`${id}-${name}`}
@@ -186,7 +160,7 @@ export function DisplaySettings() {
             Back to my system's
           </button>
         </div>
-      )}
-    </div>
+      </Sheet>
+    </>
   );
 }

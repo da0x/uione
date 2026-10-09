@@ -13,7 +13,6 @@
 import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
-import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
@@ -21,6 +20,7 @@ import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
 import { DisplaySettings } from "./accessibility.js";
+import { Sheet } from "./sheet.js";
 import { ThemeToggle } from "./theme.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
@@ -1476,27 +1476,11 @@ export const radix: ComponentSet = {
     );
   },
 
+  // Over the page: a dialog on a wide screen, the whole screen on a phone.
   Dialog: ({ open, title, onClose, children }) => (
-    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
-      <Dialog.Portal>
-        {/* Above the page's header, which stays on top of everything else on the page. */}
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[2px]" />
-        {/* Its title and × stay in sight, and only what's under them scrolls, however
-            long it is on however short a screen. */}
-        <Dialog.Content
-          aria-describedby={undefined}
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-box border border-line bg-surface text-ink shadow-raised"
-        >
-          <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6 pb-4">
-            <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
-            <Dialog.Close aria-label="Close" className="-mt-1 -mr-2 rounded-box px-2 text-xl leading-8 text-muted hover:text-ink">
-              <span aria-hidden="true">×</span>
-            </Dialog.Close>
-          </div>
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-6 [&>button]:self-auto">{children}</div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Sheet open={open} title={title} onClose={onClose}>
+      {children}
+    </Sheet>
   ),
 
   // Nothing written, like an issue without a description, takes no room.

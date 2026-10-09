@@ -557,7 +557,8 @@ describe("display settings", () => {
     expect(button.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    const panel = screen.getByRole("group", { name: "Display settings" });
+    // It opens as everything over the page does, in a dialog.
+    const panel = screen.getByRole("dialog", { name: "Display settings" });
     // Each setting is a group of radio buttons under its name.
     fireEvent.click(within(panel).getByRole("radio", { name: "More" }));
     fireEvent.click(within(panel).getByRole("radio", { name: "200%" }));
@@ -579,13 +580,15 @@ describe("display settings", () => {
     expect(within(panel).getByRole("radio", { name: "100%" })).toHaveProperty("checked", true);
   });
 
-  it("closes with Escape, and gives focus back to its button", () => {
+  it("closes with Escape, and gives focus back to its button", async () => {
     render(<DisplaySettings />);
     const button = screen.getByRole("button", { name: "Display settings" });
+    button.focus();
     fireEvent.click(button);
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("group", { name: "Display settings" })).toBeNull();
-    expect(document.activeElement).toBe(button);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Display settings" })).toBeNull();
+    // Given back once it's closed.
+    await waitFor(() => expect(document.activeElement).toBe(button));
   });
 });
 
@@ -606,6 +609,16 @@ describe("a dialog", () => {
     expect(layer(header)).toBeGreaterThan(0);
     expect(layer(dialog)).toBeGreaterThan(layer(header));
     expect(layer(overlay)).toBeGreaterThan(layer(header));
+  });
+
+  it("is the whole screen on a phone, and a dialog in the middle of a wider one", () => {
+    renderScreen(() => (
+      <radix.Dialog open title="New project" onClose={() => {}}>
+        <p>Its name.</p>
+      </radix.Dialog>
+    ));
+    const classes = screen.getByRole("dialog", { name: "New project" }).getAttribute("class")!.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["inset-0", "h-[100dvh]", "w-full", "sm:top-1/2", "sm:left-1/2", "sm:w-[min(28rem,calc(100vw-2rem))]"]));
   });
 
   it("keeps its title and × in sight, and scrolls only what's under them", () => {
