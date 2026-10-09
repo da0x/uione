@@ -50,8 +50,8 @@ type DeskTicket struct {
 type DeskNote struct {
 	one.Record
 	DeskTicket string `firestore:"ticket" one:"required,key,refers=desks::desk_ticket"`
-	URL    string `firestore:"url" one:"required,key"`
-	Title  string `firestore:"title"`
+	URL        string `firestore:"url" one:"required,key"`
+	Title      string `firestore:"title"`
 }
 
 var desks = one.Module("desks",
