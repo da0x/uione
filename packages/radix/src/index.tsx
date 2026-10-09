@@ -1107,7 +1107,7 @@ export const radix: ComponentSet = {
     const over = (x: number, y: number) => nodes.find((_, i) => x >= left(i) && x <= left(i) + width && y >= top && y <= top + height);
     return (
       <div className="flex flex-col gap-2">
-        <div className="w-fit max-w-full overflow-x-auto rounded-box border border-line bg-surface p-2 shadow-panel">
+        <div className="mx-auto w-fit max-w-full overflow-x-auto rounded-box border border-line bg-surface p-2 shadow-panel">
           <svg
             width={total.w}
             height={total.h}
@@ -1198,7 +1198,7 @@ export const radix: ComponentSet = {
             )}
           </svg>
         </div>
-        {onConnect && <p className="text-sm text-muted">Drag from one box to another to add an arrow between them; press an arrow to change it.</p>}
+        {onConnect && <p className="text-center text-sm text-muted">Drag from one box to another to add an arrow between them; press an arrow to change it.</p>}
         {error && (
           <p role="alert" className="text-sm text-danger">
             {error}
