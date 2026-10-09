@@ -25,6 +25,8 @@ namespace tracker {
 	define role maintainer "Maintainer" in project {
 		project::update
 		member::create
+		page::update
+		link::delete
 	}
 
 } // namespace tracker

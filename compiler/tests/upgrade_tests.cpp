@@ -314,3 +314,26 @@ TEST_CASE("an upgrade says each change to another record as a dispatch of its co
     CHECK(text.find("\teach card {\n\t\tdispatch card::update { column = none }\n") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("a project's themes, and uione's own, are shown as they say and as they're drawn, for a designer") {
+    driver::sources files{{"main.one", "import one\n\ndefine theme sea \"Sea\" from harbor {\n\taccent  #0b5cad  dark #8cc4ff\n\tcorners  4\n}\n\n"
+                                       "project shop {\n\ttheme  sea\n}\n"}};
+    auto shown = driver::themes(files, ".preview");
+    REQUIRE(shown.read);
+    CHECK(shown.theme == "sea");
+    CHECK(shown.project_path == "main.one");
+    auto sea = std::find_if(shown.themes.begin(), shown.themes.end(), [](const auto& t) { return t.name == "sea"; });
+    REQUIRE(sea != shown.themes.end());
+    CHECK(sea->from == "harbor");
+    CHECK(sea->line == 3);
+    CHECK_FALSE(sea->own);
+    // What it's from is filled in.
+    CHECK(sea->look.colors.at("accent") == std::pair<std::string, std::string>{"#0b5cad", "#8cc4ff"});
+    CHECK(sea->look.colors.at("page") == std::pair<std::string, std::string>{"#f7f8fa", "#0a101c"});
+    CHECK(sea->look.corners == 4);
+    // Its CSS is for the preview, light and dark side by side.
+    CHECK(sea->css.starts_with(".preview {\n"));
+    CHECK(sea->css.find(".preview[data-theme=\"dark\"] {\n") != std::string::npos);
+    CHECK(sea->css.find(":root") == std::string::npos);
+    CHECK(std::any_of(shown.themes.begin(), shown.themes.end(), [](const auto& t) { return t.name == "papercolor" && t.own; }));
+}

@@ -132,15 +132,44 @@ export interface Shown {
   files: ShownFile[];
 }
 
+// A theme, as it says and as it's drawn, for a theme designer: its colors, light and
+// dark, by role, its fonts, corners and depth, with what it's from filled in; the
+// Google Fonts it needs; and its CSS for a preview under the scope asked for.
+export interface ThemeShown {
+  name: string;
+  title: string;
+  from: string; // the theme it starts from, or ""
+  path: string; // the file it's declared in; "" for uione's own
+  line: number;
+  own: boolean; // uione's, which a project starts from but doesn't change
+  colors: Record<string, [string, string]>;
+  text: string;
+  heading: string; // "" for the text's font
+  code: string;
+  ground: [string, string]; // code's ground, light and dark; "" when the theme gives none
+  corners: number;
+  depth: "flat" | "raised";
+  fonts: string; // the Google Fonts address it needs, or ""
+  css: string;
+}
+
+export interface Themes {
+  read: boolean; // false when the files don't parse
+  theme: string; // the one the project's block names, harbor unless it names one
+  projectPath: string; // the file with the project block, or ""
+  themes: ThemeShown[];
+}
+
 export type Request =
   | { kind: "version" }
   | { kind: "check"; files: Files }
   | { kind: "build"; files: Files; environment?: string }
   | { kind: "define"; files: Files; path: string; line: number; column: number }
   | { kind: "show"; files: Files; path: string; from: number; to?: number }
-  | { kind: "complete"; text: string; line: number; column: number };
+  | { kind: "complete"; text: string; line: number; column: number }
+  | { kind: "themes"; files: Files; scope: string };
 
-export type Answer = string | Checked | Built | Shown | Definition | Completions;
+export type Answer = string | Checked | Built | Shown | Definition | Completions | Themes;
 
 // The parts of the Emscripten module this uses.
 export interface Module {
@@ -177,6 +206,12 @@ export function run(one: Module, request: Request): Answer {
     ) as Definition;
     if (defined.found && defined.path) defined.path = inside(defined.path);
     return defined;
+  }
+  if (request.kind === "themes") {
+    const shown = call("one_themes", project, request.scope) as Themes;
+    shown.projectPath = shown.projectPath ? inside(shown.projectPath) : "";
+    for (const theme of shown.themes) theme.path = theme.path ? inside(theme.path) : "";
+    return shown;
   }
   if (request.kind === "build") {
     const built = within(call("one_build", project, `${project}/build`, request.environment ?? "")) as Built;

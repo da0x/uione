@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createCompiler } from "../src/index.js";
-import type { Port } from "../src/index.js";
+import type { Themes, Port } from "../src/index.js";
 import { run } from "../src/project.js";
 import type { Built, Checked, Completions, Module, Shown } from "../src/project.js";
 
@@ -150,6 +150,17 @@ describe("the compiler in the browser", () => {
     const settings = run(one, { kind: "complete", text, line: 4, column: 4 }) as Completions;
     expect(settings.from).toBe(2);
     expect(settings.items).toContainEqual({ label: "theme", detail: "theme", info: "How the site looks: a theme of its own, or uione's, like papercolor." });
+  });
+
+  it("shows a project's themes, each with its CSS for a preview", () => {
+    const files = { "main.one": 'import one\n\ndefine theme sea "Sea" from harbor {\n\taccent  #0b5cad  dark #8cc4ff\n}\n\nproject shop {\n\ttheme  sea\n}\n' };
+    const shown = run(one, { kind: "themes", files, scope: ".preview" }) as Themes;
+    expect(shown).toMatchObject({ read: true, theme: "sea", projectPath: "main.one" });
+    const sea = shown.themes.find((t) => t.name === "sea")!;
+    expect(sea).toMatchObject({ from: "harbor", path: "main.one", line: 3, own: false, corners: 10, depth: "raised" });
+    expect(sea.colors.accent).toEqual(["#0b5cad", "#8cc4ff"]);
+    expect(sea.css.startsWith(".preview {")).toBe(true);
+    expect(shown.themes.some((t) => t.name === "harbor" && t.own && t.path === "")).toBe(true);
   });
 
   it("keeps a project's files inside it", () => {

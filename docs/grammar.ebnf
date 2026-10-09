@@ -57,8 +57,8 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | qualified) END
                  | "redirect" STRING STRING END
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
-                 | "title" | "one" | "analytics" | "theme" | "appearance" | "corners"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "layout" | "serve"
+                 | "title" | "one" | "analytics" | "theme" | "appearance" | "accessibility"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
  * the place of the shared ones. `one build --for staging` builds for it. */

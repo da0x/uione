@@ -35,9 +35,9 @@ syn match uioneQualifier  "\%(\h\w*::\)\+" contained nextgroup=uioneName
 syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
-" Words inside blocks
-syn keyword uioneKeyword   require permission clear dispatch readers as dark ground depth flat raised when was add remove to has of in limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen badge find only tint color
+" Words inside blocks, never the entity a command is on: board in board::create
+" is a name.
+syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|details\|layout\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|hour\|hours\|day\|days\|week\|weeks\|new\|since\|seen\|badge\|find\|only\|tint\|color\)\>\%(\s*::\)\@!"
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+in\>"
@@ -64,6 +64,8 @@ syn keyword uioneBuiltin   now me none true false
 " name.
 " by anyone signed in: who runs a command no role allows.
 syn match   uioneBuiltin   "\%(\<by\s\+\)\@<=\%(\<anyone\>\%(\s\+\<signed\>\s\+\<in\>\)\=\|\<owner\>\)"
+" define role maintainer "Maintainer" in project: what it's in is an entity.
+syn match   uioneType      +\%(^\s*define\s\+\%(role\|service\)\s\+\h\w*\s\+"[^"]*"\s\+in\s\+\)\@<=\h\w*+
 " define role maintainer "Maintainer" in project: a role each project starts with;
 " define service github "GitHub" in project, a system that runs commands.
 syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\%(role\|service\|theme\)\>" nextgroup=uioneName skipwhite
@@ -106,7 +108,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 syn cluster uioneProjectItems contains=uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
-syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|appearance\|corners\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|theme\|appearance\|accessibility\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

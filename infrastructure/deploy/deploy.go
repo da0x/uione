@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -149,12 +148,11 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 		if err := os.WriteFile(filepath.Join(web, ".env.production"), []byte(env), 0o644); err != nil {
 			return err
 		}
-		// A machine that builds only to deploy, like a Cloud Build, hasn't installed
-		// the web app's packages yet.
-		if _, err := os.Stat(filepath.Join(web, "node_modules")); errors.Is(err, fs.ErrNotExist) {
-			if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive"); err != nil {
-				return err
-			}
+		// The web app's packages, as its package.json names them: installed on a
+		// machine that builds only to deploy, and brought up to date where an earlier
+		// build left others, which would otherwise ship in their place.
+		if err := tools.Run(ctx, web, log, "yarn", "install", "--non-interactive"); err != nil {
+			return err
 		}
 		return tools.Run(ctx, web, log, "yarn", "build")
 	}); err != nil {

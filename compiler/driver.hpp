@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -20,6 +21,7 @@
 #include <vector>
 
 #include "generators/project.hpp"
+#include "generators/theme.hpp"
 #include "language/checker.hpp"
 #include "language/diagnostics.hpp"
 #include "language/parser.hpp"
@@ -680,6 +682,67 @@ namespace one::driver {
         auto read = read_sources(root, found);
         if (!found.empty()) return {};
         return define(read, path, line, column);
+    }
+
+    // A project's themes, and uione's own, each as it says and as it's drawn, for a
+    // theme designer: where it's declared, what it's from, its colors light and dark,
+    // fonts, corners and depth with what it's from filled in, and its CSS for a
+    // preview under scope. theme is the one the project's block names, harbor unless
+    // it names one; nothing when the files don't parse.
+    struct theme_shown {
+        std::string name, title, from, path;
+        int line = 0;
+        bool own = false;  // uione's, from its library, which a project starts from but doesn't change
+        generators::theme::look look;
+        std::string css;
+    };
+
+    struct themes_shown {
+        bool read = false;
+        std::string theme = "harbor";
+        std::string project_path;  // the file with the project block
+        std::vector<theme_shown> themes;
+    };
+
+    inline themes_shown themes(const sources& given, const std::string& scope) {
+        themes_shown out;
+        language::diagnostics found;
+        std::vector<language::file> files;
+        for (const auto& [path, source] : given) files.push_back(language::parse(path, source, found));
+        if (!found.empty()) return out;
+        out.read = true;
+        std::function<void(const std::vector<language::declaration>&, const std::string&, bool)> each =
+            [&](const std::vector<language::declaration>& declarations, const std::string& path, bool own) {
+                for (const auto& d : declarations) {
+                    if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                        each(n->declarations, path, own);
+                    } else if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
+                        out.project_path = path;
+                        for (const auto& s : p->settings) {
+                            if (s.key == "theme") out.theme = s.value;
+                        }
+                    } else if (auto* t = std::get_if<language::theme_declaration>(&d.node)) {
+                        theme_shown shown{t->name, t->title, t->from, own ? "" : path, d.where.line, own, {}, ""};
+                        if (auto look = generators::theme::resolve(files, t->name)) {
+                            shown.look = *look;
+                            shown.css = generators::theme::scoped_css(*look, scope);
+                        }
+                        out.themes.push_back(std::move(shown));
+                    }
+                }
+            };
+        language::diagnostics ignored;
+        auto library = language::parse(std::string(language::library_path), language::library_source, ignored);
+        each(library.declarations, "", true);
+        for (const auto& f : files) each(f.declarations, f.path, false);
+        return out;
+    }
+
+    inline themes_shown themes(const std::string& root, const std::string& scope) {
+        language::diagnostics found;
+        auto read = read_sources(root, found);
+        if (!found.empty()) return {};
+        return themes(read, scope);
     }
 
     // What can be written where an editor's cursor is, from the library: a project's

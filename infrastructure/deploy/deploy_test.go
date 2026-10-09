@@ -172,7 +172,9 @@ func TestAStackWithoutTheWebAppsSettingsIsntBuilt(t *testing.T) {
 	}
 }
 
-func TestAWebAppWithItsPackagesInstalledIsntInstalledAgain(t *testing.T) {
+// Packages an earlier build left, like 0.7.1's under a package.json that names
+// 0.7.3, are brought up to date rather than shipped.
+func TestAWebAppsPackagesAreBroughtUpToDateWhereAnEarlierBuildLeftSome(t *testing.T) {
 	dir := built(t)
 	os.MkdirAll(filepath.Join(dir, "web", "node_modules"), 0o755)
 	w := &world{outputs: outputs}
@@ -180,10 +182,12 @@ func TestAWebAppWithItsPackagesInstalledIsntInstalledAgain(t *testing.T) {
 		Confirm: func(string) bool { return true }}, w.tools()); err != nil {
 		t.Fatal(err)
 	}
+	installed := false
 	for _, did := range w.did {
-		if strings.Contains(did, "yarn install") {
-			t.Errorf("installed again: %v", w.did)
-		}
+		installed = installed || strings.Contains(did, "yarn install")
+	}
+	if !installed {
+		t.Errorf("not brought up to date: %v", w.did)
 	}
 }
 

@@ -4,9 +4,9 @@
 // The uione compiler for the browser. createCompiler starts it in a Web Worker;
 // each call sends a project's files and resolves with what the compiler found.
 
-import type { Built, Checked, Completions, Definition, Files, Request, Shown } from "./project.js";
+import type { Built, Checked, Completions, Definition, Files, Request, Shown, Themes } from "./project.js";
 
-export type { Built, Checked, Completions, Definition, Files, GeneratedFile, Outline, OutlinedEnvironment, OutlinedItem, OutlinedScreen, OutlinedSetting, OutlinedTable, Problem, Shown, ShownFile, Source } from "./project.js";
+export type { Built, Checked, Completions, Definition, Files, GeneratedFile, Outline, OutlinedEnvironment, OutlinedItem, OutlinedScreen, OutlinedSetting, OutlinedTable, Problem, Shown, ShownFile, Source, ThemeShown, Themes } from "./project.js";
 
 export interface Compiler {
   version(): Promise<string>;
@@ -19,6 +19,8 @@ export interface Compiler {
   show(files: Files, path: string, from: number, to?: number): Promise<Shown>;
   // What can be written at a line and column of a file's text, both counted from 1.
   complete(text: string, line: number, column: number): Promise<Completions>;
+  // A project's themes and uione's own, each with its CSS for a preview under scope.
+  themes(files: Files, scope: string): Promise<Themes>;
   stop(): void;
 }
 
@@ -53,6 +55,7 @@ export function createCompiler(port: Port = new Worker(new URL("./worker.js", im
     define: (files, path, line, column) => ask<Definition>({ kind: "define", files, path, line, column }),
     show: (files, path, from, to) => ask<Shown>({ kind: "show", files, path, from, ...(to === undefined ? {} : { to }) }),
     complete: (text, line, column) => ask<Completions>({ kind: "complete", text, line, column }),
+    themes: (files, scope) => ask<Themes>({ kind: "themes", files, scope }),
     stop: () => {
       port.terminate?.();
       for (const pending of waiting.values()) pending.reject(new Error("the compiler was stopped"));

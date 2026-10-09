@@ -211,9 +211,9 @@ editors/fixtures/roles.one	entity invitation invites seat {	invites	keyword
 editors/fixtures/roles.one	email  email  required  key	email	variable
 editors/fixtures/environments.one	import one	import	declare
 editors/fixtures/environments.one	import one	one	namespace
-editors/fixtures/environments.one	corners one::corners::square	corners	keyword
-editors/fixtures/environments.one	corners one::corners::square	one	namespace
-editors/fixtures/environments.one	corners one::corners::square	square	plain
+editors/fixtures/environments.one	appearance one::appearance::light	appearance	keyword
+editors/fixtures/environments.one	appearance one::appearance::light	one	namespace
+editors/fixtures/environments.one	appearance one::appearance::light	light	plain
 compiler/library/one.one	settings project {	settings	declare
 compiler/library/one.one	settings project {	project	name
 compiler/library/one.one	one         version	one	variable
@@ -232,3 +232,9 @@ editors/fixtures/theme.one	define theme sea "Sea" from harbor {	sea	name
 editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	#0b5cad	constant
 editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	dark	keyword
 editors/fixtures/theme.one	depth    flat	flat	keyword
+editors/fixtures/accessibility.one	accessibility  menu	accessibility	keyword
+editors/fixtures/roles.one	in project {	project	type
+editors/fixtures/roles.one	\t\tmember::create	member	namespace
+examples/tracker/main.one	\t\tissue::take	issue	namespace
+editors/fixtures/roles.one	\t\tpage::update	page	namespace
+editors/fixtures/roles.one	\t\tlink::delete	link	namespace

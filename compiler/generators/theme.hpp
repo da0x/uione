@@ -195,6 +195,18 @@ namespace one::generators::theme {
                ":root[data-contrast=\"more\"] {\n" + detail::chosen("more") + "}\n";
     }
 
+    // The same, for a part of a page rather than the page, like a theme designer's
+    // preview: under scope, dark with data-theme="dark" on it, and more contrast with
+    // data-contrast="more", so light and dark, and more contrast, can be shown side by
+    // side whatever the page itself is.
+    inline std::string scoped_css(const look& l, const std::string& scope) {
+        std::string shape = "  --radius-box: " + std::to_string(l.corners) + "px;\n  --radius-control: " + std::to_string(l.corners > 2 ? l.corners - 2 : l.corners) +
+                            "px;\n  --font-sans: " + detail::stack(l.text, false) + ";\n  --font-heading: " +
+                            detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n";
+        return scope + " {\n" + shape + detail::mode(l, false) + "}\n" + scope + "[data-theme=\"dark\"] {\n" + detail::mode(l, true) + "}\n" + scope + " {\n" +
+               detail::chosen("std") + detail::worked_out() + "}\n" + scope + "[data-contrast=\"more\"] {\n" + detail::chosen("more") + "}\n";
+    }
+
     // The fonts the component set doesn't bring, from Google Fonts; empty when it brings them all.
     inline std::string fonts_link(const look& l) {
         std::set<std::string> families{l.text, l.heading.empty() ? l.text : l.heading, l.code};

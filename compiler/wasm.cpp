@@ -255,6 +255,59 @@ EMSCRIPTEN_KEEPALIVE const char* one_define(const char* project, const char* pat
     return answer.c_str();
 }
 
+// A project's themes and uione's own, each as it says and as it's drawn, with its CSS
+// for a preview under scope, and the one the project's block names.
+EMSCRIPTEN_KEEPALIVE const char* one_themes(const char* project, const char* scope) {
+    auto t = one::driver::themes(std::string(project), std::string(scope));
+    answer = "{\"read\":" + std::string(t.read ? "true" : "false") + ",\"theme\":";
+    text(answer, t.theme);
+    answer += ",\"projectPath\":";
+    text(answer, t.project_path);
+    answer += ",\"themes\":[";
+    for (std::size_t i = 0; i < t.themes.size(); ++i) {
+        const auto& shown = t.themes[i];
+        answer += i ? ",{\"name\":" : "{\"name\":";
+        text(answer, shown.name);
+        answer += ",\"title\":";
+        text(answer, shown.title);
+        answer += ",\"from\":";
+        text(answer, shown.from);
+        answer += ",\"path\":";
+        text(answer, shown.path);
+        answer += ",\"line\":" + std::to_string(shown.line) + ",\"own\":" + (shown.own ? "true" : "false") + ",\"colors\":{";
+        bool first = true;
+        for (const auto& [role, pair] : shown.look.colors) {
+            answer += first ? "" : ",";
+            first = false;
+            text(answer, role);
+            answer += ":[";
+            text(answer, pair.first);
+            answer += ",";
+            text(answer, pair.second);
+            answer += "]";
+        }
+        answer += "},\"text\":";
+        text(answer, shown.look.text);
+        answer += ",\"heading\":";
+        text(answer, shown.look.heading);
+        answer += ",\"code\":";
+        text(answer, shown.look.code);
+        answer += ",\"ground\":[";
+        text(answer, shown.look.ground);
+        answer += ",";
+        text(answer, shown.look.ground_dark);
+        answer += "],\"corners\":" + std::to_string(shown.look.corners) + ",\"depth\":";
+        text(answer, shown.look.depth);
+        answer += ",\"fonts\":";
+        text(answer, one::generators::theme::fonts_link(shown.look));
+        answer += ",\"css\":";
+        text(answer, shown.css);
+        answer += "}";
+    }
+    answer += "]}";
+    return answer.c_str();
+}
+
 // What can be written at a line and column of a file's text, both counted from 1:
 // the column the word being written starts at, and each item with its type and what
 // the library says of it.
