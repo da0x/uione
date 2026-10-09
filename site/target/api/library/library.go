@@ -58,21 +58,25 @@ var LoanCreate = one.Command[Loan]("loan::create").
 		if book.Status != StatusOnShelf {
 			return c.Fail("that book is not on the shelf")
 		}
-		book.Status = StatusLent
+		if err := one.DispatchUpdate(c, l.Book, func(dispatched *Book) {
+			dispatched.Status = StatusLent
+		}, nil, nil); err != nil {
+			return err
+		}
 		return nil
 	})
 
 var Checkin = one.Command[Loan]("loan::checkin").
 	Do(func(c *one.Ctx, l *Loan) error {
-		book, err := one.Read[Book](c, l.Book)
-		if err != nil {
-			return err
-		}
 		if !l.ReturnedAt.IsZero() {
 			return c.Fail("that book is already back")
 		}
 		l.ReturnedAt = c.Now()
-		book.Status = StatusOnShelf
+		if err := one.DispatchUpdate(c, l.Book, func(dispatched *Book) {
+			dispatched.Status = StatusOnShelf
+		}, nil, nil); err != nil {
+			return err
+		}
 		return nil
 	})
 

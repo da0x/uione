@@ -478,7 +478,7 @@ roles rank per crew from hand {
 }
 command crew::create {
 	permission signed_in
-	create hand {
+	dispatch hand::create {
 		crew = id  person = me  rank = rank::captain
 	}
 }
@@ -768,7 +768,8 @@ TEST_CASE("a form asks for a command's input as it would a field of its type") {
                          "entity board {\n\ttitle  text\n}\n"
                          "entity column {\n\tboard  board\n\ttitle  text\n}\n"
                          "entity card {\n\tcolumn  column\n}\n"
-                         "command column::delete {\n\tinput into column\n\teach card where column == id {\n\t\tcolumn = into\n\t}\n}\n"
+                         "command card::update\n"
+                         "command column::delete {\n\tinput into column\n\teach card where column == id {\n\t\tdispatch card::update { column = into }\n\t}\n}\n"
                          "view board_page per board {\n\tcolumns = each column in board {\n\t\ttitle\n\t}\n}\n"
                          "screen \"Columns\" /boards/:board {\n"
                          "\ttable board_page.columns {\n\t\ttitle\n\t\tdelete \"Remove\"\n\t}\n"

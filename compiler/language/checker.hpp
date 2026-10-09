@@ -156,6 +156,7 @@ namespace one::language {
             // by entity: what phase::triaged may name, with a project's starting roles.
             const std::map<std::string, std::set<std::string>>* made = nullptr;
             bool stored = false;                         // a once's, which may name what's already stored, like role::developer
+            bool picked = false;                         // entity is a row an each or a once's step picked, changed only by dispatch
             // A command's inputs, like into in input into phase, named in its body.
             const std::map<std::string, field, std::less<>>* inputs = nullptr;
         };
@@ -558,6 +559,11 @@ namespace one::language {
                     for (const auto& v : c->values) {
                         auto* literal = v.value ? std::get_if<literal_expression>(&v.value->node) : nullptr;
                         if (v.name == "name" && literal) made[c->entity].insert(literal->value);
+                    }
+                } else if (auto* d = std::get_if<dispatch_statement>(&st.node); d && d->command.parts.size() == 2 && d->command.parts[1] == "create") {
+                    for (const auto& v : d->values) {
+                        auto* literal = v.value ? std::get_if<literal_expression>(&v.value->node) : nullptr;
+                        if (v.name == "name" && literal) made[d->command.parts[0]].insert(literal->value);
                     }
                 } else if (auto* i = std::get_if<if_statement>(&st.node)) {
                     made_by_name(i->then_body, made);
@@ -1159,6 +1165,16 @@ namespace one::language {
                         const field* f = entity ? find_field(*entity, name) : nullptr;
                         if (entity && !f) error(s.where, "'changes " + name + "' names a field entity " + entity->name + " doesn't have");
                     }
+                } else if (auto* d = std::get_if<dispatch_statement>(&s.node)) {
+                    verify_dispatch(ns, *d, in);
+                } else if (auto* a = std::get_if<assign_statement>(&s.node); a && entity && (in.picked || in.stored)) {
+                    // A row an each picked is changed by its own command, as anything
+                    // but the command's own entity is.
+                    by_command(ns, s, entity->name, "update", s.text, a->target->where);
+                } else if (auto* a = std::get_if<assign_statement>(&s.node); a && entity && through(*entity, *a->target)) {
+                    auto [pointer, target, member] = *through(*entity, *a->target);
+                    std::string rest = s.text.starts_with(written(*a->target)) ? s.text.substr(written(*a->target).size()) : "";
+                    by_command(ns, s, target, "update", rest.empty() ? "" : "id = " + pointer + "  " + member + rest, a->target->where);
                 } else if (auto* a = std::get_if<assign_statement>(&s.node)) {
                     std::size_t errors = out_.size();
                     const field* target = resolve(in, *a->target);
@@ -1172,7 +1188,19 @@ namespace one::language {
                     // With the target wrong, what's assigned to it can't be judged.
                     if (out_.size() == errors) resolve(in, *a->value, target);
                 } else if (auto* c = std::get_if<create_statement>(&s.node)) {
-                    verify_create(ns, *c, in);
+                    // A record is made by its create command, which is run with dispatch.
+                    qualified_name command{{c->entity, "create"}, c->entity_where};
+                    if (c->command) {
+                        error(s.where, "a command is run with dispatch, like dispatch " + c->command->text() + " { ... }", fix{s.where, 0, "dispatch "});
+                    } else if (find_command(ns, command)) {
+                        error(s.where, "a record is made by its create command: dispatch " + c->entity + "::create { ... }",
+                              fix{s.where, c->head_length, "dispatch " + c->entity + "::create"});
+                    } else {
+                        error(s.where, "a record is made by its create command, run with dispatch " + c->entity + "::create { ... }; declare command " +
+                                           c->entity + "::create");
+                    }
+                } else if (auto* l = std::get_if<list_statement>(&s.node); l && entity && (in.picked || in.stored)) {
+                    by_command(ns, s, entity->name, "update", s.text, l->list_where);
                 } else if (auto* l = std::get_if<list_statement>(&s.node)) {
                     snake(l->list, l->list_where);
                     const field* list = entity ? find_field(*entity, l->list) : nullptr;
@@ -1209,10 +1237,11 @@ namespace one::language {
                         error(each->entity_where, "there's no entity " + each->entity + " " + in_namespace(ns));
                     } else {
                         mean_entity(each->entity_where, each->entity.size(), picked);
-                        verify_pick(*picked, *each->where, in, false);
+                        verify_pick(*picked, *each->where, in, true);
                         context inner = in;
                         inner.entity = picked;
                         inner.update = true;
+                        inner.picked = true;
                         statements(ns, each->body, picked, inner);
                     }
                 } else if (auto* gone = std::get_if<delete_statement>(&s.node)) {
@@ -1223,10 +1252,138 @@ namespace one::language {
                     } else if (!picked) {
                         error(gone->entity_where, "there's no entity " + gone->entity + " " + in_namespace(ns));
                     } else {
-                        mean_entity(gone->entity_where, gone->entity.size(), picked);
-                        verify_pick(*picked, *gone->where, in, true);
+                        // Deleted by its own command, for each it picks.
+                        std::size_t each_at = s.text.find("each ");
+                        std::string written = each_at == std::string::npos ? "" : s.text.substr(each_at);
+                        qualified_name command{{gone->entity, "delete"}, gone->entity_where};
+                        if (!find_command(ns, command)) {
+                            error(s.where, "a record is deleted by its delete command, run with dispatch " + gone->entity + "::delete; declare command " +
+                                               gone->entity + "::delete");
+                        } else {
+                            error(s.where, "a record is deleted by its delete command: " + (written.empty() ? "each ... " : written + " ") +
+                                               "{ dispatch " + gone->entity + "::delete }",
+                                  written.empty() ? std::nullopt
+                                                  : std::optional<fix>{fix{s.where, s.text.size(), written + " { dispatch " + gone->entity + "::delete }"}});
+                        }
                     }
                 }
+            }
+        }
+
+        // A record changed other than by the command that's its own, said as a
+        // dispatch of its command: dispatch issue::update { phase = into }. inside is
+        // what goes in the braces, or nothing when the fix can't be said.
+        void by_command(const std::string& ns, const statement& s, const std::string& entity, const std::string& action, const std::string& inside,
+                        location where) {
+            qualified_name command{{entity, action}, where};
+            std::string says = "dispatch " + entity + "::" + action + " { " + (inside.empty() ? "..." : inside) + " }";
+            if (!find_command(ns, command)) {
+                error(where, "a record is changed by its commands, run with " + says + "; declare command " + entity + "::" + action);
+            } else if (inside.empty() || s.text.empty()) {
+                error(where, "a record is changed by its commands: " + says);
+            } else {
+                error(where, "a record is changed by its commands: " + says, fix{s.where, s.text.size(), says});
+            }
+        }
+
+        // book.status, in a command on loan: a field of what the entity points at, as
+        // the pointing field, the entity it points at, and the field.
+        std::optional<std::tuple<std::string, std::string, std::string>> through(const entity_declaration& e, const expression& target) {
+            auto* m = std::get_if<member_expression>(&target.node);
+            if (!m) return std::nullopt;
+            const expression* object = m->object.get();
+            // loan.book.status names the loan's own book.
+            if (auto* inner = std::get_if<member_expression>(&object->node)) {
+                auto* own = std::get_if<name_expression>(&inner->object->node);
+                if (!own || own->name.parts != std::vector<std::string>{e.name}) return std::nullopt;
+                const field* f = find_field(e, inner->member);
+                if (!f || f->list || !f->type) return std::nullopt;
+                return std::tuple{inner->member, f->type->parts.back(), m->member};
+            }
+            auto* name = std::get_if<name_expression>(&object->node);
+            if (!name || name->name.parts.size() != 1 || name->name.parts[0] == e.name) return std::nullopt;
+            const field* f = find_field(e, name->name.parts[0]);
+            if (!f || f->list || !f->type || f->type->text() == "user") return std::nullopt;
+            return std::tuple{f->name, f->type->parts.back(), m->member};
+        }
+
+        // dispatch board::create { project = id  name = "main" }: the command is
+        // declared, each value is given to a field of its entity or to one of its
+        // inputs, and an update or a delete says which it acts on, by id, or is on the
+        // row an each picked.
+        void verify_dispatch(const std::string& ns, const dispatch_statement& d, const context& in) {
+            snake(d.command);
+            if (!in.command && !in.hook) {
+                error(d.command.where, "dispatch goes in a command, which changes things; a function only works out a value");
+                return;
+            }
+            const entity_declaration* target = find_command(ns, d.command);
+            if (!target) {
+                verify_command_use(ns, d.command);
+                return;
+            }
+            const std::string& action = d.command.parts.back();
+            const command_declaration* command = nullptr;
+            for (const auto& candidate : candidates(ns, {d.command.parts.begin(), d.command.parts.end() - 2})) {
+                auto here = scopes_.find(candidate);
+                if (here == scopes_.end()) continue;
+                auto found = here->second.command_nodes.find(target->name + "::" + action);
+                if (found != here->second.command_nodes.end()) command = found->second;
+            }
+            std::set<std::string, std::less<>> inputs;
+            if (command) {
+                for (const auto& st : command->body) {
+                    if (auto* input = std::get_if<input_statement>(&st.node)) inputs.insert(input->name);
+                }
+            }
+            std::set<std::string, std::less<>> given;
+            bool id = false, misnamed = false;
+            for (const auto& v : d.values) {
+                if (!given.insert(v.name).second) error(v.where, v.name + " is given a value twice");
+                if (v.name == "id") {
+                    if (action == "create") error(v.where, "what's made gets an id of its own; dispatch " + d.command.text() + " gives it its fields");
+                    id = true;
+                    resolve(in, *v.value);
+                    continue;
+                }
+                if (inputs.contains(v.name)) {
+                    resolve(in, *v.value);
+                    continue;
+                }
+                const field* f = find_field(*target, v.name);
+                if (!f) {
+                    error(v.where, "entity " + target->name + " has no field " + v.name + nearest(v.name, field_names(*target)));
+                    names_in(*v.value);
+                    misnamed = true;
+                    continue;
+                }
+                // A once may give what was made before a key existed its key, like the
+                // board a project's phases were in before it had boards.
+                if (is_serial(*f) || (action != "create" && f->key && !in.stored)) error(v.where, why_fixed(*f));
+                resolve(in, *v.value, f);
+            }
+            for (const auto& st : d.lists) {
+                auto* l = std::get_if<list_statement>(&st.node);
+                if (!l) continue;
+                const field* list = find_field(*target, l->list);
+                if (!list) {
+                    error(l->list_where, "entity " + target->name + " has no field " + l->list + nearest(l->list, field_names(*target)));
+                } else if (!list->list) {
+                    error(l->list_where, l->list + " isn't a list, so nothing can be " + (l->adds ? "added to" : "removed from") + " it");
+                } else {
+                    resolve(in, *l->value, list);
+                }
+            }
+            if (action == "create") {
+                // A misspelled name is likely the missing one, so it's reported once.
+                for (const auto& f : target->fields) {
+                    if (!misnamed && f.required && !f.initial && !is_serial(f) && !given.contains(f.name)) {
+                        error(d.command.where, "dispatch " + d.command.text() + " needs a value for " + f.name + ", which is required");
+                    }
+                }
+            } else if (!id && !(in.picked && in.entity == target)) {
+                error(d.command.where, "dispatch " + d.command.text() + " says which " + target->name + " it acts on, like id = " + target->name +
+                                           ", or goes in an each over them");
             }
         }
 
@@ -2553,6 +2710,7 @@ namespace one::language {
                 in.update = true;
                 in.command = true;
                 in.stored = true;
+                in.picked = true;
                 std::map<std::string, std::set<std::string>> made;
                 made_by_name(step.body, made);
                 in.made = &made;

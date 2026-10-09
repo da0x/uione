@@ -48,6 +48,7 @@ type Ctx struct {
 	command  string               // the command running, like tracker::issue::close, for history
 	given    map[string]any       // what it was sent besides its entity's fields, for Input
 	gone     []*gone              // what it deletes besides its own entity, with DeleteWhere
+	deleting string               // the path of its own entity, when the command deletes it
 }
 
 // gone is an entity a command's body deletes with DeleteWhere.
@@ -75,11 +76,13 @@ func Create[E any, P entityPointer[E]](c *Ctx, entity *E) error {
 	if s == nil {
 		return fmt.Errorf("one: %s isn't an entity any module uses", reflect.TypeFor[E]().Name())
 	}
-	return create(c, s, reflect.ValueOf(entity).Elem())
+	return create(c, s, reflect.ValueOf(entity).Elem(), nil)
 }
 
-// create is Create for an entity known by its schema, like a project's roles.
-func create(c *Ctx, s *schema, v reflect.Value) error {
+// create is Create for an entity known by its schema, like a project's roles. body,
+// when there is one, runs once the entity has its id, before it's checked, as a
+// dispatched command's does.
+func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 	record := v.Addr().Interface().(interface{ record() *Record }).record()
 	username := ""
 	if s.startsWithUsername() {
@@ -90,9 +93,6 @@ func create(c *Ctx, s *schema, v reflect.Value) error {
 	}
 	madeFrom := s.start(v, c.me, username, c.now)
 	s.normalize(v)
-	if err := s.validate(v); err != nil {
-		return err
-	}
 	counted, err := c.app.serials(c.tx, s, v, c.counters)
 	if err != nil {
 		return err
@@ -101,6 +101,15 @@ func create(c *Ctx, s *schema, v reflect.Value) error {
 	ref := collection.NewDoc()
 	if key, ok := s.id(v); ok {
 		ref = collection.Doc(key)
+	}
+	record.ID = ref.ID
+	if body != nil {
+		if err := body(); err != nil {
+			return err
+		}
+	}
+	if err := s.validate(v); err != nil {
+		return err
 	}
 	record.CreatedAt, record.CreatedBy = c.now, c.me
 	var before map[string]any
@@ -752,7 +761,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		if action == "delete" {
 			// Its body says whether it may go, as a require does, before it goes, and
-			// what goes with it, like the issues of a phase moving to another.
+			// what goes with it, like the issues of a phase moving to another. What it
+			// dispatches to delete it again, like a link's other side, does nothing.
+			body.deleting = ref.Path
 			if do != nil {
 				if err := do(body, entity); err != nil {
 					return err

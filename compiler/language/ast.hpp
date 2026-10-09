@@ -143,6 +143,17 @@ namespace one::language {
         // board::create { ... }: made as that command makes it, its body run too,
         // like a board's phases made from the preset it starts from.
         std::optional<qualified_name> command;
+        std::size_t head_length = 0;  // create board, or board::create: what dispatch replaces
+    };
+
+    // dispatch board::create { project = id  name = "main" }: another command run in
+    // the same step as this one, as the same person, its body and requires too. An
+    // update or a delete names what it acts on with id = ..., or acts on the row of an
+    // each over its entity. Its permission isn't asked again: this command vouches.
+    struct dispatch_statement {
+        qualified_name command;
+        std::vector<field_value> values;
+        std::vector<statement> lists;  // add role::contributor to roles
     };
 
     struct return_statement {
@@ -186,8 +197,9 @@ namespace one::language {
         location where;
         std::variant<require_statement, permission_statement, clear_statement, changes_statement, assign_statement,
                      create_statement, list_statement, return_statement, if_statement, input_statement, each_statement,
-                     delete_statement>
+                     delete_statement, dispatch_statement>
             node;
+        std::string text = {};  // as written, for a statement on one line, which a fix rewrites
     };
 
     // declarations

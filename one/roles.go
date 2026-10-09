@@ -187,7 +187,7 @@ func (a *App) seedRoles(c *Ctx, scope *schema, place string) error {
 				v.FieldByIndex(f.title.index).SetString(d.title)
 			}
 			v.FieldByIndex(f.allows.index).Set(reflect.ValueOf(append([]string{}, d.permissions...)))
-			if err := create(c, f.role, v); err != nil {
+			if err := create(c, f.role, v, nil); err != nil {
 				return err
 			}
 		}

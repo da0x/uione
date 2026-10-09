@@ -773,6 +773,9 @@ namespace one::generators {
             if (auto* i = std::get_if<language::if_statement>(&s.node)) return mentions(*i->condition, name) || any(i->then_body) || any(i->else_body);
             if (auto* each = std::get_if<language::each_statement>(&s.node)) return mentions(*each->where, name) || any(each->body);
             if (auto* gone = std::get_if<language::delete_statement>(&s.node)) return mentions(*gone->where, name);
+            if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) {
+                return std::any_of(d->values.begin(), d->values.end(), [&](const auto& v) { return mentions(*v.value, name); }) || any(d->lists);
+            }
             return false;
         }
 
@@ -806,10 +809,11 @@ namespace one::generators {
             return local_name(command.substr(cut + 2) + "_" + command.substr(0, cut));
         }
 
-        // The create commands a package's bodies run, like board::create.
+        // The commands a package's bodies run, like board::create.
         void find_run(const std::vector<language::statement>& body) {
             for (const auto& s : body) {
                 if (auto* made = std::get_if<language::create_statement>(&s.node); made && made->command) run_.insert(made->command->text());
+                if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) run_.insert(d->command.text());
                 if (auto* i = std::get_if<language::if_statement>(&s.node)) {
                     find_run(i->then_body);
                     find_run(i->else_body);
@@ -963,6 +967,9 @@ namespace one::generators {
             }
             if (auto* c = std::get_if<language::create_statement>(&s.node)) {
                 for (const auto& v : c->values) find_pointed(e, *v.value);
+            }
+            if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) {
+                for (const auto& v : d->values) find_pointed(e, *v.value);
             }
             if (auto* i = std::get_if<language::if_statement>(&s.node)) {
                 find_pointed(e, *i->condition);
@@ -1144,17 +1151,22 @@ namespace one::generators {
                     unsupported(path_, s.where, "this each in a command");
                     return;
                 }
+                // Each it picks, by any of the ways it says, like pair == id || id == pair.
                 std::string inner = local_name(picked->name);
-                out.open("if err := one.EachIn(c, " + pick->front().first + ", " + pick->front().second + ", func(" + inner + " *" +
-                         api_detail::go_name(picked->name) + ") error {");
+                std::string visit = "each" + api_detail::go_name(picked->name);
+                out.open("{");
+                out.open(visit + " := func(" + inner + " *" + api_detail::go_name(picked->name) + ") error {");
                 auto outer = pointed_;
                 pointed_.clear();
                 for (const auto& inside : each->body) statement(out, *picked, inside, inner, uses_time);
                 pointed_ = outer;
                 out.line("return nil");
-                out.dedent();
-                out.open("}); err != nil {");
-                out.line("return err");
+                out.close("}");
+                for (const auto& [name, value] : *pick) {
+                    out.open("if err := one.EachIn(c, " + name + ", " + value + ", " + visit + "); err != nil {");
+                    out.line("return err");
+                    out.close("}");
+                }
                 out.close("}");
             } else if (auto* gone = std::get_if<language::delete_statement>(&s.node)) {
                 // delete each step where from == id || to == id: deleted with the command.
@@ -1169,6 +1181,8 @@ namespace one::generators {
                     out.line("return err");
                     out.close("}");
                 }
+            } else if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) {
+                dispatch(out, e, *d, me, s.where);
             } else if (std::holds_alternative<language::input_statement>(s.node)) {
                 // Read where the body starts.
             } else if (auto* cl = std::get_if<language::clear_statement>(&s.node)) {
@@ -1182,6 +1196,132 @@ namespace one::generators {
             } else {
                 unsupported(path_, s.where, "this statement in a command");
             }
+        }
+
+        // A value given to a field, worked out where the command runs: one of a
+        // project's own by its name, like role::maintainer, a list of them, or any value.
+        std::optional<std::string> given_to(const language::entity_declaration& e, const std::string& me, const language::field& f,
+                                            const language::expression& value) {
+            auto one_of = [&](const language::expression& item) -> std::optional<std::string> {
+                if (auto own = own_named(e, me, f, item)) return own;
+                return expression(e, item, me, &f);
+            };
+            if (auto* list = std::get_if<language::list_expression>(&value.node)) {
+                std::string items;
+                for (const auto& item : list->items) {
+                    auto one = one_of(*item);
+                    if (!one) return std::nullopt;
+                    items += (items.empty() ? "" : ", ") + *one;
+                }
+                return "[]string{" + items + "}";
+            }
+            return one_of(value);
+        }
+
+        // dispatch board::create { ... }: the command run in this one's transaction,
+        // its body too, through one.DispatchCreate, DispatchUpdate or DispatchDelete.
+        // An update or delete acts on the id it's given, or on the row an each picked.
+        void dispatch(stream& out, const language::entity_declaration& e, const language::dispatch_statement& d, const std::string& me,
+                      language::location where) {
+            const language::entity_declaration* target = pkg_ && d.command.parts.size() == 2 ? entity(*pkg_, d.command.parts[0]) : nullptr;
+            if (!target) {
+                unsupported(path_, where, "dispatching a command of another namespace");
+                return;
+            }
+            const std::string& action = d.command.parts[1];
+            const language::command_declaration* runs = nullptr;
+            for (const auto& [command, _] : pkg_->commands) {
+                if (command->name.text() == d.command.text()) runs = command;
+            }
+            std::map<std::string, std::string> inputs;  // its inputs, by name, with their Go types
+            bool body = false;
+            if (runs) {
+                for (const auto& st : runs->body) {
+                    if (auto* input = std::get_if<language::input_statement>(&st.node)) inputs[input->name] = "";
+                    else if (!std::holds_alternative<language::permission_statement>(st.node) && !std::holds_alternative<language::changes_statement>(st.node)) body = true;
+                }
+            }
+            std::string function = body ? body_function(d.command.text()) : "nil";
+            std::string type = api_detail::go_name(target->name);
+            std::string given, id, fields, sets;
+            const std::string it = "dispatched";
+            for (const auto& v : d.values) {
+                if (v.name == "id") {
+                    auto value = expression(e, *v.value, me, nullptr);
+                    if (!value) return;
+                    id = *value;
+                    continue;
+                }
+                if (inputs.contains(v.name)) {
+                    auto value = expression(e, *v.value, me, nullptr);
+                    if (!value) return;
+                    given += (given.empty() ? "" : ", ") + api_detail::go_string(v.name) + ": " + *value;
+                    continue;
+                }
+                const language::field* f = field(*target, v.name);
+                if (!f) continue;
+                std::optional<std::string> value;
+                if (action == "create") {
+                    // One of the project's own, named beside the project it's in: the
+                    // place another value of this dispatch gives.
+                    auto* named = std::get_if<language::name_expression>(&v.value->node);
+                    if (named && named->name.parts.size() == 2 && f->type && f->type->text() != "permission" && entity(*pkg_, f->type->text())) {
+                        const language::entity_declaration* pointed_at = entity(*pkg_, f->type->text());
+                        for (const auto& k : pointed_at->fields) {
+                            if (!k.key || !k.type || !entity(*pkg_, k.type->text())) continue;
+                            for (const auto& other : d.values) {
+                                const language::field* g = field(*target, other.name);
+                                if (!g || !g->type || g->type->text() != k.type->text()) continue;
+                                auto place = expression(e, *other.value, me, g);
+                                if (place) value = "one.Key(" + *place + ", " + api_detail::go_string(named->name.parts[1]) + ")";
+                            }
+                        }
+                    }
+                }
+                if (!value) value = given_to(e, me, *f, *v.value);
+                if (!value) return;
+                if (action == "create") fields += (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value;
+                else sets += it + "." + api_detail::go_name(f->name) + " = " + *value + "\n";
+            }
+            for (const auto& st : d.lists) {
+                auto* l = std::get_if<language::list_statement>(&st.node);
+                const language::field* list = l ? field(*target, l->list) : nullptr;
+                if (!list) continue;
+                auto value = own_named(e, me, *list, *l->value);
+                if (!value) value = expression(e, *l->value, me, nullptr);
+                if (!value) return;
+                std::string field_go = it + "." + api_detail::go_name(list->name);
+                sets += field_go + " = one." + (l->adds ? "Add" : "Remove") + "(" + field_go + ", " + *value + ")\n";
+            }
+            std::string inputs_go = given.empty() ? "nil" : "map[string]any{" + given + "}";
+            if (action == "create") {
+                out.open("{");
+                out.line("made := &" + type + "{" + fields + "}");
+                out.open("if err := one.DispatchCreate(c, made, " + inputs_go + ", " + function + "); err != nil {");
+                out.line("return err");
+                out.close("}");
+                out.close("}");
+                return;
+            }
+            if (id.empty()) id = me + ".ID";  // the row an each picked
+            if (action == "delete") {
+                out.open("if err := one.DispatchDelete[" + type + "](c, " + id + ", " + inputs_go + ", " + function + "); err != nil {");
+                out.line("return err");
+                out.close("}");
+                return;
+            }
+            std::string set = "nil";
+            if (!sets.empty()) {
+                out.open("if err := one.DispatchUpdate(c, " + id + ", func(" + it + " *" + type + ") {");
+                std::size_t at = 0;
+                for (std::size_t end; (end = sets.find('\n', at)) != std::string::npos; at = end + 1) out.line(sets.substr(at, end - at));
+                out.dedent();
+                out.open("}, " + inputs_go + ", " + function + "); err != nil {");
+            } else {
+                out.open("if err := one.DispatchUpdate[" + type + "](c, " + id + ", " + set + ", " + inputs_go + ", " + function + "); err != nil {");
+            }
+            out.line("return err");
+            out.close("}");
         }
 
         static std::string zero(const language::field& f) {

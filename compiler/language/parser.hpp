@@ -1502,8 +1502,49 @@ namespace one::language {
             return body;
         }
 
+        // A statement, with its text as written when it's on one line, for a fix that
+        // says it another way.
         statement parse_statement() {
+            std::size_t begin = peek().begin;
+            statement s = parse_one_statement();
+            std::size_t last = pos_;
+            while (last > 0 && tokens_[last - 1].kind == token_kind::newline) --last;
+            if (last > 0 && tokens_[last - 1].end > begin) {
+                std::string text(source_.substr(begin, tokens_[last - 1].end - begin));
+                if (text.find('\n') == std::string::npos) s.text = std::move(text);
+            }
+            return s;
+        }
+
+        statement parse_one_statement() {
             location where = peek().where;
+            if (at_word("dispatch")) {
+                advance();
+                dispatch_statement s;
+                s.command = parse_qualified_name("the command it runs, like board::create");
+                if (s.command.parts.size() != 2) fail(s.command.where, "dispatch runs an entity's command, like board::create");
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        if ((at_word("add") || at_word("remove")) && peek(1).kind != token_kind::assign) {
+                            s.lists.push_back(parse_one_statement());
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            field_value value;
+                            value.where = peek().where;
+                            value.name = expect(token_kind::identifier, "a field of what it acts on, like phase").text;
+                            expect(token_kind::assign, "'='");
+                            value.value = parse_postfix();
+                            s.values.push_back(std::move(value));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(s)};
+            }
             if (at_word("require")) {
                 advance();
                 require_statement s;
@@ -1596,6 +1637,7 @@ namespace one::language {
                         peek(2).text == "create" && peek(3).kind == token_kind::left_brace;
             if (runs || (at_word("create") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace)) {
                 create_statement s;
+                std::size_t begin = peek().begin;
                 if (runs) {
                     s.entity_where = peek().where;
                     s.command = parse_qualified_name("the command, like board::create");
@@ -1605,6 +1647,7 @@ namespace one::language {
                     s.entity_where = peek().where;
                     s.entity = advance().text;
                 }
+                s.head_length = tokens_[pos_ - 1].end - begin;
                 advance();
                 while (in_block()) {
                     while (!at_line_end()) {
@@ -1638,7 +1681,7 @@ namespace one::language {
                 advance();
                 if (at_word("if")) {
                     location where = peek().where;
-                    s.else_body.push_back({where, parse_if()});
+                    s.else_body.push_back({where, parse_if(), {}});
                 } else {
                     s.else_body = parse_statement_block();
                 }

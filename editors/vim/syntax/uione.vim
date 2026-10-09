@@ -36,7 +36,7 @@ syn match uioneFormatName "\h\w*" contained nextgroup=uionePattern skipwhite
 syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
-syn keyword uioneKeyword   require permission clear create readers when was add remove to has of in limit for by on component order each per where from table form confirm hint
+syn keyword uioneKeyword   require permission clear create dispatch readers when was add remove to has of in limit for by on component order each per where from table form confirm hint
 syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen badge find only tint color
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.

@@ -69,7 +69,7 @@ namespace tracker {
 	// Whoever makes a project is its first maintainer.
 	command project::create {
 		permission signed_in
-		create member {
+		dispatch member::create {
 			project = id  person = me  role = role::maintainer
 		}
 	}

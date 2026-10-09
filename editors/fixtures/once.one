@@ -19,16 +19,19 @@ namespace tracker {
 	}
 
 	command project::update
+	command role::update
 
 	once "2026-10-07 workflows" {
 		each role where name == "developer" {
-			title = "Programmer"
-			may = [
-				project::update,
-			]
+			dispatch role::update {
+				title = "Programmer"
+				may = [
+					project::update,
+				]
+			}
 		}
 		each project {
-			start = "triage"
+			dispatch project::update { start = "triage" }
 		}
 	}
 

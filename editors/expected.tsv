@@ -103,7 +103,7 @@ site/studio.one	owner  user  = me	user	type
 site/studio.one	owner  user  = me	me	constant
 site/studio.one	permission signed_in	signed_in	constant
 site/studio.one	view projects per user	user	plain
-examples/tracker/main.one	create member {	create	keyword
+examples/tracker/main.one	dispatch member::create {	dispatch	keyword
 examples/tracker/main.one	role maintainer per project from member	from	keyword
 examples/tracker/main.one	command project::create {	create	name
 examples/tracker/main.one	readers member	readers	keyword
@@ -175,8 +175,9 @@ editors/fixtures/once.one	each role where	each	keyword
 editors/fixtures/once.one	each role where	where	keyword
 editors/fixtures/once.one	\t\tonce  boolean	once	variable
 editors/fixtures/body.one	input into column	input	keyword
-editors/fixtures/body.one	delete each card	delete	keyword
-editors/fixtures/body.one	delete each card	each	keyword
+editors/fixtures/body.one	dispatch card::delete	dispatch	keyword
+editors/fixtures/body.one	dispatch card::update { column	card	namespace
+editors/fixtures/once.one	dispatch role::update {	dispatch	keyword
 editors/fixtures/body.one	\t\tinput   text	input	variable
 editors/fixtures/body.one	delete "Remove"	delete	plain
 editors/fixtures/body.one	reorder position	reorder	keyword

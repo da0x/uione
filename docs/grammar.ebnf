@@ -120,14 +120,18 @@ statement      ::= ( "require" expression STRING
                    | "changes" NAME+
                    | "return" expression
                    | if
+                   | dispatch
                    | create
-                   | "add" postfix "to" NAME
-                   | "remove" postfix "from" NAME
+                   | list_change
                    | "input" NAME qualified
                    | "each" NAME "where" expression block
-                   | "delete" "each" NAME "where" expression
                    | postfix "=" expression ) END
-create         ::= ("create" NAME | NAME "::" "create") "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
+/* dispatch: another command run in the same step, its body too: an update or a
+ * delete says which with id = ..., or acts on the row of an each over its entity. */
+dispatch       ::= "dispatch" NAME "::" NAME ("{" NEWLINE? (((NAME "=" postfix)+ | list_change) END)* "}")?
+list_change    ::= "add" postfix "to" NAME | "remove" postfix "from" NAME
+/* create: what a webhook's handler makes; a command dispatches X::create instead. */
+create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
 permission_word ::= "anyone" | "signed_in" | "owner"
 if             ::= "if" expression block ("else" (if | block))?
 

@@ -46,13 +46,13 @@ namespace library {
 	// Lending takes the book off the shelf in the same step.
 	command loan::create {
 		require book.status == status::on_shelf  "that book is not on the shelf"
-		book.status = status::lent
+		dispatch book::update { id = book  status = status::lent }
 	}
 
 	command loan::checkin {
 		require returned_at == none  "that book is already back"
 		returned_at = now
-		book.status = status::on_shelf
+		dispatch book::update { id = book  status = status::on_shelf }
 	}
 
 	// Every book still in the collection, by title as a reader says it.

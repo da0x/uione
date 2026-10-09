@@ -153,16 +153,21 @@ entity arrow {
 	from  column
 	to    column
 }
+command card::update
+command arrow::delete
+command board::update
 command column::delete {
 	input into column
 	input note text
 	require into != id  "pick another column"
 	each card where column == id {
-		column = into
+		dispatch card::update { column = into }
 	}
-	delete each arrow where from == id || to == id
+	each arrow where from == id || to == id {
+		dispatch arrow::delete
+	}
 	if board.start == id {
-		board.start = into
+		dispatch board::update { id = board  start = into }
 	}
 }
 }
@@ -178,11 +183,15 @@ command column::delete {
     CHECK(go.find(R"(into, _ := c.Input("into").(string))") != std::string::npos);
     // An input the body doesn't name isn't read, so the Go has nothing unused.
     CHECK(go.find(R"(c.Input("note"))") == std::string::npos);
-    CHECK(go.find(R"(if err := one.EachIn(c, "column", x.ID, func(card *Card) error {)") != std::string::npos);
-    CHECK(go.find("card.Column = into") != std::string::npos);
-    CHECK(go.find(R"(one.DeleteWhere[Arrow](c, "from", x.ID))") != std::string::npos);
-    CHECK(go.find(R"(one.DeleteWhere[Arrow](c, "to", x.ID))") != std::string::npos);
-    CHECK(go.find("board.Start = into") != std::string::npos);
+    // Each it picks is changed or deleted by its own command, dispatched.
+    CHECK(go.find("eachCard := func(card *Card) error {") != std::string::npos);
+    CHECK(go.find(R"(if err := one.EachIn(c, "column", x.ID, eachCard); err != nil {)") != std::string::npos);
+    CHECK(go.find("if err := one.DispatchUpdate(c, card.ID, func(dispatched *Card) {\n\t\t\t\t\tdispatched.Column = into\n\t\t\t\t}, nil, nil); err != nil {") !=
+          std::string::npos);
+    CHECK(go.find(R"(one.EachIn(c, "from", x.ID, eachArrow))") != std::string::npos);
+    CHECK(go.find(R"(one.EachIn(c, "to", x.ID, eachArrow))") != std::string::npos);
+    CHECK(go.find("one.DispatchDelete[Arrow](c, arrow.ID, nil, nil)") != std::string::npos);
+    CHECK(go.find("if err := one.DispatchUpdate(c, x.Board, func(dispatched *Board) {\n\t\t\t\tdispatched.Start = into") != std::string::npos);
 }
 
 TEST_CASE("an update may set the field a table's rows are dragged into order by") {
@@ -244,17 +253,19 @@ entity phase {
 }
 command project::create {
 	permission signed_in
-	board::create { project = id  name = "main"  title = slug  preset = preset }
+	dispatch board::create { project = id  name = "main"  title = slug  preset = preset }
 }
 command board::create {
 	if preset == preset::simple {
-		create phase { board = id  name = "open"  project = project }
+		dispatch phase::create { board = id  name = "open"  project = project }
 		start = phase::open
 	}
 }
+command phase::create
+command phase::update
 once "2026-10-08 boards" {
 	each phase {
-		board = board::main
+		dispatch phase::update { board = board::main }
 	}
 }
 }
@@ -269,9 +280,11 @@ once "2026-10-08 boards" {
     CHECK(go.find("func createBoard(c *one.Ctx, b *Board) error {") != std::string::npos);
     CHECK(go.find(R"(var BoardCreate = one.Command[Board]("board::create").Do(createBoard))") != std::string::npos);
     CHECK(go.find(R"(made := &Board{Project: p.ID, Name: "main", Title: p.Slug, Preset: p.Preset})") != std::string::npos);
-    CHECK(go.find("if err := createBoard(c, made); err != nil {") != std::string::npos);
+    CHECK(go.find("if err := one.DispatchCreate(c, made, nil, createBoard); err != nil {") != std::string::npos);
+    CHECK(go.find(R"(made := &Phase{Board: b.ID, Name: "open", Project: b.Project})") != std::string::npos);
+    CHECK(go.find("if err := one.DispatchCreate(c, made, nil, nil); err != nil {") != std::string::npos);
     // A once gives what was made before boards their board, though it's a key.
-    CHECK(go.find(R"(p.Board = one.Key(p.Project, "main"))") != std::string::npos);
+    CHECK(go.find(R"(dispatched.Board = one.Key(p.Project, "main"))") != std::string::npos);
 
     // What's run is a create that's declared.
     language::diagnostics wrong;
@@ -353,20 +366,24 @@ entity task {
 }
 command crew::update
 command task::update
+command rank::update
+command stage::create
 once "2026-10-07 stages" {
 	each rank where name == "mate" {
-		title = "First mate"
-		may = [
-			crew::update,
-			task::update,
-		]
+		dispatch rank::update {
+			title = "First mate"
+			may = [
+				crew::update,
+				task::update,
+			]
+		}
 	}
 	each crew {
-		create stage { crew = id  name = "todo" }
-		start = stage::todo
+		dispatch stage::create { crew = id  name = "todo" }
+		dispatch crew::update { start = stage::todo }
 	}
 	each task {
-		stage = stage::todo
+		dispatch task::update { stage = stage::todo }
 	}
 }
 }
@@ -380,11 +397,13 @@ once "2026-10-07 stages" {
     const auto& go = found->content;
     CHECK(go.find(R"(var Once20261007Stages = one.Once("2026-10-07 stages",)") != std::string::npos);
     CHECK(go.find(R"(one.Each[Rank]("name", "mate", func(c *one.Ctx, r *Rank) error {)") != std::string::npos);
-    CHECK(go.find(R"(r.May = []string{"crew::update", "task::update"})") != std::string::npos);
+    CHECK(go.find(R"(if err := one.DispatchUpdate(c, r.ID, func(dispatched *Rank) {)") != std::string::npos);
+    CHECK(go.find(R"(dispatched.May = []string{"crew::update", "task::update"})") != std::string::npos);
     CHECK(go.find(R"(one.Each[Crew]("", nil, func(c *one.Ctx, x *Crew) error {)") != std::string::npos);
-    CHECK(go.find(R"(x.Start = one.Key(x.ID, "todo"))") != std::string::npos);
+    CHECK(go.find(R"(made := &Stage{Crew: x.ID, Name: "todo"})") != std::string::npos);
+    CHECK(go.find(R"(dispatched.Start = one.Key(x.ID, "todo"))") != std::string::npos);
     // A task names its crew's stage through the crew it's in.
-    CHECK(go.find(R"(t.Stage = one.Key(t.Crew, "todo"))") != std::string::npos);
+    CHECK(go.find(R"(dispatched.Stage = one.Key(t.Crew, "todo"))") != std::string::npos);
     CHECK(go.find(", Once20261007Stages") != std::string::npos);
 }
 
@@ -424,13 +443,16 @@ entity leg {
 command crew::create {
 	permission signed_in
 	if workflow == workflow::steady {
-		create rank { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
-		create stage { crew = id  name = "todo" }
-		create stage { crew = id  name = "done" }
-		create leg { crew = id  from = stage::todo  to = stage::done  ranks = [rank::captain, rank::bosun] }
+		dispatch rank::create { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
+		dispatch stage::create { crew = id  name = "todo" }
+		dispatch stage::create { crew = id  name = "done" }
+		dispatch leg::create { crew = id  from = stage::todo  to = stage::done  ranks = [rank::captain, rank::bosun] }
 		start = stage::todo
 	}
 }
+command rank::create
+command stage::create
+command leg::create
 view legs per crew {
 	legs = each leg in crew {
 		order by from.name  to.name descending
@@ -469,9 +491,11 @@ entity leg {
 }
 command crew::create {
 	permission signed_in
-	create stage { crew = id  name = "todo" }
-	create leg { crew = id  from = stage::todo  to = stage::dnoe }
+	dispatch stage::create { crew = id  name = "todo" }
+	dispatch leg::create { crew = id  from = stage::todo  to = stage::dnoe }
 }
+command stage::create
+command leg::create
 }
 )";
     typo.push_back(language::parse("main.one", text, wrong));
@@ -570,7 +594,7 @@ roles rank per crew from hand {
 }
 command crew::create {
 	permission signed_in
-	create hand {
+	dispatch hand::create {
 		crew = id  person = me  rank = rank::captain
 	}
 }

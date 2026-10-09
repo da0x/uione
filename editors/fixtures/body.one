@@ -22,12 +22,17 @@ namespace board {
 		title   text
 	}
 
+	command card::update
+	command card::delete
+
 	command column::delete {
 		input into column
 		each card where column == id {
-			column = into
+			dispatch card::update { column = into }
 		}
-		delete each card where column == into
+		each card where column == into {
+			dispatch card::delete
+		}
 	}
 
 	command column::update

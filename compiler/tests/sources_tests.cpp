@@ -72,7 +72,7 @@ TEST_CASE("a command's lines lead to the Go they became") {
     // The line of main.one that says it, found rather than counted, so editing the
     // example elsewhere doesn't move it.
     auto source = *platform::read_file(root + "/examples/library/main.one");
-    int lending = 1 + static_cast<int>(std::count(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(source.find("book.status = status::lent")), '\n'));
+    int lending = 1 + static_cast<int>(std::count(source.begin(), source.begin() + static_cast<std::ptrdiff_t>(source.find("dispatch book::update { id = book  status = status::lent }")), '\n'));
     std::vector<std::string> from;
     std::size_t at = 0, n = 0;
     while (at < go->content.size()) {
@@ -82,7 +82,8 @@ TEST_CASE("a command's lines lead to the Go they became") {
         at = end + 1;
         ++n;
     }
-    CHECK(from == std::vector<std::string>{"\t\tbook.Status = StatusLent"});
+    CHECK(from == std::vector<std::string>{"\t\tif err := one.DispatchUpdate(c, l.Book, func(dispatched *Book) {", "\t\t\tdispatched.Status = StatusLent",
+                                           "\t\t}, nil, nil); err != nil {", "\t\t\treturn err", "\t\t}"});
 }
 
 TEST_CASE("a project whose roles are held within something gets a view per person of where they hold them") {

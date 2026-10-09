@@ -125,8 +125,8 @@ Words for values that aren't written out:
 The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
-- in a command: `require`, `permission`, `create`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
-  `input`, `each … where`, `delete each … where`;
+- in a command: `require`, `permission`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
+  `input`, `each … where`;
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
@@ -496,21 +496,28 @@ format shelfmark AAA-9999 {
 ## command
 
 A way to change an entity, named on it. A command with no body creates, updates or
-deletes with the entity's own rules.
+deletes with the entity's own rules. A command is the only way anything stored is
+made, changed or deleted, because a command is where everything that has to happen
+with it is said.
 
 ```one
 command book::create
+command book::update
 
 command loan::checkin {
 	require returned_at == none  "that book is already back"
 	returned_at = now
-	book.status = status::on_shelf
+	dispatch book::update { id = book  status = status::on_shelf }
 }
 ```
 
 - `require` states a precondition and the message shown when it fails.
-- A command may change an entity it points at, as `book.status` does here. Both
-  changes are made together or not at all.
+- A command's body sets its own entity's fields, like `returned_at = now`. Anything
+  else, like the book a loan points at, is changed by its own command, run with
+  `dispatch`: `dispatch book::update { id = book  status = status::on_shelf }`.
+  What it dispatches runs in the same step, as the same person, its body and its
+  `require`s too, and both changes are made together or not at all. Its
+  permission isn't asked again, since the command dispatching it was allowed.
 - `permission` overrides the permission the command needs. `anyone` means no
   sign-in, `signed_in` means anyone signed in, any way the project offers, and
   `owner` means the person in the entity's `owner` field.
@@ -538,44 +545,51 @@ command issue::move {
 ```
 - `if workflow == workflow::kanban { ... }` does what's inside only when its
   condition holds, so a project can start from a preset it picks.
-- In a `create`, `phase::triaged` is the project's phase named triaged: one of
-  what the command makes, or a role every project starts with, named by the project
-  and its name. A list field is given its values whole: `roles = [role::maintainer,
+- In a `dispatch phase::create`, `phase::triaged` is the project's phase named
+  triaged: one of what the command makes, or a role every project starts with,
+  named by the project and its name. A list field is given its values whole: `roles = [role::maintainer,
   role::programmer]`, or a role's `may = [issue::create, issue::move]`.
   A long list goes on over lines until its `]`, and may end in a comma.
-- `board::create { project = id  title = name }` makes a board as `board::create`
-  makes one: its body runs too, like the phases of the preset a board starts from,
-  so a project made with a first board gets that board's phases with it.
+- `dispatch board::create { project = id  title = name }` makes a board as
+  `board::create` makes one: its body runs too, like the phases of the preset a
+  board starts from, so a project made with a first board gets that board's phases
+  with it. Every required field gets a value, unless it starts with one, and what's
+  made gets an id of its own.
+- An update, a delete, or another command like a move, says which it acts on with
+  `id = ...`, or goes in an `each` over its entity, where it acts on each row. It's
+  sent its command's inputs by name, like `into`, and a list is changed with `add
+  ... to` and `remove ... from` inside its braces. Deleting what's already being
+  deleted in the same step does nothing, so two links that delete each other stop.
 - A once may give what was made before a key existed its key, like the board a
   project's phases were in before projects had boards.
 - `input into phase` is something a command is sent besides its entity's fields,
   like the phase a removed phase's issues move to. Its forms ask for it, picked as a
   field of its type would be, its body names it, and it's never stored.
-- `each issue where phase == id { phase = into }` changes other entities in the
-  same step as the command, picked by a field's value, and `delete each step where
-  from == id || to == id` deletes them, picked by any of several. Each is kept in
-  their history as the command's change.
+- `each issue where phase == id { ... }` runs what's inside for each entity it
+  picks, by a field's value, or by any of several, like `from == id || to == id`.
+  Each is changed by a dispatch of its own command, and kept in its history as
+  changed.
 
 ```one
 command phase::delete {
 	input into phase
 	require into != id  "pick another phase for its issues"
 	each issue where phase == id {
-		phase = into
+		dispatch issue::update { phase = into }
 	}
-	delete each step where from == id || to == id
+	each step where from == id || to == id {
+		dispatch step::delete
+	}
 }
 ```
 
-- `create` makes another entity in the same step, giving its fields values worked
-  out where the command runs. `id` is the id of the command's own entity, and `me`
-  is the person running it. Every required field gets a value, unless it starts
-  with one.
+- Values given in a dispatch are worked out where the command runs. `id` is the id
+  of the command's own entity, and `me` is the person running it.
 
 ```one
 command project::create {
 	permission signed_in
-	create member {
+	dispatch member::create {
 		project = id  person = me  role = role::maintainer
 	}
 }
@@ -773,7 +787,7 @@ roles role per project from member {
 
 command project::create {
 	permission signed_in
-	create member {
+	dispatch member::create {
 		project = id  person = me  role = role::maintainer
 	}
 }
@@ -1229,24 +1243,26 @@ name never changes. If it fails, the backend doesn't start, and the deploy says 
 ```one
 once "2026-10-07 workflows" {
 	each role where name == "developer" {
-		title = "Programmer"
+		dispatch role::update { title = "Programmer" }
 	}
 	each project {
-		create phase { project = id  name = "triage"  title = "Triage"  position = 1 }
-		start = phase::triage
+		dispatch phase::create {
+			project = id  name = "triage"  title = "Triage"  position = 1
+		}
+		dispatch project::update { start = phase::triage }
 	}
 	each issue {
-		phase = phase::triage
+		dispatch issue::update { phase = phase::triage }
 	}
 }
 ```
 
 - Its steps are done in order, each `each` to every stored entity of its kind,
   or to those whose field holds a value, like `where name == "developer"`.
-- What a step says is a command's body on that entity: it changes the entity's
-  fields, `create`s others beside it, and decides with `if`, and each entity is
-  changed in a step of its own, checked against its rules, with its history
-  saying it was changed.
+- What a step says is done to each entity it picks, by dispatching commands, as a
+  command's body does: `dispatch role::update { ... }` acts on the role picked,
+  and decides with `if`. Each entity is changed in a step of its own, checked
+  against its rules, with its history saying it was changed.
 - `phase::triage` is the project's phase named triage, from the project itself or
   from what's in it, like an issue. A once may name what's already stored, like
   `role::developer`, as well as what it makes.

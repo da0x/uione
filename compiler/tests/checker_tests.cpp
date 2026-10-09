@@ -58,9 +58,10 @@ entity loan {
 }
 
 command book::create
+command book::update
 command loan::checkin {
 	require book.status == status::lent  "that book is on the shelf"
-	book.status = status::on_shelf
+	dispatch book::update { id = book  status = status::on_shelf }
 	clear due_at
 }
 
@@ -361,12 +362,16 @@ entity column {
 entity card {
 	column  column
 }
+command card::update
+command card::delete
 command column::delete {
 	input into column
 	each card where column == id {
-		column = into
+		dispatch card::update { column = into }
 	}
-	delete each card where column == into
+	each card where column == into {
+		dispatch card::delete
+	}
 }
 }
 )";
@@ -410,13 +415,13 @@ roles rank per crew from hand {
 	captain "Captain"  crew::update
 }
 command crew::update
+command rank::update
 once "2026-10-07 mates" {
 	each rank where name == "mate" {
-		title = "First mate"
-		may = [crew::update]
+		dispatch rank::update { title = "First mate"  may = [crew::update] }
 	}
 	each crew {
-		newcomer = rank::bosun
+		dispatch crew::update { newcomer = rank::bosun }
 	}
 }
 }
@@ -467,7 +472,7 @@ roles rank per crew from hand {
 }
 command crew::create {
 	permission signed_in
-	create hand {
+	dispatch hand::create {
 		crew = id  person = me  rank = rank::captain
 	}
 }
@@ -717,21 +722,50 @@ TEST_CASE("a role held within something names the entity that grants it, which p
     CHECK(e.message == "role maintainer is held within team, which isn't an entity at the top level");
 }
 
-TEST_CASE("a command can create another entity, giving it what it needs") {
+TEST_CASE("a command dispatches another's create, giving what it makes what it needs") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n"
-                              "\trole  enum maintainer | reporter = role::reporter\n\tseat  serial  per project\n}\n";
-    CHECK(check_source(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  role = role::maintainer\n\t}\n}\n").empty());
-    auto e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id\n\t}\n}\n");
-    CHECK(e.message == "create member needs a value for person, which is required");
-    e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  role = owner\n\t}\n}\n");
+                              "\trole  enum maintainer | reporter = role::reporter\n\tseat  serial  per project\n}\n"
+                              "command member::create\n";
+    CHECK(check_source(start + "command project::create {\n\tdispatch member::create {\n\t\tproject = id  person = me  role = role::maintainer\n\t}\n}\n").empty());
+    auto e = only_error(start + "command project::create {\n\tdispatch member::create {\n\t\tproject = id\n\t}\n}\n");
+    CHECK(e.message == "dispatch member::create needs a value for person, which is required");
+    e = only_error(start + "command project::create {\n\tdispatch member::create {\n\t\tproject = id  person = me  role = owner\n\t}\n}\n");
     CHECK(e.message.starts_with("owner isn't one of role's choices"));
-    e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id  person = me  seat = 1\n\t}\n}\n");
+    e = only_error(start + "command project::create {\n\tdispatch member::create {\n\t\tproject = id  person = me  seat = 1\n\t}\n}\n");
     CHECK(e.message == "seat is counted when it's made, so it can't be set");
-    e = only_error(start + "command project::create {\n\tcreate member {\n\t\tproject = id  persn = me\n\t}\n}\n");
+    e = only_error(start + "command project::create {\n\tdispatch member::create {\n\t\tproject = id  persn = me\n\t}\n}\n");
     CHECK(e.message == "entity member has no field persn; did you mean person?");
-    e = only_error(start + "command project::create {\n\tcreate seat {\n\t}\n}\n");
-    CHECK(e.message == "there's no entity seat to create at the top level");
+    e = only_error(start + "command project::create {\n\tdispatch seat::create {\n\t}\n}\n");
+    CHECK(e.message == "there's no command seat::create at the top level; commands are named after their entity, like book::create");
+    e = only_error(start + "command project::create {\n\tdispatch member::create {\n\t\tid = \"x\"  project = id  person = me\n\t}\n}\n");
+    CHECK(e.message == "what's made gets an id of its own; dispatch member::create gives it its fields");
+}
+
+TEST_CASE("only commands change records: what changed them otherwise is fixed to a dispatch") {
+    const std::string start = "entity board {\n\ttitle  text\n\tstart  column\n}\nentity column {\n\tboard  board  required\n\ttitle  text\n}\n"
+                              "entity card {\n\tcolumn  column\n}\ncommand card::create\ncommand card::update\ncommand card::delete\ncommand board::update\n";
+    auto e = only_error(start + "command column::delete {\n\tcreate card { column = id }\n}\n");
+    CHECK(e.message == "a record is made by its create command: dispatch card::create { ... }");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "dispatch card::create");
+    CHECK(e.fix->length == std::string("create card").size());
+    e = only_error(start + "command column::delete {\n\tcard::create { column = id }\n}\n");
+    CHECK(e.message == "a command is run with dispatch, like dispatch card::create { ... }");
+    e = only_error(start + "command column::delete {\n\teach card where column == id {\n\t\tcolumn = none\n\t}\n}\n");
+    CHECK(e.message == "a record is changed by its commands: dispatch card::update { column = none }");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "dispatch card::update { column = none }");
+    e = only_error(start + "command column::delete {\n\tdelete each card where column == id\n}\n");
+    CHECK(e.message == "a record is deleted by its delete command: each card where column == id { dispatch card::delete }");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "each card where column == id { dispatch card::delete }");
+    e = only_error(start + "command column::delete {\n\tboard.start = none\n}\n");
+    CHECK(e.message == "a record is changed by its commands: dispatch board::update { id = board  start = none }");
+    e = only_error(start + "command column::update {\n\tdispatch card::update { column = id }\n}\n");
+    CHECK(e.message == "dispatch card::update says which card it acts on, like id = card, or goes in an each over them");
+    e = only_error(start + "command column::delete {\n\teach card where column == id {\n\t\tdispatch column::update { title = \"x\" }\n\t}\n}\n");
+    CHECK(e.message == "there's no command column::update at the top level; commands are named after their entity, like book::create");
 }
 
 TEST_CASE("a view per entity can say who reads each document: the people of its project, and everyone when it's public") {
@@ -1225,7 +1259,8 @@ TEST_CASE("an invitation invites to be something with one person, and has what i
 
 TEST_CASE("on signin does each step as the person signing in, with me.email theirs") {
     CHECK(check_source("namespace work {\nentity note {\n\temail  email\n\ttext  text\n}\n"
-                       "on signin {\n\teach note where email == me.email {\n\t\ttext = \"seen\"\n\t}\n\tdelete each note where email == me.email\n}\n}\n")
+                       "command note::update\n"
+                       "on signin {\n\teach note where email == me.email {\n\t\tdispatch note::update { text = \"seen\" }\n\t}\n\tdelete each note where email == me.email\n}\n}\n")
               .empty());
 }
 

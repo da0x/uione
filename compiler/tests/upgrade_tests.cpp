@@ -296,3 +296,21 @@ TEST_CASE("an upgrade says each change in, in project and me") {
     CHECK(text.find("each issue where owner == me {") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("an upgrade says each change to another record as a dispatch of its command") {
+    auto dir = project("uione-upgrade-dispatch",
+                       "import one\n\nnamespace work {\nentity board {\n\ttitle  text\n\tstart  column\n}\nentity column {\n\tboard  board  required\n\ttitle  text\n}\n"
+                       "entity card {\n\tcolumn  column\n}\ncommand card::create\ncommand card::update\ncommand card::delete\ncommand board::update\n"
+                       "command column::delete {\n\tcreate card { column = id }\n\teach card where column == id {\n\t\tcolumn = none\n\t}\n"
+                       "\tdelete each card where column == id\n\tboard.start = none\n}\n"
+                       "once \"2026-10-09 titles\" {\n\teach card {\n\t\tcolumn = none\n\t}\n}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\tdispatch card::create { column = id }\n") != std::string::npos);
+    CHECK(text.find("\t\tdispatch card::update { column = none }\n\t}\n\teach card where column == id { dispatch card::delete }\n") != std::string::npos);
+    CHECK(text.find("\tdispatch board::update { id = board  start = none }\n") != std::string::npos);
+    CHECK(text.find("\teach card {\n\t\tdispatch card::update { column = none }\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
