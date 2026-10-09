@@ -43,7 +43,7 @@ export interface PageProps {
 // What a site was built from: the uione release, and the commit and repository the
 // deploy found, which its footer can show and link.
 export interface Build {
-  version: string; // like 0.7.2
+  version: string; // like 0.7.3
   commit?: string; // like d9d95fd0...
   repository?: string; // where the commit can be read, like https://github.com/da0x/neotrac
 }
