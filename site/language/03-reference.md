@@ -203,7 +203,7 @@ namespace one {
 The value is checked by its type. An enum setting takes one of its choices,
 written plainly, `corners square`, since the type says which enum it is; it can
 be written in full too, `corners one::corners::square`. A `domain` is a domain name,
-a `slug` lowercase letters, digits and dashes, a `version` like "0.7.1", a
+a `slug` lowercase letters, digits and dashes, a `version` like "0.7.2", a
 `color` #rrggbb, a `file` and a `folder` are next to the project's `.one` files,
 an `address` is one of the site's own, starting with /, and a `link` is an https
 address. A setting whose
