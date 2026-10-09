@@ -36,7 +36,7 @@ namespace notes {
 	}
 
 	view mine per user {
-		each note where owner == user.id {
+		each note where owner == me {
 			order by created_at descending
 			text  created_at
 		}

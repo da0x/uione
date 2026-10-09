@@ -118,7 +118,7 @@ command loan::checkin {
 TEST_CASE("views: per, public, order, each, and computed values") {
     auto f = parse_ok(R"(
 view mine per user {
-	each loan where member == user.id {
+	each loan where member == me {
 		order by done  created_at descending
 		book.title  due_at
 		lent_to = first(loan where returned_at == none).member
@@ -435,7 +435,7 @@ TEST_CASE("a view can hold lists with names, and a table names the one it shows"
     auto f = parse_ok(R"(
 view issue_page per issue {
 	title = issue.title
-	comments = each comment where issue == issue.id {
+	comments = each comment in issue {
 		order by created_at
 		author  body
 	}
@@ -510,7 +510,7 @@ command issue::take {
 	remove me from watchers
 }
 view mine per user {
-	each issue where assignees has user.id
+	each issue where assignees has me
 }
 )");
     const auto& issue = std::get<entity_declaration>(f.declarations[0].node);
@@ -531,7 +531,7 @@ entity issue history {
 	title  text
 }
 view page per issue {
-	changes = each change of issue where issue == issue.id {
+	changes = each change in issue {
 		order by created_at descending
 		limit 20
 		field  after

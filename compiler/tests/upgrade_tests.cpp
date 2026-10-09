@@ -265,8 +265,8 @@ TEST_CASE("an upgrade moves what's new to a person into a value of their view, s
                        "import one\n\nproject shop {\n\tui      radix\n\tunread  news.changes since news.seen\n}\n\n"
                        "namespace work {\n\tentity issue history {\n\t\ttitle  text\n\t}\n"
                        "\tentity reader {\n\t\tperson  user  key  = me\n\t\tseen_at  date\n\t}\n"
-                       "\tview news per user {\n\t\tchanges = each change of issue where created_by != user.id {\n\t\t\tfield  created_at\n\t\t}\n"
-                       "\t\tseen = first(reader where person == user.id).seen_at  // \"}\"\n\t}\n}\n");
+                       "\tview news per user {\n\t\tchanges = each change in issue where created_by != me {\n\t\t\tfield  created_at\n\t\t}\n"
+                       "\t\tseen = first(reader where person == me).seen_at  // \"}\"\n\t}\n}\n");
     auto done = driver::upgrade(dir.string(), "9.9.9");
     REQUIRE(done.problems.empty());
     REQUIRE(done.changed.size() == 1);
@@ -274,7 +274,25 @@ TEST_CASE("an upgrade moves what's new to a person into a value of their view, s
           "import one\n\nproject shop {\n\tone     \"9.9.9\"\n\tui      radix\n}\n\nheader {\n\tbadge news.unread\n}\n\n"
           "namespace work {\n\tentity issue history {\n\t\ttitle  text\n\t}\n"
           "\tentity reader {\n\t\tperson  user  key  = me\n\t\tseen_at  date\n\t}\n"
-          "\tview news per user {\n\t\tchanges = each change of issue where created_by != user.id {\n\t\t\tfield  created_at\n\t\t}\n"
-          "\t\tseen = first(reader where person == user.id).seen_at  // \"}\"\n\t\tunread = count(changes where created_at > seen)\n\t}\n}\n");
+          "\tview news per user {\n\t\tchanges = each change in issue where created_by != me {\n\t\t\tfield  created_at\n\t\t}\n"
+          "\t\tseen = first(reader where person == me).seen_at  // \"}\"\n\t\tunread = count(changes where created_at > seen)\n\t}\n}\n");
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("an upgrade says each change in, in project and me") {
+    auto dir = project("uione-upgrade-in",
+                       "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"
+                       "view page per project {\n\tissues = each issue where project == project.id {\n\t\towner\n\t}\n"
+                       "\ttimeline = each change of issue where project == project.id {\n\t\tfield\n\t}\n}\n"
+                       "view history per issue {\n\teach change of issue where issue == issue.id {\n\t\tfield\n\t}\n}\n"
+                       "view mine per user {\n\teach issue where owner == user.id {\n\t\tproject\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("issues = each issue in project {") != std::string::npos);
+    CHECK(text.find("timeline = each change in issue in project {") != std::string::npos);
+    CHECK(text.find("\teach change in issue {") != std::string::npos);
+    CHECK(text.find("each issue where owner == me {") != std::string::npos);
     std::filesystem::remove_all(dir);
 }

@@ -140,7 +140,7 @@ view_line      ::= (NAME "=")? each
                  | "readers" NAME ("." NAME)+ END
                  | "public" "when" expression END
                  | NAME "=" expression END
-each           ::= "each" ("change" "of")? postfix ("where" expression)? ("{" NEWLINE? list_line* "}")? END
+each           ::= "each" ("change" "in")? postfix ("in" NAME)* ("where" expression)? ("{" NEWLINE? list_line* "}")? END
 list_line      ::= "order" "by" order_key+ END
                  | "limit" WHOLE END
                  | row_line

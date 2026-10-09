@@ -432,7 +432,7 @@ command crew::create {
 	}
 }
 view legs per crew {
-	legs = each leg where crew == crew.id {
+	legs = each leg in crew {
 		order by from.name  to.name descending
 		from.name  to.name
 	}
@@ -820,7 +820,7 @@ entity issue history {
 	assignees  list of user
 }
 view news per user {
-	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+	changes = each change in issue where (board.followers has me || assignees has me) && created_by != me {
 		issue  field  after
 	}
 }
@@ -853,19 +853,19 @@ entity issue history {
 	assignees  list of user
 }
 view news per user {
-	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+	changes = each change in issue where (board.followers has me || assignees has me) && created_by != me {
 		order by created_at descending
 		limit 30
 		field
 	}
 }
 view project_page per project {
-	timeline = each change of issue where project == project.id {
+	timeline = each change in issue in project {
 		order by created_at descending
 		limit 50
 		field
 	}
-	everything = each change of issue where project == project.id {
+	everything = each change in issue in project {
 		field
 	}
 }
@@ -898,7 +898,7 @@ entity comment history of issue {
 	mentioned  list of user = mentions(body)
 }
 view news per user {
-	changes = each change of issue where mentioned has user.id {
+	changes = each change in issue where mentioned has me {
 		field
 	}
 }
@@ -958,10 +958,10 @@ entity reader {
 	seen_at  date
 }
 view news per user {
-	changes = each change of issue where created_by != user.id {
+	changes = each change in issue where created_by != me {
 		field  created_at
 	}
-	seen = first(reader where person == user.id).seen_at
+	seen = first(reader where person == me).seen_at
 	unread = count(changes where created_at > seen && field != seen)
 	listed = count(changes)
 }

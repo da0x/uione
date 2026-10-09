@@ -32,6 +32,7 @@
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
 #include "language/library.hpp"
+#include "language/lower.hpp"
 #include "language/parser.hpp"
 #include "language/names.hpp"
 #include "platform/files.hpp"
@@ -1374,7 +1375,7 @@ namespace one::language {
                         error(source->name.where, "'each " + source->name.text() + "' needs an entity called " +
                                                       source->name.text());
                     } else if (each.changes && !listed->history) {
-                        error(source->name.where, "'each change of " + listed->name + "' needs " + listed->name +
+                        error(source->name.where, "'each change in " + listed->name + "' needs " + listed->name +
                                                       " to keep its history: entity " + listed->name + " history { ... }");
                         listed = nullptr;
                     } else if (each.changes) {
@@ -1779,7 +1780,7 @@ namespace one::language {
         // A view per entity is shown for one entity at a time, the one the screen's
         // address names, so the screen needs that entity as a parameter of its route.
         // A thread or a timeline shows one of a view's lists, whose rows hold what it
-        // needs: a thread who wrote each and what, a timeline each change of an entity.
+        // needs: a thread who wrote each and what, a timeline each change in an entity.
         void verify_listing(const std::string& ns, const qualified_name& name, const std::string& list_name, const std::string& route, bool changes,
                             std::initializer_list<std::string_view> needs) {
             snake(name);
@@ -1798,7 +1799,7 @@ namespace one::language {
                 return;
             }
             if (changes && !list->changes) {
-                error(name.where, "a timeline shows an entity's changes, so " + list_name + " is each change of an entity, like each change of issue");
+                error(name.where, "a timeline shows an entity's changes, so " + list_name + " is each change in an entity, like each change in issue");
                 return;
             }
             for (auto need : needs) {
@@ -2922,7 +2923,7 @@ namespace one::language {
                 const std::string& name = object->name.parts[0];
                 const entity_declaration* through = nullptr;
                 if (name == "user" && in.reader) {
-                    if (m->member != "id") error(where, "the person reading a view is only known by user.id");
+                    if (m->member != "id") error(where, "the person reading a view is only known by me");
                     return nullptr;
                 }
                 if (in.entity && name == in.entity->name) through = in.entity;            // loan.book, in a where on loan
@@ -3104,14 +3105,17 @@ namespace one::language {
         }
     };
 
-    // Checks what a project's files mean. Call it only after every file has parsed
-    // without errors, since a half-read file would only produce follow-on errors.
-    inline void check(const std::vector<file>& files, diagnostics& out) {
+    // Checks what a project's files mean, once what they say in short is said in full.
+    // Call it only after every file has parsed without errors, since a half-read file
+    // would only produce follow-on errors.
+    inline void check(std::vector<file>& files, diagnostics& out) {
+        lower(files, out);
         checker(out).check(files);
     }
 
     // Checks, and says what each name means where it's written.
-    inline void check(const std::vector<file>& files, diagnostics& out, meanings& meant) {
+    inline void check(std::vector<file>& files, diagnostics& out, meanings& meant) {
+        lower(files, out);
         checker(out, &meant).check(files);
     }
 

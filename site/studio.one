@@ -19,7 +19,7 @@ namespace studio {
 	// One document per person, readable only by that person. A screen that shows it
 	// asks for sign-in by itself: nothing on the screen says so.
 	view projects per user {
-		each project where owner == user.id {
+		each project where owner == me {
 			name  created_at
 		}
 	}

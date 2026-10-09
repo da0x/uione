@@ -64,7 +64,7 @@ examples/tasks/main.one	done   boolean  = false	boolean	type
 examples/tasks/main.one	done   boolean  = false	false	constant
 examples/tasks/main.one	permission owner	owner	constant
 examples/tasks/main.one	owner  user     = me	owner	variable
-examples/tasks/main.one	where owner == user.id	owner	plain
+examples/tasks/main.one	where owner == me	owner	plain
 examples/tasks/main.one	require !done	!	operator
 examples/tasks/main.one	order by done  created_at descending	descending	keyword
 examples/tasks/main.one	screen "Tasks" / {	/	route
@@ -112,11 +112,11 @@ examples/tracker/main.one	labels     list of text	list	type
 examples/tracker/main.one	labels     list of text	of	type
 examples/tracker/main.one	add me to assignees	add	keyword
 examples/tracker/main.one	remove me from assignees	remove	keyword
-examples/tracker/main.one	where assignees has user.id	has	keyword
+examples/tracker/main.one	where assignees has me	has	keyword
 examples/tasks/main.one	view list per user	list	name
 examples/tracker/main.one	entity issue history {	history	keyword
 examples/tracker/main.one	entity issue history {	issue	name
-examples/tracker/main.one	each change of issue where project	change	type
+examples/tracker/main.one	each change in issue in project	change	type
 examples/tracker/main.one	limit 50	limit	keyword
 examples/tracker/main.one	webhook github /hooks/github {	webhook	declare
 examples/tracker/main.one	webhook github /hooks/github {	github	name
@@ -153,8 +153,8 @@ editors/fixtures/roles.one	tags    list of label	of	type
 editors/fixtures/roles.one	tags    list of label	label	type
 examples/tracker/main.one	title = issue.title	title	variable
 examples/tracker/main.one	title = issue.title	issue.title	plain
-examples/tracker/main.one	changes = each change of issue where issue	changes	variable
-examples/tracker/main.one	changes = each change of issue where issue	of	keyword
+examples/tracker/main.one	changes = each change in issue {	changes	variable
+examples/tracker/main.one	changes = each change in issue {	in	keyword
 examples/tracker/main.one	field  before  after  created_by.name	after	plain
 examples/tracker/main.one	entity issue history {	history	keyword
 examples/tracker/main.one	timeline issue_page.changes	changes	plain

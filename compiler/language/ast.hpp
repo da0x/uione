@@ -304,7 +304,12 @@ namespace one::language {
     struct view_each {
         location where;
         std::optional<std::string> name;    // comments = each comment ...
-        bool changes = false;               // each change of issue: the changes an entity keeps
+        bool changes = false;               // each change in issue: the changes an entity keeps
+        // each issue in project: the rows whose field pointing at the view's project
+        // holds it; each change in issue in project, the changes of a project's issues.
+        std::vector<std::pair<std::string, location>> within;
+        location where_word;              // where its where starts, and how long the
+        std::size_t where_length = 0;     // condition after it runs, for a fix to say it as in
         std::vector<expression_ptr> order;  // -due_at sorts in reverse
         std::optional<int> limit;           // limit 50: only the first, once ordered
         expression_ptr source;

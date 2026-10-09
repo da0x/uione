@@ -486,7 +486,7 @@ command hand::create
 command rank::create
 view crew_page per crew {
 	readers hand
-	ranks = each rank where crew == crew.id {
+	ranks = each rank in crew {
 		name  title
 	}
 }
@@ -559,13 +559,13 @@ command issue::move {
 }
 view project_page per project {
 	readers member
-	phases = each phase where project == project.id {
+	phases = each phase in project {
 		name  title
 	}
-	steps = each step where project == project.id {
+	steps = each step in project {
 		from  to  title  from.title  to.title  roles
 	}
-	roles = each role where project == project.id {
+	roles = each role in project {
 		name  title
 	}
 }
@@ -769,7 +769,7 @@ TEST_CASE("a form asks for a command's input as it would a field of its type") {
                          "entity column {\n\tboard  board\n\ttitle  text\n}\n"
                          "entity card {\n\tcolumn  column\n}\n"
                          "command column::delete {\n\tinput into column\n\teach card where column == id {\n\t\tcolumn = into\n\t}\n}\n"
-                         "view board_page per board {\n\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n}\n"
+                         "view board_page per board {\n\tcolumns = each column in board {\n\t\ttitle\n\t}\n}\n"
                          "screen \"Columns\" /boards/:board {\n"
                          "\ttable board_page.columns {\n\t\ttitle\n\t\tdelete \"Remove\"\n\t}\n"
                          "\tform column::delete \"Remove\" {\n\t\tinto \"Move its cards to\"\n\t}\n"
@@ -795,8 +795,8 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
                          "command column::update\n"
                          "command arrow::create\ncommand arrow::update\ncommand arrow::delete\n"
                          "view board_page per board {\n"
-                         "\tcolumns = each column where board == board.id {\n\t\torder by position\n\t\ttitle  position\n\t}\n"
-                         "\tarrows = each arrow where board == board.id {\n\t\tfrom  to  says\n\t}\n"
+                         "\tcolumns = each column in board {\n\t\torder by position\n\t\ttitle  position\n\t}\n"
+                         "\tarrows = each arrow in board {\n\t\tfrom  to  says\n\t}\n"
                          "}\n"
                          "screen \"Board\" /boards/:board {\n"
                          "\ttable board_page.columns {\n\t\treorder position\n\t\thide when empty\n\t\ttitle\n\t}\n"
@@ -827,8 +827,8 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
                              "entity arrow {\n\tboard  board  required  key\n\tfrom  column  required  key\n\tto  column  required  key\n}\n"
                              "command arrow::delete\n"
                              "view board_page per board {\n"
-                             "\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n"
-                             "\tarrows = each arrow where board == board.id {\n\t\tfrom  to\n\t}\n"
+                             "\tcolumns = each column in board {\n\t\ttitle\n\t}\n"
+                             "\tarrows = each arrow in board {\n\t\tfrom  to\n\t}\n"
                              "}\n"
                              "screen \"Board\" /boards/:board {\n"
                              "\tdiagram board_page.arrows by from and to over board_page.columns\n"
@@ -849,7 +849,7 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
                                                 "entity column {\n\tboard  board\n\ttitle  text\n}\n"
                                                 "entity arrow {\n\tboard  board\n\tfrom  column\n\tto  board\n}\n"
                                                 "view board_page per board {\n"
-                                                "\tcolumns = each column where board == board.id {\n\t\ttitle\n\t}\n"
+                                                "\tcolumns = each column in board {\n\t\ttitle\n\t}\n"
                                                 "\tarrows = each arrow where board == board.id {\n\t\tfrom  to\n\t}\n"
                                                 "}\n"
                                                 "screen \"Board\" /boards/:board {\n"
@@ -874,9 +874,9 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
                          "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tphase  phase\n}\n"
                          "command issue::move {\n\tchanges phase\n}\n"
                          "view project_page per project {\n"
-                         "\tphases = each phase where project == project.id {\n\t\torder by position\n\t\ttitle\n\t}\n"
-                         "\tsteps = each step where project == project.id {\n\t\tfrom  to\n\t}\n"
-                         "\tissues = each issue where project == project.id {\n\t\tnumber  title  phase\n\t}\n"
+                         "\tphases = each phase in project {\n\t\torder by position\n\t\ttitle\n\t}\n"
+                         "\tsteps = each step in project {\n\t\tfrom  to\n\t}\n"
+                         "\tissues = each issue in project {\n\t\tnumber  title  phase\n\t}\n"
                          "}\n"
                          "screen \"Project\" /projects/:project {\n"
                          "\ttable project_page.issues {\n\t\tnumber  title\n\t}\n"
@@ -900,8 +900,8 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
                                                 "entity phase {\n\tproject  project\n\ttitle  text\n}\n"
                                                 "entity issue {\n\tproject  project\n\ttitle  text\n\tphase  phase\n}\n"
                                                 "view project_page per project {\n"
-                                                "\tphases = each phase where project == project.id {\n\t\ttitle\n\t}\n"
-                                                "\tissues = each issue where project == project.id {\n\t\ttitle  project\n\t}\n"
+                                                "\tphases = each phase in project {\n\t\ttitle\n\t}\n"
+                                                "\tissues = each issue in project {\n\t\ttitle  project\n\t}\n"
                                                 "}\n"
                                                 "screen \"Project\" /projects/:project {\n"
                                                 "\tboard project_page.issues by project over project_page.phases {\n\t\ttitle\n\t}\n"
@@ -925,8 +925,8 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
                          "command issue::create\ncommand project::update\n"
                          "view project_page per project {\n"
                          "\ttitle = project.title\n"
-                         "\tphases = each phase where project == project.id {\n\t\ttitle\n\t}\n"
-                         "\tissues = each issue where project == project.id {\n\t\ttitle  phase\n\t}\n"
+                         "\tphases = each phase in project {\n\t\ttitle\n\t}\n"
+                         "\tissues = each issue in project {\n\t\ttitle  phase\n\t}\n"
                          "}\n"
                          "screen \"Project\" /projects/:project {\n"
                          "\theading {\n\t\tproject::update \"Edit project\"\n\t\tform project::update \"Save\" {\n\t\t\ttitle\n\t\t}\n\t}\n"
@@ -1001,8 +1001,8 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\tphase  phase\n\tauthor  user = me\n\tpriority  enum { low  high }\n}\n"
                          "command project::update\n"
                          "view project_page per project {\n\tname = project.name\n\tsummary = project.summary\n"
-                         "\tboards = each board where project == project.id {\n\t\ttitle\n\t}\n"
-                         "\tissues = each issue where project == project.id {\n\t\tboard  phase  phase.title  phase.position\n\t}\n}\n"
+                         "\tboards = each board in project {\n\t\ttitle\n\t}\n"
+                         "\tissues = each issue in project {\n\t\tboard  phase  phase.title  phase.position\n\t}\n}\n"
                          "screen \"{project_page.name}\" /:project {\n"
                          "\theading {\n\t\tproject::update \"Edit project\" icon edit\n\t\tform project::update \"Save\" {\n\t\t\tname\n\t\t}\n\t}\n"
                          "\tsubtitle \"{project_page.summary}\"\n"
@@ -1201,7 +1201,7 @@ TEST_CASE("a timeline can say what it's of, and a row can open what it points at
                          "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
                          "entity issue history {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tassignees  list of user\n}\n"
                          "entity link {\n\tproject  project  required\n\tfrom  issue  required\n\tto  issue  required\n}\n"
-                         "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tproject  issue  issue.title  field  before  after  created_at\n\t}\n}\n"
+                         "view news per user {\n\tchanges = each change in issue where assignees has me {\n\t\tproject  issue  issue.title  field  before  after  created_at\n\t}\n}\n"
                          "view issue_page per issue {\n\ttitle = issue.title\n\tlinks = each link where from == issue.id {\n\t\tto  to.title\n\t}\n}\n"
                          "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" link /:project/:issue\n}\n"
                          "screen \"{issue_page.title}\" /:project/:issue {\n\ttable issue_page.links link /:project/:to {\n\t\tto.title \"Issue\"\n\t}\n}\n"
@@ -1229,7 +1229,7 @@ TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go 
                          "command issue::move {\n\tchanges phase\n}\n"
                          "view issue_page per issue {\n\ttitle = issue.title\n\tphase = issue.phase\n"
                          "\tsteps = each step {\n\t\tfrom  to  title\n\t}\n"
-                         "\tcomments = each comment where issue == issue.id {\n\t\tbody\n\t}\n}\n"
+                         "\tcomments = each comment in issue {\n\t\tbody\n\t}\n}\n"
                          "screen \"{issue_page.title}\" /issues/:issue {\n\tissue::move along issue_page.steps\n\ttable issue_page.comments {\n\t\tbody\n\t}\n"
                          "\tcopy issue_page \"Copy issue\"\n}\n"
                          "}\n");
@@ -1250,8 +1250,8 @@ TEST_CASE("a person's news marks what came since they looked, and a header's bad
                          "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
                          "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
                          "command reader::create {\n\tseen_at = now\n}\n"
-                         "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tissue  field  before  after  created_at\n\t}\n"
-                         "\tseen = first(reader where person == user.id).seen_at\n\tunread = count(changes where created_at > seen)\n}\n"
+                         "view news per user {\n\tchanges = each change in issue where assignees has me {\n\t\tissue  field  before  after  created_at\n\t}\n"
+                         "\tseen = first(reader where person == me).seen_at\n\tunread = count(changes where created_at > seen)\n}\n"
                          "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" {\n\t\tnew since news.seen\n\t\tseen reader::create\n\t}\n}\n"
                          "}\n");
     auto files = generate_at(dir.string());
@@ -1301,8 +1301,8 @@ TEST_CASE("a table keeps only some rows, rows are tinted by a choice, and a box 
                          "entity milestone {\n\tproject  project  required\n\ttitle  text\n\tdue  date\n}\n"
                          "command issue::create\n"
                          "view project_page per project {\n"
-                         "\tissues = each issue where project == project.id {\n\t\tnumber  title  priority\n\t}\n"
-                         "\tmilestones = each milestone where project == project.id {\n\t\ttitle  due\n\t}\n}\n"
+                         "\tissues = each issue in project {\n\t\tnumber  title  priority\n\t}\n"
+                         "\tmilestones = each milestone in project {\n\t\ttitle  due\n\t}\n}\n"
                          "view issue_page per issue {\n\ttitle = issue.title\n\tpriority = issue.priority\n}\n"
                          "screen \"Project\" /:project {\n"
                          "\tfind \"Search this project\" {\n\t\tproject_page.issues \"Issues\" link /:project/:issue by number title\n\t}\n"

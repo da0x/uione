@@ -78,7 +78,7 @@ namespace library {
 		author = book.author
 		shelfmark = book.shelfmark
 		summary = book.summary
-		loans = each loan where book == book.id {
+		loans = each loan in book {
 			order by number descending
 			number  member.picture  member.name  lent_at  returned_at
 		}
@@ -86,7 +86,7 @@ namespace library {
 
 	// A member's own loans: one document per member, readable only by them.
 	view mine per user {
-		each loan where member == user.id && returned_at == none {
+		each loan where member == me && returned_at == none {
 			order by due_at
 			book.title  due_at
 		}

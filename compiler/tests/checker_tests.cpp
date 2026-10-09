@@ -591,7 +591,7 @@ function sort_title(title) {
                           "20: entity book has no field titel; did you mean title?",
                           "21: entity book has no field pages",
                           "22: entity loan has no field member",
-                          "26: the person reading a view is only known by user.id",
+                          "26: the person reading a view is only known by me",
                           "31: starts_with takes 2 arguments, not 1",
                           "32: there's no titel here; did you mean title?",
                       });
@@ -666,14 +666,14 @@ TEST_CASE("a create form asks for a key, and an update form can't") {
 
 TEST_CASE("a view's lists have names of their own, and a table names the one it shows") {
     const std::string start = "entity book {\n\ttitle  text\n}\nentity loan {\n\tbook  book  required\n\tmember  user\n}\n";
-    auto e = only_error(start + "view page per book {\n\teach loan where book == book.id\n\teach loan\n}\n");
+    auto e = only_error(start + "view page per book {\n\teach loan in book\n\teach loan\n}\n");
     CHECK(e.message == "view page already has a list without a name; give this one a name, like comments = each ...");
     e = only_error(start + "view page per book {\n\ttitle = book.title\n\ttitle = each loan\n}\n");
     CHECK(e.message == "view page already has something called title");
     e = only_error(start + "view page per book {\n\trows = each loan\n}\n");
     CHECK(e.message == "rows is what a view's list without a name is called; name this list something else");
 
-    const std::string page = start + "view page per book {\n\ttitle = book.title\n\tloans = each loan where book == book.id {\n\t\tmember\n\t}\n}\n";
+    const std::string page = start + "view page per book {\n\ttitle = book.title\n\tloans = each loan in book {\n\t\tmember\n\t}\n}\n";
     CHECK(check_source(page + "screen \"Book\" /books/:book {\n\ttable page.loans {\n\t\tmember\n\t}\n}\n").empty());
     e = only_error(page + "screen \"Book\" /books/:book {\n\ttable page.lends {\n\t\tmember\n\t}\n}\n");
     CHECK(e.message == "view page has no list called lends");
@@ -781,7 +781,7 @@ TEST_CASE("a list holds text, people or entities, changes by add and remove, and
     const std::string start = "entity label {\n\tname  text  required  key\n}\n"
                               "entity issue {\n\ttitle  text\n\tlabels  list of label\n\ttags  list of text\n\tassignees  list of user\n}\n";
     CHECK(check_source(start + "command issue::take {\n\tadd me to assignees\n}\ncommand issue::drop {\n\tremove me from assignees\n}\n"
-                               "view mine per user {\n\teach issue where assignees has user.id {\n\t\ttitle  assignees.name  labels.name\n\t}\n}\n")
+                               "view mine per user {\n\teach issue where assignees has me {\n\t\ttitle  assignees.name  labels.name\n\t}\n}\n")
               .empty());
     auto e = only_error(start + "entity bad {\n\tsizes  list of number\n}\n");
     CHECK(e.message == "sizes is a list, which holds text, people or entities, like list of label or list of user");
@@ -793,7 +793,7 @@ TEST_CASE("a list holds text, people or entities, changes by add and remove, and
     CHECK(e.message == "entity issue has no field assignes; did you mean assignees?");
     e = only_error(start + "command issue::take {\n\tassignees = me\n}\n");
     CHECK(e.message == "assignees is a list; add to it or remove from it, like add me to assignees, or give it a whole list, like [a, b]");
-    e = only_error(start + "view mine per user {\n\teach issue where title has user.id\n}\n");
+    e = only_error(start + "view mine per user {\n\teach issue where title has me\n}\n");
     CHECK(e.message == "has asks a list, and title isn't one");
 }
 
@@ -801,14 +801,14 @@ TEST_CASE("a view lists the changes an entity keeps, by the entity or by what it
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity issue history {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity note {\n\ttext  text\n}\n";
-    CHECK(check_source(start + "view issue_page per issue {\n\tchanges = each change of issue where issue == issue.id {\n"
+    CHECK(check_source(start + "view issue_page per issue {\n\tchanges = each change in issue {\n"
                                "\t\torder by created_at\n\t\tlimit 20\n\t\tfield  before  after  action  created_by.name  created_at\n\t}\n}\n"
-                               "view project_page per project {\n\ttimeline = each change of issue where project == project.id {\n"
+                               "view project_page per project {\n\ttimeline = each change in issue in project {\n"
                                "\t\tissue  field  after\n\t}\n}\n")
               .empty());
-    auto e = only_error(start + "view notes {\n\teach change of note\n}\n");
-    CHECK(e.message == "'each change of note' needs note to keep its history: entity note history { ... }");
-    e = only_error(start + "view page per issue {\n\tchanges = each change of issue where issue == issue.id {\n\t\ttitle\n\t}\n}\n");
+    auto e = only_error(start + "view notes {\n\teach change in note\n}\n");
+    CHECK(e.message == "'each change in note' needs note to keep its history: entity note history { ... }");
+    e = only_error(start + "view page per issue {\n\tchanges = each change in issue {\n\t\ttitle\n\t}\n}\n");
     CHECK(e.message == "entity change has no field title");
 }
 
@@ -868,7 +868,7 @@ TEST_CASE("a component is a file beside the .one that draws it") {
 TEST_CASE("a table's link may name the screen's own parameters before the row's") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
-                              "view issues per project {\n\teach issue where project == project.id {\n\t\ttitle\n\t}\n}\n"
+                              "view issues per project {\n\teach issue in project {\n\t\ttitle\n\t}\n}\n"
                               "view issue_page per issue {\n\ttitle = issue.title\n}\n"
                               "screen \"Issue\" /projects/:project/issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n";
     CHECK(check_source(start + "screen \"Project\" /projects/:project {\n\ttable issues link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n")
@@ -1070,11 +1070,11 @@ TEST_CASE("a button's when reads the views its screen shows") {
 
 TEST_CASE("a thread shows who wrote what, and a timeline an entity's changes") {
     const std::string start = "namespace a {\nentity issue history {\n\ttitle  text\n}\nentity comment {\n\tissue  issue  required\n\tbody  text\n\tauthor  user  = me\n}\n";
-    const std::string view = "view issue_page per issue {\n\tcomments = each comment where issue == issue.id {\n\t\tauthor.name  body  created_at\n\t}\n"
-                             "\thistory = each change of issue where issue == issue.id {\n\t\tfield  before  after  created_at\n\t}\n}\n";
+    const std::string view = "view issue_page per issue {\n\tcomments = each comment in issue {\n\t\tauthor.name  body  created_at\n\t}\n"
+                             "\thistory = each change in issue {\n\t\tfield  before  after  created_at\n\t}\n}\n";
     CHECK(check_source(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.comments\n\ttimeline issue_page.history\n}\n}\n").empty());
     CHECK(only_error(start + view + "screen \"Issue\" /issues/:issue {\n\ttimeline issue_page.comments\n}\n}\n").message ==
-          "a timeline shows an entity's changes, so comments is each change of an entity, like each change of issue");
+          "a timeline shows an entity's changes, so comments is each change in an entity, like each change in issue");
     auto wrong = check_source(start + view + "screen \"Issue\" /issues/:issue {\n\tthread issue_page.history\n}\n}\n");
     REQUIRE(wrong.size() == 2);
     CHECK(wrong[0].message == "a thread needs body in each of history's rows");
@@ -1142,8 +1142,8 @@ TEST_CASE("a view counts the rows of its own list that pass, and a header's badg
         return "namespace work {\n"
                "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
                "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
-               "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tfield  created_at\n\t}\n"
-               "\tseen = first(reader where person == user.id).seen_at\n\t" + value + "\n}\n}\n";
+               "view news per user {\n\tchanges = each change in issue where assignees has me {\n\t\tfield  created_at\n\t}\n"
+               "\tseen = first(reader where person == me).seen_at\n\t" + value + "\n}\n}\n";
     };
     std::string counted = views("unread = count(changes where created_at > seen)");
     CHECK(check_source("import one\nproject tracker {\n\tui  radix\n}\nheader {\n\tbadge news.unread\n}\n" + counted).empty());
@@ -1247,4 +1247,31 @@ TEST_CASE("a footer says who a site is by, and what it was built from, with a sc
     // Who a site is by was a setting for a while.
     CHECK(only_error("import one\nproject shop {\n\tcopyright \"Ada Lovelace\" \"https://www.linkedin.com/in/ada\"\n}\n").message ==
           "who a site is by is said in its footer, like footer { text \"© {year} Ada Lovelace\" }; one upgrade moves it there");
+}
+
+TEST_CASE("each issue in project lists the rows whose one field pointing at the view's project holds it") {
+    const std::string start = "entity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\ttitle  text\n}\n"
+                              "entity link {\n\tfrom  issue\n\tto  issue\n}\n";
+    CHECK(check_source(start + "view page per project {\n\tissues = each issue in project {\n\t\ttitle\n\t}\n"
+                               "\ttimeline = each change in issue in project {\n\t\tfield\n\t}\n}\n").empty());
+    auto e = only_error(start + "view page per issue {\n\teach link in issue\n}\n");
+    CHECK(e.message == "link points at an issue by from and to; say which with where, like where from == issue.id");
+    e = only_error(start + "view page per project {\n\teach link in project\n}\n");
+    CHECK(e.message == "link has no field pointing at a project, so no link is in one");
+    e = only_error(start + "view page per issue {\n\teach issue in project\n}\n");
+    CHECK(e.message == "view page is per issue, so it has no project for its rows to be in");
+}
+
+TEST_CASE("a view says where in and the person reading as me, and each is fixed to it") {
+    const std::string start = "entity project {\n\tname  text\n}\nentity issue {\n\tproject  project  required\n\towner  user\n}\n";
+    auto e = only_error(start + "view page per project {\n\teach issue where project == project.id\n}\n");
+    CHECK(e.message == "write in project for the rows in the view's project");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "in project");
+    CHECK(e.fix->length == std::string("where project == project.id").size());
+    e = only_error(start + "view mine per user {\n\teach issue where owner == user.id\n}\n");
+    CHECK(e.message == "write me for the person reading");
+    REQUIRE(e.fix);
+    CHECK(e.fix->where.column == 28);
+    CHECK(check_source(start + "view mine per user {\n\teach issue where owner == me\n}\n").empty());
 }

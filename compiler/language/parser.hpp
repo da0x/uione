@@ -591,15 +591,24 @@ namespace one::language {
         view_each parse_each() {
             view_each each;
             each.where = advance().where;
-            if (at_word("change") && peek(1).kind == token_kind::identifier && peek(1).text == "of") {
+            if (at_word("change") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "of")) {
                 advance();
-                advance();
+                const token& word = advance();
+                // Said and read on, so the rest of the file is still checked.
+                if (word.text == "of") out_.push_back({path_, word.where, "write each change in, as each issue in project is said", fix{word.where, 2, "in"}});
                 each.changes = true;
             }
             each.source = parse_postfix();
-            if (at_word("where")) {
+            while (at_word("in") && peek(1).kind == token_kind::identifier) {
                 advance();
+                const token& name = advance();
+                each.within.emplace_back(name.text, name.where);
+            }
+            if (at_word("where")) {
+                const token& word = advance();
+                each.where_word = word.where;
                 each.condition = parse_expression();
+                each.where_length = tokens_[pos_ - 1].end - word.begin;
             }
             if (at(token_kind::left_brace)) {
                 advance();

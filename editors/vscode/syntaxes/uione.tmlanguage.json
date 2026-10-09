@@ -236,8 +236,8 @@
     "keywords": {
       "patterns": [
         {
-          "comment": "each change of issue: change is the language's own record of an entity's changes, a type, as text is.",
-          "match": "\\b(change)\\s+(of)\\b",
+          "comment": "each change in issue: change is the language's own record of an entity's changes, a type, as text is.",
+          "match": "\\b(change)\\s+(in)\\b",
           "captures": {
             "1": {
               "name": "support.type.uione"
@@ -321,7 +321,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|was|add|remove|to|has|of|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|hour|hours|day|days|week|weeks|new|since|seen|badge|find|only|tint|color)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?:require|permission|clear|create|readers|when|was|add|remove|to|has|of|in|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|hour|hours|day|days|week|weeks|new|since|seen|badge|find|only|tint|color)\\b",
           "name": "keyword.other.uione"
         },
         {

@@ -40,7 +40,7 @@ What a name means depends on where it's written:
   `report.project.takes_reports` says plainly that it's the field.
 - **In a view**, each row's fields are named by the entity it comes from, like
   `book.title`, and in `each book where ...` plainly. A view per entity names that
-  entity, like `project.name`, and `user.id` is whoever is reading it.
+  entity, like `project.name`, and `me` is whoever is reading it.
 - **Everywhere**, `me`, `now`, `none`, `true` and `false` are the language's own
   [values](#built-in-values). A choice is named with its enum, like
   `status::open`. `permission` takes one of the language's own words: `anyone`,
@@ -127,7 +127,7 @@ The language's own words, inside what a declaration says:
 - in a field: `enum`, `list of`, `serial per`;
 - in a command: `require`, `permission`, `create`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
   `input`, `each … where`, `delete each … where`;
-- in a view: `per`, `public`, `each`, `change of`, `where`, `order`, `ascending`,
+- in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
@@ -387,7 +387,7 @@ entity loan {
   such as their email address, can reach a view.
 - `list of label`, `list of user` or `list of text` holds several: labels, the
   people assigned, tags. A view can read through each, as `assignees.name`, and
-  pick by what a list holds, as `where assignees has user.id`. A form writes a list
+  pick by what a list holds, as `where assignees has me`. A form writes a list
   separated by commas, and a table shows it that way.
 - `serial` is a number counted up as each entity is made: 1, 2, 3. `serial per book`
   counts within each book, so every book's loans start from 1. Two made at the same
@@ -603,7 +603,7 @@ view signups public {
 
 view book_page per book {
 	title = book.title
-	loans = each loan where book == book.id {
+	loans = each loan in book {
 		order by number descending
 		number  member  lent_at  returned_at
 	}
@@ -613,13 +613,15 @@ view book_page per book {
 - `per <entity>` makes one document per entity, like a page per book. Inside the
   view, that entity is named plainly: `title = book.title` puts its title in the
   document, `lifecycle = issue.project.lifecycle` a field of what it points at,
-  which changing the project changes on every issue's page, and `where book ==
-  book.id` picks the rows that belong to it. A screen
+  which changing the project changes on every issue's page, and `each loan in
+  book` picks the rows that belong to it: those whose one field pointing at a book
+  holds this one. An entity that points at a book by two fields, like a link's
+  `from` and `to`, says which with `where from == book.id`. A screen
   showing it reads it for the entity its address names, so its route has that
   entity as a parameter: `screen "Book" /books/:book`. `per user` makes one
   document per person, readable only by that person.
 - `total = count(signup)` counts what a view's query picks, and `seen =
-  first(reader where person == user.id).seen_at` holds a field of the earliest it
+  first(reader where person == me).seen_at` holds a field of the earliest it
   picks, or none, like when the person reading last looked at their news.
 - `unread = count(changes where created_at > seen)` counts the rows of the view's
   own list `changes` that pass: each test compares a field its rows hold with
@@ -647,14 +649,14 @@ view issue_page per issue {
 }
 ```
 
-- `each change of issue` lists the changes an issue keeps. Each holds the issue,
-  under `issue`, and what it points at, so a view can list one issue's changes,
-  `where issue == issue.id`, or every change in a project, `where project ==
-  project.id`. A change's rows can show `field`, `before`, `after`, `action`,
-  `created_at` and `created_by.name`, and `created_by != user.id` leaves out the
+- `each change in issue` lists the changes issues keep. Each holds the issue,
+  under `issue`, and what it points at, so in a view per issue it lists that
+  issue's own changes, and `each change in issue in project` every change to a
+  project's issues. A change's rows can show `field`, `before`, `after`, `action`,
+  `created_at` and `created_by.name`, and `created_by != me` leaves out the
   person's own.
 - A condition can read through what each row points at: `board.followers has
-  user.id` picks the changes to issues on the boards the person follows. `||` joins
+  me` picks the changes to issues on the boards the person follows. `||` joins
   ways to be picked, and a row any of them picks is listed once.
 - A list in a view `per user` holds only what the person may read: a row whose own
   page, like an issue's, is private to a project they aren't in, or no longer in,
@@ -668,7 +670,7 @@ view issue_page per issue {
 
 ```one
 view news per user {
-	changes = each change of issue where (board.followers has user.id || assignees has user.id) && created_by != user.id {
+	changes = each change in issue where (board.followers has me || assignees has me) && created_by != me {
 		order by created_at descending
 		limit 30
 		project  issue  issue.number  issue.title  field  before  after  created_by.name  created_at
@@ -676,7 +678,7 @@ view news per user {
 }
 
 view project_page per project {
-	timeline = each change of issue where project == project.id {
+	timeline = each change in issue in project {
 		order by created_at descending
 		limit 50
 		issue  field  after  created_by.name  created_at
@@ -790,7 +792,7 @@ command project::create {
   the backend starts, and its members' roles, named as those are, point at them.
 - A form for a role ticks the commands it allows; a form for a member picks its
   role from a list of the project's roles that a view on the screen holds, like
-  `roles = each role where project == project.id { name  title }`.
+  `roles = each role in project { name  title }`.
 
 ## function
 
@@ -1180,12 +1182,12 @@ header {
 }
 
 view news per user {
-	changes = each change of issue where assignees has user.id {
+	changes = each change in issue where assignees has me {
 		order by created_at descending
 		limit 30
 		issue  field  created_at
 	}
-	seen = first(reader where person == user.id).seen_at
+	seen = first(reader where person == me).seen_at
 	unread = count(changes where created_at > seen)
 }
 ```
