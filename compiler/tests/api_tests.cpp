@@ -970,3 +970,52 @@ view news per user {
     CHECK(go.find(R"(CountRows("unread", "changes", one.RowWhere("created_at", ">", "seen"), one.RowWhere("field", "!=", "seen")))") != std::string::npos);
     CHECK(go.find(R"(CountRows("listed", "changes"))") != std::string::npos);
 }
+
+TEST_CASE("a command asks whether a list holds one of the project's own, and whether any of an entity exists") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity leg {
+	crew   crew  required  key
+	name   slug  required  key
+	roles  list of role
+}
+define role captain "Captain" in crew {
+	leg::update
+	role::delete
+	member::delete
+}
+command leg::update
+command member::delete
+command role::delete {
+	require !exists(member where role == id)  "give its people another role first"
+}
+once "2026-10-09 captains" {
+	each leg {
+		if roles has role::captain {
+			dispatch leg::update { remove role::captain from roles }
+		}
+	}
+	each member {
+		if role == role::captain {
+			dispatch member::delete
+		}
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find(R"(if one.Has(l.Roles, one.Key(l.Crew, "captain")) {)") != std::string::npos);
+    CHECK(go.find(R"(dispatched.Roles = one.Remove(dispatched.Roles, one.Key(l.Crew, "captain")))") != std::string::npos);
+    CHECK(go.find(R"(if m.Role == one.Key(m.Crew, "captain") {)") != std::string::npos);
+    CHECK(go.find(R"(found, err := one.Exists[Member](c, one.Where[Member]("role", r.ID), nil))") != std::string::npos);
+}
