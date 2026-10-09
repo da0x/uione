@@ -692,13 +692,26 @@ namespace one::language {
         std::vector<screen_item> items;
     };
 
+    // header { badge news.unread }: what's beside the site's name on every page. A
+    // badge shows a number a view holds, like what's new to the person reading,
+    // when it's more than none.
+    struct header_badge {
+        location where;
+        std::string view;   // news
+        std::string value;  // unread
+    };
+
+    struct header_declaration {
+        std::vector<header_badge> badges;
+    };
+
     struct declaration {
         location where;
         std::variant<project_declaration, namespace_declaration, format_declaration,
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
-                     import_declaration, settings_declaration, footer_declaration>
+                     import_declaration, settings_declaration, footer_declaration, header_declaration>
             node;
     };
 
@@ -719,6 +732,28 @@ namespace one::language {
         if (name.parts.size() == 2 && (name.parts[0] == f.name || name.parts[0] == f.enum_name)) value = &name.parts[1];
         if (!value || std::find(f.choices.begin(), f.choices.end(), *value) == f.choices.end()) return std::nullopt;
         return *value;
+    }
+
+    // unread = count(changes where created_at > seen): a count of a view's own list,
+    // of the rows that pass, compared with its other values. The list it counts, and
+    // its where, when a value is one.
+    struct row_count {
+        const view_each* list = nullptr;
+        const where_expression* where = nullptr;  // none when it counts every row
+    };
+
+    inline row_count counted_rows(const view_declaration& v, const view_value& value) {
+        auto* call = std::get_if<call_expression>(&value.value->node);
+        auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+        if (!callee || callee->name.text() != "count" || call->arguments.size() != 1) return {};
+        const expression& argument = *call->arguments[0];
+        auto* w = std::get_if<where_expression>(&argument.node);
+        auto* source = std::get_if<name_expression>(&(w ? *w->source : argument).node);
+        if (!source || source->name.parts.size() != 1) return {};
+        for (const auto& each : v.each) {
+            if (each.name && *each.name == source->name.parts[0]) return {&each, w};
+        }
+        return {};
     }
 
 } // namespace one::language

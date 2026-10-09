@@ -102,8 +102,9 @@ var clubs = one.Module("club",
 		List("news", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer).Has("rack.followers", one.Viewer).
 			Or(one.All[one.ChangeOf[Trick]]().Has("dealt", one.Viewer).Except("created_by", one.Viewer)).
 			Or(one.All[one.ChangeOf[Trick]]().Has("mentioned", one.Viewer).Except("created_by", one.Viewer))).
-		Fields("trick", "field", "after").
-		FirstOf("seen", one.Where[Glance]("person", one.Viewer), "seen_at"),
+		Fields("trick", "field", "after", "created_at").
+		FirstOf("seen", one.Where[Glance]("person", one.Viewer), "seen_at").
+		CountRows("unread", "news", one.RowWhere("created_at", ">", "seen")),
 	// The two newest changes someone else made, however many of their own came after.
 	one.View("others").PerUser().
 		List("others", one.All[one.ChangeOf[Trick]]().Except("created_by", one.Viewer)).Order("-created_at").Limit(2).
@@ -229,6 +230,30 @@ func TestNewsSaysWhenThePersonLastLookedAtIt(t *testing.T) {
 	}
 	if seen := h.view("club::news:" + ada)["seen"]; seen != nil {
 		t.Errorf("Ada's news says she looked, when only Grace did: %v", seen)
+	}
+}
+
+func TestNewsCountsWhatsNewSinceThePersonLastLooked(t *testing.T) {
+	h := start(t)
+	grace, graceToken := h.signUp("grace@example.com")
+	_, adaToken := h.signUp("ada@example.com")
+	h.mustRun("club/club/create", adaToken, map[string]any{"slug": "chess"})
+	rack := h.mustRun("club/rack/create", adaToken, map[string]any{"club": "chess", "name": "Openings"})
+	h.mustRun("club/rack/follow", graceToken, map[string]any{"id": rack})
+	trick := h.mustRun("club/trick/create", adaToken, map[string]any{"club": "chess", "rack": rack, "title": "Italian"})
+	h.mustRun("club/trick/update", adaToken, map[string]any{"id": trick, "title": "Italian game"})
+	unread := func() any { return h.view("club::news:" + grace)["unread"] }
+	// Before she's ever looked, all of it is new.
+	if got := unread(); got != int64(2) {
+		t.Fatalf("before Grace looks, her news counts %v new, want 2", got)
+	}
+	h.mustRun("club/glance/create", graceToken, map[string]any{})
+	if got := unread(); got != int64(0) {
+		t.Errorf("right after Grace looks, her news counts %v new, want 0", got)
+	}
+	h.mustRun("club/trick/update", adaToken, map[string]any{"id": trick, "title": "Italian opening"})
+	if got := unread(); got != int64(1) {
+		t.Errorf("after one more change, Grace's news counts %v new, want 1", got)
 	}
 }
 

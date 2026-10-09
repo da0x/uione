@@ -945,3 +945,35 @@ on signin {
     CHECK(file->content.find(R"(one.DeleteEach[Invitation]("email", one.MyEmail),)") != std::string::npos);
     CHECK(file->content.find("var OnSignIn = one.OnSignIn(") != std::string::npos);
 }
+
+TEST_CASE("a view's count of its own list's rows becomes CountRows, each test a RowWhere") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace work {
+entity issue history {
+	title  text
+}
+entity reader {
+	person  user  key  = me
+	seen_at  date
+}
+view news per user {
+	changes = each change of issue where created_by != user.id {
+		field  created_at
+	}
+	seen = first(reader where person == user.id).seen_at
+	unread = count(changes where created_at > seen && field != seen)
+	listed = count(changes)
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "work/work.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find(R"(CountRows("unread", "changes", one.RowWhere("created_at", ">", "seen"), one.RowWhere("field", "!=", "seen")))") != std::string::npos);
+    CHECK(go.find(R"(CountRows("listed", "changes"))") != std::string::npos);
+}

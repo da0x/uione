@@ -32,7 +32,9 @@ export interface PageProps {
   heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
   crumbs?: ReactNode; // where the pages above a screen go, above its title
   subtitle?: ReactNode; // where a screen's words about itself go, under its title
-  unread?: number; // how many things are new to the person reading, said beside the app's name
+  // Numbers beside the app's name, like what's new to the person reading, each said
+  // with what it counts, like unread; each is shown when more than none.
+  badges?: readonly { count: number; label: string }[];
   footer?: FooterProps; // at the foot of the page, as the site's footer says
   children: ReactNode;
 }

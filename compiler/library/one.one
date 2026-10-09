@@ -101,8 +101,6 @@ namespace one {
 		redirect    list of redirect
 		// Counting the site's visitors, once each agrees to it.
 		analytics   analytics
-		// What's new to the person signed in, counted beside the site's name.
-		unread      unread
 	}
 
 	// What a place the project runs has of its own: environment staging { ... }.
@@ -121,14 +119,6 @@ namespace one {
 		from  address
 		// Where whoever asks for it goes: an https address, or another of this site's.
 		to    link
-	}
-
-	// unread news.changes since news.seen
-	settings unread {
-		// A list of a view per user, whose rows are counted.
-		list   view_list
-		// A value of the same view: what came after it is new.
-		since  view_value
 	}
 
 } // namespace one

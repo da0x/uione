@@ -259,3 +259,22 @@ TEST_CASE("an upgrade moves who a site is by into a footer, with what it was bui
                                           "\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}\n");
     std::filesystem::remove_all(dir);
 }
+
+TEST_CASE("an upgrade moves what's new to a person into a value of their view, shown by the header") {
+    auto dir = project("uione-upgrade-unread",
+                       "import one\n\nproject shop {\n\tui      radix\n\tunread  news.changes since news.seen\n}\n\n"
+                       "namespace work {\n\tentity issue history {\n\t\ttitle  text\n\t}\n"
+                       "\tentity reader {\n\t\tperson  user  key  = me\n\t\tseen_at  date\n\t}\n"
+                       "\tview news per user {\n\t\tchanges = each change of issue where created_by != user.id {\n\t\t\tfield  created_at\n\t\t}\n"
+                       "\t\tseen = first(reader where person == user.id).seen_at  // \"}\"\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    CHECK(done.changed.begin()->second ==
+          "import one\n\nproject shop {\n\tone     \"9.9.9\"\n\tui      radix\n}\n\nheader {\n\tbadge news.unread\n}\n\n"
+          "namespace work {\n\tentity issue history {\n\t\ttitle  text\n\t}\n"
+          "\tentity reader {\n\t\tperson  user  key  = me\n\t\tseen_at  date\n\t}\n"
+          "\tview news per user {\n\t\tchanges = each change of issue where created_by != user.id {\n\t\t\tfield  created_at\n\t\t}\n"
+          "\t\tseen = first(reader where person == user.id).seen_at  // \"}\"\n\t\tunread = count(changes where created_at > seen)\n\t}\n}\n");
+    std::filesystem::remove_all(dir);
+}

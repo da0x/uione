@@ -9,7 +9,6 @@ project shop {
 	region  "us-east4"
 	ui      radix
 	corners one::corners::square
-	unread  news.changes since news.seen
 	environment production {
 		domain    "shop.example"
 		firebase  "shop-production"
@@ -18,6 +17,10 @@ project shop {
 		domain    "staging.shop.example"
 		firebase  "shop-staging"
 	}
+}
+
+header {
+	badge news.unread
 }
 
 footer columns {

@@ -211,6 +211,25 @@ namespace one::language {
                 end_line();
                 return {where, std::move(footer)};
             }
+            // header { badge news.unread }
+            if (word == "header" && peek(1).kind == token_kind::left_brace) {
+                advance();
+                advance();
+                header_declaration header;
+                while (in_block()) {
+                    if (!at_word("badge")) fail_expecting("a badge, like badge news.unread");
+                    header_badge badge;
+                    badge.where = advance().where;
+                    badge.view = expect(token_kind::identifier, "a view, like news.unread").text;
+                    expect(token_kind::dot, "'.' after " + badge.view);
+                    badge.value = expect(token_kind::identifier, "a value of view " + badge.view + ", like " + badge.view + ".unread").text;
+                    end_line();
+                    header.badges.push_back(std::move(badge));
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(header)};
+            }
             if (word == "namespace") return {where, parse_namespace()};
             if (word == "format") return {where, parse_format()};
             if (word == "entity") return {where, parse_entity()};
@@ -236,7 +255,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend, footer or once");
+                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -249,8 +268,8 @@ namespace one::language {
                 const token& key = expect(token_kind::identifier, "a setting, like domain");
                 s.key = key.text;
                 s.where = key.where;
-                // unread news.changes since news.seen: how many of a person's own list are
-                // newer than a value of theirs, said beside the app's name.
+                // unread news.changes since news.seen: what's new to a person, as it was said
+                // for a while, read so the checker can say where it's said now.
                 if (key.text == "unread") {
                     auto dotted = [&](const std::string& what) {
                         std::string view = expect(token_kind::identifier, what).text;

@@ -248,10 +248,6 @@ is asked once whether it may use cookies, and until they agree, they're counted
 without them, as Google's consent mode does; their answer is kept in their browser.
 A project without the setting counts no one and asks no one.
 
-`unread news.changes since news.seen` counts, on every page, what's new to the
-person signed in: the rows of a list of their own view made after a value of it,
-said beside the site's name.
-
 ### environment
 
 A project can run in more than one place, each deployed on its own: production
@@ -616,6 +612,11 @@ view book_page per book {
 - `total = count(signup)` counts what a view's query picks, and `seen =
   first(reader where person == user.id).seen_at` holds a field of the earliest it
   picks, or none, like when the person reading last looked at their news.
+- `unread = count(changes where created_at > seen)` counts the rows of the view's
+  own list `changes` that pass: each test compares a field its rows hold with
+  another of the view's values, joined by `&&`. Nothing comes before everything, so
+  before someone has ever looked, all of it counts. It counts what the list holds,
+  after its `limit`.
 - `public` lets anyone read it, signed in or not.
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public
@@ -1157,6 +1158,28 @@ view project_settings per project {
 - The deploy makes the master secret that every project's secret is derived
   from, keeps it in Secret Manager, and gives it only to the backend. It never
   goes into GitHub itself.
+
+## header
+
+What's beside the site's name on every page. A `badge` shows a value of a view,
+like what's new to the person reading, once they're signed in and while it's more
+than none. A site has one header, or none.
+
+```one
+header {
+	badge news.unread
+}
+
+view news per user {
+	changes = each change of issue where assignees has user.id {
+		order by created_at descending
+		limit 30
+		issue  field  created_at
+	}
+	seen = first(reader where person == user.id).seen_at
+	unread = count(changes where created_at > seen)
+}
+```
 
 ## footer
 

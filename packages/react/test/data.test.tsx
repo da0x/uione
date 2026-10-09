@@ -920,6 +920,25 @@ describe("what's on screen, in the path", () => {
   });
 });
 
+describe("a site's badges", () => {
+  const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
+  const badges = [{ view: "work::news", value: "unread" }];
+  const named = () => screen.getByRole("link", { name: /^app/ }).textContent;
+
+  it("says a value of a view beside the site's name, with what it counts, once there's any", () => {
+    const source = memorySource({ person: { uid: "ada", name: "Ada" }, views: { "work::news": { unread: 3 } } });
+    render(<App name="app" screens={[only]} ui={plain} data={source} location="/" badges={badges} />);
+    expect(named()).toBe("app (3 unread)");
+    act(() => source.set("work::news", { unread: 0 }));
+    expect(named()).toBe("app");
+  });
+
+  it("says nothing to someone not signed in", () => {
+    render(<App name="app" screens={[only]} ui={plain} data={memorySource({ person: null, views: { "work::news": { unread: 3 } } })} location="/" badges={badges} />);
+    expect(named()).toBe("app");
+  });
+});
+
 describe("a site's foot", () => {
   const only = defineScreen({ title: "Test", route: "/" }, () => <Text>hi</Text>);
   const Foot = () => (

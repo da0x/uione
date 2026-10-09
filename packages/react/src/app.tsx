@@ -43,9 +43,9 @@ export interface AppProps {
   authentication?: boolean; // whether people sign in here, so the page offers it; true unless the project says otherwise
   color?: string; // the site's own color, as #rrggbb, for its buttons and links in place of the component set's
   analytics?: Analytics; // counting visitors, once they agree; none counts no one, and asks no one
-  // What's new to the person reading, counted beside the app's name on every page: the
-  // rows of a list of their own view made since a value of it, like when they last looked.
-  unread?: Unread;
+  // Numbers beside the app's name on every page, each a value of a view, like what's
+  // new to the person reading; shown once they're signed in, when more than none.
+  badges?: readonly Badge[];
   build?: Build; // what it was built from, which its footer can show
   footer?: SiteFooter; // at the foot of every page
 }
@@ -56,13 +56,12 @@ export interface SiteFooter {
   content: ComponentType;
 }
 
-export interface Unread {
+export interface Badge {
   view: string; // like projects::news
-  list: string; // like changes
-  since: string; // like seen
+  value: string; // like unread
 }
 
-const UnreadSpec = createContext<Unread | undefined>(undefined);
+const BadgeSpec = createContext<readonly Badge[]>([]);
 const FooterSpec = createContext<SiteFooter | undefined>(undefined);
 export const BuildSpec = createContext<Build | undefined>(undefined);
 
@@ -92,16 +91,11 @@ export function BuiltLink({ to, children }: { to: "release" | "source"; children
 }
 
 // Counts what's new to the person, and says how many to its parent.
-function CountUnread({ spec, onCount }: { spec: Unread; onCount: (n: number) => void }) {
-  const view = useView(spec.view);
-  const since = view.status === "live" ? view.data?.[spec.since] : undefined;
-  const after = since instanceof Date ? since.getTime() : typeof since === "string" ? Date.parse(since) : Number.NEGATIVE_INFINITY;
-  const rows = view.status === "live" && Array.isArray(view.data?.[spec.list]) ? (view.data?.[spec.list] as Record<string, unknown>[]) : [];
-  const count = rows.filter((row) => {
-    const made = row.created_at instanceof Date ? row.created_at.getTime() : typeof row.created_at === "string" ? Date.parse(row.created_at) : Number.NaN;
-    return made > after;
-  }).length;
-  useEffect(() => onCount(count), [count, onCount]);
+function ReadBadge({ badge, at, onRead }: { badge: Badge; at: number; onRead: (at: number, n: number) => void }) {
+  const view = useView(badge.view);
+  const value = view.status === "live" ? view.data?.[badge.value] : undefined;
+  const n = typeof value === "number" ? value : 0;
+  useEffect(() => onRead(at, n), [at, n, onRead]);
   return null;
 }
 
@@ -233,7 +227,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, unread, build, footer }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, badges = [], build, footer }: AppProps) {
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}
@@ -248,7 +242,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
   );
   return (
     <UIContext.Provider value={ui}>
-      <UnreadSpec.Provider value={unread}>
+      <BadgeSpec.Provider value={badges}>
       <FooterSpec.Provider value={footer}>
       <BuildSpec.Provider value={build}>
       <DataProvider source={data}>
@@ -262,7 +256,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
       </DataProvider>
       </BuildSpec.Provider>
       </FooterSpec.Provider>
-      </UnreadSpec.Provider>
+      </BadgeSpec.Provider>
     </UIContext.Provider>
   );
 }
@@ -286,9 +280,17 @@ function Shell({
   const auth = useAuth();
   const signIn = useSignIn();
   const [signOutError, setSignOutError] = useState<string | undefined>();
-  const unreadSpec = useContext(UnreadSpec);
+  const badgeSpecs = useContext(BadgeSpec);
   const footer = useContext(FooterSpec);
-  const [unread, setUnread] = useState(0);
+  const [counts, setCounts] = useState<readonly number[]>([]);
+  const onRead = useCallback((at: number, n: number) => {
+    setCounts((was) => {
+      if (was[at] === n) return was;
+      const next = [...was];
+      next[at] = n;
+      return next;
+    });
+  }, []);
   // Where a screen's Heading puts its buttons, on the title's row.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   // And where its Crumbs put the pages above it.
@@ -317,7 +319,7 @@ function Shell({
       heading={<div ref={setSlot} style={{ display: "contents" }} />}
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
-      unread={unreadSpec && auth?.person ? unread : undefined}
+      badges={auth?.person ? badgeSpecs.map((badge, at) => ({ count: counts[at] ?? 0, label: badge.value.replaceAll("_", " ") })) : undefined}
       footer={footer ? { layout: footer.layout, children: <footer.content /> } : undefined}
       account={
         signIn.offered &&
@@ -339,7 +341,7 @@ function Shell({
         )
       }
     >
-      {unreadSpec && auth?.person && <CountUnread spec={unreadSpec} onCount={setUnread} />}
+      {auth?.person && badgeSpecs.map((badge, at) => <ReadBadge key={at} badge={badge} at={at} onRead={onRead} />)}
       <HeadingSlot.Provider value={slot}>
         <CrumbsSlot.Provider value={trail}>
           <SubtitleSlot.Provider value={under}>

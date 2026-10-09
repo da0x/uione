@@ -42,7 +42,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | roles
-                 | function | screen | picker | webhook | backend | once | signin | settings | footer
+                 | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
 import         ::= "import" NAME END
@@ -54,8 +54,6 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | qualified) END
                  | "redirect" STRING STRING END
-                 /* what's new to a person, counted beside the app's name */
-                 | "unread" NAME "." NAME "since" NAME "." NAME END
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "color" | "layout" | "serve"
                  | "title" | "one" | "analytics" | "theme" | "appearance" | "corners"
 
@@ -86,6 +84,12 @@ type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | 
 list           ::= "list" "of" ("text" | "user" | "permission" | qualified)
 serial         ::= "serial" ("per" NAME)?
 rule           ::= "required" | "unique" | "key" | "after" NAME
+
+/* header: what's beside the site's name on every page; a badge shows a value of a
+ * view, like what's new to the person reading, when it's more than none */
+
+header         ::= "header" "{" NEWLINE? badge* "}" END
+badge          ::= "badge" NAME "." NAME END
 
 /* footer: what's at the foot of every page, in one line or in columns of sections,
  * drawn with a screen's text, links and sections */
@@ -127,6 +131,8 @@ if             ::= "if" expression block ("else" (if | block))?
 
 /* view */
 
+/* a value can count the rows of the view's own list that pass, compared with its
+ * other values: unread = count(changes where created_at > seen) */
 view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
 view_line      ::= (NAME "=")? each
                  | "readers" NAME ("." NAME)+ END

@@ -4,7 +4,7 @@
 // @uione/react: the runtime every uione screen is built on.
 
 export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, usePageTitle, useSignIn, useTitle } from "./app.js";
-export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Unread } from "./app.js";
+export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Badge } from "./app.js";
 
 export { Actions, Board, Cards, Code, Command, Copy, Details, Find, useAddressState, toneOf, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Thread, Timeline, changed, done, holds, keptByTime, allows, listChoices, listHas, markdownOf, phrase } from "./components.js";
 export type { BoardMove, CopiedField, Tally, CopiedList, DocPage, FieldSpec, GridCommand, RowAction } from "./components.js";

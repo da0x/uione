@@ -204,6 +204,7 @@ namespace one::language {
         std::map<std::string, std::set<std::string>> imports_;  // what each file imports, by its path
         location imports_at_;                                    // where the file being verified would say one
         int footers_ = 0;                                        // the footers declared, of which a site has one
+        int headers_ = 0;                                        // and the headers
         std::map<std::string, std::string> placed_;  // where each namespace's at was first said
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
@@ -611,26 +612,6 @@ namespace one::language {
             return out;
         }
 
-        // unread news.changes since news.seen: a list of a view per user, and a value of
-        // the same view saying when the person last looked.
-        void check_unread(const setting& s) {
-            auto [view, list] = std::pair{s.value.substr(0, s.value.find('.')), s.value.substr(s.value.find('.') + 1)};
-            auto [since_view, since] = std::pair{s.to.substr(0, s.to.find('.')), s.to.substr(s.to.find('.') + 1)};
-            const view_declaration* found = nullptr;
-            for (const auto& [ns, sc] : scopes_) {
-                if (auto it = sc.views.find(view); it != sc.views.end()) found = it->second.node;
-            }
-            bool listed = found && std::any_of(found->each.begin(), found->each.end(), [&](const view_each& e) { return e.name && *e.name == list; });
-            bool held = found && std::any_of(found->values.begin(), found->values.end(), [&](const view_value& v) { return v.name && *v.name == since; });
-            if (!found || found->per != std::optional<std::string>{"user"}) {
-                error(s.where, "unread counts a list of a view per user, and there's no such view " + view);
-            } else if (!listed) {
-                error(s.where, "view " + view + " has no list " + list + " to count");
-            } else if (since_view != view || !held) {
-                error(s.where, "unread counts since a value of view " + view + ", like since " + view + ".seen");
-            }
-        }
-
         // What the library says of a setting, like "domain: where it's served".
         static std::string doc_of(int line, const std::string& name) {
             std::string said = library_comment(line);
@@ -673,6 +654,26 @@ namespace one::language {
             };
             items(f.items, false);
             screen_items(ns, f.items, "");
+        }
+
+        // header { badge news.unread }: one for the whole site, its badges each a value
+        // of a view.
+        void verify(const std::string&, location where, const header_declaration& h) {
+            if (++headers_ > 1) error(where, "a site has one header, beside its name on every page");
+            for (const auto& badge : h.badges) {
+                const view_declaration* found = nullptr;
+                for (const auto& [ns, sc] : scopes_) {
+                    if (auto it = sc.views.find(badge.view); it != sc.views.end()) found = it->second.node;
+                }
+                if (!found) {
+                    error(badge.where, "a badge shows a value of a view, and there's no view " + badge.view);
+                    continue;
+                }
+                bool held = std::any_of(found->values.begin(), found->values.end(), [&](const view_value& v) { return v.name && *v.name == badge.value; });
+                if (!held) {
+                    error(badge.where, "view " + badge.view + " has no value " + badge.value + " to show; give it one, like " + badge.value + " = count(...)");
+                }
+            }
         }
 
         void verify(const std::string&, location where, const settings_declaration& st) {
@@ -770,6 +771,15 @@ namespace one::language {
                                        "\" }; one upgrade moves it there");
                     return;
                 }
+                // What's new to a person was counted by a setting for a while, and is a
+                // value of their view now, shown in the header.
+                if (s.key == "unread" && in.name == "project") {
+                    std::string view = s.value.substr(0, s.value.find('.'));
+                    std::string list = s.value.substr(s.value.find('.') + 1), since = s.to.substr(s.to.find('.') + 1);
+                    error(s.where, "what's new is counted in a view and shown in the header: unread = count(" + list + " where created_at > " +
+                                       since + ") in view " + view + ", and header { badge " + view + ".unread }; one upgrade moves it there");
+                    return;
+                }
                 const field* f = nullptr;
                 for (const auto& candidate : in.fields) {
                     if (candidate.name == s.key) f = &candidate;
@@ -793,10 +803,6 @@ namespace one::language {
                 std::string type = f->type ? f->type->text() : "text";
                 // A setting of several values, like copyright's name and link, in their order.
                 if (const settings_declaration* parts = settings_of(type)) {
-                    if (type == "unread") {
-                        check_unread(s);
-                        return;
-                    }
                     const field* second = parts->fields.size() > 1 ? &parts->fields[1] : nullptr;
                     if (!parts->fields.empty()) check_value(s, parts->fields[0], s.value, s.is_string);
                     if (second && !s.to.empty()) check_value(s, *second, s.to, true);
@@ -1319,7 +1325,13 @@ namespace one::language {
             // title of the book the document is for.
             const entity_declaration* subject = v.per && *v.per != "user" ? find_entity(ns, qualified_name{{*v.per}, where}) : nullptr;
             context plain{ns, nullptr, nullptr, {}, true, subject};
-            for (const auto& value : v.values) verify_view_value(plain, value);
+            for (const auto& value : v.values) {
+                if (counted_rows(v, value).list) {
+                    verify_row_count(v, value);
+                } else {
+                    verify_view_value(plain, value);
+                }
+            }
             for (const auto& value : v.values) {
                 if (*value.name == "public" || *value.name == "readers" || *value.name == "within") {
                     error(value.where, *value.name + " says who may read a view's document, so it can't name a value");
@@ -1519,6 +1531,49 @@ namespace one::language {
                                             "." + *view.each.front().name);
             }
             return nullptr;
+        }
+
+        // unread = count(changes where created_at > seen): the rows of one of the view's
+        // own lists, each test a field its rows hold, compared with another of the
+        // view's values.
+        void verify_row_count(const view_declaration& v, const view_value& value) {
+            snake(*value.name, value.where);
+            auto [list, w] = counted_rows(v, value);
+            if (!w) return;
+            auto holds = [&](const std::string& name) {
+                return std::any_of(list->rows.begin(), list->rows.end(), [&](const view_value& row) {
+                    return row.name ? *row.name == name : written(*row.value) == name;
+                });
+            };
+            auto valued = [&](const std::string& name) {
+                return std::any_of(v.values.begin(), v.values.end(), [&](const view_value& other) {
+                    return other.name && *other.name == name && &other != &value && !counted_rows(v, other).list;
+                });
+            };
+            std::function<void(const expression&)> test = [&](const expression& e) {
+                auto* b = std::get_if<binary_expression>(&e.node);
+                if (b && b->op == token_kind::logical_and) {
+                    test(*b->left);
+                    test(*b->right);
+                    return;
+                }
+                static const std::set<token_kind> comparisons{token_kind::equal, token_kind::not_equal, token_kind::less,
+                                                              token_kind::greater, token_kind::less_equal, token_kind::greater_equal};
+                auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+                auto* other = b ? std::get_if<name_expression>(&b->right->node) : nullptr;
+                if (!b || !comparisons.contains(b->op) || !field || !other || field->name.parts.size() != 1 || other->name.parts.size() != 1) {
+                    error(e.where, "counting " + *list->name + " compares a field of its rows with another value of the view, "
+                                   "like created_at > seen, joined by &&");
+                    return;
+                }
+                if (!holds(field->name.text())) {
+                    error(b->left->where, *list->name + "'s rows don't hold " + field->name.text() + "; list it in its block to count by it");
+                }
+                if (!valued(other->name.text())) {
+                    error(b->right->where, "view " + v.name + " has no value " + other->name.text() + " to compare with, like seen = first(...).seen_at");
+                }
+            };
+            test(*w->condition);
         }
 
         void verify_view_value(const context& in, const view_value& value) {

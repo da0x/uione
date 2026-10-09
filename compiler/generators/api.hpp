@@ -1827,6 +1827,29 @@ namespace one::generators {
                         continue;
                     }
                 }
+                // How many of its own list's rows pass: unread = count(changes where
+                // created_at > seen).
+                if (auto [list, w] = language::counted_rows(v, value); list) {
+                    std::string tests;
+                    std::function<void(const language::expression&)> add = [&](const language::expression& e) {
+                        auto& b = std::get<language::binary_expression>(e.node);
+                        if (b.op == language::token_kind::logical_and) {
+                            add(*b.left);
+                            add(*b.right);
+                            return;
+                        }
+                        static const std::map<language::token_kind, std::string> ops{
+                            {language::token_kind::equal, "=="},     {language::token_kind::not_equal, "!="},
+                            {language::token_kind::less, "<"},       {language::token_kind::less_equal, "<="},
+                            {language::token_kind::greater, ">"},    {language::token_kind::greater_equal, ">="}};
+                        tests += ", one.RowWhere(" + api_detail::go_string(web_detail::text_of(*b.left)) + ", " + api_detail::go_string(ops.at(b.op)) +
+                                 ", " + api_detail::go_string(web_detail::text_of(*b.right)) + ")";
+                    };
+                    if (w) add(*w->condition);
+                    calls.push_back({"CountRows(" + api_detail::go_string(*value.name) + ", " + api_detail::go_string(*list->name) + tests + ")",
+                                     value.where.line});
+                    continue;
+                }
                 auto* call = std::get_if<language::call_expression>(&value.value->node);
                 auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
                 if (callee && callee->name.text() == "github_secret") {

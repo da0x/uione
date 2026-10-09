@@ -222,7 +222,6 @@ namespace one::generators {
         std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
         bool footer_ = false;  // whether the site has a footer, in src/footer.tsx
         std::string footer_layout_;  // bar or columns
-        std::pair<std::string, std::string> unread_;  // unread news.changes since news.seen, as news.changes and news.seen
         bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
         bool has_project_ = false;  // a project block, which says whether people sign in at all
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
@@ -294,7 +293,6 @@ namespace one::generators {
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
-                        if (s.key == "unread") unread_ = {s.value, s.to};
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
@@ -850,6 +848,14 @@ namespace one::generators {
                 }
             }
             return {"", nullptr};
+        }
+
+        // header { badge news.unread }: its badges, wherever it's declared.
+        static void header_badges(const std::vector<language::declaration>& declarations, std::vector<language::header_badge>& out) {
+            for (const auto& d : declarations) {
+                if (auto* h = std::get_if<language::header_declaration>(&d.node)) out.insert(out.end(), h->badges.begin(), h->badges.end());
+                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) header_badges(n->declarations, out);
+            }
         }
 
         // src/footer.tsx: what's at the foot of every page, drawn with the items a
@@ -2456,25 +2462,26 @@ namespace one::generators {
                 // A project that names no way of signing in offers none.
                 std::string offered = has_project_ && authentication_.empty() ? ", authentication: false" : "";
                 if (!color_.empty()) icon += ", color: " + web_detail::js_string(color_);
-                // What's new to the person, counted beside the name: their own view, by its
+                // The header's badges, beside the name, each a value of a view, by the view's
                 // full name, wherever it's declared.
-                std::string unread;
-                if (!unread_.first.empty()) {
-                    std::string view = unread_.first.substr(0, unread_.first.find('.'));
-                    std::string full = view;
+                std::string badges;
+                std::vector<language::header_badge> shown;
+                for (const auto& f : files_) header_badges(f.declarations, shown);
+                for (const auto& badge : shown) {
+                    std::string full = badge.view;
                     for (const auto& [ns, declared] : views_) {
-                        if (declared.contains(view)) full = web_detail::join(ns, view);
+                        if (declared.contains(badge.view)) full = web_detail::join(ns, badge.view);
                     }
-                    unread = ", unread: { view: " + web_detail::js_string(full) + ", list: " + web_detail::js_string(unread_.first.substr(unread_.first.find('.') + 1)) +
-                             ", since: " + web_detail::js_string(unread_.second.substr(unread_.second.find('.') + 1)) + " }";
+                    badges += std::string(badges.empty() ? "" : ", ") + "{ view: " + web_detail::js_string(full) + ", value: " + web_detail::js_string(badge.value) + " }";
                 }
+                if (!badges.empty()) badges = ", badges: [" + badges + "]";
                 // What it was built from, which a footer can show: the uione release, and
                 // the commit and repository, as the deploy found them.
                 std::string footer = ", build: { version: " + web_detail::js_string(std::string(one::version)) +
                                      ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
                 if (footer_) footer += ", footer: { layout: " + web_detail::js_string(footer_layout_) + " as const, content: SiteFooter }";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ ? ", analytics" : "") + unread + footer + " };");
+                         ", data" + offered + (analytics_ ? ", analytics" : "") + badges + footer + " };");
             }
             out.line();
             out.open("export default function Site() {");

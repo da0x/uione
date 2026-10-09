@@ -293,7 +293,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, footer, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
     <div className="min-h-screen overflow-x-clip bg-page text-ink">
       {/* The header stays in view, over a blur of the page as it scrolls. The page
@@ -304,12 +304,14 @@ export const radix: ComponentSet = {
           <a {...home} className="flex shrink-0 items-center gap-2.5 py-0 text-[1.05rem] font-semibold tracking-[-0.01em] sm:py-3.5">
             {icon && <img src={icon} alt="" className="h-7 w-7" />}
             {name}
-            {unread ? (
-              <span className="rounded-full bg-accent px-1.5 text-xs font-medium text-accent-ink tabular-nums">
-                {unread}
-                <span className="sr-only"> new</span>
-              </span>
-            ) : null}
+            {badges
+              ?.filter((badge) => badge.count > 0)
+              .map((badge) => (
+                <span key={badge.label} className="rounded-full bg-accent px-1.5 text-xs font-medium text-accent-ink tabular-nums">
+                  {badge.count}
+                  <span className="sr-only"> {badge.label}</span>
+                </span>
+              ))}
           </a>
           <nav className="order-last -mb-px flex w-full flex-wrap gap-x-5 text-sm sm:order-none sm:w-auto">
             {nav.map((item) => (

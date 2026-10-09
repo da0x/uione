@@ -512,6 +512,75 @@ namespace one::driver {
         return moved;
     }
 
+    // Moves what's new to a person, once a setting, unread news.changes since
+    // news.seen, into a value of their view, unread = count(changes where created_at >
+    // seen), and a header below the project block that shows it, header { badge
+    // news.unread }. How many it moved.
+    inline std::size_t move_unread(sources& files) {
+        static const std::regex setting(R"re((^|\n)[ \t]+unread[ \t]+(\w+)\.(\w+)[ \t]+since[ \t]+(\w+)\.(\w+)[ \t]*(?=\n|$))re");
+        static const std::regex block(R"re((^|\n)project[ \t]+\w+[ \t]*\{)re");
+        std::size_t moved = 0;
+        for (auto& [path, text] : files) {
+            std::smatch opens;
+            if (!std::regex_search(text, opens, block)) continue;
+            std::size_t start = static_cast<std::size_t>(opens.position(0) + opens.length(0));
+            std::size_t end = text.find("\n}", start);
+            if (end == std::string::npos) continue;
+            std::string inside = text.substr(start, end - start);
+            std::smatch found;
+            if (!std::regex_search(inside, found, setting)) continue;
+            std::string view = found[2], list = found[3], since = found[5];
+            // The view's closing brace, past its strings and comments, in whichever file
+            // declares it.
+            const std::regex declared("(^|\n)([ \t]*)view[ \t]+" + view + "\\b[^\n{]*\\{");
+            std::string* home = nullptr;
+            std::size_t close = std::string::npos;
+            std::string indent;
+            for (auto& [other, source] : files) {
+                std::smatch v;
+                if (!std::regex_search(source, v, declared)) continue;
+                int depth = 1;
+                for (std::size_t i = static_cast<std::size_t>(v.position(0) + v.length(0)); i < source.size(); ++i) {
+                    char c = source[i];
+                    if (c == '"') {
+                        while (++i < source.size() && source[i] != '"' && source[i] != '\n') {
+                            if (source[i] == '\\') ++i;
+                        }
+                    } else if (c == '/' && i + 1 < source.size() && source[i + 1] == '/') {
+                        i = source.find('\n', i);
+                        if (i == std::string::npos) break;
+                    } else if (c == '{') {
+                        ++depth;
+                    } else if (c == '}' && --depth == 0) {
+                        close = i;
+                        break;
+                    }
+                }
+                if (close != std::string::npos) {
+                    home = &source;
+                    indent = v[2];
+                }
+                break;
+            }
+            if (!home) continue;
+            // Its own line, after what the view says, at the start of the brace's line.
+            std::size_t line = home->rfind('\n', close);
+            line = line == std::string::npos ? 0 : line + 1;
+            home->insert(line, indent + "\tunread = count(" + list + " where created_at > " + since + ")\n");
+            // text may be the same file as the view's, so it's found again.
+            std::regex_search(text, opens, block);
+            start = static_cast<std::size_t>(opens.position(0) + opens.length(0));
+            end = text.find("\n}", start);
+            inside = text.substr(start, end - start);
+            std::regex_search(inside, found, setting);
+            text.insert(end + 2, "\n\nheader {\n\tbadge " + view + ".unread\n}");
+            text.erase(start + static_cast<std::size_t>(found.position(0)) + found[1].length(),
+                       static_cast<std::size_t>(found.length(0) - found[1].length()) + 1);
+            ++moved;
+        }
+        return moved;
+    }
+
     struct upgraded {
         sources changed;                 // the files it changed, as they are now
         language::diagnostics problems;  // what's left that has no fix; nothing is changed while there's any
@@ -528,6 +597,7 @@ namespace one::driver {
         if (!out.problems.empty()) return out;
         auto original = files;
         out.fixes += move_copyright(files);
+        out.fixes += move_unread(files);
         for (int round = 0; round < 100; ++round) {
             language::diagnostics found;
             check_sources(files, found);

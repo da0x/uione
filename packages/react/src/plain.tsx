@@ -60,13 +60,13 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 }
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, unread, footer, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, children }) => (
     <>
       <header>
         <a {...home}>
           {icon && <img src={icon} alt="" width={24} height={24} />}
           {name}
-          {unread ? ` (${unread} new)` : null}
+          {badges?.filter((badge) => badge.count > 0).map((badge) => ` (${badge.count} ${badge.label})`)}
         </a>
         <nav>
           {nav.map((item) => (

@@ -21,8 +21,8 @@ syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 " Declarations open a line; the word after them is the thing being declared.
 syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|settings\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
 syn match uioneDeclare "^\s*\zs\<once\>\ze\s\+\""
-" footer, and how it's laid out: footer columns {.
-syn match uioneDeclare "^\s*\zs\<footer\>\ze\s*\%(\h\w*\s*\)\={"
+" footer, and how it's laid out: footer columns {; and header {.
+syn match uioneDeclare "^\s*\zs\<\%(footer\|header\)\>\ze\s*\%(\h\w*\s*\)\={"
 syn match uioneKeyword "\%(^\s*footer\s\+\)\@<=\<\%(bar\|columns\)\>"
 " What a site was built from: link build.release.
 syn match uioneBuiltin "\<\%(build\)\.\%(release\|source\)\>"
@@ -37,7 +37,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks
 syn keyword uioneKeyword   require permission clear create readers when was add remove to has of limit for by on component order each per where from table form confirm hint
-syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen unread find only tint color
+syn keyword uioneKeyword   hero section menu link markdown thread timeline copy details layout main side search sort ascending descending page at grid diagram board under cards tally filter subtitle icon hide empty along over and reorder heading ago hour hours day days week weeks new since seen badge find only tint color
 " each change of issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+of\>"
@@ -100,7 +100,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 syn cluster uioneProjectItems contains=uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
-syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|appearance\|corners\|layout\|serve\|redirect\|title\|one\|analytics\|unread\)\>" contained
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|icon\|color\|theme\|appearance\|corners\|layout\|serve\|redirect\|title\|one\|analytics\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

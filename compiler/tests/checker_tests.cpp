@@ -200,7 +200,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect, analytics or unread");
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect or analytics");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
@@ -1137,18 +1137,29 @@ TEST_CASE("a card's filter keeps what changed since a time counted from now") {
           "a filter keeps a time before or after one, like updated_at > 7 days ago");
 }
 
-TEST_CASE("what's new is counted from a person's own view, since a value of it") {
-    std::string views = "namespace work {\n"
-                        "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
-                        "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
-                        "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tfield\n\t}\n"
-                        "\tseen = first(reader where person == user.id).seen_at\n}\n}\n";
-    CHECK(check_source("import one\nproject tracker {\n\tunread  news.changes since news.seen\n}\n" + views).empty());
-    CHECK(only_error("import one\nproject tracker {\n\tunread  news.comments since news.seen\n}\n" + views).message == "view news has no list comments to count");
-    CHECK(only_error("import one\nproject tracker {\n\tunread  news.changes since news.looked\n}\n" + views).message ==
-          "unread counts since a value of view news, like since news.seen");
-    CHECK(only_error("import one\nproject tracker {\n\tunread  feed.changes since feed.seen\n}\n" + views).message ==
-          "unread counts a list of a view per user, and there's no such view feed");
+TEST_CASE("a view counts the rows of its own list that pass, and a header's badge shows it") {
+    auto views = [](const std::string& value) {
+        return "namespace work {\n"
+               "entity issue history {\n\ttitle  text\n\tassignees  list of user\n}\n"
+               "entity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
+               "view news per user {\n\tchanges = each change of issue where assignees has user.id {\n\t\tfield  created_at\n\t}\n"
+               "\tseen = first(reader where person == user.id).seen_at\n\t" + value + "\n}\n}\n";
+    };
+    std::string counted = views("unread = count(changes where created_at > seen)");
+    CHECK(check_source("import one\nproject tracker {\n\tui  radix\n}\nheader {\n\tbadge news.unread\n}\n" + counted).empty());
+    CHECK(check_source(views("listed = count(changes)")).empty());
+    CHECK(only_error(views("unread = count(changes where field > seen && created_at > looked)")).message ==
+          "view news has no value looked to compare with, like seen = first(...).seen_at");
+    CHECK(only_error(views("unread = count(changes where before > seen)")).message ==
+          "changes's rows don't hold before; list it in its block to count by it");
+    CHECK(only_error(views("unread = count(changes where created_at > 3)")).message ==
+          "counting changes compares a field of its rows with another value of the view, like created_at > seen, joined by &&");
+    CHECK(only_error("header {\n\tbadge news.fresh\n}\n" + counted).message ==
+          "view news has no value fresh to show; give it one, like fresh = count(...)");
+    CHECK(only_error("header {\n\tbadge feed.unread\n}\n" + counted).message == "a badge shows a value of a view, and there's no view feed");
+    CHECK(only_error("import one\nproject tracker {\n\tunread  news.changes since news.seen\n}\n" + views("")).message ==
+          "what's new is counted in a view and shown in the header: unread = count(changes where created_at > seen) in view news, "
+          "and header { badge news.unread }; one upgrade moves it there");
 }
 
 TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist") {

@@ -189,6 +189,7 @@ type ViewSpec struct {
 	per     reflect.Type // the entity each document is for, in a view per entity
 	counts  []count
 	firsts  []value // fields of the earliest of something, like when a person last looked
+	tallies []tally // how many of a list's rows pass, like the changes since a person looked
 	lists   []*list
 	copies  []copied
 	secrets []string     // values holding the document's project's GitHub webhook secret
@@ -268,6 +269,48 @@ func (v *ViewSpec) GitHubSecret(name string) *ViewSpec {
 func (v *ViewSpec) Count(name string, q Query) *ViewSpec {
 	v.counts = append(v.counts, count{name, q})
 	return v
+}
+
+// RowTest compares a field of a list's rows with another of the view's values,
+// as in RowWhere("created_at", ">", "seen").
+type RowTest struct{ field, op, value string }
+
+// RowWhere is a RowTest: a row's field, compared by ==, !=, <, <=, > or >= with a
+// value of the view. Nothing comes before everything, so a row made at any time is
+// after a value that holds none.
+func RowWhere(field, op, value string) RowTest { return RowTest{field, op, value} }
+
+type tally struct {
+	name, list string
+	tests      []RowTest
+}
+
+// CountRows adds a value to the view: how many rows of one of its lists pass every
+// test, as in CountRows("unread", "changes", RowWhere("created_at", ">", "seen")),
+// the changes made since the person last looked. It counts what the list holds,
+// after its limit.
+func (v *ViewSpec) CountRows(name, list string, tests ...RowTest) *ViewSpec {
+	v.tallies = append(v.tallies, tally{name, list, tests})
+	return v
+}
+
+func (t RowTest) passes(row, data map[string]any) bool {
+	c := compare(row[t.field], data[t.value])
+	switch t.op {
+	case "==":
+		return c == 0
+	case "!=":
+		return c != 0
+	case "<":
+		return c < 0
+	case "<=":
+		return c <= 0
+	case ">":
+		return c > 0
+	case ">=":
+		return c >= 0
+	}
+	panic(fmt.Sprintf("one: a row can't be compared by %s", t.op))
 }
 
 // Each lists the entities the query finds, as the view's rows. Order, Fields and
@@ -405,6 +448,15 @@ func (v *ViewSpec) register(r *registry, ns string) {
 func (v *ViewSpec) resolve(r *registry) error {
 	if err := v.held(r); err != nil {
 		return err
+	}
+	for _, t := range v.tallies {
+		found := false
+		for _, l := range v.lists {
+			found = found || l.name == t.list
+		}
+		if !found {
+			return fmt.Errorf("one: view %s counts the rows of %s, which isn't one of its lists", v.full, t.list)
+		}
 	}
 	// A value copied through what the entity points at, like an issue's
 	// project.lifecycle, reads that entity too, so changing it rebuilds the view.
@@ -1128,6 +1180,21 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 		}
 		data[l.name] = rows
 	}
+	for _, t := range v.tallies {
+		rows, _ := data[t.list].([]any)
+		n := 0
+		for _, r := range rows {
+			row, _ := r.(map[string]any)
+			passed := true
+			for _, test := range t.tests {
+				passed = passed && test.passes(row, data)
+			}
+			if passed {
+				n++
+			}
+		}
+		data[t.name] = n
+	}
 	return data, nil
 }
 
@@ -1580,6 +1647,9 @@ func (v *ViewSpec) definition() string {
 	}
 	for _, f := range v.firsts {
 		fmt.Fprintf(&out, "first %s %s %s\n", f.name, query(f.query), f.field)
+	}
+	for _, t := range v.tallies {
+		fmt.Fprintf(&out, "tally %s %s %v\n", t.name, t.list, t.tests)
 	}
 	for _, l := range v.lists {
 		fmt.Fprintf(&out, "list %s %s fields=%q limit=%d\n", l.name, query(l.query), l.fields, l.limit)
