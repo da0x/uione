@@ -173,13 +173,13 @@ describe("a workbench, with the real compiler", async () => {
       const state = EditorState.create({ doc });
       return completionsFrom({ compiler })(new CompletionContext(state, doc.length, explicit));
     };
-    const settings = await offered("import one\nproject shop {\n\tcor");
+    const settings = await offered("import one\nproject shop {\n\tappear");
     expect(settings?.from).toBe("import one\nproject shop {\n\t".length);
-    expect(settings?.options).toContainEqual({ label: "corners", detail: "corners", info: "How corners are drawn." });
-    const choices = await offered("import one\nproject shop {\n\tcorners  ", true);
-    expect(choices?.options.map((o) => o.label)).toEqual(["square", "round"]);
+    expect(settings?.options).toContainEqual({ label: "appearance", detail: "appearance", info: "Whether it opens light or dark, rather than as the visitor's system is." });
+    const choices = await offered("import one\nproject shop {\n\tappearance  ", true);
+    expect(choices?.options.map((o) => o.label)).toEqual(["system", "light", "dark"]);
     // Nothing is offered before a word is begun, unless it's asked for.
-    expect(await offered("import one\nproject shop {\n\tcorners  ")).toBeNull();
+    expect(await offered("import one\nproject shop {\n\tappearance  ")).toBeNull();
     expect(await offered("entity book {\n\tti")).toBeNull();
   });
 

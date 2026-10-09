@@ -203,7 +203,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, theme, appearance, layout, serve, redirect or analytics");
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, theme, appearance, layout, serve, redirect, accessibility or analytics");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
@@ -1352,4 +1352,12 @@ TEST_CASE("a view says where in and the person reading as me, and each is fixed 
     REQUIRE(e.fix);
     CHECK(e.fix->where.column == 28);
     CHECK(check_source(start + "view mine per user {\n\teach issue where owner == me\n}\n").empty());
+}
+
+TEST_CASE("a form's field is labeled, so a screen reader says what it asks for") {
+    const std::string start = "entity note {\n\ttext  text\n}\ncommand note::create\n";
+    CHECK(check_source(start + "screen \"Notes\" /notes {\n\tform note::create {\n\t\ttext \"Note\"\n\t}\n}\n").empty());
+    CHECK(check_source(start + "screen \"Notes\" /notes {\n\tform note::create {\n\t\ttext\n\t}\n}\n").empty());
+    CHECK(only_error(start + "screen \"Notes\" /notes {\n\tform note::create {\n\t\ttext \"\"\n\t}\n}\n").message ==
+          "a field is labeled, so everyone, a screen reader too, knows what it asks for: text \"...\", or no label for one from its name");
 }

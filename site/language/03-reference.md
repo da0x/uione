@@ -249,6 +249,18 @@ from one of these.
 follows the system. Either way, a visitor who picks the other with the toggle at the
 top of the page keeps their pick.
 
+`accessibility menu` puts a menu of display settings beside light and dark, at the
+top of every page, for readers who need the page drawn otherwise: more contrast,
+text up to twice as large, more space between lines, letters and words, a legible
+font, less motion, solid panels, every link underlined, and a thicker focus ring.
+Each is kept in the reader's browser, and Back to my system's undoes them all. Every
+site, with the menu or without, follows a reader's system when it asks for more
+contrast or less motion, and keeps the colors a system picks for itself, like
+Windows' contrast themes. More contrast is the site's own theme, worked out from it:
+text black or white, quieter text, links and the rest at 7:1, and lines at 3:1. The
+menu changes how the page is drawn, and nothing else: it isn't an overlay, and it
+doesn't stand in for a screen reader or a magnifier.
+
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google
 Analytics account of the owner's. It records each screen as it's opened. A visitor

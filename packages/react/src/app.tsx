@@ -48,6 +48,9 @@ export interface AppProps {
   badges?: readonly Badge[];
   build?: Build; // what it was built from, which its footer can show
   footer?: SiteFooter; // at the foot of every page
+  // Display settings beside light and dark: contrast, text size, spacing, a legible
+  // font, motion, links and focus, each kept in the reader's browser.
+  display?: boolean;
 }
 
 // The site's footer: how it's laid out, and what it holds, drawn on every page.
@@ -63,6 +66,7 @@ export interface Badge {
 
 const BadgeSpec = createContext<readonly Badge[]>([]);
 const FooterSpec = createContext<SiteFooter | undefined>(undefined);
+const DisplaySpec = createContext(false);
 export const BuildSpec = createContext<Build | undefined>(undefined);
 
 // A value of what the site was built from, in a footer's words: the year it's read
@@ -227,7 +231,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, badges = [], build, footer }: AppProps) {
+export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, badges = [], build, footer, display = false }: AppProps) {
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}
@@ -244,6 +248,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
     <UIContext.Provider value={ui}>
       <BadgeSpec.Provider value={badges}>
       <FooterSpec.Provider value={footer}>
+      <DisplaySpec.Provider value={display}>
       <BuildSpec.Provider value={build}>
       <DataProvider source={data}>
         <SignInProvider offered={authentication}>
@@ -255,6 +260,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
         </SignInProvider>
       </DataProvider>
       </BuildSpec.Provider>
+      </DisplaySpec.Provider>
       </FooterSpec.Provider>
       </BadgeSpec.Provider>
     </UIContext.Provider>
@@ -282,6 +288,7 @@ function Shell({
   const [signOutError, setSignOutError] = useState<string | undefined>();
   const badgeSpecs = useContext(BadgeSpec);
   const footer = useContext(FooterSpec);
+  const display = useContext(DisplaySpec);
   const [counts, setCounts] = useState<readonly number[]>([]);
   const onRead = useCallback((at: number, n: number) => {
     setCounts((was) => {
@@ -321,6 +328,7 @@ function Shell({
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
       badges={auth?.person ? badgeSpecs.map((badge, at) => ({ count: counts[at] ?? 0, label: badge.value.replaceAll("_", " ") })) : undefined}
       footer={footer ? { layout: footer.layout, children: <footer.content /> } : undefined}
+      display={display}
       account={
         signIn.offered &&
         auth && (

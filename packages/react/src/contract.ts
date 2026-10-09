@@ -36,6 +36,7 @@ export interface PageProps {
   // with what it counts, like unread; each is shown when more than none.
   badges?: readonly { count: number; label: string }[];
   footer?: FooterProps; // at the foot of the page, as the site's footer says
+  display?: boolean; // whether to offer display settings beside light and dark
   children: ReactNode;
 }
 

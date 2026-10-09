@@ -71,6 +71,15 @@ namespace one {
 		two_columns  "Two columns"
 	}
 
+	// What a site offers its readers besides light and dark: a menu of display
+	// settings, each kept in the reader's browser: more contrast, larger text, more
+	// space between lines and letters, a legible font, less motion, solid panels,
+	// underlined links and a thicker focus ring. Whatever it says, a site follows a
+	// reader's system when it asks for more contrast or less motion.
+	enum accessibility {
+		menu  "A menu of display settings"
+	}
+
 	// Counting the site's visitors, once each agrees to it.
 	enum analytics {
 		google  "Firebase Analytics"
@@ -118,6 +127,8 @@ namespace one {
 		// An address of the site that sends whoever asks for it somewhere else, one to
 		// a line.
 		redirect    list of redirect
+		// Display settings for readers, beside light and dark.
+		accessibility  accessibility
 		// Counting the site's visitors, once each agrees to it.
 		analytics   analytics
 	}

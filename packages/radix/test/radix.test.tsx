@@ -28,6 +28,7 @@ import type { MemorySource } from "@uione/react";
 import { highlight } from "../src/highlight.js";
 import { restyle, setCodeDisplay } from "../src/display.js";
 import { MarkdownText } from "../src/markdown.js";
+import { DisplaySettings } from "../src/accessibility.js";
 import { radix } from "../src/index.js";
 
 function renderScreen(body: () => ReactNode, source: MemorySource = memorySource(), location = "/") {
@@ -260,7 +261,18 @@ describe("the stylesheet", () => {
   it("squares corners when the page asks, except a person's picture, which stays a circle", () => {
     const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
     expect(text).toMatch(/\[data-corners=(square|"square")\] \.rounded-full:not\(\.one-person\)\{border-radius:0\}/);
-    expect(text).toMatch(/\[data-palette=(papercolor|"papercolor")\]\{--color-page:#eee/);
+    // A section's colors in the shades of the theme the site's is from.
+    expect(text).toMatch(/\[data-palette=(papercolor|"papercolor")\]\{--hue-blue:#005faf/);
+  });
+
+  it("draws what the reader asks for: text size, spacing, a legible font, less motion, links and focus", () => {
+    const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
+    expect(text).toMatch(/\[data-text=(200|"200")\]\{font-size:200%\}/);
+    expect(text).toMatch(/\[data-spacing=(comfortable|"comfortable")\] body\{letter-spacing:\.12em;word-spacing:\.16em;line-height:1\.5\}/);
+    expect(text).toMatch(/\[data-font=(legible|"legible")\]\{--font-sans:"Atkinson Hyperlegible"/);
+    expect(text).toMatch(/prefers-reduced-motion:\s*reduce/);
+    expect(text).toMatch(/\[data-links=(underline|"underline")\] a\{[^}]*text-decoration-line:underline/);
+    expect(text).toMatch(/forced-colors:\s*active/);
   });
 });
 
@@ -521,5 +533,58 @@ describe("icons", () => {
     expect(link.getAttribute("title")).toBe("Workflow");
     expect(link.querySelector("svg")).toBeTruthy();
     expect(link.textContent).toBe("");
+  });
+});
+
+describe("display settings", () => {
+  const kept = new Map<string, string>();
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => kept.get(k) ?? null,
+      setItem: (k: string, v: string) => void kept.set(k, v),
+      removeItem: (k: string) => void kept.delete(k),
+    });
+  });
+  afterEach(() => {
+    kept.clear();
+    vi.unstubAllGlobals();
+    for (const name of ["contrast", "text", "spacing", "font", "motion", "transparency", "links", "focus"]) delete document.documentElement.dataset[name];
+  });
+
+  it("opens from a labeled button, sets what the reader picks on the page, and keeps it", () => {
+    render(<DisplaySettings />);
+    const button = screen.getByRole("button", { name: "Display settings" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    const panel = screen.getByRole("group", { name: "Display settings" });
+    // Each setting is a group of radio buttons under its name.
+    fireEvent.click(within(panel).getByRole("radio", { name: "More" }));
+    fireEvent.click(within(panel).getByRole("radio", { name: "200%" }));
+    fireEvent.click(within(panel).getByRole("radio", { name: "Comfortable" }));
+    fireEvent.click(within(panel).getByRole("radio", { name: "Underline every link" }));
+    const root = document.documentElement;
+    expect(root.dataset.contrast).toBe("more");
+    expect(root.dataset.text).toBe("200");
+    expect(root.dataset.spacing).toBe("comfortable");
+    expect(root.dataset.links).toBe("underline");
+    expect(JSON.parse(localStorage.getItem("uione-display")!)).toMatchObject({ contrast: "more", text: "200", spacing: "comfortable", links: "underline" });
+    // A legible font is loaded the first time it's asked for.
+    fireEvent.click(within(panel).getByRole("radio", { name: "Atkinson Hyperlegible" }));
+    expect(document.getElementById("uione-legible")?.getAttribute("href")).toContain("Atkinson+Hyperlegible");
+    // Back to the system's: nothing is set on the page.
+    fireEvent.click(within(panel).getByRole("button", { name: "Back to my system's" }));
+    expect(root.dataset.contrast).toBeUndefined();
+    expect(root.dataset.text).toBeUndefined();
+    expect(within(panel).getByRole("radio", { name: "100%" })).toHaveProperty("checked", true);
+  });
+
+  it("closes with Escape, and gives focus back to its button", () => {
+    render(<DisplaySettings />);
+    const button = screen.getByRole("button", { name: "Display settings" });
+    fireEvent.click(button);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Display settings" })).toBeNull();
+    expect(document.activeElement).toBe(button);
   });
 });

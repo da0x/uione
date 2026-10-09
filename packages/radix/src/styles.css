@@ -54,60 +54,9 @@
   --shadow-raised: 0 12px 32px -8px rgba(14, 23, 38, 0.18), 0 2px 6px rgba(14, 23, 38, 0.06);
 }
 
-/* Dark follows the system unless the reader picked a theme with the toggle, which
-   sets data-theme on the page. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-page: #0a101c;
-    --color-ink: #e6ebf3;
-    --color-muted: #94a0b4;
-    --color-line: #1f2a3d;
-    --color-control-line: #4a5872;
-    --color-surface: #111a2b;
-    --color-sunken: #0d1524;
-    --color-accent: #7ea6ff;
-    --color-accent-hover: #a3c0ff;
-    --color-accent-ink: #0a101c;
-    --color-accent-soft: #16244a;
-    --color-danger: #ff7b72;
-    --color-grid: rgba(126, 166, 255, 0.06);
-    --color-tone-1: rgba(255, 120, 100, 0.16);
-    --color-tone-1-edge: rgba(255, 120, 100, 0.55);
-    --color-tone-2: rgba(240, 220, 90, 0.13);
-    --color-tone-2-edge: rgba(240, 220, 90, 0.5);
-    --color-tone-4: rgba(90, 220, 230, 0.1);
-    --color-tone-4-edge: rgba(90, 220, 230, 0.4);
-    --color-tone-5: rgba(120, 150, 255, 0.12);
-    --color-tone-5-edge: rgba(120, 150, 255, 0.45);
-    --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-    --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
-  }
-}
-:root[data-theme="dark"] {
-  --color-tone-1: rgba(255, 120, 100, 0.16);
-  --color-tone-1-edge: rgba(255, 120, 100, 0.55);
-  --color-tone-2: rgba(240, 220, 90, 0.13);
-  --color-tone-2-edge: rgba(240, 220, 90, 0.5);
-  --color-tone-4: rgba(90, 220, 230, 0.1);
-  --color-tone-4-edge: rgba(90, 220, 230, 0.4);
-  --color-tone-5: rgba(120, 150, 255, 0.12);
-  --color-tone-5-edge: rgba(120, 150, 255, 0.45);
-  --color-page: #0a101c;
-  --color-ink: #e6ebf3;
-  --color-muted: #94a0b4;
-  --color-line: #1f2a3d;
-  --color-control-line: #4a5872;
-  --color-surface: #111a2b;
-  --color-sunken: #0d1524;
-  --color-accent: #7ea6ff;
-  --color-accent-hover: #a3c0ff;
-  --color-accent-ink: #0a101c;
-  --color-accent-soft: #16244a;
-  --color-danger: #ff7b72;
-  --color-grid: rgba(126, 166, 255, 0.06);
-  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
-}
+/* Dark, and the colors of the site's own theme, light and dark, come from the
+   theme.css the compiler writes for it, which follows the system unless the reader
+   picked one with the toggle, which sets data-theme on the page. */
 
 
 /*
@@ -123,7 +72,7 @@
   --hue-teal: #0f766e;
   --hue-teal-hover: #0b5e58;
   --hue-teal-soft: #dff3f0;
-  --hue-green: #2f7d32;
+  --hue-green: #2d7b31;
   --hue-green-hover: #24622a;
   --hue-green-soft: #e3f2e4;
   --hue-amber: #a15c00;
@@ -182,13 +131,13 @@
   --hue-blue: #005faf;
   --hue-blue-hover: #004b8c;
   --hue-blue-soft: #dbe6f5;
-  --hue-teal: #007a7a;
+  --hue-teal: #007373;
   --hue-teal-hover: #006060;
   --hue-teal-soft: #d7eeee;
-  --hue-green: #008700;
+  --hue-green: #007b00;
   --hue-green-hover: #006f00;
   --hue-green-soft: #dcefdc;
-  --hue-amber: #af5f00;
+  --hue-amber: #a05200;
   --hue-amber-hover: #8f4d00;
   --hue-amber-soft: #f4e4d2;
   --hue-red: #af0000;
@@ -287,6 +236,9 @@
     font-family: var(--font-heading, var(--font-sans));
   }
   html {
+    /* What's focused or jumped to scrolls clear of the header that stays in view,
+       so it's never hidden under it (WCAG 2.4.11). */
+    scroll-padding-top: 5rem;
     background: var(--color-page);
     color: var(--color-ink);
     color-scheme: light dark;
@@ -440,4 +392,84 @@
     font-size: 0.85rem;
     font-weight: 500;
   }
+}
+
+/*
+ * What a reader can ask of the page, from the display settings beside light and dark,
+ * kept in their browser and set on the page as data-* before it's drawn, and what
+ * their system asks, which holds unless they say otherwise. More contrast is the
+ * theme's own, from theme.css. Nothing here stands in for what assistive technology
+ * does; it changes only how the page is drawn.
+ */
+
+/* Text size, up to twice as large: everything is in rem, so the page grows with it
+   and reflows rather than scrolling sideways. */
+:root[data-text="125"] { font-size: 125%; }
+:root[data-text="150"] { font-size: 150%; }
+:root[data-text="200"] { font-size: 200%; }
+
+/* Comfortable spacing, as WCAG's text spacing asks a page to bear: lines 1.5 apart,
+   paragraphs 2em, letters 0.12em, words 0.16em, and no justified text. */
+:root[data-spacing="comfortable"] body {
+  line-height: 1.5;
+  letter-spacing: 0.12em;
+  word-spacing: 0.16em;
+}
+:root[data-spacing="comfortable"] p { margin-bottom: 2em; }
+:root[data-spacing="comfortable"] * { text-align: start; }
+
+/* A legible font, Atkinson Hyperlegible, which tells 0 from O and l from 1; code
+   keeps its own. */
+:root[data-font="legible"] {
+  --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Less motion: what moves on its own or slides, instantly instead. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="standard"]) *, :root:not([data-motion="standard"]) *::before, :root:not([data-motion="standard"]) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Less transparency: what's see-through, like the header over the page, solid. */
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-transparency="standard"]) .backdrop-blur-md,
+  :root:not([data-transparency="standard"]) [class*="backdrop-blur"] {
+    backdrop-filter: none;
+    background-color: var(--color-page);
+  }
+}
+:root[data-transparency="reduce"] .backdrop-blur-md,
+:root[data-transparency="reduce"] [class*="backdrop-blur"] {
+  backdrop-filter: none;
+  background-color: var(--color-page);
+}
+
+/* Every link underlined, so none is told by its color alone. */
+:root[data-links="underline"] a {
+  text-decoration-line: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* A stronger focus ring, twice as thick and further out. */
+:root[data-focus="strong"] :focus-visible {
+  outline: 4px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* The system's own colors, like Windows' contrast themes, are kept: what's drawn by
+   a border or a ring keeps one, in the colors the system picks. */
+@media (forced-colors: active) {
+  button, input, select, textarea, [role="button"] { border: 1px solid ButtonText; }
+  :focus-visible { outline: 2px solid Highlight; }
 }

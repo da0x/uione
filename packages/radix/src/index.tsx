@@ -20,6 +20,7 @@ import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
+import { DisplaySettings } from "./accessibility.js";
 import { ThemeToggle } from "./theme.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
@@ -293,9 +294,13 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, children }) => (
+  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, display, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
     <div className="min-h-screen overflow-x-clip bg-page text-ink">
+      {/* The first thing a keyboard reaches: past the header, straight to the page's own. */}
+      <a href="#content" className="sr-only z-30 rounded-control bg-accent px-3 py-2 text-accent-ink focus:not-sr-only focus:fixed focus:left-4 focus:top-3">
+        Skip to content
+      </a>
       {/* The header stays in view, over a blur of the page as it scrolls. The page
           you're on is underlined in the accent, along the header's edge. */}
       <header className="sticky top-0 z-20 border-b border-line bg-page/80 backdrop-blur-md">
@@ -327,6 +332,7 @@ export const radix: ComponentSet = {
             ))}
           </nav>
           <div className="ml-auto flex items-center gap-2 text-sm">
+            {display && <DisplaySettings />}
             <ThemeToggle />
             {account}
           </div>
@@ -336,7 +342,7 @@ export const radix: ComponentSet = {
           its own reading width. */}
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
-      <main className={`px-4 pb-8 sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
+      <main id="content" tabIndex={-1} className={`px-4 pb-8 outline-none sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
         {crumbs}
         {/* The title, and a screen's own buttons at the end of its row. */}
         <div className={`flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>

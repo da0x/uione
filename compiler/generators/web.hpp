@@ -216,6 +216,7 @@ namespace one::generators {
         int in_block_ = 0;  // how deep in heroes and sections the items being written are  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
         std::string title_;  // the name shown at the top of every page, when it isn't the project's
         std::string theme_;    // the component set's theme the site's colors are, like papercolor
+        bool display_ = false;  // display settings beside light and dark, with accessibility menu
         std::string appearance_;  // light or dark, which the site opens in; empty for the system's
         std::string layout_ = "single";  // how screens are laid out unless they say
         std::string ui_ = "radix";
@@ -291,6 +292,7 @@ namespace one::generators {
                         if (s.key == "layout") layout_ = s.value;
                         if (s.key == "signin") authentication_.push_back(s.value);
                         if (s.key == "analytics") analytics_ = s.value == "google";
+                        if (s.key == "accessibility") display_ = s.value == "menu";
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
@@ -2500,7 +2502,7 @@ namespace one::generators {
                                      ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
                 if (footer_) footer += ", footer: { layout: " + web_detail::js_string(footer_layout_) + " as const, content: SiteFooter }";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ ? ", analytics" : "") + badges + footer + " };");
+                         ", data" + offered + (analytics_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") + " };");
             }
             out.line();
             out.open("export default function Site() {");

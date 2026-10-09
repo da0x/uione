@@ -143,13 +143,13 @@ describe("the compiler in the browser", () => {
   });
 
   it("offers a project's settings in its block, and an enum setting's choices", () => {
-    const text = "import one\nproject shop {\n\tcorners  s\n\tth\n}\n";
-    const choices = run(one, { kind: "complete", text, line: 3, column: 12 }) as Completions;
-    expect(choices.from).toBe(11);
-    expect(choices.items[0]).toMatchObject({ label: "square", detail: "Square" });
+    const text = "import one\nproject shop {\n\tappearance  l\n\tth\n}\n";
+    const choices = run(one, { kind: "complete", text, line: 3, column: 15 }) as Completions;
+    expect(choices.from).toBe(14);
+    expect(choices.items[0]).toMatchObject({ label: "light", detail: "Light" });
     const settings = run(one, { kind: "complete", text, line: 4, column: 4 }) as Completions;
     expect(settings.from).toBe(2);
-    expect(settings.items).toContainEqual({ label: "theme", detail: "theme", info: "The site's colors, light and dark." });
+    expect(settings.items).toContainEqual({ label: "theme", detail: "theme", info: "How the site looks: a theme of its own, or uione's, like papercolor." });
   });
 
   it("keeps a project's files inside it", () => {

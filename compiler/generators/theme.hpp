@@ -57,24 +57,43 @@ namespace one::generators::theme {
             return mono ? quoted + ", ui-monospace, \"SFMono-Regular\", Menlo, monospace" : quoted + ", ui-sans-serif, system-ui, sans-serif";
         }
 
-        inline std::string side(const look& l, bool dark) {
+        static constexpr const char* roles[] = {"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"};
+
+        // A color moved, by lightness alone, until it reads at ratio on each ground.
+        inline std::string reads(std::string color, const std::vector<std::string>& grounds, double ratio) {
+            for (int round = 0; round < 3; ++round) {
+                const std::string* worst = &grounds.front();
+                for (const auto& g : grounds) {
+                    if (language::colors::contrast(color, g) < language::colors::contrast(color, *worst)) worst = &g;
+                }
+                if (language::colors::contrast(color, *worst) >= ratio) return color;
+                std::string moved = language::colors::nearest(color, *worst, ratio);
+                if (moved.empty()) return language::colors::dark_ground(*worst) ? "#ffffff" : "#000000";
+                color = moved;
+            }
+            return color;
+        }
+
+        // The theme's colors in one mode, as it says them and with more contrast: text
+        // black or white, quieter text and the rest at 7:1 on the page and on panels,
+        // as WCAG's AAA asks, and lines at 3:1.
+        inline std::string mode(const look& l, bool dark) {
             auto c = [&](const std::string& role) { return dark ? l.colors.at(role).second : l.colors.at(role).first; };
             std::string out;
-            auto put = [&](const std::string& name, const std::string& value) { out += "  --color-" + name + ": " + value + ";\n"; };
-            for (const auto& role : {"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"}) put(role, c(role));
-            put("accent-ink", language::colors::on(c("accent"), c("page")));
-            put("accent-hover", "color-mix(in oklch, " + c("accent") + " 85%, " + c("ink") + ")");
-            put("accent-soft", "color-mix(in oklch, " + c("accent") + " 14%, " + c("surface") + ")");
-            // The edge of a field stands out from the page by 3:1.
-            put("control-line", "color-mix(in oklch, " + c("ink") + " 45%, " + c("page") + ")");
-            put("grid", "color-mix(in srgb, " + c("accent") + " 7%, transparent)");
-            // How urgent something is, as Trac colored it: the most urgent the danger's,
-            // then the warning's, then plain, then what can wait in the theme's own.
-            std::map<std::string, std::string> tones{{"1", c("danger")}, {"2", c("warning")}, {"4", c("success")}, {"5", c("accent")}};
-            for (const auto& [n, from] : tones) {
-                put("tone-" + n, "color-mix(in oklch, " + from + " 16%, " + c("surface") + ")");
-                put("tone-" + n + "-edge", "color-mix(in oklch, " + from + " 55%, " + c("surface") + ")");
+            auto put = [&](const std::string& name, const std::string& value) { out += "  --" + name + ": " + value + ";\n"; };
+            std::map<std::string, std::string> more;
+            for (const char* role : roles) more[role] = c(role);
+            std::vector<std::string> grounds{c("page"), c("surface")};
+            for (const char* role : {"muted", "accent", "danger", "success", "warning"}) more[role] = reads(c(role), grounds, 7);
+            // Text itself as far from the page as it goes.
+            more["ink"] = language::colors::dark_ground(c("page")) ? "#ffffff" : "#000000";
+            more["line"] = reads(c("line"), {c("page")}, 3);
+            for (const char* role : roles) {
+                put(std::string("std-") + role, c(role));
+                put(std::string("more-") + role, more[role]);
             }
+            put("std-accent-ink", language::colors::on(c("accent"), c("page")));
+            put("more-accent-ink", language::colors::on(more["accent"], c("page")));
             if (l.depth == "flat") {
                 out += "  --shadow-panel: none;\n";
                 out += dark ? "  --shadow-raised: 0 16px 40px -12px rgb(0 0 0 / 0.6);\n" : "  --shadow-raised: 0 8px 24px -8px rgb(0 0 0 / 0.2);\n";
@@ -85,6 +104,33 @@ namespace one::generators::theme {
             }
             std::string ground = dark ? l.ground_dark : l.ground;
             if (!ground.empty()) out += "  --uione-code-ground: " + ground + ";\n";
+            return out;
+        }
+
+        // The colors the component set reads, from one set of the theme's: as it says
+        // them, or with more contrast.
+        inline std::string chosen(const std::string& set) {
+            std::string out;
+            for (const char* role : roles) out += "  --color-" + std::string(role) + ": var(--" + set + "-" + role + ");\n";
+            out += "  --color-accent-ink: var(--" + set + "-accent-ink);\n";
+            return out;
+        }
+
+        // What's worked out from the roles, whichever set they're from.
+        inline std::string worked_out() {
+            std::string out;
+            auto put = [&](const std::string& name, const std::string& value) { out += "  --color-" + name + ": " + value + ";\n"; };
+            put("accent-hover", "color-mix(in oklch, var(--color-accent) 85%, var(--color-ink))");
+            put("accent-soft", "color-mix(in oklch, var(--color-accent) 14%, var(--color-surface))");
+            // The edge of a field stands out from the page by 3:1.
+            put("control-line", "color-mix(in oklch, var(--color-ink) 45%, var(--color-page))");
+            put("grid", "color-mix(in srgb, var(--color-accent) 7%, transparent)");
+            // How urgent something is, as Trac colored it: the most urgent the danger's,
+            // then the warning's, then plain, then what can wait in the theme's own.
+            for (const auto& [n, from] : std::map<std::string, std::string>{{"1", "danger"}, {"2", "warning"}, {"4", "success"}, {"5", "accent"}}) {
+                put("tone-" + n, "color-mix(in oklch, var(--color-" + from + ") 16%, var(--color-surface))");
+                put("tone-" + n + "-edge", "color-mix(in oklch, var(--color-" + from + ") 55%, var(--color-surface))");
+            }
             return out;
         }
 
@@ -136,10 +182,17 @@ namespace one::generators::theme {
         std::string shape = "  --radius-box: " + std::to_string(l.corners) + "px;\n  --radius-control: " + std::to_string(l.corners > 2 ? l.corners - 2 : l.corners) +
                             "px;\n  --font-sans: " + detail::stack(l.text, false) + ";\n  --font-heading: " +
                             detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n";
+        // Each mode's sets: light; dark as the system is unless the reader picked; and
+        // dark when they did.
+        // Then the set drawn with: as the theme says, or with more contrast, when the
+        // system asks for it unless the reader said otherwise, or when they did.
         return "/* Generated by one from the site's theme. Do not edit. */\n"
-               ":root {\n" + shape + detail::side(l, false) + "}\n"
-               "@media (prefers-color-scheme: dark) {\n  :root:not([data-theme=\"light\"]) {\n" + detail::side(l, true) + "  }\n}\n"
-               ":root[data-theme=\"dark\"] {\n" + detail::side(l, true) + "}\n";
+               ":root {\n" + shape + detail::mode(l, false) + "}\n"
+               "@media (prefers-color-scheme: dark) {\n  :root:not([data-theme=\"light\"]) {\n" + detail::mode(l, true) + "  }\n}\n"
+               ":root[data-theme=\"dark\"] {\n" + detail::mode(l, true) + "}\n"
+               ":root {\n" + detail::chosen("std") + detail::worked_out() + "}\n"
+               "@media (prefers-contrast: more) {\n  :root:not([data-contrast=\"standard\"]) {\n" + detail::chosen("more") + "  }\n}\n"
+               ":root[data-contrast=\"more\"] {\n" + detail::chosen("more") + "}\n";
     }
 
     // The fonts the component set doesn't bring, from Google Fonts; empty when it brings them all.

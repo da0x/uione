@@ -582,7 +582,7 @@ TEST_CASE("a project's theme is drawn from its roles, and its corners and appear
     fs::path dir = fs::temp_directory_path() / "uione-theme";
     fs::remove_all(dir);
     fs::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "import one\ndefine theme ink \"Ink\" from papercolor {\n\ttext  \"Inter\"\n\tcorners  0\n}\nproject tracker {\n\ttheme  ink\n\tappearance  light\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    platform::write_file((dir / "main.one").string(), "import one\ndefine theme ink \"Ink\" from papercolor {\n\ttext  \"Inter\"\n\tcorners  0\n}\nproject tracker {\n\ttheme  ink\n\tappearance  light\n\taccessibility  menu\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* page = find(files, "index.html");
@@ -591,17 +591,29 @@ TEST_CASE("a project's theme is drawn from its roles, and its corners and appear
     CHECK(page->content.find(R"(<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />)") != std::string::npos);
     const auto* css = find(files, "src/theme.css");
     REQUIRE(css != nullptr);
-    // PaperColor's colors, with what it says over harbor's, and what's worked out from them.
-    CHECK(css->content.find("  --color-page: #eeeeee;\n") != std::string::npos);
-    CHECK(css->content.find("  --color-accent-hover: color-mix(in oklch, #005faf 85%, #262626);\n") != std::string::npos);
-    CHECK(css->content.find("  --color-accent-ink: #ffffff;\n") != std::string::npos);
+    // PaperColor's colors, with what it says over harbor's, each as it says them and
+    // with more contrast, and what's worked out from whichever is drawn with.
+    CHECK(css->content.find("  --std-page: #eeeeee;\n") != std::string::npos);
+    CHECK(css->content.find("  --std-ink: #262626;\n  --more-ink: #000000;\n") != std::string::npos);
+    CHECK(css->content.find("  --std-line: #d0d0d0;\n  --more-line: #888888;\n") != std::string::npos);
+    CHECK(css->content.find("  --std-accent: #005faf;\n  --more-accent: #004d9c;\n") != std::string::npos);
+    CHECK(css->content.find("  --std-accent-ink: #ffffff;\n") != std::string::npos);
+    CHECK(css->content.find(":root[data-theme=\"dark\"] {\n  --std-page: #1c1c1c;\n") != std::string::npos);
+    CHECK(css->content.find(":root {\n  --color-page: var(--std-page);\n") != std::string::npos);
+    CHECK(css->content.find("  --color-accent-hover: color-mix(in oklch, var(--color-accent) 85%, var(--color-ink));\n") != std::string::npos);
+    // More contrast when the system asks, unless the reader says standard, or when they ask.
+    CHECK(css->content.find("@media (prefers-contrast: more) {\n  :root:not([data-contrast=\"standard\"]) {\n  --color-page: var(--more-page);\n") != std::string::npos);
+    CHECK(css->content.find(":root[data-contrast=\"more\"] {\n  --color-page: var(--more-page);\n") != std::string::npos);
     CHECK(css->content.find("  --radius-box: 0px;\n") != std::string::npos);
     CHECK(css->content.find("  --font-sans: \"Inter\", ui-sans-serif, system-ui, sans-serif;\n") != std::string::npos);
     CHECK(css->content.find("  --shadow-panel: none;\n") != std::string::npos);
-    CHECK(css->content.find(":root[data-theme=\"dark\"] {\n  --color-page: #1c1c1c;\n") != std::string::npos);
     const auto* main = find(files, "src/main.tsx");
     REQUIRE(main != nullptr);
     CHECK(main->content.find("import \"@uione/radix/styles.css\";\nimport \"./theme.css\";\n") != std::string::npos);
+    // The display settings, for a site that offers them.
+    const auto* app = find(files, "src/app.tsx");
+    REQUIRE(app != nullptr);
+    CHECK(app->content.find(", display: true };") != std::string::npos);
 }
 
 TEST_CASE("a site's footer is drawn with a screen's items, and what it was built from") {

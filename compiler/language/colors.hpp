@@ -73,6 +73,9 @@ namespace one::language::colors {
         return "";
     }
 
+    // Whether a ground is dark, so what reads on it is light.
+    inline bool dark_ground(const std::string& hex) { return luminance(hex) < 0.18; }
+
     // Text on the accent, as on a button: white, or the page's own color, whichever
     // reads better.
     inline std::string on(const std::string& accent, const std::string& page) {

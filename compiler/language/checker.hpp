@@ -2687,6 +2687,12 @@ namespace one::language {
                     }
                     for (const auto& f : form->fields) {
                         snake(f.name, f.where);
+                        // A field's label is what a person reads beside it and a screen
+                        // reader says for it, as WCAG asks (1.3.1, 3.3.2, 4.1.2).
+                        if (f.label && f.label->find_first_not_of(" \t") == std::string::npos) {
+                            error(f.where, "a field is labeled, so everyone, a screen reader too, knows what it asks for: " + f.name +
+                                               " \"...\", or no label for one from its name");
+                        }
                         if (inputs.contains(f.name)) continue;
                         const field* asked = entity ? find_field(*entity, f.name) : nullptr;
                         if (entity && !asked) {
