@@ -1010,7 +1010,8 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high  color red\n"
                          "\t\tfilter \"Changed this week\" updated_at > 7 days ago  color green\n\t}\n"
                          "}\n"
-                         "screen \"Board\" /:project/boards/:board {\n\tsection \"Wiki\" color violet {\n\t\ttext \"hi\"\n\t}\n}\n"
+                         "screen \"Board\" /:project/boards/:board {\n\tsection \"Wiki\" color violet {\n\t\ttext \"hi\"\n\t}\n"
+                         "\ttable project_page.boards {\n\t\tcolor teal\n\t\ttitle\n\t}\n}\n"
                          "}\n");
     const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
@@ -1022,6 +1023,7 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
     CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" }, hue: "red" }, )"
                    R"({ label: "Changed this week", query: { "updated_at>": "-7d" }, hue: "green" }]})") != std::string::npos);
     CHECK(tsx.find(R"(<Section title="Wiki" hue="violet">)") != std::string::npos);
+    CHECK(tsx.find(R"( hue="teal")") != std::string::npos);
     fs::remove_all(dir);
 }
 

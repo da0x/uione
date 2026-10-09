@@ -919,6 +919,7 @@ export function Table({
   hideEmpty = false,
   only,
   tint,
+  hue,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -941,6 +942,7 @@ export function Table({
   hideEmpty?: boolean; // not there at all while the list has no rows, like a person's reports
   only?: Record<string, string>; // the rows it keeps, worked out as it's shown, like { "due<=": "+2w" }
   tint?: Tint; // each row colored by how urgent it is, like its priority
+  hue?: Hue; // its rows' links in this color, rather than the site's own
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -1019,6 +1021,7 @@ export function Table({
     <>
       <ui.Table
         status={view.status}
+        {...(hue ? { hue } : {})}
         tabs={tabs}
         search={
           search.length

@@ -201,6 +201,7 @@ export interface TableProps {
   reorder?: TableReorder; // its rows put in order by the person, when they may
   tools?: ReactNode; // buttons beside its search, like New issue
   filtered?: Filtered; // the filter its rows are picked by, like Opened by me, which can be cleared
+  hue?: Hue; // its rows' links in this color, rather than the site's own
 }
 
 // What a list is filtered by, from the page's address, and how to stop filtering.

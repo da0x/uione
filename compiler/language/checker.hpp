@@ -2042,6 +2042,7 @@ namespace one::language {
                     }
                 }
                 if (auto* t = std::get_if<table_item>(&item.node)) {
+                    hue(t->hue, t->hue_where);
                     for (const auto& c : t->columns) icon(c.icon, c.icon_where);
                 }
                 if (auto* bo = std::get_if<board_item>(&item.node)) {

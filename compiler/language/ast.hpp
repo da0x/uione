@@ -431,6 +431,8 @@ namespace one::language {
         location only_where;
         // tint by priority: each row colored by how urgent its choice is, the first of
         // the field's choices the most, as Trac colored a ticket's priority.
+        std::string hue;  // color violet: its rows' links in one of the library's hues
+        location hue_where;
         std::optional<std::string> tint;
         location tint_where;
     };

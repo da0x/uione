@@ -553,7 +553,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered }) {
+  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered, hue }) {
     // The row being dragged, and the place it would go.
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
@@ -563,7 +563,7 @@ export const radix: ComponentSet = {
     const room = density === "compact" ? "py-0.5" : "py-1";
     const entry = density === "compact" ? "py-1.5" : "py-2.5";
     return (
-    <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
+    <div data-hue={hue} className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
           and the search box at the end of the same row. */}
       {(tabs || search || tools || filtered) && (

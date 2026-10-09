@@ -977,6 +977,14 @@ namespace one::language {
                             continue;
                         }
                         // tint by priority
+                        // color violet: its rows' links in a hue of the library's
+                        if (at_word("color") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            table.hue_where = peek().where;
+                            table.hue = advance().text;
+                            end_line();
+                            continue;
+                        }
                         if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
                             advance();
                             advance();

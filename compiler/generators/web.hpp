@@ -2042,6 +2042,7 @@ namespace one::generators {
             if (table.page || table.by) parts.shown_in_path = true;
             if (table.only) line += " only={" + filter_query(*table.only) + "}";
             line += tint_on(ns, table.view, table.list, table.tint);
+            if (!table.hue.empty()) line += " hue=" + web_detail::js_string(table.hue);
             if (table.hide_empty) line += " hideEmpty";
             line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.

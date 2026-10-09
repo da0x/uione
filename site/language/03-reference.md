@@ -953,7 +953,8 @@ form step::update "Save" {
 - A filter and a section can each have a color, so the parts of a page can be told
   apart at a glance: `filter "High priority" priority == priority::high color red`,
   `section "Wiki" color violet { ... }`. A section's heading, links and tables
-  take its color in place of the site's own. The colors are the library's `hue`:
+  take its color in place of the site's own. A table can have one of its own,
+  `color violet` in its block, for its rows' links alone. The colors are the library's `hue`:
   `blue`, `teal`, `green`, `amber`, `red` and `violet`, each drawn in the
   component set's own shade of it, light and dark.
 - A table's toolbar has a button for compact rows, which every table on the site
