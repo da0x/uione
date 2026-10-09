@@ -233,6 +233,12 @@ describe("themes", () => {
     expect(colored?.dark).not.toBe(github?.dark); // Nord's
   });
 
+  it("shows Nord on its own blue-gray, as dark as the page", async () => {
+    const nord = await darkThemes.find((t) => t.name === "Nord")!.load();
+    expect(nord.bg).toBe("#1e2229");
+    expect(nord.colors?.["editor.background"]).toBe("#1e2229");
+  });
+
   it("keeps a list of themes for a light page and one for a dark page, and GitHub's for a name it doesn't know", () => {
     expect(lightThemes.every((t) => !t.dark)).toBe(true);
     expect(darkThemes.every((t) => t.dark)).toBe(true);

@@ -34,7 +34,7 @@ export const darkThemes: CodeTheme[] = [
   { name: "Dracula", id: "dracula", dark: true, load: shiki(() => import("@shikijs/themes/dracula")) },
   { name: "Catppuccin Mocha", id: "catppuccin-mocha", dark: true, load: shiki(() => import("@shikijs/themes/catppuccin-mocha")) },
   { name: "Tokyo Night", id: "tokyo-night", dark: true, load: shiki(() => import("@shikijs/themes/tokyo-night")) },
-  { name: "Nord", id: "nord", dark: true, load: shiki(() => import("@shikijs/themes/nord")) },
+  { name: "Nord", id: "nord", dark: true, load: nord },
   { name: "PaperColor Dark", id: "papercolor-dark", dark: true, load: async () => paperColor("dark") },
   { name: "Solarized Dark", id: "solarized-dark", dark: true, load: shiki(() => import("@shikijs/themes/solarized-dark")) },
   { name: "Gruvbox Dark", id: "gruvbox-dark-medium", dark: true, load: shiki(() => import("@shikijs/themes/gruvbox-dark-medium")) },
@@ -80,6 +80,18 @@ export function fromOneChoice(name: string | undefined): { light?: string; dark?
     default:
       return {};
   }
+}
+
+// Nord on a darker ground: its own blue-gray, hue and saturation kept, as dark as
+// the pages it's shown on, so the code doesn't sit on a lighter slab of gray.
+async function nord(): Promise<ThemeRegistration> {
+  const theme = (await import("@shikijs/themes/nord")).default as ThemeRegistration;
+  const ground = "#1e2229";
+  return {
+    ...theme,
+    bg: ground,
+    colors: { ...theme.colors, "editor.background": ground, "editorGutter.background": ground, "panel.background": ground, "sideBar.background": ground },
+  };
 }
 
 // PaperColor, by Nikyle Nguyen (MIT), as its Vim theme colors each kind of word.
