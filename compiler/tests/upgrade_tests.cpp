@@ -36,7 +36,7 @@ TEST_CASE("an upgrade renames authentication and authenticated, and keeps the se
     const auto& text = done.changed.begin()->second;
     CHECK(text.find("\tone             \"9.9.9\"\n\tregion          \"us-east4\"\n\tsignin          google\n") != std::string::npos);
     CHECK(text.find("\t\tdomain    \"shop.example\"") != std::string::npos);  // an environment's settings are its own
-    CHECK(text.find("permission signed_in") != std::string::npos);
+    CHECK(text.find("by anyone signed in") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
 

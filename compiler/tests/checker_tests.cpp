@@ -170,9 +170,9 @@ TEST_CASE("forms, confirms and buttons name commands that exist") {
 TEST_CASE("permissions") {
     std::string entity = "entity task {\n\ttitle text\n}\n";
     CHECK(only_error(entity + "command task::create {\n\tpermission everyone\n}\n").message.starts_with("'everyone' isn't a permission"));
-    CHECK(only_error(entity + "command task::create {\n\tpermission owner\n}\n").message ==
+    CHECK(only_error(entity + "command task::create {\n\tby owner\n}\n").message ==
           "'owner' needs entity task to have a field 'owner user'");
-    CHECK(check_source("entity task {\n\towner user = me\n}\ncommand task::delete {\n\tpermission owner\n}\n").empty());
+    CHECK(check_source("entity task {\n\towner user = me\n}\ncommand task::delete {\n\tby owner\n}\n").empty());
     CHECK(only_error("role editor  post::edit\n").message ==
           "permission post::edit is on entity post, which isn't declared at the top level");
 }
@@ -398,30 +398,20 @@ TEST_CASE("a once's steps are checked as updates of what they go through, and ma
     const std::string crew = R"(namespace crew {
 entity crew {
 	slug     slug  required  unique  key
-	newcomer rank
+	newcomer role
 }
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
-}
-entity hand {
-	crew  crew  required  key
-	person  user  required  key
-	rank  rank  required  key
-}
-roles rank per crew from hand {
-	captain "Captain"  crew::update
+define role captain "Captain" in crew {
+	crew::update
+	role::update
 }
 command crew::update
-command rank::update
+command role::update
 once "2026-10-07 mates" {
-	each rank where name == "mate" {
-		dispatch rank::update { title = "First mate"  may = [crew::update] }
+	each role where name == "mate" {
+		dispatch role::update { title = "First mate"  may = [crew::update] }
 	}
 	each crew {
-		dispatch crew::update { newcomer = rank::bosun }
+		dispatch crew::update { newcomer = role::bosun }
 	}
 }
 }
@@ -433,53 +423,43 @@ once "2026-10-07 mates" {
     CHECK(only_error(where).message == "a once's where picks by a field's value, like where name == \"developer\"");
 
     std::string entity = crew;
-    entity.replace(entity.find("each rank where"), 9, "each rang");
+    entity.replace(entity.find("each role where"), 9, "each rang");
     CHECK(only_error(entity).message == "there's no entity rang in namespace crew");
 
     std::string field = crew;
     field.replace(field.find("title = \"First mate\""), 5, "titel");
-    CHECK(only_error(field).message.starts_with("entity rank has no field titel"));
+    CHECK(only_error(field).message.starts_with("entity role has no field titel"));
 
     CHECK(only_error("once \"x\" {\n\teach crew {\n\t}\n}\n").message ==
           "once \"x\" changes a namespace's entities, so it goes inside a namespace");
 }
 
-TEST_CASE("roles a project defines for itself are records of an entity, given by members") {
+TEST_CASE("roles a project defines for itself are role records, given by member records, which the language declares") {
     const std::string crew = R"(namespace crew {
 entity crew {
 	slug  slug  required  unique  key
-}
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
-}
-entity hand {
-	crew    crew  required  key
-	person  user  required  key
-	rank    rank  required  key
 }
 entity job {
 	crew   crew  required
 	title  text  required
 }
-roles rank per crew from hand {
-	captain "Captain" {
-		hand::create  job::create
-	}
-	deckhand "Deckhand"  job::create
+define role captain "Captain" in crew {
+	member::create
+	job::create
+}
+define role deckhand "Deckhand" in crew {
+	job::create
 }
 command crew::create {
-	permission signed_in
-	dispatch hand::create {
-		crew = id  person = me  rank = rank::captain
+	by anyone signed in
+	dispatch member::create {
+		crew = id  person = me  role = role::captain
 	}
 }
-command hand::create
+command member::create
 command job::create
 view crew_page per crew {
-	readers hand
+	readers member
 	slug = crew.slug
 }
 }
@@ -487,18 +467,33 @@ view crew_page per crew {
     CHECK(check_source(crew).size() == 0);
 
     std::string unknown = crew;
-    unknown.replace(unknown.find("rank = rank::captain"), 20, "rank = rank::admiral");
-    CHECK(only_error(unknown).message == "rank::admiral isn't a rank this command makes or every project starts with; those are rank::captain, rank::deckhand");
+    unknown.replace(unknown.find("role = role::captain"), 20, "role = role::admiral");
+    CHECK(only_error(unknown).message == "role::admiral isn't a role this command makes or every project starts with; those are role::captain, role::deckhand");
 
     std::string allowing = crew;
-    allowing.replace(allowing.find("deckhand \"Deckhand\"  job::create"), 32, "deckhand \"Deckhand\"  job::sink");
+    allowing.replace(allowing.find("in crew {\n\tjob::create"), 22, "in crew {\n\tjob::sink");
     CHECK(only_error(allowing).message == "deckhand allows job::sink, which isn't a command in namespace crew");
 
-    std::string single = crew;
-    single.replace(single.find("may    list of permission"), 25, "may    permission");
-    auto errors = check_source(single);
+    // Every command is one a role allows, or says who runs it.
+    std::string ungranted = crew;
+    ungranted.replace(ungranted.find("command job::create"), 19, "command job::create\ncommand job::update");
+    auto e = only_error(ungranted);
+    CHECK(e.message == "job::update isn't allowed by any role; add it to a define role, or say by anyone signed in in the command");
+
+    std::string both = crew;
+    both.replace(both.find("\tmember::create\n\tjob::create"), 15, "\tmember::create\n\tcrew::create");
+    CHECK(only_error(both).message == "crew::create says who runs it, by anyone or by anyone signed in, so no role allows it");
+
+    std::string own = crew;
+    own.replace(own.find("entity job {"), 12, "entity member {\n\tname  text\n}\nentity job {");
+    auto errors = check_source(own);
     REQUIRE(errors.size() >= 1);
-    CHECK(errors[0].message == "a role allows several commands, so may is a list of them, like may  list of permission");
+    CHECK(errors[0].message == "define role keeps roles as the language's own member records; take out entity member, which it declares");
+
+    // Roles were once declared by the entities that keep them.
+    CHECK(only_error("namespace crew {\nentity crew {\n\tslug  slug  required  key\n}\nroles rank per crew from hand {\n}\n}\n").message ==
+          "a project's roles are each declared on their own, like define role maintainer \"Maintainer\" in crew { project::update }, "
+          "and the language keeps them as role and member records");
 }
 
 TEST_CASE("a theme and corners are ones the component set has") {
@@ -699,27 +694,20 @@ TEST_CASE("a view shows a person's name, picture and username, and nothing else 
     CHECK(e.message == "a person's name, picture and username are shown in views; here author is only who they are");
 }
 
-TEST_CASE("a role held within something names the entity that grants it, which points at it and a person") {
+TEST_CASE("a role held in a project allows commands on what's in one") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity comment {\n\tissue  issue  required\n}\n"
                               "entity note {\n\ttext  text\n}\n"
-                              "command issue::create\ncommand comment::create\ncommand note::create\n";
-    const std::string member = "entity member {\n\tproject  project  required\n\tperson  user  required\n\trole  enum maintainer | reporter\n}\n";
-    CHECK(check_source(start + member + "role maintainer per project from member  issue::create  comment::create\n").empty());
-
-    auto e = only_error(start + member + "role maintainer per project from member  note::create\n");
-    CHECK(e.message == "role maintainer is held within a project, but note doesn't point at one, so there's no project to look in for note::create");
-    e = only_error(start + member + "role owner per project from member  issue::create\n");
-    CHECK(e.message == "role owner comes from member, so member needs a field role with owner among its choices, like role  enum owner | reader");
-    e = only_error(start + "entity member {\n\tproject  project\n\tperson  user  required\n\trole  enum maintainer | reporter\n}\n" +
-                   "role maintainer per project from member  issue::create\n");
-    CHECK(e.message == "role maintainer comes from member, so member needs a required field pointing at project, like project  project  required");
-    e = only_error(start + "entity member {\n\tproject  project  required\n\trole  enum maintainer | reporter\n}\n" +
-                   "role maintainer per project from member  issue::create\n");
-    CHECK(e.message == "role maintainer comes from member, so member needs a required field holding the person, like person  user  required");
-    e = only_error(start + member + "role maintainer per team from member  issue::create\n");
-    CHECK(e.message == "role maintainer is held within team, which isn't an entity at the top level");
+                              "command issue::create\ncommand comment::create\ncommand note::create {\n\tby anyone signed in\n}\n";
+    CHECK(check_source(start + "define role maintainer \"Maintainer\" in project {\n\tissue::create\n\tcomment::create\n}\n").empty());
+    auto e = only_error(start + "command note::update\n"
+                                "define role maintainer \"Maintainer\" in project {\n\tissue::create\n\tcomment::create\n\tnote::update\n}\n");
+    CHECK(e.message == "role maintainer is held in a project, but note doesn't point at one, so there's no project to look in for note::update");
+    e = only_error(start + "entity member {\n\tproject  project  required\n\tperson  user  required\n\trole  enum maintainer | reporter\n}\n"
+                           "role maintainer per project from member  issue::create\n");
+    CHECK(e.message == "a role held in a project is declared with define role, like define role maintainer \"Maintainer\" in project { ... }, "
+                       "and the language keeps it as role and member records");
 }
 
 TEST_CASE("a command dispatches another's create, giving what it makes what it needs") {
@@ -770,10 +758,9 @@ TEST_CASE("only commands change records: what changed them otherwise is fixed to
 
 TEST_CASE("a view per entity can say who reads each document: the people of its project, and everyone when it's public") {
     const std::string start = "entity project {\n\tslug  text  required  key\n\tvisibility  enum public | private = visibility::public\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity note {\n\ttext  text\n}\n"
-                              "role maintainer per project from member\n";
+                              "define role maintainer \"Maintainer\" in project {\n}\n";
     CHECK(check_source(start + "view page per project {\n\treaders member\n\tpublic when project.visibility == visibility::public\n\tslug = project.slug\n}\n"
                                "view issue_page per issue {\n\treaders member\n\tpublic when issue.project.visibility == visibility::public\n}\n")
               .empty());
@@ -782,7 +769,7 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
     e = only_error(start + "view page per note {\n\treaders member\n}\n");
     CHECK(e.message == "readers member are people in a project, but a note isn't held within one");
     e = only_error(start + "view page per project {\n\treaders project\n}\n");
-    CHECK(e.message == "readers project needs a role that comes from project, like role maintainer per project from project");
+    CHECK(e.message == "readers project are the people whose project records give them a role, so it's readers member, with roles each declared like define role maintainer \"Maintainer\" in project { ... }");
     e = only_error(start + "view page per project public {\n\tpublic when project.visibility == visibility::public\n}\n");
     CHECK(e.message == "view page is public, so it can't also be public when something holds");
     e = only_error(start + "view page per issue {\n\tpublic when issue.project.visibilty == public\n}\n");
@@ -795,9 +782,8 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
 
 TEST_CASE("a view's readers can be the people a field of its entity names") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
                               "entity report {\n\tproject  project  required\n\ttitle  text\n\tauthor  user = me\n\twatchers  list of user\n}\n"
-                              "role maintainer per project from member\n";
+                              "define role maintainer \"Maintainer\" in project {\n}\n";
     CHECK(check_source(start + "view page per report {\n\treaders member\n\treaders report.author\n\treaders report.watchers\n\ttitle = report.title\n}\n"
                                "view card per report {\n\treaders report.author\n}\n")
               .empty());
@@ -874,8 +860,7 @@ TEST_CASE("a github webhook finds a project by its repository, and makes things 
 
 TEST_CASE("a project's webhook secret is shown only to its own people") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
-                              "entity member {\n\tproject  project  required  key\n\tperson  user  required  key\n\trole  enum maintainer | reporter\n}\n"
-                              "role maintainer per project from member\n";
+                              "define role maintainer \"Maintainer\" in project {\n}\n";
     CHECK(check_source(start + "view settings per project {\n\treaders member\n\tsecret = github_secret(project.id)\n}\n").empty());
     auto e = only_error(start + "view settings per project public {\n\tsecret = github_secret(project.id)\n}\n");
     CHECK(e.message == "view settings shows a webhook secret, so only the project's people may read it: give it readers, and don't make it public");
@@ -1053,10 +1038,11 @@ TEST_CASE("people sign in with Google, GitHub or Microsoft, each named once") {
     CHECK(signin.fix->text == "signin");
     CHECK(signin.fix->length == 14);
     auto signed_in = only_error("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission authenticated\n}\n");
-    CHECK(signed_in.message == "authenticated is called signed_in");
+    CHECK(signed_in.message == "who runs a command is said as it reads: by anyone signed in");
     REQUIRE(signed_in.fix);
-    CHECK(signed_in.fix->text == "signed_in");
-    CHECK(check_source("entity task {\n\ttitle text\n}\ncommand task::create {\n\tpermission signed_in\n}\n").empty());
+    CHECK(signed_in.fix->text == "by anyone signed in");
+    CHECK(signed_in.fix->length == std::string("permission authenticated").size());
+    CHECK(check_source("entity task {\n\ttitle text\n}\ncommand task::create {\n\tby anyone signed in\n}\n").empty());
 }
 
 TEST_CASE("a field can start as the person's username") {

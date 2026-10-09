@@ -102,6 +102,7 @@ namespace one::language {
 
     struct permission_statement {  // anyone, signed_in, owner, or a permission
         qualified_name permission;
+        bool by = false;  // by anyone signed in: who runs a command no role allows, said as it reads
     };
 
     struct clear_statement {
@@ -368,6 +369,19 @@ namespace one::language {
         std::string from;    // member
         location per_where;
         std::vector<default_role> defaults;
+        bool defined = false;  // made from define role, with the role and member the language declares
+    };
+
+    // define role maintainer "Maintainer" in project { project::update ... }: a role
+    // each project starts with, and the commands it allows, one a line. The language
+    // keeps a project's roles as role records, and who holds them as member records.
+    struct define_role_declaration {
+        std::string name;
+        location where;
+        std::string title;
+        std::string in;  // project
+        location in_where;
+        std::vector<qualified_name> permissions;
     };
 
     struct function_declaration {
@@ -728,7 +742,7 @@ namespace one::language {
                      entity_declaration, command_declaration, view_declaration,
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
-                     import_declaration, settings_declaration, footer_declaration, header_declaration>
+                     import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration>
             node;
     };
 

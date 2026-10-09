@@ -1367,7 +1367,9 @@ namespace one::generators {
                 return value + " " + op + " " + zero(*f);
             }
             auto l = expression(e, *b.left, me, nullptr);
-            auto r = expression(e, *b.right, me, f);
+            // role == role::member: the project's own role of that name.
+            auto r = f ? own_named(e, me, *f, *b.right) : std::nullopt;
+            if (!r) r = expression(e, *b.right, me, f);
             if (!l || !r) return std::nullopt;
             return *l + " " + op + " " + *r;
         }
@@ -1427,7 +1429,9 @@ namespace one::generators {
             }
             if (query.empty()) query = "one.All[" + api_detail::go_name(found->name) + "]()";
             std::string name = "found" + (existing_.empty() ? std::string() : std::to_string(existing_.size() + 1));
-            out.line(name + ", err := one.Exists(c, " + query + ", " + (keep.empty() ? "nil" : keep) + ")");
+            // With nothing to keep, nothing says which entity it asks of, so it's named.
+            std::string asks = keep.empty() ? "one.Exists[" + api_detail::go_name(found->name) + "](c, " : "one.Exists(c, ";
+            out.line(name + ", err := " + asks + query + ", " + (keep.empty() ? "nil" : keep) + ")");
             out.open("if err != nil {");
             out.line("return err");
             out.close("}");
@@ -1488,6 +1492,18 @@ namespace one::generators {
                     {language::token_kind::greater, ">"}, {language::token_kind::less_equal, "<="}, {language::token_kind::greater_equal, ">="},
                     {language::token_kind::logical_and, "&&"}, {language::token_kind::logical_or, "||"}, {language::token_kind::plus, "+"},
                     {language::token_kind::minus, "-"}, {language::token_kind::star, "*"}};
+                // roles has role::member: whether a list holds a value.
+                if (b->op == language::token_kind::has) {
+                    auto left = resolve(e, *b->left, me);
+                    if (!left) {
+                        unsupported(path_, x.where, "has on anything but a list of the command's own entity");
+                        return std::nullopt;
+                    }
+                    auto r = own_named(e, me, *left->second, *b->right);
+                    if (!r) r = expression(e, *b->right, me, nullptr);
+                    if (!r) return std::nullopt;
+                    return "one.Has(" + left->first + ", " + *r + ")";
+                }
                 if (auto it = ops.find(b->op); it != ops.end()) {
                     if (it->second == "==" || it->second == "!=") return compare(e, *b, me, it->second);
                     auto l = expression(e, *b->left, me, nullptr);

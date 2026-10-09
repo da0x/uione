@@ -237,6 +237,26 @@ namespace one::language {
             if (word == "view") return {where, parse_view()};
             if (word == "role") return {where, parse_role()};
             if (word == "roles") return {where, parse_roles()};
+            if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "role") {
+                advance();
+                advance();
+                define_role_declaration role;
+                role.where = peek().where;
+                role.name = expect(token_kind::identifier, "the role's name, like maintainer").text;
+                role.title = expect(token_kind::string, "how it's shown, like \"Maintainer\"").text;
+                if (!at_word("in")) fail_expecting("'in' and what each has its own of, like in project");
+                advance();
+                role.in_where = peek().where;
+                role.in = expect(token_kind::identifier, "what each has its own of, like project").text;
+                expect(token_kind::left_brace, "'{' and the commands it allows, one a line");
+                while (in_block()) {
+                    role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(role)};
+            }
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
@@ -255,7 +275,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, role, roles, function, screen, picker, webhook, backend, header, footer or once");
+                        "format, enum, entity, command, view, define role, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -1556,6 +1576,20 @@ namespace one::language {
             if (at_word("permission")) {
                 advance();
                 permission_statement s{parse_qualified_name("who may run it: anyone, signed_in, owner or a permission")};
+                end_line();
+                return {where, std::move(s)};
+            }
+            // by anyone, by anyone signed in, by owner: who runs a command no role allows.
+            if (at_word("by") && peek(1).kind == token_kind::identifier && (peek(1).text == "anyone" || peek(1).text == "owner")) {
+                advance();
+                const token& who = advance();
+                permission_statement s{qualified_name{{who.text}, who.where}, true};
+                if (who.text == "anyone" && at_word("signed")) {
+                    advance();
+                    if (!at_word("in")) fail_expecting("'in', as in by anyone signed in");
+                    advance();
+                    s.permission.parts = {"signed_in"};
+                }
                 end_line();
                 return {where, std::move(s)};
             }

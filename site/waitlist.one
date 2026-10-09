@@ -11,7 +11,7 @@ namespace waitlist {
 	}
 
 	command signup::create {
-		permission anyone
+		by anyone
 	}
 
 	// Public, and a number only: never an address.

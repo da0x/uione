@@ -7,10 +7,13 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // RolesSpec is the roles each entity of a kind, like a project, defines for itself,
@@ -253,6 +256,117 @@ func (a *App) seedEarlierRoles(ctx context.Context) error {
 				a.publish(ctx, ev)
 			}
 		}
+	}
+	return nil
+}
+
+// grantAdded gives each project's roles what a deploy added to the roles it starts
+// with: a command added to maintainer is added to every project's maintainer, and
+// a role added to the ones it starts with is made in every project. What each role
+// started with is kept, so a command a project took away from a role isn't given
+// back unless a later deploy adds it again. The first deploy that keeps it adds
+// nothing, since nothing says what came before.
+func (a *App) grantAdded(ctx context.Context) error {
+	for _, r := range a.reg.defined {
+		f, err := a.rolesFields(r)
+		if err != nil {
+			return err
+		}
+		kept := a.store.Collection("role_defaults").Doc(f.scope.collection)
+		now := map[string]any{}
+		for _, d := range r.defaults {
+			now[d.name] = append([]string{}, d.permissions...)
+		}
+		snap, err := kept.Get(ctx)
+		if status.Code(err) == codes.NotFound {
+			if _, err := kept.Set(ctx, map[string]any{"roles": now}); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		before, _ := snap.Data()["roles"].(map[string]any)
+		added := map[string][]string{}
+		newRole := false
+		for _, d := range r.defaults {
+			had, known := before[d.name].([]any)
+			if !known {
+				newRole = true
+				continue
+			}
+			for _, p := range d.permissions {
+				if !slices.ContainsFunc(had, func(h any) bool { return h == p }) {
+					added[d.name] = append(added[d.name], p)
+				}
+			}
+		}
+		if len(added) > 0 || newRole {
+			places, err := a.store.Collection(f.scope.collection).DocumentRefs(ctx).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, place := range places {
+				if err := a.grantIn(ctx, r, f, place.ID, added, newRole); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := kept.Set(ctx, map[string]any{"roles": now}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// grantIn adds to a project's roles of each name the commands added to them, and
+// makes the roles it starts with that it doesn't have, each kept in history.
+func (a *App) grantIn(ctx context.Context, r *RolesSpec, f *rolesFields, place string, added map[string][]string, newRole bool) error {
+	var events []event
+	err := a.store.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		events = nil
+		c := &Ctx{Context: ctx, now: time.Now().UTC(), app: a, tx: tx, counters: map[string]*counting{}, command: f.scope.entity + "::roles"}
+		for name, permissions := range added {
+			id, err := a.roleID(f, place, name)
+			if err != nil {
+				return err
+			}
+			ref := a.store.Collection(f.role.collection).Doc(id)
+			snap, err := tx.Get(ref)
+			if status.Code(err) == codes.NotFound {
+				continue // a project that took the role away keeps it away
+			}
+			if err != nil {
+				return err
+			}
+			v := reflect.New(f.role.typ).Elem()
+			if err := snap.DataTo(v.Addr().Interface()); err != nil {
+				return err
+			}
+			before := f.role.data(v)
+			allows := v.FieldByIndex(f.allows.index)
+			list := allows.Interface().([]string)
+			for _, p := range permissions {
+				list = Add(list, p)
+			}
+			allows.Set(reflect.ValueOf(list))
+			c.reads = append(c.reads, &read{schema: f.role, ref: ref, value: v, stored: snap.Data(), before: before})
+		}
+		if newRole {
+			if err := a.seedRoles(c, f.scope, place); err != nil {
+				return err
+			}
+		}
+		var err error
+		events, err = c.save()
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	for _, ev := range events {
+		a.publish(ctx, ev)
 	}
 	return nil
 }

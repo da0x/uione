@@ -43,8 +43,8 @@ What a name means depends on where it's written:
   entity, like `project.name`, and `me` is whoever is reading it.
 - **Everywhere**, `me`, `now`, `none`, `true` and `false` are the language's own
   [values](#built-in-values). A choice is named with its enum, like
-  `status::open`. `permission` takes one of the language's own words: `anyone`,
-  `signed_in` or `owner`.
+  `status::open`. `by` takes one of the language's own words: `anyone`, `anyone
+  signed in` or `owner`.
 
 A name that means nothing where it's written is an error that says what's in scope
 there, and suggests the nearest name that is.
@@ -75,7 +75,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`command`](#command) | a way to change an entity |
 | [`view`](#view) | a document built ahead of time for a screen |
 | [`role`](#role) | permissions a person can be given |
-| [`roles`](#roles) | the roles each project defines for itself, as records its people edit |
+| [`define role`](#define-role) | a role each project starts with, kept as records its people edit |
 | [`function`](#function) | a value worked out from others |
 | [`screen`](#screen) | a page, at an address |
 | [`picker`](#picker) | how an entity is chosen in a form |
@@ -125,7 +125,7 @@ Words for values that aren't written out:
 The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
-- in a command: `require`, `permission`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
+- in a command: `require`, `by`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
   `input`, `each … where`;
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
@@ -518,9 +518,9 @@ command loan::checkin {
   What it dispatches runs in the same step, as the same person, its body and its
   `require`s too, and both changes are made together or not at all. Its
   permission isn't asked again, since the command dispatching it was allowed.
-- `permission` overrides the permission the command needs. `anyone` means no
-  sign-in, `signed_in` means anyone signed in, any way the project offers, and
-  `owner` means the person in the entity's `owner` field.
+- `by` says who runs a command that no role allows: `by anyone` means no
+  sign-in, `by anyone signed in` means anyone signed in, any way the project
+  offers, and `by owner` means the person in the entity's `owner` field.
 - `add me to assignees` and `remove me from assignees` change a list. Adding what's
   already there, or removing what isn't, changes nothing. A list is never given a
   whole new value with `=`.
@@ -534,7 +534,7 @@ command loan::checkin {
 - `exists(step where from == was issue.phase && to == issue.phase)` asks whether
   there's one, in a `require`. Inside it, the entity's own fields are named
   plainly, and the command's entity by its name. `held(roles)` there asks whether
-  the person holds one of a list of the project's [roles](#roles), so who may take
+  the person holds one of a list of the project's [roles](#define-role), so who may take
   a step is the project's to say:
 
 ```one
@@ -588,7 +588,7 @@ command phase::delete {
 
 ```one
 command project::create {
-	permission signed_in
+	by anyone signed in
 	dispatch member::create {
 		project = id  person = me  role = role::maintainer
 	}
@@ -727,41 +727,45 @@ in `users/{id}.role_id`.
 role librarian  book::view  book::create  book::update  book::withdraw
 ```
 
-A role can instead be held within something, such as a project, and come from an
-entity that grants it:
+- A role given everywhere is never held within something; a role each project has
+  its own of is a [define role](#define-role).
+
+## define role
+
+A role each project starts with, and the commands it allows, one a line. The
+project keeps its roles as records its people edit, rather than roles written in
+code: it changes what a role allows, or adds a role of its own, in its settings,
+with no deploy.
 
 ```one
-entity member {
-	project  project  required  key
-	person   user     required  key
-	role     enum     maintainer | reporter = role::reporter
+// Runs the project and its settings.
+define role maintainer "Maintainer" in project {
+	project::update
+	member::create
+	role::create
+	role::update
+	issue::create
+	issue::close
 }
 
-role maintainer per project from member {
-	project::update  member::create
-	issue::create  issue::update  issue::close  issue::reopen
+// Works on the project's issues.
+define role reporter "Reporter" in project {
+	issue::create
 	comment::create
 }
 
-role reporter per project from member  issue::create  comment::create
+command project::create {
+	by anyone signed in
+	dispatch member::create {
+		project = id  person = me  role = role::maintainer
+	}
+}
 ```
 
-- A role with many permissions lists them in a block, as many to a line as reads
-  well; a short one keeps them on its line. Either way a role is declared once,
-  with all its permissions, so none is ever lost to a second declaration.
-
-- A member grants its role to its person, within its project. Its id is the
-  project and the person, so each person has one role in each project.
-- The role's permissions count for the project itself, for anything that points at
-  it, like an issue, and for anything that points at that, like an issue's
-  comment. A maintainer of one project can do nothing in another.
-- A role held within something is never given everywhere.
-
-## roles
-
-Roles each project defines for itself, as records its people edit, rather than
-roles written in code. A project changes what a role allows, or adds a role of its
-own, in its settings, with no deploy.
+- `in project` says what each has its own roles of. The language keeps them as
+  records of an entity it declares, `role`, named by the project and its name,
+  with a title and the commands it allows, `may`, and gives them to people with
+  records of another, `member`:
 
 ```one
 entity role {
@@ -776,34 +780,24 @@ entity member {
 	person   user     required  key
 	role     role     required  key
 }
-
-roles role per project from member {
-	maintainer "Maintainer" {
-		project::update  member::create  role::create  role::update
-		issue::create  issue::update  issue::close
-	}
-	reporter "Reporter"  issue::create  comment::create
-}
-
-command project::create {
-	permission signed_in
-	dispatch member::create {
-		project = id  person = me  role = role::maintainer
-	}
-}
 ```
 
-- A role is a record of its project, named by the project and its name, with a
-  title and the commands it allows: `may  list of permission`.
-- A member gives its person the role it points at, in its project. What the role
-  allows now is what they may do there, on the project and on everything held
-  within it, like its issues. Changing a role changes what everyone who holds it
-  may do, at once, and their pages show it.
-- The block gives the roles each project starts with, made with it; one that
-  allows a lot lists its commands in a block of its own. `role::maintainer` is the
-  project's maintainer role, as in what `project::create` makes.
-- A project made before its roles were records gets the ones it starts with when
-  the backend starts, and its members' roles, named as those are, point at them.
+- A member gives its person the role it points at, in its project, and a person
+  may hold several. What the role allows now is what they may do there, on the
+  project and on everything held within it: what points at it, like an issue, and
+  what points at that, like an issue's comment. A role allows only commands on
+  those. Changing a role changes what everyone who holds it may do, at once, and
+  their pages show it.
+- Screens, views and commands name `role` and `member` like any entity of the
+  project's own: `each member in project`, `dispatch member::create`, `readers
+  member`. Their commands, like `member::create` and `role::update`, are declared
+  as any command is.
+- Every command is allowed by a role, or says who runs it with `by`, like
+  `project::create`, which no role in a project can allow before there is one.
+  One left out is a mistake, and so is a role allowing one that says `by`.
+- These are the roles each project starts with, made with it. `role::maintainer`
+  is the project's maintainer role, as in what `project::create` makes. A command
+  added to a role later is added to that role in every project at the next deploy.
 - A form for a role ticks the commands it allows; a form for a member picks its
   role from a list of the project's roles that a view on the screen holds, like
   `roles = each role in project { name  title }`.

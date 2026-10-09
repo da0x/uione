@@ -43,7 +43,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | roles
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role
                  | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
@@ -115,7 +115,8 @@ signin         ::= "on" "signin" "{" NEWLINE? (once_step | "delete" "each" NAME 
 command        ::= "command" qualified block? END
 block          ::= "{" NEWLINE? statement* "}"
 statement      ::= ( "require" expression STRING
-                   | "permission" (permission_word | qualified)
+                   | "permission" qualified
+                   | "by" ("anyone" ("signed" "in")? | "owner")
                    | "clear" NAME+
                    | "changes" NAME+
                    | "return" expression
@@ -132,7 +133,6 @@ dispatch       ::= "dispatch" NAME "::" NAME ("{" NEWLINE? (((NAME "=" postfix)+
 list_change    ::= "add" postfix "to" NAME | "remove" postfix "from" NAME
 /* create: what a webhook's handler makes; a command dispatches X::create instead. */
 create         ::= "create" NAME "{" NEWLINE? ((NAME "=" postfix)+ END)* "}"
-permission_word ::= "anyone" | "signed_in" | "owner"
 if             ::= "if" expression block ("else" (if | block))?
 
 /* view */
@@ -153,10 +153,11 @@ row_line       ::= (postfix+ | postfix* NAME "=" expression) END
 
 /* role */
 
-role           ::= "role" NAME ("per" NAME "from" NAME)? qualified*
-                   ("{" NEWLINE? (qualified+ END)* "}")? END
-roles          ::= "roles" NAME "per" NAME "from" NAME ("{" NEWLINE? default_role* "}")? END
-default_role   ::= NAME STRING qualified* ("{" NEWLINE? (qualified+ END)* "}")? END
+role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? END
+/* define role: a role each project starts with, kept as the language's role
+ * records, given to people by member records, with the commands it allows, one
+ * a line. */
+define_role    ::= "define" "role" NAME STRING "in" NAME "{" NEWLINE? (qualified END)* "}" END
 
 /* function */
 

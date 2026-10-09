@@ -95,7 +95,7 @@ TEST_CASE("table columns that name a command on the row become actions") {
 
 TEST_CASE("a row's button with a when is on only the rows it holds for") {
     const auto& content = find(generate("/examples/tracker"), "src/screens/main.tsx")->content;
-    CHECK(content.find(R"(actions={[{ name: "tracker::member::delete", label: "Remove", allowed: holds(memberRoles, "project", projectId, ["maintainer"]), when: (row) => ((row["person"] ?? null) !== viewer) }]})") != std::string::npos);
+    CHECK(content.find(R"(actions={[{ name: "tracker::member::delete", label: "Remove", allowed: allows(memberRoles, "project", projectId, "member::delete", "role.may"), when: (row) => ((row["person"] ?? null) !== viewer) }]})") != std::string::npos);
     CHECK(content.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
 }
 
@@ -301,7 +301,7 @@ TEST_CASE("a create form takes what the screen's address names, without asking f
     auto files = generate("/examples/tracker");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button authenticated allowed={holds(memberRoles, "project", projectId, ["maintainer", "reporter"])} />)") !=
+    CHECK(screens->content.find(R"(<Form command="tracker::issue::create" fields={["title", { name: "body", type: "markdown" }, { name: "labels", type: "list" }]} given={{ project: projectId }} button authenticated allowed={allows(memberRoles, "project", projectId, "issue::create", "role.may")} />)") !=
           std::string::npos);
     CHECK(screens->content.find(R"(const memberRoles = useView("tracker::member_roles");)") != std::string::npos);
     CHECK(screens->content.find(R"(<Form command="tracker::comment::create" fields={[{ name: "body", type: "markdown" }]} given={{ issue: issueId }} button authenticated />)") !=
@@ -462,41 +462,31 @@ TEST_CASE("a project's own roles decide its buttons, and its forms pick from the
 entity crew {
 	slug  slug  required  unique  key
 }
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
-}
-entity hand {
-	crew    crew  required  key
-	person  user  required  key
-	rank    rank  required  key
-}
-roles rank per crew from hand {
-	captain "Captain"  hand::create  rank::create
+define role captain "Captain" in crew {
+	member::create
+	role::create
 }
 command crew::create {
-	permission signed_in
-	dispatch hand::create {
-		crew = id  person = me  rank = rank::captain
+	by anyone signed in
+	dispatch member::create {
+		crew = id  person = me  role = role::captain
 	}
 }
-command hand::create
-command rank::create
+command member::create
+command role::create
 view crew_page per crew {
-	readers hand
-	ranks = each rank in crew {
+	readers member
+	roles = each role in crew {
 		name  title
 	}
 }
 screen "Crew" /crews/:crew {
-	hand::create "Add someone"
-	form hand::create "Add" {
-		person  rank
+	member::create "Add someone"
+	form member::create "Add" {
+		person  role
 	}
-	rank::create "New rank"
-	form rank::create "Create" {
+	role::create "New role"
+	form role::create "Create" {
 		name  title  may
 	}
 }
@@ -507,10 +497,10 @@ screen "Crew" /crews/:crew {
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"({ name: "rank", type: "pick", choices: listChoices(crewPage, "ranks", "title") })") != std::string::npos);
-    CHECK(tsx.find(R"(allowed={allows(handRoles, "crew", crewId, "hand::create", "rank.may")})") != std::string::npos);
-    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["crew::create", "Create crew"], ["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") == std::string::npos);
-    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["hand::create", "Create hand"], ["rank::create", "Create rank"]] })") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "role", type: "pick", choices: listChoices(crewPage, "roles", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"(allowed={allows(memberRoles, "crew", crewId, "member::create", "role.may")})") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["crew::create", "Create crew"], ["member::create", "Create member"], ["role::create", "Create role"]] })") == std::string::npos);
+    CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["member::create", "Create member"], ["role::create", "Create role"]] })") != std::string::npos);
 }
 
 TEST_CASE("a workflow's steps are buttons along them, and a step's form picks its phases and roles") {
@@ -522,19 +512,9 @@ TEST_CASE("a workflow's steps are buttons along them, and a step's form picks it
 entity project {
 	slug  slug  required  unique  key
 }
-entity role {
-	project  project  required  key
-	name     slug     required  key
-	title    text     required
-	may      list of permission
-}
-entity member {
-	project  project  required  key
-	person   user     required  key
-	role     role     required  key
-}
-roles role per project from member {
-	owner "Owner"  step::create  issue::move
+define role owner "Owner" in project {
+	step::create
+	issue::move
 }
 entity phase {
 	project  project  required  key
@@ -1155,7 +1135,7 @@ TEST_CASE("a namespace can put its screens at the root, and an address can name 
     platform::write_file((dir / "main.one").string(),
                          "namespace studio at / {\n"
                          "entity project {\n\towner  text  key  = me.username\n\tslug  text  required  key\n\tname  text\n}\n"
-                         "command project::create {\n\tpermission signed_in\n}\n"
+                         "command project::create {\n\tby anyone signed in\n}\n"
                          "view all {\n\teach project {\n\t\tname\n\t}\n}\n"
                          "view page per project {\n\tname = project.name\n}\n"
                          "screen \"Projects\" / {\n\ttable all link /:owner/:project {\n\t\tname\n\t}\n}\n"

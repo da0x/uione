@@ -4,9 +4,9 @@
 // A project tracker: projects named by a short name, the people who belong to
 // each with a role in it, and issues numbered within each project.
 //
-// The example for roles held within something. Whoever makes a project
+// The example for roles each project has its own of. Whoever makes a project
 // maintains it, maintainers add and remove members, and what each person may
-// do to a project's issues and comments depends on their role in that project
+// do to a project's issues and comments depends on their roles in that project
 // alone. A private project's pages are read by its members and nobody else.
 // Every change to an issue is kept, and shown on its page and in its project's
 // timeline. Commits and pull requests on GitHub that mention #12 show on issue
@@ -19,14 +19,6 @@ namespace tracker {
 		name        text  required
 		repository  text  unique
 		visibility  enum  public | private = visibility::public
-	}
-
-	// A person's place in a project. Its id is the project and the person, so
-	// each person has one role in each project.
-	entity member {
-		project  project  required  key
-		person   user     required  key
-		role     enum     maintainer | reporter = role::reporter
 	}
 
 	// Where an issue is. An enum declared on its own names its choices once, for
@@ -68,7 +60,7 @@ namespace tracker {
 
 	// Whoever makes a project is its first maintainer.
 	command project::create {
-		permission signed_in
+		by anyone signed in
 		dispatch member::create {
 			project = id  person = me  role = role::maintainer
 		}
@@ -102,8 +94,26 @@ namespace tracker {
 
 	command comment::create
 
-	role maintainer per project from member  project::update  member::create  member::delete  issue::create  issue::update  issue::take  issue::drop  issue::close  comment::create
-	role reporter per project from member  issue::create  issue::take  issue::drop  comment::create
+	// Each project's own roles, kept as its role records, and given to people by
+	// member records, one for each role a person holds there.
+	define role maintainer "Maintainer" in project {
+		project::update
+		member::create
+		member::delete
+		issue::create
+		issue::update
+		issue::take
+		issue::drop
+		issue::close
+		comment::create
+	}
+
+	define role reporter "Reporter" in project {
+		issue::create
+		issue::take
+		issue::drop
+		comment::create
+	}
 
 	// Every public project, newest first. A private one is listed nowhere.
 	webhook github /hooks/github {
@@ -144,7 +154,10 @@ namespace tracker {
 		}
 		members = each member in project {
 			order by role
-			person  person.picture  person.name  role
+			person  person.picture  person.name  role.title
+		}
+		roles = each role in project {
+			name  title
 		}
 		timeline = each change in issue in project {
 			order by created_at descending
@@ -237,7 +250,7 @@ namespace tracker {
 		table project_page.members {
 			person.picture ""
 			person.name "Member"
-			role
+			role.title "Role"
 			delete "Remove" when person != me
 		}
 		confirm member::delete "Remove this person from the project?"

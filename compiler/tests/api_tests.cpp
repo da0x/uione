@@ -252,7 +252,7 @@ entity phase {
 	project  project  required
 }
 command project::create {
-	permission signed_in
+	by anyone signed in
 	dispatch board::create { project = id  name = "main"  title = slug  preset = preset }
 }
 command board::create {
@@ -416,19 +416,10 @@ entity crew {
 	workflow  enum { simple  steady } = workflow::simple
 	start     stage
 }
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
-}
-entity hand {
-	crew    crew  required  key
-	person  user  required  key
-	rank    rank  required  key
-}
-roles rank per crew from hand {
-	captain "Captain"  crew::create
+define role captain "Captain" in crew {
+	role::create
+	stage::create
+	leg::create
 }
 entity stage {
 	crew  crew  required  key
@@ -438,19 +429,19 @@ entity leg {
 	crew   crew   required  key
 	from   stage  required  key
 	to     stage  required  key
-	ranks  list of rank
+	roles  list of role
 }
 command crew::create {
-	permission signed_in
+	by anyone signed in
 	if workflow == workflow::steady {
-		dispatch rank::create { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
+		dispatch role::create { crew = id  name = "bosun"  title = "Bosun"  may = [crew::create] }
 		dispatch stage::create { crew = id  name = "todo" }
 		dispatch stage::create { crew = id  name = "done" }
-		dispatch leg::create { crew = id  from = stage::todo  to = stage::done  ranks = [rank::captain, rank::bosun] }
+		dispatch leg::create { crew = id  from = stage::todo  to = stage::done  roles = [role::captain, role::bosun] }
 		start = stage::todo
 	}
 }
-command rank::create
+command role::create
 command stage::create
 command leg::create
 view legs per crew {
@@ -470,8 +461,8 @@ view legs per crew {
     CHECK(found->content.find("if x.Workflow == WorkflowSteady {") != std::string::npos);
     CHECK(found->content.find(R"(x.Start = one.Key(x.ID, "todo"))") != std::string::npos);
     CHECK(found->content.find(R"(Order("from.name", "-to.name").)") != std::string::npos);
-    CHECK(found->content.find(R"(&Rank{Crew: x.ID, Name: "bosun", Title: "Bosun", May: []string{"crew::create"}})") != std::string::npos);
-    CHECK(found->content.find(R"(&Leg{Crew: x.ID, From: one.Key(x.ID, "todo"), To: one.Key(x.ID, "done"), Ranks: []string{one.Key(x.ID, "captain"), one.Key(x.ID, "bosun")}})") != std::string::npos);
+    CHECK(found->content.find(R"(&Role{Crew: x.ID, Name: "bosun", Title: "Bosun", May: []string{"crew::create"}})") != std::string::npos);
+    CHECK(found->content.find(R"(&Leg{Crew: x.ID, From: one.Key(x.ID, "todo"), To: one.Key(x.ID, "done"), Roles: []string{one.Key(x.ID, "captain"), one.Key(x.ID, "bosun")}})") != std::string::npos);
 
     // A name the command doesn't make, and every crew doesn't start with, is a mistake.
     language::diagnostics wrong;
@@ -490,7 +481,7 @@ entity leg {
 	to    stage  required  key
 }
 command crew::create {
-	permission signed_in
+	by anyone signed in
 	dispatch stage::create { crew = id  name = "todo" }
 	dispatch leg::create { crew = id  from = stage::todo  to = stage::dnoe }
 }
@@ -511,19 +502,8 @@ TEST_CASE("a move takes what it changes, and asks what exists and what roles are
 entity crew {
 	slug  slug  required  unique  key
 }
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
-}
-entity hand {
-	crew    crew  required  key
-	person  user  required  key
-	rank    rank  required  key
-}
-roles rank per crew from hand {
-	captain "Captain"  job::move
+define role captain "Captain" in crew {
+	job::move
 }
 entity stage {
 	crew  crew  required  key
@@ -533,7 +513,7 @@ entity leg {
 	crew   crew   required  key
 	from   stage  required  key
 	to     stage  required  key
-	ranks  list of rank
+	roles  list of role
 }
 entity job {
 	crew   crew  required
@@ -541,7 +521,7 @@ entity job {
 }
 command job::move {
 	changes stage
-	require exists(leg where from == was job.stage && to == job.stage && held(ranks))  "not from there to there"
+	require exists(leg where from == was job.stage && to == job.stage && held(roles))  "not from there to there"
 }
 }
 )", out));
@@ -552,7 +532,7 @@ command job::move {
     auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
     REQUIRE(found != generated.files.end());
     CHECK(found->content.find(R"(var Move = one.Command[Job]("job::move").Fields("stage").)") != std::string::npos);
-    CHECK(found->content.find(R"(found, err := one.Exists(c, one.Where[Leg]("from", c.Was("stage")).And("to", j.Stage), func(l *Leg) (bool, error) { return c.Held(l.Ranks) }))") != std::string::npos);
+    CHECK(found->content.find(R"(found, err := one.Exists(c, one.Where[Leg]("from", c.Was("stage")).And("to", j.Stage), func(l *Leg) (bool, error) { return c.Held(l.Roles) }))") != std::string::npos);
     CHECK(found->content.find("if !found {") != std::string::npos);
 }
 
@@ -575,30 +555,19 @@ TEST_CASE("a project's own roles become one.Roles, and a role it starts with its
 entity crew {
 	slug  slug  required  unique  key
 }
-entity rank {
-	crew   crew  required  key
-	name   slug  required  key
-	title  text  required
-	may    list of permission
+define role captain "Captain" in crew {
+	member::create
 }
-entity hand {
-	crew    crew  required  key
-	person  user  required  key
-	rank    rank  required  key
-}
-roles rank per crew from hand {
-	captain "Captain" {
-		hand::create
-	}
-	deckhand "Deckhand"  hand::create
+define role deckhand "Deckhand" in crew {
+	member::create
 }
 command crew::create {
-	permission signed_in
-	dispatch hand::create {
-		crew = id  person = me  rank = rank::captain
+	by anyone signed in
+	dispatch member::create {
+		crew = id  person = me  role = role::captain
 	}
 }
-command hand::create
+command member::create
 }
 )", out));
     language::check(files, out);
@@ -607,10 +576,10 @@ command hand::create
     REQUIRE(generated.errors.empty());
     auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
     REQUIRE(found != generated.files.end());
-    CHECK(found->content.find("Rank: one.Key(x.ID, \"captain\")") != std::string::npos);
-    CHECK(found->content.find("var Roles = one.Roles(one.Entity[Rank](), one.Entity[Crew](), one.Entity[Hand](), \"may\").\n"
-                              "\tDefault(\"captain\", \"Captain\", \"hand::create\").\n"
-                              "\tDefault(\"deckhand\", \"Deckhand\", \"hand::create\")\n") != std::string::npos);
+    CHECK(found->content.find("Role: one.Key(x.ID, \"captain\")") != std::string::npos);
+    CHECK(found->content.find("var Roles = one.Roles(one.Entity[Role](), one.Entity[Crew](), one.Entity[Member](), \"may\").\n"
+                              "\tDefault(\"captain\", \"Captain\", \"member::create\").\n"
+                              "\tDefault(\"deckhand\", \"Deckhand\", \"member::create\")\n") != std::string::npos);
     CHECK(found->content.find(", Roles)") != std::string::npos);
 }
 
@@ -681,7 +650,7 @@ TEST_CASE("a command names its entity's fields plainly, or with the entity's nam
         files.push_back(language::parse("main.one", "namespace tracker {\n"
                                                     "entity project {\n\tname  text  required\n\ttakes_reports  boolean = false\n}\n"
                                                     "entity report {\n\tproject  project  required\n\ttitle  text  required\n}\n"
-                                                    "command report::create {\n\tpermission signed_in\n"
+                                                    "command report::create {\n\tby anyone signed in\n"
                                                     "\trequire " + condition + "  \"this project doesn't take reports\"\n}\n}\n", out));
         language::check(files, out);
         for (const auto& d : out) FAIL_CHECK(language::format(d));
@@ -738,7 +707,7 @@ TEST_CASE("a github webhook makes what each event's handler creates, and is part
           std::string::npos);
     CHECK(file->content.find(R"(one.Create(c, &Mention{Issue: m.Issue, URL: m.URL, Kind: KindCommit, Title: m.Message, Author: m.Author}))") !=
           std::string::npos);
-    CHECK(file->content.find(", WebhookGithub,") != std::string::npos);
+    CHECK(file->content.find(", WebhookGithub)") != std::string::npos);
 }
 
 TEST_CASE("a view shows a project's webhook secret through the library") {

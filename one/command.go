@@ -406,6 +406,17 @@ func alike(x, y any) bool {
 	return reflect.DeepEqual(plain(x), plain(y))
 }
 
+// Has says whether a list holds a value, like the roles that may take a step
+// holding a project's contributor role.
+func Has(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
 // Add puts a value in a list, unless it's there already: Add(i.Assignees, c.Me()).
 func Add(list []string, value string) []string {
 	if value == "" || contains(list, value) {

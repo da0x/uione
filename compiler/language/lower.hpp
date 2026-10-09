@@ -8,7 +8,11 @@
 //     each issue in project          each issue where project == project.id
 //     each change in issue in project    each change of issue where project == project.id
 //     me, in a view                  user.id, the person reading it
+//     define role maintainer "Maintainer" in project { ... }
+//                                    the role and member entities each project's roles
+//                                    are kept in, and the roles it starts with
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <type_traits>
@@ -18,6 +22,7 @@
 
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
+#include "language/parser.hpp"
 
 namespace one::language {
 
@@ -242,9 +247,118 @@ namespace one::language {
             }
         };
 
+        // define role ... in project: the roles each project starts with, kept as role
+        // records, and member records giving people them, which the language
+        // declares beside them, as a project that wrote them out would have:
+        //
+        //     entity role {
+        //         project  project  required  key
+        //         name     slug     required  key
+        //         title    text     required
+        //         may      list of permission
+        //     }
+        //     entity member {
+        //         project  project  required  key
+        //         person   user     required  key
+        //         role     role     required  key
+        //     }
+        //     roles role per project from member { maintainer "Maintainer" { ... } }
+        struct definer {
+            diagnostics& out;
+            struct place {
+                std::vector<declaration>* declarations = nullptr;
+                const std::string* path = nullptr;
+                std::vector<const define_role_declaration*> roles;
+            };
+            std::map<std::string, place> by_namespace;
+
+            void find(std::vector<declaration>& declarations, const std::string& ns, const std::string& path) {
+                for (auto& d : declarations) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
+                        find(n->declarations, ns.empty() ? n->name : ns + "::" + n->name, path);
+                    } else if (auto* r = std::get_if<define_role_declaration>(&d.node)) {
+                        auto& at = by_namespace[ns];
+                        if (!at.declarations) at.declarations = &declarations, at.path = &path;
+                        at.roles.push_back(r);
+                    }
+                }
+            }
+
+            static bool declares(const std::vector<file>& files, const std::string& name) {
+                std::function<bool(const std::vector<declaration>&)> any = [&](const std::vector<declaration>& ds) {
+                    for (const auto& d : ds) {
+                        if (auto* e = std::get_if<entity_declaration>(&d.node); e && e->name == name) return true;
+                        if (auto* n = std::get_if<namespace_declaration>(&d.node); n && any(n->declarations)) return true;
+                    }
+                    return false;
+                };
+                for (const auto& f : files) {
+                    if (any(f.declarations)) return true;
+                }
+                return false;
+            }
+
+            void define(const std::vector<file>& files) {
+                // A namespace inside another first, so adding to the outer one moves nothing
+                // still to be added to.
+                for (auto it = by_namespace.rbegin(); it != by_namespace.rend(); ++it) {
+                    auto& at = it->second;
+                    const define_role_declaration& first = *at.roles.front();
+                    bool fine = true;
+                    for (const auto* r : at.roles) {
+                        if (r->in != first.in) {
+                            out.push_back({*at.path, r->in_where, "every role is in the same thing, " + first.in + ", which each has its own of"});
+                            fine = false;
+                        }
+                    }
+                    for (const char* own : {"role", "member"}) {
+                        if (declares(files, own)) {
+                            out.push_back({*at.path, first.where, std::string("define role keeps roles as the language's own ") + own +
+                                                                      " records; take out entity " + own + ", which it declares"});
+                            fine = false;
+                        }
+                    }
+                    if (!fine) continue;
+                    const std::string& in = first.in;
+                    std::string text = "entity role {\n\t" + in + "  " + in + "  required  key\n\tname  slug  required  key\n"
+                                       "\ttitle  text  required\n\tmay  list of permission\n}\n"
+                                       "entity member {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
+                                       "\trole  role  required  key\n}\n"
+                                       "roles role per " + in + " from member {\n";
+                    for (const auto* r : at.roles) {
+                        text += "\t" + r->name + " \"\" {\n";
+                        for (const auto& p : r->permissions) text += "\t\t" + p.text() + "\n";
+                        text += "\t}\n";
+                    }
+                    text += "}\n";
+                    diagnostics ignored;
+                    file made = parse("<define role>", text, ignored);
+                    // Said where the roles are, so what's wrong with one is shown there.
+                    for (auto& d : made.declarations) {
+                        d.where = first.where;
+                        if (auto* e = std::get_if<entity_declaration>(&d.node)) {
+                            for (auto& f : e->fields) f.where = first.where;
+                        } else if (auto* roles = std::get_if<roles_declaration>(&d.node)) {
+                            roles->defined = true;
+                            roles->entity_where = roles->per_where = first.in_where;
+                            for (std::size_t i = 0; i < roles->defaults.size() && i < at.roles.size(); ++i) {
+                                roles->defaults[i].where = at.roles[i]->where;
+                                roles->defaults[i].title = at.roles[i]->title;
+                                roles->defaults[i].permissions = at.roles[i]->permissions;
+                            }
+                        }
+                    }
+                    for (auto& d : made.declarations) at.declarations->push_back(std::move(d));
+                }
+            }
+        };
+
     } // namespace lowering
 
     inline void lower(std::vector<file>& files, diagnostics& out) {
+        lowering::definer roles{out, {}};
+        for (auto& f : files) roles.find(f.declarations, "", f.path);
+        roles.define(files);
         lowering::lowerer l{nullptr, out, {}};
         for (const auto& f : files) l.index(f.declarations);
         for (auto& f : files) {

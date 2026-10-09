@@ -193,3 +193,48 @@ func TestAListOrdersByAFieldOfWhatItsRowsPointAt(t *testing.T) {
 		t.Errorf("legs by where they leave from, last first, then where they go: %v", got)
 	}
 }
+
+// The crew module as a later deploy says it: captains may also delete stages, and
+// crews start with a cook as well.
+func laterCrews() one.Item {
+	return one.Module("crew",
+		one.Command[Crew]("crew::create").Allow(one.SignedIn),
+		one.Command[Hand]("hand::create"),
+		one.Command[Rank]("rank::create"),
+		one.Command[Rank]("rank::update").Fields("title", "may"),
+		one.Command[Job]("job::create"),
+		one.Command[Job]("job::update"),
+		one.Command[Stage]("stage::create"),
+		one.Command[Stage]("stage::delete"),
+		one.Command[Leg]("leg::create"),
+		one.Roles(one.Entity[Rank](), one.Entity[Crew](), one.Entity[Hand](), "may").
+			Default("captain", "Captain", "hand::create", "rank::create", "rank::update", "job::create", "job::update", "job::move", "stage::create", "leg::create", "stage::delete").
+			Default("deckhand", "Deckhand", "job::create", "job::move").
+			Default("cook", "Cook", "job::create"),
+	)
+}
+
+func TestWhatADeployAddsToTheRolesCrewsStartWithReachesEveryCrew(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("hal@example.com")
+	h.mustRun("crew/crew/create", token, map[string]any{"slug": "junk"})
+	// The crew takes job::move away from its deckhands, its own to say.
+	h.mustRun("crew/rank/update", token, map[string]any{"id": one.Key("junk", "deckhand"), "may": []any{"job::create"}})
+
+	later, err := one.New(context.Background(), laterCrews())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer later.Close()
+	captain := h.stored("crew_rank", one.Key("junk", "captain"))
+	if may, _ := captain["may"].([]any); len(may) != 9 || may[8] != "stage::delete" {
+		t.Fatalf("the captain after the deploy may %v", captain["may"])
+	}
+	// What the crew took away stays away, since the deploy didn't add it.
+	if may, _ := h.stored("crew_rank", one.Key("junk", "deckhand"))["may"].([]any); len(may) != 1 {
+		t.Fatalf("the deckhand after the deploy may %v", may)
+	}
+	if cook := h.stored("crew_rank", one.Key("junk", "cook")); cook["title"] != "Cook" {
+		t.Fatalf("the crew's new cook is %v", cook)
+	}
+}

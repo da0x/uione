@@ -13,7 +13,7 @@ namespace studio {
 	}
 
 	command project::create {
-		permission signed_in
+		by anyone signed in
 	}
 
 	// One document per person, readable only by that person. A screen that shows it

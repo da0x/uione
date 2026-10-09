@@ -62,7 +62,7 @@ examples/library/main.one	picker book from shelf	picker	declare
 examples/library/main.one	picker book from shelf	from	keyword
 examples/tasks/main.one	done   boolean  = false	boolean	type
 examples/tasks/main.one	done   boolean  = false	false	constant
-examples/tasks/main.one	permission owner	owner	constant
+examples/tasks/main.one	by owner	owner	constant
 examples/tasks/main.one	owner  user     = me	owner	variable
 examples/tasks/main.one	where owner == me	owner	plain
 examples/tasks/main.one	require !done	!	operator
@@ -78,7 +78,7 @@ site/site.one	serve      "public"	serve	keyword
 site/waitlist.one	email  email  required  key	email  required	type
 site/waitlist.one	email  email  required  key	email	variable
 site/waitlist.one	email  email  required  key	key	modifier
-site/waitlist.one	permission anyone	anyone	constant
+site/waitlist.one	by anyone	anyone	constant
 site/waitlist.one	view signups public	public	modifier
 site/home.one	screen "uione" / {	/	route
 site/home.one	hero "Write	hero	keyword
@@ -101,10 +101,12 @@ site/studio.one	name   text  required	text	type
 site/studio.one	name   text  required	name	variable
 site/studio.one	owner  user  = me	user	type
 site/studio.one	owner  user  = me	me	constant
-site/studio.one	permission signed_in	signed_in	constant
+site/studio.one	by anyone signed in	signed	constant
 site/studio.one	view projects per user	user	plain
 examples/tracker/main.one	dispatch member::create {	dispatch	keyword
-examples/tracker/main.one	role maintainer per project from member	from	keyword
+examples/tracker/main.one	define role reporter "Reporter" in project {	reporter	name
+examples/tracker/main.one	project    project       required  key	project	variable
+examples/tracker/main.one	project    project       required  key	project       required	type
 examples/tracker/main.one	command project::create {	create	name
 examples/tracker/main.one	readers member	readers	keyword
 examples/tracker/main.one	public when project.visibility	when	keyword
@@ -130,20 +132,22 @@ examples/tracker/main.one	visibility  enum  public	public	plain
 examples/tracker/main.one	= visibility::public	public	plain
 examples/tracker/main.one	view projects public	public	modifier
 examples/tracker/main.one	public when project.visibility	public	modifier
-examples/tracker/main.one	project  project  required  key	project	variable
-examples/tracker/main.one	project  project  required  key	project  required	type
-examples/tracker/main.one	role     enum     maintainer	role	variable
-examples/tracker/main.one	role     enum     maintainer	maintainer	plain
-examples/tracker/main.one	= role::reporter	role	namespace
 examples/tracker/main.one	number     serial        per project	per	keyword
 examples/tracker/main.one	labels     list of text	of	type
 editors/fixtures/environments.one	environment production {	environment	declare
 editors/fixtures/environments.one	environment production {	production	name
 editors/fixtures/environments.one	firebase  "shop-staging"	firebase	keyword
 editors/fixtures/environments.one	environment  text  required	environment	variable
-editors/fixtures/roles.one	project::update  member::create	project	namespace
-editors/fixtures/roles.one	project::update  member::create	update	plain
-editors/fixtures/roles.one	project::update  member::create	create	plain
+editors/fixtures/roles.one	\t\tproject::update	project	namespace
+editors/fixtures/roles.one	\t\tproject::update	update	plain
+editors/fixtures/roles.one	\t\tmember::create	create	plain
+editors/fixtures/roles.one	define role maintainer "Maintainer" in project {	define	declare
+editors/fixtures/roles.one	define role maintainer "Maintainer" in project {	role	declare
+editors/fixtures/roles.one	define role maintainer "Maintainer" in project {	maintainer	name
+editors/fixtures/roles.one	in project {	in	keyword
+editors/fixtures/roles.one	by anyone signed in	by	keyword
+editors/fixtures/roles.one	by anyone signed in	anyone	constant
+editors/fixtures/roles.one	by anyone signed in	signed	constant
 editors/fixtures/roles.one	command project::update	command	declare
 examples/tracker/main.one	project = id  person = me	project	variable
 examples/tracker/main.one	labels     list of text	text	type

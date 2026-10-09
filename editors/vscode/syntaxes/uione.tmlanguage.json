@@ -145,7 +145,22 @@
           }
         },
         {
-          "match": "^\\s*(project|environment|enum|entity|view|roles|role|screen|picker|webhook|backend)\\b(?!::|\\s*=)(?:\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*))?",
+          "comment": "define role maintainer \"Maintainer\" in project: a role each project starts with.",
+          "match": "^\\s*(define)\\s+(role)\\s+([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "storage.type.uione"
+            },
+            "3": {
+              "name": "entity.name.type.uione"
+            }
+          }
+        },
+        {
+          "match": "^\\s*(project|environment|enum|entity|view|role|screen|picker|webhook|backend)\\b(?!::|\\s*=)(?:\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*))?",
           "captures": {
             "1": {
               "name": "storage.type.uione"
@@ -270,12 +285,19 @@
           ]
         },
         {
-          "match": "\\b(permission)\\s+(anyone|signed_in|owner)\\b",
+          "comment": "by anyone signed in: who runs a command no role allows.",
+          "match": "\\b(by)\\s+(anyone|owner)(?:\\s+(signed)\\s+(in))?\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"
             },
             "2": {
+              "name": "constant.language.uione"
+            },
+            "3": {
+              "name": "constant.language.uione"
+            },
+            "4": {
               "name": "constant.language.uione"
             }
           }

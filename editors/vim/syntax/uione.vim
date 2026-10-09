@@ -19,7 +19,7 @@ syn match   uioneComment "//.*$" contains=uioneTodo,@Spell
 syn region  uioneComment start="/\*" end="\*/" contains=uioneTodo,@Spell
 
 " Declarations open a line; the word after them is the thing being declared.
-syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|settings\|command\|view\|roles\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
+syn match uioneDeclare "^\s*\zs\<\%(project\|environment\|enum\|entity\|settings\|command\|view\|role\|function\|screen\|picker\|webhook\|backend\)\>\%(::\|\s*=\)\@!" nextgroup=uioneQualifier,uioneName skipwhite
 syn match uioneDeclare "^\s*\zs\<once\>\ze\s\+\""
 " footer, and how it's laid out: footer columns {; and header {.
 syn match uioneDeclare "^\s*\zs\<\%(footer\|header\)\>\ze\s*\%(\h\w*\s*\)\={"
@@ -60,9 +60,12 @@ syn keyword uioneModifier  contained required unique after key
 " name, as in visibility enum public | private, which stays plain.
 syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$\|when\>\)\)\@=/
 syn keyword uioneBuiltin   now me none true false
-" Who may run a command: words only after `permission`, so a field called owner
-" stays a name.
-syn match   uioneBuiltin   "\%(\<permission\s\+\)\@<=\%(anyone\|signed_in\|owner\)\>"
+" Who may run a command: words only after `by`, so a field called owner stays a
+" name.
+" by anyone signed in: who runs a command no role allows.
+syn match   uioneBuiltin   "\%(\<by\s\+\)\@<=\%(\<anyone\>\%(\s\+\<signed\>\s\+\<in\>\)\=\|\<owner\>\)"
+" define role maintainer "Maintainer" in project: a role each project starts with.
+syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\<role\>" nextgroup=uioneName skipwhite
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("

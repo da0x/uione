@@ -13,17 +13,17 @@ namespace tasks {
 	}
 
 	command task::create {
-		permission signed_in
+		by anyone signed in
 	}
 
 	command task::complete {
-		permission owner
+		by owner
 		require !done  "that task is already done"
 		done = true
 	}
 
 	command task::delete {
-		permission owner
+		by owner
 	}
 
 	view list per user {

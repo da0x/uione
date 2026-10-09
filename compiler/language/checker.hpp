@@ -103,6 +103,7 @@ namespace one::language {
                 imports_at_ = f->imports_at;
                 verify("", f->declarations);
             }
+            granted();
         }
 
         // uione's own library, read once.
@@ -137,6 +138,7 @@ namespace one::language {
             std::map<std::string, const command_declaration*> command_nodes;  // the same, as declared
             std::vector<const role_declaration*> roles;
             std::vector<const roles_declaration*> defined;  // roles each project defines for itself
+            std::map<const roles_declaration*, origin> defined_at;  // and the file each is in
             std::map<std::string, origin> role_names;  // so a role is declared once
             std::map<std::string, const settings_declaration*, std::less<>> settings;  // what a block of settings may say, in a library
         };
@@ -278,6 +280,7 @@ namespace one::language {
                     add(here.formats, f->name, *f, d.where, "format", ns);
                 } else if (auto* rs = std::get_if<roles_declaration>(&d.node)) {
                     here.defined.push_back(rs);
+                    here.defined_at[rs] = origin{path_, d.where};
                 } else if (auto* en = std::get_if<enum_declaration>(&d.node)) {
                     add(here.enums, en->name, *en, d.where, "enum", ns);
                 } else if (auto* r = std::get_if<role_declaration>(&d.node)) {
@@ -505,7 +508,56 @@ namespace one::language {
         // pointing at the project, a name and a title among its keys and fields, and
         // a list of the commands it allows; member points at a project, a person and
         // a role. Each role a project starts with allows commands there are.
+        void verify(const std::string&, location, const define_role_declaration& r) {
+            snake(r.name, r.where);
+        }
+
+        // Once a project defines its roles, every command is one a role allows, or
+        // says itself who runs it, by anyone or by anyone signed in, so none is
+        // left unguarded by accident; and one that says so isn't a role's to allow.
+        void granted() {
+            std::map<std::string, std::vector<std::pair<const qualified_name*, origin>>> allowed;  // command, and where a role allows it
+            bool any = false;
+            for (const auto& [ns, here] : scopes_) {
+                for (const auto* r : here.defined) {
+                    if (!r->defined) continue;
+                    any = true;
+                    auto at = here.defined_at.find(r);
+                    for (const auto& d : r->defaults) {
+                        for (const auto& p : d.permissions) allowed[join(ns, p.text())].push_back({&p, at == here.defined_at.end() ? origin{} : at->second});
+                    }
+                }
+            }
+            if (!any) return;
+            std::string kept = path_;
+            for (const auto& [ns, here] : scopes_) {
+                for (const auto& [name, node] : here.command_nodes) {
+                    bool by = false;
+                    for (const auto& st : node->body) {
+                        if (auto* p = std::get_if<permission_statement>(&st.node); p && p->by) by = true;
+                    }
+                    auto grants = allowed.find(join(ns, name));
+                    auto from = here.commands.find(name);
+                    if (by && grants != allowed.end()) {
+                        for (const auto& [p, where] : grants->second) {
+                            path_ = where.path;
+                            error(p->where, name + " says who runs it, by anyone or by anyone signed in, so no role allows it");
+                        }
+                    } else if (!by && grants == allowed.end() && from != here.commands.end()) {
+                        path_ = from->second.path;
+                        error(node->name.where, name + " isn't allowed by any role; add it to a define role, or say by anyone signed in in the command");
+                    }
+                }
+            }
+            path_ = kept;
+        }
+
         void verify(const std::string& ns, location, const roles_declaration& r) {
+            if (!r.defined) {
+                error(r.entity_where, "a project's roles are each declared on their own, like define role maintainer \"Maintainer\" in " + r.per +
+                                          " { project::update }, and the language keeps them as role and member records");
+                return;
+            }
             snake(r.entity, r.entity_where);
             const entity_declaration* role = find_entity(ns, qualified_name{{r.entity}, r.entity_where});
             const entity_declaration* scope = find_entity(ns, qualified_name{{r.per}, r.per_where});
@@ -547,6 +599,8 @@ namespace one::language {
                     auto here = scopes_.find(ns);
                     if (p.parts.size() != 2 || here == scopes_.end() || !here->second.commands.contains(p.text())) {
                         error(p.where, d.name + " allows " + p.text() + ", which isn't a command " + in_namespace(ns));
+                    } else {
+                        within_scope(ns, *scope, d.name, p);
                     }
                 }
             }
@@ -1144,6 +1198,19 @@ namespace one::language {
             for (const auto& s : body) {
                 if (auto* r = std::get_if<require_statement>(&s.node)) {
                     resolve(in, *r->condition);
+                } else if (auto* p = std::get_if<permission_statement>(&s.node); p && !p->by && p->permission.parts.size() == 1 &&
+                                                                                   (p->permission.parts[0] == "anyone" || p->permission.parts[0] == "signed_in" ||
+                                                                                    p->permission.parts[0] == "authenticated" || p->permission.parts[0] == "owner")) {
+                    // Who runs a command, said as it reads: by anyone signed in.
+                    const std::string& word = p->permission.parts[0];
+                    std::string says = word == "anyone" ? "by anyone" : word == "owner" ? "by owner" : "by anyone signed in";
+                    error(s.where, "who runs a command is said as it reads: " + says,
+                          s.text.empty() ? std::nullopt : std::optional<fix>{fix{s.where, s.text.size(), says}});
+                } else if (auto* p = std::get_if<permission_statement>(&s.node); p && p->by && p->permission.text() != "owner") {
+                    bool signed_in = p->permission.text() == "signed_in";
+                    mean(p->permission.where, signed_in ? std::string("anyone signed in").size() : std::string("anyone").size(),
+                         signed_in ? "by anyone signed in: anyone signed in, any way the project offers" : "by anyone: anyone, signed in or not",
+                         std::nullopt, "command");
                 } else if (auto* p = std::get_if<permission_statement>(&s.node)) {
                     verify_permission(ns, p->permission, entity);
                 } else if (auto* c = std::get_if<clear_statement>(&s.node)) {
@@ -1580,8 +1647,8 @@ namespace one::language {
                 if (!find_entity(ns, qualified_name{{*v.readers}, v.readers_where})) {
                     error(v.readers_where, "readers " + *v.readers + " names an entity that isn't declared " + in_namespace(ns));
                 } else if (!scope) {
-                    error(v.readers_where, "readers " + *v.readers + " needs a role that comes from " + *v.readers +
-                                               ", like role maintainer per project from " + *v.readers);
+                    error(v.readers_where, "readers " + *v.readers + " are the people whose " + *v.readers + " records give them a role, so it's readers member, " +
+                                                "with roles each declared like define role maintainer \"Maintainer\" in project { ... }");
                 } else if (!held_within(ns, *subject, *scope)) {
                     error(v.readers_where, "readers " + *v.readers + " are people in a " + scope->name + ", but a " + subject->name +
                                                " isn't held within one");
@@ -1741,54 +1808,32 @@ namespace one::language {
 
         void verify(const std::string& ns, location where, const role_declaration& r) {
             snake(r.name, where);
+            if (r.per) {
+                error(r.per_where, "a role held in a " + *r.per + " is declared with define role, like define role " + r.name + " \"" +
+                                       std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(r.name[0])))) + r.name.substr(1) +
+                                       "\" in " + *r.per + " { ... }, and the language keeps it as role and member records");
+                return;
+            }
             for (const auto& p : r.permissions) verify_permission(ns, p, nullptr);
-            if (r.per) verify_role_within(ns, r);
         }
 
-        // role maintainer per project from member: a member grants it, by pointing at
-        // a project and a person and naming the role in its role field. Each
-        // permission it grants is on the project, on something that points at one,
-        // like an issue, or on something that points at that, like an issue's
-        // comment, so a command can tell which project to look in.
-        void verify_role_within(const std::string& ns, const role_declaration& r) {
-            const entity_declaration* scope = find_entity(ns, qualified_name{{*r.per}, r.per_where});
-            const entity_declaration* member = find_entity(ns, qualified_name{{*r.from}, r.per_where});
-            if (!scope) error(r.per_where, "role " + r.name + " is held within " + *r.per + ", which isn't an entity " + in_namespace(ns));
-            if (!member) error(r.per_where, "role " + r.name + " comes from " + *r.from + ", which isn't an entity " + in_namespace(ns));
-            if (!scope || !member) return;
-            bool place = false, person = false, named = false;
-            for (const auto& f : member->fields) {
-                if (f.required && pointed(ns, f) == scope) place = true;
-                if (f.required && f.type && f.type->text() == "user") person = true;
-                if (f.name == "role" && std::find(f.choices.begin(), f.choices.end(), r.name) != f.choices.end()) named = true;
-            }
-            if (!place) {
-                error(r.per_where, "role " + r.name + " comes from " + member->name + ", so " + member->name + " needs a required field " +
-                                       "pointing at " + scope->name + ", like " + scope->name + "  " + scope->name + "  required");
-            }
-            if (!person) {
-                error(r.per_where, "role " + r.name + " comes from " + member->name + ", so " + member->name + " needs a required field " +
-                                       "holding the person, like person  user  required");
-            }
-            if (!named) {
-                error(r.per_where, "role " + r.name + " comes from " + member->name + ", so " + member->name + " needs a field role " +
-                                       "with " + r.name + " among its choices, like role  enum " + r.name + " | reader");
-            }
-            for (const auto& p : r.permissions) {
-                if (p.parts.size() < 2) continue;
-                const entity_declaration* on = find_entity(ns, qualified_name{{p.parts.begin(), p.parts.end() - 1}, p.where});
-                if (!on || on == scope) continue;
-                auto points_at_scope = [&](const entity_declaration& e) {
-                    return std::any_of(e.fields.begin(), e.fields.end(), [&](const field& f) { return pointed(ns, f) == scope; });
-                };
-                bool points = points_at_scope(*on) || std::any_of(on->fields.begin(), on->fields.end(), [&](const field& f) {
-                                  const entity_declaration* through = pointed(ns, f);
-                                  return through && points_at_scope(*through);
-                              });
-                if (!points) {
-                    error(p.where, "role " + r.name + " is held within a " + scope->name + ", but " + on->name + " doesn't point at one, " +
-                                       "so there's no " + scope->name + " to look in for " + p.text());
-                }
+        // A role held in a project allows commands on what's in one: the project, what
+        // points at it, like an issue, or what points at that, like an issue's comment,
+        // so a command can tell which project to look in.
+        void within_scope(const std::string& ns, const entity_declaration& scope, const std::string& role, const qualified_name& p) {
+            if (p.parts.size() < 2) return;
+            const entity_declaration* on = find_entity(ns, qualified_name{{p.parts.begin(), p.parts.end() - 1}, p.where});
+            if (!on || on == &scope) return;
+            auto points_at_scope = [&](const entity_declaration& e) {
+                return std::any_of(e.fields.begin(), e.fields.end(), [&](const field& f) { return pointed(ns, f) == &scope; });
+            };
+            bool points = points_at_scope(*on) || std::any_of(on->fields.begin(), on->fields.end(), [&](const field& f) {
+                              const entity_declaration* through = pointed(ns, f);
+                              return through && points_at_scope(*through);
+                          });
+            if (!points) {
+                error(p.where, "role " + role + " is held in a " + scope.name + ", but " + on->name + " doesn't point at one, " +
+                                   "so there's no " + scope.name + " to look in for " + p.text());
             }
         }
 
