@@ -126,7 +126,7 @@ TEST_CASE("a project names its compiler's version as one, like one \"0.4.0\"") {
     language::diagnostics found;
     driver::check_sources(bad, found);
     REQUIRE(found.size() == 1);
-    CHECK(found[0].message == "one names the compiler's version, like one \"0.7.4\"");
+    CHECK(found[0].message == "one names the compiler's version, like one \"0.7.5\"");
 }
 
 TEST_CASE("each screen is outlined by line: its layout, its regions and their items") {
