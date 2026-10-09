@@ -353,7 +353,9 @@ function Shell({
       <HeadingSlot.Provider value={slot}>
         <CrumbsSlot.Provider value={trail}>
           <SubtitleSlot.Provider value={under}>
-            <Confirmations>{children}</Confirmations>
+            <SiteName.Provider value={name}>
+              <Confirmations>{children}</Confirmations>
+            </SiteName.Provider>
           </SubtitleSlot.Provider>
         </CrumbsSlot.Provider>
       </HeadingSlot.Provider>
@@ -371,6 +373,12 @@ export function Heading({ children }: { children: ReactNode }) {
 }
 
 const CrumbsSlot = createContext<HTMLElement | null>(null);
+// The site's name: a page titled with just that, as it's written rather than as it
+// reads, has no title of its own, so no place among the pages above another. A
+// project that happens to share the site's name keeps its place.
+const SiteName = createContext("");
+// Whether the page shown is titled with just the site's name.
+const Untitled = createContext(false);
 const SubtitleSlot = createContext<HTMLElement | null>(null);
 
 // A screen's words about itself, like a project's summary, under its title.
@@ -393,6 +401,8 @@ export function Crumbs({
   const link = useLinks();
   const params = useParams();
   const current = usePageTitle();
+  const name = useContext(SiteName);
+  const untitled = useContext(Untitled);
   const filled = (name: string, fill: Record<string, readonly [ViewState, string, number]> = {}) => {
     if (params[name] !== undefined) return params[name];
     const from = fill[name];
@@ -400,13 +410,16 @@ export function Crumbs({
     if (typeof id !== "string" || id === "") return undefined;
     return from[2] > 1 ? (partsOf(id, from[2])?.at(-1) ?? id) : id;
   };
-  const shown = items.map(({ to, title, fill }) => ({
+  const own = items.filter(({ title }) => !(title.length === 1 && title[0] === name));
+  const shown = own.map(({ to, title, fill }) => ({
     label: title.map((part) => (typeof part === "string" ? part : String(part[0].data?.[part[1]] ?? ""))).join("").trim() || "…",
     link: link(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
       const value = filled(name, fill);
       return value === undefined ? written : encodeURIComponent(value);
     })),
   }));
+  // A page with no title of its own shows no heading, and so no trail to it either.
+  if (untitled) return null;
   return slot ? createPortal(<ui.Crumbs items={shown} current={current} />, slot) : null;
 }
 
@@ -462,9 +475,11 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
         <ShownPath.Provider value={{ base, parts, open: shown }}>
         <Titling.Provider value={setTitled}>
           <Titled.Provider value={titled ?? Body.info.title}>
-            <Contained key={key}>
-              <Body />
-            </Contained>
+            <Untitled.Provider value={Body.info.title === name}>
+              <Contained key={key}>
+                <Body />
+              </Contained>
+            </Untitled.Provider>
           </Titled.Provider>
         </Titling.Provider>
         </ShownPath.Provider>

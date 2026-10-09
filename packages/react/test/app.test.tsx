@@ -3,8 +3,8 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
-import { App, Form, Link, Text, accentOf, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
-import type { Person } from "../src/index.js";
+import { App, Crumbs, Form, Link, Text, accentOf, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
+import type { Person, ViewState } from "../src/index.js";
 import { useConfirmContext } from "../src/app.js";
 import { withoutLicense } from "../src/components.js";
 import { plain } from "../src/plain.js";
@@ -49,6 +49,43 @@ describe("an app built from screens", () => {
   it("says so when nothing is at the address", () => {
     renderAt("/nowhere");
     expect(screen.getByText("There's nothing at this address.")).toBeTruthy();
+  });
+});
+
+describe("the pages above a page", () => {
+  // Like the studio's: an owner's page and a project's, titled only with the site's
+  // name, with a project's tab and an issue under them.
+  const owner = defineScreen({ title: "uione", route: "/:owner" }, () => <Text>An owner.</Text>);
+  const project = defineScreen({ title: "uione", route: "/:owner/:project" }, () => <Text>A project.</Text>);
+  const theme = defineScreen({ title: "uione", route: "/:owner/:project/theme" }, () => (
+    <Crumbs items={[{ to: "/:owner", title: ["uione"] }, { to: "/:owner/:project", title: ["uione"] }]} />
+  ));
+  const boards = defineScreen({ title: "Boards", route: "/:owner/:project/boards" }, () => <Text>Boards.</Text>);
+  const board = defineScreen({ title: "Main", route: "/:owner/:project/boards/main" }, () => (
+    <Crumbs items={[{ to: "/:owner", title: ["uione"] }, { to: "/:owner/:project", title: ["uione"] }, { to: "/:owner/:project/boards", title: ["Boards"] }]} />
+  ));
+  const at = (location: string) =>
+    render(<App name="uione" screens={[home, owner, project, theme, boards, board]} ui={plain} data={memorySource()} location={location} />);
+
+  it("leave out the pages with no title of their own, as their headings do", () => {
+    at("/da0x/neotrac/boards/main");
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(Array.from(trail.querySelectorAll("li")).map((li) => li.textContent?.replace("›", "").trim())).toEqual(["Boards", "Main"]);
+  });
+
+  it("keep a page whose title only reads like the site's name, like a project called uione", () => {
+    const named = { status: "live", data: { name: "uione" } } as ViewState;
+    const issue = defineScreen({ title: "Issue 12", route: "/:owner/:project/12" }, () => (
+      <Crumbs items={[{ to: "/:owner/:project", title: [[named, "name"]] }]} />
+    ));
+    render(<App name="uione" screens={[home, owner, project, issue]} ui={plain} data={memorySource()} location="/da0x/uione/12" />);
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(Array.from(trail.querySelectorAll("li")).map((li) => li.textContent?.trim())).toEqual(["uione", "Issue 12"]);
+  });
+
+  it("aren't shown on a page with no title of its own", () => {
+    at("/da0x/neotrac/theme");
+    expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
   });
 });
 
