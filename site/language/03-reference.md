@@ -95,6 +95,15 @@ Text written as it is, in double quotes: `"Shelf"`, `"that book is not on the
 shelf"`. In a screen's text, `{...}` shows a live value: `"{book_page.title}, by
 {book_page.author}"`. A backslash writes a quote or a backslash inside one: `\"`.
 
+A string ends on its own line. When it ends a line, the strings on the lines right
+after it that hold nothing else go on with it, joined by a space, so long words fit
+in a short line:
+
+```one
+text "Tell the project's maintainers about a problem privately."
+	"Only they and you can read it."
+```
+
 ## Numbers and operators
 
 Numbers are written as they are, `20` or `1.5`. Values are compared with `==`, `!=`,

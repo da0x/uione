@@ -88,6 +88,27 @@ TEST_CASE("an unclosed string is reported where it starts") {
     CHECK(out[0].message.find("never closed") != std::string::npos);
 }
 
+TEST_CASE("strings on the lines right after one, and nothing else, go on with it") {
+    diagnostics out;
+    auto tokens = lex("text \"Words that go\"\n\t\t\"on over lines,\"  // a note\n\t\t\"three of them.\"\nnext", out);
+    for (const auto& d : out) FAIL_CHECK(d.message);
+    REQUIRE(tokens.size() == 6);
+    CHECK(tokens[1].kind == k::string);
+    CHECK(tokens[1].text == "Words that go on over lines, three of them.");
+    CHECK(tokens[2].kind == k::newline);
+    CHECK(tokens[3].text == "next");
+}
+
+TEST_CASE("a string followed by more on its line, or a line with more than a string, stands alone") {
+    diagnostics out;
+    auto tokens = lex("a \"one\" b\n\"two\"\nc \"three\"\n\"four\" d", out);
+    CHECK(out.empty());
+    std::vector<std::string> strings;
+    for (const auto& t : tokens)
+        if (t.kind == k::string) strings.push_back(t.text);
+    CHECK(strings == std::vector<std::string>{"one", "two", "three", "four"});
+}
+
 TEST_CASE("a character that isn't part of the language is one error, then skipped") {
     diagnostics out;
     auto tokens = lex("a @ b", out);

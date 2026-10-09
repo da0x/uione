@@ -84,8 +84,12 @@ namespace one::language {
                 std::string_view text = source_.substr(at, end - at);
                 std::size_t first = text.find_first_not_of(" \t\r");
                 if (!in_comment && first != std::string_view::npos) {
-                    std::size_t space = text.substr(0, first).find(' ');
-                    if (space != std::string_view::npos) {
+                    std::string_view indent = text.substr(0, first);
+                    std::size_t space = indent.find(' ');
+                    // A string that goes on from the line above may line up under it
+                    // with spaces after the tabs, which looks the same at any width.
+                    bool aligned = text[first] == '"' && indent.find('\t', space) == std::string_view::npos;
+                    if (space != std::string_view::npos && !aligned) {
                         error({line, static_cast<int>(space) + 1},
                               "indent with tabs, not spaces: how wide a tab looks is up to whoever reads the file");
                     }
@@ -209,7 +213,20 @@ namespace one::language {
             return std::nullopt;
         }
 
+        // A string, and the strings on the lines right after it that hold nothing
+        // else, joined with a space, so words go on over lines:
+        //     text "The studio is where you describe a feature"
+        //          "in one short file."
         token string_literal(location where, std::size_t begin) {
+            std::string value = one_string(where);
+            while (continued()) {
+                while (current() != '"') step();
+                value += " " + one_string(here());
+            }
+            return make(token_kind::string, std::move(value), where, begin);
+        }
+
+        std::string one_string(location where) {
             step();
             std::string value;
             while (!done() && current() != '"' && current() != '\n') {
@@ -224,7 +241,28 @@ namespace one::language {
             } else {
                 error(where, "this string is never closed; end it with \" on the same line");
             }
-            return make(token_kind::string, std::move(value), where, begin);
+            return value;
+        }
+
+        // Whether the string just read ends its line, or only a note follows it, and
+        // the next line is only a string, which goes on with it.
+        bool continued() const {
+            auto blank = [&](std::size_t i) {
+                while (i < source_.size() && (source_[i] == ' ' || source_[i] == '\t' || source_[i] == '\r')) ++i;
+                return i;
+            };
+            std::size_t i = blank(pos_);
+            if (i + 1 < source_.size() && source_[i] == '/' && source_[i + 1] == '/')
+                while (i < source_.size() && source_[i] != '\n') ++i;
+            if (i >= source_.size() || source_[i] != '\n') return false;
+            i = blank(i + 1);
+            if (i >= source_.size() || source_[i] != '"') return false;
+            for (++i; i < source_.size() && source_[i] != '"' && source_[i] != '\n'; ++i) {
+                if (source_[i] == '\\' && i + 1 < source_.size() && (source_[i + 1] == '"' || source_[i + 1] == '\\')) ++i;
+            }
+            if (i >= source_.size() || source_[i] != '"') return false;
+            i = blank(i + 1);
+            return i >= source_.size() || source_[i] == '\n' || (source_[i] == '/' && i + 1 < source_.size() && source_[i + 1] == '/');
         }
 
         // A route starts with / and is followed by its path, a parameter like :page,

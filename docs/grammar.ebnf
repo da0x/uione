@@ -18,6 +18,8 @@
  *
  *   NAME     a word of letters, digits and _, starting with a letter or _
  *   STRING   text in double quotes, on one line, where \" and \\ stand for " and \
+ *            each string alone on the lines right after one that ends its line
+ *            goes on with it, joined by a space
  *   NUMBER   digits, with a fractional part if it has one: 14, 2.5
  *   WHOLE    digits alone, a number with no fractional part: 50
  *   ROUTE    a page's address: /, /shelf, /docs/:page, /code/:file*, whose last
