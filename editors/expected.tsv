@@ -218,7 +218,7 @@ compiler/library/one.one	settings project {	settings	declare
 compiler/library/one.one	settings project {	project	name
 compiler/library/one.one	one         version	one	variable
 compiler/library/one.one	signin      list of signin	list	type
-compiler/library/one.one	enum corners {	enum	declare
+compiler/library/one.one	enum appearance {	enum	declare
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	color	keyword
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	green	plain
 editors/fixtures/environments.one	footer columns {	footer	declare
@@ -227,3 +227,8 @@ editors/fixtures/environments.one	link build.release "uione {build.version}"	bui
 examples/tracker/main.one	webhook github /hooks/github as github {	as	keyword
 examples/tracker/main.one	define service github "GitHub" in project {	service	declare
 examples/tracker/main.one	define service github "GitHub" in project {	github	name
+editors/fixtures/theme.one	define theme sea "Sea" from harbor {	theme	declare
+editors/fixtures/theme.one	define theme sea "Sea" from harbor {	sea	name
+editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	#0b5cad	constant
+editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	dark	keyword
+editors/fixtures/theme.one	depth    flat	flat	keyword

@@ -76,6 +76,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`view`](#view) | a document built ahead of time for a screen |
 | [`role`](#role) | permissions a person can be given |
 | [`define role`](#define-role) | a role each project starts with, kept as records its people edit |
+| [`define theme`](#define-theme) | how a site looks: its colors, light and dark, fonts, corners and depth |
 | [`define service`](#define-service) | a system that runs commands, like GitHub, and the commands it may run |
 | [`function`](#function) | a value worked out from others |
 | [`screen`](#screen) | a page, at an address |
@@ -149,8 +150,8 @@ project block says it, at the top:
 import one
 
 project shop {
-	ui       radix
-	corners  square
+	ui     radix
+	theme  papercolor
 }
 ```
 
@@ -184,27 +185,28 @@ library's `settings project`, with its type:
 
 ```one
 namespace one {
-	enum corners {
-		square  "Square"
-		round   "Round"
+	enum appearance {
+		system  "As the system is"
+		light   "Light"
+		dark    "Dark"
 	}
 
 	settings project {
 		// Where it's served, like "neotrac.org".
-		domain   domain
+		domain      domain
 		// The ways people sign in, one to a line.
-		signin   list of signin
-		// How corners are drawn.
-		corners  corners
+		signin      list of signin
+		// Whether it opens light or dark, rather than as the visitor's system is.
+		appearance  appearance
 	}
 }
 ```
 
 The value is checked by its type. An enum setting takes one of its choices,
-written plainly, `corners square`, since the type says which enum it is; it can
-be written in full too, `corners one::corners::square`. A `domain` is a domain name,
+written plainly, `appearance light`, since the type says which enum it is; it can
+be written in full too, `appearance one::appearance::light`. A `domain` is a domain name,
 a `slug` lowercase letters, digits and dashes, a `version` like "0.7.2", a
-`color` #rrggbb, a `file` and a `folder` are next to the project's `.one` files,
+`theme` one that's declared, a `file` and a `folder` are next to the project's `.one` files,
 an `address` is one of the site's own, starting with /, and a `link` is an https
 address. A setting whose
 type is another `settings`, like `redirect`, takes its fields in
@@ -236,15 +238,11 @@ as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redir
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
 
-`color "#0f766e"` is the site's own color, for its buttons, links and focus rings, in
-place of the component set's, a lighter one of it on a dark page. It's written
-#rrggbb, and dark enough to read as a link on a white page.
-
-`theme papercolor` gives the site the component set's PaperColor colors, light and
-dark: a warm gray page with graphite text, and panels that sit flat on it. A
-`color` given as well is still its color for buttons and links. `corners square`
-squares the corners of panels, buttons and labels, for a sharper look; they're
-round unless it says. A person's picture stays a circle either way.
+`theme papercolor` gives the site a [theme](#define-theme): its colors, light and
+dark, its fonts, its corners and its depth. It's uione's own `harbor` unless it
+says, and uione's `papercolor` is a warm gray page with graphite text, and panels
+that sit flat on it. A site's own theme is declared beside it, and usually starts
+from one of these.
 
 `appearance light` opens the site light, whatever the visitor's system prefers, and
 `appearance dark` opens it dark; without it, or with `appearance system`, it
@@ -802,6 +800,50 @@ entity member {
 - A form for a role ticks the commands it allows; a form for a member picks its
   role from a list of the project's roles that a view on the screen holds, like
   `roles = each role in project { name  title }`.
+
+## define theme
+
+How a site looks: a color for what each is for, light and dark, its fonts, its
+corners and its depth. Everything else it's drawn with is worked out from these:
+text on a button, hover, the soft color behind a chosen row, the edge of a field,
+grid lines, the tints of how urgent something is, and shadows. So a theme stays
+short, and nothing in it can drift from the rest.
+
+```one
+define theme sea "Sea" from harbor {
+	page     #f7fafc  dark #0b1220
+	accent   #0b5cad  dark #8cc4ff
+	text     "Inter"
+	heading  "Fraunces"
+	code     "IBM Plex Mono"  ground #f4f7fb  dark #0d1524
+	corners  4
+	depth    flat
+}
+
+project shop {
+	theme  sea
+}
+```
+
+- The colors are for `page`, `surface` (a panel on the page), `sunken` (a well in
+  one, like a table's head), `ink` (text), `muted` (quieter text), `line`
+  (borders), `accent` (links and buttons), `danger`, `success` and `warning`, each
+  `#rrggbb`, with its color when dark after `dark`.
+- `from harbor` starts from another theme, uione's own or the project's, and
+  changes only what it says. A theme that starts from none says every color.
+- `text`, `heading` and `code` are fonts, from Google Fonts unless they're the IBM
+  Plex the component set brings. Headings are in the text's font unless it says.
+  `ground` is the background code sits on, light and dark, in place of a code
+  theme's own.
+- `corners` is how round, in pixels, 0 for square; `depth` is `flat`, panels flat
+  on the page, or `raised`, with a shadow.
+- Text has to read on what it sits on, 4.5:1 as WCAG asks, light and dark: ink,
+  muted and the accent on the page and on panels, and danger, success and warning
+  on panels. A color that doesn't is a mistake, and its fix is the nearest color
+  that does, its hue kept and only its lightness moved. So is an accent no text
+  reads on, white or the page's own.
+- A section's color, like `color violet`, is drawn in the shades of uione's theme
+  a site's theme starts from.
 
 ## define service
 

@@ -5,6 +5,7 @@
 
 import { createRoot } from "react-dom/client";
 import "@uione/radix/styles.css";
+import "./theme.css";
 import Site from "./app";
 
 createRoot(document.getElementById("root")!).render(<Site />);

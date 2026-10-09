@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cctype>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -165,6 +166,20 @@ namespace one::language {
             }
             if (c == '"') return string_literal(where, begin);
             if (c == '/') return route(where, begin);
+            // #2457d6: six hex digits and nothing more of a name is a color; anything
+            // else after # is an anchor, like #waitlist.
+            if (c == '#') {
+                auto hex = [](char h) { return (h >= '0' && h <= '9') || (h >= 'a' && h <= 'f') || (h >= 'A' && h <= 'F'); };
+                std::size_t end = pos_ + 1;
+                while (end < source_.size() && hex(source_[end])) ++end;
+                bool more = end < source_.size() && (is_letter(source_[end]) || is_digit(source_[end]) || source_[end] == '-');
+                if (end - pos_ == 7 && !more) {
+                    while (pos_ < end) step();
+                    std::string text(source_.substr(begin, end - begin));
+                    for (auto& ch : text) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                    return make(token_kind::color, std::move(text), where, begin);
+                }
+            }
             if (c == '#' && is_letter(following())) {
                 step();
                 std::size_t name = pos_;

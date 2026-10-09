@@ -109,62 +109,6 @@
   --shadow-raised: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
-/*
- * PaperColor, the palette of the editor theme: a warm gray page, like paper, with
- * graphite text and its navy for what's pressed; dark, near black with soft blues.
- * Panels sit flat on the page. Text is a shade darker than the editor's, so a page
- * of it reads as easily as code does.
- */
-:root[data-palette="papercolor"] {
-  --color-page: #eeeeee;
-  --color-ink: #262626;
-  --color-muted: #4e4e4e;
-  --color-line: #d0d0d0;
-  --color-control-line: #878787;
-  --color-surface: #f7f7f7;
-  --color-sunken: #e4e4e4;
-  --color-accent: #005faf;
-  --color-accent-hover: #004b8c;
-  --color-accent-ink: #ffffff;
-  --color-accent-soft: #dbe6f5;
-  --color-danger: #af0000;
-  --color-grid: rgba(0, 95, 135, 0.07);
-  --shadow-panel: none;
-}
-@media (prefers-color-scheme: dark) {
-  :root[data-palette="papercolor"]:not([data-theme="light"]) {
-    --color-page: #1c1c1c;
-    --color-ink: #e4e4e4;
-    --color-muted: #b2b2b2;
-    --color-line: #3a3a3a;
-    --color-control-line: #626262;
-    --color-surface: #262626;
-    --color-sunken: #161616;
-    --color-accent: #5fafd7;
-    --color-accent-hover: #87d7ff;
-    --color-accent-ink: #1c1c1c;
-    --color-accent-soft: #1f3540;
-    --color-danger: #ff5f87;
-    --color-grid: rgba(95, 175, 215, 0.06);
-    --shadow-panel: none;
-  }
-}
-:root[data-palette="papercolor"][data-theme="dark"] {
-  --color-page: #1c1c1c;
-  --color-ink: #e4e4e4;
-  --color-muted: #b2b2b2;
-  --color-line: #3a3a3a;
-  --color-control-line: #626262;
-  --color-surface: #262626;
-  --color-sunken: #161616;
-  --color-accent: #5fafd7;
-  --color-accent-hover: #87d7ff;
-  --color-accent-ink: #1c1c1c;
-  --color-accent-soft: #1f3540;
-  --color-danger: #ff5f87;
-  --color-grid: rgba(95, 175, 215, 0.06);
-  --shadow-panel: none;
-}
 
 /*
  * The colors a section or a filter is drawn in, section "Wiki" color violet: each a
@@ -338,6 +282,10 @@
 }
 
 @layer base {
+  /* Headings in the theme's heading font, its text font unless it says. */
+  h1, h2, h3, h4 {
+    font-family: var(--font-heading, var(--font-sans));
+  }
   html {
     background: var(--color-page);
     color: var(--color-ink);

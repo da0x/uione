@@ -27,10 +27,12 @@ TEST_CASE("a project's block offers its settings, each with its type and what it
     std::string text = "import one\n\nproject shop {\n\tui  radix\n\tco\n";
     auto c = driver::complete(text, 5, 4);
     CHECK(c.from == 2);
-    auto corners = item(c, "corners");
-    REQUIRE(corners);
-    CHECK(corners->detail == "corners");
-    CHECK(corners->info == "How corners are drawn.");
+    std::string started = "import one\n\nproject shop {\n\tui  radix\n\tap\n";
+    auto offered = driver::complete(started, 5, 4);
+    auto appearance = item(offered, "appearance");
+    REQUIRE(appearance);
+    CHECK(appearance->detail == "appearance");
+    CHECK(appearance->info == "Whether it opens light or dark, rather than as the visitor's system is.");
     REQUIRE(item(c, "signin"));
     CHECK(item(c, "signin")->detail == "list of signin");
     CHECK(item(c, "environment"));
@@ -38,12 +40,12 @@ TEST_CASE("a project's block offers its settings, each with its type and what it
 }
 
 TEST_CASE("after an enum setting's name, its choices, each as it's shown") {
-    std::string text = "import one\nproject shop {\n\tcorners  sq\n}\n";
-    auto c = driver::complete(text, 3, 13);
-    CHECK(c.from == 11);
-    REQUIRE(c.items.size() == 2);
-    CHECK(c.items[0].label == "square");
-    CHECK(c.items[0].detail == "Square");
+    std::string text = "import one\nproject shop {\n\tappearance  li\n}\n";
+    auto c = driver::complete(text, 3, 16);
+    CHECK(c.from == 14);
+    REQUIRE(c.items.size() == 3);
+    CHECK(c.items[1].label == "light");
+    CHECK(c.items[1].detail == "Light");
     auto qualified = driver::complete("project shop {\n\tsignin  one::signin::\n", 2, 23);
     CHECK(qualified.from == 23);
     CHECK(item(qualified, "github"));

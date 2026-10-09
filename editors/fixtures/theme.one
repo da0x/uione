@@ -1,0 +1,15 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A theme of a site's own, for the highlighting test: its colors are constants, and
+// dark, ground and depth are the language's words.
+
+import one
+
+define theme sea "Sea" from harbor {
+	accent   #0b5cad  dark #8cc4ff
+	text     "Inter"
+	code     "IBM Plex Mono"  ground #f4f7fb  dark #0d1524
+	corners  4
+	depth    flat
+}

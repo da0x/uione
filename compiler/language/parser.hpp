@@ -237,6 +237,11 @@ namespace one::language {
             if (word == "view") return {where, parse_view()};
             if (word == "role") return {where, parse_role()};
             if (word == "roles") return {where, parse_roles()};
+            if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "theme") {
+                advance();
+                advance();
+                return {where, parse_theme()};
+            }
             if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "service") {
                 advance();
                 advance();
@@ -296,7 +301,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, define role, define service, function, screen, picker, webhook, backend, header, footer or once");
+                        "format, enum, entity, command, view, define role, define service, define theme, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -751,6 +756,60 @@ namespace one::language {
             return role;
         }
 
+        // define theme harbor "Harbor" from papercolor { ... }, one thing a line.
+        theme_declaration parse_theme() {
+            theme_declaration theme;
+            theme.where = peek().where;
+            theme.name = expect(token_kind::identifier, "the theme's name, like harbor").text;
+            theme.title = expect(token_kind::string, "how it's shown, like \"Harbor\"").text;
+            if (at_word("from")) {
+                advance();
+                theme.from_where = peek().where;
+                theme.from = expect(token_kind::identifier, "the theme it starts from, like papercolor").text;
+            }
+            expect(token_kind::left_brace, "'{'");
+            // #f7f8fa, and dark #0a101c when there is one.
+            auto colors = [&](theme_color& c) {
+                c.light_where = peek().where;
+                c.light = expect(token_kind::color, "a color, like #2457d6").text;
+                if (at_word("dark")) {
+                    advance();
+                    c.dark_where = peek().where;
+                    c.dark = expect(token_kind::color, "its color when dark, like dark #7ea6ff").text;
+                }
+            };
+            while (in_block()) {
+                const token& word = peek();
+                if (!at(token_kind::identifier)) fail_expecting("a color's role, a font, corners or depth");
+                advance();
+                if (word.text == "text" || word.text == "heading" || word.text == "code") {
+                    std::string font = expect(token_kind::string, "a font, like \"IBM Plex Sans\"").text;
+                    (word.text == "text" ? theme.text : word.text == "heading" ? theme.heading : theme.code) = font;
+                    if (word.text == "code" && at_word("ground")) {
+                        advance();
+                        theme_color ground{"ground", word.where, "", "", {}, {}};
+                        colors(ground);
+                        theme.ground = ground;
+                    }
+                } else if (word.text == "corners") {
+                    theme.corners_where = peek().where;
+                    const token& n = expect(token_kind::number, "how round corners are, in pixels, like corners 8, or 0 for square");
+                    theme.corners = std::atoi(n.text.c_str());
+                } else if (word.text == "depth") {
+                    theme.depth_where = peek().where;
+                    theme.depth = expect(token_kind::identifier, "flat or raised").text;
+                } else {
+                    theme_color c{word.text, word.where, "", "", {}, {}};
+                    colors(c);
+                    theme.colors.push_back(std::move(c));
+                }
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return theme;
+        }
+
         roles_declaration parse_roles() {
             advance();
             roles_declaration roles;
@@ -881,7 +940,9 @@ namespace one::language {
                 block.type = peek().text == "hero" ? content_block::kind::hero : content_block::kind::section;
                 advance();
                 block.title = expect(token_kind::string, "a title").text;
+                // An anchor that happens to be six hex digits, like #facade, lexes as a color.
                 if (at(token_kind::anchor)) block.anchor = advance().text;
+                else if (at(token_kind::color)) block.anchor = advance().text.substr(1);
                 if (at_word("color")) {
                     advance();
                     block.hue_where = peek().where;
@@ -922,6 +983,8 @@ namespace one::language {
                     link.target = advance().text;
                 } else if (at(token_kind::anchor)) {
                     link.target = "#" + advance().text;
+                } else if (at(token_kind::color)) {
+                    link.target = advance().text;
                 } else if (at_word("namespace")) {
                     advance();
                     link.namespace_name = parse_qualified_name("the namespace the link opens, like namespace projects");

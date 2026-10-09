@@ -15,6 +15,7 @@ namespace one::language {
         number,
         route,          // /shelf, /docs/:page, or just /
         anchor,         // #waitlist, stored without the #
+        color,          // #2457d6, a color as six hex digits, stored with the #
         left_brace,
         right_brace,
         left_paren,
@@ -65,6 +66,7 @@ namespace one::language {
             case token_kind::number:        return "a number";
             case token_kind::route:         return "a route";
             case token_kind::anchor:        return "an anchor";
+            case token_kind::color:         return "a color";
             case token_kind::left_brace:    return "'{'";
             case token_kind::right_brace:   return "'}'";
             case token_kind::left_paren:    return "'('";

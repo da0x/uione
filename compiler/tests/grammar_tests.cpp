@@ -144,7 +144,7 @@ namespace {
 
         bool punctuation(const language::token& t) const {
             return t.kind != token_kind::string && t.kind != token_kind::number && t.kind != token_kind::route &&
-                   t.kind != token_kind::anchor && t.kind != token_kind::newline && t.kind != token_kind::end_of_file;
+                   t.kind != token_kind::anchor && t.kind != token_kind::color && t.kind != token_kind::newline && t.kind != token_kind::end_of_file;
         }
 
         // Every place in the tokens where `n` can end, starting at `at`.
@@ -164,7 +164,7 @@ namespace {
                     if ((p == "NAME" && t.kind == token_kind::identifier) || (p == "STRING" && t.kind == token_kind::string) ||
                         (p == "NUMBER" && t.kind == token_kind::number) || (p == "ROUTE" && t.kind == token_kind::route) ||
                         (p == "WHOLE" && t.kind == token_kind::number && t.text.find('.') == std::string::npos) ||
-                        (p == "ANCHOR" && t.kind == token_kind::anchor) || (p == "NEWLINE" && t.kind == token_kind::newline) ||
+                        (p == "ANCHOR" && t.kind == token_kind::anchor) || (p == "COLOR" && t.kind == token_kind::color) || (p == "NEWLINE" && t.kind == token_kind::newline) ||
                         (p == "EOF" && t.kind == token_kind::end_of_file)) {
                         add(at + 1);
                     } else if (p == "END") {
@@ -288,7 +288,7 @@ namespace {
                 case node::kind::piece: {
                     static const std::map<std::string, std::vector<std::string>> samples{
                         {"NAME", {"alpha", "beta", "gamma", "delta_one"}}, {"STRING", {"\"words\"", "\"two words\""}},
-                        {"NUMBER", {"42", "2.5"}}, {"WHOLE", {"20", "50"}}, {"ROUTE", {"/", "/shelf", "/docs/:page"}}, {"ANCHOR", {"#top"}},
+                        {"NUMBER", {"42", "2.5"}}, {"WHOLE", {"20", "50"}}, {"ROUTE", {"/", "/shelf", "/docs/:page"}}, {"ANCHOR", {"#top"}}, {"COLOR", {"#2457d6"}},
                         {"PATTERN", {"AAA-9999"}}, {"NEWLINE", {"\n"}}, {"END", {"\n"}}, {"EOF", {""}}};
                     const auto& choices = samples.at(n.text);
                     out.push_back(choices[static_cast<std::size_t>(below(static_cast<int>(choices.size())))]);

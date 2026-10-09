@@ -372,6 +372,32 @@ namespace one::language {
         bool defined = false;  // made from define role, with the role and member the language declares
     };
 
+    // page  #f7f8fa  dark #0a101c: a color a theme gives one of its roles, light and dark.
+    struct theme_color {
+        std::string role;
+        location where;
+        std::string light, dark;
+        location light_where, dark_where;
+    };
+
+    // define theme harbor "Harbor" { page #f7f8fa dark #0a101c ... }: how a site
+    // looks, said as colors for what each is for, light and dark, its fonts, its
+    // corners and its depth. Everything else it's drawn with is worked out from these.
+    struct theme_declaration {
+        std::string name;
+        location where;
+        std::string title;
+        std::string from;  // a theme this one starts from, changing what it says
+        location from_where;
+        std::vector<theme_color> colors;
+        std::optional<std::string> text, heading, code;  // fonts
+        std::optional<theme_color> ground;              // the code editor's background
+        std::optional<int> corners;
+        location corners_where;
+        std::optional<std::string> depth;               // flat or raised
+        location depth_where;
+    };
+
     // define service github "GitHub" in project { mention::create }: a system that
     // runs commands, not a person, and the commands it may run, one a line. A webhook
     // runs as one. No person may run a command only services allow.
@@ -757,7 +783,7 @@ namespace one::language {
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
-                     define_service_declaration>
+                     define_service_declaration, theme_declaration>
             node;
     };
 

@@ -248,13 +248,13 @@ describe("themes", () => {
     expect(themesOf("Monokai", "GitHub Light")).toEqual({ light: lightThemes[0], dark: darkThemes[0] });
   });
 
-  it("gives the editor its themes' own backgrounds", async () => {
+  it("gives the editor its themes' own backgrounds, or the site's ground for code when its theme gives one", async () => {
     const checker = { check: async () => ({ problems: [] }) } as unknown as Pick<Compiler, "check">;
     const text = "entity book {\n}\n";
     const { container } = render(<Editor path="main.one" value={text} onChange={() => {}} files={{ "main.one": text }} compiler={checker} themes={{ dark: "Dracula" }} />);
     await waitFor(() => expect(container.querySelector(".cm-editor.uione-themed")).not.toBeNull());
     const style = (container.querySelector(".cm-editor")!.getAttribute("style") ?? "").replace(/\s/g, "").toLowerCase();
-    expect(style).toContain("--one-bg-dark:#282a36");
+    expect(style).toContain("--one-bg-dark:var(--uione-code-ground,#282a36)");
   });
 
   it("offers only the themes for the page as it is, and keeps the other page's choice", async () => {

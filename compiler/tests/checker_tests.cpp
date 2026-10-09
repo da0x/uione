@@ -203,7 +203,7 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 
 TEST_CASE("one project block, with known settings") {
     CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, color, theme, appearance, corners, layout, serve, redirect or analytics");
+          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, icon, theme, appearance, layout, serve, redirect or analytics");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
@@ -498,11 +498,6 @@ view crew_page per crew {
           "and the language keeps them as role and member records");
 }
 
-TEST_CASE("a theme and corners are ones the component set has") {
-    CHECK(only_error("import one\nproject p {\n\ttheme  solarized\n}\n").message == "theme is papercolor, written plainly, like theme papercolor");
-    CHECK(only_error("import one\nproject p {\n\tcorners  sharp\n}\n").message == "corners is square or round, written plainly, like corners square");
-    CHECK(check_source("import one\nproject p {\n\ttheme  papercolor\n\tcorners  square\n}\n").size() == 0);
-}
 
 TEST_CASE("an enum declared on its own gives any field of its type its choices, named with the enum") {
     const std::string project = R"(
@@ -1147,11 +1142,39 @@ TEST_CASE("a table's tabs are by a choice it shows") {
           "a table's tabs are by a field with choices, like status, and title isn't one");
 }
 
-TEST_CASE("a project's color is dark enough to read on a white page") {
-    CHECK(check_source("import one\nproject p {\n\tcolor  \"#0f766e\"\n}\n").empty());
-    CHECK(only_error("import one\nproject p {\n\tcolor  \"teal\"\n}\n").message == "color is written #rrggbb, like color \"#0f766e\"");
-    CHECK(only_error("import one\nproject p {\n\tcolor  \"#fde047\"\n}\n").message ==
-          "color #fde047 is too light to read as a link on a white page (1.3:1, and it needs 4.5:1); choose a darker one");
+TEST_CASE("a theme gives each role a color, light and dark, and its text reads on what it sits on") {
+    const std::string start = "import one\n";
+    // Starting from harbor, a theme changes only what it says.
+    CHECK(check_source(start + "define theme sea \"Sea\" from harbor {\n\taccent  #0b5cad  dark #8cc4ff\n\tcorners  4\n}\nproject p {\n\ttheme  sea\n}\n").empty());
+    // Text that doesn't read is fixed to the nearest color that does, only its lightness moved.
+    auto light = check_source(start + "define theme sea \"Sea\" from harbor {\n\taccent  #2383e2  dark #8cc4ff\n}\n");
+    REQUIRE(light.size() >= 1);
+    auto e = light[0];
+    CHECK(e.message == "accent #2383e2 on page #f7f8fa is 3.65:1, and text needs 4.5:1; #0673d1 is the nearest that reads (4.51:1)");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text == "#0673d1");
+    CHECK(e.fix->length == 7);
+    // Every role, with what it's from, light and dark.
+    e = only_error(start + "define theme bare \"Bare\" {\n\tpage  #ffffff  dark #000000\n}\n");
+    CHECK(e.message.starts_with("theme bare has no color for surface, sunken, ink"));
+    e = only_error(start + "define theme sea \"Sea\" from harbor {\n\taccent  #0b5cad\n}\n");
+    CHECK(e.message == "accent has a color when dark too, like accent  #0b5cad  dark #...");
+    e = only_error(start + "define theme sea \"Sea\" from harbr {\n}\n");
+    CHECK(e.message == "there's no theme harbr to start from");
+    e = only_error(start + "define theme sea \"Sea\" from harbor {\n\tbackground  #ffffff  dark #000000\n}\n");
+    CHECK(e.message.starts_with("a theme's colors are page, surface"));
+    e = only_error(start + "define theme sea \"Sea\" from harbor {\n\ttext  \"Inter\\\" onload\"\n}\n");
+    CHECK(e.message.starts_with("a font is named by its letters, digits and spaces"));
+    // A project's theme is one that's declared.
+    CHECK(only_error(start + "project p {\n\ttheme  solarized\n}\n").message.starts_with("there's no theme solarized"));
+    CHECK(check_source(start + "project p {\n\ttheme  papercolor\n}\n").empty());
+}
+
+TEST_CASE("a site's corners and color are its theme's, which they were settings for a while") {
+    auto e = only_error("import one\nproject p {\n\ttheme  papercolor\n\tcorners  square\n}\n");
+    CHECK(e.message == "the site's corners are its theme's: define theme mine \"Mine\" from papercolor { corners 0 }, and theme mine");
+    e = only_error("import one\nproject p {\n\tcolor  \"#0f766e\"\n}\n");
+    CHECK(e.message == "the site's color are its theme's: define theme mine \"Mine\" from harbor { accent #0f766e dark ... }, and theme mine");
 }
 
 TEST_CASE("details show values the view has") {

@@ -121,7 +121,9 @@ function surface(themes: Themes): Extension {
   const dark = colors(themes.dark, "var(--uione-surface)", "var(--uione-ink)");
   return EditorView.editorAttributes.of({
     class: "uione-themed",
-    style: `--one-bg:${light.bg};--one-fg:${light.fg};--one-bg-dark:${dark.bg};--one-fg-dark:${dark.fg}`,
+    // A site's theme can give code a ground of its own, light and dark, which a theme
+    // with a background of its own sits on instead.
+    style: `--one-bg:var(--uione-code-ground, ${light.bg});--one-fg:${light.fg};--one-bg-dark:var(--uione-code-ground, ${dark.bg});--one-fg-dark:${dark.fg}`,
   });
 }
 

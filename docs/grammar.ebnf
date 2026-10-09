@@ -21,6 +21,7 @@
  *            each string alone on the lines right after one that ends its line
  *            goes on with it, joined by a space
  *   NUMBER   digits, with a fractional part if it has one: 14, 2.5
+ *   COLOR    # and six hex digits: #2457d6
  *   WHOLE    digits alone, a number with no fractional part: 50
  *   ROUTE    a page's address: /, /shelf, /docs/:page, /code/:file*, whose last
  *            parameter may end in * to take the rest of the address
@@ -43,7 +44,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme
                  | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
@@ -155,6 +156,14 @@ role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? 
  * records, given to people by member records, with the commands it allows, one
  * a line. */
 define_role    ::= "define" "role" NAME STRING "in" NAME "{" NEWLINE? (qualified END)* "}" END
+/* define theme: how a site looks, as a color for each role, light and dark, its
+ * fonts, corners and depth; from another, it changes only what it says. */
+define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END
+theme_line     ::= ( NAME COLOR ("dark" COLOR)?
+                   | ("text" | "heading") STRING
+                   | "code" STRING ("ground" COLOR ("dark" COLOR)?)?
+                   | "corners" WHOLE
+                   | "depth" ("flat" | "raised") ) END
 /* define service: a system that runs commands, not a person, like GitHub telling
  * each project about commits; a webhook runs as one. */
 define_service ::= "define" "service" NAME STRING ("in" NAME)? "{" NEWLINE? (qualified END)* "}" END

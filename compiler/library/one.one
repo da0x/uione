@@ -19,10 +19,41 @@ namespace one {
 		microsoft  "Microsoft"
 	}
 
-	// The site's colors, light and dark, as a theme of its component set's; left out,
-	// the component set's own.
-	enum theme {
-		papercolor  "PaperColor"
+	// The site's look unless it says: a cool, exact palette, pages a breath off
+	// white, panels white, a deep blue-black for text and one blue accent. Dark is
+	// navy-black, not gray.
+	define theme harbor "Harbor" {
+		page     #f7f8fa  dark #0a101c
+		surface  #ffffff  dark #111a2b
+		sunken   #eef1f5  dark #0d1524
+		ink      #0e1726  dark #e6ebf3
+		muted    #5b6577  dark #94a0b4
+		line     #dde2ea  dark #1f2a3d
+		accent   #2457d6  dark #7ea6ff
+		danger   #c2312d  dark #ff7b72
+		success  #1a7f37  dark #3fb950
+		warning  #9a6700  dark #d29922
+		text     "IBM Plex Sans"
+		code     "IBM Plex Mono"
+		corners  10
+		depth    raised
+	}
+
+	// PaperColor, the palette of the editor theme: a warm gray page, like paper, with
+	// graphite text and its navy for what's pressed; dark, near black with soft blues.
+	// Panels sit flat on the page.
+	define theme papercolor "PaperColor" from harbor {
+		page     #eeeeee  dark #1c1c1c
+		surface  #f7f7f7  dark #262626
+		sunken   #e4e4e4  dark #161616
+		ink      #262626  dark #e4e4e4
+		muted    #4e4e4e  dark #b2b2b2
+		line     #d0d0d0  dark #3a3a3a
+		accent   #005faf  dark #5fafd7
+		danger   #af0000  dark #ff5f87
+		success  #005f00  dark #5faf00
+		warning  #875f00  dark #d7af5f
+		depth    flat
 	}
 
 	// Whether a site opens light or dark: as the visitor's system is, unless it says.
@@ -31,13 +62,6 @@ namespace one {
 		system  "As the system is"
 		light   "Light"
 		dark    "Dark"
-	}
-
-	// How corners are drawn: square for a sharper look, or round, as they are unless
-	// it says.
-	enum corners {
-		square  "Square"
-		round   "Round"
 	}
 
 	// How screens are laid out unless one says: in one column, or in a wide main one
@@ -83,15 +107,10 @@ namespace one {
 		signin      list of signin
 		// The site's icon: an SVG file beside the project's .one files.
 		icon        file
-		// The site's own color for its buttons and links, as "#rrggbb", dark enough to
-		// read on a white page.
-		color       color
-		// The site's colors, light and dark.
+		// How the site looks: a theme of its own, or uione's, like papercolor.
 		theme       theme
 		// Whether it opens light or dark, rather than as the visitor's system is.
 		appearance  appearance
-		// How corners are drawn.
-		corners     corners
 		// How screens are laid out unless one says.
 		layout      layout
 		// A folder of files served as they are, at the site's root.

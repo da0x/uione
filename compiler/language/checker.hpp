@@ -31,6 +31,7 @@
 
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
+#include "language/colors.hpp"
 #include "language/library.hpp"
 #include "language/lower.hpp"
 #include "language/parser.hpp"
@@ -140,6 +141,7 @@ namespace one::language {
             std::vector<const roles_declaration*> defined;  // roles each project defines for itself
             std::map<const roles_declaration*, origin> defined_at;  // and the file each is in
             std::map<std::string, declared<define_service_declaration>> services;  // systems that run commands, by name
+            std::map<std::string, declared<theme_declaration>> themes;  // how a site may look, by name
             std::map<std::string, origin> role_names;  // so a role is declared once
             std::map<std::string, const settings_declaration*, std::less<>> settings;  // what a block of settings may say, in a library
         };
@@ -279,6 +281,8 @@ namespace one::language {
                     add(here.views, v->name, *v, d.where, "view", ns);
                 } else if (auto* f = std::get_if<format_declaration>(&d.node)) {
                     add(here.formats, f->name, *f, d.where, "format", ns);
+                } else if (auto* th = std::get_if<theme_declaration>(&d.node)) {
+                    add(here.themes, th->name, *th, d.where, "theme", ns);
                 } else if (auto* sv = std::get_if<define_service_declaration>(&d.node)) {
                     add(here.services, sv->name, *sv, d.where, "service", ns);
                 } else if (auto* rs = std::get_if<roles_declaration>(&d.node)) {
@@ -511,6 +515,130 @@ namespace one::language {
         // pointing at the project, a name and a title among its keys and fields, and
         // a list of the commands it allows; member points at a project, a person and
         // a role. Each role a project starts with allows commands there are.
+        // A theme, with what it starts from: each color, font, corners and depth, and
+        // the theme that says it.
+        struct resolved_theme {
+            std::map<std::string, std::pair<const theme_color*, const theme_declaration*>> colors;
+            std::optional<std::string> text, code;
+            std::optional<int> corners;
+            std::optional<std::string> depth;
+        };
+
+        const theme_declaration* find_theme(const std::string& name) const {
+            for (const auto& [ns, sc] : scopes_) {
+                if (auto it = sc.themes.find(name); it != sc.themes.end()) return it->second.node;
+            }
+            return nullptr;
+        }
+
+        // What a theme says, over what the one it's from says, all the way down.
+        std::optional<resolved_theme> resolve_theme(const theme_declaration& t) const {
+            std::vector<const theme_declaration*> chain{&t};
+            while (!chain.back()->from.empty()) {
+                const theme_declaration* from = find_theme(chain.back()->from);
+                if (!from || std::find(chain.begin(), chain.end(), from) != chain.end()) return std::nullopt;
+                chain.push_back(from);
+            }
+            resolved_theme r;
+            for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+                for (const auto& c : (*it)->colors) r.colors[c.role] = {&c, *it};
+                if ((*it)->text) r.text = (*it)->text;
+                if ((*it)->code) r.code = (*it)->code;
+                if ((*it)->corners) r.corners = (*it)->corners;
+                if ((*it)->depth) r.depth = (*it)->depth;
+            }
+            return r;
+        }
+
+        static const std::vector<std::string>& theme_roles() {
+            static const std::vector<std::string> roles{"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"};
+            return roles;
+        }
+
+        // define theme harbor "Harbor" { ... }: each color is for one of the roles, light
+        // and dark; with what it's from, it has them all; and text reads on what it sits
+        // on, 4.5:1 as WCAG asks, or the nearest color that does is its fix.
+        void verify(const std::string&, location, const theme_declaration& t) {
+            snake(t.name, t.where);
+            std::set<std::string> seen;
+            for (const auto& c : t.colors) {
+                const auto& roles = theme_roles();
+                if (std::find(roles.begin(), roles.end(), c.role) == roles.end()) {
+                    error(c.where, "a theme's colors are page, surface, sunken, ink, muted, line, accent, danger, success and warning, not " + c.role +
+                                       nearest(c.role, roles));
+                    continue;
+                }
+                if (!seen.insert(c.role).second) error(c.where, c.role + " is given twice");
+            }
+            if (t.corners && (*t.corners < 0 || *t.corners > 32)) error(t.corners_where, "corners are 0, square, to 32 pixels round");
+            // A font's name goes into the page as it is, so it's only letters, digits and spaces.
+            for (const auto* font : {&t.text, &t.heading, &t.code}) {
+                if (*font && (font->value().empty() || font->value().find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ") != std::string::npos)) {
+                    error(t.where, "a font is named by its letters, digits and spaces, like \"IBM Plex Sans\", not \"" + font->value() + "\"");
+                }
+            }
+            if (t.depth && *t.depth != "flat" && *t.depth != "raised") error(t.depth_where, "depth is flat or raised");
+            if (!t.from.empty() && !find_theme(t.from)) {
+                error(t.from_where, "there's no theme " + t.from + " to start from");
+                return;
+            }
+            auto r = resolve_theme(t);
+            if (!r) {
+                error(t.from_where, "theme " + t.name + " starts from itself, through the themes it's from");
+                return;
+            }
+            std::vector<std::string> missing;
+            for (const auto& role : theme_roles()) {
+                auto it = r->colors.find(role);
+                if (it == r->colors.end()) missing.push_back(role);
+                else if (it->second.first->dark.empty() && it->second.second == &t) error(it->second.first->where, role + " has a color when dark too, like " + role + "  " +
+                                                                                                                      it->second.first->light + "  dark #...");
+            }
+            if (!missing.empty()) {
+                std::string names;
+                for (std::size_t i = 0; i < missing.size(); ++i) names += (i == 0 ? "" : i + 1 == missing.size() ? " and " : ", ") + missing[i];
+                error(t.where, "theme " + t.name + " has no color for " + names + "; give it one, or start from a theme that does, like from harbor");
+                return;
+            }
+            // Text and what it sits on, light and dark. A pair is checked by the theme that
+            // says one of them; one both are inherited by was checked where they're said.
+            static const std::vector<std::pair<std::string, std::string>> pairs{
+                {"ink", "page"}, {"ink", "surface"}, {"muted", "page"}, {"muted", "surface"}, {"accent", "page"}, {"accent", "surface"},
+                {"danger", "surface"}, {"success", "surface"}, {"warning", "surface"}};
+            for (bool dark : {false, true}) {
+                auto value = [&](const std::string& role) {
+                    const theme_color* c = r->colors.at(role).first;
+                    return dark && !c->dark.empty() ? c->dark : c->light;
+                };
+                auto where = [&](const std::string& role) {
+                    const theme_color* c = r->colors.at(role).first;
+                    return dark && !c->dark.empty() ? c->dark_where : c->light_where;
+                };
+                std::string side = dark ? " when dark" : "";
+                // A color said here with no dark one is reported as that, once.
+                auto undark = [&](const std::string& role) { return dark && r->colors.at(role).second == &t && r->colors.at(role).first->dark.empty(); };
+                for (const auto& [text, ground] : pairs) {
+                    if (undark(text) || undark(ground)) continue;
+                    bool here = r->colors.at(text).second == &t || r->colors.at(ground).second == &t;
+                    double c = colors::contrast(value(text), value(ground));
+                    if (!here || c >= 4.5) continue;
+                    std::string better = colors::nearest(value(text), value(ground));
+                    std::string says = text + " " + value(text) + " on " + ground + " " + value(ground) + side + " is " + colors::ratio(c) +
+                                       ", and text needs 4.5:1";
+                    if (r->colors.at(text).second != &t || better.empty()) {
+                        error(where(r->colors.at(text).second == &t ? text : ground), says);
+                    } else {
+                        error(where(text), says + "; " + better + " is the nearest that reads (" + colors::ratio(colors::contrast(better, value(ground))) + ")",
+                              fix{where(text), 7, better});
+                    }
+                }
+                std::string accent = value("accent"), page = value("page");
+                if (r->colors.at("accent").second == &t && !undark("accent") && !undark("page") && colors::contrast(colors::on(accent, page), accent) < 4.5) {
+                    error(where("accent"), "no text reads on accent " + accent + side + ", white or the page's; make it darker or lighter");
+                }
+            }
+        }
+
         void verify(const std::string&, location, const define_role_declaration& r) {
             snake(r.name, r.where);
         }
@@ -824,6 +952,18 @@ namespace one::language {
                     }
                     return;
                 }
+                if (type == "theme") {
+                    std::vector<std::string> names;
+                    const theme_declaration* found = nullptr;
+                    for (const auto& [ns, sc] : scopes_) {
+                        for (const auto& [name, t] : sc.themes) {
+                            names.push_back(name);
+                            if (name == value) found = t.node;
+                        }
+                    }
+                    if (!found) error(s.value_where, "there's no theme " + value + "; declare one, like define theme " + value + " \"...\" from harbor { ... }" + nearest(value, names));
+                    return;
+                }
                 if (type == "version" && !std::regex_match(value, std::regex(R"(\d+\.\d+\.\d+)"))) {
                     error(s.where, s.key + " names the compiler's version, like " + s.key + " \"0.7.2\"");
                 } else if (type == "slug" && !only(value, id)) {
@@ -868,6 +1008,16 @@ namespace one::language {
                     std::string list = s.value.substr(s.value.find('.') + 1), since = s.to.substr(s.to.find('.') + 1);
                     error(s.where, "what's new is counted in a view and shown in the header: unread = count(" + list + " where created_at > " +
                                        since + ") in view " + view + ", and header { badge " + view + ".unread }; one upgrade moves it there");
+                    return;
+                }
+                // The site's corners and color were settings for a while, and are its theme's.
+                if ((s.key == "corners" || s.key == "color") && in.name == "project") {
+                    std::string says = s.key == "corners" ? std::string("corners ") + (s.value == "square" ? "0" : "10") : "accent " + s.value + " dark ...";
+                    std::string from = "harbor";
+                    for (const auto& other : p.settings) {
+                        if (other.key == "theme") from = other.value;
+                    }
+                    error(s.where, "the site's " + s.key + " are its theme's: define theme mine \"Mine\" from " + from + " { " + says + " }, and theme mine");
                     return;
                 }
                 const field* f = nullptr;
