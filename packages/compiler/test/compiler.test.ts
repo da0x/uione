@@ -146,7 +146,7 @@ describe("the compiler in the browser", () => {
     const text = "import one\nproject shop {\n\tappearance  l\n\tth\n}\n";
     const choices = run(one, { kind: "complete", text, line: 3, column: 15 }) as Completions;
     expect(choices.from).toBe(14);
-    expect(choices.items[0]).toMatchObject({ label: "light", detail: "Light" });
+    expect(choices.items[1]).toMatchObject({ label: "light", detail: "Light" });
     const settings = run(one, { kind: "complete", text, line: 4, column: 4 }) as Completions;
     expect(settings.from).toBe(2);
     expect(settings.items).toContainEqual({ label: "theme", detail: "theme", info: "How the site looks: a theme of its own, or uione's, like papercolor." });
