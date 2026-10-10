@@ -36,7 +36,7 @@ type Worker struct {
 	one.Record
 	Yard   string `firestore:"yard" one:"required,key,refers=yard::yard"`
 	Person string `firestore:"person" one:"required,key,refers=user"`
-	Grade   string `firestore:"grade" one:"required,key,refers=yard::grade"`
+	Grade  string `firestore:"grade" one:"required,key,refers=yard::grade"`
 }
 
 type Bot struct {
@@ -44,7 +44,7 @@ type Bot struct {
 	Yard     string    `firestore:"yard" one:"required,key,refers=yard::yard"`
 	Name     string    `firestore:"name" one:"required,key,from=title"`
 	Title    string    `firestore:"title" one:"required"`
-	Grade     string    `firestore:"grade" one:"required,refers=yard::grade"`
+	Grade    string    `firestore:"grade" one:"required,refers=yard::grade"`
 	KeyStart string    `firestore:"key_start"`
 	KeyMade  time.Time `firestore:"key_made"`
 	KeyUsed  time.Time `firestore:"key_used"`
