@@ -244,8 +244,8 @@ built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 
 find_line      ::= qualified "." NAME STRING ("link" ROUTE)? "by" NAME+ END
-(* track milestone over board_page.milestones { due }: a list's records as cards in a
-   row joined by arrows; picking one keeps the rows whose field is it. *)
+/* track milestone over board_page.milestones { due }: a list's records as cards in a
+   row joined by arrows; picking one keeps the rows whose field is it. */
 track          ::= "track" NAME "over" qualified "." NAME ("{" NEWLINE? (column+ END)* "}")?
 table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? ("icon" NAME)? END
