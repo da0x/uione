@@ -5,7 +5,7 @@
 // running before it has a backend. A view with no data stays loading, exactly as a
 // real view would before its first document arrives.
 
-import type { AuthSource, AuthenticationMethod, CommandInput, DataSource, Person, ViewData, ViewState, ViewStatus } from "./data.js";
+import type { AuthSource, AuthenticationMethod, CommandInput, CommandReply, DataSource, Person, ViewData, ViewState, ViewStatus } from "./data.js";
 
 export interface MemorySource extends DataSource {
   // Replaces a view's data and marks it live, telling everyone listening.
@@ -20,7 +20,7 @@ export interface MemorySource extends DataSource {
 
 export interface MemoryOptions {
   views?: Record<string, ViewData>;
-  commands?: Record<string, (input: CommandInput) => void | Promise<void>>;
+  commands?: Record<string, (input: CommandInput) => void | CommandReply | Promise<void | CommandReply>>;
   // Gives the source sign-in, starting with this person signed in, or no one when
   // it's null. Signing in makes anyone the person "you", whichever way.
   person?: Person | null;
@@ -87,7 +87,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
 
     async run(command, input) {
       runs.push({ command, input });
-      await options.commands?.[command]?.(input);
+      return (await options.commands?.[command]?.(input)) ?? undefined;
     },
 
     set(view, data, subject) {

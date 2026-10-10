@@ -173,6 +173,31 @@ describe("commands", () => {
   });
 });
 
+describe("a key a command gives", () => {
+  it("is shown once, to copy, and gone when it's closed", async () => {
+    const source = memorySource({
+      commands: { "crew::service::key": () => ({ id: "ark-welder", key: "one_abcdefghijklmnop_secret" }) },
+    });
+    renderScreen(source, () => <Command name="crew::service::key" id="ark-welder" label="New key" />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "New key" }));
+    const dialog = await screen.findByRole("dialog", { name: "Your new key" });
+    expect(dialog.textContent).toContain("one_abcdefghijklmnop_secret");
+    expect(dialog.textContent).toContain("the only time it's shown");
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.body.textContent).not.toContain("one_abcdefghijklmnop_secret");
+  });
+
+  it("isn't shown for a command that gives none", async () => {
+    const source = memorySource({ commands: { "crew::service::revoke": () => ({ id: "ark-welder" }) } });
+    renderScreen(source, () => <Command name="crew::service::revoke" id="ark-welder" />);
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
 describe("tables", () => {
   function Shelf() {
     const shelf = useView("library::shelf");

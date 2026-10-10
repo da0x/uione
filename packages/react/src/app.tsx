@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
 import type { Analytics, Build, ComponentSet } from "./contract.js";
 import { buildLinks } from "./contract.js";
-import { DataProvider, useAuth, useView } from "./data.js";
+import { DataProvider, useAuth, useShownOnce, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
@@ -258,12 +258,34 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
             <MemoryRouter initialEntries={[location]}>{routes}</MemoryRouter>
           )}
         </SignInProvider>
+        <KeyShown />
       </DataProvider>
       </BuildSpec.Provider>
       </DisplaySpec.Provider>
       </FooterSpec.Provider>
       </BadgeSpec.Provider>
     </UIContext.Provider>
+  );
+}
+
+// A key a command's answer gave, like a service's new one: shown this once, to copy,
+// and gone when it's closed, since only its first characters are kept.
+function KeyShown() {
+  const ui = useUI();
+  const { key, show } = useShownOnce();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => setCopied(false), [key]);
+  return (
+    <ui.Dialog open={key !== undefined} title="Your new key" onClose={() => show(undefined)}>
+      <ui.Text>Copy it now: this is the only time it's shown. Whoever has it acts as this service, so keep it where secrets are kept.</ui.Text>
+      <ui.Code lang="text" source={key ?? ""} />
+      <ui.Button kind="primary" onClick={() => void navigator.clipboard.writeText(key ?? "").then(() => setCopied(true))}>
+        {copied ? "Copied" : "Copy the key"}
+      </ui.Button>
+      <ui.Button kind="secondary" onClick={() => show(undefined)}>
+        Done
+      </ui.Button>
+    </ui.Dialog>
   );
 }
 

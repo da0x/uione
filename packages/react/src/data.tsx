@@ -25,12 +25,19 @@ export interface ViewState {
 
 export type CommandInput = Record<string, unknown>;
 
+// What a command answers: the id of what it changed, and what it shows only once,
+// like a service's new key, which is never kept anywhere a screen could read again.
+export interface CommandReply {
+  id?: string;
+  key?: string;
+}
+
 export interface DataSource {
   // Starts listening to a view and calls emit with every new state. Returns the
   // function that stops listening.
   subscribe(view: string, subject: string | undefined, emit: (state: ViewState) => void): () => void;
   // Runs a command. It rejects with a readable message when the command fails.
-  run(command: string, input: CommandInput): Promise<void>;
+  run(command: string, input: CommandInput): Promise<CommandReply | void>;
   // Who's signed in, for a source that has sign-in.
   auth?: AuthSource;
 }
@@ -65,8 +72,26 @@ export interface AuthSource {
 
 const DataContext = createContext<DataSource | null>(null);
 
+// A key a command's answer showed, until the person closes it; then it's gone.
+interface ShownOnce {
+  key: string | undefined;
+  show: (key: string | undefined) => void;
+}
+
+const ShownContext = createContext<ShownOnce>({ key: undefined, show: () => {} });
+
 export function DataProvider({ source, children }: { source: DataSource; children: ReactNode }) {
-  return <DataContext.Provider value={source}>{children}</DataContext.Provider>;
+  const [key, show] = useState<string>();
+  return (
+    <DataContext.Provider value={source}>
+      <ShownContext.Provider value={{ key, show }}>{children}</ShownContext.Provider>
+    </DataContext.Provider>
+  );
+}
+
+// The key a command's answer is showing, and how to stop showing it.
+export function useShownOnce(): ShownOnce {
+  return useContext(ShownContext);
 }
 
 function useSource(): DataSource {
@@ -151,6 +176,7 @@ export interface Runner {
 
 export function useRunner(): Runner {
   const source = useSource();
+  const { show } = useContext(ShownContext);
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const clear = useCallback((command: string) => {
@@ -166,7 +192,8 @@ export function useRunner(): Runner {
       setRunning((current) => new Set(current).add(command));
       clear(command);
       try {
-        await source.run(command, input);
+        const reply = await source.run(command, input);
+        if (reply?.key) show(reply.key);
         return true;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -180,7 +207,7 @@ export function useRunner(): Runner {
         });
       }
     },
-    [source, clear],
+    [source, clear, show],
   );
   return { run, busy: (command) => running.has(command), error: (command) => errors[command], clear };
 }
