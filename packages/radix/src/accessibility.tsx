@@ -59,13 +59,7 @@ export function apply(display: Display) {
     if (value === defaults[name]) delete root.dataset[name];
     else root.dataset[name] = value;
   }
-  if (display.font === "legible" && !document.getElementById("uione-legible")) {
-    const link = document.createElement("link");
-    link.id = "uione-legible";
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap";
-    document.head.append(link);
-  }
+  if (display.font === "legible") loadLegible();
 }
 
 function save(display: Display) {
@@ -101,6 +95,104 @@ const legends: Record<keyof Display, string> = {
   focus: "Keyboard focus",
 };
 
+// The settings in three groups, by what they're for.
+const groups: readonly (readonly [string, readonly (keyof Display)[]])[] = [
+  ["Reading", ["text", "font", "spacing"]],
+  ["Color and movement", ["contrast", "motion", "transparency"]],
+  ["Finding your way", ["links", "focus"]],
+];
+
+// The legible font, loaded once, so its card can show it before it's chosen.
+function loadLegible() {
+  if (typeof document === "undefined" || document.getElementById("uione-legible")) return;
+  const link = document.createElement("link");
+  link.id = "uione-legible";
+  link.rel = "stylesheet";
+  link.href = "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap";
+  document.head.append(link);
+}
+
+// What each choice shows beside its words: a picture of what it does, where one says
+// it better than the words alone. Each is hidden from assistive technology, which
+// reads the words.
+function preview(name: keyof Display, value: string) {
+  switch (name) {
+    case "text": {
+      const size = { "100": "0.875rem", "125": "1.0625rem", "150": "1.3125rem", "200": "1.625rem" }[value];
+      return <span aria-hidden="true" className="flex h-8 items-end font-semibold leading-none" style={{ fontSize: size }}>A</span>;
+    }
+    case "font":
+      return (
+        <span aria-hidden="true" className="text-2xl leading-none" style={value === "legible" ? { fontFamily: '"Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif' } : undefined}>
+          Aa 0O l1
+        </span>
+      );
+    case "spacing": {
+      const gap = value === "comfortable" ? 7 : 4;
+      return (
+        <svg aria-hidden="true" viewBox="0 0 48 24" className="h-6 w-12" fill="currentColor">
+          {[0, 1, 2].map((i) => (
+            <rect key={i} x="0" y={2 + i * gap} width={i === 2 ? 30 : 48} height="2.5" rx="1.25" opacity={0.55} />
+          ))}
+        </svg>
+      );
+    }
+    case "links":
+      return (
+        <span aria-hidden="true" className="text-sm font-medium text-accent" style={{ textDecorationLine: value === "underline" ? "underline" : "none", textUnderlineOffset: "0.2em" }}>
+          Read more
+        </span>
+      );
+    case "focus":
+      return (
+        <span
+          aria-hidden="true"
+          className="h-5 w-10 rounded-control bg-surface"
+          style={{ outline: `${value === "strong" ? 4 : 2}px solid var(--color-accent)`, outlineOffset: value === "strong" ? 3 : 1 }}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
+// One setting: its choices side by side, as a segmented control where they're words,
+// and as cards where each shows what it does. They're radio buttons underneath, so
+// arrows move between them and assistive technology reads them as one.
+function Setting({ id, name, value, onChange }: { id: string; name: keyof Display; value: string; onChange: (value: string) => void }) {
+  const options = choices[name];
+  const pictured = preview(name, options[0][0]) !== null;
+  const columns = { 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4" }[options.length];
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-medium text-ink">{legends[name]}</legend>
+      <div className={`grid ${columns} ${pictured ? "gap-2" : "gap-1 rounded-control bg-sunken p-1"}`}>
+        {options.map(([option, label]) => (
+          <label
+            key={option}
+            className={
+              pictured
+                ? "relative flex min-h-11 cursor-pointer flex-col items-center justify-end gap-2 rounded-control border border-line bg-surface px-2 pt-3 pb-2 text-center text-xs text-muted transition-colors hover:border-control-line hover:text-ink has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:checked]:text-ink has-[:checked]:shadow-[inset_0_0_0_1px_var(--color-accent)] has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent"
+                : "relative flex min-h-9 cursor-pointer items-center justify-center rounded-[calc(var(--radius-control)-2px)] px-2 py-1.5 text-center text-xs leading-tight text-muted transition-colors hover:text-ink has-[:checked]:bg-surface has-[:checked]:font-medium has-[:checked]:text-ink has-[:checked]:shadow-panel has-[:checked]:ring-1 has-[:checked]:ring-line has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent"
+            }
+          >
+            <input
+              type="radio"
+              className="sr-only"
+              name={`${id}-${name}`}
+              value={option}
+              checked={value === option}
+              onChange={() => onChange(option)}
+            />
+            {preview(name, option)}
+            {label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 export function DisplaySettings() {
   const [open, setOpen] = useState(false);
   const [display, setDisplay] = useState<Display>(stored);
@@ -110,7 +202,7 @@ export function DisplaySettings() {
     apply(next);
     save(next);
   };
-  const changed = (Object.keys(defaults) as (keyof Display)[]).some((name) => display[name] !== defaults[name]);
+  const changed = (Object.keys(defaults) as (keyof Display)[]).filter((name) => display[name] !== defaults[name]).length;
   return (
     <>
       <button
@@ -120,7 +212,10 @@ export function DisplaySettings() {
         aria-haspopup="dialog"
         aria-expanded={open}
         className="flex h-8 w-8 items-center justify-center rounded-box text-muted hover:bg-surface hover:text-ink"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          loadLegible();
+          setOpen(true);
+        }}
       >
         {/* A person with open arms, in a circle: the sign for accessibility. */}
         <svg viewBox="0 0 24 24" width="18" height="18" style={{ width: "1.125rem", height: "1.125rem" }} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -131,30 +226,23 @@ export function DisplaySettings() {
       </button>
       {/* Opened as everything over the page is: a dialog, the whole screen on a phone. */}
       <Sheet open={open} title="Display settings" onClose={() => setOpen(false)}>
-        <div className="flex flex-col gap-4 text-sm">
-          {(Object.keys(choices) as (keyof Display)[]).map((name) => (
-            <fieldset key={name} className="flex flex-col gap-1.5">
-              <legend className="mb-1 font-medium">{legends[name]}</legend>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                {choices[name].map(([value, label]) => (
-                  <label key={value} className="flex min-h-8 items-center gap-1.5">
-                    <input
-                      type="radio"
-                      name={`${id}-${name}`}
-                      value={value}
-                      checked={display[name] === value}
-                      onChange={() => change({ ...display, [name]: value })}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          ))}
+        <p className="-mt-1 text-sm text-muted">Changes show at once, and stay in this browser.</p>
+        {groups.map(([title, names]) => (
+          <section key={title} aria-label={title} className="flex flex-col gap-4 border-t border-line pt-4">
+            <h3 className="text-xs font-semibold text-muted">{title}</h3>
+            {names.map((name) => (
+              <Setting key={name} id={id} name={name} value={display[name]} onChange={(value) => change({ ...display, [name]: value })} />
+            ))}
+          </section>
+        ))}
+        <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+          <span className="text-xs text-muted" aria-live="polite">
+            {changed === 0 ? "Following your system" : `${changed} changed from your system`}
+          </span>
           <button
             type="button"
-            disabled={!changed}
-            className="self-start rounded-control border border-line px-3 py-1.5 text-ink hover:bg-sunken disabled:text-muted"
+            disabled={changed === 0}
+            className="rounded-control border border-line px-3 py-1.5 text-sm text-ink hover:bg-sunken disabled:cursor-default disabled:text-muted disabled:hover:bg-transparent"
             onClick={() => change({ ...defaults })}
           >
             Back to my system's
