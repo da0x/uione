@@ -587,6 +587,27 @@ command issue::claim {
   sent its command's inputs by name, like `into`, and a list is changed with `add
   ... to` and `remove ... from` inside its braces. Deleting what's already being
   deleted in the same step does nothing, so two links that delete each other stop.
+- What's deleted takes its own history with it, and the numbers counted for it,
+  like a project's issue numbers, so whatever's made again under its id starts
+  afresh and never shows what came before. Deleting the entity a
+  [define role](#define-role) is `in`, like a project, also deletes what the
+  language made for it: its roles, the members that give its people their roles,
+  and its services with their keys. A service's profile stays, so what it did
+  is still named. Deleting a whole project is a command like any other, which
+  dispatches the deletes of what's in it:
+
+```one
+command project::delete {
+	input address text
+	require address == slug  "type the project's address to delete it"
+	each issue where project == id {
+		dispatch issue::delete
+	}
+	each board where project == id {
+		dispatch board::delete
+	}
+}
+```
 - A once may give what was made before a key existed its key, like the board a
   project's phases were in before projects had boards.
 - `input into phase` is something a command is sent besides its entity's fields,

@@ -49,6 +49,8 @@ type Ctx struct {
 	given    map[string]any       // what it was sent besides its entity's fields, for Input
 	gone     []*gone              // what it deletes besides its own entity, with DeleteWhere
 	deleting string               // the path of its own entity, when the command deletes it
+	deleted  *schema              // and its kind
+	leaving  map[string]bool      // the paths of everything it deletes, its own entity too
 	service  bool                 // run by a service account, with its key
 	writes   []write              // what it changes outside any entity, like a key
 	revealed map[string]any       // what its answer shows once, like a new key
@@ -197,6 +199,12 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 // checking each against its rules, and returns the events to publish once the
 // transaction commits.
 func (c *Ctx) save() ([]event, error) {
+	// What goes with what's deleted is read first, as a transaction reads before it
+	// writes.
+	forgotten, err := c.forgetting()
+	if err != nil {
+		return nil, err
+	}
 	var events []event
 	deleted := map[string]bool{}
 	for _, g := range c.gone {
@@ -204,12 +212,20 @@ func (c *Ctx) save() ([]event, error) {
 		if err := c.tx.Delete(g.ref); err != nil {
 			return nil, err
 		}
-		kept, err := c.app.keep(c.Context, c.tx, g.schema, g.ref.ID, g.before, nil, c.command, c.me, c.now)
+		kept, err := c.keepDeleted(g.schema, g.ref.ID, g.before)
 		if err != nil {
 			return nil, err
 		}
 		events = append(events, kept...)
 		events = append(events, event{Type: g.schema.name + ".updated", Entity: g.schema.entity, ID: g.ref.ID, Version: c.now.UnixNano(), Before: g.before})
+	}
+	for _, f := range forgotten {
+		if err := c.tx.Delete(f.ref); err != nil {
+			return nil, err
+		}
+		if f.schema != nil {
+			events = append(events, event{Type: f.schema.name + ".updated", Entity: f.schema.entity, ID: f.ref.ID, Version: c.now.UnixNano(), Before: f.before})
+		}
 	}
 	for _, n := range c.counters {
 		if err := c.tx.Set(n.ref, map[string]any{"last": n.value}); err != nil {
@@ -284,6 +300,57 @@ func (c *Ctx) save() ([]event, error) {
 	return events, nil
 }
 
+// forgetting finds what goes with everything the command deletes: each one's own
+// history, which belongs to it and would otherwise be found by whatever's made
+// again under its id, and the counters kept per each, like a project's issue
+// numbers, so a project made again under its name starts again from 1.
+func (c *Ctx) forgetting() ([]*gone, error) {
+	c.leaving = map[string]bool{}
+	type deleting struct {
+		schema *schema
+		id     string
+	}
+	var all []deleting
+	if c.deleting != "" && c.deleted != nil {
+		c.leaving[c.deleting] = true
+		all = append(all, deleting{c.deleted, c.deleting[strings.LastIndex(c.deleting, "/")+1:]})
+	}
+	for _, g := range c.gone {
+		c.leaving[g.ref.Path] = true
+		all = append(all, deleting{g.schema, g.ref.ID})
+	}
+	var out []*gone
+	for _, d := range all {
+		if h := d.schema.history; h != nil {
+			docs, err := c.tx.Documents(c.app.store.Collection(h.collection).Where(d.schema.name, "==", d.id)).GetAll()
+			if err != nil {
+				return nil, err
+			}
+			for _, doc := range docs {
+				out = append(out, &gone{schema: h, ref: doc.Ref, before: doc.Data()})
+			}
+		}
+		for _, t := range c.app.reg.schemas {
+			for _, f := range t.fields {
+				if !f.serial || f.per == "" {
+					continue
+				}
+				if per := t.field(f.per); per != nil && per.refers == d.schema.entity {
+					out = append(out, &gone{ref: c.app.store.Collection("serials").Doc(t.collection + "." + f.name + "." + d.id)})
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+// keepDeleted keeps a deletion in the history of what the entity is kept in, like a
+// comment's in its issue's, unless that goes too. Its own history goes with it, so
+// it keeps nothing of its own.
+func (c *Ctx) keepDeleted(s *schema, id string, before map[string]any) ([]event, error) {
+	return c.app.keepInParent(c.Context, c.tx, s, id, before, nil, c.command, c.me, c.now, c.leaving)
+}
+
 // keep writes the changes of an entity that keeps its history, in the command's
 // transaction, and returns their events. before is nil for something just made,
 // and after nil for something deleted; either way that's one change with no field.
@@ -292,7 +359,7 @@ func (a *App) keep(ctx context.Context, tx *firestore.Transaction, s *schema, id
 	if err != nil {
 		return nil, err
 	}
-	more, err := a.keepInParent(ctx, tx, s, id, before, after, action, me, now)
+	more, err := a.keepInParent(ctx, tx, s, id, before, after, action, me, now, nil)
 	return append(events, more...), err
 }
 
@@ -301,7 +368,7 @@ func (a *App) keep(ctx context.Context, tx *firestore.Transaction, s *schema, id
 // what the issue points at, like its board and assignees, and what the comment
 // points at, like the people it mentions, with its field the comment's own name.
 // What the issue points at is read as it's stored.
-func (a *App) keepInParent(ctx context.Context, tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time) ([]event, error) {
+func (a *App) keepInParent(ctx context.Context, tx *firestore.Transaction, s *schema, id string, before, after map[string]any, action, me string, now time.Time, leaving map[string]bool) ([]event, error) {
 	current := after
 	if current == nil {
 		current = before
@@ -316,7 +383,7 @@ func (a *App) keepInParent(ctx context.Context, tx *firestore.Transaction, s *sc
 			continue
 		}
 		parentID, _ := current[f.name].(string)
-		if parentID == "" {
+		if parentID == "" || leaving[a.store.Collection(parent.collection).Doc(parentID).Path] {
 			continue
 		}
 		stored, err := a.stored(ctx, parent, parentID)
@@ -812,7 +879,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			// Its body says whether it may go, as a require does, before it goes, and
 			// what goes with it, like the issues of a phase moving to another. What it
 			// dispatches to delete it again, like a link's other side, does nothing.
-			body.deleting = ref.Path
+			body.deleting, body.deleted = ref.Path, s
 			if do != nil {
 				if err := do(body, entity); err != nil {
 					return err
@@ -821,11 +888,15 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := a.serviceChanged(body, s, action, id, v); err != nil {
 				return err
 			}
+			// A project takes its roles, members and services with it.
+			if err := a.scopeDeleted(body, s, id); err != nil {
+				return err
+			}
 			changed, err := body.save()
 			if err != nil {
 				return err
 			}
-			kept, err := a.keep(ctx, tx, s, id, before, nil, body.command, c.me, now)
+			kept, err := body.keepDeleted(s, id, before)
 			if err != nil {
 				return err
 			}

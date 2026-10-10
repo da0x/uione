@@ -69,6 +69,18 @@ var yards = one.Module("yard",
 	one.Command[Bot]("bot::delete"),
 	one.Command[Bot]("bot::key"),
 	one.Command[Bot]("bot::revoke"),
+	one.Command[Yard]("yard::delete").Do(func(c *one.Ctx, y *Yard) error {
+		return one.EachIn(c, "yard", y.ID, func(h *Hull) error {
+			return one.DispatchDelete[Hull](c, h.ID, nil, nil)
+		})
+	}),
+	// A yard's services, retired by hand, as a command could: each goes as bot::delete
+	// takes it, its key too.
+	one.Command[Yard]("yard::retire").Do(func(c *one.Ctx, y *Yard) error {
+		return one.EachIn(c, "yard", y.ID, func(b *Bot) error {
+			return one.DispatchDelete[Bot](c, b.ID, nil, nil)
+		})
+	}),
 	one.Command[Hull]("hull::create"),
 	one.Command[Hull]("hull::finish").Do(func(c *one.Ctx, h *Hull) error {
 		h.Done = true
@@ -77,7 +89,7 @@ var yards = one.Module("yard",
 	one.View("hulls").Per(one.Entity[Yard]()).Readers(one.Entity[Worker]()).
 		List("hulls", one.Where[Hull]("yard", one.Subject)).Fields("title", "done"),
 	one.Roles(one.Entity[Grade](), one.Entity[Yard](), one.Entity[Worker](), "may").
-		Default("foreman", "Foreman", "worker::create", "grade::update", "bot::create", "bot::update", "bot::delete", "bot::key", "bot::revoke", "hull::create", "hull::finish").
+		Default("foreman", "Foreman", "yard::delete", "yard::retire", "worker::create", "grade::update", "bot::create", "bot::update", "bot::delete", "bot::key", "bot::revoke", "hull::create", "hull::finish").
 		Default("welder", "Welder", "hull::finish").
 		Services(one.Entity[Bot](), "welder"),
 )
@@ -269,4 +281,49 @@ func (h *harness) signInWithCustomToken(token string) string {
 		h.t.Fatal("the Auth emulator didn't take the custom token")
 	}
 	return signedIn.IDToken
+}
+
+func TestAYardDeletedTakesItsGradesWorkersAndServicesWithIt(t *testing.T) {
+	h := start(t)
+	_, foreman := h.signUp("ida@example.com")
+	ctx := context.Background()
+	h.mustRun("yard/yard/create", foreman, map[string]any{"slug": "slip"})
+	h.mustRun("yard/yard/create", foreman, map[string]any{"slug": "quay"})
+	bot, key := h.keyOf(foreman, "slip", "Riveter", "welder")
+	h.keyOf(foreman, "quay", "Caulker", "welder")
+	h.mustRun("yard/hull/create", foreman, map[string]any{"yard": "slip", "title": "tug"})
+	// The foreman's own place in it, and the grades people hold, go too.
+	h.mustRun("yard/yard/delete", foreman, map[string]any{"id": "slip"})
+	for _, left := range []struct{ collection, field string }{
+		{"yard_grade", "yard"}, {"yard_worker", "yard"}, {"yard_bot", "yard"}, {"yard_hull", "yard"},
+	} {
+		docs, _ := h.store.Collection(left.collection).Where(left.field, "==", "slip").Documents(ctx).GetAll()
+		if len(docs) != 0 {
+			t.Fatalf("a deleted yard leaves no %s: %d", left.collection, len(docs))
+		}
+	}
+	h.expect("yard/hull/create", key, map[string]any{"yard": "slip", "title": "barge"}, 401, "that key isn't one this app gave, or it was revoked")
+	if _, err := h.store.Collection("users").Doc(bot).Get(ctx); err != nil {
+		t.Fatalf("a deleted service's profile stays, for history: %v", err)
+	}
+	// Another yard keeps its own.
+	if docs, _ := h.store.Collection("yard_bot").Where("yard", "==", "quay").Documents(ctx).GetAll(); len(docs) != 1 {
+		t.Fatalf("another yard keeps its service: %d", len(docs))
+	}
+	// Its name is free, and made again it starts afresh, its maker its foreman.
+	h.mustRun("yard/yard/create", foreman, map[string]any{"slug": "slip"})
+	h.keyOf(foreman, "slip", "Riveter", "welder")
+}
+
+func TestServicesDeletedByDispatchLoseTheirKeys(t *testing.T) {
+	h := start(t)
+	_, foreman := h.signUp("eli@example.com")
+	h.mustRun("yard/yard/create", foreman, map[string]any{"slug": "berth"})
+	_, key := h.keyOf(foreman, "berth", "Welder", "welder")
+	h.mustRun("yard/yard/retire", foreman, map[string]any{"id": "berth"})
+	h.expect("yard/hull/create", key, map[string]any{"yard": "berth", "title": "skiff"}, 401, "that key isn't one this app gave, or it was revoked")
+	workers, _ := h.store.Collection("yard_worker").Where("yard", "==", "berth").Documents(context.Background()).GetAll()
+	if len(workers) != 1 {
+		t.Fatalf("only the foreman is left a worker: %d", len(workers))
+	}
 }

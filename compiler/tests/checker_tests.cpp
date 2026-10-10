@@ -749,6 +749,12 @@ TEST_CASE("an update form needs its entity in the address, and a view holding wh
     CHECK(check_source(start + "view page per book {\n\ttitle = book.title\n\tauthor = book.author\n}\n" +
                        "screen \"Book\" /books/:book {\n\tform book::update {\n\t\ttitle  author\n\t}\n}\n")
               .empty());
+    // What a command is sent besides its fields is never stored, so it starts empty:
+    // the title typed to say a book is to go, as long as the view holds the rest.
+    const std::string withdraw = "entity book {\n\ttitle  text\n\tnote  text\n}\ncommand book::withdraw {\n\tinput typed text\n\trequire typed == title  \"type its title\"\n}\n";
+    CHECK(check_source(withdraw + "screen \"Book\" /books/:book {\n\tform book::withdraw {\n\t\ttyped\n\t}\n}\n").empty());
+    e = only_error(withdraw + "screen \"Book\" /books/:book {\n\tform book::withdraw {\n\t\ttyped  note\n\t}\n}\n");
+    CHECK(e.message == "form book::withdraw starts from what's stored, so it needs a view per book holding note, like note = book.note");
 }
 
 

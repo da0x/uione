@@ -80,10 +80,18 @@ func DispatchDelete[E any, P entityPointer[E]](c *Ctx, id string, given map[stri
 	}
 	before := c.stored(ref.Path)
 	c.gone = append(c.gone, &gone{schema: s, ref: ref, before: before})
-	if body == nil {
-		return nil
+	v := reflect.ValueOf(entity).Elem()
+	if body != nil {
+		if err := c.within(s, v, before, given, func(d *Ctx) error { return body(d, entity) }); err != nil {
+			return err
+		}
 	}
-	return c.within(s, reflect.ValueOf(entity).Elem(), before, given, func(d *Ctx) error { return body(d, entity) })
+	// What goes with it as when its own command deletes it: a service's key, or a
+	// project's roles, members and services.
+	if err := c.app.serviceChanged(c, s, "delete", id, v); err != nil {
+		return err
+	}
+	return c.app.scopeDeleted(c, s, id)
 }
 
 func dispatchedSchema[E any](c *Ctx) (*schema, error) {

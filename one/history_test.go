@@ -33,6 +33,11 @@ var cases = one.Module("log",
 	one.Command[Folder]("folder::create").Allow(one.SignedIn),
 	one.Command[Case]("case::create").Allow(one.SignedIn),
 	one.Command[Case]("case::update").Allow(one.SignedIn),
+	one.Command[Folder]("folder::delete").Allow(one.SignedIn).Do(func(c *one.Ctx, f *Folder) error {
+		return one.EachIn(c, "folder", f.ID, func(k *Case) error {
+			return one.DispatchDelete[Case](c, k.ID, nil, nil)
+		})
+	}),
 	one.Command[Case]("case::close").Allow(one.SignedIn).Do(func(c *one.Ctx, k *Case) error {
 		k.Status = "closed"
 		return nil
@@ -108,5 +113,25 @@ func TestAFieldStoredAsNothingIsntChangedByBeingWrittenEmpty(t *testing.T) {
 	}
 	if !reflect.DeepEqual(fields, []any{"", "title"}) {
 		t.Errorf("only the title changed, not the note it had nothing in: %v", fields)
+	}
+}
+
+func TestADeletedCaseTakesItsHistoryWithIt(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("ada@example.com")
+	ctx := context.Background()
+	h.mustRun("log/folder/create", token, map[string]any{"name": "sealed"})
+	k := h.mustRun("log/case/create", token, map[string]any{"folder": "sealed", "title": "Ledger"})
+	h.mustRun("log/case/update", token, map[string]any{"id": k, "title": "Ledger, 1931"})
+	h.mustRun("log/folder/delete", token, map[string]any{"id": "sealed"})
+	left, _ := h.store.Collection("log_case_history").Where("folder", "==", "sealed").Documents(ctx).GetAll()
+	if len(left) != 0 {
+		t.Fatalf("a deleted case's history goes with it: %d left", len(left))
+	}
+	// A folder made again under its name starts with nothing of the old one's.
+	h.mustRun("log/folder/create", token, map[string]any{"name": "sealed"})
+	h.mustRun("log/case/create", token, map[string]any{"folder": "sealed", "title": "Diary"})
+	if timeline := list(h.view("log::folder_page:sealed"), "timeline"); len(timeline) != 1 {
+		t.Fatalf("a folder made again shows only its own: %v", timeline)
 	}
 }

@@ -211,6 +211,62 @@ func (a *App) seedRoles(c *Ctx, scope *schema, place string) error {
 	return nil
 }
 
+// scopeDeleted takes with a project, as it goes, what the language made for it: its
+// services and their keys, the members that give its people their roles, and its
+// roles. They're the language's to remove, so the requires that keep a project from
+// losing its last maintainer, or a role its people hold, don't stand in the way of
+// the whole project going. A service's profile stays, so history still names it.
+func (a *App) scopeDeleted(c *Ctx, scope *schema, place string) error {
+	for _, r := range a.reg.defined {
+		if a.reg.schemas[r.scope] != scope {
+			continue
+		}
+		f, err := a.rolesFields(r)
+		if err != nil {
+			return err
+		}
+		if r.service != nil {
+			sf, err := a.servicesFields(r)
+			if err != nil {
+				return err
+			}
+			services, err := c.tx.Documents(a.store.Collection(sf.service.collection).Where(sf.place.name, "==", place)).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, d := range services {
+				c.drop(sf.service, d)
+				if err := a.dropKeys(c, d.Ref.ID); err != nil {
+					return err
+				}
+			}
+		}
+		for _, held := range []struct {
+			s     *schema
+			field *field
+		}{{f.member, f.memberPlace}, {f.role, f.place}} {
+			docs, err := c.tx.Documents(a.store.Collection(held.s.collection).Where(held.field.name, "==", place)).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, d := range docs {
+				c.drop(held.s, d)
+			}
+		}
+	}
+	return nil
+}
+
+// drop deletes an entity with the command, once however many ways it's reached.
+func (c *Ctx) drop(s *schema, d *firestore.DocumentSnapshot) {
+	for _, g := range c.gone {
+		if g.ref.Path == d.Ref.Path {
+			return
+		}
+	}
+	c.gone = append(c.gone, &gone{schema: s, ref: d.Ref, before: d.Data()})
+}
+
 // seedEarlierRoles gives each project made before its roles were records the
 // default ones, and points its members' roles, named as the defaults are, at them.
 // A project with any role records is left as it is, so this happens once.

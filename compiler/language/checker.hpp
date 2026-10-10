@@ -2484,23 +2484,37 @@ namespace one::language {
                                              entity.name + " in its route, like /" + entity.name + "s/:" + entity.name);
                     continue;
                 }
-                bool found = false;
+                // What the command is sent besides its entity's fields, like the address
+                // typed to delete a project, is never stored, so it starts empty.
+                std::set<std::string> inputs;
+                std::vector<const form_field*> stored;
                 if (auto scope = scopes_.find(ns); scope != scopes_.end()) {
+                    if (auto it = scope->second.command_nodes.find(command.text()); it != scope->second.command_nodes.end()) {
+                        for (const auto& st : it->second->body) {
+                            if (auto* input = std::get_if<input_statement>(&st.node)) inputs.insert(input->name);
+                        }
+                    }
+                }
+                for (const auto& f : form.fields) {
+                    if (!inputs.contains(f.name)) stored.push_back(&f);
+                }
+                bool found = stored.empty();
+                if (auto scope = scopes_.find(ns); scope != scopes_.end() && !found) {
                     for (const auto& [name, view] : scope->second.views) {
                         if (!view.node->per || *view.node->per != entity.name) continue;
-                        bool holds = std::all_of(form.fields.begin(), form.fields.end(), [&](const form_field& f) {
+                        bool holds = std::all_of(stored.begin(), stored.end(), [&](const form_field* f) {
                             return std::any_of(view.node->values.begin(), view.node->values.end(),
-                                               [&](const view_value& v) { return v.name && *v.name == f.name; });
+                                               [&](const view_value& v) { return v.name && *v.name == f->name; });
                         });
                         found = found || holds;
                     }
                 }
                 if (!found) {
                     std::string fields;
-                    for (const auto& f : form.fields) fields += (fields.empty() ? "" : " ") + f.name;
+                    for (const auto* f : stored) fields += (fields.empty() ? "" : " ") + f->name;
                     error(command.where, "form " + command.text() + " starts from what's stored, so it needs a view per " +
-                                             entity.name + " holding " + fields + ", like " + form.fields.front().name + " = " +
-                                             entity.name + "." + form.fields.front().name);
+                                             entity.name + " holding " + fields + ", like " + stored.front()->name + " = " +
+                                             entity.name + "." + stored.front()->name);
                 }
             }
         }

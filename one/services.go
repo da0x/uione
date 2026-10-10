@@ -220,7 +220,7 @@ func (a *App) dropMembers(c *Ctx, f *servicesFields, place, id string) error {
 		return err
 	}
 	for _, d := range docs {
-		c.gone = append(c.gone, &gone{schema: f.member, ref: d.Ref, before: d.Data()})
+		c.drop(f.member, d)
 	}
 	return nil
 }
@@ -231,7 +231,13 @@ func (a *App) dropKeys(c *Ctx, id string) error {
 	if err != nil {
 		return err
 	}
+next:
 	for _, d := range docs {
+		for _, w := range c.writes {
+			if w.ref.Path == d.Ref.Path {
+				continue next
+			}
+		}
 		c.writes = append(c.writes, write{ref: d.Ref})
 	}
 	return nil

@@ -34,6 +34,11 @@ var tracker = one.Module("tracker",
 	one.Command[Tracked]("tracked::create").Allow(one.SignedIn),
 	one.Command[Issue]("issue::create").Allow(one.SignedIn),
 	one.Command[Issue]("issue::update").Allow(one.SignedIn),
+	one.Command[Tracked]("tracked::delete").Allow(one.SignedIn).Do(func(c *one.Ctx, t *Tracked) error {
+		return one.EachIn(c, "project", t.ID, func(i *Issue) error {
+			return one.DispatchDelete[Issue](c, i.ID, nil, nil)
+		})
+	}),
 )
 
 func (h *harness) issue(id string) map[string]any {
@@ -120,5 +125,18 @@ func TestAUniqueKeyCantBeMadeTwice(t *testing.T) {
 	snap, err := h.store.Collection("tracker_tracked").Doc("uione").Get(context.Background())
 	if err != nil || snap.Data()["name"] != "uione" {
 		t.Errorf("a second create changed the first: %v %v", snap.Data(), err)
+	}
+}
+
+func TestAProjectMadeAgainUnderItsNameNumbersItsIssuesFromOne(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("ada@example.com")
+	h.mustRun("tracker/tracked/create", token, map[string]any{"slug": "kiln"})
+	h.mustRun("tracker/issue/create", token, map[string]any{"project": "kiln", "title": "cracks"})
+	h.mustRun("tracker/issue/create", token, map[string]any{"project": "kiln", "title": "smoke"})
+	h.mustRun("tracker/tracked/delete", token, map[string]any{"id": "kiln"})
+	h.mustRun("tracker/tracked/create", token, map[string]any{"slug": "kiln"})
+	if id := h.mustRun("tracker/issue/create", token, map[string]any{"project": "kiln", "title": "glaze"}); id != "kiln-1" {
+		t.Fatalf("the first issue of a project made again is 1: %s", id)
 	}
 }
