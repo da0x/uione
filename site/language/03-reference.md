@@ -1308,7 +1308,11 @@ issue::verify "Verify" when {
   already there. It goes on that entity's page, a screen like `/books/:book`, and
   starts from what's stored: a view per book has to hold every field it asks for
   (`title = book.title`), so no field starts empty and gets saved empty. It can't
-  ask for a key, which never changes.
+  ask for a key, which never changes. What its command is sent besides, an
+  `input`, starts empty, like the address typed to delete a project, and a form
+  of only those needs no view.
+- A form that deletes what its page's address names goes, once it's done, to the
+  address above it: deleting a project from `/:project/settings` goes to `/`.
 - `form project::update "Save changes" { ... }` names the form's button; without
   it, the button is named after the command, like Update.
 - A button and the form it opens go on one line: `issue::update "Edit" form "Save" {

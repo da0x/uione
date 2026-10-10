@@ -34,16 +34,21 @@ export function Text({ children }: { children: ReactNode }) {
   return <ui.Text>{children}</ui.Text>;
 }
 
-// A link's :parameters come from the page it's on: /projects/:project/reports on the
-// page /projects/uione goes to /projects/uione/reports.
+// An address's :parameters filled from the page it's on: /projects/:project/reports
+// on the page /projects/uione is /projects/uione/reports.
+function useFilled(): (to: string) => string {
+  const params = useParams();
+  return (to) =>
+    to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+      const value = params[name];
+      return value === undefined ? written : encodeURIComponent(value);
+    });
+}
+
 export function Link({ to, icon, children }: { to: string; icon?: string; children: ReactNode }) {
   const ui = useUI();
   const link = useLinks();
-  const params = useParams();
-  const filled = to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
-    const value = params[name];
-    return value === undefined ? written : encodeURIComponent(value);
-  });
+  const filled = useFilled()(to);
   return (
     <ui.Link {...link(filled)} icon={icon}>
       {children}
@@ -1537,6 +1542,7 @@ export function Form({
   authenticated = false,
   onDone,
   icon,
+  after,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -1551,11 +1557,14 @@ export function Form({
   authenticated?: boolean; // its command needs the person signed in, so someone who isn't is asked to sign in instead
   onDone?: () => void; // called once what it sent is done, like closing the dialog a row's button opened it in
   icon?: string; // the button that opens it drawn as this, like edit, its words still naming it
+  after?: string; // where to go once it's done, like the page above one it deleted the subject of; its :parameters are the page's
 }) {
   const ui = useUI();
   const auth = useAuth();
   const signIn = useSignIn();
   const runner = useConfirmedRunner();
+  const navigate = useNavigate();
+  const filled = useFilled();
   const specs = fields.map((f) => (typeof f === "string" ? { name: f } : f));
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
   const [values, setValues] = useState<Record<string, string>>(empty);
@@ -1584,6 +1593,7 @@ export function Form({
       }
       setOpen(false);
       onDone?.();
+      if (after !== undefined) void navigate(filled(after));
     }
   };
 

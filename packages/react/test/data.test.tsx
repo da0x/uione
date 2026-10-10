@@ -141,6 +141,19 @@ describe("commands", () => {
     expect(email.value).toBe("not an email");
   });
 
+  it("goes where it says once it's done, like up from the page of what it deleted", async () => {
+    const source = memorySource();
+    const front = defineScreen({ title: "Front", route: "/towns/:town" }, () => <Text>Every shop</Text>);
+    const settings = defineScreen({ title: "Settings", route: "/towns/:town/:shop/settings" }, () => (
+      <Form command="shop::shop::delete" fields={["address"]} id="kiln" submit="Delete it" after="/towns/:town" />
+    ));
+    render(<App name="app" screens={[front, settings]} ui={plain} data={source} location="/towns/lyon/kiln/settings" />);
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "kiln" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete it" }));
+    await waitFor(() => expect(source.runs).toEqual([{ command: "shop::shop::delete", input: { address: "kiln", id: "kiln" } }]));
+    expect(await screen.findByText("Every shop")).toBeTruthy();
+  });
+
   it("opens a form in a dialog when it has a button", async () => {
     const source = memorySource();
     renderScreen(source, () => <Form command="studio::project::create" fields={["name"]} button />);

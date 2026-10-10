@@ -1382,3 +1382,24 @@ TEST_CASE("a table keeps only some rows, rows are tinted by a choice, and a box 
     CHECK(tsx.find(R"(<Details view={issuePage} fields={[["priority", "Priority"]]} choices={{ priority: Object.fromEntries([["critical", "Critical"], ["normal", "Normal"], ["low", "Low"]]) }} tint={{ field: "priority", order: ["critical", "normal", "low"] }} />)") != std::string::npos);
     CHECK(tsx.find(R"(start: "normal", required: true)") != std::string::npos);
 }
+
+TEST_CASE("a form of only what a command is sent besides its fields acts on the entity its address names") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-form-confirm";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace shop {\n"
+                         "entity shop {\n\tslug  text  required  unique  key\n}\n"
+                         "command shop::delete {\n\tinput address text\n\trequire address == slug  \"type its address\"\n}\n"
+                         "screen \"Settings\" /:shop/settings {\n"
+                         "\tform shop::delete \"Delete it\" {\n\t\taddress \"Type its address\"\n\t}\n"
+                         "}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Form command="shop::shop::delete" fields={[{ name: "address", label: "Type its address" }]} id={shopId} after="/shop" submit="Delete it")") != std::string::npos);
+    CHECK(screens->content.find(R"(const shopId = useParam("shop");)") != std::string::npos);
+    fs::remove_all(dir);
+}

@@ -337,14 +337,28 @@ namespace one::generators {
             return name.parts.size() == 2 ? web_detail::join(ns, name.text()) : name.text();
         }
         // The view per entity that holds every field an update form asks for.
+        // What a command is sent besides its entity's fields, like the address typed to
+        // delete a project: never stored, so a form starts it empty.
+        std::set<std::string> inputs_of(const std::string& command) const {
+            std::set<std::string> out;
+            auto it = command_nodes_.find(command);
+            if (it == command_nodes_.end()) return out;
+            for (const auto& st : it->second->body) {
+                if (auto* input = std::get_if<language::input_statement>(&st.node)) out.insert(input->name);
+            }
+            return out;
+        }
+
         std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity,
                                              const language::form_item& form) const {
             auto scope = views_.find(ns);
             if (scope == views_.end()) return std::nullopt;
+            auto inputs = inputs_of(web_detail::join(ns, form.commands.front().text()));
             for (const auto& [name, view] : scope->second) {
                 if (!view->per || *view->per != entity.name) continue;
                 bool holds = std::all_of(form.fields.begin(), form.fields.end(), [&](const language::form_field& f) {
-                    return std::any_of(view->values.begin(), view->values.end(),
+                    return inputs.contains(f.name) ||
+                           std::any_of(view->values.begin(), view->values.end(),
                                        [&](const language::view_value& v) { return v.name && *v.name == f.name; });
                 });
                 if (holds) return web_detail::join(ns, name);
@@ -2228,8 +2242,27 @@ namespace one::generators {
             // address names (the checker makes sure both are there).
             std::string edit;
             if (entity && command.substr(command.rfind("::") + 2) != "create") {
-                if (auto view = edit_view(ns, *entity, form)) {
+                auto inputs = inputs_of(command);
+                bool only_inputs = std::all_of(form.fields.begin(), form.fields.end(), [&](const auto& f) { return inputs.contains(f.name); });
+                if (only_inputs && names_parameter(route_, entity->name)) {
+                    // Nothing to start from, like a typed confirmation: only which one.
+                    parts.params.insert(entity->name);
+                    edit = " id={" + web_detail::js_name(entity->name + "_id") + "}";
+                } else if (auto view = edit_view(ns, *entity, form)) {
                     edit = " from={" + view_variable(parts, *view) + "} id={" + web_detail::js_name(entity->name + "_id") + "}";
+                }
+                // Once what the address names is deleted, its page has nothing to show, so
+                // the form goes to the address above it: /:project/settings to /.
+                if (command.substr(command.rfind("::") + 2) == "delete" && names_parameter(route_, entity->name)) {
+                    std::string wanted = "/:" + entity->name, above = route_;
+                    for (std::size_t at = route_.find(wanted); at != std::string::npos; at = route_.find(wanted, at + 1)) {
+                        std::size_t end = at + wanted.size();
+                        if (end == route_.size() || route_[end] == '/') {
+                            above = route_.substr(0, at);
+                            break;
+                        }
+                    }
+                    edit += " after=" + web_detail::js_string(above.empty() ? "/" : above);
                 }
             }
             // A create form on a screen whose address names what the entity points at,
