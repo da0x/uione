@@ -904,6 +904,52 @@ function cellOf(
   return typeof value === "string" && value.startsWith("https://") ? <ui.Picture source={value} /> : "";
 }
 
+// A track over a list's records, like a project's milestones: the rows' field naming
+// one, the view and list they're in, what each is called, and what else a card shows.
+export interface TrackSpec {
+  field: string; // like milestone
+  view: ViewState;
+  list: string; // like milestones
+  shown?: string; // what a card is called, like title
+  columns: Record<string, string>; // what else a card shows, like { due: "Due" }
+}
+
+// The rows a track keeps, and the track itself, drawn above them. The record picked
+// is in the page's path by its field's name, like /milestone/beta, so a link shows
+// the same; picking it again shows every row.
+function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPick?: () => void) {
+  const ui = useUI();
+  const links = useLinks();
+  const [part, setPart] = usePathNamed(track?.field ?? "track");
+  if (!track) return { keeps: () => true, element: null };
+  const records = rowsOf(track.view.data?.[track.list]);
+  // A record is named in the path by what sets it apart, like beta of neotrac-beta.
+  const ids = records.map((record) => record.id);
+  const start = ids.length > 1 ? sharedStart(ids) : (ids[0] ?? "").slice(0, (ids[0] ?? "").lastIndexOf("-") + 1);
+  const picked = part ? records.find((record) => record.id.slice(start.length) === part)?.id : undefined;
+  const keeps = (row: Row) => !picked || row[track.field] === picked;
+  const element = records.length > 0 && (
+    <ui.Track
+      label={label(track.field)}
+      steps={records.map((record) => ({
+        id: record.id,
+        title: show(record[track.shown ?? "title"]) || record.id,
+        details: Object.keys(track.columns)
+          .map((key) => cellOf(ui, links, record, key, {}))
+          .filter((detail) => detail !== ""),
+        count: rows.filter((row) => row[track.field] === record.id).length,
+        noun,
+        selected: record.id === picked,
+        onSelect: () => {
+          setPart(record.id === picked ? "" : record.id.slice(start.length));
+          onPick?.();
+        },
+      }))}
+    />
+  );
+  return { keeps, element };
+}
+
 export function Table({
   view,
   list = "rows",
@@ -925,6 +971,7 @@ export function Table({
   only,
   tint,
   hue,
+  track,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -948,6 +995,7 @@ export function Table({
   only?: Record<string, string>; // the rows it keeps, worked out as it's shown, like { "due<=": "+2w" }
   tint?: Tint; // each row colored by how urgent it is, like its priority
   hue?: Hue; // its rows' links in this color, rather than the site's own
+  track?: TrackSpec; // cards above it for a list's records, like milestones, picking one keeping the rows in it
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -963,7 +1011,8 @@ export function Table({
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
   const own = rowsOf(view.data?.[list]).filter((row) => !only || kept(row, Object.entries(only), auth?.person?.uid ?? ""));
-  const found = own.filter(matches).filter(
+  const tracked = useTrack(track, own, list === "rows" ? "rows" : list, () => setAt(1));
+  const found = own.filter(tracked.keeps).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   // With tabs, the first choice is shown first, like Open before Closed.
@@ -1024,6 +1073,7 @@ export function Table({
   const says = asking ? (asking.action.label ?? label(action(asking.action.name))) : "";
   return (
     <>
+      {tracked.element}
       <ui.Table
         status={view.status}
         {...(hue ? { hue } : {})}
@@ -1119,6 +1169,7 @@ export function Board({
   search = [],
   tools,
   tint,
+  track,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1137,6 +1188,7 @@ export function Board({
   search?: string[]; // fields a box finds cards by, like title and labels
   tools?: ReactNode; // buttons beside its search, like New issue
   tint?: Tint; // each card colored by how urgent it is, like its priority
+  track?: TrackSpec; // cards above it for a list's records, like milestones, picking one keeping the cards in it
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1149,7 +1201,8 @@ export function Board({
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
   const all = rowsOf(view.data?.[list]);
-  const cards = all.filter(matches).filter(
+  const tracked = useTrack(track, all, list);
+  const cards = all.filter(tracked.keeps).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   const things = rowsOf(over.data?.[overList]);
@@ -1177,45 +1230,48 @@ export function Board({
   const [title, ...rest] = Object.keys(columns);
   const status = over.status === "live" ? view.status : over.status;
   return (
-    <ui.Board
-      status={status}
-      error={move ? runner.error(move.command) : undefined}
-      tools={tools}
-      filtered={filtered}
-      column={column || undefined}
-      onColumn={setColumn}
-      search={
-        search.length
-          ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
-          : undefined
-      }
-      onMove={
-        move
-          ? (id, to) => {
-              const card = all.find((c) => c.id === id);
-              if (!card || !reaches(where(card)).includes(to)) return;
-              setMoved((now) => ({ ...now, [id]: to }));
-              void runner.run(move.command, { id, [by]: to }, card).then((done) => {
-                if (!done) setMoved((now) => Object.fromEntries(Object.entries(now).filter(([other]) => other !== id)));
-              });
-            }
-          : undefined
-      }
-      columns={things.map((thing) => ({
-        id: thing.id,
-        title: show(thing[shown]) || thing.id,
-        cards: cards
-          .filter((card) => where(card) === thing.id)
-          .map((card) => ({
-            id: card.id,
-            title: title ? cellOf(ui, links, card, title, { choices, labels, pictures }) : card.id,
-            link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
-            details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
-            reaches: reaches(where(card)),
-            tone: toneOf(card, tint),
-          })),
-      }))}
-    />
+    <>
+      {tracked.element}
+      <ui.Board
+        status={status}
+        error={move ? runner.error(move.command) : undefined}
+        tools={tools}
+        filtered={filtered}
+        column={column || undefined}
+        onColumn={setColumn}
+        search={
+          search.length
+            ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
+            : undefined
+        }
+        onMove={
+          move
+            ? (id, to) => {
+                const card = all.find((c) => c.id === id);
+                if (!card || !reaches(where(card)).includes(to)) return;
+                setMoved((now) => ({ ...now, [id]: to }));
+                void runner.run(move.command, { id, [by]: to }, card).then((done) => {
+                  if (!done) setMoved((now) => Object.fromEntries(Object.entries(now).filter(([other]) => other !== id)));
+                });
+              }
+            : undefined
+        }
+        columns={things.map((thing) => ({
+          id: thing.id,
+          title: show(thing[shown]) || thing.id,
+          cards: cards
+            .filter((card) => where(card) === thing.id)
+            .map((card) => ({
+              id: card.id,
+              title: title ? cellOf(ui, links, card, title, { choices, labels, pictures }) : card.id,
+              link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
+              details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
+              reaches: reaches(where(card)),
+              tone: toneOf(card, tint),
+            })),
+        }))}
+      />
+    </>
   );
 }
 

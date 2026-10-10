@@ -135,7 +135,7 @@ The language's own words, inside what a declaration says:
 - in a role: `per`, `from`, and in a define role, `in` and `for services`; in a picker, `from`;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
-  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
+  `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: the settings `one`'s library defines, below;
 - in a footer: `bar`, `columns`, and in a link, `build.release` and `build.source`.
 
@@ -1121,6 +1121,23 @@ screen "Book" /books/:book {
 - `by phase over project_page.phases` makes the tabs a list's records instead, one
   for each phase in its order, called by its title, with the rows holding which
   phase they're in.
+- `track milestone over board_page.milestones { due }` puts a list's records above
+  the table as large cards in a row, in the list's order, an arrow from each to the
+  next, like a project's milestones, sprints or versions as a timeline. Each card
+  shows its title, what the block names, like its date, and how many rows it holds.
+  Picking one keeps the rows whose `milestone` is it, and picking it again shows
+  them all. The one picked is in the path, `/milestone/beta`. A board beside the
+  table takes its track, and a board's own block can say `track` too.
+
+```one
+table board_page.issues by phase over board_page.phases link /:project/:issue {
+	track milestone over board_page.milestones {
+		due
+	}
+	number "#"
+	title
+}
+```
 - A command in a table's block, like `issue::create "New issue"`, is a button in
   its toolbar, beside its search, opening its form when the screen has one; the form
   isn't drawn anywhere else. A board's block takes one too, and `search` as well.

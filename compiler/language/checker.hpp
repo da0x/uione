@@ -2645,6 +2645,7 @@ namespace one::language {
                     if (table->sort && !in_rows(*table->sort)) error(table->sort_where, "the table is sorted by " + *table->sort + ", which its rows don't have");
                     if (table->page && *table->page < 1) error(table->page_where, "a page has at least one row");
                     if (list) verify_tint(ns, *list, table->view.text(), table->tint, table->tint_where);
+                    if (list && table->track) verify_track(ns, *table->track, *list, route);
                     if (table->only) {
                         verify_filter(*table->only, table->only_where);
                         auto* b = std::get_if<binary_expression>(&table->only->node);
@@ -2855,10 +2856,37 @@ namespace one::language {
         // board project_page.issues by phase over project_page.phases: each card names
         // its column by a field pointing at what the over list lists, and the cards hold
         // that field and what they show. A move goes along steps and changes that field.
+        // track milestone over board_page.milestones { due }: the rows' field points at
+        // what the track's list holds, the rows hold it, and each card is called by its
+        // title or name and shows what its list holds.
+        void verify_track(const std::string& ns, const track_setting& track, const view_each& rows, const std::string& route) {
+            const view_each* records = named_list(ns, track.over, track.over_list, route);
+            const entity_declaration* row = listed_entity(ns, rows);
+            const entity_declaration* record = records ? listed_entity(ns, *records) : nullptr;
+            if (!row || !record) return;
+            const field* f = find_field(*row, track.field);
+            std::string list = track.over.text() + "." + track.over_list;
+            if (!f) {
+                error(track.where, "entity " + row->name + " has no field " + track.field + nearest(track.field, field_names(*row)));
+            } else if (pointed(ns, *f) != record) {
+                error(track.where, "a track over " + list + " picks rows by a field pointing at a " + record->name + ", and " + track.field + " doesn't");
+            } else if (!in_rows(rows, track.field)) {
+                error(track.where, "the rows need " + track.field + " for the track to pick them; add it to the list's block");
+            }
+            if (!in_rows(*records, "title") && !in_rows(*records, "name")) {
+                error(track.over.where, "a track's cards are called by their title or name, so " + list + " needs one");
+            }
+            for (const auto& shown : track.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*records, key)) error(shown.where, "view " + track.over.text() + " has no " + key + " in its " + track.over_list + "; add it to the list's block");
+            }
+        }
+
         void verify_board(const std::string& ns, const board_item& board, const std::string& route) {
             const view_each* cards = named_list(ns, board.view, *board.list, route);
             const view_each* columns = named_list(ns, board.over, board.over_list, route);
             if (!cards || !columns) return;
+            if (board.track) verify_track(ns, *board.track, *cards, route);
             const entity_declaration* card = listed_entity(ns, *cards);
             const entity_declaration* column = listed_entity(ns, *columns);
             if (!card || !column) return;

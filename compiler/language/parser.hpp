@@ -1067,6 +1067,7 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        if (parse_track(table.track)) continue;
                         // hide when empty: not shown while it has no rows, like a person's reports.
                         if (at_word("hide") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
                             advance();
@@ -1207,6 +1208,7 @@ namespace one::language {
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
+                        if (parse_track(board.track)) continue;
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
@@ -1941,6 +1943,38 @@ namespace one::language {
                 return e;
             }
             return parse_postfix();
+        }
+
+        // track milestone over board_page.milestones { due }, in a table's or a board's
+        // block: the field, the list it's over, and what a card shows besides its title.
+        bool parse_track(std::optional<track_setting>& out) {
+            if (!at_word("track") || peek(1).kind != token_kind::identifier) return false;
+            advance();
+            track_setting track;
+            track.where = peek().where;
+            track.field = advance().text;
+            if (!at_word("over")) fail_expecting("over and the view's list it picks from, like over board_page.milestones");
+            advance();
+            track.over = parse_qualified_name("the view whose list it's a track of, like board_page");
+            expect(token_kind::dot, "'.' and the view's list, like board_page.milestones");
+            track.over_list = expect(token_kind::identifier, "the view's list, like milestones").text;
+            if (at(token_kind::left_brace)) {
+                advance();
+                while (in_block()) {
+                    while (!at_line_end()) {
+                        table_column column;
+                        column.where = peek().where;
+                        column.value = parse_postfix();
+                        if (at(token_kind::string)) column.label = advance().text;
+                        track.columns.push_back(std::move(column));
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+            }
+            end_line();
+            out = std::move(track);
+            return true;
         }
 
         expression_ptr parse_postfix() {

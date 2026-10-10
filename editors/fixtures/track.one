@@ -1,0 +1,36 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A track, for the highlighting test: track and over are keywords.
+
+namespace shop {
+
+	entity release {
+		title  text
+		due    date
+	}
+
+	entity order {
+		title    text
+		release  release
+	}
+
+	view desk public {
+		releases = each release {
+			title  due
+		}
+		orders = each order {
+			title  release
+		}
+	}
+
+	screen "Desk" /desk {
+		table desk.orders {
+			track release over desk.releases {
+				due
+			}
+			title
+		}
+	}
+
+}

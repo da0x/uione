@@ -1486,3 +1486,23 @@ TEST_CASE("a form's field is labeled, so a screen reader says what it asks for")
     CHECK(only_error(start + "screen \"Notes\" /notes {\n\tform note::create {\n\t\ttext \"\"\n\t}\n}\n").message ==
           "a field is labeled, so everyone, a screen reader too, knows what it asks for: text \"...\", or no label for one from its name");
 }
+
+TEST_CASE("a track picks rows by a field pointing at what its list holds, and its cards are called by a title") {
+    const std::string start =
+        "entity release {\n\ttitle  text\n\tdue  date\n}\n"
+        "entity ticket {\n\ttitle  text\n\trelease  release\n\tnote  text\n}\n"
+        "view desk public {\n"
+        "\treleases = each release {\n\t\ttitle  due\n\t}\n"
+        "\ttickets = each ticket {\n\t\ttitle  release\n\t}\n"
+        "}\n";
+    auto table = [&](const std::string& track) { return start + "screen \"Desk\" /desk {\n\ttable desk.tickets {\n\t\t" + track + "\n\t\ttitle\n\t}\n}\n"; };
+    CHECK(check_source(table("track release over desk.releases {\n\t\t\tdue\n\t\t}")).empty());
+    CHECK(only_error(table("track note over desk.releases")).message == "a track over desk.releases picks rows by a field pointing at a release, and note doesn't");
+    CHECK(only_error(table("track relase over desk.releases")).message == "entity ticket has no field relase; did you mean release?");
+    CHECK(only_error(table("track release over desk.releases {\n\t\t\tnotes\n\t\t}")).message == "view desk has no notes in its releases; add it to the list's block");
+    CHECK(only_error(table("track release over desk.release")).message == "view desk has no list called release");
+    diagnostics out;
+    parse("test.one", table("track release"), out);
+    REQUIRE(out.size() == 1);
+    CHECK(out[0].message == "expected over and the view's list it picks from, like over board_page.milestones, found the end of the line");
+}

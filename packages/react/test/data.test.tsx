@@ -1,7 +1,7 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: LGPL-3.0-only
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useLocation } from "react-router";
@@ -955,6 +955,63 @@ describe("what's on screen, in the path", () => {
     open("/issues/closed");
     expect(screen.getByText("Old bug")).toBeTruthy();
     expect(screen.queryByText("Tabs too wide")).toBeNull();
+  });
+});
+
+describe("a track over a table", () => {
+  const view: ViewState = {
+    status: "live",
+    data: {
+      milestones: [
+        { id: "p-alpha", title: "Alpha", due: "2026-11-01" },
+        { id: "p-beta", title: "Beta", due: "2026-12-01" },
+      ],
+      issues: [
+        { id: "1", title: "Crash on save", milestone: "p-alpha" },
+        { id: "2", title: "Slow start", milestone: "p-beta" },
+        { id: "3", title: "Typo", milestone: "p-beta" },
+        { id: "4", title: "Someday", milestone: "" },
+      ],
+    },
+  };
+  function Where() {
+    const { pathname } = useLocation();
+    return <output aria-label="address">{pathname}</output>;
+  }
+  const track = { field: "milestone", view, list: "milestones", shown: "title", columns: { due: "Due" } };
+  const issues = defineScreen({ title: "Issues", route: "/issues", shown: true }, () => (
+    <>
+      <Table view={view} list="issues" columns={{ title: "Title" }} track={track} />
+      <Where />
+    </>
+  ));
+  const open = (location: string) => render(<App name="app" screens={[issues]} ui={plain} data={memorySource()} location={location} />);
+  const cards = () => within(screen.getByRole("group", { name: "Milestone" })).getAllByRole("button");
+
+  it("shows each record as a card, in order, with what it shows and how many rows it holds", () => {
+    open("/issues");
+    expect(cards().map((card) => card.textContent)).toEqual(["Alpha 2026-11-01 1 issue", "Beta 2026-12-01 2 issues"]);
+    expect(screen.getByRole("group", { name: "Milestone" }).textContent).toContain("→");
+    expect(screen.getByText("Someday")).toBeTruthy();
+  });
+
+  it("keeps the rows in the card picked, says so in the path, and shows them all when it's picked again", async () => {
+    open("/issues");
+    fireEvent.click(cards()[1]);
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("/issues/milestone/beta"));
+    expect(cards()[1].getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Crash on save")).toBeNull();
+    expect(screen.queryByText("Someday")).toBeNull();
+    expect(screen.getByText("Typo")).toBeTruthy();
+    fireEvent.click(cards()[1]);
+    await waitFor(() => expect(screen.getByLabelText("address").textContent).toBe("/issues"));
+    expect(screen.getByText("Crash on save")).toBeTruthy();
+  });
+
+  it("opens on the card a path names, as a shared link does", () => {
+    open("/issues/milestone/alpha");
+    expect(screen.getByText("Crash on save")).toBeTruthy();
+    expect(screen.queryByText("Typo")).toBeNull();
   });
 });
 

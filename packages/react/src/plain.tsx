@@ -392,6 +392,23 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Track: ({ label, steps }) => (
+    <div role="group" aria-label={label}>
+      {steps.map((step, i) => (
+        <span key={step.id}>
+          {i > 0 && <span aria-hidden="true"> → </span>}
+          <button type="button" aria-pressed={step.selected} onClick={step.onSelect}>
+            <strong>{step.title}</strong>
+            {step.details.map((detail, at) => (
+              <span key={at}> {detail}</span>
+            ))}{" "}
+            {step.count} {step.count === 1 ? step.noun.replace(/s$/, "") : step.noun}
+          </button>
+        </span>
+      ))}
+    </div>
+  ),
+
   Board: ({ status, columns, error, onMove, search, tools, filtered }) => (
     <>
       {filtered && (

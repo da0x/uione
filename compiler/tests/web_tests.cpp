@@ -1403,3 +1403,33 @@ TEST_CASE("a form of only what a command is sent besides its fields acts on the 
     CHECK(screens->content.find(R"(const shopId = useParam("shop");)") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a track draws a list's records above a table, and a board beside it takes it too") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-track";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace desk at / {\n"
+                         "entity release {\n\ttitle  text\n\tdue  date\n}\n"
+                         "entity column {\n\ttitle  text\n}\n"
+                         "entity ticket {\n\ttitle  text\n\trelease  release\n\tcolumn  column\n}\n"
+                         "view desk public {\n"
+                         "\treleases = each release {\n\t\torder by due\n\t\ttitle  due\n\t}\n"
+                         "\tcolumns = each column {\n\t\ttitle\n\t}\n"
+                         "\ttickets = each ticket {\n\t\ttitle  release  column\n\t}\n"
+                         "}\n"
+                         "screen \"Desk\" /desk {\n"
+                         "\ttable desk.tickets {\n\t\ttrack release over desk.releases {\n\t\t\tdue \"Ships\"\n\t\t}\n\t\ttitle\n\t}\n"
+                         "\tboard desk.tickets by column over desk.columns {\n\t\ttitle\n\t}\n"
+                         "}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    std::string track = R"( track={{ field: "release", view: desk, list: "releases", shown: "title", columns: { due: "Ships" } }})";
+    CHECK(screens->content.find("<Table view={desk} list=\"tickets\" columns={{ title: \"Title\" }}" + track) != std::string::npos);
+    CHECK(screens->content.find("columns={{ title: \"Title\" }}" + track + " />") != std::string::npos);
+    CHECK(screens->content.find("shown: true") != std::string::npos);
+    fs::remove_all(dir);
+}

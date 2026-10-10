@@ -492,6 +492,17 @@ namespace one::language {
         location icon_where;
     };
 
+    // track milestone over board_page.milestones { due }: a list's records as cards in
+    // a row, in its order, joined by arrows, each its title and what the block shows;
+    // picking one keeps the rows whose field is it, like the issues in a milestone.
+    struct track_setting {
+        std::string field;  // the rows' field naming one of the records, like milestone
+        location where;
+        qualified_name over;
+        std::string over_list;
+        std::vector<table_column> columns;  // what a card shows besides its title, like due
+    };
+
     struct table_item {
         qualified_name view;
         std::optional<std::string> list;  // table issue_page.comments: one of the view's lists
@@ -523,6 +534,7 @@ namespace one::language {
         location hue_where;
         std::optional<std::string> tint;
         location tint_where;
+        std::optional<track_setting> track;
     };
 
     // grid project_page.steps by from and to over project_page.phases { roles.title }:
@@ -591,6 +603,7 @@ namespace one::language {
         std::vector<std::string> search;    // search title labels: a box that finds cards by these
         std::optional<std::string> tint;    // tint by priority: each card colored as a table's row
         location tint_where;
+        std::optional<track_setting> track;
     };
 
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as

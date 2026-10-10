@@ -1513,6 +1513,8 @@ namespace one::generators {
             }
             line += " columns={{ " + columns + " }}";
             line += tint_on(ns, board.view, board.list, board.tint);
+            // A board beside a table, shown in its stead, takes the table's track.
+            line += track_on(parts, ns, board.track ? &*board.track : beside && beside->track ? &*beside->track : nullptr);
             if (board.link) {
                 std::string target = full_route(ns, *board.link);
                 line += " link=" + web_detail::js_string(target);
@@ -2062,6 +2064,7 @@ namespace one::generators {
             if (table.page || table.by) parts.shown_in_path = true;
             if (table.only) line += " only={" + filter_query(*table.only) + "}";
             line += tint_on(ns, table.view, table.list, table.tint);
+            line += track_on(parts, ns, table.track ? &*table.track : nullptr);
             if (!table.hue.empty()) line += " hue=" + web_detail::js_string(table.hue);
             if (table.hide_empty) line += " hideEmpty";
             line += toolbar(parts, ns, table.columns, screen);
@@ -2073,6 +2076,25 @@ namespace one::generators {
                         (allowed.empty() ? "" : ", allowed: " + allowed.substr(10, allowed.size() - 11)) + " }}";
             }
             out.line(line + " />");
+        }
+
+        // track={{ field: "milestone", view: boardPage, list: "milestones", shown: "title",
+        // columns: { due: "Due" } }}: a list's records as cards in a row, picking one
+        // keeping the rows whose field is it, which is in the page's path.
+        std::string track_on(screen_parts& parts, const std::string& ns, const language::track_setting* track) {
+            if (!track) return "";
+            parts.shown_in_path = true;
+            auto over = listed_columns(ns, track->over.text(), track->over_list);
+            std::string shown = std::find(over.begin(), over.end(), "title") != over.end() ? "title" : "name";
+            std::string columns;
+            for (const auto& column : track->columns) {
+                std::string key = web_detail::text_of(*column.value);
+                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
+                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+            }
+            return " track={{ field: " + web_detail::js_string(track->field) + ", view: " + view_variable(parts, full_view(ns, track->over.text())) +
+                   ", list: " + web_detail::js_string(track->over_list) + ", shown: " + web_detail::js_string(shown) + ", columns: { " + columns + " } }}";
         }
 
         // A choice field's choices, each with how it's shown: [["mit", "MIT"], ...].

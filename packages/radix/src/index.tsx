@@ -13,7 +13,7 @@
 import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
@@ -834,6 +834,45 @@ export const radix: ComponentSet = {
     </div>
     );
   },
+
+  // A list's records as large cards in a row, like a project's milestones as a
+  // timeline: an arrow from each to the next, each its title, what else it shows,
+  // like its date, and how many rows it holds; the one picked stands out, pressed.
+  // On a narrow page the row scrolls sideways rather than wrapping, to stay a line.
+  Track: ({ label, steps }) => (
+    <div role="group" aria-label={label} className="-mx-1 flex items-stretch gap-1 overflow-x-auto px-1 pt-1 pb-3">
+      {steps.map((step, i) => (
+        <Fragment key={step.id}>
+          {i > 0 && (
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6 shrink-0 self-center text-muted" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          )}
+          <button
+            type="button"
+            aria-pressed={step.selected}
+            onClick={step.onSelect}
+            className={
+              "flex w-56 shrink-0 flex-col items-start gap-1 rounded-box border p-4 text-left shadow-panel transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden " +
+              (step.selected ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent")
+            }
+          >
+            <span className={"text-lg leading-snug font-semibold " + (step.selected ? "text-accent" : "text-ink")}>{step.title}</span>
+            {step.details.length > 0 && (
+              <span className="flex flex-wrap gap-x-3 text-sm text-muted">
+                {step.details.map((detail, at) => (
+                  <span key={at}>{detail}</span>
+                ))}
+              </span>
+            )}
+            <span className="mt-auto text-sm text-muted">
+              <span className="font-semibold text-ink tabular-nums">{step.count}</span> {step.count === 1 ? step.noun.replace(/s$/, "") : step.noun}
+            </span>
+          </button>
+        </Fragment>
+      ))}
+    </div>
+  ),
 
   // Large cards, three across a wide page and one on a narrow one: a title that opens
   // what it's for, how many it holds and how they split, as a slim bar in the accent

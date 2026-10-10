@@ -255,6 +255,24 @@ export interface Card {
   filters: { label: string; link: LinkProps; hue?: Hue }[];
 }
 
+// A list's records as large cards in a row, in their order, joined by arrows, like a
+// project's milestones as a timeline: picking one shows only the rows in it, and
+// picking it again shows them all.
+export interface TrackProps {
+  label: string; // what the cards are, like Milestone
+  steps: TrackStep[];
+}
+
+export interface TrackStep {
+  id: string;
+  title: ReactNode;
+  details: ReactNode[]; // what else it shows, like its due date
+  count: number; // how many rows are in it
+  noun: string; // what's counted, like issues
+  selected: boolean;
+  onSelect: () => void;
+}
+
 export interface BoardColumn {
   id: string;
   title: string;
@@ -463,6 +481,7 @@ export interface ComponentSet {
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;
   Cards: ComponentType<CardsProps>;
+  Track: ComponentType<TrackProps>;
   Labels: ComponentType<LabelsProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
