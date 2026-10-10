@@ -132,7 +132,7 @@ The language's own words, inside what a declaration says:
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
-- in a role: `per`, `from`, and in a picker, `from`;
+- in a role: `per`, `from`, and in a define role, `in` and `for services`; in a picker, `from`;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
@@ -559,6 +559,17 @@ command issue::move {
 	}
 }
 ```
+- `held(phase.worked_by)` asks the same of the roles listed on what the command's
+  entity points at, read once in the command's own transaction. A list is `none`
+  when it holds nothing, so taking an issue nobody else has is:
+
+```one
+command issue::claim {
+	require held(phase.worked_by)  "this phase isn't worked by a role you hold"
+	require assignees == none || assignees has me  "someone else has taken it"
+	add me to assignees
+}
+```
 - `if workflow == workflow::kanban { ... }` does what's inside only when its
   condition holds, so a project can start from a preset it picks.
 - In a `dispatch phase::create`, `phase::triaged` is the project's phase named
@@ -858,6 +869,60 @@ entity member {
   role from a list of the project's roles that a view on the screen holds, like
   `roles = each role in project { name  title }`.
 
+### for services
+
+A role a project's services may hold as well as its people: programs, like an AI
+agent or a script, that work beside them.
+
+```one
+// Works the issues in the phases its role works: takes one, comments, moves it on.
+define role agent "Agent" in project for services {
+	issue::claim
+	issue::release
+	issue::move
+	comment::create
+}
+
+command service::create
+command service::key
+command service::revoke
+```
+
+- A role for services brings the project's services, records of an entity the
+  language declares, `service`, named by its project and its title, holding one
+  role made for services, with what's shown of its key:
+
+```one
+entity service history {
+	project    project  required  key
+	name       text     required  key = slug(title)
+	title      text     required
+	role       role     required
+	key_start  text
+	key_made   date
+	key_used   date
+}
+```
+
+- A service is a member of its project, as a person is: it reads what members
+  read, and runs what its role allows, there. It runs nothing else: no command that
+  says `by anyone` or `by anyone signed in`, nothing in another project, and nothing
+  that changes who has access, roles, members, services or invitations, whatever a
+  role's record is edited to say. A role for services that allows one of those is a
+  mistake.
+- `service::key` gives it a new key, which replaces any it had and is shown once,
+  to copy; only its first characters are kept to show. `service::revoke` takes it
+  away. Both are declared as any command is, with no body.
+- A service sends its key as `Authorization: Bearer one_…` to run commands, at
+  `POST /api/<namespace>/<entity>/<action>` as a page does, and asks who it is at
+  `GET /api/me`. At `POST /api/token` the key trades for a Firebase sign-in of the
+  service's own, which reads views live under the same rules as a person's.
+  A revoked key is refused at once.
+- A service's profile is its title, marked as a service: `created_by.service` and
+  `author.service` say so in a view. It has no username, so no `@mention` names it.
+- A project with a role for services lets its backend sign their sign-ins as
+  itself, which its deploy sets up.
+
 ## define theme
 
 How a site looks: a color for what each is for, light and dark, its fonts, its
@@ -904,7 +969,8 @@ project shop {
 
 ## define service
 
-A system that runs commands, not a person, like GitHub telling each project
+A system declared in code that runs commands, not a person, and not one of the
+programs a project gives a role [for services](#for-services), like GitHub telling each project
 about the commits that mention its issues, and the commands it may run, one a
 line. A [webhook](#webhook) runs as one.
 
