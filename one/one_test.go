@@ -79,6 +79,7 @@ var modules = []one.Item{
 	forum,
 	teams,
 	crews,
+	yards,
 	desk,
 	cases,
 	code,

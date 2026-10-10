@@ -49,6 +49,9 @@ type Ctx struct {
 	given    map[string]any       // what it was sent besides its entity's fields, for Input
 	gone     []*gone              // what it deletes besides its own entity, with DeleteWhere
 	deleting string               // the path of its own entity, when the command deletes it
+	service  bool                 // run by a service account, with its key
+	writes   []write              // what it changes outside any entity, like a key
+	revealed map[string]any       // what its answer shows once, like a new key
 }
 
 // gone is an entity a command's body deletes with DeleteWhere.
@@ -231,6 +234,25 @@ func (c *Ctx) save() ([]event, error) {
 			Before:  m.before,
 			After:   after,
 		})
+	}
+	for _, w := range c.writes {
+		var err error
+		switch {
+		case w.data == nil:
+			err = c.tx.Delete(w.ref)
+		case w.merged:
+			err = c.tx.Set(w.ref, w.data, firestore.MergeAll)
+		default:
+			err = c.tx.Set(w.ref, w.data)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if w.event != nil {
+			ev := *w.event
+			ev.Version = c.now.UnixNano()
+			events = append(events, ev)
+		}
 	}
 	for _, r := range c.reads {
 		if deleted[r.ref.Path] || reflect.DeepEqual(r.schema.data(r.value), r.before) {
@@ -608,10 +630,12 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 }
 
 type call struct {
-	ctx    context.Context
-	me     string // the signed-in person's id, or empty
-	input  map[string]any
-	system bool // run by the backend's own code, which may run any command
+	ctx      context.Context
+	me       string // the signed-in person's id, or empty
+	input    map[string]any
+	system   bool           // run by the backend's own code, which may run any command
+	service  bool           // run by a service account, which may only do what its role allows
+	revealed map[string]any // what the answer shows once, like a new key
 }
 
 func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, fields, inputs []string, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
@@ -654,8 +678,8 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	// says which project.
 	within := false
 	if action == "create" {
-		if err := a.permitted(c.ctx, nil, c.me, permission, nil); err != nil {
-			if !a.scopes(permission) || c.me == "" {
+		if err := a.permittedAs(c.ctx, nil, c.me, c.service, permission, nil); err != nil {
+			if !a.scopes(permission) || c.me == "" || (c.service && a.refusedOutright(permission)) {
 				return "", err
 			}
 			within = true
@@ -667,9 +691,11 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		v := reflect.ValueOf(entity).Elem()
 		record := P(entity).record()
 		before, after = nil, nil
-		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given}
+		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given, service: c.service}
 		body.entity = &owned{s, v}
 		pointed = nil
+		c.revealed = nil
+		defer func() { c.revealed = body.revealed }()
 
 		if action == "create" {
 			if err := s.decode(c.input, v); err != nil {
@@ -704,6 +730,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 			// A project starts with its default roles, made with it.
 			if err := a.seedRoles(body, s, ref.ID); err != nil {
+				return err
+			}
+			if err := a.serviceChanged(body, s, action, ref.ID, v); err != nil {
 				return err
 			}
 			if err := s.validate(v); err != nil {
@@ -776,7 +805,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		before = snap.Data()
 		body.before = before
-		if err := a.permitted(ctx, tx, c.me, permission, &owned{s, v}); err != nil {
+		if err := a.permittedAs(ctx, tx, c.me, c.service, permission, &owned{s, v}); err != nil {
 			return err
 		}
 		if action == "delete" {
@@ -788,6 +817,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				if err := do(body, entity); err != nil {
 					return err
 				}
+			}
+			if err := a.serviceChanged(body, s, action, id, v); err != nil {
+				return err
 			}
 			changed, err := body.save()
 			if err != nil {
@@ -827,11 +859,14 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 		}
+		if err := a.serviceChanged(body, s, action, id, v); err != nil {
+			return err
+		}
 		if err := s.validate(v); err != nil {
 			return err
 		}
 		// Moving something into another project needs the same permission there.
-		if err := a.permittedWhereMoved(ctx, tx, c.me, permission, s, before, v); err != nil {
+		if err := a.permittedWhereMoved(ctx, tx, c.me, c.service, permission, s, before, v); err != nil {
 			return err
 		}
 		if err := a.unique(tx, s, v, id); err != nil {
@@ -1027,7 +1062,7 @@ func (a *App) permitted(ctx context.Context, tx *firestore.Transaction, me strin
 
 // permittedWhereMoved checks a permission again when a change moves an entity into
 // another project, or whatever a role is held within.
-func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction, me string, p Permission, s *schema, before map[string]any, v reflect.Value) error {
+func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction, me string, service bool, p Permission, s *schema, before map[string]any, v reflect.Value) error {
 	if !a.scopes(p) {
 		return nil
 	}
@@ -1057,7 +1092,7 @@ func (a *App) permittedWhereMoved(ctx context.Context, tx *firestore.Transaction
 			return err
 		}
 		if after != earlier {
-			return a.permitted(ctx, tx, me, p, &owned{s, v})
+			return a.permittedAs(ctx, tx, me, service, p, &owned{s, v})
 		}
 	}
 	return nil

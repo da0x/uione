@@ -42,6 +42,10 @@ func (s *System) SignedIn(r *http.Request) (string, error) {
 	if err != nil {
 		return "", &Failure{Status: http.StatusUnauthorized, Message: "your sign-in has expired; sign in again"}
 	}
+	// A route's own code is written for people; a service is turned away.
+	if service, _ := token.Claims["service"].(bool); service {
+		return "", &Failure{Status: http.StatusForbidden, Message: "a service can't use this"}
+	}
 	s.app.remember(r.Context(), token)
 	return token.UID, nil
 }

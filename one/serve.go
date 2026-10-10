@@ -200,6 +200,7 @@ type App struct {
 	log   *log.Logger
 
 	profiles sync.Map     // each person's name and picture, as last saved
+	used     sync.Map     // when each service last used its key, as last kept
 	rebuilt  atomic.Int64 // how many view documents have been worked out, which tests count
 }
 
@@ -313,6 +314,8 @@ func (a *App) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST /api/", a.serveCommand)
 	mux.HandleFunc("POST /api/signin", a.serveSignIn)
+	mux.HandleFunc("POST /api/token", a.serveToken)
+	mux.HandleFunc("GET /api/me", a.serveMe)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
 	}
@@ -334,15 +337,10 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	me := ""
-	if header := r.Header.Get("Authorization"); header != "" {
-		token, err := a.auth.VerifyIDToken(r.Context(), strings.TrimPrefix(header, "Bearer "))
-		if err != nil {
-			reply(w, http.StatusUnauthorized, map[string]any{"error": "your sign-in has expired; sign in again"})
-			return
-		}
-		me = token.UID
-		a.remember(r.Context(), token)
+	who, err := a.caller(r)
+	if err != nil {
+		replyFailure(w, a, "signing in", err)
+		return
 	}
 
 	input := map[string]any{}
@@ -351,17 +349,122 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := command(a, &call{ctx: r.Context(), me: me, input: input})
-	var failure *Failure
-	switch {
-	case errors.As(err, &failure):
-		reply(w, failure.Status, map[string]any{"error": failure.Message})
-	case err != nil:
-		a.log.Printf("one: %s failed: %v", name, err)
-		reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong on our side; try again"})
-	default:
-		reply(w, http.StatusOK, map[string]any{"id": id})
+	run := &call{ctx: r.Context(), me: who.id, input: input, service: who.service}
+	id, err := command(a, run)
+	if err != nil {
+		replyFailure(w, a, name, err)
+		return
 	}
+	answer := map[string]any{"id": id}
+	for k, v := range run.revealed {
+		answer[k] = v
+	}
+	reply(w, http.StatusOK, answer)
+}
+
+// replyFailure answers with what went wrong: a Failure's own words and status, or,
+// for anything else, a plain apology, with the error logged.
+func replyFailure(w http.ResponseWriter, a *App, doing string, err error) {
+	var failure *Failure
+	if errors.As(err, &failure) {
+		reply(w, failure.Status, map[string]any{"error": failure.Message})
+		return
+	}
+	a.log.Printf("one: %s failed: %v", doing, err)
+	reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong on our side; try again"})
+}
+
+// caller is who's asking: nobody, a person signed in with Firebase, or a service,
+// with its key or with the Firebase sign-in its key traded for.
+type caller struct {
+	id      string
+	service bool
+	place   string // the project a service is held in
+}
+
+func (a *App) caller(r *http.Request) (caller, error) {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return caller{}, nil
+	}
+	credential := strings.TrimPrefix(header, "Bearer ")
+	if strings.HasPrefix(credential, keyPrefix) {
+		service, place, err := a.keyed(r.Context(), credential)
+		if err != nil {
+			return caller{}, err
+		}
+		return caller{id: service, service: true, place: place}, nil
+	}
+	token, err := a.auth.VerifyIDToken(r.Context(), credential)
+	if err != nil {
+		return caller{}, &Failure{Status: 401, Message: "your sign-in has expired; sign in again"}
+	}
+	// A service's own Firebase sign-in is still a service: it's never taken for a
+	// person, and its profile isn't rewritten from it.
+	if service, _ := token.Claims["service"].(bool); service {
+		place, _ := token.Claims["place"].(string)
+		return caller{id: token.UID, service: true, place: place}, nil
+	}
+	a.remember(r.Context(), token)
+	return caller{id: token.UID}, nil
+}
+
+// serveToken trades a service's key for a Firebase custom token of the service's
+// own id, which signs it in to read views under the same rules as anyone. Only a
+// key is taken here.
+func (a *App) serveToken(w http.ResponseWriter, r *http.Request) {
+	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !strings.HasPrefix(credential, keyPrefix) {
+		reply(w, http.StatusUnauthorized, map[string]any{"error": "a token is given for a service's key"})
+		return
+	}
+	service, place, err := a.keyed(r.Context(), credential)
+	if err != nil {
+		replyFailure(w, a, "a service's token", err)
+		return
+	}
+	token, err := a.auth.CustomTokenWithClaims(r.Context(), service, map[string]any{"service": true, "place": place})
+	if err != nil {
+		replyFailure(w, a, "a service's token", err)
+		return
+	}
+	reply(w, http.StatusOK, map[string]any{"token": token})
+}
+
+// serveMe says who the caller is: their id and name, and for a service, its
+// project and role.
+func (a *App) serveMe(w http.ResponseWriter, r *http.Request) {
+	who, err := a.caller(r)
+	if err != nil {
+		replyFailure(w, a, "who's asking", err)
+		return
+	}
+	if who.id == "" {
+		reply(w, http.StatusUnauthorized, map[string]any{"error": "sign in, or send a service's key"})
+		return
+	}
+	answer := map[string]any{"id": who.id, "service": who.service}
+	if snap, err := a.store.Collection("users").Doc(who.id).Get(r.Context()); err == nil {
+		answer["name"], _ = snap.Data()["name"].(string)
+	}
+	if who.service {
+		for _, spec := range a.reg.defined {
+			if spec.service == nil {
+				continue
+			}
+			f, err := a.servicesFields(spec)
+			if err != nil {
+				continue
+			}
+			snap, err := a.store.Collection(f.service.collection).Doc(who.id).Get(r.Context())
+			if err != nil {
+				continue
+			}
+			answer[f.scope.name] = who.place
+			answer["role"], _ = snap.Data()[f.role.name].(string)
+		}
+	}
+	reply(w, http.StatusOK, answer)
 }
 
 func reply(w http.ResponseWriter, status int, body map[string]any) {
@@ -401,9 +504,18 @@ func Serve(items ...Item) {
 // person gave GitHub signing in, which is checked to be theirs, and kept on their
 // profile, out of every view, until they sign in with GitHub again.
 func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
-	token, err := a.auth.VerifyIDToken(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if strings.HasPrefix(credential, keyPrefix) {
+		reply(w, http.StatusBadRequest, map[string]any{"error": "a service doesn't sign in; it uses its key"})
+		return
+	}
+	token, err := a.auth.VerifyIDToken(r.Context(), credential)
 	if err != nil {
 		reply(w, http.StatusUnauthorized, map[string]any{"error": "your sign-in has expired; sign in again"})
+		return
+	}
+	if service, _ := token.Claims["service"].(bool); service {
+		reply(w, http.StatusBadRequest, map[string]any{"error": "a service doesn't sign in; it uses its key"})
 		return
 	}
 	a.remember(r.Context(), token)

@@ -24,6 +24,8 @@ type RolesSpec struct {
 	allows              string // the role's list of what it allows, like may
 	defaults            []defaultRole
 	ns                  string
+	service             reflect.Type // the project's service accounts, when it has them
+	forServices         []string     // the roles a service may hold, like agent
 }
 
 type defaultRole struct {
@@ -56,6 +58,9 @@ func (r *RolesSpec) register(reg *registry, ns string) {
 	reg.schema(r.role, ns)
 	reg.schema(r.scope, ns)
 	reg.schema(r.member, ns)
+	if r.service != nil {
+		reg.schema(r.service, ns)
+	}
 	reg.defined = append(reg.defined, r)
 }
 

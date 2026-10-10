@@ -28,6 +28,9 @@ type Profile struct {
 	// Username is the person's GitHub login when they signed in with GitHub, like
 	// da0x, so an address can name them the way GitHub does.
 	Username string `firestore:"username"`
+	// Service is true for a service account, a program a project gave a role, so a
+	// screen can show it isn't a person.
+	Service bool `firestore:"service"`
 }
 
 // githubLogin asks GitHub for the login of the account with a numeric id, which is
