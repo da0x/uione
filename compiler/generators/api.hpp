@@ -141,7 +141,8 @@ namespace one::generators {
         code::source project_;  // the project block, or fixed without one
         std::string collecting_;  // the file being collected
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
-        std::map<const language::expression*, std::string> existing_;  // each exists(...) asked in a command, and what holds its answer
+        std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
+        int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
 
         code::source at(const void* declaration) const {
             auto it = declared_.find(declaration);
@@ -854,6 +855,7 @@ namespace one::generators {
                      const code::source& source, bool& uses_time) {
             pointed_.clear();
             existing_.clear();
+            helds_ = 0;
             for (const auto* s : body) find_pointed(e, *s);
             // What the body reads through a reference is read first, in the command's
             // own transaction, so its changes are saved with the command's.
@@ -1385,6 +1387,8 @@ namespace one::generators {
             if (right && right->name.text() == "none" && f) {
                 const std::string& value = left->first;
                 if (f->type && f->type->text() == "date") return (op == "==" ? "" : "!") + value + ".IsZero()";
+                // A list is none when it holds nothing, whether it's stored empty or not at all.
+                if (f->list) return "len(" + value + ") " + op + " 0";
                 return value + " " + op + " " + zero(*f);
             }
             auto l = expression(e, *b.left, me, nullptr);
@@ -1407,6 +1411,7 @@ namespace one::generators {
             if (auto* u = std::get_if<language::unary_expression>(&x.node)) return exists_before(out, e, *u->operand, me);
             auto* call = std::get_if<language::call_expression>(&x.node);
             auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+            if (callee && callee->name.text() == "held") return held_before(out, e, x, *call, me);
             if (!callee || callee->name.text() != "exists") return true;
             auto* w = std::get_if<language::where_expression>(&call->arguments[0]->node);
             auto* source = w ? std::get_if<language::name_expression>(&w->source->node) : nullptr;
@@ -1457,6 +1462,46 @@ namespace one::generators {
             out.line("return err");
             out.close("}");
             existing_[&x] = name;
+            return true;
+        }
+
+        // held(stage.worked_by): whether the person holds one of the roles listed on
+        // what the command's entity points at, asked before the require that uses it.
+        // What it points at is read once, beside what the body reads the same way.
+        bool held_before(stream& out, const language::entity_declaration& e, const language::expression& x, const language::call_expression& call, const std::string& me) {
+            // It's read as stage.worked_by, a member of a name, or as one dotted name.
+            std::string through, listed;
+            if (call.arguments.size() == 1) {
+                if (auto* m = std::get_if<language::member_expression>(&call.arguments[0]->node)) {
+                    auto* object = std::get_if<language::name_expression>(&m->object->node);
+                    if (object && object->name.parts.size() == 1) through = object->name.parts[0], listed = m->member;
+                } else if (auto* named = std::get_if<language::name_expression>(&call.arguments[0]->node); named && named->name.parts.size() == 2) {
+                    through = named->name.parts[0], listed = named->name.parts[1];
+                }
+            }
+            const language::field* pointer = through.empty() ? nullptr : field(e, through);
+            const language::entity_declaration* pointed = pointer && pointer->type && pkg_ ? entity(*pkg_, pointer->type->text()) : nullptr;
+            const language::field* roles = pointed ? field(*pointed, listed) : nullptr;
+            if (!roles || !roles->list) {
+                unsupported(path_, x.where, "held of anything but a list of roles on what the command's entity points at, like held(stage.worked_by)");
+                return false;
+            }
+            bool read = std::any_of(pointed_.begin(), pointed_.end(), [&](const auto& p) { return p.first == pointer->name; });
+            if (!read) {
+                out.line(local_name(pointer->name) + ", err := one.Read[" + api_detail::go_name(pointed->name) + "](c, " + me + "." +
+                         api_detail::go_name(pointer->name) + ")");
+                out.open("if err != nil {");
+                out.line("return err");
+                out.close("}");
+                pointed_.emplace_back(pointer->name, pointed);
+            }
+            std::string answer = "held" + (helds_ ? std::to_string(helds_ + 1) : std::string());
+            ++helds_;
+            out.line(answer + ", err := c.Held(" + local_name(pointer->name) + "." + api_detail::go_name(roles->name) + ")");
+            out.open("if err != nil {");
+            out.line("return err");
+            out.close("}");
+            existing_[&x] = answer;
             return true;
         }
 

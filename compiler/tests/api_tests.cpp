@@ -611,6 +611,49 @@ command job::move {
     CHECK(found->content.find("if !found {") != std::string::npos);
 }
 
+TEST_CASE("a claim asks whether a role of the stage's is held, and whether nobody has taken it") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+define role hand "Hand" in crew {
+	job::claim
+}
+entity stage {
+	crew       crew  required  key
+	name       slug  required  key
+	worked_by  list of role
+}
+entity job {
+	crew      crew  required
+	stage     stage
+	takers    list of user
+}
+command job::claim {
+	require held(stage.worked_by)  "this stage isn't worked by a role you hold"
+	require takers == none || takers has me  "someone else has taken it"
+	add me to takers
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    // The stage is read, then whether one of its roles is held.
+    CHECK(go.find("stage, err := one.Read[Stage](c, j.Stage)") != std::string::npos);
+    CHECK(go.find("held, err := c.Held(stage.WorkedBy)") != std::string::npos);
+    CHECK(go.find("if !held {") != std::string::npos);
+    // A list compared with none is whether it's empty.
+    CHECK(go.find("len(j.Takers) == 0") != std::string::npos);
+    CHECK(go.find("[]string{}") == std::string::npos);
+}
+
 TEST_CASE("exists and was are a command's, and held takes a project's roles") {
     language::diagnostics out;
     std::vector<language::file> files;
