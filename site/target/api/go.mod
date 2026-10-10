@@ -2,6 +2,6 @@ module www.uione.io/api
 
 go 1.26
 
-require github.com/da0x/uione/one v0.8.3
+require github.com/da0x/uione/one v0.8.4
 
 replace github.com/da0x/uione/one => ../../../one
