@@ -639,8 +639,21 @@ namespace one::language {
             }
         }
 
-        void verify(const std::string&, location, const define_role_declaration& r) {
+        void verify(const std::string& ns, location, const define_role_declaration& r) {
             snake(r.name, r.where);
+            if (!r.services) return;
+            // A role a program may hold never hands out access: not roles, members or
+            // services, nor anything that gives a role, like an invitation.
+            for (const auto& p : r.permissions) {
+                if (p.parts.size() != 2) continue;
+                const std::string& on = p.parts[0];
+                const entity_declaration* e = find_entity(ns, qualified_name{{on}, p.where});
+                bool gives = on == "role" || on == "member" || on == "service";
+                if (e && !gives) {
+                    gives = std::any_of(e->fields.begin(), e->fields.end(), [](const field& f) { return f.type && f.type->text() == "role"; });
+                }
+                if (gives) error(p.where, "role " + r.name + " is for services, which never change who has access, so it can't allow " + p.text());
+            }
         }
 
         // define service github "GitHub" in project { mention::create }: each is a
@@ -3189,6 +3202,11 @@ namespace one::language {
                     f.type = qualified_name{{"text"}, {}};
                     fields.push_back(std::move(f));
                 }
+                // Whether it's a service account, a program, rather than a person.
+                field service;
+                service.name = "service";
+                service.type = qualified_name{{"boolean"}, {}};
+                fields.push_back(std::move(service));
                 return fields;
             }();
             if (!in.reader) {
@@ -3198,8 +3216,8 @@ namespace one::language {
             for (const auto& f : profile) {
                 if (f.name == member) return &f;
             }
-            error(where, "a view can show a person's name, picture and username, not " + person.name + "." + member +
-                             nearest(member, {"name", "picture", "username"}));
+            error(where, "a view can show a person's name, picture and username, and whether they're a service, not " + person.name + "." + member +
+                             nearest(member, {"name", "picture", "username", "service"}));
             return nullptr;
         }
 

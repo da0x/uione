@@ -319,7 +319,10 @@ namespace one::language {
                             fine = false;
                         }
                     }
-                    for (const char* own : {"role", "member"}) {
+                    bool services = std::any_of(at.roles.begin(), at.roles.end(), [](const auto* r) { return r->services; });
+                    std::vector<const char*> owns{"role", "member"};
+                    if (services) owns.push_back("service");
+                    for (const char* own : owns) {
                         if (declares(files, own)) {
                             out.push_back({*at.path, first.where, std::string("define role keeps roles as the language's own ") + own +
                                                                       " records; take out entity " + own + ", which it declares"});
@@ -333,6 +336,12 @@ namespace one::language {
                                        "entity member {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
                                        "\trole  role  required  key\n}\n"
                                        "roles role per " + in + " from member {\n";
+                    // A role for services brings the project's service accounts: each
+                    // named by its title, holding one role, and what's shown of its key.
+                    if (services) {
+                        text = "entity service history {\n\t" + in + "  " + in + "  required  key\n\tname  text  required  key = slug(title)\n"
+                               "\ttitle  text  required\n\trole  role  required\n\tkey_start  text\n\tkey_made  date\n\tkey_used  date\n}\n" + text;
+                    }
                     for (const auto* r : at.roles) {
                         text += "\t" + r->name + " \"\" {\n";
                         for (const auto& p : r->permissions) text += "\t\t" + p.text() + "\n";
@@ -353,6 +362,7 @@ namespace one::language {
                                 roles->defaults[i].where = at.roles[i]->where;
                                 roles->defaults[i].title = at.roles[i]->title;
                                 roles->defaults[i].permissions = at.roles[i]->permissions;
+                                roles->defaults[i].services = at.roles[i]->services;
                             }
                         }
                     }

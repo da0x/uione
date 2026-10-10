@@ -574,12 +574,18 @@ namespace one::generators {
                     body.line(head);
                 } else {
                     body.open(head + ".");
+                    // The roles a project's service accounts may hold, said last.
+                    std::string services;
+                    for (const auto& d : r->defaults) {
+                        if (d.services) services += ", " + api_detail::go_string(d.name);
+                    }
                     for (std::size_t i = 0; i < r->defaults.size(); ++i) {
                         const auto& d = r->defaults[i];
                         std::string line = "Default(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(d.title);
                         for (const auto& p : d.permissions) line += ", " + api_detail::go_string(p.text());
-                        body.line(line + ")" + (i + 1 < r->defaults.size() ? "." : ""));
+                        body.line(line + ")" + (i + 1 < r->defaults.size() || !services.empty() ? "." : ""));
                     }
+                    if (!services.empty()) body.line("Services(one.Entity[Service]()" + services + ")");
                     body.dedent();
                 }
                 body.line();

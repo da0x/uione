@@ -666,6 +666,45 @@ TEST_CASE("exists and was are a command's, and held takes a project's roles") {
     CHECK(std::any_of(out.begin(), out.end(), [](const auto& d) { return d.message == "held takes a list of a project's roles, like held(roles)"; }));
 }
 
+TEST_CASE("a role for services is said last, with the service accounts that hold it") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+define role captain "Captain" in crew {
+	member::create
+	service::create
+	service::key
+}
+define role welder "Welder" in crew for services {
+	crew::update
+}
+command crew::create {
+	by anyone signed in
+	dispatch member::create {
+		crew = id  person = me  role = role::captain
+	}
+}
+command crew::update
+command member::create
+command service::create
+command service::key
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find("type Service struct {") != std::string::npos);
+    CHECK(go.find("\tDefault(\"welder\", \"Welder\", \"crew::update\").\n\tServices(one.Entity[Service](), \"welder\")\n") != std::string::npos);
+    CHECK(go.find(R"(one.Command[Service]("service::key"))") != std::string::npos);
+}
+
 TEST_CASE("a project's own roles become one.Roles, and a role it starts with its id") {
     language::diagnostics out;
     std::vector<language::file> files;

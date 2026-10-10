@@ -483,6 +483,78 @@ once "2026-10-07 mates" {
           "once \"x\" changes a namespace's entities, so it goes inside a namespace");
 }
 
+TEST_CASE("a role for services brings the project's service accounts, and never hands out access") {
+    const std::string crew = R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+entity job {
+	crew   crew  required
+	title  text  required
+	done   boolean
+}
+define role captain "Captain" in crew {
+	member::create
+	service::create
+	service::key
+	service::revoke
+	job::create
+}
+define role welder "Welder" in crew for services {
+	job::finish
+}
+command crew::create {
+	by anyone signed in
+	dispatch member::create {
+		crew = id  person = me  role = role::captain
+	}
+}
+command member::create
+command service::create
+command service::key
+command service::revoke
+command job::create
+command job::finish {
+	done = true
+}
+view crew_page per crew {
+	readers member
+	services = each service in crew {
+		title  role.title  key_start  key_made  key_used  created_by.service
+	}
+}
+}
+)";
+    CHECK(check_source(crew).size() == 0);
+
+    // A role for services can't hand out access.
+    std::string giving = crew;
+    giving.replace(giving.find("for services {\n"), 15, "for services {\n\tmember::create\n");
+    CHECK(only_error(giving).message == "role welder is for services, which never change who has access, so it can't allow member::create");
+
+    // for is followed by services.
+    std::string unfinished = crew;
+    unfinished.replace(unfinished.find("for services {"), 14, "for people {");
+    diagnostics parsed;
+    parse("test.one", unfinished, parsed);
+    REQUIRE(!parsed.empty());
+    CHECK(parsed[0].message == "expected services, as in define role agent \"Agent\" in project for services, found 'people'");
+    diagnostics errors;
+
+    // The language declares the service entity, so the project doesn't.
+    std::string own = crew;
+    own.replace(own.find("entity job {"), 12, "entity service {\n\tname  text\n}\nentity job {");
+    errors = check_source(own);
+    REQUIRE(errors.size() >= 1);
+    CHECK(errors[0].message == "define role keeps roles as the language's own service records; take out entity service, which it declares");
+
+    // Without a role for services there's no service entity.
+    std::string none = crew;
+    none.replace(none.find(" for services {"), 15, " {");
+    errors = check_source(none);
+    REQUIRE(!errors.empty());
+}
+
 TEST_CASE("roles a project defines for itself are role records, given by member records, which the language declares") {
     const std::string crew = R"(namespace crew {
 entity crew {
@@ -731,9 +803,9 @@ TEST_CASE("a view shows a person's name, picture and username, and nothing else 
     const std::string start = "entity post {\n\ttext  text\n\tauthor  user = me\n}\n";
     CHECK(check_source(start + "view posts {\n\teach post {\n\t\ttext  author.name  author.picture  author.username\n\t}\n}\n").empty());
     auto e = only_error(start + "view posts {\n\teach post {\n\t\tauthor.email\n\t}\n}\n");
-    CHECK(e.message == "a view can show a person's name, picture and username, not author.email");
+    CHECK(e.message == "a view can show a person's name, picture and username, and whether they're a service, not author.email");
     e = only_error(start + "view posts {\n\teach post {\n\t\tauthor.nme\n\t}\n}\n");
-    CHECK(e.message == "a view can show a person's name, picture and username, not author.nme; did you mean name?");
+    CHECK(e.message == "a view can show a person's name, picture and username, and whether they're a service, not author.nme; did you mean name?");
     e = only_error(start + "command post::sign {\n\ttext = author.name\n}\n");
     CHECK(e.message == "a person's name, picture and username are shown in views; here author is only who they are");
 }

@@ -133,6 +133,33 @@ TEST_CASE("a project that takes GitHub's webhook routes it to the backend and is
     CHECK(program->content.find("\t\tGitHub:   \"/hooks/github\",\n") != std::string::npos);
 }
 
+TEST_CASE("a project with a role for services lets its backend sign their tokens, and one without doesn't") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "services-project";
+    fs::create_directories(dir);
+    std::string source = "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"
+                         "namespace crew {\n"
+                         "\tentity crew {\n\t\tslug  slug  required  unique  key\n\t}\n"
+                         "\tdefine role captain \"Captain\" in crew {\n\t\tmember::create\n\t}\n"
+                         "\tdefine role welder \"Welder\" in crew for services {\n\t\tcrew::update\n\t}\n"
+                         "\tcommand crew::create {\n\t\tby anyone signed in\n\t}\n"
+                         "\tcommand crew::update\n\tcommand member::create\n"
+                         "}\n";
+    auto program_of = [&](const std::string& text) {
+        REQUIRE(platform::write_file((dir / "main.one").string(), text));
+        auto generated = generate_at(dir.string());
+        for (const auto& f : generated.files) {
+            if (f.path == "infrastructure/main.go") return f.content;
+        }
+        return std::string();
+    };
+    CHECK(program_of(source).find("\t\tServices: true,\n") != std::string::npos);
+    std::string without = source;
+    without.replace(without.find(" for services {"), 15, " {");
+    CHECK(program_of(without).find("Services") == std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a redirect goes into Hosting's settings") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-redirect";

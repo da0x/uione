@@ -35,6 +35,7 @@ namespace one::generators {
         std::string stack = "production";
         code::source from;  // the project block they're written in
         std::string github;  // where GitHub's webhook comes in, which needs a secret
+        bool services = false;  // a role is made for services, whose tokens the backend signs
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
@@ -46,6 +47,15 @@ namespace one::generators {
             if (auto* w = std::get_if<language::webhook_declaration>(&d.node); w && w->provider == "github") return w->route;
         }
         return "";
+    }
+
+    // Whether a role is made for services: define role ... for services.
+    static bool has_services(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_services(n->declarations)) return true;
+            if (auto* r = std::get_if<language::define_role_declaration>(&d.node); r && r->services) return true;
+        }
+        return false;
     }
 
     // The project's deploy settings, when it has all of them.
@@ -67,6 +77,7 @@ namespace one::generators {
                 if (!p->environment.empty()) s.stack = s.firebase;
                 for (const auto& other : files) {
                     if (s.github.empty()) s.github = github_route(other.declarations);
+                    s.services = s.services || has_services(other.declarations);
                 }
                 return s;
             }
@@ -165,6 +176,7 @@ namespace one::generators {
             g.line("Firebase: " + quoted(s.firebase) + ",");
             g.line("Region:   " + quoted(s.region) + ",");
             if (!s.github.empty()) g.line("GitHub:   " + quoted(s.github) + ",");
+            if (s.services) g.line("Services: true,");
             g.close("})");
             g.close("}");
             out.push_back(file("infrastructure/main.go", g));

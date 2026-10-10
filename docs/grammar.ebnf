@@ -156,7 +156,7 @@ role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? 
 /* define role: a role each project starts with, kept as the language's role
  * records, given to people by member records, with the commands it allows, one
  * a line. */
-define_role    ::= "define" "role" NAME STRING "in" NAME "{" NEWLINE? (qualified END)* "}" END
+define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? (qualified END)* "}" END
 /* define theme: how a site looks, as a color for each role, light and dark, its
  * fonts, corners and depth; from another, it changes only what it says. */
 define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END

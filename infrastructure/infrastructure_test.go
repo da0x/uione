@@ -453,6 +453,32 @@ func TestWithoutGitHubThereIsNoSecret(t *testing.T) {
 	}
 }
 
+func TestTheBackendSignsServicesTokensAsItselfOnlyWhenThereAreServices(t *testing.T) {
+	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Services = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, ok := m.resources["gcp:serviceaccount/iAMMember:IAMMember::runtime-signs-tokens"]
+	if !ok {
+		t.Fatalf("a project with services lets its backend sign their tokens; declared: %v", keys(m.resources))
+	}
+	if grant["role"].StringValue() != "roles/iam.serviceAccountTokenCreator" || grant["member"].StringValue() != "serviceAccount:uione-api@ui-one.iam.gserviceaccount.com" {
+		t.Errorf("the backend signs as itself, and nothing more: %v", grant)
+	}
+	if _, ok := m.resources["gcp:projects/service:Service::iamcredentials.googleapis.com"]; !ok {
+		t.Errorf("signing goes through IAM Credentials, which is turned on")
+	}
+	m, err = declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key := range m.resources {
+		if strings.Contains(key, "runtime-signs-tokens") {
+			t.Errorf("a project without services declares %s", key)
+		}
+	}
+}
+
 func TestSettingsGoogleWouldRefuseAreRefusedBeforeAnythingIsDeclared(t *testing.T) {
 	for _, c := range []struct {
 		change func(*Project)
@@ -766,4 +792,13 @@ func TestTheSiteWaitsForHostingToAnswer(t *testing.T) {
 	if len(m.hosting) != 0 {
 		t.Errorf("a preview waits for Firebase Hosting in %v", m.hosting)
 	}
+}
+
+// keys lists what's declared, for a failure to show.
+func keys(resources map[string]resource.PropertyMap) []string {
+	var out []string
+	for key := range resources {
+		out = append(out, key)
+	}
+	return out
 }

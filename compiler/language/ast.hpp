@@ -372,6 +372,7 @@ namespace one::language {
         location where;
         std::string title;
         std::vector<qualified_name> permissions;
+        bool services = false;  // a service account may hold it, as well as a person
     };
 
     // roles role per project from member { ... }: the roles each project defines for
@@ -435,6 +436,8 @@ namespace one::language {
         std::string title;
         std::string in;  // project
         location in_where;
+        bool services = false;  // for services: service accounts may hold it too
+        location services_where;
         std::vector<qualified_name> permissions;
     };
 

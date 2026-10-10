@@ -87,6 +87,11 @@ type Project struct {
 	// secret in the app.
 	GitHub string
 
+	// Whether the project has service accounts, programs given a role made for
+	// services. Each trades its key for a Firebase sign-in of its own, a custom token
+	// the backend signs as itself, so the backend may make tokens as its own account.
+	Services bool
+
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
 	// parent of the Pulumi program's folder unless it's set.
 	Build string
@@ -134,9 +139,13 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	project := pulumi.String(p.Firebase)
 	opt := func(deps ...pulumi.Resource) pulumi.ResourceOrInvokeOption { return pulumi.DependsOn(deps) }
 
-	needed := apis
+	needed := append([]string(nil), apis...)
 	if p.GitHub != "" {
-		needed = append(append([]string(nil), apis...), "secretmanager.googleapis.com")
+		needed = append(needed, "secretmanager.googleapis.com")
+	}
+	// A service's custom token is signed through IAM Credentials.
+	if p.Services {
+		needed = append(needed, "iamcredentials.googleapis.com")
 	}
 	var enabled []pulumi.Resource
 	var hosting *projects.Service
@@ -234,6 +243,17 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		Member:  pulumi.Sprintf("serviceAccount:%s", runtime.Email),
 	}); err != nil {
 		return err
+	}
+	// Signing a service's custom token is asking Google to sign as the backend's own
+	// account, which it may do for itself and for no other account.
+	if p.Services {
+		if _, err := serviceaccount.NewIAMMember(ctx, "runtime-signs-tokens", &serviceaccount.IAMMemberArgs{
+			ServiceAccountId: runtime.Name,
+			Role:             pulumi.String("roles/iam.serviceAccountTokenCreator"),
+			Member:           pulumi.Sprintf("serviceAccount:%s", runtime.Email),
+		}); err != nil {
+			return err
+		}
 	}
 	envs := cloudrunv2.ServiceTemplateContainerEnvArray{&cloudrunv2.ServiceTemplateContainerEnvArgs{
 		Name:  pulumi.String("GOOGLE_CLOUD_PROJECT"),

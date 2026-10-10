@@ -275,6 +275,14 @@ namespace one::language {
                 advance();
                 role.in_where = peek().where;
                 role.in = expect(token_kind::identifier, "what each has its own of, like project").text;
+                // for services: a project's service accounts may hold it too.
+                if (at_word("for")) {
+                    role.services_where = peek().where;
+                    advance();
+                    if (!at_word("services")) fail_expecting("services, as in define role agent \"Agent\" in project for services");
+                    advance();
+                    role.services = true;
+                }
                 expect(token_kind::left_brace, "'{' and the commands it allows, one a line");
                 while (in_block()) {
                     role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
