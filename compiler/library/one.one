@@ -100,7 +100,7 @@ namespace one {
 	// What a project says about itself: where it runs, how people sign in, and how it
 	// looks. Each line is one of these, and only a list may be said more than once.
 	settings project {
-		// The uione it's built with, like "0.8.0", which one upgrade moves on.
+		// The uione it's built with, like "0.8.1", which one upgrade moves on.
 		one         version
 		// What the site is called, when it isn't the project's own name.
 		title       text
