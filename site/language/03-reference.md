@@ -923,6 +923,24 @@ entity service history {
 - A project with a role for services lets its backend sign their sign-ins as
   itself, which its deploy sets up.
 
+### A program signing in as a person
+
+An app people sign in to also lets a program on their computer, like its command,
+sign in as them, through their browser, the way native apps do with OAuth:
+
+1. The program listens on `127.0.0.1` and opens the app's `/authorize` page with
+   the port, a state, and a PKCE challenge.
+2. The person signs in there as they always do, and presses **Authorize**. The page
+   asks the backend at `POST /api/authorize` for a code bound to the challenge, and
+   sends the browser back to the program with it. **Cancel** sends it back with
+   `error=denied`.
+3. The program trades the code, with the verifier only it knows, at `POST
+   /api/token` for a Firebase sign-in of the person's own. A code is good once, for
+   five minutes, and only its hash is kept.
+
+The generated C++ client does all of it with `sign_in_with_browser(open)`, where
+`open` shows the address, and keeps the refresh token the program stores.
+
 ## define theme
 
 How a site looks: a color for what each is for, light and dark, its fonts, its

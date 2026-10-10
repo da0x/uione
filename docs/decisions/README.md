@@ -17,6 +17,7 @@ relevant record before changing what it covers.
 | [0009](0009-ids-from-keys-and-serials.md) | An entity's id is made from its keys, and numbers are counted per parent |
 | [0010](0010-who-may-do-and-read-what.md) | Who may do and read what |
 | [0011](0011-services-with-keys.md) | Services that work beside people, with keys |
+| [0012](0012-programs-sign-in-through-the-browser.md) | Programs sign in as a person through their browser |
 
 ## Writing one
 
