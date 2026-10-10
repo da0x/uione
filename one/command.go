@@ -417,6 +417,15 @@ func Has(list []string, value string) bool {
 	return false
 }
 
+// Match is the value a match gives for a choice, or otherwise for one it doesn't
+// name: Match(l.Relation, map[string]string{RelationBlocks: RelationBlockedBy}, "").
+func Match[T any](choice string, values map[string]T, otherwise T) T {
+	if value, ok := values[choice]; ok {
+		return value
+	}
+	return otherwise
+}
+
 // Add puts a value in a list, unless it's there already: Add(i.Assignees, c.Me()).
 func Add(list []string, value string) []string {
 	if value == "" || contains(list, value) {

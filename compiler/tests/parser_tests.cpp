@@ -375,10 +375,84 @@ TEST_CASE("a when block holds a condition a line, and all of them must hold") {
     // Each line is one condition, and the block holds at least one.
     auto out = parse_errors("screen \"Issue\" /issues/:issue {\n\tissue::verify when {\n\t\ta == b  c == d\n\t}\n}\n");
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "expected the end of the line; a when block has one condition a line, found 'c'");
+    CHECK(out[0].message == "expected the end of the line; a block of conditions has one a line, found 'c'");
     out = parse_errors("screen \"Issue\" /issues/:issue {\n\tissue::verify when {\n\t}\n}\n");
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "a when block holds its conditions, one a line");
+    CHECK(out[0].message == "a block of conditions holds them one a line");
+}
+
+TEST_CASE("a button with its form is the button, then the form for its command") {
+    auto f = parse_ok("screen \"Issue\" /issues/:issue {\n"
+                      "\tissue::update \"Edit\" icon edit form \"Save\" {\n\t\ttitle  body \"Description\"\n\t}\n"
+                      "\tissue::close \"Close\"\n"
+                      "}\n");
+    const auto& screen = std::get<screen_declaration>(f.declarations[0].node);
+    REQUIRE(screen.items.size() == 3);
+    const auto& button = std::get<button_item>(screen.items[0].node);
+    CHECK(button.command.text() == "issue::update");
+    CHECK(button.label == "Edit");
+    CHECK(button.icon == "edit");
+    const auto& form = std::get<form_item>(screen.items[1].node);
+    REQUIRE(form.commands.size() == 1);
+    CHECK(form.commands[0].text() == "issue::update");
+    CHECK(form.submit == "Save");
+    REQUIRE(form.fields.size() == 2);
+    CHECK(form.fields[1].label == "Description");
+    CHECK(std::get<button_item>(screen.items[2].node).command.text() == "issue::close");
+}
+
+TEST_CASE("a match is a choice and its value a line, and else for the rest") {
+    auto f = parse_ok("command link::create {\n\tdispatch link::create {\n\t\trelation = match relation {\n"
+                      "\t\t\tblocks      blocked_by\n\t\t\tblocked_by  blocks\n\t\t\telse        relation\n\t\t}\n\t}\n}\n");
+    const auto& command = std::get<command_declaration>(f.declarations[0].node);
+    const auto& dispatch = std::get<dispatch_statement>(command.body[0].node);
+    const auto& m = std::get<match_expression>(dispatch.values[0].value->node);
+    CHECK(std::get<name_expression>(m.subject->node).name.text() == "relation");
+    REQUIRE(m.arms.size() == 2);
+    CHECK(m.arms[0].choice == "blocks");
+    CHECK(std::get<name_expression>(m.arms[0].value->node).name.text() == "blocked_by");
+    REQUIRE(m.otherwise);
+
+    auto two = parse_errors("command a::b {\n\tdispatch a::c {\n\t\tx = match y {\n\t\t\tp  q  r  s\n\t\t}\n\t}\n}\n");
+    REQUIRE(!two.empty());
+    CHECK(two[0].message == "expected the end of the line; a match has one choice a line, found 'r'");
+    auto late = parse_errors("command a::b {\n\tdispatch a::c {\n\t\tx = match y {\n\t\t\telse  q\n\t\t\tp  q\n\t\t}\n\t}\n}\n");
+    REQUIRE(!late.empty());
+    CHECK(late[0].message == "else is the last line of a match");
+}
+
+TEST_CASE("where, public when and require take a block of conditions too") {
+    auto and_of = [](const expression_ptr& e) {
+        REQUIRE(e);
+        const auto& all = std::get<binary_expression>(e->node);
+        CHECK(all.op == token_kind::logical_and);
+        CHECK(std::get<binary_expression>(all.left->node).op == token_kind::logical_or);
+        CHECK(std::get<binary_expression>(all.right->node).op == token_kind::not_equal);
+    };
+    auto f = parse_ok("view news per issue {\n"
+                      "\tpublic when {\n\t\ta == b || c == d\n\t\te != f\n\t}\n"
+                      "\tchanges = each change in issue where {\n\t\ta == b || c == d\n\t\te != f\n\t} {\n\t\ttitle\n\t}\n"
+                      "}\n"
+                      "command link::delete {\n"
+                      "\trequire \"pick another\" {\n\t\ta == b || c == d\n\t\te != f\n\t}\n"
+                      "\teach link where {\n\t\ta == b || c == d\n\t\te != f\n\t} {\n\t\tdispatch link::delete\n\t}\n"
+                      "}\n");
+    REQUIRE(f.declarations.size() == 2);
+    const auto& view = std::get<view_declaration>(f.declarations[0].node);
+    and_of(view.public_when);
+    REQUIRE(view.each.size() == 1);
+    and_of(view.each[0].condition);
+    CHECK(view.each[0].name == "changes");
+    const auto& command = std::get<command_declaration>(f.declarations[1].node);
+    REQUIRE(command.body.size() == 2);
+    const auto& require = std::get<require_statement>(command.body[0].node);
+    CHECK(require.message == "pick another");
+    and_of(require.condition);
+    and_of(std::get<each_statement>(command.body[1].node).where);
+
+    // The one-line forms stay.
+    auto g = parse_ok("command link::delete {\n\trequire a == b  \"pick another\"\n}\n");
+    CHECK(std::get<require_statement>(std::get<command_declaration>(g.declarations[0].node).body[0].node).message == "pick another");
 }
 
 TEST_CASE("an order key says ascending or descending in words, and a - in front is fixed to say it") {

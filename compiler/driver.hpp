@@ -514,6 +514,30 @@ namespace one::driver {
         return moved;
     }
 
+    // Joins a form to the button right above it that opens it, issue::update "Edit"
+    // and form issue::update "Save" { … }, as issue::update "Edit" form "Save" { … }.
+    // A form several buttons open, or one apart from its button, stays as it is. How
+    // many it joined.
+    inline std::size_t join_forms(sources& files) {
+        static const std::regex pair(
+            R"re((^|\n)([ \t]+)(\w+(?:::\w+)+)((?:[ \t]+"[^"\n]*")?(?:[ \t]+icon[ \t]+\w+)?)[ \t]*\n\2form[ \t]+\3((?:[ \t]+"[^"\n]*")?)[ \t]*\{)re");
+        std::size_t joined = 0;
+        for (auto& [path, text] : files) {
+            std::string out;
+            auto from = text.cbegin();
+            for (std::sregex_iterator it(text.begin(), text.end(), pair), end; it != end; ++it) {
+                const auto& m = *it;
+                out.append(from, m[0].first);
+                out += m[1].str() + m[2].str() + m[3].str() + m[4].str() + " form" + m[5].str() + " {";
+                from = m[0].second;
+                ++joined;
+            }
+            out.append(from, text.cend());
+            text = std::move(out);
+        }
+        return joined;
+    }
+
     // Moves what's new to a person, once a setting, unread news.changes since
     // news.seen, into a value of their view, unread = count(changes where created_at >
     // seen), and a header below the project block that shows it, header { badge
@@ -600,6 +624,7 @@ namespace one::driver {
         auto original = files;
         out.fixes += move_copyright(files);
         out.fixes += move_unread(files);
+        out.fixes += join_forms(files);
         for (int round = 0; round < 100; ++round) {
             language::diagnostics found;
             check_sources(files, found);

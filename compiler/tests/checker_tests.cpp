@@ -183,6 +183,49 @@ TEST_CASE("permissions") {
           "task has no command read; a permission is a command, or view to read its views");
 }
 
+TEST_CASE("a row of the command's own kind is each other, its fields other.pair") {
+    std::string entities = "entity issue {\n\ttitle text\n}\nentity link {\n\tfrom issue\n\tto issue\n\tpair link\n}\n";
+    auto with = [&](const std::string& command, const std::string& each) {
+        return entities + (command == "link::delete" ? "" : "command link::delete\n") + "command " + command + " {\n\t" + each + " {\n\t\tdispatch link::delete\n\t}\n}\n";
+    };
+    CHECK(check_source(with("link::delete", "each other link where other.pair == id || other.id == pair")).empty());
+    auto bare = only_error(with("link::delete", "each link where pair == id || id == pair"));
+    CHECK(bare.message == "each link in a link's command is each other link, with its fields said other.pair, so they aren't read as this one's");
+    REQUIRE(bare.fix);
+    CHECK(bare.fix->text == "other ");
+    auto field = only_error(with("link::delete", "each other link where pair == id"));
+    CHECK(field.message == "the other link's field is other.pair; a bare pair is this link's");
+    REQUIRE(field.fix);
+    CHECK(field.fix->text == "other.");
+    CHECK(only_error(with("link::delete", "each other link where other.pears == id")).message.starts_with("entity link has no field pears"));
+    CHECK(only_error(with("issue::delete", "each other link where other.from == id")).message ==
+          "other names a row of the command's own kind, issue; each link needs no other");
+    CHECK(check_source(with("issue::delete", "each link where from == id")).empty());
+}
+
+TEST_CASE("a match says a value for every choice, or else") {
+    std::string entities = "entity issue {\n\ttitle text\n}\n"
+                           "entity link {\n\tfrom issue\n\tto issue\n\tpair link\n\trelation enum blocks | blocked_by | relates\n\tnote text\n}\n"
+                           "view links per issue {\n\teach link where from == issue.id {\n\t\trelation\n\t}\n}\n";
+    auto with = [&](const std::string& arms) {
+        return entities + "command link::create {\n\tif pair == none {\n\t\tdispatch link::create {\n\t\t\tpair = id  from = to  to = from\n"
+                          "\t\t\trelation = match relation {\n" + arms + "\t\t\t}\n\t\t}\n\t}\n}\n";
+    };
+    CHECK(check_source(with("\t\t\t\tblocks  blocked_by\n\t\t\t\tblocked_by  blocks\n\t\t\t\trelates  relates\n")).empty());
+    CHECK(check_source(with("\t\t\t\tblocks  blocked_by\n\t\t\t\tblocked_by  blocks\n\t\t\t\telse  relation\n")).empty());
+    CHECK(only_error(with("\t\t\t\tblocks  blocked_by\n")).message ==
+          "this match doesn't say what blocked_by, relates give; add a line for each, or else and a value for the rest");
+    CHECK(only_error(with("\t\t\t\tblocks  blocked_by\n\t\t\t\tblocked_by  blocks\n\t\t\t\trelates  relates\n\t\t\t\telse  relates\n")).message ==
+          "every choice of relation is said, so else is never taken");
+    CHECK(only_error(with("\t\t\t\tblocks  blocked_by\n\t\t\t\tblocks  blocks\n\t\t\t\telse  relates\n")).message == "blocks is said twice in this match");
+    CHECK(only_error(with("\t\t\t\tblock  blocked_by\n\t\t\t\telse  relates\n")).message.starts_with("block isn't one of relation's choices"));
+    CHECK(only_error(with("\t\t\t\tblocks  blocks_it\n\t\t\t\telse  relates\n")).message.starts_with("blocks_it isn't one of relation's choices"));
+    // It picks by a choice, in a command.
+    auto by_text = entities + "command link::create {\n\tif pair == none {\n\t\tdispatch link::create {\n\t\t\tpair = id  from = to  to = from\n"
+                              "\t\t\trelation = match note {\n\t\t\t\tblocks  blocks\n\t\t\t}\n\t\t}\n\t}\n}\n";
+    CHECK(only_error(by_text).message == "match picks a value by a choice, and note isn't one of an enum's choices");
+}
+
 TEST_CASE("a picker names an entity and a view") {
     auto out = check_source("picker book from shelf\n");
     REQUIRE(out.size() == 2);

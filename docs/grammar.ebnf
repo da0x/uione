@@ -106,16 +106,16 @@ backend        ::= "backend" NAME END
 /* once */
 
 once           ::= "once" STRING "{" NEWLINE? once_step* "}" END
-once_step      ::= "each" NAME ("where" expression)? block END
+once_step      ::= "each" NAME ("where" condition)? block END
 /* done each time someone opens the app signed in, as them, me.email the email their
    sign-in vouches for */
-signin         ::= "on" "signin" "{" NEWLINE? (once_step | "delete" "each" NAME ("where" expression)? END)* "}" END
+signin         ::= "on" "signin" "{" NEWLINE? (once_step | "delete" "each" NAME ("where" condition)? END)* "}" END
 
 /* command */
 
 command        ::= "command" qualified block? END
 block          ::= "{" NEWLINE? statement* "}"
-statement      ::= ( "require" expression STRING
+statement      ::= ( "require" (expression STRING | STRING "{" NEWLINE? (expression END)+ "}")
                    | "permission" qualified
                    | "by" ("anyone" ("signed" "in")? | "owner")
                    | "clear" NAME+
@@ -125,7 +125,8 @@ statement      ::= ( "require" expression STRING
                    | dispatch
                    | list_change
                    | "input" NAME qualified
-                   | "each" NAME "where" expression block
+                   /* other: a row of the command's own kind, its fields other.pair */
+                   | "each" "other"? NAME "where" condition block
                    | postfix "=" expression ) END
 /* dispatch: another command run in the same step, its body too: an update or a
  * delete says which with id = ..., or acts on the row of an each over its entity. */
@@ -140,9 +141,9 @@ if             ::= "if" expression block ("else" (if | block))?
 view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
 view_line      ::= (NAME "=")? each
                  | "readers" NAME ("." NAME)+ END
-                 | "public" "when" expression END
+                 | "public" "when" condition END
                  | NAME "=" expression END
-each           ::= "each" ("change" "in")? postfix ("in" NAME)* ("where" expression)? ("{" NEWLINE? list_line* "}")? END
+each           ::= "each" ("change" "in")? postfix ("in" NAME)* ("where" condition)? ("{" NEWLINE? list_line* "}")? END
 list_line      ::= "order" "by" order_key+ END
                  | "limit" WHOLE END
                  | row_line
@@ -196,7 +197,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_bl
                  | "find" STRING "{" NEWLINE? find_line* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
-                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)?) END
+                 /* a button, and the form it opens, issue::update "Edit" form "Save" { title } */
+                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | column+) END
 board_line     ::= ("move" qualified "along" qualified "." NAME | "tint" "by" NAME | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
@@ -228,6 +230,9 @@ unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
 primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+                 | match
+/* a value for each choice of an enum, one a line, and else for the rest */
+match          ::= "match" NAME ("." NAME)* "{" NEWLINE? (NAME expression END)+ ("else" expression END)? "}"
 /* the changes since a person last looked are new, and seen runs once they've looked */
 timeline_line  ::= "new" "since" qualified "." NAME END
                  | "seen" qualified END

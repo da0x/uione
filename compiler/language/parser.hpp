@@ -52,6 +52,7 @@ namespace one::language {
         std::vector<int> depth_;  // how many braces are open before each token
         std::size_t pos_ = 0;
         bool relative_times_ = false;  // while reading a filter, where 7 days ago is a time
+        std::optional<screen_item> button_form_;  // the form a button's line ended with, put after it
 
         // reading tokens
 
@@ -536,7 +537,7 @@ namespace one::language {
                 step.entity = expect(token_kind::identifier, "the entity it changes, like project").text;
                 if (at_word("where")) {
                     advance();
-                    step.where = parse_expression();
+                    step.where = parse_when();
                 }
                 if (!step.remove) step.body = parse_statement_block();
                 end_line();
@@ -581,7 +582,7 @@ namespace one::language {
                 } else if (at_word("public") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
                     advance();
                     advance();
-                    view.public_when = parse_expression();
+                    view.public_when = parse_when();
                     end_line();
                 } else if (at_word("each")) {
                     view.each.push_back(parse_each());
@@ -653,7 +654,7 @@ namespace one::language {
             if (at_word("where")) {
                 const token& word = advance();
                 each.where_word = word.where;
-                each.condition = parse_expression();
+                each.condition = parse_when();
                 each.where_length = tokens_[pos_ - 1].end - word.begin;
             }
             if (at(token_kind::left_brace)) {
@@ -899,6 +900,12 @@ namespace one::language {
             std::vector<screen_item> items;
             while (in_block()) {
                 items.push_back(parse_screen_item());
+                // A button's own form, issue::update "Edit" form "Save" { … }, is the
+                // form beside it.
+                if (button_form_) {
+                    items.push_back(std::move(*button_form_));
+                    button_form_.reset();
+                }
             }
             expect(token_kind::right_brace, "'}'");
             return items;
@@ -1495,6 +1502,19 @@ namespace one::language {
                     advance();
                     button.when = parse_when();
                 }
+                // issue::update "Edit" form "Save" { title body }: the form it opens.
+                if (at_word("form")) {
+                    location form_where = advance().where;
+                    form_item form;
+                    form.commands.push_back(button.command);
+                    if (at(token_kind::string)) form.submit = advance().text;
+                    expect(token_kind::left_brace, "'{' and the fields it asks for, like form \"Save\" { title  body }");
+                    while (in_block()) {
+                        parse_form_line(form.fields);
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                    button_form_ = screen_item{form_where, std::move(form)};
+                }
                 end_line();
                 return {where, std::move(button)};
             }
@@ -1657,8 +1677,15 @@ namespace one::language {
             if (at_word("require")) {
                 advance();
                 require_statement s;
-                s.condition = parse_expression();
-                s.message = expect(token_kind::string, "the message shown when it isn't met").text;
+                // require "message" { … }: a long condition goes in a block, one a line,
+                // with its message first, so the line says what it's for.
+                if (at(token_kind::string) && peek(1).kind == token_kind::left_brace) {
+                    s.message = advance().text;
+                    s.condition = parse_when();
+                } else {
+                    s.condition = parse_expression();
+                    s.message = expect(token_kind::string, "the message shown when it isn't met").text;
+                }
                 end_line();
                 return {where, std::move(s)};
             }
@@ -1712,11 +1739,17 @@ namespace one::language {
             if (at_word("each") && peek(1).kind == token_kind::identifier) {
                 advance();
                 each_statement s;
+                // each other link where other.pair == id: a row of the command's own
+                // kind, named so it isn't read as the command's.
+                if (at_word("other") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "where") {
+                    advance();
+                    s.other = true;
+                }
                 s.entity_where = peek().where;
                 s.entity = advance().text;
                 if (!at_word("where")) fail_expecting("where and what it picks, like each issue where phase == id { ... }");
                 advance();
-                s.where = parse_expression();
+                s.where = parse_when();
                 s.body = parse_statement_block();
                 end_line();
                 return {where, std::move(s)};
@@ -1729,7 +1762,7 @@ namespace one::language {
                 s.entity = expect(token_kind::identifier, "what it deletes, like step").text;
                 if (!at_word("where")) fail_expecting("where and what it picks, like delete each step where from == id");
                 advance();
-                s.where = parse_expression();
+                s.where = parse_when();
                 end_line();
                 return {where, std::move(s)};
             }
@@ -1834,8 +1867,9 @@ namespace one::language {
 
         expression_ptr parse_expression() { return parse_binary(0); }
 
-        // What follows a when: a condition, or a block of them, one a line, that all
-        // hold, as if each line were joined to the next with &&:
+        // What follows a when, a where, a public when or a require's message: a
+        // condition, or a block of them, one a line, that all hold, as if each line
+        // were joined to the next with &&:
         //
         //     when {
         //         issue_page.status == status::implemented
@@ -1847,7 +1881,7 @@ namespace one::language {
             expression_ptr all;
             while (in_block()) {
                 auto line = parse_expression();
-                if (!at_line_end()) fail_expecting("the end of the line; a when block has one condition a line");
+                if (!at_line_end()) fail_expecting("the end of the line; a block of conditions has one a line");
                 if (!all) {
                     all = std::move(line);
                     continue;
@@ -1858,7 +1892,7 @@ namespace one::language {
                 all = std::move(both);
             }
             expect(token_kind::right_brace, "'}'");
-            if (!all) fail(where, "a when block holds its conditions, one a line");
+            if (!all) fail(where, "a block of conditions holds them one a line");
             return all;
         }
 
@@ -1975,6 +2009,27 @@ namespace one::language {
                 e->node = literal_expression{literal_expression::kind::time, sign + amount + unit_of(unit.text)};
             } else if (at(token_kind::number)) {
                 e->node = literal_expression{literal_expression::kind::number, advance().text};
+            } else if (at_word("match") && peek(1).kind == token_kind::identifier) {
+                // match relation { blocks  blocked_by … }: a choice, then its value, a line
+                // each, and else for the rest.
+                advance();
+                match_expression match;
+                match.subject = parse_postfix();
+                expect(token_kind::left_brace, "'{' and a line for each choice, like blocks  blocked_by");
+                while (in_block()) {
+                    if (match.otherwise) fail(peek().where, "else is the last line of a match");
+                    const token& choice = expect(token_kind::identifier, "a choice and its value, like blocks  blocked_by");
+                    if (choice.text == "else") {
+                        match.otherwise_where = choice.where;
+                        match.otherwise = parse_expression();
+                    } else {
+                        match.arms.push_back({choice.text, choice.where, parse_expression()});
+                    }
+                    if (!at_line_end()) fail_expecting("the end of the line; a match has one choice a line");
+                }
+                expect(token_kind::right_brace, "'}'");
+                if (match.arms.empty()) fail(e->where, "a match says a value for each choice, one a line, like blocks  blocked_by");
+                e->node = std::move(match);
             } else if (at(token_kind::identifier)) {
                 e->node = name_expression{parse_qualified_name("a name")};
             } else if (at(token_kind::left_paren)) {

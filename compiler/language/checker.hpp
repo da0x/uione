@@ -1351,14 +1351,42 @@ namespace one::language {
         // each issue where phase == id, or delete each step where from == id || to ==
         // id: a field of what's picked, its value worked out where the command runs,
         // and for a delete, any of several.
-        void verify_pick(const entity_declaration& picked, const expression& where, const context& in, bool any) {
+        // The row's field in other.pair, or nothing for anything else.
+        static const std::string* others(const expression& e) {
+            auto* member = std::get_if<member_expression>(&e.node);
+            auto* object = member ? std::get_if<name_expression>(&member->object->node) : nullptr;
+            if (!object || object->name.parts.size() != 1 || object->name.parts[0] != "other") return nullptr;
+            return &member->member;
+        }
+
+        // other: the rows are the command's own kind, so each field of theirs is said
+        // other.pair, and a bare pair is the command's own.
+        void verify_pick(const entity_declaration& picked, const expression& where, const context& in, bool any, bool other = false) {
             auto* b = std::get_if<binary_expression>(&where.node);
             if (any && b && b->op == token_kind::logical_or) {
-                verify_pick(picked, *b->left, in, any);
-                verify_pick(picked, *b->right, in, any);
+                verify_pick(picked, *b->left, in, any, other);
+                verify_pick(picked, *b->right, in, any, other);
                 return;
             }
             auto* name = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
+            if (other && b && b->op == token_kind::equal) {
+                if (name && name->name.parts.size() == 1) {
+                    error(name->name.where, "the other " + picked.name + "'s field is other." + name->name.parts[0] + "; a bare " + name->name.parts[0] +
+                                                " is this " + picked.name + "'s",
+                          fix{name->name.where, 0, "other."});
+                    return;
+                }
+                if (const std::string* row = others(*b->left)) {
+                    const field* f = field_or_id(picked, *row);
+                    if (!f) {
+                        error(b->left->where, "entity " + picked.name + " has no field " + *row + nearest(*row, field_names(picked)));
+                        return;
+                    }
+                    mean_field(b->left->where, f);
+                    resolve(in, *b->right, f);
+                    return;
+                }
+            }
             if (!b || b->op != token_kind::equal || !name || name->name.parts.size() != 1) {
                 error(where.where, std::string("what's picked is by a field's value, like where phase == id") +
                                        (any ? ", or by any of several, like from == id || to == id" : ""));
@@ -1483,7 +1511,17 @@ namespace one::language {
                         error(each->entity_where, "there's no entity " + each->entity + " " + in_namespace(ns));
                     } else {
                         mean_entity(each->entity_where, each->entity.size(), picked);
-                        verify_pick(*picked, *each->where, in, true);
+                        // A row of the command's own kind is named other, so this one's
+                        // fields and the row's don't read the same.
+                        if (picked == entity && !each->other) {
+                            error(each->entity_where, "each " + picked->name + " in a " + picked->name + "'s command is each other " + picked->name +
+                                                          ", with its fields said other.pair, so they aren't read as this one's",
+                                  fix{each->entity_where, 0, "other "});
+                        } else if (picked != entity && each->other) {
+                            error(each->entity_where, "other names a row of the command's own kind, " + (entity ? entity->name : std::string("its entity")) +
+                                                          "; each " + picked->name + " needs no other");
+                        }
+                        verify_pick(*picked, *each->where, in, true, each->other);
                         context inner = in;
                         inner.entity = picked;
                         inner.update = true;
@@ -3208,8 +3246,63 @@ namespace one::language {
         // Checks every name in an expression against what it can mean here, and
         // returns the field it stands for, if it's one, so a choice compared with it
         // or assigned to it can be checked too.
+        // match relation { blocks  blocked_by … }: a value for each choice of an enum,
+        // every one of them or an else, each value one the field it's given to holds,
+        // with a choice of that field's enum written bare.
+        void matched(const context& in, const expression& e, const match_expression& m, const field* beside) {
+            if (!in.command) {
+                error(e.where, "match is for a command's body for now; a view or a screen can't use it yet");
+                return;
+            }
+            const field* subject = resolve(in, *m.subject);
+            if (!subject) return;
+            if (subject->choices.empty() || subject->list) {
+                error(m.subject->where, "match picks a value by a choice, and " + subject->name + " isn't one of an enum's choices");
+                return;
+            }
+            std::set<std::string> said;
+            for (const auto& arm : m.arms) {
+                if (std::find(subject->choices.begin(), subject->choices.end(), arm.choice) == subject->choices.end()) {
+                    error(arm.where, arm.choice + " isn't one of " + subject->name + "'s choices" + nearest(arm.choice, subject->choices));
+                } else if (!said.insert(arm.choice).second) {
+                    error(arm.where, arm.choice + " is said twice in this match");
+                } else {
+                    mean(arm.where, arm.choice.size(), "choice " + arm.choice + " of " + subject->name, std::nullopt, "match");
+                }
+                arm_value(in, *arm.value, beside);
+            }
+            if (m.otherwise) {
+                if (said.size() == subject->choices.size()) error(m.otherwise_where, "every choice of " + subject->name + " is said, so else is never taken");
+                arm_value(in, *m.otherwise, beside);
+            } else {
+                std::string missing;
+                for (const auto& c : subject->choices) {
+                    if (!said.contains(c)) missing += (missing.empty() ? "" : ", ") + c;
+                }
+                if (!missing.empty()) {
+                    error(e.where, "this match doesn't say what " + missing + " give" + (missing.find(',') == std::string::npos ? "s" : "") +
+                                       "; add a line for each, or else and a value for the rest");
+                }
+            }
+        }
+
+        // A match's value, where a choice of the enum it's given to is written bare.
+        void arm_value(const context& in, const expression& value, const field* beside) {
+            auto* n = std::get_if<name_expression>(&value.node);
+            if (n && beside && n->name.parts.size() == 1 &&
+                std::find(beside->choices.begin(), beside->choices.end(), n->name.parts[0]) != beside->choices.end()) {
+                mean(n->name.where, n->name.parts[0].size(), "choice " + n->name.parts[0] + " of " + beside->name, std::nullopt, "match");
+                return;
+            }
+            resolve(in, value, beside);
+        }
+
         const field* resolve(const context& in, const expression& e, const field* beside = nullptr) {
             static const std::set<std::string, std::less<>> plain{"now", "me", "none", "true", "false"};
+            if (auto* m = std::get_if<match_expression>(&e.node)) {
+                matched(in, e, *m, beside);
+                return nullptr;
+            }
             if (auto* n = std::get_if<name_expression>(&e.node)) {
                 snake(n->name);
                 // An enum's choice, named with its enum: visibility::public.
@@ -3533,6 +3626,10 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, binary_expression>) {
                         names_in(*node.left);
                         names_in(*node.right);
+                    } else if constexpr (std::is_same_v<T, match_expression>) {
+                        names_in(*node.subject);
+                        for (const auto& arm : node.arms) names_in(*arm.value);
+                        if (node.otherwise) names_in(*node.otherwise);
                     }
                 },
                 e.node);

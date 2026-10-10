@@ -226,16 +226,14 @@ namespace tracker {
 			slug "Project"
 			name
 		}
-		project::create
-		form project::create {
+		project::create form {
 			slug  name  repository
 		}
 	}
 
 	screen "Project" /projects/:project {
 		text "{project_page.name}"
-		project::update
-		form project::update {
+		project::update form {
 			name  repository  visibility
 		}
 		table project_page.issues by status link /issues/:issue {
@@ -251,8 +249,7 @@ namespace tracker {
 			author.name "Author"
 			take  drop
 		}
-		issue::create
-		form issue::create {
+		issue::create form {
 			title  body  labels
 		}
 		table project_page.members {
@@ -262,8 +259,7 @@ namespace tracker {
 			delete "Remove" when person != me
 		}
 		confirm member::delete "Remove this person from the project?"
-		member::create
-		form member::create {
+		member::create form {
 			person  role
 		}
 		timeline project_page.timeline link /issues/:issue
@@ -277,8 +273,7 @@ namespace tracker {
 	screen "Issue" /issues/:issue layout two_columns {
 		text "{issue_page.title}"
 		markdown "{issue_page.body}"
-		issue::update
-		form issue::update {
+		issue::update form {
 			title  body  labels
 		}
 		details issue_page {
@@ -287,8 +282,7 @@ namespace tracker {
 		}
 		copy issue_page "Copy issue"
 		thread issue_page.comments
-		comment::create
-		form comment::create {
+		comment::create form {
 			body
 		}
 		table issue_page.mentions {

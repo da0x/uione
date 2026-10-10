@@ -1,0 +1,40 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A match and each other, for the highlighting test: match, else and other are
+// keywords, a match's choices are names, and a field named other is still a field.
+
+namespace tracker {
+
+	entity issue {
+		title  text
+		other  text
+	}
+
+	entity link {
+		from      issue
+		to        issue
+		pair      link
+		relation  enum  blocks | blocked_by | relates
+	}
+
+	command link::create {
+		if pair == none {
+			dispatch link::create {
+				pair = id  from = to  to = from
+				relation = match relation {
+					blocks      blocked_by
+					blocked_by  blocks
+					else        relates
+				}
+			}
+		}
+	}
+
+	command link::delete {
+		each other link where other.pair == id || other.id == pair {
+			dispatch link::delete
+		}
+	}
+
+}

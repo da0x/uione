@@ -171,3 +171,17 @@ func TestAChangeOfWhatSomethingPointsAtSaysItsTitle(t *testing.T) {
 		t.Errorf("the errand's history is\n%v\nwant\n%v", got, want)
 	}
 }
+
+// A match gives the value for its choice, and otherwise's for one it doesn't name.
+func TestAMatchGivesTheValueForItsChoice(t *testing.T) {
+	other := map[string]string{"blocks": "blocked_by", "blocked_by": "blocks"}
+	if got := one.Match("blocks", other, "relates"); got != "blocked_by" {
+		t.Fatalf("blocks gave %q, not blocked_by", got)
+	}
+	if got := one.Match("relates", other, "relates"); got != "relates" {
+		t.Fatalf("relates gave %q, not otherwise's relates", got)
+	}
+	if got := one.Match("blocks", map[string]float64{"blocks": 2}, 1); got != 2 {
+		t.Fatalf("a number match gave %v, not 2", got)
+	}
+}

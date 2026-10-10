@@ -84,10 +84,25 @@ namespace one::language {
         expression_ptr right;
     };
 
+    // match relation { blocks  blocked_by … }: the value for each choice of an enum,
+    // one a line, covering every choice or ending in else.
+    struct match_arm {
+        std::string choice;
+        location where;
+        expression_ptr value;
+    };
+
+    struct match_expression {
+        expression_ptr subject;
+        std::vector<match_arm> arms;
+        expression_ptr otherwise;  // else, when the arms don't cover every choice
+        location otherwise_where;
+    };
+
     struct expression {
         location where;
         std::variant<literal_expression, name_expression, member_expression, call_expression,
-                     where_expression, unary_expression, binary_expression, list_expression>
+                     where_expression, unary_expression, binary_expression, list_expression, match_expression>
             node;
     };
 
@@ -182,6 +197,7 @@ namespace one::language {
     struct each_statement {
         std::string entity;
         location entity_where;
+        bool other = false;  // each other link: a row of the command's own kind, named other
         expression_ptr where;
         std::vector<statement> body;
     };

@@ -54,7 +54,7 @@ examples/library/main.one	screen "Shelf" /shelf	screen	declare
 examples/library/main.one	screen "Shelf" /shelf	"Shelf	string
 examples/library/main.one	screen "Shelf" /shelf	/shelf	route
 examples/library/main.one	\t\t\tshelfmark	shelfmark	plain
-examples/library/main.one	form book::update	form	keyword
+examples/library/main.one	book::update form {	form	keyword
 examples/library/main.one	confirm book::withdraw	confirm	keyword
 examples/library/main.one	Withdraw {title}?	{title	interp
 examples/library/main.one	Withdraw {title}?	title}	plain
@@ -238,3 +238,8 @@ editors/fixtures/roles.one	\t\tmember::create	member	namespace
 examples/tracker/main.one	\t\tissue::take	issue	namespace
 editors/fixtures/roles.one	\t\tpage::update	page	namespace
 editors/fixtures/roles.one	\t\tlink::delete	link	namespace
+editors/fixtures/match.one	relation = match relation {	match	keyword
+editors/fixtures/match.one	\t\t\t\t\tblocks      blocked_by	blocks	plain
+editors/fixtures/match.one	else        relates	else	keyword
+editors/fixtures/match.one	each other link where	other	keyword
+editors/fixtures/match.one	\t\tother  text	other	variable

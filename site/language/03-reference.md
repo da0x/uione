@@ -128,13 +128,13 @@ The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`;
 - in a command: `require`, `by`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
-  `input`, `each … where`;
+  `input`, `each … where`, `each other … where`, `match`, `else`;
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a picker, `from`;
 - in a once: `each`, `where`;
-- on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, `confirm`, `component`, `hero`, `section`, `text`,
+- on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: the settings `one`'s library defines, below;
 - in a footer: `bar`, `columns`, and in a link, `build.release` and `build.source`.
@@ -522,7 +522,10 @@ command loan::checkin {
 }
 ```
 
-- `require` states a precondition and the message shown when it fails.
+- `require` states a precondition and the message shown when it fails. A long one
+  puts its message first and its conditions in a block, one a line, that all hold,
+  as if each line were joined to the next with `&&`; a line can still use `||`
+  within itself. `where` and `public when` take the same block, as `when` does.
 - A command's body sets its own entity's fields, like `returned_at = now`. Anything
   else, like the book a loan points at, is changed by its own command, run with
   `dispatch`: `dispatch book::update { id = book  status = status::on_shelf }`.
@@ -551,7 +554,9 @@ command loan::checkin {
 ```one
 command issue::move {
 	changes phase
-	require exists(step where from == was issue.phase && to == issue.phase && held(roles))  "your role doesn't move an issue from there to there"
+	require "your role doesn't move an issue from there to there" {
+		exists(step where from == was issue.phase && to == issue.phase && held(roles))
+	}
 }
 ```
 - `if workflow == workflow::kanban { ... }` does what's inside only when its
@@ -590,6 +595,43 @@ command phase::delete {
 	}
 	each step where from == id || to == id {
 		dispatch step::delete
+	}
+}
+```
+
+- `each other link where other.pair == id || other.id == pair` picks rows of the
+  command's own kind. They're named `other`, and their fields `other.pair`, so a
+  bare `pair` or `id` is always this one's and the two sides don't read the same.
+  An `each` over the command's own kind says `other`, and no other `each` does.
+
+```one
+command link::delete {
+	each other link where other.pair == id || other.id == pair {
+		dispatch link::delete
+	}
+}
+```
+
+- `match relation { … }` is a value picked by a choice of an enum: a line for each
+  choice, the choice then its value, and `else` last for any it doesn't name.
+  Every choice is said, or there's an `else`, so a choice added to the enum later
+  is an error until each match says what it gives. Given to a field that's an
+  enum, its values are that enum's choices, written bare. A match works in a
+  command's body.
+
+```one
+command link::create {
+	if pair == none {
+		dispatch link::create {
+			project = project  pair = id  from = to  to = from
+			relation = match relation {
+				blocks         blocked_by
+				blocked_by     blocks
+				duplicates     duplicated_by
+				duplicated_by  duplicates
+				relates        relates
+			}
+		}
 	}
 }
 ```
@@ -695,7 +737,10 @@ view issue_page per issue {
 
 ```one
 view news per user {
-	changes = each change in issue where (board.followers has me || assignees has me) && created_by != me {
+	changes = each change in issue where {
+		board.followers has me || assignees has me
+		created_by != me
+	} {
 		order by created_at descending
 		limit 30
 		project  issue  issue.number  issue.title  field  before  after  created_by.name  created_at
@@ -1161,6 +1206,10 @@ issue::verify "Verify" when {
   ask for a key, which never changes.
 - `form project::update "Save changes" { ... }` names the form's button; without
   it, the button is named after the command, like Update.
+- A button and the form it opens go on one line: `issue::update "Edit" form "Save" {
+  title  body }` is the button, then its form, as `issue::update "Edit"` with `form
+  issue::update "Save" { title  body }` below it. A form several buttons open is
+  written on its own.
 - A field can be called something other than its name: `form comment::create
   "Comment" { body "Comment" }` asks for the body, labelled Comment.
 - `confirm` asks before a command runs.

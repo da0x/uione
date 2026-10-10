@@ -112,8 +112,7 @@ namespace library {
 			lent_to "Lent to"
 			withdraw
 		}
-		book::create
-		form book::create {
+		book::create form {
 			title  author  shelfmark  summary
 		}
 		confirm book::withdraw "Withdraw {title}? It will not be lent again."
@@ -122,8 +121,7 @@ namespace library {
 	screen "Book" /books/:book {
 		text "{book_page.title}, by {book_page.author}"
 		markdown "{book_page.summary}"
-		book::update
-		form book::update {
+		book::update form {
 			title  author  summary
 		}
 		table book_page.loans {
@@ -143,8 +141,7 @@ namespace library {
 			due_at "Due"
 			checkin
 		}
-		loan::create
-		form loan::create {
+		loan::create form {
 			book  member  due_at
 		}
 	}

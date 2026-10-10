@@ -39,6 +39,8 @@ namespace {
         auto it = std::find_if(files.begin(), files.end(), [&](const auto& f) { return f.path == path; });
         return it == files.end() ? nullptr : &*it;
     }
+    // What's found points into the files, so they're kept, not a temporary's.
+    const generators::output_file* find(std::vector<generators::output_file>&&, const std::string&) = delete;
 
     // A target without the license header it carries as a file in this repository.
     // Generated code carries none, because it belongs to whoever generated it.
@@ -94,7 +96,8 @@ TEST_CASE("table columns that name a command on the row become actions") {
 }
 
 TEST_CASE("a row's button with a when is on only the rows it holds for") {
-    const auto& content = find(generate("/examples/tracker"), "src/screens/main.tsx")->content;
+    auto content_files = generate("/examples/tracker");
+    const auto& content = find(content_files, "src/screens/main.tsx")->content;
     CHECK(content.find(R"(actions={[{ name: "tracker::member::delete", label: "Remove", allowed: allows(memberRoles, "project", projectId, "member::delete", "role.may"), when: (row) => ((row["person"] ?? null) !== viewer) }]})") != std::string::npos);
     CHECK(content.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
 }
@@ -125,7 +128,8 @@ TEST_CASE("markdown pages are turned into HTML when the site is built, a set for
 }
 
 TEST_CASE("the app is told which views have one document per person, and only those") {
-    auto app = find(generate("/examples/library"), "src/app.tsx");
+    auto app_files = generate("/examples/library");
+    auto app = find(app_files, "src/app.tsx");
     REQUIRE(app != nullptr);
     CHECK(app->content.find("personal: [\"library::mine\"] ") != std::string::npos);
 }
@@ -156,7 +160,8 @@ TEST_CASE("the project's icon is copied into the app and linked from its page") 
     const auto* index = find(files, "index.html");
     REQUIRE(index != nullptr);
     CHECK(index->content.find("<link rel=\"icon\" type=\"image/svg+xml\" href=\"/icon.svg\" />") != std::string::npos);
-    CHECK(find(generate("/examples/tasks"), "public/icon.svg") == nullptr);
+    auto tasks = generate("/examples/tasks");
+    CHECK(find(tasks, "public/icon.svg") == nullptr);
 }
 
 TEST_CASE("a screen showing a view per entity reads it for the entity its address names") {
@@ -228,7 +233,8 @@ TEST_CASE("a copy names values as the screen does, and leaves out a person's id 
                          "view issue_page per issue {\n\tbody = issue.body\n\tlifecycle = issue.project.lifecycle\n\timplemented_by = issue.implemented_by\n\timplementer = issue.implemented_by.name\n}\n"
                          "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\timplementer \"Implemented by\"\n\t}\n"
                          "\tform issue::update {\n\t\tbody \"Description\"\n\t}\n\tform comment::create {\n\t\tbody \"Comment\"\n\t}\n\tcopy issue_page\n}\n}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(fields={[["body", "Description", "markdown"], ["lifecycle", "Lifecycle"], ["implementer", "Implemented by"]]} lists={[]} )"
                                 R"(choices={{ lifecycle: Object.fromEntries([["full", "Implement, verify"], ["simple", "Simple"]]) }} />)") != std::string::npos);
@@ -244,7 +250,8 @@ TEST_CASE("a screen is laid out in regions, everything in main unless it says") 
                          "screen \"Issue\" /issues/:issue layout two_columns {\n\tmain {\n\t\ttext \"{issue_page.title}\"\n\t}\n\tside {\n\t\ttext \"aside\"\n\t}\n}\n"
                          "screen \"Other\" /other layout two_columns {\n\ttext \"all in main\"\n}\n"
                          "screen \"Plain\" /plain {\n\ttext \"as it was\"\n}\n}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find("<Layout name=\"two_columns\">\n        <Region name=\"main\">\n          <Text><Live view={issuePage} field=\"title\" /></Text>\n        </Region>\n        <Region name=\"side\">") != std::string::npos);
@@ -274,7 +281,8 @@ TEST_CASE("a text can be shown only while its when holds") {
                          "namespace tracker {\nentity issue {\n\ttitle  text\n\towner  user\n}\n"
                          "view issue_page per issue {\n\towner = issue.owner\n\towner_name = issue.owner.name\n}\n"
                          "screen \"Issue\" /issues/:issue {\n\ttext \"Taken by {issue_page.owner_name}\" when issue_page.owner != none\n}\n}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"({issuePage.status === "live" && (((issuePage.data?.["owner"] ?? null) !== null)) && <Text>Taken by <Live view={issuePage} field="owner_name" /></Text>})") !=
           std::string::npos);
@@ -653,7 +661,8 @@ TEST_CASE("a screen's title can show what the page does, once it's arrived") {
                          "screen \"#{issue_page.number} {issue_page.title}\" /issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n"
                          "screen \"Home\" / {\n\ttext \"hi\"\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(export const issues = screen({ title: "", route: "/tracker/issues/:issue" }, () => {)") != std::string::npos);
@@ -680,7 +689,8 @@ TEST_CASE("a button says what it does, and shows only while its when holds") {
                          "}\n"
                          "screen \"Issues\" /issues {\n\tissue::create \"New issue\"\n\tform issue::create {\n\t\ttitle\n\t}\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Command name="tracker::issue::close" id={issueId} label="Close issue" when={issuePage.status === "live" && (((issuePage.data?.["status"] ?? null) === "open"))} />)") !=
@@ -715,7 +725,8 @@ TEST_CASE("a when block shows a button, a text or a row's button only while all 
                          "\t}\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(when={issuePage.status === "live" && ((((issuePage.data?.["status"] ?? null) === "open") && ((issuePage.data?.["owner"] ?? null) === viewer)))} />)") !=
@@ -740,7 +751,8 @@ TEST_CASE("a row's button opens its command's form, started from the row, and th
                          "\tform phase::update \"Save\" {\n\t\ttitle \"Called\"\n\t}\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(actions={[{ name: "tracker::phase::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]})") != std::string::npos);
@@ -782,7 +794,8 @@ TEST_CASE("a form asks for a command's input as it would a field of its type") {
                          "\tform column::delete \"Remove\" {\n\t\tinto \"Move its cards to\"\n\t}\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(form: { fields: [{ name: "into", label: "Move its cards to", type: "pick", choices: listChoices(boardPage, "columns", "title") }], submit: "Remove" })") !=
           std::string::npos);
@@ -841,7 +854,8 @@ TEST_CASE("a grid shows what goes between a list's things, its cells opening cre
                              "\tdiagram board_page.arrows by from and to over board_page.columns\n"
                              "}\n"
                              "}\n");
-        const auto* drawn = find(generate_at(dir.string()), "src/screens/main.tsx");
+        auto drawn_files = generate_at(dir.string());
+        const auto* drawn = find(drawn_files, "src/screens/main.tsx");
         REQUIRE(drawn != nullptr);
         CHECK(drawn->content.find(R"(<Diagram view={boardPage} list="arrows" from="from" to="to" over={boardPage} overList="columns" shown="title" remove={{ name: "board::arrow::delete" }} />)") !=
               std::string::npos);
@@ -890,7 +904,8 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
                          "\tboard project_page.issues by phase over project_page.phases {\n\t\tmove issue::move along project_page.steps\n\t\ttitle\n\t\tnumber \"#\"\n\t}\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Switched id="work::project_page.issues" label="Show issues as" options={["Table", "Board"]} icons={["table", "board"]}>)") != std::string::npos);
@@ -942,7 +957,8 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
                          "\tform issue::create \"Open issue\" {\n\t\ttitle\n\t}\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(choices={{ phase: Object.fromEntries(listChoices(projectPage, "phases", "title")) }})") != std::string::npos);
@@ -972,7 +988,8 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
                          "screen \"{board_page.title}\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
                          "screen \"{issue_page.title}\" /:project/:issue under /:project/boards/:board \"{issue_page.board_title}\" {\n\ttext \"hi\"\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Crumbs items={[{ to: "/:project", title: [[projectPage, "name"]] }]} />)") != std::string::npos);
@@ -1020,7 +1037,8 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "screen \"Board\" /:project/boards/:board {\n\tsection \"Wiki\" color violet {\n\t\ttext \"hi\"\n\t}\n"
                          "\ttable project_page.boards {\n\t\tcolor teal\n\t\ttitle\n\t}\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Subtitle><Markdown view={projectPage} field="summary" plain /></Subtitle>)") != std::string::npos);
@@ -1050,7 +1068,8 @@ TEST_CASE("a button's when can ask whether a list has whoever is reading") {
                          "\tissue::drop \"Unassign me\" when issue_page.assignees has me\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find("const viewer = useAuth()?.person?.uid ?? null;") != std::string::npos);
@@ -1067,7 +1086,8 @@ TEST_CASE("a form can call a field something other than its name") {
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\nentity comment {\n\tbody  markdown  required\n\tnote  text\n}\ncommand comment::create\n"
                          "screen \"Comments\" /comments {\n\tform comment::create \"Comment\" {\n\t\tbody \"Comment\"  note\n\t}\n}\n}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(fields={[{ name: "body", label: "Comment", type: "markdown" }, "note"]})") != std::string::npos);
     fs::remove_all(dir);
@@ -1090,7 +1110,8 @@ TEST_CASE("buttons one after another sit in a row") {
                          "\ttext \"{issue_page.title}\"\n\tissue::close\n"
                          "}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     std::size_t row = tsx.find("<Actions>");
@@ -1102,6 +1123,32 @@ TEST_CASE("buttons one after another sit in a row") {
     CHECK(inside.find("<Command name=\"tracker::issue::reopen\"") != std::string::npos);
     CHECK(tsx.find("<Actions>", end) == std::string::npos);  // a button alone isn't in a row
     fs::remove_all(dir);
+}
+
+TEST_CASE("a button with its form draws as the button and the form written apart") {
+    namespace fs = std::filesystem;
+    auto screen = [](const std::string& name, const std::string& buttons) {
+        fs::path dir = fs::temp_directory_path() / name;
+        fs::remove_all(dir);
+        fs::create_directories(dir);
+        platform::write_file((dir / "main.one").string(),
+                             "namespace tracker {\n"
+                             "entity issue {\n\ttitle  text\n\tbody  markdown\n}\n"
+                             "command issue::update\n"
+                             "view issue_page per issue {\n\ttitle = issue.title\n\tbody = issue.body\n}\n"
+                             "screen \"Issue\" /issues/:issue {\n" + buttons + "\ttext \"{issue_page.title}\"\n}\n"
+                             "}\n");
+        auto files = generate_at(dir.string());
+        const auto* screens = find(files, "src/screens/main.tsx");
+        REQUIRE(screens != nullptr);
+        std::string tsx = screens->content;
+        fs::remove_all(dir);
+        return tsx;
+    };
+    auto apart = screen("uione-form-apart", "\tissue::update \"Edit\"\n\tform issue::update \"Save\" {\n\t\ttitle  body \"Description\"\n\t}\n");
+    auto with = screen("uione-form-with", "\tissue::update \"Edit\" form \"Save\" {\n\t\ttitle  body \"Description\"\n\t}\n");
+    CHECK(apart.find("<Form command=\"tracker::issue::update\"") != std::string::npos);
+    CHECK(with == apart);
 }
 
 TEST_CASE("a command's button on its entity's page acts on that entity") {
@@ -1119,7 +1166,8 @@ TEST_CASE("a command's button on its entity's page acts on that entity") {
                          "screen \"Issue\" /projects/:project/issues/:issue {\n\tissue::close\n}\n"
                          "screen \"Projects\" /projects {\n\tproject::create\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(const issueId = keyOf([useParam("project"), useParam("issue")]);)") != std::string::npos);
     CHECK(screens->content.find(R"(<Command name="tracker::issue::close" id={issueId} />)") != std::string::npos);
@@ -1134,7 +1182,8 @@ TEST_CASE("an app offers the ways of signing in its project names, in its order,
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "import one\nproject p {\n\tsignin github\n\tsignin microsoft\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
-    auto app = find(generate_at(dir.string()), "src/app.tsx");
+    auto app_files = generate_at(dir.string());
+    auto app = find(app_files, "src/app.tsx");
     REQUIRE(app != nullptr);
     CHECK(app->content.find(R"(import { firebaseSource, github as signInWithGitHub, microsoft as signInWithMicrosoft } from "@uione/react/firebase";)") !=
           std::string::npos);
@@ -1146,7 +1195,8 @@ TEST_CASE("an app offers the ways of signing in its project names, in its order,
     // A project that names no way offers none.
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(), "import one\nproject p {\n\tui radix\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
-    auto none = find(generate_at(dir.string()), "src/app.tsx");
+    auto none_files = generate_at(dir.string());
+    auto none = find(none_files, "src/app.tsx");
     REQUIRE(none != nullptr);
     CHECK(none->content.find(", authentication: false") != std::string::npos);
     CHECK(none->content.find("import { firebaseSource } from") != std::string::npos);
@@ -1213,7 +1263,8 @@ TEST_CASE("a timeline can say what it's of, and a row can open what it points at
                          "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" link /:project/:issue\n}\n"
                          "screen \"{issue_page.title}\" /:project/:issue {\n\ttable issue_page.links link /:project/:to {\n\t\tto.title \"Issue\"\n\t}\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Timeline view={news} list="changes" subject={["project", "issue.title"]} title="What's new" link="/:project/:issue" keyed={["project"]})") !=
@@ -1240,7 +1291,8 @@ TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go 
                          "screen \"{issue_page.title}\" /issues/:issue {\n\tissue::move along issue_page.steps\n\ttable issue_page.comments {\n\t\tbody\n\t}\n"
                          "\tcopy issue_page \"Copy issue\"\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CHECK(screens->content.find(R"(lists={[["comments", "Comments", "rows", ["body"]]]})") != std::string::npos);
     fs::remove_all(dir);
@@ -1285,7 +1337,8 @@ TEST_CASE("a link and a toolbar's button can be drawn as icons, and a subtitle s
                          "\tmain {\n\t\ttable issues {\n\t\t\ttitle\n\t\t\tissue::create \"New issue\" icon add\n\t\t}\n\t\tform issue::create {\n\t\t\ttitle\n\t\t}\n\t}\n"
                          "\tside {\n\t\tlink /workflow \"Workflow\" icon workflow\n\t}\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     fs::remove_all(dir);
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
@@ -1318,7 +1371,8 @@ TEST_CASE("a table keeps only some rows, rows are tinted by a choice, and a box 
                          "\tform issue::create {\n\t\ttitle  priority\n\t}\n}\n"
                          "screen \"Issue\" /:project/:issue {\n\tdetails issue_page {\n\t\ttint by priority\n\t\tpriority\n\t}\n}\n"
                          "}\n");
-    const auto* screens = find(generate_at(dir.string()), "src/screens/main.tsx");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
     fs::remove_all(dir);
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;

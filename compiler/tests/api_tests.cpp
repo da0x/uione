@@ -194,6 +194,81 @@ command column::delete {
     CHECK(go.find("if err := one.DispatchUpdate(c, x.Board, func(dispatched *Board) {\n\t\t\t\tdispatched.Start = into") != std::string::npos);
 }
 
+TEST_CASE("each other link picks rows of the command's own kind by their fields") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace board {
+entity issue {
+	title  text
+}
+entity link {
+	from  issue
+	to    issue
+	pair  link
+}
+command link::delete {
+	each other link where other.pair == id || other.id == pair {
+		dispatch link::delete
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "board/board.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CAPTURE(go);
+    CHECK(go.find(R"(one.EachIn(c, "pair", l.ID, eachLink))") != std::string::npos);
+    CHECK(go.find(R"(one.EachIn(c, "id", l.Pair, eachLink))") != std::string::npos);
+}
+
+TEST_CASE("a match is one.Match, with each choice's value") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace board {
+entity issue {
+	title  text
+}
+entity link {
+	from      issue
+	to        issue
+	pair      link
+	relation  enum  blocks | blocked_by | relates
+	weight    number
+}
+command link::create {
+	if pair == none {
+		dispatch link::create {
+			pair = id  from = to  to = from
+			relation = match relation {
+				blocks      blocked_by
+				blocked_by  blocks
+				relates     relates
+			}
+			weight = match relation {
+				blocks  2
+				else    1
+			}
+		}
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "board/board.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CHECK(go.find(R"(one.Match(l.Relation, map[string]string{RelationBlocks: RelationBlockedBy, RelationBlockedBy: RelationBlocks, RelationRelates: RelationRelates}, ""))") !=
+          std::string::npos);
+    CHECK(go.find(R"(one.Match(l.Relation, map[string]float64{RelationBlocks: 2}, 1))") != std::string::npos);
+}
+
 TEST_CASE("an update may set the field a table's rows are dragged into order by") {
     language::diagnostics out;
     std::vector<language::file> files;

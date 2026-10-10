@@ -315,6 +315,72 @@ TEST_CASE("an upgrade says each change to another record as a dispatch of its co
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("an upgrade joins a form to the button above it that opens it") {
+    auto dir = project("uione-upgrade-form", R"(import one
+
+entity issue {
+	title  text
+	body   markdown
+}
+command issue::update
+command issue::close
+view issue_page per issue {
+	title = issue.title
+	body = issue.body
+}
+screen "Issue" /issues/:issue {
+	issue::update "Edit"
+	form issue::update "Save" {
+		title  body
+	}
+	issue::close
+	form issue::update {
+		title
+	}
+	issue::close "Close"
+	form issue::update issue::close {
+		title
+	}
+}
+)");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(!done.changed.empty());
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\tissue::update \"Edit\" form \"Save\" {\n\t\ttitle  body\n\t}\n") != std::string::npos);
+    // Not its button, and a form for two commands, stay apart.
+    CHECK(text.find("\tissue::close\n\tform issue::update {\n") != std::string::npos);
+    CHECK(text.find("\tissue::close \"Close\"\n\tform issue::update issue::close {\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("an upgrade names a row of the command's own kind other") {
+    auto dir = project("uione-upgrade-other", R"(import one
+
+entity issue {
+	title  text
+}
+entity link {
+	from  issue
+	to    issue
+	pair  link
+}
+command link::delete {
+	each link where pair == id || id == pair {
+		dispatch link::delete
+	}
+}
+)");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(!done.changed.empty());
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\teach other link where other.pair == id || other.id == pair {\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("a project's themes, and uione's own, are shown as they say and as they're drawn, for a designer") {
     driver::sources files{{"main.one", "import one\n\ndefine theme sea \"Sea\" from harbor {\n\taccent  #0b5cad  dark #8cc4ff\n\tcorners  4\n}\n\n"
                                        "project shop {\n\ttheme  sea\n}\n"}};

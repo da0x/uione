@@ -769,6 +769,9 @@ namespace one::generators {
                         return mentions(*node.left, name) || mentions(*node.right, name);
                     } else if constexpr (std::is_same_v<T, language::list_expression>) {
                         return std::any_of(node.items.begin(), node.items.end(), [&](const auto& i) { return mentions(*i, name); });
+                    } else if constexpr (std::is_same_v<T, language::match_expression>) {
+                        return mentions(*node.subject, name) || (node.otherwise && mentions(*node.otherwise, name)) ||
+                               std::any_of(node.arms.begin(), node.arms.end(), [&](const auto& arm) { return mentions(*arm.value, name); });
                     } else {
                         return false;
                     }
@@ -810,8 +813,10 @@ namespace one::generators {
                 return out;
             }
             auto* name = b ? std::get_if<language::name_expression>(&b->left->node) : nullptr;
-            if (!name) return std::nullopt;
-            const std::string& field_name = name->name.parts[0];
+            // other.pair, for a row of the command's own kind, is the row's pair.
+            auto* member = b ? std::get_if<language::member_expression>(&b->left->node) : nullptr;
+            if (!name && !member) return std::nullopt;
+            const std::string& field_name = name ? name->name.parts[0] : member->member;
             auto value = expression(e, *b->right, me, field(picked, field_name));
             if (!value) return std::nullopt;
             out.emplace_back(api_detail::go_string(field_name), *value);
@@ -1475,6 +1480,7 @@ namespace one::generators {
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
                 return lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
             }
+            if (auto* m = std::get_if<language::match_expression>(&x.node)) return matched(e, *m, me, beside);
             // A choice of the field it's beside: status::closed.
             if (auto* n = std::get_if<language::name_expression>(&x.node); n && beside) {
                 if (auto c = language::choice_of(n->name, *beside)) return choice(*beside, *c);
@@ -1530,6 +1536,43 @@ namespace one::generators {
             }
             unsupported(path_, x.where, "this expression in a command; a command can use its own fields, now, me, none, and plain values");
             return std::nullopt;
+        }
+
+        // match relation { blocks  blocked_by … }: one.Match with the value for each
+        // choice, and else's, or the field's empty value when every choice is said.
+        std::optional<std::string> matched(const language::entity_declaration& e, const language::match_expression& m, const std::string& me,
+                                           const language::field* beside) {
+            const language::field* subject = nullptr;
+            std::optional<std::string> on;
+            if (auto* n = std::get_if<language::name_expression>(&m.subject->node); n && n->name.parts.size() == 1) {
+                subject = field(e, n->name.parts[0]);
+                if (subject) on = me + "." + api_detail::go_name(subject->name);
+            } else if (auto through = resolve(e, *m.subject, me)) {
+                subject = through->second;
+                on = through->first;
+            }
+            if (!subject || !on || !beside || beside->list) {
+                unsupported(path_, m.subject->where, "this match; a command's match gives one value to a field, by a choice of a field it reads");
+                return std::nullopt;
+            }
+            std::string type = !beside->choices.empty() ? "string"
+                               : beside->type && (beside->type->text() == "number" || beside->type->text() == "serial") ? "float64"
+                               : beside->type && beside->type->text() == "boolean" ? "bool"
+                               : beside->type && beside->type->text() == "date" ? "time.Time"
+                               : "string";
+            std::string values;
+            for (const auto& arm : m.arms) {
+                auto value = expression(e, *arm.value, me, beside);
+                if (!value) return std::nullopt;
+                values += (values.empty() ? "" : ", ") + choice(*subject, arm.choice) + ": " + *value;
+            }
+            std::string otherwise = zero(*beside);
+            if (m.otherwise) {
+                auto value = expression(e, *m.otherwise, me, beside);
+                if (!value) return std::nullopt;
+                otherwise = *value;
+            }
+            return "one.Match(" + *on + ", map[string]" + type + "{" + values + "}, " + otherwise + ")";
         }
 
         // views

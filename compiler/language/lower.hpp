@@ -73,6 +73,10 @@ namespace one::language {
                         reader(node.right);
                     } else if constexpr (std::is_same_v<T, list_expression>) {
                         for (auto& item : node.items) reader(item);
+                    } else if constexpr (std::is_same_v<T, match_expression>) {
+                        reader(node.subject);
+                        for (auto& arm : node.arms) reader(arm.value);
+                        if (node.otherwise) reader(node.otherwise);
                     }
                 },
                 e->node);
@@ -218,6 +222,10 @@ namespace one::language {
                             reading(node.right);
                         } else if constexpr (std::is_same_v<T, list_expression>) {
                             for (const auto& item : node.items) reading(item);
+                        } else if constexpr (std::is_same_v<T, match_expression>) {
+                            reading(node.subject);
+                            for (const auto& arm : node.arms) reading(arm.value);
+                            if (node.otherwise) reading(node.otherwise);
                         }
                     },
                     e->node);

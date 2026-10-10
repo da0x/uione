@@ -37,7 +37,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks, never the entity a command is on: board in board::create
 " is a name.
-syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|details\|layout\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|hour\|hours\|day\|days\|week\|weeks\|new\|since\|seen\|badge\|find\|only\|tint\|color\)\>\%(\s*::\)\@!"
+syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|details\|layout\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|hour\|hours\|day\|days\|week\|weeks\|new\|since\|seen\|badge\|find\|only\|tint\|color\|match\|other\)\>\%(\s*::\)\@!"
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+in\>"
