@@ -35,6 +35,13 @@ that uses every part of the language, held to its target the same way. It shows 
 harder shapes: commands that change the book a loan points at, rows read through a
 reference, a value worked out from another entity, and a function.
 
+## cpp
+
+`cpp/uione.hpp` is exactly what the C++ client generator writes for the site, held by
+a golden test in `compiler/tests/cpp_tests.cpp`. It's one header a native program
+includes: a struct for every entity and view, the ids entities are stored under, a
+function for every command, and every view read live through libember.
+
 The rule all of these are held to: a generated file is about as long as the `.one`
 it came from. Anything that would repeat across generated files belongs in a library
 instead.

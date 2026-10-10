@@ -83,6 +83,7 @@ if(ONE_TESTS)
         tests/web_tests.cpp
         tests/api_tests.cpp
         tests/infrastructure_tests.cpp
+        tests/cpp_tests.cpp
         tests/sources_tests.cpp
         tests/grammar_tests.cpp
         tests/complete_tests.cpp

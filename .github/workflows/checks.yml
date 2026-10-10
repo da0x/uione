@@ -86,6 +86,10 @@ jobs:
             (cd "$api" && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
           done
 
+      # Each generated C++ client compiles against libember, with warnings as errors.
+      - name: Compile the generated C++ clients
+        run: CXX=g++-14 tools/check-cpp-clients
+
       - name: Vet and test the infrastructure library, and build the site's Pulumi program
         run: |
           (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test ./...)

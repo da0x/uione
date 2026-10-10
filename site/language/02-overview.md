@@ -11,6 +11,7 @@ and deploy with the tools you already use:
 | `api/` | a Go service on the `one` library | `go build` |
 | `infrastructure/` | a Pulumi program for the cloud project | `pulumi up` |
 | `firestore.rules` | who may read which view | deployed by `infrastructure/` |
+| `cpp/<app>.hpp` | one header for a native program or desktop app: the app's records, the ids they're stored under, its commands, and its views read live | `g++ -std=c++23`, with [libember](https://github.com/da0x/libember) |
 
 Everything generated is short enough to read, and nothing generated is edited by
 hand. When the output needs changing, the `.one` file or the library changes.

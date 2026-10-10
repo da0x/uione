@@ -1,0 +1,26 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Compiles every generated C++ client, cpp/<app>.hpp, against libember itself, at the
+# release it's written for, with warnings as errors: the site's and each example's,
+# once one build has written them. OpenSSL is the TLS here, since every machine that
+# runs the checks has it.
+
+set -eu
+version=v0.1.0
+here=$(cd "$(dirname "$0")/.." && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+git -c advice.detachedHead=false clone -q --depth 1 --branch "$version" https://github.com/da0x/libember "$work/libember"
+cxx=${CXX:-g++}
+found=0
+for header in "$here"/site/build/cpp/*.hpp "$here"/examples/*/build/cpp/*.hpp; do
+	[ -f "$header" ] || continue
+	found=$((found + 1))
+	printf '#include "%s"\nint main() {}\n' "$header" > "$work/client.cpp"
+	"$cxx" -std=c++23 -Wall -Wextra -Werror -DEMBER_TLS_OPENSSL -I"$work/libember/include" "$work/client.cpp" -o "$work/client" -lssl -lcrypto
+	echo "ok: $(basename "$header") compiles against libember $version"
+done
+[ "$found" -gt 0 ] || { echo "check-cpp-clients: no generated clients; run one build first" >&2; exit 1; }
