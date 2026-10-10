@@ -12,8 +12,8 @@ The folder you're in is the project. `--user` makes the files `one build` writes
 yours rather than root's.
 
 `ghcr.io/da0x/uione:latest` is the latest release, and each release has its own
-tag, like `ghcr.io/da0x/uione:0.7.8`. In CI, pin the release:
+tag, like `ghcr.io/da0x/uione:0.8.0`. In CI, pin the release:
 
 ```yaml
-- run: docker run --rm -v "$PWD:/work" ghcr.io/da0x/uione:0.7.8 check .
+- run: docker run --rm -v "$PWD:/work" ghcr.io/da0x/uione:0.8.0 check .
 ```
