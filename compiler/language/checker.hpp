@@ -1713,6 +1713,14 @@ namespace one::language {
             if (!find_entity(ns, on)) {
                 error(p.where, "permission " + p.text() + " is on entity " + on.text() +
                                    ", which isn't declared " + in_namespace(ns));
+                return;
+            }
+            // A permission is running a command, or reading the views of what's on an
+            // entity, as book::view reads every view of books that names no readers.
+            if (p.parts.back() == "view") return;
+            auto here = scopes_.find(ns);
+            if (here == scopes_.end() || !here->second.commands.contains(p.text())) {
+                error(p.where, on.text() + " has no command " + p.parts.back() + "; a permission is a command, or view to read its views");
             }
         }
 

@@ -177,6 +177,10 @@ TEST_CASE("permissions") {
     CHECK(check_source("entity task {\n\towner user = me\n}\ncommand task::delete {\n\tby owner\n}\n").empty());
     CHECK(only_error("role editor  post::edit\n").message ==
           "permission post::edit is on entity post, which isn't declared at the top level");
+    // A permission is a command, or view to read an entity's views.
+    CHECK(check_source(entity + "command task::create\nrole editor  task::create  task::view\n").empty());
+    CHECK(only_error(entity + "command task::create\nrole editor  task::create  task::read\n").message ==
+          "task has no command read; a permission is a command, or view to read its views");
 }
 
 TEST_CASE("a picker names an entity and a view") {
