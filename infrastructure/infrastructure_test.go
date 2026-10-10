@@ -453,28 +453,30 @@ func TestWithoutGitHubThereIsNoSecret(t *testing.T) {
 	}
 }
 
-func TestTheBackendSignsServicesTokensAsItselfOnlyWhenThereAreServices(t *testing.T) {
-	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Services = true })
-	if err != nil {
-		t.Fatal(err)
+func TestTheBackendSignsTokensAsItselfOnlyWhenThereAreServicesOrPeopleSignIn(t *testing.T) {
+	for _, give := range []func(*Project){func(p *Project) { p.Services = true }, func(p *Project) { p.SignIn = true }} {
+		m, err := declareChanged(t, build(t), settings, "000000-000000-000000", give)
+		if err != nil {
+			t.Fatal(err)
+		}
+		grant, ok := m.resources["gcp:serviceaccount/iAMMember:IAMMember::runtime-signs-tokens"]
+		if !ok {
+			t.Fatalf("a project with services, or that people sign in to, lets its backend sign tokens; declared: %v", keys(m.resources))
+		}
+		if grant["role"].StringValue() != "roles/iam.serviceAccountTokenCreator" || grant["member"].StringValue() != "serviceAccount:uione-api@ui-one.iam.gserviceaccount.com" {
+			t.Errorf("the backend signs as itself, and nothing more: %v", grant)
+		}
+		if _, ok := m.resources["gcp:projects/service:Service::iamcredentials.googleapis.com"]; !ok {
+			t.Errorf("signing goes through IAM Credentials, which is turned on")
+		}
 	}
-	grant, ok := m.resources["gcp:serviceaccount/iAMMember:IAMMember::runtime-signs-tokens"]
-	if !ok {
-		t.Fatalf("a project with services lets its backend sign their tokens; declared: %v", keys(m.resources))
-	}
-	if grant["role"].StringValue() != "roles/iam.serviceAccountTokenCreator" || grant["member"].StringValue() != "serviceAccount:uione-api@ui-one.iam.gserviceaccount.com" {
-		t.Errorf("the backend signs as itself, and nothing more: %v", grant)
-	}
-	if _, ok := m.resources["gcp:projects/service:Service::iamcredentials.googleapis.com"]; !ok {
-		t.Errorf("signing goes through IAM Credentials, which is turned on")
-	}
-	m, err = declare(t, build(t), settings)
+	m, err := declare(t, build(t), settings)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for key := range m.resources {
 		if strings.Contains(key, "runtime-signs-tokens") {
-			t.Errorf("a project without services declares %s", key)
+			t.Errorf("a project with neither declares %s", key)
 		}
 	}
 }

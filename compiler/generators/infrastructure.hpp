@@ -36,6 +36,7 @@ namespace one::generators {
         code::source from;  // the project block they're written in
         std::string github;  // where GitHub's webhook comes in, which needs a secret
         bool services = false;  // a role is made for services, whose tokens the backend signs
+        bool signs_in = false;  // people sign in, so programs on their computers may too, with a token the backend signs
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
@@ -72,6 +73,7 @@ namespace one::generators {
                     if (setting.key == "firebase") s.firebase = setting.value;
                     if (setting.key == "region") s.region = setting.value;
                     if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
+                    if (setting.key == "signin") s.signs_in = true;
                 }
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
                 if (!p->environment.empty()) s.stack = s.firebase;
@@ -177,6 +179,7 @@ namespace one::generators {
             g.line("Region:   " + quoted(s.region) + ",");
             if (!s.github.empty()) g.line("GitHub:   " + quoted(s.github) + ",");
             if (s.services) g.line("Services: true,");
+            if (s.signs_in) g.line("SignIn:   true,");
             g.close("})");
             g.close("}");
             out.push_back(file("infrastructure/main.go", g));

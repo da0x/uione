@@ -92,6 +92,10 @@ type Project struct {
 	// the backend signs as itself, so the backend may make tokens as its own account.
 	Services bool
 
+	// Whether people sign in. A program on someone's computer, like the app's command,
+	// signs in as them through their browser and is given a custom token too.
+	SignIn bool
+
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
 	// parent of the Pulumi program's folder unless it's set.
 	Build string
@@ -143,8 +147,8 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	if p.GitHub != "" {
 		needed = append(needed, "secretmanager.googleapis.com")
 	}
-	// A service's custom token is signed through IAM Credentials.
-	if p.Services {
+	// A custom token, a service's or a program's, is signed through IAM Credentials.
+	if p.Services || p.SignIn {
 		needed = append(needed, "iamcredentials.googleapis.com")
 	}
 	var enabled []pulumi.Resource
@@ -244,9 +248,9 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	}); err != nil {
 		return err
 	}
-	// Signing a service's custom token is asking Google to sign as the backend's own
-	// account, which it may do for itself and for no other account.
-	if p.Services {
+	// Signing a custom token is asking Google to sign as the backend's own account,
+	// which it may do for itself and for no other account.
+	if p.Services || p.SignIn {
 		if _, err := serviceaccount.NewIAMMember(ctx, "runtime-signs-tokens", &serviceaccount.IAMMemberArgs{
 			ServiceAccountId: runtime.Name,
 			Role:             pulumi.String("roles/iam.serviceAccountTokenCreator"),

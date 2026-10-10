@@ -157,6 +157,12 @@ TEST_CASE("a project with a role for services lets its backend sign their tokens
     std::string without = source;
     without.replace(without.find(" for services {"), 15, " {");
     CHECK(program_of(without).find("Services") == std::string::npos);
+    CHECK(program_of(without).find("SignIn") == std::string::npos);
+    // People signing in lets a program on their computer sign in as them, with a token
+    // the backend signs too.
+    std::string signing_in = without;
+    signing_in.replace(signing_in.find("\tdomain"), 0, "\tsignin  github\n");
+    CHECK(program_of(signing_in).find("\t\tSignIn:   true,\n") != std::string::npos);
     fs::remove_all(dir);
 }
 

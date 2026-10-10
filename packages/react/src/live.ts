@@ -239,8 +239,9 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
       }
       const body: unknown = await response.json().catch(() => undefined);
       if (response.ok) {
-        const reply = body as { id?: unknown; key?: unknown } | undefined;
-        return { id: typeof reply?.id === "string" ? reply.id : undefined, key: typeof reply?.key === "string" ? reply.key : undefined };
+        const reply = body as { id?: unknown; key?: unknown; code?: unknown } | undefined;
+        const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+        return { id: text(reply?.id), key: text(reply?.key), code: text(reply?.code) };
       }
       const message = (body as { error?: unknown } | undefined)?.error;
       throw new Error(typeof message === "string" ? message : "something went wrong on our side; try again");

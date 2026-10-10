@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "code/stream.hpp"
+#include "generators/cpp_browser.hpp"
 #include "generators/web.hpp"
 #include "language/ast.hpp"
 
@@ -92,6 +93,7 @@ namespace one::generators {
                 out.line("#include <string>");
                 out.line("#include <utility>");
                 out.line("#include <vector>");
+                verbatim(out, cpp_detail::browser_includes);
                 out.line();
                 out.line("#include <ember.hpp>");
                 out.line();
@@ -239,6 +241,15 @@ namespace one::generators {
         }
 
         // The helpers the rest reads values with, and the key ids are made from.
+        // Lines written as they are, each indented as deep as the stream is.
+        static void verbatim(code::stream& out, std::string_view text) {
+            while (!text.empty()) {
+                auto end = text.find('\n');
+                out.line(std::string(text.substr(0, end)));
+                text = end == std::string_view::npos ? std::string_view() : text.substr(end + 1);
+            }
+        }
+
         void support(code::stream& out) {
             out.line("// When something happened, to the nanosecond.");
             out.line("using time = std::chrono::sys_time<std::chrono::nanoseconds>;");
@@ -315,6 +326,8 @@ namespace one::generators {
             out.line("return s;");
             out.close("}");
             out.line("inline std::string key_part(const std::string& s) { return s; }");
+            out.line();
+            verbatim(out, cpp_detail::browser_support);
             out.line();
         }
 
@@ -595,6 +608,8 @@ namespace one::generators {
             out.line("connect();");
             out.line("auth_->sign_in_with_idp(provider, access_token);");
             out.close("}");
+            out.line();
+            verbatim(out, cpp_detail::browser_sign_in);
             out.line();
             out.line("std::string refresh_token() { connect(); return auth_->refresh_token(); }");
             out.line();

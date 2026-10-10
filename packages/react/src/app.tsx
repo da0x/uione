@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
 import type { Analytics, Build, ComponentSet } from "./contract.js";
 import { buildLinks } from "./contract.js";
-import { DataProvider, useAuth, useShownOnce, useView } from "./data.js";
+import { DataProvider, useAuth, useAuthorize, useShownOnce, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
@@ -240,6 +240,7 @@ export function App({ name, icon, screens, ui, data, location, authentication = 
       {screens.map((s) => (
         <Route key={s.info.route} path={routerPath(s.info.route, s.info.shown)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
       ))}
+      {authentication && <Route path="/authorize" element={<Authorize name={name} icon={icon} screens={screens} />} />}
       <Route path="*" element={<NotFound name={name} icon={icon} screens={screens} />} />
       </Routes>
     </>
@@ -558,6 +559,81 @@ function NotFound({ name, icon, screens }: { name: string; icon: string | undefi
   return (
     <Shell name={name} icon={icon} title="Not found" screens={screens}>
       <ui.Text>There's nothing at this address.</ui.Text>
+    </Shell>
+  );
+}
+
+// Signing a program on this computer in as the person, like the app's command. The
+// program waits at 127.0.0.1 on the port in the address and is sent back either a
+// code made for its challenge or word that it was turned down; nothing goes anywhere
+// else. Then it sends the browser back here, done, to say so.
+function Authorize({ name, icon, screens }: { name: string; icon: string | undefined; screens: Screen[] }) {
+  const ui = useUI();
+  const auth = useAuth();
+  const signIn = useSignIn();
+  const authorize = useAuthorize();
+  const { search } = useLocation();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const asked = new URLSearchParams(search);
+  const port = Number(asked.get("port"));
+  const state = asked.get("state") ?? "";
+  const challenge = asked.get("challenge") ?? "";
+  const done = asked.get("done");
+  const complete = Number.isInteger(port) && port >= 1024 && port <= 65535 && /^[\w-]{16,128}$/.test(state) && /^[\w-]{43,128}$/.test(challenge);
+  const back = (answer: Record<string, string>) => window.location.assign(`http://127.0.0.1:${port}/?${new URLSearchParams({ ...answer, state })}`);
+  const person = auth?.person;
+  let body: ReactNode = null;
+  if (done === "yes") body = <ui.Text>You're signed in on your computer. You can close this tab and go back to where you ran it.</ui.Text>;
+  else if (done === "no") body = <ui.Text>Nothing was signed in. You can close this tab.</ui.Text>;
+  else if (!complete) body = <ui.Text>This sign-in link isn't complete. Run the program's login again.</ui.Text>;
+  else if (person === null) {
+    body = (
+      <>
+        <ui.Text>Sign in to let the {name} command on this computer act as you.</ui.Text>
+        <ui.Actions>
+          <ui.Button kind="primary" onClick={signIn.begin}>
+            Sign in
+          </ui.Button>
+        </ui.Actions>
+      </>
+    );
+  } else if (person) {
+    body = (
+      <>
+        <ui.Text>
+          The {name} command on this computer is asking to act as you, {person.name || "signed in here"}: to see what you can see on {name} and do what you can
+          do. Authorize it only if you just ran its login yourself.
+        </ui.Text>
+        <ui.Actions>
+          <ui.Button
+            kind="primary"
+            disabled={busy}
+            error={error}
+            onClick={() => {
+              setBusy(true);
+              setError(undefined);
+              authorize(challenge).then(
+                (code) => back({ code }),
+                (e: unknown) => {
+                  setError(e instanceof Error ? e.message : String(e));
+                  setBusy(false);
+                },
+              );
+            }}
+          >
+            Authorize
+          </ui.Button>
+          <ui.Button kind="secondary" disabled={busy} onClick={() => back({ error: "denied" })}>
+            Cancel
+          </ui.Button>
+        </ui.Actions>
+      </>
+    );
+  }
+  return (
+    <Shell name={name} icon={icon} title="Sign in on your computer" screens={screens}>
+      {body}
     </Shell>
   );
 }

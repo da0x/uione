@@ -168,6 +168,11 @@ int main() {
 		if (ours[i] != made[i]) std::printf("%s, not %s\n", ours[i].c_str(), made[i]), ++wrong;
 	}
 	if (tasks::work::job_id("ark", 3) != "ark-3") std::printf("job_id\n"), ++wrong;
+	// The challenge a browser sign-in sends, as RFC 7636's own example makes it.
+	if (tasks::detail::base64url(tasks::detail::sha256("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk")) != "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM") std::printf("challenge\n"), ++wrong;
+	if (tasks::detail::base64url(tasks::detail::sha256(std::string(1000, 'a'))) != "Qe3s5C1j6Nm_UVqbppMuHCDLyfWl0TRkWttdsblzfqM") std::printf("sha256 over blocks\n"), ++wrong;
+	if (tasks::detail::query_value("state=s%2Fx&code=a+b", "code") != "a b" || tasks::detail::query_value("state=s%2Fx&code=", "state") != "s/x") std::printf("query\n"), ++wrong;
+	if (tasks::detail::random_text(32).size() != 43) std::printf("random_text\n"), ++wrong;
 	return wrong;
 }
 )";

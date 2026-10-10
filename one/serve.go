@@ -315,6 +315,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /api/", a.serveCommand)
 	mux.HandleFunc("POST /api/signin", a.serveSignIn)
 	mux.HandleFunc("POST /api/token", a.serveToken)
+	mux.HandleFunc("POST /api/authorize", a.serveAuthorize)
 	mux.HandleFunc("GET /api/me", a.serveMe)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
@@ -410,12 +411,18 @@ func (a *App) caller(r *http.Request) (caller, error) {
 }
 
 // serveToken trades a service's key for a Firebase custom token of the service's
-// own id, which signs it in to read views under the same rules as anyone. Only a
-// key is taken here.
+// own id, which signs it in to read views under the same rules as anyone. Without a
+// key, it trades the code a person's browser gave a program on their computer
+// (authorize.go). A person's own sign-in gets nothing here.
 func (a *App) serveToken(w http.ResponseWriter, r *http.Request) {
-	credential := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		a.tokenForCode(w, r)
+		return
+	}
+	credential := strings.TrimPrefix(header, "Bearer ")
 	if !strings.HasPrefix(credential, keyPrefix) {
-		reply(w, http.StatusUnauthorized, map[string]any{"error": "a token is given for a service's key"})
+		reply(w, http.StatusUnauthorized, map[string]any{"error": "a token is given for a service's key, or for a sign-in's code"})
 		return
 	}
 	service, place, err := a.keyed(r.Context(), credential)

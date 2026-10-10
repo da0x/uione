@@ -321,3 +321,44 @@ describe("a site's own color", () => {
     expect(accentOf("red; } body { display: none")).toBe("");
   });
 });
+
+describe("signing a program on this computer in", () => {
+  const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+  const asked = `/authorize?port=50123&state=a-state-of-the-program&challenge=${challenge}`;
+  const home = defineScreen({ title: "Home", route: "/" }, () => <Text>hello</Text>);
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a code made for the program's challenge back to it, and only to 127.0.0.1", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const source = memorySource({ person: { uid: "ada", name: "Ada" }, commands: { authorize: () => ({ code: "the-code" }) } });
+    render(<App name="neotrac" screens={[home]} ui={plain} data={source} location={asked} />);
+    expect(screen.getByText(/The neotrac command on this computer is asking to act as you, Ada/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Authorize" }));
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("http://127.0.0.1:50123/?code=the-code&state=a-state-of-the-program"));
+    expect(source.runs).toEqual([{ command: "authorize", input: { challenge } }]);
+  });
+
+  it("tells the program it was turned down", () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={asked} />);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(assign).toHaveBeenCalledWith("http://127.0.0.1:50123/?error=denied&state=a-state-of-the-program");
+  });
+
+  it("asks someone signed out to sign in first", () => {
+    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: null })} location={asked} />);
+    expect(screen.getByText(/Sign in to let the neotrac command on this computer act as you/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Authorize" })).toBeNull();
+  });
+
+  it("refuses a link that isn't complete, or names no port of this computer", () => {
+    const { unmount } = render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={`/authorize?port=80&state=a-state-of-the-program&challenge=${challenge}`} />);
+    expect(screen.getByText("This sign-in link isn't complete. Run the program's login again.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Authorize" })).toBeNull();
+    unmount();
+    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location="/authorize?done=yes" />);
+    expect(screen.getByText(/You're signed in on your computer/)).toBeTruthy();
+  });
+});

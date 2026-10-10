@@ -30,6 +30,7 @@ export type CommandInput = Record<string, unknown>;
 export interface CommandReply {
   id?: string;
   key?: string;
+  code?: string; // a code for a program on the person's computer, from authorize
 }
 
 export interface DataSource {
@@ -210,6 +211,20 @@ export function useRunner(): Runner {
     [source, clear, show],
   );
   return { run, busy: (command) => running.has(command), error: (command) => errors[command], clear };
+}
+
+// Gives a program on this computer, like the app's command, a code that signs it in
+// as the person signed in here, made for the program's challenge.
+export function useAuthorize(): (challenge: string) => Promise<string> {
+  const source = useSource();
+  return useCallback(
+    async (challenge: string) => {
+      const reply = await source.run("authorize", { challenge });
+      if (!reply?.code) throw new Error("the server didn't give a code; try again");
+      return reply.code;
+    },
+    [source],
+  );
 }
 
 export interface CommandState {
