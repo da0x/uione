@@ -389,15 +389,16 @@ export function Timeline({
   keyed,
   named,
   title,
-  since,
-  seen,
+  fresh,
+  onOpen,
 }: {
   view: ViewState;
   list: string;
   title?: string; // what it's of, like "What's new", shown only while it holds something
-  // When the person last looked, a value of a view: the changes after it are new.
-  since?: { view: ViewState; field: string };
-  seen?: string; // the command that says they've looked, run once there's something new
+  // Which changes are new, by each row and the views it reads, like when the person
+  // last looked, as they were when the page opened.
+  fresh?: { views: ViewState[]; test: (row: Row, read: (Record<string, unknown> | undefined)[]) => boolean };
+  onOpen?: string; // a command run once it opens with something new in it, like one saying they've looked
   subject?: string[]; // the columns naming what each change was to, like issue.number and issue.title
   link?: string; // where each change's subject is, like /:project/issues/:issue
   keyed?: string[]; // the key's parts before the last, when the link names them, like project
@@ -408,26 +409,24 @@ export function Timeline({
   const params = useParams();
   const runner = useRunner();
   const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
-  // When they last looked, as it was when the page opened: saying they've looked
-  // moves it on, but what was new stays marked until they leave. Never is before
-  // everything.
-  const [looked, setLooked] = useState<{ at: number }>();
+  // The views it reads, as they were when the page opened: saying they've looked
+  // moves the time on, but what was new stays marked until they leave.
+  const [looked, setLooked] = useState<{ read: (Record<string, unknown> | undefined)[] }>();
   const [said, setSaid] = useState(false);
-  const sinceStatus = since?.view.status;
-  const sinceValue = since ? since.view.data?.[since.field] : undefined;
+  const ready = fresh !== undefined && fresh.views.every((v) => v.status === "live");
   useEffect(() => {
-    if (since && !looked && sinceStatus === "live") setLooked({ at: timeOf(sinceValue) ?? Number.NEGATIVE_INFINITY });
-  }, [since, looked, sinceStatus, sinceValue]);
-  const fresh = (row: Row) => looked !== undefined && (timeOf(row.created_at) ?? 0) > looked.at;
-  const freshCount = view.status === "live" ? onceEach(rows).filter(fresh).length : 0;
+    if (fresh && ready && !looked) setLooked({ read: fresh.views.map((v) => v.data) });
+  }, [fresh, ready, looked]);
+  const isNew = (row: Row) => looked !== undefined && fresh !== undefined && fresh.test(row, looked.read);
+  const freshCount = view.status === "live" ? onceEach(rows).filter(isNew).length : 0;
   useEffect(() => {
-    if (!seen || said || freshCount === 0) return;
+    if (!onOpen || said || freshCount === 0) return;
     setSaid(true);
-    void runner.run(seen, {});
-  }, [seen, said, freshCount, runner]);
+    void runner.run(onOpen, {});
+  }, [onOpen, said, freshCount, runner]);
   const entries = onceEach(rows).map((row) => {
     // A change no one made, like a migration's, was made by the system.
-    const entry = { id: row.id, who: show(row["created_by.name"]) || "System", when: when(row.created_at), fresh: fresh(row) || undefined };
+    const entry = { id: row.id, who: show(row["created_by.name"]) || "System", when: when(row.created_at), fresh: isNew(row) || undefined };
     if (subject.length === 0) return { ...entry, what: changed(row.field, row.before, row.after, row.action) };
     // A number is said as one, like #12.
     const words = subject.map((column) => (column.endsWith(".number") || column === "number" ? `#${show(row[column])}` : show(row[column]))).filter((part) => part !== "" && part !== "#");
@@ -435,7 +434,7 @@ export function Timeline({
     const to = link ? links(rowLink(link, row, params, keyed, named)) : undefined;
     return { ...entry, what: head, subject: words.join(" "), after: tail, link: to && { href: to.href, onClick: to.onClick } };
   });
-  return <ui.Timeline status={view.status} entries={entries} title={title} fresh={since ? freshCount : undefined} />;
+  return <ui.Timeline status={view.status} entries={entries} title={title} fresh={fresh ? freshCount : undefined} />;
 }
 
 // The names in an address's query that are what's typed to find something, rather
@@ -699,6 +698,17 @@ export function Confirm({ command, question }: { command: string; question: stri
     };
   }, [questions, command, question]);
   return null;
+}
+
+// A value as it's put in order: a time as its milliseconds, so times compare as
+// times, a number as itself, and nothing before everything, like a person who has
+// never looked.
+export function ordered(value: unknown): number | string {
+  if (value === null || value === undefined) return Number.NEGATIVE_INFINITY;
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") return /^\d{4}-\d{2}-\d{2}/.test(value) ? (timeOf(value) ?? value) : value;
+  return String(value);
 }
 
 // Whether a list from a view has a value, like an issue's assignees having whoever

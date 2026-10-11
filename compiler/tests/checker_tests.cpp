@@ -1257,6 +1257,29 @@ TEST_CASE("a thread shows who wrote what, and a timeline an entity's changes") {
           "view issue_page has no list called replies");
 }
 
+TEST_CASE("a timeline says what's new by its rows and another view's values, and runs on open only with something new") {
+    const std::string start = "namespace a {\nentity issue history {\n\ttitle  text\n}\nentity reader {\n\tperson  user  key  = me\n\tseen_at  date\n}\n"
+                              "command reader::create {\n\tseen_at = now\n}\n"
+                              "view news per user {\n\tchanges = each change in issue {\n\t\tfield  before  after  created_at\n\t}\n"
+                              "\tseen = first(reader where person == me).seen_at\n}\n";
+    auto screen = [&](const std::string& block) { return start + "screen \"Home\" / {\n\ttimeline news.changes {\n" + block + "\t}\n}\n}\n"; };
+    CHECK(check_source(screen("\t\tnew when created_at > news.seen && field != \"title\"\n\t\ton open dispatch reader::create\n")).empty());
+    CHECK(only_error(screen("\t\tnew when made_at > news.seen\n")).message == "changes's rows have no made_at to say what's new by");
+    CHECK(only_error(screen("\t\tnew when created_at > news.looked\n")).message == "view news has no value looked");
+    CHECK(only_error(screen("\t\tnew when created_at > old.seen\n")).message == "there's no view old in namespace a");
+    CHECK(only_error(screen("\t\ton open dispatch reader::create\n")).message ==
+          "a timeline runs its on open once it opens with something new; say what's new, like new when created_at > news.seen");
+    CHECK(only_error(screen("\t\tnew when created_at > news.seen\n\t\ton open dispatch reader::delete\n")).message ==
+          "there's no command reader::delete in namespace a");
+    // As it was said before, with the fix that says it now.
+    diagnostics old;
+    parse("test.one", screen("\t\tnew since news.seen\n\t\tseen reader::create\n"), old);
+    REQUIRE(old.size() == 2);
+    CHECK(old[0].message == "say what's new as a condition, like new when created_at > news.seen");
+    CHECK(old[0].fix->text == "when created_at >");
+    CHECK(old[1].fix->text == "on open dispatch");
+}
+
 TEST_CASE("a table's tabs are by a choice it shows") {
     const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\tstatus  enum  open | closed = status::open\n}\n"
                               "view issues {\n\teach issue {\n\t\ttitle  status\n\t}\n}\n";

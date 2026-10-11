@@ -1154,6 +1154,51 @@ namespace one::generators {
             return "false";
         }
 
+        // A timeline's new when, as JavaScript reading a row and the other views it
+        // names, which the timeline keeps as they were when the page opened:
+        // created_at > news.seen is (ordered(row["created_at"]) > ordered(read[0]?.["seen"])).
+        // Times are compared as times, and none is before everything.
+        std::string fresh_condition(screen_parts& parts, const std::string& ns, const language::expression& e, std::vector<std::string>& views) {
+            using language::token_kind;
+            auto value = [&](const language::expression& operand) -> std::string {
+                if (auto* member = std::get_if<language::member_expression>(&operand.node)) {
+                    auto* object = std::get_if<language::name_expression>(&member->object->node);
+                    std::string variable = view_variable(parts, full_view(ns, object->name.text()));
+                    auto at = std::find(views.begin(), views.end(), variable);
+                    if (at == views.end()) at = views.insert(views.end(), variable);
+                    return "read[" + std::to_string(at - views.begin()) + "]?.[" + web_detail::js_string(member->member) + "]";
+                }
+                if (auto* name = std::get_if<language::name_expression>(&operand.node); name && name->name.parts.size() == 1) {
+                    const std::string word = name->name.text();
+                    if (word != "true" && word != "false" && word != "none" && word != "me") return "row[" + web_detail::js_string(word) + "]";
+                }
+                return "";
+            };
+            if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
+                bool order = binary->op == token_kind::less || binary->op == token_kind::greater ||
+                             binary->op == token_kind::less_equal || binary->op == token_kind::greater_equal;
+                if (order) {
+                    parts.components.insert("ordered");
+                    std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<=" : ">=";
+                    auto side = [&](const language::expression& operand) {
+                        std::string read = value(operand);
+                        return "ordered(" + (read.empty() ? fresh_condition(parts, ns, operand, views) : read) + ")";
+                    };
+                    return "(" + side(*binary->left) + " " + op + " " + side(*binary->right) + ")";
+                }
+                if (binary->op == token_kind::has) {
+                    parts.components.insert("listHas");
+                    return "listHas(" + fresh_condition(parts, ns, *binary->left, views) + ", " + fresh_condition(parts, ns, *binary->right, views) + ")";
+                }
+                std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
+                               : binary->op == token_kind::logical_and ? "&&" : "||";
+                return "(" + fresh_condition(parts, ns, *binary->left, views) + " " + op + " " + fresh_condition(parts, ns, *binary->right, views) + ")";
+            }
+            if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + fresh_condition(parts, ns, *unary->operand, views);
+            if (std::string read = value(e); !read.empty()) return "(" + read + " ?? null)";
+            return row_condition(parts, e);
+        }
+
         // A row's button's when, as JavaScript reading the row: person != me is
         // ((row["person"] ?? null) !== viewer).
         std::string row_condition(screen_parts& parts, const language::expression& e) {
@@ -1315,10 +1360,14 @@ namespace one::generators {
                     }
                     if (!subject.empty()) line += " subject={[" + subject + "]}";
                     if (timeline->title) line += " title=" + web_detail::js_string(*timeline->title);
-                    if (timeline->since) {
-                        line += " since={{ view: " + view_variable(parts, full_view(ns, timeline->since->text())) + ", field: " + web_detail::js_string(timeline->since_field) + " }}";
+                    if (timeline->fresh) {
+                        std::vector<std::string> views;
+                        std::string test = fresh_condition(parts, ns, *timeline->fresh, views);
+                        std::string read;
+                        for (const auto& v : views) read += (read.empty() ? "" : ", ") + v;
+                        line += " fresh={{ views: [" + read + "], test: (row, read) => " + test + " }}";
                     }
-                    if (timeline->seen) line += " seen=" + web_detail::js_string(full_command(ns, *timeline->seen));
+                    if (timeline->opened) line += " onOpen=" + web_detail::js_string(full_command(ns, *timeline->opened));
                     if (timeline->link) {
                         std::string target = full_route(ns, *timeline->link);
                         line += " link=" + web_detail::js_string(target);

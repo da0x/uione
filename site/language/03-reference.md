@@ -1445,10 +1445,13 @@ screen "Press" / landing grid {
   /:project/issues/:issue` reads "Ada closed #12 Copy an issue whole".
 - `timeline news.changes "What's new"` says what a timeline is of above it. Like
   every timeline, it isn't shown while it has nothing in it. Its block can say
-  `new since news.seen`, which marks the changes made after a value of a view, like
-  when the person last looked, and counts them beside its title, and `seen
-  reader::create`, which runs once there's something new, to say they've looked.
-  What was new stays marked until they leave the page.
+  `new when created_at > news.seen`, which marks the changes a condition holds for
+  and counts them beside its title. A bare name is a column of the timeline's rows,
+  and `news.seen` a value of another view, read as it was when the page opened, so
+  what was new stays marked until they leave the page. Times compare as times, and
+  none, like a person who has never looked, is before everything. `on open dispatch
+  reader::create` runs a command once the timeline opens with something new in it,
+  like one saying they've looked; nothing runs when nothing is new.
 - Buttons one after another on a screen sit together in a row, a command's own and
   the ones that open forms alike, and so do links one after another, outside a
   hero or a section, which lay out their own.

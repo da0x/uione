@@ -63,8 +63,8 @@ namespace board {
 			columns.columns "Columns" by title
 		}
 		timeline columns.changes "What's new" {
-			new since columns.seen
-			seen glance::create
+			new when created_at > columns.seen
+			on open dispatch glance::create
 		}
 		table columns.columns {
 			reorder position

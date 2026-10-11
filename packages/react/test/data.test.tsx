@@ -19,6 +19,7 @@ import {
   Text,
   Thread,
   Timeline,
+  ordered,
   changed,
   done,
   holds,
@@ -893,16 +894,39 @@ describe("what's new", () => {
         ],
       },
     };
-    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" since={{ view, field: "seen" }} seen="tracker::reader::create" />);
+    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" fresh={{ views: [view], test: (row, read) => ordered(row.created_at) > ordered(read[0]?.seen) }} onOpen="tracker::reader::create" />);
     expect(screen.getByRole("list", { name: "What's new, 1 new" })).toBeTruthy();
     expect(screen.getAllByRole("listitem").map((item) => item.textContent?.startsWith("New: "))).toEqual([true, false]);
     await waitFor(() => expect(source.runs).toEqual([{ command: "tracker::reader::create", input: {} }]));
   });
 
+  it("marks everything new for someone who has never looked", () => {
+    const source = memorySource();
+    const view: ViewState = { status: "live", data: { seen: null, changes: [{ id: "a", field: "", created_at: new Date("2026-10-08T09:00:00Z") }] } };
+    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" fresh={{ views: [view], test: (row, read) => ordered(row.created_at) > ordered(read[0]?.seen) }} />);
+    expect(screen.getByRole("list", { name: "What's new, 1 new" })).toBeTruthy();
+  });
+
+  it("keeps what was new marked once looking moves the time on", async () => {
+    const source = memorySource();
+    const changes = [{ id: "a", field: "", created_at: new Date("2026-10-08T11:00:00Z") }];
+    const before: ViewState = { status: "live", data: { seen: new Date("2026-10-08T10:00:00Z"), changes } };
+    const after: ViewState = { status: "live", data: { seen: new Date("2026-10-08T12:00:00Z"), changes } };
+    let view = before;
+    const only = defineScreen({ title: "Test", route: "/" }, () => (
+      <Timeline view={view} list="changes" title="What's new" fresh={{ views: [view], test: (row, read) => ordered(row.created_at) > ordered(read[0]?.seen) }} />
+    ));
+    const shown = render(<App name="app" screens={[only]} ui={plain} data={source} location="/" />);
+    expect(screen.getByRole("list", { name: "What's new, 1 new" })).toBeTruthy();
+    view = after;
+    shown.rerender(<App name="app" screens={[only]} ui={plain} data={source} location="/" />);
+    expect(screen.getByRole("list", { name: "What's new, 1 new" })).toBeTruthy();
+  });
+
   it("says nothing was looked at when nothing is new", async () => {
     const source = memorySource();
     const view: ViewState = { status: "live", data: { seen: new Date("2026-10-08T12:00:00Z"), changes: [{ id: "a", field: "", created_at: new Date("2026-10-08T09:00:00Z") }] } };
-    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" since={{ view, field: "seen" }} seen="tracker::reader::create" />);
+    renderScreen(source, () => <Timeline view={view} list="changes" title="What's new" fresh={{ views: [view], test: (row, read) => ordered(row.created_at) > ordered(read[0]?.seen) }} onOpen="tracker::reader::create" />);
     expect(screen.getByRole("list", { name: "What's new" })).toBeTruthy();
     await new Promise((done) => setTimeout(done, 20));
     expect(source.runs).toEqual([]);

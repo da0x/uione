@@ -1489,7 +1489,7 @@ namespace one::language {
                     end_line();
                     return {where, thread_item{std::move(view), std::move(list)}};
                 }
-                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, std::nullopt, {}, {}, std::nullopt, {}};
+                timeline_item timeline{std::move(view), std::move(list), std::nullopt, {}, std::nullopt, nullptr, {}, std::nullopt, {}};
                 if (at(token_kind::string)) timeline.title = advance().text;
                 if (at_word("link")) {
                     advance();
@@ -1499,22 +1499,38 @@ namespace one::language {
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
-                        // new since news.seen
+                        // new when created_at > news.seen
                         if (at_word("new")) {
                             advance();
-                            if (!at_word("since")) fail_expecting("since and when the person last looked, like new since news.seen");
+                            if (at_word("since")) {
+                                // Said before 0.9.5 as new since news.seen, which compared when each was made.
+                                const token since = advance();
+                                out_.push_back({path_, since.where, "say what's new as a condition, like new when created_at > news.seen",
+                                                fix{since.where, since.text.size(), "when created_at >"}});
+                                parse_expression();
+                            } else {
+                                if (!at_word("when")) fail_expecting("when and what makes a change new, like new when created_at > news.seen");
+                                advance();
+                                timeline.fresh_where = peek().where;
+                                timeline.fresh = parse_expression();
+                            }
+                        } else if (at_word("on")) {
+                            // on open dispatch reader::create
                             advance();
-                            timeline.since_where = peek().where;
-                            timeline.since = parse_qualified_name("the view holding when the person last looked, like news");
-                            expect(token_kind::dot, "'.' and its value, like news.seen");
-                            timeline.since_field = expect(token_kind::identifier, "the view's value, like seen").text;
+                            if (!at_word("open")) fail_expecting("open, like on open dispatch reader::create");
+                            advance();
+                            if (!at_word("dispatch")) fail_expecting("dispatch and the command it runs, like on open dispatch reader::create");
+                            advance();
+                            timeline.opened_where = peek().where;
+                            timeline.opened = parse_qualified_name("the command it runs, like reader::create");
                         } else if (at_word("seen")) {
-                            // seen reader::create
-                            advance();
-                            timeline.seen_where = peek().where;
-                            timeline.seen = parse_qualified_name("the command that says they've looked, like reader::create");
+                            // Said before 0.9.5 as seen reader::create.
+                            const token seen = advance();
+                            out_.push_back({path_, seen.where, "say what a timeline runs once it's looked at as on open dispatch reader::create",
+                                            fix{seen.where, seen.text.size(), "on open dispatch"}});
+                            parse_qualified_name("the command that says they've looked, like reader::create");
                         } else {
-                            fail_expecting("new since or seen");
+                            fail_expecting("new when or on open");
                         }
                         end_line();
                     }

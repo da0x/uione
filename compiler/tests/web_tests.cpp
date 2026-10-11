@@ -1378,13 +1378,15 @@ TEST_CASE("a person's news marks what came since they looked, and a header's bad
                          "command reader::create {\n\tseen_at = now\n}\n"
                          "view news per user {\n\tchanges = each change in issue where assignees has me {\n\t\tissue  field  before  after  created_at\n\t}\n"
                          "\tseen = first(reader where person == me).seen_at\n\tunread = count(changes where created_at > seen)\n}\n"
-                         "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" {\n\t\tnew since news.seen\n\t\tseen reader::create\n\t}\n}\n"
+                         "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" {\n\t\tnew when created_at > news.seen\n\t\ton open dispatch reader::create\n\t}\n}\n"
                          "}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(title="What's new" since={{ view: news, field: "seen" }} seen="work::reader::create")") != std::string::npos);
+    // What's new is a condition on each row, reading other views as they were when the
+    // page opened, and on open runs once it opens with something new in it.
+    CHECK(screens->content.find(R"(title="What's new" fresh={{ views: [news], test: (row, read) => (ordered(row["created_at"]) > ordered(read[0]?.["seen"])) }} onOpen="work::reader::create")") != std::string::npos);
     const auto* site = find(files, "src/app.tsx");
     REQUIRE(site != nullptr);
     CHECK(site->content.find(R"(badges: [{ view: "work::news", value: "unread" }])") != std::string::npos);

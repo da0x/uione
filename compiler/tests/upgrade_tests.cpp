@@ -279,6 +279,22 @@ TEST_CASE("an upgrade moves what's new to a person into a value of their view, s
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("an upgrade says what's new in a timeline as a condition, and what it runs as on open") {
+    auto dir = project("uione-upgrade-fresh",
+                       "import one\n\nnamespace work {\n\tentity issue history {\n\t\ttitle  text\n\t}\n"
+                       "\tentity reader {\n\t\tperson  user  key  = me\n\t\tseen_at  date\n\t}\n"
+                       "\tcommand reader::create {\n\t\tseen_at = now\n\t}\n"
+                       "\tview news per user {\n\t\tchanges = each change in issue {\n\t\t\tfield  before  after  created_at\n\t\t}\n"
+                       "\t\tseen = first(reader where person == me).seen_at\n\t}\n"
+                       "\tscreen \"Home\" / {\n\t\ttimeline news.changes \"What's new\" {\n\t\t\tnew since news.seen\n\t\t\tseen reader::create\n\t\t}\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\t\t\tnew when created_at > news.seen\n\t\t\ton open dispatch reader::create\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade says each change in, in project and me") {
     auto dir = project("uione-upgrade-in",
                        "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"

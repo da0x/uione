@@ -199,9 +199,10 @@ editors/fixtures/body.one	filter "Untitled"	filter	keyword
 editors/fixtures/body.one	7 days ago	days	keyword
 editors/fixtures/body.one	7 days ago	ago	keyword
 editors/fixtures/body.one	subtitle "The columns"	subtitle	keyword
-editors/fixtures/body.one	new since columns.seen	new	keyword
-editors/fixtures/body.one	new since columns.seen	since	keyword
-editors/fixtures/body.one	seen glance::create	seen	keyword
+editors/fixtures/body.one	new when created_at > columns.seen	new	keyword
+editors/fixtures/body.one	new when created_at > columns.seen	when	keyword
+editors/fixtures/body.one	on open dispatch glance::create	on	keyword
+editors/fixtures/body.one	on open dispatch glance::create	dispatch	keyword
 editors/fixtures/body.one	find "Find a column"	find	keyword
 editors/fixtures/environments.one	header {	header	declare
 editors/fixtures/environments.one	badge news.unread	badge	keyword

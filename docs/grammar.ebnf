@@ -243,9 +243,10 @@ primary        ::= STRING | time | NUMBER | built_in | qualified | "(" expressio
                  | match
 /* a value for each choice of an enum, one a line, and else for the rest */
 match          ::= "match" NAME ("." NAME)* "{" NEWLINE? (NAME expression END)+ ("else" expression END)? "}"
-/* the changes since a person last looked are new, and seen runs once they've looked */
-timeline_line  ::= "new" "since" qualified "." NAME END
-                 | "seen" qualified END
+/* the changes a condition holds for are new, reading other views as they were when the
+   page opened, and on open runs a command once it opens with something new in it */
+timeline_line  ::= "new" "when" expression END
+                 | "on" "open" "dispatch" qualified END
 /* a card's filter: a field and what it holds, or a time it's before or after, counted
    from when it's opened: updated_at > 7 days ago, due <= 2 weeks from now; in a
    command, a time is counted from when it runs: held_until = 10 minutes from now */

@@ -2246,6 +2246,39 @@ namespace one::language {
         // address names, so the screen needs that entity as a parameter of its route.
         // A thread or a timeline shows one of a view's lists, whose rows hold what it
         // needs: a thread who wrote each and what, a timeline each change in an entity.
+        // new when created_at > news.seen: a bare name is a column of the timeline's
+        // rows, and view.value is a value another view holds, like when the person
+        // last looked.
+        void verify_fresh(const std::string& ns, const timeline_item& timeline, const expression& e) {
+            if (auto* binary = std::get_if<binary_expression>(&e.node)) {
+                verify_fresh(ns, timeline, *binary->left);
+                verify_fresh(ns, timeline, *binary->right);
+            } else if (auto* unary = std::get_if<unary_expression>(&e.node)) {
+                verify_fresh(ns, timeline, *unary->operand);
+            } else if (auto* member = std::get_if<member_expression>(&e.node)) {
+                auto* object = std::get_if<name_expression>(&member->object->node);
+                const view_declaration* view = object ? find(ns, object->name, &scope::views) : nullptr;
+                if (!view) {
+                    error(e.where, "there's no view " + (object ? object->name.text() : written(*member->object)) + " " + in_namespace(ns));
+                    return;
+                }
+                bool held = std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return v.name && *v.name == member->member; });
+                if (!held) error(e.where, "view " + object->name.text() + " has no value " + member->member);
+            } else if (auto* name = std::get_if<name_expression>(&e.node)) {
+                const std::string word = name->name.text();
+                if (word == "true" || word == "false" || word == "none" || word == "me" || name->name.parts.size() > 1) return;
+                const view_declaration* view = find(ns, timeline.view, &scope::views);
+                if (!view) return;  // said already, by verify_listing
+                const view_each* list = nullptr;
+                for (const auto& each : view->each) {
+                    if (each.name && *each.name == timeline.list) list = &each;
+                }
+                if (!list) return;
+                bool column = std::any_of(list->rows.begin(), list->rows.end(), [&](const auto& row) { return (row.name ? *row.name : written(*row.value)) == word; });
+                if (!column) error(e.where, timeline.list + "'s rows have no " + word + " to say what's new by");
+            }
+        }
+
         void verify_listing(const std::string& ns, const qualified_name& name, const std::string& list_name, const std::string& route, bool changes,
                             std::initializer_list<std::string_view> needs) {
             snake(name);
@@ -2634,15 +2667,13 @@ namespace one::language {
                     if (timeline->link && !routes_.contains(full_route(ns, *timeline->link))) {
                         error(timeline->link_where, "there's no screen at " + full_route(ns, *timeline->link) + " for this timeline's changes to open");
                     }
-                    if (timeline->since) {
-                        const view_declaration* view = find(ns, *timeline->since, &scope::views);
-                        bool held = view && std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return v.name && *v.name == timeline->since_field; });
-                        if (!held) error(timeline->since_where, "view " + timeline->since->text() + " has no value " + timeline->since_field + " saying when the person last looked");
+                    if (timeline->fresh) verify_fresh(ns, *timeline, *timeline->fresh);
+                    if (timeline->opened && !find_command(ns, *timeline->opened)) {
+                        error(timeline->opened_where, "there's no command " + timeline->opened->text() + " " + in_namespace(ns));
                     }
-                    if (timeline->seen && !find_command(ns, *timeline->seen)) {
-                        error(timeline->seen_where, "there's no command " + timeline->seen->text() + " " + in_namespace(ns));
+                    if (timeline->opened && !timeline->fresh) {
+                        error(timeline->opened_where, "a timeline runs its on open once it opens with something new; say what's new, like new when created_at > news.seen");
                     }
-                    if (timeline->seen && !timeline->since) error(timeline->seen_where, "a timeline runs seen once its new changes are looked at; say since when, like new since news.seen");
                 } else if (auto* table = std::get_if<table_item>(&item.node)) {
                     snake(table->view);
                     const view_declaration* view = find(ns, table->view, &scope::views);

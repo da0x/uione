@@ -675,13 +675,13 @@ namespace one::language {
         std::optional<std::string> link;  // timeline project_page.timeline link /:project/issues/:issue: what each change was to
         location link_where;
         std::optional<std::string> title;  // timeline news.changes "What's new": said above it, shown while it holds something
-        // new since news.seen: the changes after a time a view holds are marked new, and
-        // seen reader::create runs once they've been looked at, to say so.
-        std::optional<qualified_name> since;
-        std::string since_field;
-        location since_where;
-        std::optional<qualified_name> seen;
-        location seen_where;
+        // new when created_at > news.seen: the changes the condition holds for are
+        // marked new, reading other views as they were when the page opened, and on
+        // open dispatch reader::create runs once it opens with something new in it.
+        expression_ptr fresh;
+        location fresh_where;
+        std::optional<qualified_name> opened;
+        location opened_where;
     };
 
     // copy issue_page "Copy issue": a button that copies everything a view holds, as
