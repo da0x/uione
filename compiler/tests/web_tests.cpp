@@ -1109,7 +1109,7 @@ TEST_CASE("a field's label is every screen's, unless one says its own, and a per
                          "namespace work at / {\n"
                          "entity order {\n\tnumber  serial  key  \"#\"\n\ttitle  text\n\tpacked_by  list of user  \"Packed by\"\n\tauthor  user  = me\n}\n"
                          "command order::update\n"
-                         "view orders {\n\teach order {\n\t\tnumber  title  packed_by.name  packed_by.picture  author.name  author.picture\n\t}\n}\n"
+                         "view orders {\n\teach order {\n\t\tnumber  title  packed_by  packed_by.name  packed_by.picture  author.name  author.picture\n\t}\n}\n"
                          "view order_page per order {\n\tnumber  title  packed_by  packed_by.name\n}\n"
                          "screen \"Orders\" /orders {\n\ttable orders {\n\t\tnumber  title  packed_by  author \"Opened by\"\n\t}\n}\n"
                          "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tnumber\n\t\tpacked_by.name\n\t}\n\tform order::update {\n\t\ttitle  packed_by\n\t}\n}\n"

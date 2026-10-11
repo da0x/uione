@@ -2069,7 +2069,12 @@ namespace one::generators {
                 }
             }
             auto held = [&](const std::string& name) { return std::find(columns.begin(), columns.end(), name) != columns.end(); };
-            if (!held(written) && held(written + ".name")) {
+            // A person is shown by their name even where the rows hold who they are too.
+            bool person = false;
+            for (const auto& f : entity ? entity->fields : nothing_) {
+                if (f.name == written && f.type && f.type->text() == "user") person = true;
+            }
+            if ((!held(written) || person) && held(written + ".name")) {
                 out.key = written + ".name";
                 if (held(written + ".picture")) out.picture = written + ".picture";
             }
