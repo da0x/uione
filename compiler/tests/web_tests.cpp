@@ -272,6 +272,27 @@ TEST_CASE("an issue's details are its values, each beside what it is") {
           std::string::npos);
 }
 
+TEST_CASE("the files a screen names are found beside its .one file") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-beside";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "site/guide");
+    platform::write_file((dir / "site/guide.one").string(),
+                         "namespace guide {\nscreen guide /:page {\n\tmarkdown \"guide/*.md\"\n}\nscreen \"Example\" /example {\n\tcode \"example.uione\"\n}\n}\n");
+    platform::write_file((dir / "site/guide/01-start.md").string(), "# Starting\n\nHello.\n");
+    platform::write_file((dir / "site/example.uione").string(), "entity book {\n}\n");
+    auto files = generate_at(dir.string());
+    const auto* pages = find(files, "src/pages/guide.generated.ts");
+    REQUIRE(pages != nullptr);
+    CHECK(pages->content.find(R"(title: "Starting")") != std::string::npos);
+    bool imported = false;
+    for (const auto& f : files) {
+        if (f.path.starts_with("src/screens/") && f.content.find("site/example.uione?raw") != std::string::npos) imported = true;
+    }
+    CHECK(imported);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a text can be shown only while its when holds") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-text-when";

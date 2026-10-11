@@ -1505,6 +1505,10 @@ issue::verify "Verify" when {
 - `hero`, `section`, `text`, `link`, `code` and `markdown` are for pages that are
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.
+- `code "examples/main.one"` shows a file, highlighted, and `markdown
+  "docs/*.md"` makes a page of each file. Both are found beside the `.one` file
+  that names them, as components are, so a folder of pages can sit in a folder
+  of its own.
 - `link` says where it goes first and its text after: `link #waitlist "Join the
   waitlist"`, `link /language/reference "Read the reference"`. `link namespace projects "See
   the projects"` opens a namespace's own screen, at `/projects`, and

@@ -1565,7 +1565,7 @@ namespace one::generators {
                 out.line("<Text>" + live_text(parts, ns, text.value) + "</Text>");
             } else if (text.type == language::content_text::kind::code) {
                 namespace fs = std::filesystem;
-                std::string source = platform::resolve(project_dir_, text.value);
+                std::string source = beside_screen(text.value);
                 fs::path path(source);
                 std::string binding = web_detail::js_name(path.stem() == "main" ? path.parent_path().filename().string() : path.stem().string());
                 std::string language = path.extension() == ".one" ? "uione" : path.extension().string().substr(path.extension().empty() ? 0 : 1);
@@ -2577,9 +2577,17 @@ namespace one::generators {
             return out;
         }
 
+        // A file an item names, like code "examples/main.one" or markdown "docs/*.md", is
+        // found beside the .one file the item is in, as components and backends are.
+        std::string beside(const std::string& one_file, const std::string& path) const {
+            std::string folder = one_file.empty() ? project_dir_ : std::filesystem::path(one_file).parent_path().string();
+            return platform::resolve(folder.empty() ? "." : folder, path);
+        }
+        std::string beside_screen(const std::string& path) const { return beside(screen_path_, path); }
+
         stream pages_module(const page_set& pages) const {
             namespace fs = std::filesystem;
-            fs::path glob = platform::resolve(project_dir_, pages.pattern);
+            fs::path glob = beside(pages.source.path, pages.pattern);
             std::string extension = glob.extension().string();
             stream out;
             auto from = out.from(pages.source.path, pages.source.line);
