@@ -473,3 +473,36 @@
   button, input, select, textarea, [role="button"] { border: 1px solid ButtonText; }
   :focus-visible { outline: 2px solid Highlight; }
 }
+
+/* Front pages (landing.tsx): the whole width of the window, whatever the page around
+   them, with a gradient made from the theme's accent turned either way. */
+.one-landing {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  --one-landing-1: oklch(from var(--color-accent) l c calc(h - 50));
+  --one-landing-3: oklch(from var(--color-accent) l c calc(h + 55));
+}
+@keyframes one-landing-pulse { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+@keyframes one-landing-play { from { left: 6%; } to { left: 94%; } }
+@keyframes one-landing-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes one-landing-drift1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(120px, 60px) scale(1.15); } }
+@keyframes one-landing-drift2 { 0%, 100% { transform: translate(0, 0) scale(1.1); } 50% { transform: translate(-140px, 40px) scale(0.95); } }
+@keyframes one-landing-drift3 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(60px, -80px); } }
+@keyframes one-landing-floor { from { background-position: 0 0; } to { background-position: 0 64px; } }
+@keyframes one-landing-track { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes one-landing-neon {
+  0%, 100% { text-shadow: 0 0 18px color-mix(in oklab, var(--color-accent) 80%, transparent), 0 0 2px #fff; }
+  50% { text-shadow: 0 0 34px color-mix(in oklab, var(--one-landing-3) 90%, transparent), 0 0 2px #fff; }
+}
+.one-landing-bar { transform-origin: center; animation: one-landing-pulse 1.6s ease-in-out infinite; }
+.one-landing-head { animation: one-landing-play 9s linear infinite; }
+.one-landing-blink { animation: one-landing-blink 1.4s ease-in-out infinite; }
+.one-landing-drift1 { animation: one-landing-drift1 16s ease-in-out infinite; }
+.one-landing-drift2 { animation: one-landing-drift2 19s ease-in-out infinite; }
+.one-landing-drift3 { animation: one-landing-drift3 22s ease-in-out infinite; }
+.one-landing-floor { animation: one-landing-floor 1.4s linear infinite; }
+.one-landing-track { animation: one-landing-track 36s linear infinite; }
+.one-landing-neon { animation: one-landing-neon 4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .one-landing [class*="one-landing-"] { animation: none; }
+}

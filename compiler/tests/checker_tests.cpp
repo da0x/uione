@@ -1525,3 +1525,19 @@ TEST_CASE("a domain can have a second, like www, that sends whoever opens it to 
     CHECK(only_error(start + "\tdomain \"uione.io\" \"uione.io\"\n}\n").message ==
           "domain names another address that sends people to uione.io, like domain \"uione.io\" \"www.uione.io\"");
 }
+
+TEST_CASE("a landing page is drawn in one of uione's designs") {
+    const std::string page = "screen \"Home\" / landing grid {\n\thero \"Fast.\" {\n\t\ttext \"Very.\"\n\t}\n\tsection \"One\" {\n\t\ttext \"A thing.\"\n\t}\n}\n";
+    CHECK(check_source(page).empty());
+    for (const char* design : {"waveform", "studio", "aurora"}) {
+        std::string other = page;
+        other.replace(other.find("grid"), 4, design);
+        CHECK(check_source(other).empty());
+    }
+    std::string wrong = page;
+    wrong.replace(wrong.find("grid"), 4, "neon");
+    CHECK(only_error(wrong).message == "landing is waveform, studio, aurora or grid");
+    std::string both = page;
+    both.replace(both.find("landing grid"), 12, "layout two_columns landing grid");
+    CHECK(only_error(both).message == "a landing page is laid out by its design, so it says no layout");
+}

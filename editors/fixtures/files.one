@@ -12,3 +12,9 @@ namespace press {
 	}
 
 }
+
+screen "Home" / landing grid {
+	hero "Fast." {
+		text "Very."
+	}
+}

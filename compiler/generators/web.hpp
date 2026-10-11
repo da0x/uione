@@ -711,7 +711,13 @@ namespace one::generators {
                         if (text && text->subtitle) screen_items(items, parts, ns, s->items, s->items, at, 1);
                     }
                 }
-                if (layout == "single" && regions.empty()) {
+                if (s->landing) {
+                    // Its hero, its sections and its call to action, drawn in its design.
+                    parts.components.insert("Landing");
+                    items.open("<Landing design=" + web_detail::js_string(*s->landing) + ">");
+                    screen_items(items, parts, ns, s->items, s->items);
+                    items.close("</Landing>");
+                } else if (layout == "single" && regions.empty()) {
                     screen_items(items, parts, ns, s->items, s->items);
                 } else {
                     parts.components.insert("Layout");

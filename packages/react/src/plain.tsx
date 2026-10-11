@@ -138,6 +138,36 @@ export const plain: ComponentSet = {
 
   Labels: ({ items }) => <span>{items.join(", ")}</span>,
 
+  // Every design, plainly: the hero, what it offers, then what it asks.
+  Landing: ({ design, title, text, links, features, asks, before }) => (
+    <div data-landing={design}>
+      {before}
+      <section>
+        <h1>{title}</h1>
+        {text.map((words, i) => (
+          <p key={i}>{words}</p>
+        ))}
+        {links.map((l, i) => (
+          <a key={i} href={l.href} onClick={l.onClick}>
+            {l.label}
+          </a>
+        ))}
+      </section>
+      {features.map((f, i) => (
+        <section key={i}>
+          <h2>{f.title}</h2>
+          <p>{f.text}</p>
+        </section>
+      ))}
+      {asks.map((a, i) => (
+        <section key={i} id={a.id}>
+          <h2>{a.title}</h2>
+          {a.children}
+        </section>
+      ))}
+    </div>
+  ),
+
   Files: ({ items }) => (
     <span>
       {items.map((item, i) => (

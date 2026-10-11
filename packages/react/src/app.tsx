@@ -377,7 +377,9 @@ function Shell({
         <CrumbsSlot.Provider value={trail}>
           <SubtitleSlot.Provider value={under}>
             <SiteName.Provider value={name}>
-              <Confirmations>{children}</Confirmations>
+              <SiteIcon.Provider value={icon}>
+                <Confirmations>{children}</Confirmations>
+              </SiteIcon.Provider>
             </SiteName.Provider>
           </SubtitleSlot.Provider>
         </CrumbsSlot.Provider>
@@ -400,6 +402,12 @@ const CrumbsSlot = createContext<HTMLElement | null>(null);
 // reads, has no title of its own, so no place among the pages above another. A
 // project that happens to share the site's name keeps its place.
 const SiteName = createContext("");
+const SiteIcon = createContext<string | undefined>(undefined);
+
+// The site's name and icon, for what draws them itself, like a front page.
+export function useSite(): { name: string; icon: string | undefined } {
+  return { name: useContext(SiteName), icon: useContext(SiteIcon) };
+}
 // Whether the page shown is titled with just the site's name.
 const Untitled = createContext(false);
 const SubtitleSlot = createContext<HTMLElement | null>(null);

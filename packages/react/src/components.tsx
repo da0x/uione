@@ -9,8 +9,8 @@ import { Children, cloneElement, isValidElement, useContext, useEffect, useRef, 
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
-import type { FieldProps, Filtered, Hue } from "./contract.js";
+import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
+import type { FieldProps, Filtered, Hue, LinkProps } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -54,6 +54,46 @@ export function Link({ to, icon, children }: { to: string; icon?: string; childr
       {children}
     </ui.Link>
   );
+}
+
+// A front page drawn in one of uione's designs: its hero, its sections of words
+// alone as what it offers, and its other sections, like one with a form, as what
+// it asks; anything else, like a component of its own, comes first, as written.
+export function Landing({ design, children }: { design: string; children?: ReactNode }) {
+  const ui = useUI();
+  const link = useLinks();
+  const filled = useFilled();
+  const site = useSite();
+  let title = "";
+  const text: ReactNode[] = [];
+  const links: (LinkProps & { label: ReactNode })[] = [];
+  const features: { title: string; text: ReactNode }[] = [];
+  const asks: { title: string; id?: string; children: ReactNode }[] = [];
+  const before: ReactNode[] = [];
+  Children.forEach(children, (child) => {
+    if (!isValidElement<{ title?: string; id?: string; children?: ReactNode }>(child)) return;
+    if (child.type === Hero) {
+      title = child.props.title ?? "";
+      Children.forEach(child.props.children, (part) => {
+        if (!isValidElement<{ to?: string; children?: ReactNode }>(part)) return;
+        if (part.type === Text) text.push(part.props.children);
+        if (part.type === Link) links.push({ ...link(filled(part.props.to ?? "/")), label: part.props.children });
+      });
+      return;
+    }
+    if (child.type === Section) {
+      const parts = Children.toArray(child.props.children);
+      const words = parts.every((part) => isValidElement(part) && part.type === Text);
+      if (words) {
+        features.push({ title: child.props.title ?? "", text: parts.map((part) => (isValidElement<{ children?: ReactNode }>(part) ? part.props.children : null)) });
+      } else {
+        asks.push({ title: child.props.title ?? "", id: child.props.id, children: child.props.children });
+      }
+      return;
+    }
+    before.push(child);
+  });
+  return <ui.Landing design={design} name={site.name} icon={site.icon} title={title} text={text} links={links} features={features} asks={asks} before={before} />;
 }
 
 export function Code({ lang, source }: { lang: string; source: string }) {

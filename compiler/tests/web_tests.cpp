@@ -1453,3 +1453,18 @@ TEST_CASE("a file is uploaded from a form, and shown as a link to it") {
           std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a landing page's hero and sections are drawn by its design") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-landing";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "screen \"Home\" / landing grid {\n\thero \"Fast.\" {\n\t\ttext \"Very.\"\n\t}\n\tsection \"One\" {\n\t\ttext \"A thing.\"\n\t}\n}\n");
+    auto generated = generate_at(dir.string());
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find("<Landing design=\"grid\">\n      <Hero title=\"Fast.\">") != std::string::npos);
+    CHECK(screens->content.find("</Section>\n    </Landing>") != std::string::npos);
+    fs::remove_all(dir);
+}

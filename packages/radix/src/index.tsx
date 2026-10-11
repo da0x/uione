@@ -22,6 +22,7 @@ import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display
 import { DisplaySettings } from "./accessibility.js";
 import { Sheet } from "./sheet.js";
 import { ThemeToggle } from "./theme.js";
+import { Landing } from "./landing.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // The box code sits in, on its own or inside a page of docs.
@@ -1614,6 +1615,8 @@ export const radix: ComponentSet = {
       ))}
     </span>
   ),
+
+  Landing,
 
   // Files, each its name as a link, beside a small picture of it when it's an image.
   Files: ({ items }) => (

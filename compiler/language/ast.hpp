@@ -730,6 +730,8 @@ namespace one::language {
         std::string route;
         std::optional<std::string> layout;  // layout two_columns: how its regions are laid out
         location layout_where;
+        std::optional<std::string> landing;  // landing grid: a front page drawn in one of uione's designs
+        location landing_where;
         // under /:project/boards/:board "{issue_page.board_title}": the page above it,
         // though its address doesn't say so, and what that page is called from here.
         std::optional<std::string> under;

@@ -944,6 +944,11 @@ namespace one::language {
                 screen.layout_where = peek().where;
                 screen.layout = expect(token_kind::identifier, "a layout, like single or two_columns").text;
             }
+            if (at_word("landing")) {
+                advance();
+                screen.landing_where = peek().where;
+                screen.landing = expect(token_kind::identifier, "a landing design: waveform, studio, aurora or grid").text;
+            }
             screen.items = parse_screen_block();
             end_line();
             return screen;

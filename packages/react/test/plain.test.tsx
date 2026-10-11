@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Cards, Details, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Section, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -591,5 +591,31 @@ describe("files", () => {
     await vi.waitFor(() => expect(opened.location.href).toBe("memory:files/a/1/proof.pdf"));
     await vi.waitFor(() => expect(document.querySelector("img")?.getAttribute("src")).toBe("memory:files/a/2/front.jpg"));
     open.mockRestore();
+  });
+});
+
+describe("a landing page", () => {
+  it("is its hero, what it offers, and what it asks, drawn in its design", () => {
+    renderScreen(memorySource(), () => (
+      <Landing design="grid">
+        <Hero title="Print that arrives on time.">
+          <Text>Where a print shop takes its orders.</Text>
+          <Link to="/signin">Sign in</Link>
+        </Hero>
+        <Section title="You approve every proof">
+          <Text>Nothing goes to press unseen.</Text>
+        </Section>
+        <Section title="Ask for a quote" id="quote">
+          <Text>Leave your address.</Text>
+          <Form command="quote::request::create" fields={["email"]} />
+        </Section>
+      </Landing>
+    ));
+    const page = document.querySelector("[data-landing=grid]")!;
+    expect(page.querySelector("h1")?.textContent).toBe("Print that arrives on time.");
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/signin");
+    const headings = Array.from(page.querySelectorAll("h2")).map((h) => h.textContent);
+    expect(headings).toEqual(["You approve every proof", "Ask for a quote"]);
+    expect(document.getElementById("quote")?.querySelector("form")).toBeTruthy();
   });
 });

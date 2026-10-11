@@ -2173,6 +2173,12 @@ namespace one::language {
             }
             // Its layout, and the regions it puts its items in: every item in one, once
             // there are any, and each region one its layout has, once.
+            // landing grid: a front page drawn in one of uione's designs, which lays it out.
+            if (s.landing) {
+                static const std::set<std::string, std::less<>> designs{"waveform", "studio", "aurora", "grid"};
+                if (!designs.contains(*s.landing)) error(s.landing_where, "landing is waveform, studio, aurora or grid");
+                if (s.layout) error(s.layout_where, "a landing page is laid out by its design, so it says no layout");
+            }
             std::string layout = s.layout ? *s.layout : layout_.empty() ? "single" : layout_;
             const std::vector<std::string>* regions = regions_of(layout);
             if (s.layout && !regions) error(s.layout_where, "layout is single or two_columns");

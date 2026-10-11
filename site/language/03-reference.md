@@ -1401,6 +1401,27 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `side { ... }`, every item in one once it uses any, or leaves them all in main.
   `single`, one column, is how a screen is laid out unless it or the project block's
   `layout` setting says otherwise.
+- `landing grid` after a screen's address draws it as a front page, in one of
+  uione's designs: `waveform`, a wave of bars under the hero; `studio`, the hero
+  beside a player and its timeline; `aurora`, drifting light behind glass; or
+  `grid`, a neon floor under the site's name, and a band of what it offers. The
+  design takes the screen's `hero`, with its words and links, the first link the
+  one it's for; its sections of words alone, as what the site offers; and its other
+  sections, like one with a form, as what it asks. Each is drawn in the theme's
+  colors, with a gradient from its accent, and its motion stops for whoever asks
+  for less. A landing page has no `layout`; its design lays it out.
+
+```one
+screen "Press" / landing grid {
+	hero "Print that arrives on time." {
+		text "Orders, proofs and shipping for a print shop, in one place."
+		link "/signin" "Sign in"
+	}
+	section "You approve every proof" {
+		text "Nothing goes to press until you've seen it."
+	}
+}
+```
 - `thread issue_page.comments` shows a list of what people wrote as a
   conversation: each entry with its author's picture and name, when it was written,
   and its body as Markdown. Its rows need `body` and `author.name`, and show

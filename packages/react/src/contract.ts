@@ -395,6 +395,21 @@ export interface LabelsProps {
   items: string[];
 }
 
+// A front page in one of uione's designs: waveform, studio, aurora or grid. Its
+// hero's title, words and links; its sections of words alone, as what it offers;
+// and the rest, like a section with a form, as what it asks of its reader.
+export interface LandingProps {
+  design: string;
+  name: string; // the site's name
+  icon?: string; // the address of its icon
+  title: string;
+  text: ReactNode[];
+  links: (LinkProps & { label: ReactNode })[];
+  features: { title: string; text: ReactNode }[];
+  asks: { title: string; id?: string; children: ReactNode }[];
+  before?: ReactNode; // what the screen has that isn't any of these, like a component of its own
+}
+
 // Files, each a link that opens it, and a picture of it when it's an image.
 export interface FilesProps {
   items: { name: string; preview?: string; onOpen: () => void }[];
@@ -495,6 +510,7 @@ export interface ComponentSet {
   Track: ComponentType<TrackProps>;
   Labels: ComponentType<LabelsProps>;
   Files: ComponentType<FilesProps>;
+  Landing: ComponentType<LandingProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;
