@@ -387,7 +387,7 @@ func TestDNSChangesAreListedPlainly(t *testing.T) {
 			RequiredAction: s(action), Type: s(kind), DomainName: s("uione.io"), Rdata: s(rdata),
 		}
 	}
-	got := records([]firebase.HostingCustomDomainRequiredDnsUpdate{{
+	got := recordsOf([]firebase.HostingCustomDomainRequiredDnsUpdate{{
 		Desireds: []firebase.HostingCustomDomainRequiredDnsUpdateDesired{{Records: []firebase.HostingCustomDomainRequiredDnsUpdateDesiredRecord{
 			record("ADD", "A", "199.36.158.100"),
 			record("DELETE", "A", "198.185.159.144"),
@@ -856,5 +856,23 @@ func TestFilesAreKeptInABucketOnlyTheBackendTouches(t *testing.T) {
 	}
 	if _, ok := m.resources["gcp:storage/bucket:Bucket::files"]; ok {
 		t.Errorf("a project without files has a bucket for them")
+	}
+}
+
+func TestASecondDomainSendsPeopleToTheFirst(t *testing.T) {
+	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Redirect = "www.uione.io" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := m.get(t, "gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect")
+	if second["customDomain"].StringValue() != "www.uione.io" || second["redirectTarget"].StringValue() != "uione.io" {
+		t.Errorf("www.uione.io is declared as %v", second)
+	}
+	m, err = declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.resources["gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect"]; ok {
+		t.Errorf("a project with one domain declares a second")
 	}
 }

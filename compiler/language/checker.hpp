@@ -1067,6 +1067,17 @@ namespace one::language {
                     }
                     return;
                 }
+                // domain "uione.io" "www.uione.io": a second address, served by the same
+                // site, that sends whoever opens it to the first.
+                if (s.key == "domain" && !s.to.empty()) {
+                    check_value(s, *f, s.value, s.is_string);
+                    if (s.to == s.value) {
+                        error(s.where, "domain names another address that sends people to " + s.value + ", like domain \"uione.io\" \"www.uione.io\"");
+                        return;
+                    }
+                    check_value(s, *f, s.to, true);
+                    return;
+                }
                 if (!s.to.empty()) error(s.where, s.key + " takes one value");
                 // The icon is an SVG, so it's sharp at any size.
                 if (s.key == "icon" && !s.value.ends_with(".svg")) {

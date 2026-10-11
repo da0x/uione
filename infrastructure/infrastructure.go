@@ -78,6 +78,7 @@ import (
 type Project struct {
 	Name     string // the project's name, like uione
 	Domain   string // where the site is served, like uione.io
+	Redirect string // a second domain, like www.uione.io, that sends whoever opens it to Domain
 	Firebase string // the Firebase project, like ui-one
 	Region   string // where the backend and the database live, like us-east4
 
@@ -362,6 +363,26 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	if err != nil {
 		return err
 	}
+	// A second domain, like www.uione.io, served by the same site, which sends
+	// whoever opens it to the first.
+	dnsRecords := domain.RequiredDnsUpdates.ApplyT(recordsOf)
+	if p.Redirect != "" {
+		second, err := firebase.NewHostingCustomDomain(ctx, "redirect", &firebase.HostingCustomDomainArgs{
+			Project:             project,
+			SiteId:              site.SiteId.Elem(),
+			CustomDomain:        pulumi.String(p.Redirect),
+			RedirectTarget:      pulumi.String(p.Domain),
+			WaitDnsVerification: pulumi.Bool(false),
+		}, pulumi.DependsOn([]pulumi.Resource{domain}))
+		if err != nil {
+			return err
+		}
+		dnsRecords = pulumi.All(domain.RequiredDnsUpdates, second.RequiredDnsUpdates).ApplyT(func(both []any) []string {
+			first := both[0].([]firebase.HostingCustomDomainRequiredDnsUpdate)
+			other := both[1].([]firebase.HostingCustomDomainRequiredDnsUpdate)
+			return append(recordsOf(first), recordsOf(other)...)
+		})
+	}
 	// The domains sign-in is allowed from are left to the console. The resource that
 	// holds them would turn the project's Firebase Auth into Identity Platform, which
 	// is priced and run differently, and that isn't a side effect to have.
@@ -411,15 +432,15 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	// Only once the Firebase project is linked to Google Analytics; empty before.
 	ctx.Export("firebase_measurement_id", web.MeasurementId())
 	ctx.Export("backend_url", run.Uri)
-	ctx.Export("dns_records", domain.RequiredDnsUpdates.ApplyT(records))
+	ctx.Export("dns_records", dnsRecords)
 	ctx.Export("domain", pulumi.String(p.Domain))
 	return nil
 }
 
-// records lists the changes the registrar needs, one per line, like
+// recordsOf lists the changes the registrar needs, one per line, like
 // "add A uione.io 199.36.158.100". Records to take away, such as the ones that point
 // the domain at its old host, are listed as "remove".
-func records(updates []firebase.HostingCustomDomainRequiredDnsUpdate) []string {
+func recordsOf(updates []firebase.HostingCustomDomainRequiredDnsUpdate) []string {
 	out := []string{}
 	for _, update := range updates {
 		for _, want := range update.Desireds {

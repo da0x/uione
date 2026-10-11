@@ -38,6 +38,7 @@ namespace one::generators {
         bool services = false;  // a role is made for services, whose tokens the backend signs
         bool signs_in = false;  // people sign in, so programs on their computers may too, with a token the backend signs
         bool files = false;  // a field holds a file, kept in a bucket of the project's
+        std::string redirect;  // a second domain, like www.uione.io, that sends whoever opens it to domain
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
@@ -83,7 +84,7 @@ namespace one::generators {
                 s.name = p->name;
                 s.from = {f.path, d.where.line};
                 for (const auto& setting : p->settings) {
-                    if (setting.key == "domain") s.domain = setting.value;
+                    if (setting.key == "domain") s.domain = setting.value, s.redirect = setting.to;
                     if (setting.key == "firebase") s.firebase = setting.value;
                     if (setting.key == "region") s.region = setting.value;
                     if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
@@ -196,6 +197,7 @@ namespace one::generators {
             if (s.services) g.line("Services: true,");
             if (s.signs_in) g.line("SignIn:   true,");
             if (s.files) g.line("Files:    true,");
+            if (!s.redirect.empty()) g.line("Redirect: " + quoted(s.redirect) + ",");
             g.close("})");
             g.close("}");
             out.push_back(file("infrastructure/main.go", g));

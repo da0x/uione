@@ -215,7 +215,10 @@ a `slug` lowercase letters, digits and dashes, a `version` like "0.9.1", a
 an `address` is one of the site's own, starting with /, and a `link` is an https
 address. A setting whose
 type is another `settings`, like `redirect`, takes its fields in
-order, `redirect "/old" "https://example.com/new"`. A setting is said once,
+order, `redirect "/old" "https://example.com/new"`. `domain` can name a second
+domain after the first, `domain "uione.io" "www.uione.io"`: the same site answers
+there, and sends whoever opens it to the first, so one project serves both. A setting
+is said once,
 unless its type is a `list of`, whose lines each add one. A name the library
 doesn't define isn't a setting, and the checker says so with the ones there are.
 

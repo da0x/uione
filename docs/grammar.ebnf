@@ -57,6 +57,7 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
 setting        ::= setting_name (STRING | qualified) END
                  | "redirect" STRING STRING END
+                 | "domain" STRING STRING END     /* a second domain, like www, sends people to the first */
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" | "layout" | "serve"
                  | "title" | "one" | "analytics" | "theme" | "appearance" | "accessibility"
 
@@ -64,6 +65,7 @@ setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "icon" |
  * the place of the shared ones. `one build --for staging` builds for it. */
 environment    ::= "environment" NAME "{" NEWLINE? place* "}" END
 place          ::= ("domain" | "firebase" | "region") STRING END
+                 | "domain" STRING STRING END
 
 /* namespace */
 

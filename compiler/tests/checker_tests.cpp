@@ -1173,7 +1173,7 @@ TEST_CASE("a project can redirect an address that moved, and a link can go to an
     CHECK(check_source("import one\nproject p {\n\tredirect \"/install.sh\" \"https://www.uione.io/install.sh\"\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tredirect \"install.sh\" \"https://www.uione.io/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
     CHECK(only_error("import one\nproject p {\n\tredirect \"/install.sh\"\n}\n").message.starts_with("redirect takes an address"));
-    CHECK(only_error("import one\nproject p {\n\tdomain \"a.io\" \"b.io\"\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n}\n").message == "domain takes one value");
+    CHECK(only_error("import one\nproject p {\n\tregion \"us-east4\" \"us-west1\"\n\tdomain \"a.io\"\n\tfirebase \"p-1\"\n}\n").message == "region takes one value");
     CHECK(check_source("screen \"Home\" / {\n\tlink \"https://uione.io/studio\" \"Open the studio\"\n}\n").empty());
     CHECK(only_error("screen \"Home\" / {\n\tlink \"http://uione.io\" \"Open\"\n}\n").message ==
           "a link to another site is an https:// address, like \"https://uione.io/studio\"");
@@ -1515,4 +1515,13 @@ TEST_CASE("a file field holds a file's path, or a list of them, and never names 
     CHECK(e.message == "proof is a file, so it can't be a key, unique, after a field, or start with a value");
     e = only_error("entity order {\n\tsizes  list of number\n}\n");
     CHECK(e.message == "sizes is a list, which holds text, files, people or entities, like list of label or list of user");
+}
+
+TEST_CASE("a domain can have a second, like www, that sends whoever opens it to the first") {
+    const std::string start = "import one\nproject p {\n\tfirebase \"ui-one\"\n\tregion \"us-east4\"\n";
+    CHECK(check_source(start + "\tdomain \"uione.io\" \"www.uione.io\"\n}\n").empty());
+    CHECK(check_source(start + "\tdomain \"x.io\"\n\tenvironment production {\n\t\tdomain \"uione.io\" \"www.uione.io\"\n\t\tfirebase \"ui-two\"\n\t}\n}\n").empty());
+    CHECK(only_error(start + "\tdomain \"uione.io\" \"$(whoami).io\"\n}\n").message == "domain has to be a domain name, like uione.io");
+    CHECK(only_error(start + "\tdomain \"uione.io\" \"uione.io\"\n}\n").message ==
+          "domain names another address that sends people to uione.io, like domain \"uione.io\" \"www.uione.io\"");
 }

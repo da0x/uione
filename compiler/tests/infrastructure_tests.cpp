@@ -181,6 +181,21 @@ TEST_CASE("a redirect goes into Hosting's settings") {
     fs::remove_all(dir);
 }
 
+TEST_CASE("a second domain, like www, is served by the same site and sends people to the first") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-www";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    REQUIRE(platform::write_file((dir / "main.one").string(),
+                                 "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\" \"www.p.io\"\n}\n"));
+    auto generated = generate_at(dir.string());
+    const auto* program = find(generated.files, "infrastructure/main.go");
+    REQUIRE(program != nullptr);
+    CHECK(program->content.find("\t\tDomain:   \"p.io\",\n") != std::string::npos);
+    CHECK(program->content.find("\t\tRedirect: \"www.p.io\",\n") != std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a project with a file field gets a bucket for its files") {
     namespace fs = std::filesystem;
     fs::path dir = fs::path(root) / "compiler" / "build" / "files-project";
