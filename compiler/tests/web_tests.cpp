@@ -955,6 +955,47 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     CHECK(out[0].message == "issue.project is a card's column, so it points at a stage, what project_page.stages lists");
 }
 
+TEST_CASE("a board's cards are dragged into order in their column, which an update sets") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-board-order";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    auto source = [](const std::string& order, const std::string& update) {
+        return "namespace work {\n"
+               "entity project {\n\ttitle  text\n}\n"
+               "entity stage {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
+               "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tstage  stage\n\tposition  number\n}\n" +
+               update +
+               "view project_page per project {\n"
+               "\tstages = each stage in project {\n\t\torder by position\n\t\ttitle\n\t}\n"
+               "\tissues = each issue in project {\n" + order + "\t\tnumber  title  stage  position\n\t}\n"
+               "}\n"
+               "screen \"Project\" /projects/:project {\n"
+               "\tboard project_page.issues by stage over project_page.stages {\n\t\treorder position\n\t\ttitle\n\t}\n"
+               "}\n"
+               "}\n";
+    };
+    platform::write_file((dir / "main.one").string(), source("\t\torder by position\n", "command issue::update\n"));
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"( reorder={{ command: "work::issue::update", field: "position" }} />)") != std::string::npos);
+    fs::remove_all(dir);
+
+    // The list is in that order, and an update sets it.
+    for (const auto& [order, update, message] : std::vector<std::tuple<std::string, std::string, std::string>>{
+             {"", "command issue::update\n", "the list is put in order by position, so it's ordered by it first, like order by position"},
+             {"\t\torder by position\n", "", "cards are put in order by issue::update, which isn't declared in namespace work"},
+         }) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", source(order, update), out));
+        language::check(files, out);
+        REQUIRE(out.size() == 1);
+        CHECK(out[0].message == message);
+    }
+}
+
 TEST_CASE("a table's tabs can be a list's records, a command in its block is in its toolbar, and a heading sits beside the title") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-toolbar";

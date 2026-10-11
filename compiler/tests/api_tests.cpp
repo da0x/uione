@@ -371,6 +371,54 @@ once "2026-10-08 boards" {
     CHECK(wrong[0].message.starts_with("expected"));
 }
 
+TEST_CASE("an update may set the field a board's cards are dragged into order by") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace work {
+entity stage {
+	title     text
+	position  number
+}
+entity card {
+	title     text
+	stage     stage
+	position  number
+}
+command card::update
+view board_page {
+	stages = each stage {
+		order by position
+		title
+	}
+	cards = each card {
+		order by position
+		title  stage  position
+	}
+}
+screen "Cards" /cards {
+	board board_page.cards by stage over board_page.stages {
+		reorder position
+		title
+	}
+}
+view card_page per card {
+	title = card.title
+}
+screen "Card" /cards/:card {
+	form card::update {
+		title
+	}
+}
+}
+)", out));
+    language::check(files, out);
+    REQUIRE(out.empty());
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "work/work.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(one.Command[Card]("card::update").Fields("title", "position"))") != std::string::npos);
+}
+
 TEST_CASE("a view per entity lists what a field of that entity picks, like the steps of an issue's board") {
     language::diagnostics out;
     std::vector<language::file> files;

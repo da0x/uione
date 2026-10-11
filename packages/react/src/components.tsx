@@ -851,6 +851,53 @@ function rowsOf(value: unknown): Row[] {
 
 // How rows are put in order by a field: numbers and dates as such, words as a reader
 // would sort them, and nothing last; with a - in front, largest or latest first.
+// Where a row dragged among others goes, given the rows it now sits between: a
+// number for its field between theirs, so only it changes. Between two at the same
+// place, like stages added one after another, there's no number between them, so
+// the whole list, every row in it, is numbered again in its new order. The list is
+// in order by the field already.
+function placed(list: Row[], field: string, row: Row, before: Row | undefined, after: Row | undefined): { id: string; value: number }[] {
+  const number = (value: unknown) => (typeof value === "number" ? value : undefined);
+  const [low, high] = [number(before?.[field]), number(after?.[field])];
+  if (low !== undefined && high !== undefined && low < high) return [{ id: row.id, value: (low + high) / 2 }];
+  if (low !== undefined && high === undefined && !after) return [{ id: row.id, value: low + 1 }];
+  if (high !== undefined && low === undefined && !before) return [{ id: row.id, value: high - 1 }];
+  if (!before && !after) return [];
+  const rest = list.filter((other) => other.id !== row.id);
+  const at = before ? rest.findIndex((other) => other.id === before.id) + 1 : rest.findIndex((other) => other.id === after?.id);
+  const order = [...rest.slice(0, at), row, ...rest.slice(at)];
+  return order.flatMap((other, i) => (other[field] === i + 1 ? [] : [{ id: other.id, value: i + 1 }]));
+}
+
+// A list put in order by a field, with the places just given to rows by dragging
+// until the view says so too, so a dropped row stays where it was put.
+function usePlacing(rows: Row[], field: string | undefined, data: unknown) {
+  const [placing, setPlacing] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setPlacing((now) => {
+      const settled = Object.keys(now).filter((id) => rows.some((row) => row.id === id && row[field ?? ""] === now[id]));
+      if (settled.length === 0) return now;
+      return Object.fromEntries(Object.entries(now).filter(([id]) => !settled.includes(id)));
+    });
+    // Only the view's newer documents settle a place.
+  }, [data]);
+  const ordered =
+    !field || Object.keys(placing).length === 0
+      ? rows
+      : rows
+          .map((row) => (row.id in placing ? { ...row, [field]: placing[row.id] } : row))
+          .map((row, i) => ({ row, i }))
+          .sort((a, b) => {
+            const [x, y] = [a.row[field], b.row[field]];
+            return typeof x === "number" && typeof y === "number" && x !== y ? x - y : a.i - b.i;
+          })
+          .map(({ row }) => row);
+  const place = (changes: { id: string; value: number }[]) => setPlacing((now) => ({ ...now, ...Object.fromEntries(changes.map((c) => [c.id, c.value])) }));
+  const forget = (changes: { id: string; value: number }[]) =>
+    setPlacing((now) => Object.fromEntries(Object.entries(now).filter(([id]) => !changes.some((c) => c.id === id))));
+  return { ordered, place, forget };
+}
+
 function ordering(sort: string): (a: Row, b: Row) => number {
   const descending = sort.startsWith("-");
   const field = descending ? sort.slice(1) : sort;
@@ -1104,7 +1151,8 @@ export function Table({
   const setAt = (n: number) => setPage_(n <= 1 ? "" : String(n));
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
-  const own = rowsOf(view.data?.[list]).filter((row) => !only || kept(row, Object.entries(only), auth?.person?.uid ?? ""));
+  const placing = usePlacing(rowsOf(view.data?.[list]), reorder?.field, view.data);
+  const own = placing.ordered.filter((row) => !only || kept(row, Object.entries(only), auth?.person?.uid ?? ""));
   const tracked = useTrack(track, own, list === "rows" ? "rows" : list, () => setAt(1));
   const found = own.filter(tracked.keeps).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
@@ -1142,26 +1190,22 @@ export function Table({
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
   if (hideEmpty && view.status === "live" && own.length === 0) return null;
-  // Put in order only when every row is shown, so a row's neighbors are its own.
-  const arranged = reorder && reorder.allowed !== false && !by && !wanted && !page && !sort ? reorder : undefined;
+  // Put in order while the rows are in the list's own order and none is hidden by
+  // what's typed. Within a tab or a page, a row's neighbors are still its neighbors in
+  // the whole list, between which it goes.
+  const arranged = reorder && reorder.allowed !== false && !wanted && !sort ? reorder : undefined;
   const move = (from: number, to: number) => {
     if (!arranged || from === to || to < 0 || to >= rows.length) return;
-    const rest = rows.filter((_, i) => i !== from);
-    const before = rest[to - 1]?.[arranged.field];
-    const after = rest[to]?.[arranged.field];
-    const number = (value: unknown) => (typeof value === "number" ? value : undefined);
-    const [low, high] = [number(before), number(after)];
-    // Between two at the same place, like stages added one after another, there's no
-    // number between them: every row is numbered again in its new order instead.
-    if (low !== undefined && low === high) {
-      const order = [...rest.slice(0, to), rows[from], ...rest.slice(to)];
-      order.forEach((row, at) => {
-        if (row[arranged.field] !== at + 1) void runner.run(arranged.command, { id: row.id, [arranged.field]: at + 1 });
+    const offset = page ? (current - 1) * page : 0;
+    const row = sorted[offset + from];
+    const rest = sorted.filter((other) => other.id !== row.id);
+    const changes = placed(own, arranged.field, row, rest[offset + to - 1], rest[offset + to]);
+    placing.place(changes);
+    for (const change of changes) {
+      void runner.run(arranged.command, { id: change.id, [arranged.field]: change.value }).then((done) => {
+        if (!done) placing.forget([change]);
       });
-      return;
     }
-    const place = low !== undefined && high !== undefined ? (low + high) / 2 : low !== undefined ? low + 1 : high !== undefined ? high - 1 : 1;
-    void runner.run(arranged.command, { id: rows[from].id, [arranged.field]: place });
   };
   const asked = asking?.action.form;
   const says = asking ? (asking.action.label ?? label(action(asking.action.name))) : "";
@@ -1264,6 +1308,7 @@ export function Board({
   tools,
   tint,
   track,
+  reorder,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1283,6 +1328,9 @@ export function Board({
   tools?: ReactNode; // buttons beside its search, like New issue
   tint?: Tint; // each card colored by how urgent it is, like its priority
   track?: TrackSpec; // cards above it for a list's records, like milestones, picking one keeping the cards in it
+  // Cards dragged into order within their column, which runs the command with a
+  // number for the field between its new neighbors', as a table's rows are.
+  reorder?: { command: string; field: string; allowed?: boolean };
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1294,7 +1342,8 @@ export function Board({
   const [query, setQuery] = useAddressState("search");
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
-  const all = rowsOf(view.data?.[list]);
+  const placing = usePlacing(rowsOf(view.data?.[list]), reorder?.field, view.data);
+  const all = placing.ordered;
   const tracked = useTrack(track, all, list);
   const cards = all.filter(tracked.keeps).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
@@ -1323,12 +1372,29 @@ export function Board({
   }, [view.data]);
   const [title, ...rest] = Object.keys(columns);
   const status = over.status === "live" ? view.status : over.status;
+  // Put in order while none is hidden by what's typed: a card goes between the cards
+  // of its column it's dropped between.
+  const arranged = reorder && reorder.allowed !== false && !wanted ? reorder : undefined;
+  const arrange = (id: string, next: string | undefined) => {
+    const card = all.find((c) => c.id === id);
+    if (!arranged || !card || id === next) return;
+    const column = cards.filter((c) => where(c) === where(card) && c.id !== id);
+    const at = next === undefined ? column.length : column.findIndex((c) => c.id === next);
+    if (at < 0) return;
+    const changes = placed(all, arranged.field, card, column[at - 1], column[at]);
+    placing.place(changes);
+    for (const change of changes) {
+      void runner.run(arranged.command, { id: change.id, [arranged.field]: change.value }).then((done) => {
+        if (!done) placing.forget([change]);
+      });
+    }
+  };
   return (
     <>
       {tracked.element}
       <ui.Board
         status={status}
-        error={move ? runner.error(move.command) : undefined}
+        error={(move ? runner.error(move.command) : undefined) ?? (arranged ? runner.error(arranged.command) : undefined)}
         tools={tools}
         filtered={filtered}
         column={column || undefined}
@@ -1350,6 +1416,7 @@ export function Board({
               }
             : undefined
         }
+        onArrange={arranged ? arrange : undefined}
         columns={things.map((thing) => ({
           id: thing.id,
           title: show(thing[shown]) || thing.id,

@@ -1551,6 +1551,14 @@ namespace one::generators {
                 for (const auto& [name, value] : held_by(parts, ns, *board.move)) move += ", " + name + ": " + value;
                 line += " move={{ " + move + " }}";
             }
+            // Cards dragged into order within their column, each drop setting the field
+            // with an update, as a table's rows are.
+            if (board.reorder && entity) {
+                std::string command = web_detail::join(ns, entity->name + "::update");
+                std::string allowed = this->allowed(parts, ns, command);
+                line += " reorder={{ command: " + web_detail::js_string(command) + ", field: " + web_detail::js_string(*board.reorder) +
+                        (allowed.empty() ? "" : ", allowed: " + allowed.substr(10, allowed.size() - 11)) + " }}";
+            }
             out.line(line + " />");
         }
 

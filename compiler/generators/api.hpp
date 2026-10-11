@@ -163,7 +163,14 @@ namespace one::generators {
         std::set<std::string> run_;
         // Tables whose rows are dragged into order, with their namespace: the entity's
         // update may change the field they're ordered by.
-        std::vector<std::pair<std::string, const language::table_item*>> reordered_;
+        // Lists dragged into order, in a table or a board: the namespace, the view, its
+        // list and the field a drop sets.
+        struct reordering {
+            std::string ns, view;
+            std::optional<std::string> list;
+            std::string field;
+        };
+        std::vector<reordering> reordered_;
         // The entity the view being written has a document per, if it has one.
         std::string subject_;
         std::string project_name_ = "app";
@@ -241,7 +248,9 @@ namespace one::generators {
                         }
                     }
                 } else if (auto* table = std::get_if<language::table_item>(&item.node); table && table->reorder) {
-                    reordered_.push_back({ns, table});
+                    reordered_.push_back({ns, table->view.text(), table->list, *table->reorder});
+                } else if (auto* board = std::get_if<language::board_item>(&item.node); board && board->reorder) {
+                    reordered_.push_back({ns, board->view.text(), board->list, *board->reorder});
                 } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     collect_forms(ns, block->items);
                 }
@@ -683,15 +692,15 @@ namespace one::generators {
             if (c.name.parts.back() != "create" && c.name.parts.back() != "delete") {
                 std::vector<std::string> fields;
                 if (auto forms = form_fields_.find(web_detail::join(ns, c.name.text())); forms != form_fields_.end()) fields = forms->second;
-                // A table dragged into order sets the field it's ordered by.
-                for (const auto& [where, table] : reordered_) {
-                    if (where != ns || c.name.parts.back() != "update" || !pkg_) continue;
+                // A table or board dragged into order sets the field it's ordered by.
+                for (const auto& r : reordered_) {
+                    if (r.ns != ns || c.name.parts.back() != "update" || !pkg_) continue;
                     for (const auto& [view, _] : pkg_->views) {
-                        if (view->name != table->view.text()) continue;
+                        if (view->name != r.view) continue;
                         for (const auto& each : view->each) {
                             auto* source = std::get_if<language::name_expression>(&each.source->node);
-                            if (each.name != table->list || !source || source->name.text() != e.name) continue;
-                            if (std::find(fields.begin(), fields.end(), *table->reorder) == fields.end()) fields.push_back(*table->reorder);
+                            if (each.name != r.list || !source || source->name.text() != e.name) continue;
+                            if (std::find(fields.begin(), fields.end(), r.field) == fields.end()) fields.push_back(r.field);
                         }
                     }
                 }

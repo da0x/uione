@@ -1273,6 +1273,14 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // reorder position: cards dragged into order within their column.
+                        if (at_word("reorder") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            board.reorder_where = peek().where;
+                            board.reorder = advance().text;
+                            end_line();
+                            continue;
+                        }
                         // tint by priority
                         if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
                             advance();

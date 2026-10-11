@@ -2678,20 +2678,7 @@ namespace one::language {
                         if (n && !in_rows(n->name.text())) error(table->only_where, "the table keeps only rows by " + n->name.text() + ", which its rows don't have");
                     }
                     // reorder position: rows dragged into order, which an update sets.
-                    if (table->reorder && list) {
-                        const entity_declaration* rows_of = listed_entity(ns, *list);
-                        const field* f = rows_of ? find_field(*rows_of, *table->reorder) : nullptr;
-                        bool ordered = !list->order.empty() && written(*list->order.front()) == *table->reorder;
-                        if (!f || !f->type || f->type->text() != "number") {
-                            error(table->reorder_where, "a table's rows are put in order by a number field of theirs, like reorder position");
-                        } else if (!in_rows(*table->reorder)) {
-                            error(table->reorder_where, "the table is put in order by " + *table->reorder + ", which its rows don't have");
-                        } else if (!ordered) {
-                            error(table->reorder_where, "the list is put in order by " + *table->reorder + ", so it's ordered by it first, like order by " + *table->reorder);
-                        } else if (!find_command(ns, qualified_name{{rows_of->name, "update"}, table->reorder_where})) {
-                            error(table->reorder_where, "rows are put in order by " + rows_of->name + "::update, which isn't declared " + in_namespace(ns));
-                        }
-                    }
+                    if (table->reorder && list) verify_reorder(ns, *list, *table->reorder, table->reorder_where, "table", "rows");
                     // Tabs by a choice the table shows, like status: one for each of its choices.
                     if (table->by && table->by_over) {
                         // by stage over project_page.stages: a tab for each stage, the rows
@@ -2907,6 +2894,24 @@ namespace one::language {
             }
         }
 
+        // reorder position, in a table or a board: what's dragged into order is put
+        // there by a number field of its own, which the list is ordered by first, and
+        // which its entity's update sets.
+        void verify_reorder(const std::string& ns, const view_each& list, const std::string& by, const location& where, const std::string& what, const std::string& rows) {
+            const entity_declaration* rows_of = listed_entity(ns, list);
+            const field* f = rows_of ? find_field(*rows_of, by) : nullptr;
+            bool ordered = !list.order.empty() && written(*list.order.front()) == by;
+            if (!f || !f->type || f->type->text() != "number") {
+                error(where, "a " + what + "'s " + rows + " are put in order by a number field of theirs, like reorder position");
+            } else if (!in_rows(list, by)) {
+                error(where, "the " + what + " is put in order by " + by + ", which its " + rows + " don't have");
+            } else if (!ordered) {
+                error(where, "the list is put in order by " + by + ", so it's ordered by it first, like order by " + by);
+            } else if (!find_command(ns, qualified_name{{rows_of->name, "update"}, where})) {
+                error(where, rows + " are put in order by " + rows_of->name + "::update, which isn't declared " + in_namespace(ns));
+            }
+        }
+
         void verify_board(const std::string& ns, const board_item& board, const std::string& route) {
             const view_each* cards = named_list(ns, board.view, *board.list, route);
             const view_each* columns = named_list(ns, board.over, board.over_list, route);
@@ -2925,6 +2930,7 @@ namespace one::language {
                 error(board.by_where, "view " + board.view.text() + " has no " + board.by + " in its " + *board.list + "; add it to the list's block");
             }
             verify_tint(ns, *cards, board.view.text(), board.tint, board.tint_where);
+            if (board.reorder) verify_reorder(ns, *cards, *board.reorder, board.reorder_where, "board", "cards");
             if (!in_rows(*columns, "title") && !in_rows(*columns, "name")) {
                 error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
             }

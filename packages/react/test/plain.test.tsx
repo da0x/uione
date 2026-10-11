@@ -3,7 +3,7 @@
 
 // The plain component set, as someone using a screen reader or a keyboard meets it.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
 import { App, Board, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Section, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
@@ -479,6 +479,67 @@ describe("a table put in order", () => {
       { id: "p4", position: 3 },
       { id: "p3", position: 4 },
     ]);
+  });
+});
+
+describe("a list put in order across tabs and columns", () => {
+  const issues = {
+    issues: [
+      { id: "a", title: "Alpha", status: "open", position: 1 },
+      { id: "b", title: "Beta", status: "closed", position: 2 },
+      { id: "c", title: "Gamma", status: "open", position: 3 },
+      { id: "d", title: "Delta", status: "open", position: 4 },
+    ],
+  };
+
+  it("moves a row within its tab between its neighbors there, and shows it in its place at once", async () => {
+    const source = memorySource({ views: { "projects::board": issues } });
+    renderScreen(source, () => (
+      <Table
+        view={useView("projects::board")}
+        list="issues"
+        by="status"
+        choices={{ status: { open: "Open", closed: "Closed" } }}
+        columns={{ title: "Title", status: "Status" }}
+        reorder={{ command: "projects::issue::update", field: "position" }}
+      />
+    ));
+    await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Delta" }), { key: "ArrowUp", altKey: true }));
+    expect(source.runs).toEqual([{ command: "projects::issue::update", input: { id: "d", position: 2 } }]);
+    const names = screen.getAllByRole("button", { name: /^Move / }).map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual(["Move Alpha", "Move Delta", "Move Gamma"]);
+  });
+
+  it("moves a board's card up and down its column, between the cards there", async () => {
+    const page = {
+      stages: [
+        { id: "s-open", title: "Open" },
+        { id: "s-closed", title: "Closed" },
+      ],
+      issues: issues.issues.map((issue) => ({ ...issue, stage: issue.status === "open" ? "s-open" : "s-closed" })),
+    };
+    const source = memorySource({ views: { "projects::board": page } });
+    renderScreen(source, () => {
+      const view = useView("projects::board");
+      return (
+        <Board
+          view={view}
+          list="issues"
+          by="stage"
+          over={view}
+          overList="stages"
+          columns={{ title: "Title" }}
+          reorder={{ command: "projects::issue::update", field: "position" }}
+        />
+      );
+    });
+    const open = screen.getByRole("region", { name: "Open" });
+    const card = (name: string) => within(open).getByText(name).closest("li")!;
+    await act(async () => fireEvent.click(within(card("Alpha")).getByRole("button", { name: "Move down" })));
+    expect(source.runs).toEqual([{ command: "projects::issue::update", input: { id: "a", position: 3.5 } }]);
+    expect(Array.from(open.querySelectorAll("li")).map((li) => li.querySelector("a, span")?.textContent ?? li.firstChild?.textContent)).toEqual(["Gamma", "Alpha", "Delta"]);
+    await act(async () => fireEvent.click(within(card("Delta")).getByRole("button", { name: "Move up" })));
+    expect(source.runs[1]).toEqual({ command: "projects::issue::update", input: { id: "d", position: 3.25 } });
   });
 });
 

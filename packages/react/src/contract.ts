@@ -228,6 +228,9 @@ export interface BoardProps {
   columns: BoardColumn[];
   error?: string;
   onMove?: (card: string, column: string) => void; // absent when no card can be moved
+  // Puts a card in its column just before another of its cards, or last when there's
+  // none; absent when cards aren't put in order.
+  onArrange?: (card: string, next: string | undefined) => void;
   search?: TableSearch; // a box that finds cards by what's typed
   tools?: ReactNode; // buttons beside its search, like New issue
   filtered?: Filtered;

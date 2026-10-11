@@ -1249,7 +1249,11 @@ screen "Book" /books/:book {
 - `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and
   Alt+↓ on a row's handle, for whoever may update them. A drop gives the row a
   position between its new neighbors', so only it changes. The list is ordered by
-  that field, and the entity's `update` may set it.
+  that field, and the entity's `update` may set it. It works within a tab or a page
+  too, where a row's neighbors are still its neighbors in the whole list, but not
+  while the table is sorted by a column or searched. In a board, `reorder position`
+  puts each column's cards in order the same way: a card is dragged up or down its
+  column, or moved with Alt+↑ and Alt+↓.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.

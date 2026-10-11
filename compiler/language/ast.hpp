@@ -621,6 +621,8 @@ namespace one::language {
         std::optional<std::string> tint;    // tint by priority: each card colored as a table's row
         location tint_where;
         std::optional<track_setting> track;
+        std::optional<std::string> reorder;  // reorder position: cards dragged into order in their column
+        location reorder_where;
     };
 
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as

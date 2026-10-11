@@ -943,13 +943,17 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
-  Board: function RadixBoard({ status, columns, error, onMove, search, tools, filtered, column, onColumn }) {
+  Board: function RadixBoard({ status, columns, error, onMove, onArrange, search, tools, filtered, column, onColumn }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();
+    // Where a card dragged within its own column would land: before this card, or
+    // last when it's none.
+    const [landing, setLanding] = useState<{ column: string; next: string | undefined }>();
     const reachable = (column: string) => !dragged || column === dragged.from || dragged.reaches.includes(column);
     const drop = () => {
       setDragged(undefined);
       setOver(undefined);
+      setLanding(undefined);
     };
     // On a phone, a stage a page: swiped between, or picked from the tabs above, which
     // follow the swiping.
@@ -1028,13 +1032,20 @@ export const radix: ComponentSet = {
               key={column.id}
               aria-label={column.title}
               onDragOver={(event) => {
+                // Below its column's cards, a card dragged within it goes last.
+                if (onArrange && dragged?.from === column.id) {
+                  event.preventDefault();
+                  setLanding({ column: column.id, next: undefined });
+                  return;
+                }
                 if (!dragged?.reaches.includes(column.id)) return;
                 event.preventDefault();
                 setOver(column.id);
               }}
               onDrop={(event) => {
                 event.preventDefault();
-                if (dragged && onMove && dragged.reaches.includes(column.id)) onMove(dragged.card, column.id);
+                if (dragged && onArrange && dragged.from === column.id && landing?.column === column.id) onArrange(dragged.card, landing.next);
+                else if (dragged && onMove && dragged.reaches.includes(column.id)) onMove(dragged.card, column.id);
                 drop();
               }}
               className={`flex w-full shrink-0 snap-start flex-col rounded-box border bg-sunken/70 transition-opacity sm:w-72 ${reachable(column.id) ? "" : "opacity-40"} ${
@@ -1046,16 +1057,43 @@ export const radix: ComponentSet = {
                 <span className="rounded-full bg-surface px-1.5 text-xs tabular-nums">{column.cards.length}</span>
               </h3>
               <ul className="flex min-h-16 flex-col gap-2 px-2 pb-2">
-                {column.cards.map((card) => {
+                {column.cards.map((card, place) => {
                   const movable = Boolean(onMove) && card.reaches.length > 0;
+                  const draggable = movable || Boolean(onArrange);
                   return (
                     <li
                       key={card.id}
-                      draggable={movable ? true : undefined}
-                      tabIndex={movable && !card.link ? 0 : undefined}
+                      draggable={draggable ? true : undefined}
+                      tabIndex={draggable && !card.link ? 0 : undefined}
                       onDragStart={() => setDragged({ card: card.id, from: column.id, reaches: card.reaches })}
                       onDragEnd={drop}
+                      onDragOver={(event) => {
+                        // Within its own column, a card lands before the one it's over
+                        // when it's over that card's top half, and after it otherwise.
+                        if (!onArrange || dragged?.from !== column.id) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const box = event.currentTarget.getBoundingClientRect();
+                        const next = event.clientY < box.top + box.height / 2 ? card.id : column.cards[place + 1]?.id;
+                        if (landing?.column !== column.id || landing.next !== next) setLanding({ column: column.id, next });
+                      }}
+                      onDrop={(event) => {
+                        if (!onArrange || !dragged || dragged.from !== column.id || landing?.column !== column.id) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onArrange(dragged.card, landing.next);
+                        drop();
+                      }}
+                      style={landing?.column === column.id && landing.next === card.id && dragged?.card !== card.id ? { boxShadow: "0 -0.375rem 0 -0.125rem var(--color-accent)" } : undefined}
                       onKeyDown={(event) => {
+                        // Alt and up or down: a place up or down its column.
+                        if (onArrange && event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+                          const up = event.key === "ArrowUp";
+                          if (up ? place === 0 : place === column.cards.length - 1) return;
+                          event.preventDefault();
+                          onArrange(card.id, up ? column.cards[place - 1].id : column.cards[place + 2]?.id);
+                          return;
+                        }
                         if (!onMove || !event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
                         const step = event.key === "ArrowLeft" ? -1 : 1;
                         for (let next = at + step; next >= 0 && next < columns.length; next += step) {
@@ -1066,7 +1104,7 @@ export const radix: ComponentSet = {
                         }
                       }}
                       className={`rounded-box border border-line ${toned(card.tone) || "bg-surface shadow-panel"} px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
-                        movable ? "cursor-grab active:cursor-grabbing" : ""
+                        draggable ? "cursor-grab active:cursor-grabbing" : ""
                       } ${dragged?.card === card.id ? "opacity-40" : ""}`}
                     >
                       {card.link ? (
@@ -1106,6 +1144,8 @@ export const radix: ComponentSet = {
                     </li>
                   );
                 })}
+                {/* Dragged below its column's cards, it goes last. */}
+                {landing?.column === column.id && landing.next === undefined && <li aria-hidden="true" className="h-0.5 rounded-full bg-accent" />}
               </ul>
             </section>
           ))}

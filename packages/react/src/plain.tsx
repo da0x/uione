@@ -452,7 +452,7 @@ export const plain: ComponentSet = {
     </div>
   ),
 
-  Board: ({ status, columns, error, onMove, search, tools, filtered }) => (
+  Board: ({ status, columns, error, onMove, onArrange, search, tools, filtered }) => (
     <>
       {filtered && (
         <p>
@@ -471,12 +471,23 @@ export const plain: ComponentSet = {
               {column.title} ({column.cards.length})
             </h3>
             <ul>
-              {column.cards.map((card) => (
+              {column.cards.map((card, at) => (
                 <li key={card.id}>
                   {card.link ? <a {...card.link}>{card.title}</a> : card.title}
                   {card.details.map((detail, i) => (
                     <span key={i}> {detail}</span>
                   ))}
+                  {/* Up and down its column, a button each, rather than a drag. */}
+                  {onArrange && at > 0 && (
+                    <button type="button" onClick={() => onArrange(card.id, column.cards[at - 1].id)}>
+                      Move up
+                    </button>
+                  )}
+                  {onArrange && at < column.cards.length - 1 && (
+                    <button type="button" onClick={() => onArrange(card.id, column.cards[at + 2]?.id)}>
+                      Move down
+                    </button>
+                  )}
                   {/* Where it may go, a button for each, rather than a drag. */}
                   {onMove &&
                     card.reaches.map((to) => {
