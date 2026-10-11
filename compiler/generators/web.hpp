@@ -1705,10 +1705,12 @@ namespace one::generators {
             std::string fields, shown, labels, files;
             for (const auto& f : details.fields) {
                 std::string key = web_detail::text_of(*f.value);
-                // Called as it says, or as its field is everywhere.
+                // Called as it says, or as its field is everywhere: assignees.name as
+                // assignees is.
                 std::optional<std::string> label = f.label;
+                std::string first = key.substr(0, key.find('.')), rest = key.find('.') == std::string::npos ? "" : key.substr(key.find('.') + 1);
                 for (const auto& field : entity ? entity->fields : nothing_) {
-                    if (!label && field.name == key && field.label) label = field.label;
+                    if (!label && field.name == first && (rest.empty() || rest == "name" || rest == "title") && field.label) label = field.label;
                 }
                 fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
                           web_detail::js_string(label ? *label : web_detail::label(key)) + "]";

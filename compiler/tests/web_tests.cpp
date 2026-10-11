@@ -1110,9 +1110,9 @@ TEST_CASE("a field's label is every screen's, unless one says its own, and a per
                          "entity order {\n\tnumber  serial  key  \"#\"\n\ttitle  text\n\tpacked_by  list of user  \"Packed by\"\n\tauthor  user  = me\n}\n"
                          "command order::update\n"
                          "view orders {\n\teach order {\n\t\tnumber  title  packed_by.name  packed_by.picture  author.name  author.picture\n\t}\n}\n"
-                         "view order_page per order {\n\tnumber\n\ttitle\n\tpacked_by\n}\n"
+                         "view order_page per order {\n\tnumber  title  packed_by  packed_by.name\n}\n"
                          "screen \"Orders\" /orders {\n\ttable orders {\n\t\tnumber  title  packed_by  author \"Opened by\"\n\t}\n}\n"
-                         "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tnumber\n\t}\n\tform order::update {\n\t\ttitle  packed_by\n\t}\n}\n"
+                         "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tnumber\n\t\tpacked_by.name\n\t}\n\tform order::update {\n\t\ttitle  packed_by\n\t}\n}\n"
                          "}\n");
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
@@ -1122,7 +1122,7 @@ TEST_CASE("a field's label is every screen's, unless one says its own, and a per
     CHECK(tsx.find(R"(columns={{ number: "#", title: "Title", "packed_by.name": "Packed by", "author.name": "Opened by" }})") != std::string::npos);
     CHECK(tsx.find(R"(people={{ "packed_by.name": "packed_by.picture", "author.name": "author.picture" }})") != std::string::npos);
     CHECK(tsx.find(R"({ name: "packed_by", label: "Packed by")") != std::string::npos);
-    CHECK(tsx.find(R"([["number", "#"]])") != std::string::npos);
+    CHECK(tsx.find(R"([["number", "#"], ["packed_by.name", "Packed by"]])") != std::string::npos);
 }
 
 TEST_CASE("a screen can be untitled and at several addresses, and a header sits above every screen under its path") {
