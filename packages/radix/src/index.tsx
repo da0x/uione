@@ -950,10 +950,10 @@ export const radix: ComponentSet = {
       setDragged(undefined);
       setOver(undefined);
     };
-    // On a phone, a phase a page: swiped between, or picked from the tabs above, which
+    // On a phone, a stage a page: swiped between, or picked from the tabs above, which
     // follow the swiping.
     const strip = useRef<HTMLDivElement>(null);
-    // Which, as the address says when it says, so a link opens on the same phase.
+    // Which, as the address says when it says, so a link opens on the same stage.
     const [own, setOwn] = useState(0);
     const asked = column === undefined ? -1 : columns.findIndex((c) => c.id === column);
     const shown = asked >= 0 ? asked : own;
@@ -968,7 +968,7 @@ export const radix: ComponentSet = {
       if (box && page) box.scrollTo?.({ left: page.offsetLeft - box.offsetLeft, behavior: "smooth" });
       setShown(at);
     };
-    // Opened on a phase the address names, it starts there.
+    // Opened on a stage the address names, it starts there.
     const opened = useRef(false);
     useEffect(() => {
       if (opened.current || asked <= 0 || !strip.current) return;
@@ -995,7 +995,7 @@ export const radix: ComponentSet = {
           </div>
         )}
         {columns.length > 1 && (
-          <div role="tablist" aria-label="Phases" className="-mx-1 flex gap-1 overflow-x-auto px-1 sm:hidden">
+          <div role="tablist" aria-label="Stages" className="-mx-1 flex gap-1 overflow-x-auto px-1 sm:hidden">
             {columns.map((column, at) => (
               <button
                 key={column.id}

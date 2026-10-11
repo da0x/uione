@@ -157,12 +157,12 @@ namespace one::language {
             bool hook = false;                           // a webhook's handler, which may create
             bool update = false;                         // an update command's body, which may say what it changes
             bool command = false;                        // a command's body, which may ask what a field was and what exists
-            // What a command's body makes by name, like create phase { name = "triaged" },
-            // by entity: what phase::triaged may name, with a project's starting roles.
+            // What a command's body makes by name, like create stage { name = "triaged" },
+            // by entity: what stage::triaged may name, with a project's starting roles.
             const std::map<std::string, std::set<std::string>>* made = nullptr;
             bool stored = false;                         // a once's, which may name what's already stored, like role::developer
             bool picked = false;                         // entity is a row an each or a once's step picked, changed only by dispatch
-            // A command's inputs, like into in input into phase, named in its body.
+            // A command's inputs, like into in input into stage, named in its body.
             const std::map<std::string, field, std::less<>>* inputs = nullptr;
         };
 
@@ -800,7 +800,7 @@ namespace one::language {
         }
 
         // Whether an entity is named within another by a name, like a project's role or
-        // phase: its keys are a field pointing at the other and name.
+        // stage: its keys are a field pointing at the other and name.
         bool named_within(const std::string& ns, const entity_declaration& e) {
             int keys = 0;
             bool place = false, name = false;
@@ -1212,7 +1212,7 @@ namespace one::language {
                     error(f.where, "'after " + *f.after + "' names a field entity " + e.name + " doesn't have");
                 }
                 // slug(title): a name made from another of its fields when none is
-                // given, like a phase's key from its title.
+                // given, like a stage's key from its title.
                 if (auto* call = f.initial ? std::get_if<call_expression>(&f.initial->node) : nullptr) {
                     auto* callee = std::get_if<name_expression>(&call->callee->node);
                     auto* from = call->arguments.size() == 1 ? std::get_if<name_expression>(&call->arguments[0]->node) : nullptr;
@@ -1349,7 +1349,7 @@ namespace one::language {
             statements(ns, c.body, entity, in);
         }
 
-        // What a command is sent besides its entity's fields: input into phase.
+        // What a command is sent besides its entity's fields: input into stage.
         static std::map<std::string, field, std::less<>> inputs_of(const command_declaration& c) {
             std::map<std::string, field, std::less<>> inputs;
             for (const auto& st : c.body) {
@@ -1364,7 +1364,7 @@ namespace one::language {
             return inputs;
         }
 
-        // each issue where phase == id, or delete each step where from == id || to ==
+        // each issue where stage == id, or delete each step where from == id || to ==
         // id: a field of what's picked, its value worked out where the command runs,
         // and for a delete, any of several.
         // The row's field in other.pair, or nothing for anything else.
@@ -1404,7 +1404,7 @@ namespace one::language {
                 }
             }
             if (!b || b->op != token_kind::equal || !name || name->name.parts.size() != 1) {
-                error(where.where, std::string("what's picked is by a field's value, like where phase == id") +
+                error(where.where, std::string("what's picked is by a field's value, like where stage == id") +
                                        (any ? ", or by any of several, like from == id || to == id" : ""));
                 return;
             }
@@ -1469,7 +1469,7 @@ namespace one::language {
                     std::size_t errors = out_.size();
                     const field* target = resolve(in, *a->target);
                     // A once may give what was made before a key existed its key, like the board
-                    // a project's phases were in before it had boards.
+                    // a project's stages were in before it had boards.
                     if (target && fixed_once_made(*target) && !in.stored) error(a->target->where, why_fixed(*target));
                     if (target && target->list && !std::holds_alternative<list_expression>(a->value->node)) {
                         error(a->target->where, target->name + " is a list; add to it or remove from it, like add me to " + target->name +
@@ -1512,7 +1512,7 @@ namespace one::language {
                 } else if (auto* input = std::get_if<input_statement>(&s.node)) {
                     snake(input->name, input->name_where);
                     if (!in.command || in.stored) {
-                        error(s.where, "input goes in a command, naming what it's sent besides its entity's fields, like input into phase");
+                        error(s.where, "input goes in a command, naming what it's sent besides its entity's fields, like input into stage");
                     } else if (entity && find_field(*entity, input->name)) {
                         error(input->name_where, input->name + " is a field of entity " + entity->name + " already; an input is something else it's sent");
                     } else {
@@ -1571,7 +1571,7 @@ namespace one::language {
         }
 
         // A record changed other than by the command that's its own, said as a
-        // dispatch of its command: dispatch issue::update { phase = into }. inside is
+        // dispatch of its command: dispatch issue::update { stage = into }. inside is
         // what goes in the braces, or nothing when the fix can't be said.
         void by_command(const std::string& ns, const statement& s, const std::string& entity, const std::string& action, const std::string& inside,
                         location where) {
@@ -1658,7 +1658,7 @@ namespace one::language {
                     continue;
                 }
                 // A once may give what was made before a key existed its key, like the
-                // board a project's phases were in before it had boards.
+                // board a project's stages were in before it had boards.
                 if (is_serial(*f) || (action != "create" && f->key && !in.stored)) error(v.where, why_fixed(*f));
                 resolve(in, *v.value, f);
             }
@@ -2327,7 +2327,7 @@ namespace one::language {
         }
 
         // issue::move along project_page.steps: the command changes one field, like
-        // phase, and each step in the list goes from one of those to another, so its
+        // stage, and each step in the list goes from one of those to another, so its
         // rows hold from and to.
         void verify_along(const std::string& ns, const button_item& button, const std::string& route) {
             const command_declaration* command = nullptr;
@@ -2340,7 +2340,7 @@ namespace one::language {
                 if (auto* c = std::get_if<changes_statement>(&st.node)) changed.insert(changed.end(), c->fields.begin(), c->fields.end());
             }
             if (changed.size() != 1) {
-                error(button.command.where, button.command.text() + " goes along steps, so it changes one field, the one they go between, like changes phase");
+                error(button.command.where, button.command.text() + " goes along steps, so it changes one field, the one they go between, like changes stage");
             }
             const view_declaration* view = find(ns, *button.along, &scope::views);
             if (!view) {
@@ -2443,7 +2443,7 @@ namespace one::language {
         }
 
         // The list of a table on the screen being checked whose rows each have a button
-        // for a command, like phase::update "Rename" on the phases: a form for it opens
+        // for a command, like stage::update "Rename" on the stages: a form for it opens
         // from the row and starts from it. With its view's name.
         std::pair<const view_each*, std::string> rows_with(const std::string& ns, const std::vector<screen_item>& items, const qualified_name& command) {
             for (const auto& item : items) {
@@ -2672,7 +2672,7 @@ namespace one::language {
                     }
                     // Tabs by a choice the table shows, like status: one for each of its choices.
                     if (table->by && table->by_over) {
-                        // by phase over project_page.phases: a tab for each phase, the rows
+                        // by stage over project_page.stages: a tab for each stage, the rows
                         // holding which they're in.
                         const view_each* tabs = named_list(ns, *table->by_over, table->by_over_list, route);
                         const entity_declaration* rows_of = list ? listed_entity(ns, *list) : nullptr;
@@ -2826,7 +2826,7 @@ namespace one::language {
             return nullptr;
         }
 
-        // grid project_page.steps by from and to over project_page.phases: each entry
+        // grid project_page.steps by from and to over project_page.stages: each entry
         // names its row and column by fields pointing at what the over list lists, and
         // the rows hold those, what a cell shows, and a title or name for each thing.
         void verify_grid(const std::string& ns, const grid_item& grid, const std::string& route) {
@@ -2856,7 +2856,7 @@ namespace one::language {
             }
         }
 
-        // board project_page.issues by phase over project_page.phases: each card names
+        // board project_page.issues by stage over project_page.stages: each card names
         // its column by a field pointing at what the over list lists, and the cards hold
         // that field and what they show. A move goes along steps and changes that field.
         // track milestone over board_page.milestones { due }: the rows' field points at
@@ -3386,7 +3386,7 @@ namespace one::language {
                     return nullptr;
                 }
                 // One of a project's own, by its name, like role::maintainer or
-                // phase::triaged: what's named by the project and a name.
+                // stage::triaged: what's named by the project and a name.
                 if (n->name.parts.size() == 2 && beside && beside->choices.empty()) {
                     if (const entity_declaration* named = pointed(in.ns, *beside)) {
                         if (n->name.parts[0] != named->name) {
@@ -3607,20 +3607,20 @@ namespace one::language {
                 if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");
                 return e;
             }
-            // exists(step where from == was issue.phase && held(roles)): whether
+            // exists(step where from == was issue.stage && held(roles)): whether
             // there's one, in a command's require.
             if (name == "exists") {
                 if (!arguments(1)) return nullptr;
                 if (!in.command) error(call.callee->where, "exists goes in a command, like require exists(step where ...)  \"...\"");
                 auto* w = std::get_if<where_expression>(&call.arguments[0]->node);
                 if (!w) {
-                    error(call.arguments[0]->where, "exists takes an entity and where, like exists(step where to == issue.phase)");
+                    error(call.arguments[0]->where, "exists takes an entity and where, like exists(step where to == issue.stage)");
                     return nullptr;
                 }
                 where_of(in, *w);
                 return nullptr;
             }
-            // was issue.phase: what a field of the command's entity held before it.
+            // was issue.stage: what a field of the command's entity held before it.
             if (name == "was") {
                 if (!arguments(1)) return nullptr;
                 if (!in.command) error(call.callee->where, "was goes in a command, saying what a field held before it");

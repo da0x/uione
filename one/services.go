@@ -22,7 +22,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Service accounts: programs, like an agent that works the issues in a phase, that
+// Service accounts: programs, like an agent that works the issues in a stage, that
 // a project gives a role as it gives people one. Each is a record of the project,
 // named by its title, holding one role made for services. It's a member of the
 // project like a person, so it reads what members read and runs what its role

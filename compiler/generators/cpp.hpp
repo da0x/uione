@@ -196,7 +196,7 @@ namespace one::generators {
         }
 
         // What a view's column holds: a field of the row's entity, read through what it
-        // points at, like phase.title, or what a person's profile shows.
+        // points at, like stage.title, or what a person's profile shows.
         std::optional<cpp_detail::cpp_type> column_type(const place& at, const std::string& ns, const language::entity_declaration* e, const std::string& dotted) {
             if (!e) return std::nullopt;
             std::vector<std::string> parts;
@@ -419,7 +419,7 @@ namespace one::generators {
         }
 
         // The fields a command may be sent: any of its entity's, and what it takes
-        // besides, like the phase a removed phase's issues move to. The app says which
+        // besides, like the stage a removed stage's issues move to. The app says which
         // it takes; one it doesn't is refused with a message saying so.
         void command_input(code::stream& out, const std::string& ns, const place& at, const language::command_declaration& c, const std::pair<std::string, int>& where) {
             auto guard = out.from(where.first, where.second);

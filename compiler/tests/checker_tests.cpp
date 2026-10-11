@@ -390,7 +390,7 @@ screen "Columns" /columns {
     CHECK(only_error(updated).message == "rows are put in order by column::update, which isn't declared in namespace board");
 }
 
-TEST_CASE("a key can be made from another field when it isn't given, like a phase's name from its title") {
+TEST_CASE("a key can be made from another field when it isn't given, like a stage's name from its title") {
     const std::string lane = "entity lane {\n\tname   text  required  key = slug(title)\n\ttitle  text  required\n\tsize   number\n}\n";
     CHECK(check_source(lane).size() == 0);
 
@@ -436,7 +436,7 @@ command column::delete {
 
     std::string shape = board;
     shape.replace(shape.find("where column == into"), 20, "where column != into");
-    CHECK(only_error(shape).message == "what's picked is by a field's value, like where phase == id, or by any of several, like from == id || to == id");
+    CHECK(only_error(shape).message == "what's picked is by a field's value, like where stage == id, or by any of several, like from == id || to == id");
 
     std::string unknown = board;
     unknown.replace(unknown.find("each card where"), 9, "each cart");

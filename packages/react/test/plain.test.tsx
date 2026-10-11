@@ -74,8 +74,8 @@ describe("a table's row actions", () => {
     renderScreen(source, () => (
       <Table
         view={useView("projects::workflow")}
-        columns={{ title: "Phase" }}
-        actions={[{ name: "projects::phase::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]}
+        columns={{ title: "Stage" }}
+        actions={[{ name: "projects::stage::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]}
       />
     ));
     fireEvent.click(screen.getByRole("button", { name: "Rename Open" }));
@@ -84,7 +84,7 @@ describe("a table's row actions", () => {
     expect(called.value).toBe("Open");
     fireEvent.change(called, { target: { value: "Triage" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
-    expect(source.runs).toEqual([{ command: "projects::phase::update", input: { title: "Triage", id: "p1" } }]);
+    expect(source.runs).toEqual([{ command: "projects::stage::update", input: { title: "Triage", id: "p1" } }]);
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -93,12 +93,12 @@ describe("a table's row actions", () => {
       this.setAttribute("open", "");
     };
     const source = memorySource({ views: { "projects::workflow": { rows: [{ id: "p1", title: "Triage" }, { id: "p2", title: "Done" }] } } });
-    const phases: [string, string][] = [["p1", "Triage"], ["p2", "Done"]];
+    const stages: [string, string][] = [["p1", "Triage"], ["p2", "Done"]];
     renderScreen(source, () => (
       <Table
         view={useView("projects::workflow")}
-        columns={{ title: "Phase" }}
-        actions={[{ name: "projects::phase::delete", label: "Remove", form: { fields: [{ name: "into", label: "Move its issues to", type: "pick", choices: phases }] } }]}
+        columns={{ title: "Stage" }}
+        actions={[{ name: "projects::stage::delete", label: "Remove", form: { fields: [{ name: "into", label: "Move its issues to", type: "pick", choices: stages }] } }]}
       />
     ));
     fireEvent.click(screen.getByRole("button", { name: "Remove Triage" }));
@@ -170,7 +170,7 @@ describe("a project's own roles", () => {
 describe("a workflow's steps", () => {
   it("are buttons for the steps from where it is that the person's roles may take, each moving it on", async () => {
     const source = memorySource();
-    const issue = { status: "live" as const, data: { phase: "ark-ready" } };
+    const issue = { status: "live" as const, data: { stage: "ark-ready" } };
     const page = {
       status: "live" as const,
       data: {
@@ -184,20 +184,20 @@ describe("a workflow's steps", () => {
     };
     const roles = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", role: "ark-programmer" }] } };
     renderScreen(source, () => (
-      <Steps command="projects::issue::move" id="ark-1" field="phase" current={issue} steps={page} list="steps" shown="title" to="to.title" held="roles" roles={roles} within="ark" />
+      <Steps command="projects::issue::move" id="ark-1" field="stage" current={issue} steps={page} list="steps" shown="title" to="to.title" held="roles" roles={roles} within="ark" />
     ));
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Start work", "Move to Closed"]);
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
-    await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "projects::issue::move", input: { id: "ark-1", phase: "ark-doing" } }));
+    await vi.waitFor(() => expect(source.runs.at(-1)).toEqual({ command: "projects::issue::move", input: { id: "ark-1", stage: "ark-doing" } }));
   });
 
   it("say where nothing leads on for the person's roles, and say nothing to someone who holds none", () => {
-    const issue = { status: "live" as const, data: { phase: "ark-review" } };
+    const issue = { status: "live" as const, data: { stage: "ark-review" } };
     const page = { status: "live" as const, data: { steps: [{ id: "s1", from: "ark-review", "from.title": "In review", to: "ark-done", roles: ["ark-tester"] }] } };
     const programmer = { status: "live" as const, data: { rows: [{ id: "m1", project: "ark", role: "ark-programmer" }] } };
     const outsider = { status: "live" as const, data: { rows: [] } };
     const steps = (roles: typeof programmer | typeof outsider) => (
-      <Steps command="projects::issue::move" id="ark-1" field="phase" current={issue} steps={page} list="steps" from="from.title" held="roles" roles={roles} within="ark" />
+      <Steps command="projects::issue::move" id="ark-1" field="stage" current={issue} steps={page} list="steps" from="from.title" held="roles" roles={roles} within="ark" />
     );
     const { unmount } = renderScreen(memorySource(), () => steps(programmer));
     expect(screen.queryByRole("button")).toBeNull();
@@ -212,7 +212,7 @@ describe("a grid", () => {
   const page = {
     status: "live" as const,
     data: {
-      phases: [
+      stages: [
         { id: "p1", title: "Triage" },
         { id: "p2", title: "Done" },
       ],
@@ -236,7 +236,7 @@ describe("a grid", () => {
         to="to"
         cell="roles.title"
         over={page}
-        overList="phases"
+        overList="stages"
         create={{ name: "projects::step::create", fields: ["title"], submit: "Allow", given: { project: "ark" } }}
         update={{ name: "projects::step::update", fields: ["title"] }}
         remove={{ name: "projects::step::delete" }}
@@ -252,7 +252,7 @@ describe("a grid", () => {
   it("opens update for a full cell, with remove beside it, and nothing for what the person may not change", async () => {
     const source = memorySource();
     renderScreen(source, () => (
-      <Grid view={page} list="steps" from="from" to="to" cell="roles.title" over={page} overList="phases" create={{ name: "projects::step::create", allowed: false }} remove={{ name: "projects::step::delete" }} />
+      <Grid view={page} list="steps" from="from" to="to" cell="roles.title" over={page} overList="stages" create={{ name: "projects::step::create", allowed: false }} remove={{ name: "projects::step::delete" }} />
     ));
     expect(screen.queryByRole("button", { name: "Add Done to Triage" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Triage to Done: Member" }));
@@ -276,9 +276,9 @@ describe("cards", () => {
       data: {
         boards: [{ id: "ark-main", title: "Product" }],
         issues: [
-          { id: "i1", board: "ark-main", phase: "p1", "phase.title": "Triage", "phase.position": 1 },
-          { id: "i2", board: "ark-main", phase: "p2", "phase.title": "Done", "phase.position": 2 },
-          { id: "i3", board: "ark-main", phase: "p1", "phase.title": "Triage", "phase.position": 1 },
+          { id: "i1", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1 },
+          { id: "i2", board: "ark-main", stage: "p2", "stage.title": "Done", "stage.position": 2 },
+          { id: "i3", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1 },
         ],
       },
     };
@@ -289,7 +289,7 @@ describe("cards", () => {
         columns={{ title: "Title" }}
         link="/:project/boards/:board"
         keyed={["project"]}
-        tally={{ view: page, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }}
+        tally={{ view: page, list: "issues", by: "board", and: "stage", shown: "stage.title", order: "stage.position", noun: "issues" }}
         filters={[{ label: "High priority", query: { priority: "high" } }]}
       />
     ));
@@ -330,7 +330,7 @@ describe("a diagram", () => {
     const page = {
       status: "live" as const,
       data: {
-        phases: [
+        stages: [
           { id: "p1", title: "Triage" },
           { id: "p2", title: "Done" },
         ],
@@ -346,7 +346,7 @@ describe("a diagram", () => {
         to="to"
         cell="roles.title"
         over={page}
-        overList="phases"
+        overList="stages"
         create={{ name: "projects::step::create", fields: [], submit: "Allow" }}
         remove={{ name: "projects::step::delete" }}
       />
@@ -364,15 +364,15 @@ describe("a board", () => {
   const page = {
     status: "live" as const,
     data: {
-      phases: [
+      stages: [
         { id: "ark-reported", title: "Reported" },
         { id: "ark-triaged", title: "Triaged" },
         { id: "ark-closed", title: "Closed" },
       ],
       steps: [{ id: "s1", from: "ark-reported", to: "ark-triaged", roles: ["ark-member"] }],
       issues: [
-        { id: "ark-1", title: "Crash", phase: "ark-reported" },
-        { id: "ark-2", title: "Typo", phase: "ark-triaged" },
+        { id: "ark-1", title: "Crash", stage: "ark-reported" },
+        { id: "ark-2", title: "Typo", stage: "ark-triaged" },
       ],
     },
   };
@@ -384,9 +384,9 @@ describe("a board", () => {
       <Board
         view={page}
         list="issues"
-        by="phase"
+        by="stage"
         over={page}
-        overList="phases"
+        overList="stages"
         columns={{ title: "Title" }}
         move={{ command: "projects::issue::move", steps: page, list: "steps", held: "roles", roles, within: "ark" }}
       />
@@ -395,7 +395,7 @@ describe("a board", () => {
     expect(column("Reported").textContent).toContain("Crash");
     expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Move to Triaged"]);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Move to Triaged" })));
-    expect(source.runs).toEqual([{ command: "projects::issue::move", input: { id: "ark-1", phase: "ark-triaged" } }]);
+    expect(source.runs).toEqual([{ command: "projects::issue::move", input: { id: "ark-1", stage: "ark-triaged" } }]);
     expect(column("Triaged").textContent).toContain("Crash");
   });
 });
@@ -439,7 +439,7 @@ describe("a table put in order", () => {
     const source = memorySource({
       views: {
         "projects::workflow": {
-          phases: [
+          stages: [
             { id: "p1", title: "Triage", position: 1 },
             { id: "p2", title: "Ready", position: 2 },
             { id: "p3", title: "Done", position: 3 },
@@ -448,11 +448,11 @@ describe("a table put in order", () => {
       },
     });
     renderScreen(source, () => (
-      <Table view={useView("projects::workflow")} list="phases" columns={{ title: "Phase" }} reorder={{ command: "projects::phase::update", field: "position" }} />
+      <Table view={useView("projects::workflow")} list="stages" columns={{ title: "Stage" }} reorder={{ command: "projects::stage::update", field: "position" }} />
     ));
     const handle = screen.getByRole("button", { name: "Move Done" });
     await act(async () => fireEvent.keyDown(handle, { key: "ArrowUp", altKey: true }));
-    expect(source.runs).toEqual([{ command: "projects::phase::update", input: { id: "p3", position: 1.5 } }]);
+    expect(source.runs).toEqual([{ command: "projects::stage::update", input: { id: "p3", position: 1.5 } }]);
     await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Triage" }), { key: "ArrowUp", altKey: true }));
     expect(source.runs.length).toBe(1);
   });
@@ -461,7 +461,7 @@ describe("a table put in order", () => {
     const source = memorySource({
       views: {
         "projects::workflow": {
-          phases: [
+          stages: [
             { id: "p1", title: "Triage", position: 1 },
             { id: "p2", title: "Ready", position: 1000 },
             { id: "p3", title: "Done", position: 1000 },
@@ -471,7 +471,7 @@ describe("a table put in order", () => {
       },
     });
     renderScreen(source, () => (
-      <Table view={useView("projects::workflow")} list="phases" columns={{ title: "Phase" }} reorder={{ command: "projects::phase::update", field: "position" }} />
+      <Table view={useView("projects::workflow")} list="stages" columns={{ title: "Stage" }} reorder={{ command: "projects::stage::update", field: "position" }} />
     ));
     await act(async () => fireEvent.keyDown(screen.getByRole("button", { name: "Move Closed" }), { key: "ArrowUp", altKey: true }));
     expect(source.runs.map((run) => run.input)).toEqual([

@@ -306,24 +306,24 @@ TEST_CASE("a row's when ends its line, so nothing after it is taken for a column
 }
 
 TEST_CASE("a command's body can take an input, change each of some entities, and delete each of others") {
-    auto f = parse_ok("command phase::delete {\n"
-                      "\tinput into phase\n"
-                      "\teach issue where phase == id {\n\t\tphase = into\n\t}\n"
+    auto f = parse_ok("command stage::delete {\n"
+                      "\tinput into stage\n"
+                      "\teach issue where stage == id {\n\t\tstage = into\n\t}\n"
                       "\tdelete each step where from == id || to == id\n"
                       "}\n");
     const auto& body = std::get<command_declaration>(f.declarations[0].node).body;
     REQUIRE(body.size() == 3);
     const auto& input = std::get<input_statement>(body[0].node);
     CHECK(input.name == "into");
-    CHECK(input.type.text() == "phase");
+    CHECK(input.type.text() == "stage");
     const auto& each = std::get<each_statement>(body[1].node);
     CHECK(each.entity == "issue");
     CHECK(each.body.size() == 1);
     CHECK(std::get<delete_statement>(body[2].node).entity == "step");
 
-    auto out = parse_errors("command phase::delete {\n\teach issue {\n\t}\n}\n");
+    auto out = parse_errors("command stage::delete {\n\teach issue {\n\t}\n}\n");
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "expected where and what it picks, like each issue where phase == id { ... }, found '{'");
+    CHECK(out[0].message == "expected where and what it picks, like each issue where stage == id { ... }, found '{'");
 }
 
 TEST_CASE("a once is named, and holds its steps in order, each a body for what it goes through") {
@@ -716,18 +716,18 @@ TEST_CASE("a time counted from now goes anywhere a value does, in minutes too") 
 }
 
 TEST_CASE("a workflow says who works its stages, its steps, and how long a claim lasts") {
-    auto f = parse_ok("define workflow issue by phase {\n\tworked by worked_by\n\tsteps step\n\tlease 2 hours\n}\n");
+    auto f = parse_ok("define workflow issue by stage {\n\tworked by worked_by\n\tsteps step\n\tlease 2 hours\n}\n");
     const auto& w = std::get<define_workflow_declaration>(f.declarations[0].node);
     CHECK(w.entity == "issue");
-    CHECK(w.by == "phase");
+    CHECK(w.by == "stage");
     CHECK(w.worked_by == "worked_by");
     CHECK(w.steps == "step");
     CHECK(w.lease_minutes == 120);
-    CHECK(std::get<define_workflow_declaration>(parse_ok("define workflow issue by phase {\n\tsteps step\n}\n").declarations[0].node).lease_minutes == 10);
-    auto out = parse_errors("define workflow issue by phase {\n\tlease 3 days\n}\n");
+    CHECK(std::get<define_workflow_declaration>(parse_ok("define workflow issue by stage {\n\tsteps step\n}\n").declarations[0].node).lease_minutes == 10);
+    auto out = parse_errors("define workflow issue by stage {\n\tlease 3 days\n}\n");
     REQUIRE(!out.empty());
     CHECK(out[0].message == "a lease lasts minutes or hours, like lease 10 minutes");
-    out = parse_errors("define workflow issue by phase {\n\tstarts at backlog\n}\n");
+    out = parse_errors("define workflow issue by stage {\n\tstarts at backlog\n}\n");
     REQUIRE(!out.empty());
     CHECK(out[0].message == "expected worked by, steps or lease, one a line, found 'starts'");
 }

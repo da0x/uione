@@ -511,7 +511,7 @@ screen "Crew" /crews/:crew {
     CHECK(tsx.find(R"({ name: "may", type: "choices", choices: [["member::create", "Create member"], ["role::create", "Create role"]] })") != std::string::npos);
 }
 
-TEST_CASE("a workflow's steps are buttons along them, and a step's form picks its phases and roles") {
+TEST_CASE("a workflow's steps are buttons along them, and a step's form picks its stages and roles") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-workflow";
     fs::remove_all(dir);
@@ -524,30 +524,30 @@ define role owner "Owner" in project {
 	step::create
 	issue::move
 }
-entity phase {
+entity stage {
 	project  project  required  key
 	name     slug     required  key
 	title    text     required
 }
 entity step {
 	project  project  required  key
-	from     phase    required  key
-	to       phase    required  key
+	from     stage    required  key
+	to       stage    required  key
 	title    text
 	roles    list of role
 }
 entity issue {
 	project  project  required
-	phase    phase
+	stage    stage
 }
 command step::create
 command issue::move {
-	changes phase
-	require exists(step where from == was issue.phase && to == issue.phase && held(roles))  "not from there to there"
+	changes stage
+	require exists(step where from == was issue.stage && to == issue.stage && held(roles))  "not from there to there"
 }
 view project_page per project {
 	readers member
-	phases = each phase in project {
+	stages = each stage in project {
 		name  title
 	}
 	steps = each step in project {
@@ -559,7 +559,7 @@ view project_page per project {
 }
 view issue_page per issue {
 	readers member
-	phase = issue.phase
+	stage = issue.stage
 }
 screen "Issue" /:project/issues/:issue {
 	issue::move along project_page.steps
@@ -578,10 +578,10 @@ screen "Steps" /:project/steps {
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="phase" current={issuePage} steps={projectPage} list="steps" shown="title" from="from.title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
-    CHECK(tsx.find(R"({ name: "from", type: "pick", choices: listChoices(projectPage, "phases", "title") })") != std::string::npos);
+    CHECK(tsx.find(R"(<Steps command="work::issue::move" id={issueId} field="stage" current={issuePage} steps={projectPage} list="steps" shown="title" from="from.title" to="to.title" held="roles" roles={memberRoles} within={projectId} place="project" role="role" />)") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "from", type: "pick", choices: listChoices(projectPage, "stages", "title") })") != std::string::npos);
     CHECK(tsx.find(R"({ name: "roles", type: "choices", choices: listChoices(projectPage, "roles", "title") })") != std::string::npos);
-    // Copying an issue leaves out its phase's id, which means nothing pasted.
+    // Copying an issue leaves out its stage's id, which means nothing pasted.
     CHECK(tsx.find(R"(<Copy view={issuePage} fields={[]})") != std::string::npos);
 }
 
@@ -743,36 +743,36 @@ TEST_CASE("a row's button opens its command's form, started from the row, and th
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\n"
-                         "entity phase {\n\ttitle  text  required\n\tposition  number\n}\n"
-                         "command phase::update\n"
-                         "view phases {\n\teach phase {\n\t\ttitle  position\n\t}\n}\n"
-                         "screen \"Phases\" /phases {\n"
-                         "\ttable phases {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
-                         "\tform phase::update \"Save\" {\n\t\ttitle \"Called\"\n\t}\n"
+                         "entity stage {\n\ttitle  text  required\n\tposition  number\n}\n"
+                         "command stage::update\n"
+                         "view stages {\n\teach stage {\n\t\ttitle  position\n\t}\n}\n"
+                         "screen \"Stages\" /stages {\n"
+                         "\ttable stages {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
+                         "\tform stage::update \"Save\" {\n\t\ttitle \"Called\"\n\t}\n"
                          "}\n"
                          "}\n");
     auto screens_files = generate_at(dir.string());
     const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"(actions={[{ name: "tracker::phase::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]})") != std::string::npos);
+    CHECK(tsx.find(R"(actions={[{ name: "tracker::stage::update", label: "Rename", form: { fields: [{ name: "title", label: "Called" }], submit: "Save" } }]})") != std::string::npos);
     CHECK(tsx.find("<Form ") == std::string::npos);
 
     // The row holds what the form asks for, or it couldn't start from it.
     language::diagnostics out;
     std::vector<language::file> files;
     files.push_back(language::parse("main.one", "namespace tracker {\n"
-                                                "entity phase {\n\ttitle  text  required\n\tposition  number\n}\n"
-                                                "command phase::update\n"
-                                                "view phases {\n\teach phase {\n\t\ttitle\n\t}\n}\n"
-                                                "screen \"Phases\" /phases {\n"
-                                                "\ttable phases {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
-                                                "\tform phase::update {\n\t\ttitle  position\n\t}\n"
+                                                "entity stage {\n\ttitle  text  required\n\tposition  number\n}\n"
+                                                "command stage::update\n"
+                                                "view stages {\n\teach stage {\n\t\ttitle\n\t}\n}\n"
+                                                "screen \"Stages\" /stages {\n"
+                                                "\ttable stages {\n\t\ttitle\n\t\tupdate \"Rename\"\n\t}\n"
+                                                "\tform stage::update {\n\t\ttitle  position\n\t}\n"
                                                 "}\n"
                                                 "}\n", out));
     language::check(files, out);
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "form phase::update opens from each row of phases, so the list needs position; add it to the list's block");
+    CHECK(out[0].message == "form stage::update opens from each row of stages, so the list needs position; add it to the list's block");
     fs::remove_all(dir);
 }
 
@@ -890,18 +890,18 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     platform::write_file((dir / "main.one").string(),
                          "namespace work {\n"
                          "entity project {\n\ttitle  text\n}\n"
-                         "entity phase {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
-                         "entity step {\n\tproject  project  required  key\n\tfrom  phase  required  key\n\tto  phase  required  key\n}\n"
-                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tphase  phase\n}\n"
-                         "command issue::move {\n\tchanges phase\n}\n"
+                         "entity stage {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
+                         "entity step {\n\tproject  project  required  key\n\tfrom  stage  required  key\n\tto  stage  required  key\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tstage  stage\n}\n"
+                         "command issue::move {\n\tchanges stage\n}\n"
                          "view project_page per project {\n"
-                         "\tphases = each phase in project {\n\t\torder by position\n\t\ttitle\n\t}\n"
+                         "\tstages = each stage in project {\n\t\torder by position\n\t\ttitle\n\t}\n"
                          "\tsteps = each step in project {\n\t\tfrom  to\n\t}\n"
-                         "\tissues = each issue in project {\n\t\tnumber  title  phase\n\t}\n"
+                         "\tissues = each issue in project {\n\t\tnumber  title  stage\n\t}\n"
                          "}\n"
                          "screen \"Project\" /projects/:project {\n"
                          "\ttable project_page.issues {\n\t\tnumber  title\n\t}\n"
-                         "\tboard project_page.issues by phase over project_page.phases {\n\t\tmove issue::move along project_page.steps\n\t\ttitle\n\t\tnumber \"#\"\n\t}\n"
+                         "\tboard project_page.issues by stage over project_page.stages {\n\t\tmove issue::move along project_page.steps\n\t\ttitle\n\t\tnumber \"#\"\n\t}\n"
                          "}\n"
                          "}\n");
     auto screens_files = generate_at(dir.string());
@@ -909,7 +909,7 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
     CHECK(tsx.find(R"(<Switched id="work::project_page.issues" label="Show issues as" options={["Table", "Board"]} icons={["table", "board"]}>)") != std::string::npos);
-    CHECK(tsx.find(R"(<Board view={projectPage} list="issues" by="phase" over={projectPage} overList="phases" shown="title" columns={{ title: "Title", number: "#" }} move={{ command: "work::issue::move", steps: projectPage, list: "steps" }} />)") !=
+    CHECK(tsx.find(R"(<Board view={projectPage} list="issues" by="stage" over={projectPage} overList="stages" shown="title" columns={{ title: "Title", number: "#" }} move={{ command: "work::issue::move", steps: projectPage, list: "steps" }} />)") !=
           std::string::npos);
     CHECK(tsx.find("</Switched>") != std::string::npos);
     fs::remove_all(dir);
@@ -919,19 +919,19 @@ TEST_CASE("a board shows a list's rows as cards in columns, moved along steps, a
     std::vector<language::file> wrong;
     wrong.push_back(language::parse("main.one", "namespace work {\n"
                                                 "entity project {\n\ttitle  text\n}\n"
-                                                "entity phase {\n\tproject  project\n\ttitle  text\n}\n"
-                                                "entity issue {\n\tproject  project\n\ttitle  text\n\tphase  phase\n}\n"
+                                                "entity stage {\n\tproject  project\n\ttitle  text\n}\n"
+                                                "entity issue {\n\tproject  project\n\ttitle  text\n\tstage  stage\n}\n"
                                                 "view project_page per project {\n"
-                                                "\tphases = each phase in project {\n\t\ttitle\n\t}\n"
+                                                "\tstages = each stage in project {\n\t\ttitle\n\t}\n"
                                                 "\tissues = each issue in project {\n\t\ttitle  project\n\t}\n"
                                                 "}\n"
                                                 "screen \"Project\" /projects/:project {\n"
-                                                "\tboard project_page.issues by project over project_page.phases {\n\t\ttitle\n\t}\n"
+                                                "\tboard project_page.issues by project over project_page.stages {\n\t\ttitle\n\t}\n"
                                                 "}\n"
                                                 "}\n", out));
     language::check(wrong, out);
     REQUIRE(out.size() == 1);
-    CHECK(out[0].message == "issue.project is a card's column, so it points at a phase, what project_page.phases lists");
+    CHECK(out[0].message == "issue.project is a card's column, so it points at a stage, what project_page.stages lists");
 }
 
 TEST_CASE("a table's tabs can be a list's records, a command in its block is in its toolbar, and a heading sits beside the title") {
@@ -942,18 +942,18 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
     platform::write_file((dir / "main.one").string(),
                          "namespace work {\n"
                          "entity project {\n\ttitle  text\n}\n"
-                         "entity phase {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
-                         "entity issue {\n\tproject  project  required\n\ttitle  text\n\tphase  phase\n}\n"
+                         "entity stage {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
+                         "entity issue {\n\tproject  project  required\n\ttitle  text\n\tstage  stage\n}\n"
                          "command issue::create\ncommand project::update\n"
                          "view project_page per project {\n"
                          "\ttitle = project.title\n"
-                         "\tphases = each phase in project {\n\t\ttitle\n\t}\n"
-                         "\tissues = each issue in project {\n\t\ttitle  phase\n\t}\n"
+                         "\tstages = each stage in project {\n\t\ttitle\n\t}\n"
+                         "\tissues = each issue in project {\n\t\ttitle  stage\n\t}\n"
                          "}\n"
                          "screen \"Project\" /projects/:project {\n"
                          "\theading {\n\t\tproject::update \"Edit project\"\n\t\tform project::update \"Save\" {\n\t\t\ttitle\n\t\t}\n\t}\n"
-                         "\ttable project_page.issues by phase over project_page.phases {\n\t\tsearch title\n\t\ttitle\n\t\tissue::create \"New issue\"\n\t}\n"
-                         "\tboard project_page.issues by phase over project_page.phases {\n\t\ttitle\n\t}\n"
+                         "\ttable project_page.issues by stage over project_page.stages {\n\t\tsearch title\n\t\ttitle\n\t\tissue::create \"New issue\"\n\t}\n"
+                         "\tboard project_page.issues by stage over project_page.stages {\n\t\ttitle\n\t}\n"
                          "\tform issue::create \"Open issue\" {\n\t\ttitle\n\t}\n"
                          "}\n"
                          "}\n");
@@ -961,8 +961,8 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
     const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     const auto& tsx = screens->content;
-    CHECK(tsx.find(R"(choices={{ phase: Object.fromEntries(listChoices(projectPage, "phases", "title")) }})") != std::string::npos);
-    CHECK(tsx.find(R"( by="phase")") != std::string::npos);
+    CHECK(tsx.find(R"(choices={{ stage: Object.fromEntries(listChoices(projectPage, "stages", "title")) }})") != std::string::npos);
+    CHECK(tsx.find(R"( by="stage")") != std::string::npos);
     CHECK(tsx.find(R"(tools={<><Form command="work::issue::create" fields={["title"]} given={{ project: projectId }} submit="Open issue" button opener="New issue" authenticated /></>})") != std::string::npos);
     // The board beside it takes its search and its toolbar.
     CHECK(tsx.find(R"(search={["title"]} tools={<><Form command="work::issue::create")") != std::string::npos);
@@ -1021,16 +1021,16 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "namespace work at / {\n"
                          "entity project {\n\tslug  text  required  unique  key\n\tname  text\n\tsummary  markdown\n}\n"
                          "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
-                         "entity phase {\n\tboard  board  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
-                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\tphase  phase\n\tauthor  user = me\n\tpriority  enum { low  high }\n}\n"
+                         "entity stage {\n\tboard  board  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
+                         "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\tstage  stage\n\tauthor  user = me\n\tpriority  enum { low  high }\n}\n"
                          "command project::update\n"
                          "view project_page per project {\n\tname = project.name\n\tsummary = project.summary\n"
                          "\tboards = each board in project {\n\t\ttitle\n\t}\n"
-                         "\tissues = each issue in project {\n\t\tboard  phase  phase.title  phase.position\n\t}\n}\n"
+                         "\tissues = each issue in project {\n\t\tboard  stage  stage.title  stage.position\n\t}\n}\n"
                          "screen \"{project_page.name}\" /:project {\n"
                          "\theading {\n\t\tproject::update \"Edit project\" icon edit\n\t\tform project::update \"Save\" {\n\t\t\tname\n\t\t}\n\t}\n"
                          "\tsubtitle \"{project_page.summary}\"\n"
-                         "\tcards project_page.boards link /:project/boards/:board {\n\t\ttitle\n\t\ttally project_page.issues by board and phase\n"
+                         "\tcards project_page.boards link /:project/boards/:board {\n\t\ttitle\n\t\ttally project_page.issues by board and stage\n"
                          "\t\tfilter \"Opened by me\" author == me\n\t\tfilter \"High priority\" priority == priority::high  color red\n"
                          "\t\tfilter \"Changed this week\" updated_at > 7 days ago  color green\n\t}\n"
                          "}\n"
@@ -1044,7 +1044,7 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
     CHECK(tsx.find(R"(<Subtitle><Markdown view={projectPage} field="summary" plain /></Subtitle>)") != std::string::npos);
     CHECK(tsx.find(R"( button opener="Edit project" icon="edit" )") != std::string::npos);
     CHECK(tsx.find(R"(<Cards view={projectPage} list="boards" columns={{ title: "Title" }} link="/:project/boards/:board" keyed={["project"]} named={{ project: 1 }})") == std::string::npos);
-    CHECK(tsx.find(R"(tally={{ view: projectPage, list: "issues", by: "board", and: "phase", shown: "phase.title", order: "phase.position", noun: "issues" }})") != std::string::npos);
+    CHECK(tsx.find(R"(tally={{ view: projectPage, list: "issues", by: "board", and: "stage", shown: "stage.title", order: "stage.position", noun: "issues" }})") != std::string::npos);
     CHECK(tsx.find(R"(filters={[{ label: "Opened by me", query: { author: "me" } }, { label: "High priority", query: { priority: "high" }, hue: "red" }, )"
                    R"({ label: "Changed this week", query: { "updated_at>": "-7d" }, hue: "green" }]})") != std::string::npos);
     CHECK(tsx.find(R"(<Section title="Wiki" hue="violet">)") != std::string::npos);
@@ -1280,12 +1280,12 @@ TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go 
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "namespace work {\n"
-                         "entity phase {\n\ttitle  text\n}\n"
-                         "entity step {\n\tfrom  phase\n\tto  phase\n\ttitle  text\n}\n"
-                         "entity issue {\n\ttitle  text\n\tphase  phase\n}\n"
+                         "entity stage {\n\ttitle  text\n}\n"
+                         "entity step {\n\tfrom  stage\n\tto  stage\n\ttitle  text\n}\n"
+                         "entity issue {\n\ttitle  text\n\tstage  stage\n}\n"
                          "entity comment {\n\tissue  issue\n\tbody  text\n}\n"
-                         "command issue::move {\n\tchanges phase\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tphase = issue.phase\n"
+                         "command issue::move {\n\tchanges stage\n}\n"
+                         "view issue_page per issue {\n\ttitle = issue.title\n\tstage = issue.stage\n"
                          "\tsteps = each step {\n\t\tfrom  to  title\n\t}\n"
                          "\tcomments = each comment in issue {\n\t\tbody\n\t}\n}\n"
                          "screen \"{issue_page.title}\" /issues/:issue {\n\tissue::move along issue_page.steps\n\ttable issue_page.comments {\n\t\tbody\n\t}\n"

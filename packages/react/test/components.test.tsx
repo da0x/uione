@@ -124,7 +124,7 @@ describe("labels", () => {
 
 describe("what a change says", () => {
   it("says from what to what a command of its own moved something, unless what it did says it already", () => {
-    expect(changed("phase", "Reported", "Triaged", "projects::issue::move")).toBe("moved this from Reported to Triaged");
+    expect(changed("stage", "Reported", "Triaged", "projects::issue::move")).toBe("moved this from Reported to Triaged");
     expect(changed("status", "open", "closed", "tracker::issue::close")).toBe("closed this");
     expect(changed("status", "closed", "open", "tracker::issue::reopen")).toBe("reopened this");
   });

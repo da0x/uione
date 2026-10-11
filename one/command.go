@@ -548,7 +548,7 @@ func validID(id string) bool {
 }
 
 // Was is what a field of the command's entity held before the command changed it,
-// like the phase an issue is moving from: the stored value, or nil for something
+// like the stage an issue is moving from: the stored value, or nil for something
 // new.
 func (c *Ctx) Was(field string) any {
 	value := c.before[field]
@@ -560,11 +560,11 @@ func (c *Ctx) Was(field string) any {
 
 // Fail stops the command with a message for the person who ran it.
 // Input is what the command was sent besides its entity's fields, by its name, like
-// the phase a removed phase's issues move to; nil when it wasn't sent.
+// the stage a removed stage's issues move to; nil when it wasn't sent.
 func (c *Ctx) Input(name string) any { return c.given[name] }
 
 // EachIn changes, with the command, every entity of a kind whose field holds a
-// value, like each issue in a phase being removed: each is read in the command's
+// value, like each issue in a stage being removed: each is read in the command's
 // transaction, body changes it, and it's checked and saved with the command's own
 // change, both or neither, with its event and history.
 func EachIn[E any, P entityPointer[E]](c *Ctx, field string, value any, body func(*E) error) error {
@@ -589,7 +589,7 @@ func EachIn[E any, P entityPointer[E]](c *Ctx, field string, value any, body fun
 }
 
 // DeleteWhere deletes, with the command, every entity of a kind whose field holds a
-// value, like the steps to and from a phase being removed, in the command's
+// value, like the steps to and from a stage being removed, in the command's
 // transaction, both or neither, each with its event and history. Called again for
 // another field, it deletes each one once.
 func DeleteWhere[E any, P entityPointer[E]](c *Ctx, field string, value any) error {
@@ -649,14 +649,14 @@ func (c *Cmd[E, P]) Allow(p Permission) *Cmd[E, P] {
 // issue's title and description, so whoever may edit an issue can't also set its
 // status or who approved it by sending them. Without it, an update may change any
 // field but its keys. Another command, like move, takes only the fields it names,
-// like the phase an issue moves to, and without it takes none.
+// like the stage an issue moves to, and without it takes none.
 func (c *Cmd[E, P]) Fields(names ...string) *Cmd[E, P] {
 	c.fields = names
 	return c
 }
 
-// Inputs names what the command is sent besides its entity's fields, like the phase
-// a removed phase's issues move to. Its body reads each with Input; none is stored.
+// Inputs names what the command is sent besides its entity's fields, like the stage
+// a removed stage's issues move to. Its body reads each with Input; none is stored.
 func (c *Cmd[E, P]) Inputs(names ...string) *Cmd[E, P] {
 	c.inputs = names
 	return c
@@ -813,7 +813,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				if taken := s.uniqueKey(); taken != nil {
 					return invalid("%s is already taken", label(taken.name))
 				}
-				// A key made from another field, like a phase's from its title, names
+				// A key made from another field, like a stage's from its title, names
 				// a new one, so another already there isn't it made again.
 				if madeFrom != "" {
 					return invalid("%s is already taken", label(madeFrom))
@@ -877,7 +877,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		if action == "delete" {
 			// Its body says whether it may go, as a require does, before it goes, and
-			// what goes with it, like the issues of a phase moving to another. What it
+			// what goes with it, like the issues of a stage moving to another. What it
 			// dispatches to delete it again, like a link's other side, does nothing.
 			body.deleting, body.deleted = ref.Path, s
 			if do != nil {
@@ -905,7 +905,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			return tx.Delete(ref)
 		}
 		// An update takes what's sent; another command, like move, only the fields
-		// it says it changes, like the phase an issue moves to.
+		// it says it changes, like the stage an issue moves to.
 		if action == "update" || fields != nil {
 			input := map[string]any{}
 			for name, value := range c.input {

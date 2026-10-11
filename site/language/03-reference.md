@@ -434,9 +434,9 @@ entity loan {
   `none` is no value. A field that starts as `me` or `me.username` always does, so
   nobody can make something in another's name.
 - `name  text  required  key = slug(title)` makes a name from another field when
-  none is given: a phase titled In review is named `in_review`, so a form asks only
+  none is given: a stage titled In review is named `in_review`, so a form asks only
   for the title. The name is made once, so a rename changes only the title, and a
-  second phase whose title makes the same name is refused rather than taken for the
+  second stage whose title makes the same name is refused rather than taken for the
   first.
 - `entity invitation invites member { ... }` makes an invitation to become a
   member, by email. When someone opens the app signed in with that email, a member
@@ -548,9 +548,9 @@ command loan::checkin {
   deploy_account` adds fields it may change besides, like those a hand-written
   component sends. An update with neither may change any field but its keys.
   Another command, like a move, takes only the fields its `changes` and its forms
-  name: `changes phase` takes the phase an issue moves to.
-- `was issue.phase` is what a field held before the command changed it.
-- `exists(step where from == was issue.phase && to == issue.phase)` asks whether
+  name: `changes stage` takes the stage an issue moves to.
+- `was issue.stage` is what a field held before the command changed it.
+- `exists(step where from == was issue.stage && to == issue.stage)` asks whether
   there's one, in a `require`. Inside it, the entity's own fields are named
   plainly, and the command's entity by its name. `held(roles)` there asks whether
   the person holds one of a list of the project's [roles](#define-role), so who may take
@@ -558,33 +558,33 @@ command loan::checkin {
 
 ```one
 command issue::move {
-	changes phase
+	changes stage
 	require "your role doesn't move an issue from there to there" {
-		exists(step where from == was issue.phase && to == issue.phase && held(roles))
+		exists(step where from == was issue.stage && to == issue.stage && held(roles))
 	}
 }
 ```
-- `held(phase.worked_by)` asks the same of the roles listed on what the command's
+- `held(stage.worked_by)` asks the same of the roles listed on what the command's
   entity points at, read once in the command's own transaction. A list is `none`
   when it holds nothing, so taking an issue nobody else has is:
 
 ```one
 command issue::claim {
-	require held(phase.worked_by)  "this phase isn't worked by a role you hold"
+	require held(stage.worked_by)  "this stage isn't worked by a role you hold"
 	require assignees == none || assignees has me  "someone else has taken it"
 	add me to assignees
 }
 ```
 - `if workflow == workflow::kanban { ... }` does what's inside only when its
   condition holds, so a project can start from a preset it picks.
-- In a `dispatch phase::create`, `phase::triaged` is the project's phase named
+- In a `dispatch stage::create`, `stage::triaged` is the project's stage named
   triaged: one of what the command makes, or a role every project starts with,
   named by the project and its name. A list field is given its values whole: `roles = [role::maintainer,
   role::programmer]`, or a role's `may = [issue::create, issue::move]`.
   A long list goes on over lines until its `]`, and may end in a comma.
 - `dispatch board::create { project = id  title = name }` makes a board as
-  `board::create` makes one: its body runs too, like the phases of the preset a
-  board starts from, so a project made with a first board gets that board's phases
+  `board::create` makes one: its body runs too, like the stages of the preset a
+  board starts from, so a project made with a first board gets that board's stages
   with it. Every required field gets a value, unless it starts with one, and what's
   made gets an id of its own.
 - An update, a delete, or another command like a move, says which it acts on with
@@ -614,21 +614,21 @@ command project::delete {
 }
 ```
 - A once may give what was made before a key existed its key, like the board a
-  project's phases were in before projects had boards.
-- `input into phase` is something a command is sent besides its entity's fields,
-  like the phase a removed phase's issues move to. Its forms ask for it, picked as a
+  project's stages were in before projects had boards.
+- `input into stage` is something a command is sent besides its entity's fields,
+  like the stage a removed stage's issues move to. Its forms ask for it, picked as a
   field of its type would be, its body names it, and it's never stored.
-- `each issue where phase == id { ... }` runs what's inside for each entity it
+- `each issue where stage == id { ... }` runs what's inside for each entity it
   picks, by a field's value, or by any of several, like `from == id || to == id`.
   Each is changed by a dispatch of its own command, and kept in its history as
   changed.
 
 ```one
-command phase::delete {
-	input into phase
-	require into != id  "pick another phase for its issues"
-	each issue where phase == id {
-		dispatch issue::update { phase = into }
+command stage::delete {
+	input into stage
+	require into != id  "pick another stage for its issues"
+	each issue where stage == id {
+		dispatch issue::update { stage = into }
 	}
 	each step where from == id || to == id {
 		dispatch step::delete
@@ -901,7 +901,7 @@ A role a project's services may hold as well as its people: programs, like an AI
 agent or a script, that work beside them.
 
 ```one
-// Works the issues in the phases its role works: takes one, comments, moves it on.
+// Works the issues in the stages its role works: takes one, comments, moves it on.
 define role agent "Agent" in project for services {
 	issue::claim
 	issue::release
@@ -1186,7 +1186,7 @@ screen "Book" /books/:book {
   too.
 - What a page shows is in its path, after its own, so a link shows the same: a
   table's tab, like `/neotrac/boards/main/in_progress`, a table and board's switch,
-  `/board`, which phase a board shows on a phone, the same part as the tab, and a
+  `/board`, which stage a board shows on a phone, the same part as the tab, and a
   page of rows, `/page/2`, in any order, a default left out. Only what's typed to
   find something is a query: a table's search, `?search=old`, and a `find` box's,
   `?find=date`. A card's filters are queries too, as they pick rows.
@@ -1211,9 +1211,9 @@ screen "Book" /books/:book {
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.
-- `by phase over project_page.phases` makes the tabs a list's records instead, one
-  for each phase in its order, called by its title, with the rows holding which
-  phase they're in.
+- `by stage over project_page.stages` makes the tabs a list's records instead, one
+  for each stage in its order, called by its title, with the rows holding which
+  stage they're in.
 - `track milestone over board_page.milestones { due }` puts a list's records above
   the table as large cards in a row, in the list's order, an arrow from each to the
   next, like a project's milestones, sprints or versions as a timeline. Each card
@@ -1223,7 +1223,7 @@ screen "Book" /books/:book {
   table takes its track, and a board's own block can say `track` too.
 
 ```one
-table board_page.issues by phase over board_page.phases link /:project/:issue {
+table board_page.issues by stage over board_page.stages link /:project/:issue {
 	track milestone over board_page.milestones {
 		due
 	}
@@ -1244,11 +1244,11 @@ table board_page.issues by phase over board_page.phases link /:project/:issue {
   The when ends its line, or its block does.
 - A row's button for a command with a `form` on the screen opens that form, started
   from the row, and sends it for that row: `update "Rename"` with `form
-  phase::update "Save" { title }` renames the phase on the row. The form isn't drawn
+  stage::update "Save" { title }` renames the stage on the row. The form isn't drawn
   on its own, and the list holds what it asks for.
-- `grid project_page.steps by from and to over project_page.phases { roles.title }`
+- `grid project_page.steps by from and to over project_page.stages { roles.title }`
   shows what goes between two of a list's things: a row and a column for each
-  phase, in its order, and in each cell what the step from the row's phase to the
+  stage, in its order, and in each cell what the step from the row's stage to the
   column's holds, like the roles that may take it. Pressing an empty cell opens the
   form for `step::create` on the screen, with `from` and `to` filled in; pressing a
   full one opens the form for `step::update`, started from the step, with Remove
@@ -1256,7 +1256,7 @@ table board_page.issues by phase over board_page.phases link /:project/:issue {
   only for whoever may run it.
 
 ```one
-grid project_page.steps by from and to over project_page.phases {
+grid project_page.steps by from and to over project_page.stages {
 	roles.title
 }
 form step::create "Allow" {
@@ -1267,9 +1267,9 @@ form step::update "Save" {
 }
 ```
 
-- `board project_page.issues by phase over project_page.phases` shows a list's
-  rows as cards in columns, a column for each phase in its order, with how many
-  cards it has, and each issue in the column its `phase` names. Its block says what
+- `board project_page.issues by stage over project_page.stages` shows a list's
+  rows as cards in columns, a column for each stage in its order, with how many
+  cards it has, and each issue in the column its `stage` names. Its block says what
   a card shows, its title first, and `link` opens a card's page as a table's does.
 - `move issue::move along project_page.steps` in its block lets a card be dragged,
   or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one
@@ -1300,8 +1300,8 @@ form step::update "Save" {
 - `cards project_page.boards link /:project/boards/:board { ... }` shows a list's
   rows as large cards, three across a wide page and one on a narrow one, each with
   what its block shows, its title first. `tally project_page.issues by board and
-  phase` sums up what each card holds, counting the list's rows whose `board` is the
-  card by their `phase`, named and ordered by `phase.title` and `phase.position` when
+  stage` sums up what each card holds, counting the list's rows whose `board` is the
+  card by their `stage`, named and ordered by `stage.title` and `stage.position` when
   the list has them. `filter "Opened by me" author == me` is a link that opens the
   card filtered; three at most. A filter can keep the rows whose time is after or
   before one counted from when it's opened: `filter "Changed this week" updated_at
@@ -1322,17 +1322,17 @@ form step::update "Save" {
 
 ```one
 table project_page.issues link /:project/issues/:issue {
-	number "#"  title  phase.title "Phase"
+	number "#"  title  stage.title "Stage"
 }
-board project_page.issues by phase over project_page.phases link /:project/issues/:issue {
+board project_page.issues by stage over project_page.stages link /:project/issues/:issue {
 	move issue::move along project_page.steps
 	title
 	number "#"  priority  labels
 }
 ```
 
-- `diagram project_page.steps by from and to over project_page.phases { roles.title }`
-  draws the same as a grid: each phase a box in a row, in order, and each step an
+- `diagram project_page.steps by from and to over project_page.stages { roles.title }`
+  draws the same as a grid: each stage a box in a row, in order, and each step an
   arrow, forward above and back below, labelled with what its block shows. An arrow
   is pressed to change or remove it, and dragged from one box to another, a new
   one is added, by the same forms as a grid's.
@@ -1368,8 +1368,8 @@ board project_page.issues by phase over project_page.phases link /:project/issue
   to closed". Its rows need `field`, `before`, `after` and `created_at`, and name
   who made each change with `created_by.name`. With `action` too, a change a
   command of its own made says what that command did: "Ada closed this".
-  A change of a field that points at something, like an issue's phase, names what
-  it pointed at by its title or name: "Ada changed phase from Triage to Ready".
+  A change of a field that points at something, like an issue's stage, names what
+  it pointed at by its title or name: "Ada changed stage from Triage to Ready".
 - A timeline of many things' changes, like every issue's in a project, names what
   each change was to with the list's own columns, like `issue.number` and
   `issue.title`, and `link` opens it: `timeline project_page.timeline link
@@ -1583,7 +1583,7 @@ unlinked, and without a commit, not at all.
 ## once
 
 A change to what's stored that a deploy brings, like giving every project made
-before workflows the phases it now needs. It's done the first time the backend
+before workflows the stages it now needs. It's done the first time the backend
 starts with it, before anything else, and never again: that it's done is kept by
 its name, so a once is named for when it was written and what it does, and its
 name never changes. If it fails, the backend doesn't start, and the deploy says so.
@@ -1594,13 +1594,13 @@ once "2026-10-07 workflows" {
 		dispatch role::update { title = "Programmer" }
 	}
 	each project {
-		dispatch phase::create {
+		dispatch stage::create {
 			project = id  name = "triage"  title = "Triage"  position = 1
 		}
-		dispatch project::update { start = phase::triage }
+		dispatch project::update { start = stage::triage }
 	}
 	each issue {
-		dispatch issue::update { phase = phase::triage }
+		dispatch issue::update { stage = stage::triage }
 	}
 }
 ```
@@ -1611,7 +1611,7 @@ once "2026-10-07 workflows" {
   command's body does: `dispatch role::update { ... }` acts on the role picked,
   and decides with `if`. Each entity is changed in a step of its own, checked
   against its rules, with its history saying it was changed.
-- `phase::triage` is the project's phase named triage, from the project itself or
+- `stage::triage` is the project's stage named triage, from the project itself or
   from what's in it, like an issue. A once may name what's already stored, like
   `role::developer`, as well as what it makes.
 - It runs as the backend itself, so no role is needed.

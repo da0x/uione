@@ -7,7 +7,7 @@
 ## Context
 
 Programs, like an AI agent or a script, work on a project's issues beside its
-people: an issue moved into a phase they work waits for one of them to take it,
+people: an issue moved into a stage they work waits for one of them to take it,
 look into it, say what it found and move it on. They need to read what a member
 reads, run only what they're given, and sign in without a person's browser.
 [0010](0010-who-may-do-and-read-what.md) gives access to people only, signed in

@@ -1292,7 +1292,7 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 				row[name] = nil
 			}
 		}
-		// A change of a field that points at something, like an issue's phase, says what
+		// A change of a field that points at something, like an issue's stage, says what
 		// it pointed at before and after by its title or name, rather than its id.
 		if owner := a.reg.historyOf(each); owner != nil {
 			if f := owner.field(fmt.Sprint(doc.Data()["field"])); f != nil && f.refers != "" {

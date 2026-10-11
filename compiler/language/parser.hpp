@@ -770,15 +770,15 @@ namespace one::language {
             return role;
         }
 
-        // define workflow issue by phase { worked by worked_by  steps step  lease 10 minutes }
+        // define workflow issue by stage { worked by worked_by  steps step  lease 10 minutes }
         define_workflow_declaration parse_define_workflow() {
             define_workflow_declaration w;
             w.where = peek().where;
             w.entity = expect(token_kind::identifier, "what moves by it, like issue").text;
-            if (!at_word("by")) fail_expecting("'by' and the field it moves along, like define workflow issue by phase");
+            if (!at_word("by")) fail_expecting("'by' and the field it moves along, like define workflow issue by stage");
             advance();
             w.by_where = peek().where;
-            w.by = expect(token_kind::identifier, "the field it moves along, like phase").text;
+            w.by = expect(token_kind::identifier, "the field it moves along, like stage").text;
             expect(token_kind::left_brace, "'{' and its rules, one a line: worked by, steps and lease");
             while (in_block()) {
                 if (at_word("worked")) {
@@ -1087,8 +1087,8 @@ namespace one::language {
                     if (!at_word("over")) return;
                     advance();
                     table.by_over = parse_qualified_name("the view whose list its tabs are, like project_page");
-                    expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
-                    table.by_over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                    expect(token_kind::dot, "'.' and the view's list, like project_page.stages");
+                    table.by_over_list = expect(token_kind::identifier, "the view's list, like stages").text;
                 };
                 if (at_word("by")) {
                     advance();
@@ -1237,15 +1237,15 @@ namespace one::language {
                 board.view = parse_qualified_name("the view whose list it shows, like project_page");
                 expect(token_kind::dot, "'.' and the view's list, like project_page.issues");
                 board.list = expect(token_kind::identifier, "the view's list, like issues").text;
-                if (!at_word("by")) fail_expecting("by and the field naming each card's column, like by phase");
+                if (!at_word("by")) fail_expecting("by and the field naming each card's column, like by stage");
                 advance();
                 board.by_where = peek().where;
-                board.by = expect(token_kind::identifier, "the field naming each card's column, like phase").text;
-                if (!at_word("over")) fail_expecting("over and the list of its columns, like over project_page.phases");
+                board.by = expect(token_kind::identifier, "the field naming each card's column, like stage").text;
+                if (!at_word("over")) fail_expecting("over and the list of its columns, like over project_page.stages");
                 advance();
                 board.over = parse_qualified_name("the view whose list its columns are, like project_page");
-                expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
-                board.over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                expect(token_kind::dot, "'.' and the view's list, like project_page.stages");
+                board.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
                 if (at_word("link")) {
                     advance();
                     board.link_where = peek().where;
@@ -1323,7 +1323,7 @@ namespace one::language {
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
-                        // tally project_page.issues by board and phase
+                        // tally project_page.issues by board and stage
                         if (at_word("tally") && peek(1).kind == token_kind::identifier) {
                             advance();
                             cards.tally_where = peek().where;
@@ -1333,9 +1333,9 @@ namespace one::language {
                             if (!at_word("by")) fail_expecting("by and the field naming each one's card, like by board");
                             advance();
                             cards.tally_by = expect(token_kind::identifier, "the field naming each one's card, like board").text;
-                            if (!at_word("and")) fail_expecting("and the field they're counted by, like and phase");
+                            if (!at_word("and")) fail_expecting("and the field they're counted by, like and stage");
                             advance();
-                            cards.tally_and = expect(token_kind::identifier, "the field they're counted by, like phase").text;
+                            cards.tally_and = expect(token_kind::identifier, "the field they're counted by, like stage").text;
                             end_line();
                             continue;
                         }
@@ -1385,11 +1385,11 @@ namespace one::language {
                 advance();
                 grid.to_where = peek().where;
                 grid.to = expect(token_kind::identifier, "the field naming each one's column, like to").text;
-                if (!at_word("over")) fail_expecting("over and the list of what its rows and columns are, like over project_page.phases");
+                if (!at_word("over")) fail_expecting("over and the list of what its rows and columns are, like over project_page.stages");
                 advance();
                 grid.over = parse_qualified_name("the view whose list its rows and columns are, like project_page");
-                expect(token_kind::dot, "'.' and the view's list, like project_page.phases");
-                grid.over_list = expect(token_kind::identifier, "the view's list, like phases").text;
+                expect(token_kind::dot, "'.' and the view's list, like project_page.stages");
+                grid.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
@@ -1718,7 +1718,7 @@ namespace one::language {
                         while (!at_line_end()) {
                             field_value value;
                             value.where = peek().where;
-                            value.name = expect(token_kind::identifier, "a field of what it acts on, like phase").text;
+                            value.name = expect(token_kind::identifier, "a field of what it acts on, like stage").text;
                             expect(token_kind::assign, "'='");
                             value.value = parse_postfix();
                             s.values.push_back(std::move(value));
@@ -1788,7 +1788,7 @@ namespace one::language {
                 input_statement s;
                 s.name_where = peek().where;
                 s.name = advance().text;
-                s.type = parse_qualified_name("what it is, like phase or text");
+                s.type = parse_qualified_name("what it is, like stage or text");
                 end_line();
                 return {where, std::move(s)};
             }
@@ -1803,7 +1803,7 @@ namespace one::language {
                 }
                 s.entity_where = peek().where;
                 s.entity = advance().text;
-                if (!at_word("where")) fail_expecting("where and what it picks, like each issue where phase == id { ... }");
+                if (!at_word("where")) fail_expecting("where and what it picks, like each issue where stage == id { ... }");
                 advance();
                 s.where = parse_when();
                 s.body = parse_statement_block();
@@ -1968,7 +1968,7 @@ namespace one::language {
         }
 
         expression_ptr parse_unary() {
-            // was issue.phase: what a field held before the command, kept as a call.
+            // was issue.stage: what a field held before the command, kept as a call.
             if (at_word("was") && peek(1).kind == token_kind::identifier) {
                 const token& was = advance();
                 auto callee = std::make_unique<expression>();

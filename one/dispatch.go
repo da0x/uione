@@ -18,7 +18,7 @@ import (
 // sent besides its entity's fields, which its body reads with Input.
 
 // DispatchCreate makes entity as its create command does, like a board with the
-// phases of the preset it starts from.
+// stages of the preset it starts from.
 func DispatchCreate[E any, P entityPointer[E]](c *Ctx, entity *E, given map[string]any, body func(*Ctx, *E) error) error {
 	s, err := dispatchedSchema[E](c)
 	if err != nil {

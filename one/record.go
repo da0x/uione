@@ -86,7 +86,7 @@ type field struct {
 	after    string
 	choices  []string
 	initial  string // the value a new entity starts with; "me" and "now" are special
-	from     string // the field a new entity's value is made from when it's given none, like a phase's name from its title
+	from     string // the field a new entity's value is made from when it's given none, like a stage's name from its title
 	refers   string // the entity this field points at, like library::book
 	mentions string // for a list of people: the field whose text names them, like a comment's body, with @username
 	history  bool   // what it points at keeps this entity's changes in its own history, as an issue does its comments'
@@ -341,7 +341,7 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 // start fills in what a new entity starts with: "me" is the person creating it,
 // "now" is the time, and anything else is a literal value, like a first choice.
 //
-// It returns the field a key was made from, like a phase's title, when one was: an
+// It returns the field a key was made from, like a stage's title, when one was: an
 // entity whose key was made that way, and is taken, isn't the same one made again.
 func (s *schema) start(v reflect.Value, me, username string, now time.Time) (madeFrom string) {
 	for _, f := range s.fields {

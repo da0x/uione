@@ -807,7 +807,7 @@ namespace one::generators {
             return false;
         }
 
-        // each issue where phase == id, or delete each step where from == id || to ==
+        // each issue where stage == id, or delete each step where from == id || to ==
         // id: each field of what's picked, and the Go for the value it's to hold.
         std::optional<std::vector<std::pair<std::string, std::string>>> picks(const language::entity_declaration& e, const language::expression& where,
                                                                               const std::string& me, const language::entity_declaration& picked) {
@@ -922,7 +922,7 @@ namespace one::generators {
             out.close(")");
         }
 
-        // One of a project's own by its name, like phase::triage or role::developer,
+        // One of a project's own by its name, like stage::triage or role::developer,
         // given to a field of an entity in that project: its id, made of the project,
         // the entity's own or the one it's in, and the name. A command a role allows,
         // like issue::create, is its name.
@@ -1050,7 +1050,7 @@ namespace one::generators {
                     unsupported(path_, s.where, "a command that changes anything but its own fields and those of what it points at");
                     return;
                 }
-                // start = phase::to_do, on a project: its own phase of that name. A
+                // start = stage::to_do, on a project: its own stage of that name. A
                 // list is given whole: may = [issue::create, comment::create].
                 const language::field* f = target->second;
                 auto one_of = [&](const language::expression& item) -> std::optional<std::string> {
@@ -1095,7 +1095,7 @@ namespace one::generators {
                     const language::field* f = field(*target, v.name);
                     if (!f) continue;
                     // One of a project's own by its name, role::maintainer or
-                    // phase::triaged, is its id: the project the made entity points at,
+                    // stage::triaged, is its id: the project the made entity points at,
                     // and the name. A list of them, or of commands a role allows, is a
                     // list of those.
                     std::optional<std::string> value;
@@ -1162,7 +1162,7 @@ namespace one::generators {
                     out.close("}");
                 }
             } else if (auto* i = std::get_if<language::if_statement>(&s.node)) {
-                // if workflow == workflow::kanban { create phase ... }: what's done when.
+                // if workflow == workflow::kanban { create stage ... }: what's done when.
                 auto condition = expression(e, *i->condition, me, nullptr);
                 if (!condition) return;
                 out.open("if " + *condition + " {");
@@ -1174,7 +1174,7 @@ namespace one::generators {
                 }
                 out.close("}");
             } else if (auto* each = std::get_if<language::each_statement>(&s.node)) {
-                // each issue where phase == id { phase = into }: each one changed in the
+                // each issue where stage == id { stage = into }: each one changed in the
                 // command's transaction.
                 const language::entity_declaration* picked = pkg_ ? entity(*pkg_, each->entity) : nullptr;
                 auto pick = picked ? picks(e, *each->where, me, *picked) : std::nullopt;
@@ -1409,7 +1409,7 @@ namespace one::generators {
 
         // An expression inside a command's body, in Go. `beside` is the field it's
         // compared with or assigned to, so a choice's name becomes its constant.
-        // exists(step where from == was issue.phase && to == issue.phase && held(roles)):
+        // exists(step where from == was issue.stage && to == issue.stage && held(roles)):
         // a query of the step's fields, each equal to a value of the command's, and the
         // roles it lets through, read before the require that asks.
         bool exists_before(stream& out, const language::entity_declaration& e, const language::expression& x, const std::string& me) {
@@ -1517,7 +1517,7 @@ namespace one::generators {
             if (auto found = existing_.find(&x); found != existing_.end()) return found->second;
             if (auto* call = std::get_if<language::call_expression>(&x.node)) {
                 auto* callee = std::get_if<language::name_expression>(&call->callee->node);
-                // was issue.phase, or was phase: the field as it was stored.
+                // was issue.stage, or was stage: the field as it was stored.
                 if (callee && callee->name.text() == "was") {
                     const auto& of = *call->arguments[0];
                     std::string name = web_detail::text_of(of);
@@ -1525,7 +1525,7 @@ namespace one::generators {
                     if (field(e, name)) return "c.Was(" + api_detail::go_string(name) + ")";
                 }
             }
-            // issue.phase: the command's own entity's field, named by the entity.
+            // issue.stage: the command's own entity's field, named by the entity.
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);
                 if (object && object->name.text() == e.name && field(e, m->member)) return me + "." + api_detail::go_name(m->member);

@@ -220,7 +220,7 @@ export interface TableReorder {
   onMove: (from: number, to: number) => void;
 }
 
-// Cards in columns, like a project's issues in its phases, a column for each in
+// Cards in columns, like a project's issues in its stages, a column for each in
 // order. A card is moved to a column it may go to, by dragging it or with Alt+← and
 // Alt+→; while one is dragged, the columns it can't go to are dimmed.
 export interface BoardProps {
@@ -250,7 +250,7 @@ export interface Card {
   title: ReactNode;
   link?: LinkProps;
   details: ReactNode[];
-  tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by phase
+  tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by stage
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
 }
@@ -296,7 +296,7 @@ export interface CrumbsProps {
 }
 
 // Things as boxes in a row, in order, and what goes between them as arrows, like a
-// workflow's phases and the moves between them: forward above, back below. An
+// workflow's stages and the moves between them: forward above, back below. An
 // arrow is pressed to change it, and one is drawn from a box to another to add it.
 export interface DiagramProps {
   status: ViewStatus;
@@ -322,7 +322,7 @@ export interface SwitchProps {
 }
 
 // What goes between two of the same things, like the moves between a project's
-// phases: a row and a column for each, and a cell for each pair, the row's first.
+// stages: a row and a column for each, and a cell for each pair, the row's first.
 export interface GridProps {
   status: ViewStatus;
   corner: string; // what the rows and columns are, like "From, to"

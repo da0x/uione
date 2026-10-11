@@ -157,7 +157,7 @@ namespace one::language {
         location entity_where;
         std::vector<field_value> values;
         // board::create { ... }: made as that command makes it, its body run too,
-        // like a board's phases made from the preset it starts from.
+        // like a board's stages made from the preset it starts from.
         std::optional<qualified_name> command;
         std::size_t head_length = 0;  // create board, or board::create: what dispatch replaces
     };
@@ -182,8 +182,8 @@ namespace one::language {
         std::vector<statement> else_body;
     };
 
-    // input into phase: a value a command is sent besides its entity's fields, like
-    // the phase a removed phase's issues move to. It's asked for by its forms, named
+    // input into stage: a value a command is sent besides its entity's fields, like
+    // the stage a removed stage's issues move to. It's asked for by its forms, named
     // in its body, and never stored.
     struct input_statement {
         std::string name;
@@ -191,7 +191,7 @@ namespace one::language {
         qualified_name type;
     };
 
-    // each issue where phase == id { phase = into }: other entities changed with the
+    // each issue where stage == id { stage = into }: other entities changed with the
     // command, in the same step. The where picks them by a field's value, worked out
     // where the command runs; the body names the picked one's fields plainly.
     struct each_statement {
@@ -441,14 +441,14 @@ namespace one::language {
         std::vector<qualified_name> permissions;
     };
 
-    // define workflow issue by phase { worked by worked_by  steps step }: the rules an
+    // define workflow issue by stage { worked by worked_by  steps step }: the rules an
     // entity moves by. Its stages are the records its field points at, each listing the
     // roles that work it; its steps say which roles move it from one to another. A
     // worker claims one for a while, its lease, and moves it on.
     struct define_workflow_declaration {
         std::string entity;  // issue
         location where;
-        std::string by;  // phase: the field it moves along
+        std::string by;  // stage: the field it moves along
         location by_where;
         std::string worked_by;  // worked_by: the stage's field listing the roles that work it
         location worked_by_where;
@@ -528,7 +528,7 @@ namespace one::language {
         location link_where;
         std::optional<std::string> by;    // table project_page.issues by status: a tab for each of its choices
         location by_where;
-        // by phase over project_page.phases: a tab for each of a list's records, in its order.
+        // by stage over project_page.stages: a tab for each of a list's records, in its order.
         std::optional<qualified_name> by_over;
         std::string by_over_list;
         std::vector<std::string> search;  // search title labels: a box that finds rows by these
@@ -554,7 +554,7 @@ namespace one::language {
         std::optional<track_setting> track;
     };
 
-    // grid project_page.steps by from and to over project_page.phases { roles.title }:
+    // grid project_page.steps by from and to over project_page.stages { roles.title }:
     // what goes between two of a list's things, a row and a column for each, and in a
     // cell what it holds, like the roles that may take a move.
     struct grid_item {
@@ -602,14 +602,14 @@ namespace one::language {
         location icon_where;
     };
 
-    // board project_page.issues by phase over project_page.phases { ... }: a list's
+    // board project_page.issues by stage over project_page.stages { ... }: a list's
     // rows as cards in columns, a column for each of the over list's things, in its
     // order; with move issue::move along project_page.steps, a card is dragged to
     // another column along a step the person's roles may take.
     struct board_item {
         qualified_name view;
         std::optional<std::string> list;
-        std::string by;  // the field naming a card's column, like phase
+        std::string by;  // the field naming a card's column, like stage
         location by_where;
         qualified_name over;
         std::string over_list;
@@ -625,7 +625,7 @@ namespace one::language {
 
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as
     // large cards, each with what its block shows, its title first; a tally of what
-    // it holds, like its issues by phase; and filters, links that open it filtered.
+    // it holds, like its issues by stage; and filters, links that open it filtered.
     struct cards_filter {
         std::string label;
         location where;
@@ -640,7 +640,7 @@ namespace one::language {
         std::optional<std::string> link;
         location link_where;
         std::vector<table_column> columns;
-        // tally project_page.issues by board and phase
+        // tally project_page.issues by board and stage
         std::optional<qualified_name> tally;
         std::string tally_list, tally_by, tally_and;
         location tally_where;
@@ -768,7 +768,7 @@ namespace one::language {
         std::string name;
     };
 
-    // each project { start = phase::triage }: a command's body done to every stored
+    // each project { start = stage::triage }: a command's body done to every stored
     // entity of a kind, or to those its where names, like each role where name ==
     // "developer".
     struct once_step {

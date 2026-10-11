@@ -1024,7 +1024,7 @@ namespace one::generators {
         }
 
         // Whether a command is a button on each row of a table on the screen, like
-        // phase::update "Rename": its form then opens from the row rather than being
+        // stage::update "Rename": its form then opens from the row rather than being
         // drawn on its own.
         bool on_rows(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) const {
             for (const auto& item : items) {
@@ -1411,7 +1411,7 @@ namespace one::generators {
                     for (const auto& value : view->values) {
                         if ((value.name ? *value.name : web_detail::text_of(*value.value)) == field) current = view_variable(parts, web_detail::join(ns, name));
                     }
-                    // What it's called where it is, like phase_title = issue.phase.title.
+                    // What it's called where it is, like stage_title = issue.stage.title.
                     for (const auto& value : view->values) {
                         if (value.name && web_detail::text_of(*value.value) == entity->name + "." + field + ".title") here = *value.name;
                     }
@@ -1478,7 +1478,7 @@ namespace one::generators {
             return props;
         }
 
-        // board project_page.issues by phase over project_page.phases: the list's rows
+        // board project_page.issues by stage over project_page.stages: the list's rows
         // as cards in the over list's columns, showing what its block names, and with
         // a move, dragged along the steps the person's roles may take.
         // Beside a table of the same list, it takes the table's toolbar and search when it
@@ -1756,7 +1756,7 @@ namespace one::generators {
                         if (f->type && f->type->text() == "markdown") kind = "markdown";
                         // A person, or another entity, is held by its id, which means
                         // nothing pasted; its name or title is a value of its own, like
-                        // implementer or phase_title.
+                        // implementer or stage_title.
                         if (f->type && f->type->text() == "user") kind = "people";
                         if (f->type && entities_.count(view_ns) && entities_[view_ns].count(f->type->text())) kind = "people";
                         // A choice as it's shown, like In progress.
@@ -1893,7 +1893,7 @@ namespace one::generators {
             return tools.empty() ? "" : " tools={<>" + tools + "</>}";
         }
 
-        // grid project_page.steps by from and to over project_page.phases: a cell for
+        // grid project_page.steps by from and to over project_page.stages: a cell for
         // each pair, opening the entity's create where there's nothing, and its update
         // and delete where there's something, each as its form on the screen asks.
         void grid(stream& out, screen_parts& parts, const std::string& ns, const language::grid_item& grid, const std::vector<language::screen_item>& screen) {
@@ -2037,7 +2037,7 @@ namespace one::generators {
                 }
                 line += named_by(ns, target);
             }
-            // Tabs by a list's records, like phases: each one's id and title, in order.
+            // Tabs by a list's records, like stages: each one's id and title, in order.
             if (table.by && table.by_over) {
                 std::string tabs_shown = "title";
                 auto columns_over = listed_columns(ns, table.by_over->text(), table.by_over_list);
@@ -2207,7 +2207,7 @@ namespace one::generators {
                                 choices = ", choices: [" + options + "]";
                             }
                         }
-                        // Another entity, like a person's role or a step's phases: one
+                        // Another entity, like a person's role or a step's stages: one
                         // of those a view on the screen lists, or several for a list.
                         if (field.name == f.name && field.type && choices.empty()) {
                             if (auto list = listed_on_screen(parts, ns, field.type->text(), entity->name)) {
@@ -2229,8 +2229,8 @@ namespace one::generators {
                         }
                     }
                 }
-                // What the command is sent besides its entity's fields, like the phase
-                // a removed phase's issues move to: picked like a field of its type.
+                // What the command is sent besides its entity's fields, like the stage
+                // a removed stage's issues move to: picked like a field of its type.
                 if (auto c = command_nodes_.find(full_command(ns, form.commands.front())); c != command_nodes_.end()) {
                     for (const auto& st : c->second->body) {
                         auto* input = std::get_if<language::input_statement>(&st.node);

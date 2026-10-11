@@ -24,7 +24,7 @@ func (ev event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, e
 
 // publish rebuilds every view that reads what changed, in this process: all of a
 // command's changes together, so a page that several of them touch, like a project's
-// when it's made with its board, phases and steps, is rebuilt once rather than once
+// when it's made with its board, stages and steps, is rebuilt once rather than once
 // for each, and different pages are rebuilt at the same time. A rebuild's version
 // is when it read, not which change caused it, so one rebuild after all of them
 // holds what each would have.

@@ -144,7 +144,7 @@ func TestMistakesInDeclaringAModuleStopItStarting(t *testing.T) {
 }
 
 // A command's changes rebuild each page they touch once, however many touch it: a
-// project made with its board, phases and steps rebuilds its page once, not once
+// project made with its board, stages and steps rebuilds its page once, not once
 // for each of them.
 func TestACommandsChangesRebuildEachPageOnce(t *testing.T) {
 	if os.Getenv("FIRESTORE_EMULATOR_HOST") == "" {

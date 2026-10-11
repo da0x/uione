@@ -372,7 +372,7 @@ namespace one::language {
             }
         };
 
-        // define workflow issue by phase { worked by worked_by  steps step }, said in
+        // define workflow issue by stage { worked by worked_by  steps step }, said in
         // full, as a project that wrote it out would have: the lease on the entity,
         //
         //     held_by     user
@@ -382,12 +382,12 @@ namespace one::language {
         // step, and a view for each role of what it works, read by the project's people:
         //
         //     command issue::claim {
-        //         require held(phase.worked_by)  "this phase isn't worked by a role you hold"
+        //         require held(stage.worked_by)  "this stage isn't worked by a role you hold"
         //         require held_by == none || held_by == me || held_until < now  "someone else holds it"
         //         held_by = me
         //         held_until = 10 minutes from now
         //     }
-        //     view issue_work per role { readers member  items = each issue where phase.worked_by has role.id { … } }
+        //     view issue_work per role { readers member  items = each issue where stage.worked_by has role.id { … } }
         struct workflower {
             diagnostics& out;
             struct found {

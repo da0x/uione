@@ -10,10 +10,10 @@ import (
 
 // Exists says whether the query finds an entity that keep, when given, also
 // accepts, read in the command's transaction: whether there's a step from the
-// phase an issue was in to the one it's moving to that the person's role may take,
+// stage an issue was in to the one it's moving to that the person's role may take,
 // as in
 //
-//	one.Exists(c, one.Where[Step]("from", c.Was("phase")).And("to", i.Phase), func(s *Step) (bool, error) {
+//	one.Exists(c, one.Where[Step]("from", c.Was("stage")).And("to", i.Stage), func(s *Step) (bool, error) {
 //		return c.Held(s.Roles)
 //	})
 func Exists[E any, P entityPointer[E]](c *Ctx, q Query, keep func(*E) (bool, error)) (bool, error) {

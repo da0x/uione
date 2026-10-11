@@ -497,7 +497,7 @@ describe("on a phone", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows a board's phases a page at a time, and moves a card with a picker", () => {
+  it("shows a board's stages a page at a time, and moves a card with a picker", () => {
     phone();
     const Board = radix.Board;
     const onMove = vi.fn();
@@ -511,10 +511,10 @@ describe("on a phone", () => {
         ]}
       />,
     );
-    const phases = screen.getByRole("tablist", { name: "Phases" });
-    expect(within(phases).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["To Do1", "Doing0"]);
-    fireEvent.click(within(phases).getByRole("tab", { name: "Doing 0" }));
-    expect(within(phases).getByRole("tab", { name: "Doing 0" }).getAttribute("aria-selected")).toBe("true");
+    const stages = screen.getByRole("tablist", { name: "Stages" });
+    expect(within(stages).getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["To Do1", "Doing0"]);
+    fireEvent.click(within(stages).getByRole("tab", { name: "Doing 0" }));
+    expect(within(stages).getByRole("tab", { name: "Doing 0" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.change(screen.getByLabelText("Move Copy an issue whole"), { target: { value: "doing" } });
     expect(onMove).toHaveBeenCalledWith("a", "doing");
     vi.unstubAllGlobals();

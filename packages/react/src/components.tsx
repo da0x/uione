@@ -350,7 +350,7 @@ export function shownState(name: string): boolean {
 }
 
 // What several names share at their start, up to the last dash in it, like a
-// board's phases' project and board: a-main- of a-main-to_do and a-main-done.
+// board's stages' project and board: a-main- of a-main-to_do and a-main-done.
 function sharedStart(names: string[]): string {
   if (names.length < 2) return "";
   let start = names[0] ?? "";
@@ -676,7 +676,7 @@ export function Command({
   );
 }
 
-// A button for each step from where something is now, like an issue's phase, that
+// A button for each step from where something is now, like an issue's stage, that
 // one of the person's roles may take: "Start work" or "Move to In review", each
 // moving it to the step's to. Steps are rows holding from and to, and the roles that
 // may take them; the person's roles come from the view of their roles, here.
@@ -699,14 +699,14 @@ export function Steps({
 }: {
   command: string;
   id?: string;
-  field: string; // what the command changes, like phase
+  field: string; // what the command changes, like stage
   current?: ViewState; // the view holding where it is now
   steps: ViewState;
   list: string;
   shown?: string; // a step's own title, like Start work
   to?: string; // the title of where it goes, like to.title
   from?: string; // the title of where it starts, like from.title, to say where nothing leads on from
-  here?: string; // the same, held by the current view, like phase_title, for where no step starts
+  here?: string; // the same, held by the current view, like stage_title, for where no step starts
   held?: string; // the step's list of roles that may take it
   roles?: ViewState; // the view of the person's roles
   within?: string; // the project they're held in
@@ -871,8 +871,8 @@ function useFilter() {
   return { matches, filtered };
 }
 
-// What a search box says it finds by, in words: Search title, labels, phase and
-// priority. A field read through another, like phase.title, is called by that other.
+// What a search box says it finds by, in words: Search title, labels, stage and
+// priority. A field read through another, like stage.title, is called by that other.
 function searchLabel(search: string[], columns: Record<string, string>): string {
   const words = search.map((field) => (columns[field] ?? label(field.includes(".") ? field.slice(0, field.lastIndexOf(".")) : field)).toLowerCase());
   return `Search ${words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words.at(-1)}` : words.join("")}`;
@@ -988,7 +988,7 @@ export function Table({
   sort?: string; // the field rows are sorted by, with a - for largest or latest first, like -number
   page?: number; // how many rows a page has
   // Rows put in order by dragging, which runs the command with a number for the field
-  // between its new neighbors', like a phase's position; the list is ordered by it.
+  // between its new neighbors', like a stage's position; the list is ordered by it.
   reorder?: { command: string; field: string; allowed?: boolean };
   tools?: ReactNode; // buttons beside its search, like New issue
   hideEmpty?: boolean; // not there at all while the list has no rows, like a person's reports
@@ -1018,7 +1018,7 @@ export function Table({
   // With tabs, the first choice is shown first, like Open before Closed.
   const options = by ? Object.keys(choices[by] ?? {}) : [];
   // A tab is named in the address by what sets it apart from the others, so a tab of
-  // records, like a board's phases, is in_progress rather than its whole id.
+  // records, like a board's stages, is in_progress rather than its whole id.
   const common = sharedStart(options);
   const [tab, setTab] = usePathPart(options.map((option) => option.slice(common.length)));
   const picked = options.find((option) => option.slice(common.length) === tab);
@@ -1057,7 +1057,7 @@ export function Table({
     const after = rest[to]?.[arranged.field];
     const number = (value: unknown) => (typeof value === "number" ? value : undefined);
     const [low, high] = [number(before), number(after)];
-    // Between two at the same place, like phases added one after another, there's no
+    // Between two at the same place, like stages added one after another, there's no
     // number between them: every row is numbered again in its new order instead.
     if (low !== undefined && low === high) {
       const order = [...rest.slice(0, to), rows[from], ...rest.slice(to)];
@@ -1112,7 +1112,7 @@ export function Table({
         <ui.Dialog open title={says} onClose={() => setAsking(undefined)}>
           <Form
             command={asking.action.name}
-            // A row isn't offered as a pick in a form about itself, like a phase removed into itself.
+            // A row isn't offered as a pick in a form about itself, like a stage removed into itself.
             fields={asked.fields.map((field) =>
               typeof field === "string" || field.type !== "pick" ? field : { ...field, choices: field.choices?.filter(([value]) => value !== asking.row.id) },
             )}
@@ -1147,7 +1147,7 @@ export interface BoardMove {
   role?: string;
 }
 
-// A list's rows as cards in columns, like a project's issues in its phases: a column
+// A list's rows as cards in columns, like a project's issues in its stages: a column
 // for each of the over list's things, in its order, and each card in the one its
 // field names. With a move, a card goes to a column a step from its own leads to,
 // for one of the person's roles; it's shown there at once, and back if the move fails.
@@ -1173,9 +1173,9 @@ export function Board({
 }: {
   view: ViewState;
   list: string; // the cards, like issues
-  by: string; // the field naming a card's column, like phase
+  by: string; // the field naming a card's column, like stage
   over: ViewState;
-  overList: string; // the columns, like phases
+  overList: string; // the columns, like stages
   shown?: string; // what a column is called, like title
   columns: Record<string, string>; // what a card shows, its title first
   link?: string;
@@ -1206,7 +1206,7 @@ export function Board({
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   const things = rowsOf(over.data?.[overList]);
-  // On a phone, the phase shown is in the path, the same part as its table's tab, so
+  // On a phone, the stage shown is in the path, the same part as its table's tab, so
   // /in_progress opens on it either way.
   const startOf = sharedStart(things.map((thing) => thing.id));
   const [part, setPart] = usePathPart(things.map((thing) => thing.id.slice(startOf.length)));
@@ -1341,9 +1341,9 @@ export interface Tally {
   view: ViewState;
   list: string;
   by: string; // like board
-  and: string; // like phase
-  shown?: string; // like phase.title
-  order?: string; // like phase.position
+  and: string; // like stage
+  shown?: string; // like stage.title
+  order?: string; // like stage.position
   noun?: string; // what's counted, like issues
 }
 
@@ -1421,7 +1421,7 @@ export interface GridCommand {
 }
 
 // What goes between two of a list's things, like the moves between a project's
-// phases: a row and a column for each thing, in the list's order, and in each cell
+// stages: a row and a column for each thing, in the list's order, and in each cell
 // the entry from the row's to the column's, if there is one. Pressing an empty cell
 // asks create's form, with the two filled in; pressing a full one asks update's,
 // started from the entry, with remove beside it.
@@ -1435,7 +1435,7 @@ interface Between {
   to: string; // the field naming where it goes to, like to
   cell?: string; // what's shown of an entry, like roles.title
   over: ViewState;
-  overList: string; // the things, like phases
+  overList: string; // the things, like stages
   shown?: string; // what a thing is called, like title
   create?: GridCommand;
   update?: GridCommand;
@@ -1492,7 +1492,7 @@ function useBetween({ view, list, from, to, cell, over, overList, shown = "title
 }
 
 // What goes between two of a list's things, like the moves between a project's
-// phases: a row and a column for each thing, in the list's order, and in each cell
+// stages: a row and a column for each thing, in the list's order, and in each cell
 // the entry from the row's to the column's, if there is one. Pressing an empty cell
 // asks create's form, with the two filled in; pressing a full one asks update's,
 // started from the entry, with remove beside it.

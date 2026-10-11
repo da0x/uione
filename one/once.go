@@ -91,7 +91,7 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 		if err := a.unique(tx, schema, v, id); err != nil {
 			return err
 		}
-		// Something it only makes beside it, like a project's phases, leaves it as
+		// Something it only makes beside it, like a project's stages, leaves it as
 		// it was, and its history without a change.
 		changed := !reflect.DeepEqual(schema.data(v), was)
 		if changed {

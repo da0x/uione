@@ -319,9 +319,9 @@ entity board {
 	name     text     required  key = slug(title)
 	title    text     required
 	preset   preset = preset::simple
-	start    phase
+	start    stage
 }
-entity phase {
+entity stage {
 	board    board    required  key
 	name     text     required  key
 	project  project  required
@@ -332,15 +332,15 @@ command project::create {
 }
 command board::create {
 	if preset == preset::simple {
-		dispatch phase::create { board = id  name = "open"  project = project }
-		start = phase::open
+		dispatch stage::create { board = id  name = "open"  project = project }
+		start = stage::open
 	}
 }
-command phase::create
-command phase::update
+command stage::create
+command stage::update
 once "2026-10-08 boards" {
-	each phase {
-		dispatch phase::update { board = board::main }
+	each stage {
+		dispatch stage::update { board = board::main }
 	}
 }
 }
@@ -356,10 +356,10 @@ once "2026-10-08 boards" {
     CHECK(go.find(R"(var BoardCreate = one.Command[Board]("board::create").Do(createBoard))") != std::string::npos);
     CHECK(go.find(R"(made := &Board{Project: p.ID, Name: "main", Title: p.Slug, Preset: p.Preset})") != std::string::npos);
     CHECK(go.find("if err := one.DispatchCreate(c, made, nil, createBoard); err != nil {") != std::string::npos);
-    CHECK(go.find(R"(made := &Phase{Board: b.ID, Name: "open", Project: b.Project})") != std::string::npos);
+    CHECK(go.find(R"(made := &Stage{Board: b.ID, Name: "open", Project: b.Project})") != std::string::npos);
     CHECK(go.find("if err := one.DispatchCreate(c, made, nil, nil); err != nil {") != std::string::npos);
     // A once gives what was made before boards their board, though it's a key.
-    CHECK(go.find(R"(dispatched.Board = one.Key(p.Project, "main"))") != std::string::npos);
+    CHECK(go.find(R"(dispatched.Board = one.Key(s.Project, "main"))") != std::string::npos);
 
     // What's run is a create that's declared.
     language::diagnostics wrong;
