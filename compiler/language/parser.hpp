@@ -629,11 +629,30 @@ namespace one::language {
                     end_line();
                 } else if (at_word("each")) {
                     view.each.push_back(parse_each());
+                } else if (at(token_kind::identifier) && peek(1).kind != token_kind::assign) {
+                    // number  title  stage.title: the fields of what the view is per, each
+                    // by its own name, and what they point at by theirs.
+                    if (!view.per) {
+                        fail(peek().where, "a view per something takes its fields bare, like view order_page per order { title }; "
+                                           "this one says what each value is, like total = count(order)");
+                    }
+                    while (!at_line_end()) {
+                        location where = peek().where;
+                        std::size_t begin = peek().begin;
+                        auto written = parse_postfix();
+                        view_value value;
+                        value.where = where;
+                        value.name = std::string(source_.substr(begin, tokens_[pos_ - 1].end - begin));
+                        value.value = rooted(std::move(written), *view.per, where);
+                        view.values.push_back(std::move(value));
+                    }
+                    end_line();
                 } else {
                     location where = peek().where;
                     view_value value;
                     value.where = where;
-                    value.name = expect(token_kind::identifier, "'each', or a value like total = count(...)").text;
+                    const token& named = expect(token_kind::identifier, "'each', or a value like total = count(...)");
+                    value.name = named.text;
                     expect(token_kind::assign, "'='");
                     if (at_word("each")) {
                         view.each.push_back(parse_each());
@@ -642,6 +661,14 @@ namespace one::language {
                         continue;
                     }
                     value.value = parse_expression();
+                    // title = order.title is the view's own field, said bare: title.
+                    if (auto* m = std::get_if<member_expression>(&value.value->node); m && view.per && m->member == *value.name) {
+                        auto* object = std::get_if<name_expression>(&m->object->node);
+                        if (object && object->name.text() == *view.per) {
+                            out_.push_back({path_, where, "a field of what the view is per is said bare, like " + *value.name,
+                                            fix{where, tokens_[pos_ - 1].end - named.begin, *value.name}});
+                        }
+                    }
                     end_line();
                     view.values.push_back(std::move(value));
                 }
@@ -649,6 +676,23 @@ namespace one::language {
             expect(token_kind::right_brace, "'}'");
             end_line();
             return view;
+        }
+
+        // stage.title in a view per order is order.stage.title: the written name, read
+        // from what the view is per.
+        expression_ptr rooted(expression_ptr written, const std::string& per, location where) {
+            if (auto* m = std::get_if<member_expression>(&written->node)) {
+                m->object = rooted(std::move(m->object), per, where);
+                return written;
+            }
+            auto root = std::make_unique<expression>();
+            root->where = where;
+            root->node = name_expression{qualified_name{{per}, where}};
+            auto out = std::make_unique<expression>();
+            out->where = written->where;
+            auto* name = std::get_if<name_expression>(&written->node);
+            out->node = member_expression{std::move(root), name ? name->name.text() : std::string()};
+            return out;
         }
 
         // A sort key: a value, or a value with - in front of it to sort in reverse.

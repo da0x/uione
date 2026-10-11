@@ -581,7 +581,7 @@ command member::create
 command job::create
 view crew_page per crew {
 	readers member
-	slug = crew.slug
+	slug
 }
 }
 )";
@@ -743,10 +743,10 @@ TEST_CASE("an update form needs its entity in the address, and a view holding wh
     const std::string start = "entity book {\n\ttitle  text\n\tauthor  text\n}\ncommand book::update\n";
     auto e = only_error(start + "screen \"Books\" /books {\n\tform book::update {\n\t\ttitle\n\t}\n}\n");
     CHECK(e.message == "form book::update changes one book, so its screen needs :book in its route, like /books/:book");
-    e = only_error(start + "view page per book {\n\ttitle = book.title\n}\n" +
+    e = only_error(start + "view page per book {\n\ttitle\n}\n" +
                    "screen \"Book\" /books/:book {\n\tform book::update {\n\t\ttitle  author\n\t}\n}\n");
     CHECK(e.message == "form book::update starts from what's stored, so it needs a view per book holding title author, like title = book.title");
-    CHECK(check_source(start + "view page per book {\n\ttitle = book.title\n\tauthor = book.author\n}\n" +
+    CHECK(check_source(start + "view page per book {\n\ttitle\n\tauthor\n}\n" +
                        "screen \"Book\" /books/:book {\n\tform book::update {\n\t\ttitle  author\n\t}\n}\n")
               .empty());
     // What a command is sent besides its fields is never stored, so it starts empty:
@@ -780,7 +780,7 @@ TEST_CASE("a serial is counted per a field that points at another entity, and is
 TEST_CASE("a create form asks for a key, and an update form can't") {
     const std::string start = "entity book {\n\tshelfmark  text  required  unique  key\n\ttitle  text\n}\n"
                               "command book::create\ncommand book::update\n"
-                              "view page per book {\n\tshelfmark = book.shelfmark\n\ttitle = book.title\n}\n";
+                              "view page per book {\n\tshelfmark\n\ttitle\n}\n";
     CHECK(check_source(start + "screen \"Shelf\" /shelf {\n\tform book::create {\n\t\tshelfmark  title\n\t}\n}\n").empty());
     auto e = only_error(start + "screen \"Book\" /books/:book {\n\tform book::update {\n\t\tshelfmark  title\n\t}\n}\n");
     CHECK(e.message == "shelfmark is part of what names it, its key, so it can't be changed");
@@ -790,12 +790,12 @@ TEST_CASE("a view's lists have names of their own, and a table names the one it 
     const std::string start = "entity book {\n\ttitle  text\n}\nentity loan {\n\tbook  book  required\n\tmember  user\n}\n";
     auto e = only_error(start + "view page per book {\n\teach loan in book\n\teach loan\n}\n");
     CHECK(e.message == "view page already has a list without a name; give this one a name, like comments = each ...");
-    e = only_error(start + "view page per book {\n\ttitle = book.title\n\ttitle = each loan\n}\n");
+    e = only_error(start + "view page per book {\n\ttitle\n\ttitle = each loan\n}\n");
     CHECK(e.message == "view page already has something called title");
     e = only_error(start + "view page per book {\n\trows = each loan\n}\n");
     CHECK(e.message == "rows is what a view's list without a name is called; name this list something else");
 
-    const std::string page = start + "view page per book {\n\ttitle = book.title\n\tloans = each loan in book {\n\t\tmember\n\t}\n}\n";
+    const std::string page = start + "view page per book {\n\ttitle\n\tloans = each loan in book {\n\t\tmember\n\t}\n}\n";
     CHECK(check_source(page + "screen \"Book\" /books/:book {\n\ttable page.loans {\n\t\tmember\n\t}\n}\n").empty());
     e = only_error(page + "screen \"Book\" /books/:book {\n\ttable page.lends {\n\t\tmember\n\t}\n}\n");
     CHECK(e.message == "view page has no list called lends");
@@ -883,7 +883,7 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "entity note {\n\ttext  text\n}\n"
                               "define role maintainer \"Maintainer\" in project {\n}\n";
-    CHECK(check_source(start + "view page per project {\n\treaders member\n\tpublic when project.visibility == visibility::public\n\tslug = project.slug\n}\n"
+    CHECK(check_source(start + "view page per project {\n\treaders member\n\tpublic when project.visibility == visibility::public\n\tslug\n}\n"
                                "view issue_page per issue {\n\treaders member\n\tpublic when issue.project.visibility == visibility::public\n}\n")
               .empty());
     auto e = only_error(start + "view notes {\n\treaders member\n}\n");
@@ -906,7 +906,7 @@ TEST_CASE("a view's readers can be the people a field of its entity names") {
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity report {\n\tproject  project  required\n\ttitle  text\n\tauthor  user = me\n\twatchers  list of user\n}\n"
                               "define role maintainer \"Maintainer\" in project {\n}\n";
-    CHECK(check_source(start + "view page per report {\n\treaders member\n\treaders report.author\n\treaders report.watchers\n\ttitle = report.title\n}\n"
+    CHECK(check_source(start + "view page per report {\n\treaders member\n\treaders report.author\n\treaders report.watchers\n\ttitle\n}\n"
                                "view card per report {\n\treaders report.author\n}\n")
               .empty());
     auto e = only_error(start + "view page per report {\n\treaders report.title\n}\n");
@@ -1042,7 +1042,7 @@ TEST_CASE("a table's link may name the screen's own parameters before the row's"
     const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
                               "entity issue {\n\tproject  project  required\n\ttitle  text\n}\n"
                               "view issues per project {\n\teach issue in project {\n\t\ttitle\n\t}\n}\n"
-                              "view issue_page per issue {\n\ttitle = issue.title\n}\n"
+                              "view issue_page per issue {\n\ttitle\n}\n"
                               "screen \"Issue\" /projects/:project/issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n";
     CHECK(check_source(start + "screen \"Project\" /projects/:project {\n\ttable issues link /projects/:project/issues/:issue {\n\t\ttitle\n\t}\n}\n")
               .empty());
@@ -1224,17 +1224,17 @@ TEST_CASE("a namespace says where it is once, in any of its files") {
 }
 
 TEST_CASE("a screen's title can show a view the screen can read") {
-    CHECK(check_source("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+    CHECK(check_source("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle\n}\n"
                        "screen \"{issue_page.title}\" /issues/:issue {\n\ttext \"hi\"\n}\n}\n")
               .empty());
-    CHECK(only_error("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+    CHECK(only_error("namespace a {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle\n}\n"
                      "screen \"{issue_page.title}\" /issues {\n\ttext \"hi\"\n}\n}\n")
               .message.starts_with("view issue_page has one document per issue, so the screen showing it needs :issue"));
 }
 
 TEST_CASE("a button's when reads the views its screen shows") {
     const std::string start = "namespace a {\nentity issue {\n\tstatus  enum  open | closed = status::open\n}\n"
-                              "command issue::close {\n\tstatus = status::closed\n}\nview issue_page per issue {\n\tstatus = issue.status\n}\n";
+                              "command issue::close {\n\tstatus = status::closed\n}\nview issue_page per issue {\n\tstatus\n}\n";
     CHECK(check_source(start + "screen \"Issue\" /issues/:issue {\n\tissue::close \"Close issue\" when issue_page.status == status::open\n}\n}\n").empty());
     CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tissue::close when issue_page.title == \"x\"\n}\n}\n").message ==
           "view issue_page has no title for the button to read");
@@ -1326,7 +1326,7 @@ TEST_CASE("a site's corners and color are its theme's, which they were settings 
 }
 
 TEST_CASE("details show values the view has") {
-    const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\towner  user\n}\nview issue_page per issue {\n\ttitle = issue.title\n\towner_name = issue.owner.name\n}\n";
+    const std::string start = "namespace a {\nentity issue {\n\ttitle  text\n\towner  user\n}\nview issue_page per issue {\n\ttitle\n\towner_name = issue.owner.name\n}\n";
     CHECK(check_source(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\towner_name \"Owner\"\n\t}\n}\n}\n").empty());
     CHECK(only_error(start + "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\tstatus\n\t}\n}\n}\n").message == "view issue_page has no status to show");
 }

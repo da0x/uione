@@ -74,10 +74,10 @@ namespace library {
 
 	// One page per book: what it is, and everyone who has borrowed it.
 	view book_page per book {
-		title = book.title
-		author = book.author
-		shelfmark = book.shelfmark
-		summary = book.summary
+		title
+		author
+		shelfmark
+		summary
 		loans = each loan in book {
 			order by number descending
 			number  member.picture  member.name  lent_at  returned_at
@@ -126,8 +126,7 @@ namespace library {
 		}
 		table book_page.loans {
 			number "Loan"
-			member.picture ""
-			member.name "Member"
+			member "Member"
 			lent_at "Lent"
 			returned_at "Back"
 		}
@@ -136,8 +135,7 @@ namespace library {
 	screen "Desk" /desk {
 		table desk {
 			book.title "Book"
-			member.picture ""
-			member.name "Member"
+			member "Member"
 			due_at "Due"
 			checkin
 		}

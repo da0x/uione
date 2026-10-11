@@ -2032,7 +2032,7 @@ namespace one::language {
         // own lists, each test a field its rows hold, compared with another of the
         // view's values.
         void verify_row_count(const view_declaration& v, const view_value& value) {
-            snake(*value.name, value.where);
+            snake_parts(*value.name, value.where);
             auto [list, w] = counted_rows(v, value);
             if (!w) return;
             auto holds = [&](const std::string& name) {
@@ -2071,8 +2071,18 @@ namespace one::language {
             test(*w->condition);
         }
 
+        // stage.title, a field through what it points at, is snake_case in each part.
+        void snake_parts(const std::string& name, location where) {
+            for (std::size_t at = 0; at <= name.size();) {
+                std::size_t dot = name.find('.', at);
+                snake(name.substr(at, dot == std::string::npos ? std::string::npos : dot - at), where);
+                if (dot == std::string::npos) break;
+                at = dot + 1;
+            }
+        }
+
         void verify_view_value(const context& in, const view_value& value) {
-            if (value.name) snake(*value.name, value.where);
+            if (value.name) snake_parts(*value.name, value.where);
             resolve(in, *value.value);
         }
 
@@ -2335,7 +2345,14 @@ namespace one::language {
             } else if (auto* unary = std::get_if<unary_expression>(&e.node); unary && unary->op == token_kind::logical_not) {
                 verify_condition(ns, *unary->operand, route);
             } else if (auto* member = std::get_if<member_expression>(&e.node)) {
-                auto* object = std::get_if<name_expression>(&member->object->node);
+                // order_page.stage.title: the view, then its value by its name, dots and all.
+                std::string value = member->member;
+                const expression* through = member->object.get();
+                while (auto* inner = std::get_if<member_expression>(&through->node)) {
+                    value = inner->member + "." + value;
+                    through = inner->object.get();
+                }
+                auto* object = std::get_if<name_expression>(&through->node);
                 const view_declaration* view = object ? find(ns, object->name, &scope::views) : nullptr;
                 if (!view) {
                     error(e.where, how);
@@ -2344,9 +2361,9 @@ namespace one::language {
                 verify_shown(*view, object->name.text(), route, e.where);
                 bool has = false;
                 for (const auto& v : view->values) {
-                    if ((v.name ? *v.name : written(*v.value)) == member->member) has = true;
+                    if ((v.name ? *v.name : written(*v.value)) == value) has = true;
                 }
-                if (!has) error(e.where, "view " + object->name.text() + " has no " + member->member + " for the button to read");
+                if (!has) error(e.where, "view " + object->name.text() + " has no " + value + " for the button to read");
             } else if (auto* name = std::get_if<name_expression>(&e.node)) {
                 const std::string word = name->name.text();
                 if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me") error(e.where, how);
@@ -2369,7 +2386,7 @@ namespace one::language {
                     }
                     continue;
                 }
-                std::size_t dot = inside.rfind('.');
+                std::size_t dot = inside.find('.');  // a view's name has none; its value may, like stage.title
                 if (dot == std::string::npos) continue;
                 qualified_name name{{}, where};
                 std::string written = inside.substr(0, dot);

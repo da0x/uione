@@ -301,7 +301,7 @@ TEST_CASE("an upgrade moves under and layout into a screen, drops a title that's
                        "import one\n\nproject shop {\n\ttitle  \"Shop\"\n}\n\n"
                        "namespace work at / {\n"
                        "\tentity order {\n\t\ttitle  text\n\t}\n"
-                       "\tview order_page per order {\n\t\ttitle = order.title\n\t}\n"
+                       "\tview order_page per order {\n\t\ttitle\n\t}\n"
                        "\tscreen \"Orders\" /orders {\n\t\ttext \"all\"\n\t}\n"
                        "\tscreen \"{order_page.title}\" /:order under /orders \"Orders\" layout two_columns {\n\t\ttext \"one\"\n\t}\n\n"
                        "\t// Its proof.\n"
@@ -335,6 +335,21 @@ TEST_CASE("an upgrade shows a person as one column, their picture beside their n
     CHECK(text.find("\t\t\ttitle\n\t\t\tauthor \"Opened by\"\n\t\t}\n") != std::string::npos);
     CHECK(text.find("\t\t\ttitle  author\n") != std::string::npos);
     CHECK(text.find("\t\t\ttitle  author.picture  author.name\n") != std::string::npos);  // the view's rows hold both still
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("an upgrade takes a view's own fields bare") {
+    auto dir = project("uione-upgrade-bare",
+                       "import one\n\nnamespace work {\n"
+                       "\tentity stage {\n\t\ttitle  text\n\t}\n"
+                       "\tentity order {\n\t\ttitle  text\n\t\tstage  stage\n\t}\n"
+                       "\tview order_page per order {\n\t\ttitle = order.title\n\t\tstage = order.stage\n\t\tstage_title = order.stage.title\n\t\tlabel = order.title\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    // A value named as its field is that field bare; one renamed stays as it is.
+    CHECK(done.changed.begin()->second.find("\t\ttitle\n\t\tstage\n\t\tstage_title = order.stage.title\n\t\tlabel = order.title\n") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
 
@@ -384,8 +399,8 @@ entity issue {
 command issue::update
 command issue::close
 view issue_page per issue {
-	title = issue.title
-	body = issue.body
+	title
+	body
 }
 screen "Issue" /issues/:issue {
 	issue::update "Edit"

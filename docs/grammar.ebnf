@@ -143,11 +143,14 @@ if             ::= "if" expression block ("else" (if | block))?
 
 /* a value can count the rows of the view's own list that pass, compared with its
  * other values: unread = count(changes where created_at > seen) */
-view           ::= "view" NAME ("per" NAME | "public")* "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
+view           ::= "view" NAME "public"? "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
+                 | "view" NAME "public"? "per" NAME "public"? "{" NEWLINE? ("readers" NAME END)? (view_line | view_fields)* "}" END
 view_line      ::= (NAME "=")? each
                  | "readers" NAME ("." NAME)+ END
                  | "public" "when" condition END
                  | NAME "=" expression END
+view_fields    ::= (NAME ("." NAME)*)+ END
+/* number  title  stage.title: in a view per something, its fields bare, and what they point at */
 each           ::= "each" ("change" "in")? postfix ("in" NAME)* ("where" condition)? ("{" NEWLINE? list_line* "}")? END
 list_line      ::= "order" "by" order_key+ END
                  | "limit" WHOLE END

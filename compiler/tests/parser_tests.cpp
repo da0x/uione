@@ -508,7 +508,7 @@ TEST_CASE("a view's order goes inside the list it sorts") {
 TEST_CASE("a view can hold lists with names, and a table names the one it shows") {
     auto f = parse_ok(R"(
 view issue_page per issue {
-	title = issue.title
+	title
 	comments = each comment in issue {
 		order by created_at
 		author  body
@@ -562,7 +562,7 @@ view issue_page per issue {
 	readers issue.author
 	readers issue.assignees
 	public when issue.project.visibility == public
-	title = issue.title
+	title
 }
 )");
     const auto& page = std::get<view_declaration>(f.declarations[0].node);

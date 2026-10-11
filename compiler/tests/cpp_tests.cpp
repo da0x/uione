@@ -72,7 +72,7 @@ command stage::delete {
 }
 view crew_page per crew {
 	readers member
-	slug = crew.slug
+	slug
 	jobs = each job in crew {
 		number  title  stage.title  priority  takers.name  due  done
 	}

@@ -750,7 +750,7 @@ view signups public {
 }
 
 view book_page per book {
-	title = book.title
+	title  author  shelf.name
 	loans = each loan in book {
 		order by number descending
 		number  member  lent_at  returned_at
@@ -758,10 +758,13 @@ view book_page per book {
 }
 ```
 
-- `per <entity>` makes one document per entity, like a page per book. Inside the
-  view, that entity is named plainly: `title = book.title` puts its title in the
-  document, `lifecycle = issue.project.lifecycle` a field of what it points at,
-  which changing the project changes on every issue's page, and `each loan in
+- `per <entity>` makes one document per entity, like a page per book. Its fields
+  are said bare, as a list's rows are: `title  author` puts its title and author
+  in the document, and `shelf.name` the name of what it points at, which renaming
+  the shelf changes on every book's page; a screen reads it as
+  `{book_page.shelf.name}`. A value named otherwise says what it is, like
+  `lifecycle = issue.project.lifecycle`. Inside the view, that entity is named
+  plainly, and `each loan in
   book` picks the rows that belong to it: those whose one field pointing at a book
   holds this one. An entity that points at a book by two fields, like a link's
   `from` and `to`, says which with `where from == book.id`. A screen

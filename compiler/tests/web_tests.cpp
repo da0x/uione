@@ -197,7 +197,7 @@ TEST_CASE("a table shows the list of a view it names") {
     auto files = generate("/examples/library");
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Table view={bookPage} list="loans" columns={{ number: "Loan", "member.picture": "", "member.name": "Member", lent_at: "Lent", returned_at: "Back" }} pictures={["member.picture"]} />)") !=
+    CHECK(screens->content.find(R"(<Table view={bookPage} list="loans" columns={{ number: "Loan", "member.name": "Member", lent_at: "Lent", returned_at: "Back" }} people={{ "member.name": "member.picture" }} />)") !=
           std::string::npos);
 }
 
@@ -230,7 +230,7 @@ TEST_CASE("a copy names values as the screen does, and leaves out a person's id 
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\nentity project {\n\tlifecycle  enum  full \"Implement, verify\" | simple\n}\nentity issue {\n\tproject  project\n\tbody  markdown\n\timplemented_by  user\n}\n"
                          "entity comment {\n\tbody  text\n}\ncommand issue::update\ncommand comment::create\n"
-                         "view issue_page per issue {\n\tbody = issue.body\n\tlifecycle = issue.project.lifecycle\n\timplemented_by = issue.implemented_by\n\timplementer = issue.implemented_by.name\n}\n"
+                         "view issue_page per issue {\n\tbody\n\tlifecycle = issue.project.lifecycle\n\timplemented_by\n\timplementer = issue.implemented_by.name\n}\n"
                          "screen \"Issue\" /issues/:issue {\n\tdetails issue_page {\n\t\timplementer \"Implemented by\"\n\t}\n"
                          "\tform issue::update {\n\t\tbody \"Description\"\n\t}\n\tform comment::create {\n\t\tbody \"Comment\"\n\t}\n\tcopy issue_page\n}\n}\n");
     auto screens_files = generate_at(dir.string());
@@ -246,7 +246,7 @@ TEST_CASE("a screen is laid out in regions, everything in main unless it says") 
     fs::remove_all(dir);
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
-                         "namespace tracker {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
+                         "namespace tracker {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle\n}\n"
                          "screen \"Issue\" /issues/:issue {\n\tlayout two_columns\n\tmain {\n\t\ttext \"{issue_page.title}\"\n\t}\n\tside {\n\t\ttext \"aside\"\n\t}\n}\n"
                          "screen \"Other\" /other {\n\tlayout two_columns\n\ttext \"all in main\"\n}\n"
                          "screen \"Plain\" /plain {\n\ttext \"as it was\"\n}\n}\n");
@@ -300,7 +300,7 @@ TEST_CASE("a text can be shown only while its when holds") {
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\nentity issue {\n\ttitle  text\n\towner  user\n}\n"
-                         "view issue_page per issue {\n\towner = issue.owner\n\towner_name = issue.owner.name\n}\n"
+                         "view issue_page per issue {\n\towner\n\towner_name = issue.owner.name\n}\n"
                          "screen \"Issue\" /issues/:issue {\n\ttext \"Taken by {issue_page.owner_name}\" when issue_page.owner != none\n}\n}\n");
     auto screens_files = generate_at(dir.string());
     const auto* screens = find(screens_files, "src/screens/main.tsx");
@@ -580,7 +580,7 @@ view project_page per project {
 }
 view issue_page per issue {
 	readers member
-	stage = issue.stage
+	stage
 }
 screen "Issue" /:project/issues/:issue {
 	issue::move along project_page.steps
@@ -683,7 +683,7 @@ TEST_CASE("a screen's title can show what the page does, once it's arrived") {
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\n"
                          "entity issue {\n\tnumber  number  key\n\ttitle  text\n}\n"
-                         "view issue_page per issue {\n\tnumber = issue.number\n\ttitle = issue.title\n}\n"
+                         "view issue_page per issue {\n\tnumber\n\ttitle\n}\n"
                          "screen \"#{issue_page.number} {issue_page.title}\" /issues/:issue {\n\ttext \"{issue_page.title}\"\n}\n"
                          "screen \"Home\" / {\n\ttext \"hi\"\n}\n"
                          "}\n");
@@ -709,7 +709,7 @@ TEST_CASE("a button says what it does, and shows only while its when holds") {
                          "entity issue {\n\ttitle  text\n\tstatus  enum  open | closed = status::open\n}\n"
                          "command issue::create\n"
                          "command issue::close {\n\tstatus = status::closed\n}\n"
-                         "view issue_page per issue {\n\tstatus = issue.status\n}\n"
+                         "view issue_page per issue {\n\tstatus\n}\n"
                          "screen \"Issue\" /issues/:issue {\n"
                          "\tissue::close \"Close issue\" when issue_page.status == status::open\n"
                          "}\n"
@@ -735,7 +735,7 @@ TEST_CASE("a when block shows a button, a text or a row's button only while all 
                          "entity issue {\n\ttitle  text\n\towner  user\n\tstatus  enum  open | closed = status::open\n}\n"
                          "command issue::close {\n\tstatus = status::closed\n}\n"
                          "command issue::delete\n"
-                         "view issue_page per issue {\n\tstatus = issue.status\n\towner = issue.owner\n}\n"
+                         "view issue_page per issue {\n\tstatus\n\towner\n}\n"
                          "view issues {\n\teach issue {\n\t\ttitle  owner  status\n\t}\n}\n"
                          "screen \"Issue\" /issues/:issue {\n"
                          "\tissue::close \"Close issue\" when {\n"
@@ -1013,7 +1013,7 @@ TEST_CASE("a table's tabs can be a list's records, a command in its block is in 
                          "entity issue {\n\tproject  project  required\n\ttitle  text\n\tstage  stage\n}\n"
                          "command issue::create\ncommand project::update\n"
                          "view project_page per project {\n"
-                         "\ttitle = project.title\n"
+                         "\ttitle\n"
                          "\tstages = each stage in project {\n\t\ttitle\n\t}\n"
                          "\tissues = each issue in project {\n\t\ttitle  stage\n\t}\n"
                          "}\n"
@@ -1048,9 +1048,9 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
                          "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
                          "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n}\n"
                          "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\ttitle  text\n}\n"
-                         "view project_page per project {\n\tname = project.name\n}\n"
-                         "view board_page per board {\n\ttitle = board.title\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tboard = issue.board\n\tboard_title = issue.board.title\n}\n"
+                         "view project_page per project {\n\tname\n}\n"
+                         "view board_page per board {\n\ttitle\n}\n"
+                         "view issue_page per issue {\n\ttitle\n\tboard\n\tboard_title = issue.board.title\n}\n"
                          "screen \"{project_page.name}\" /:project {\n\ttext \"hi\"\n}\n"
                          "screen \"{board_page.title}\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
                          "screen \"{issue_page.title}\" /:project/:issue {\n\tunder /:project/boards/:board \"{issue_page.board_title}\"\n\ttext \"hi\"\n}\n"
@@ -1070,13 +1070,34 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
     files.push_back(language::parse("main.one", "namespace work {\n"
                                                 "entity board {\n\ttitle  text\n}\n"
                                                 "entity issue {\n\ttitle  text\n}\n"
-                                                "view issue_page per issue {\n\ttitle = issue.title\n}\n"
+                                                "view issue_page per issue {\n\ttitle\n}\n"
                                                 "screen \"Board\" /boards/:board {\n\ttext \"hi\"\n}\n"
                                                 "screen \"Issue\" /issues/:issue {\n\tunder /boards/:board \"Board\"\n\ttext \"hi\"\n}\n"
                                                 "}\n", out));
     language::check(files, out);
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "this screen's address has no :board, so a view per what it shows holds it, like board = issue.board");
+}
+
+TEST_CASE("a screen reads a view's value through what it points at, as it's named") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-bare";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity stage {\n\ttitle  text\n}\n"
+                         "entity order {\n\ttitle  text\n\tstage  stage\n}\n"
+                         "view order_page per order {\n\ttitle  stage.title\n}\n"
+                         "screen \"{order_page.title}\" /orders/:order {\n\ttext \"In {order_page.stage.title}\"\n\ttext \"Ready\" when order_page.stage.title == \"Ready\"\n\tdetails order_page {\n\t\tstage.title \"Stage\"\n\t}\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(<Live view={orderPage} field="stage.title" />)") != std::string::npos);
+    CHECK(screens->content.find(R"([["stage.title", "Stage"]])") != std::string::npos);
+    CHECK(screens->content.find(R"((orderPage.data?.["stage.title"] ?? null))") != std::string::npos);
 }
 
 TEST_CASE("a field's label is every screen's, unless one says its own, and a person's column shows their picture beside their name") {
@@ -1089,7 +1110,7 @@ TEST_CASE("a field's label is every screen's, unless one says its own, and a per
                          "entity order {\n\tnumber  serial  key  \"#\"\n\ttitle  text\n\tpacked_by  list of user  \"Packed by\"\n\tauthor  user  = me\n}\n"
                          "command order::update\n"
                          "view orders {\n\teach order {\n\t\tnumber  title  packed_by.name  packed_by.picture  author.name  author.picture\n\t}\n}\n"
-                         "view order_page per order {\n\tnumber = order.number\n\ttitle = order.title\n\tpacked_by = order.packed_by\n}\n"
+                         "view order_page per order {\n\tnumber\n\ttitle\n\tpacked_by\n}\n"
                          "screen \"Orders\" /orders {\n\ttable orders {\n\t\tnumber  title  packed_by  author \"Opened by\"\n\t}\n}\n"
                          "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tnumber\n\t}\n\tform order::update {\n\t\ttitle  packed_by\n\t}\n}\n"
                          "}\n");
@@ -1148,7 +1169,7 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
                          "entity stage {\n\tboard  board  required  key\n\tname  text  required  key\n\ttitle  text\n\tposition  number\n}\n"
                          "entity issue {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\tboard  board\n\tstage  stage\n\tauthor  user = me\n\tpriority  enum { low  high }\n}\n"
                          "command project::update\n"
-                         "view project_page per project {\n\tname = project.name\n\tsummary = project.summary\n"
+                         "view project_page per project {\n\tname\n\tsummary\n"
                          "\tboards = each board in project {\n\t\ttitle\n\t}\n"
                          "\tissues = each issue in project {\n\t\tboard  stage  stage.title  stage.position\n\t}\n}\n"
                          "screen \"{project_page.name}\" /:project {\n"
@@ -1186,7 +1207,7 @@ TEST_CASE("a button's when can ask whether a list has whoever is reading") {
                          "entity issue {\n\ttitle  text\n\tassignees  list of user\n}\n"
                          "command issue::take {\n\tadd me to assignees\n}\n"
                          "command issue::drop {\n\tremove me from assignees\n}\n"
-                         "view issue_page per issue {\n\tassignees = issue.assignees\n}\n"
+                         "view issue_page per issue {\n\tassignees\n}\n"
                          "screen \"Issue\" /issues/:issue {\n"
                          "\tissue::take \"Assign to me\" when !(issue_page.assignees has me)\n"
                          "\tissue::drop \"Unassign me\" when issue_page.assignees has me\n"
@@ -1228,7 +1249,7 @@ TEST_CASE("buttons one after another sit in a row") {
                          "command issue::update\n"
                          "command issue::close {\n\tstatus = status::closed\n}\n"
                          "command issue::reopen {\n\tstatus = status::open\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tstatus = issue.status\n}\n"
+                         "view issue_page per issue {\n\ttitle\n\tstatus\n}\n"
                          "screen \"Issue\" /issues/:issue {\n"
                          "\tissue::update \"Edit\"\n\tform issue::update {\n\t\ttitle\n\t}\n\tissue::close\n\tissue::reopen\n"
                          "\ttext \"{issue_page.title}\"\n\tissue::close\n"
@@ -1259,7 +1280,7 @@ TEST_CASE("a button with its form draws as the button and the form written apart
                              "namespace tracker {\n"
                              "entity issue {\n\ttitle  text\n\tbody  markdown\n}\n"
                              "command issue::update\n"
-                             "view issue_page per issue {\n\ttitle = issue.title\n\tbody = issue.body\n}\n"
+                             "view issue_page per issue {\n\ttitle\n\tbody\n}\n"
                              "screen \"Issue\" /issues/:issue {\n" + buttons + "\ttext \"{issue_page.title}\"\n}\n"
                              "}\n");
         auto files = generate_at(dir.string());
@@ -1337,7 +1358,7 @@ TEST_CASE("a namespace can put its screens at the root, and an address can name 
                          "entity project {\n\towner  text  key  = me.username\n\tslug  text  required  key\n\tname  text\n}\n"
                          "command project::create {\n\tby anyone signed in\n}\n"
                          "view all {\n\teach project {\n\t\tname\n\t}\n}\n"
-                         "view page per project {\n\tname = project.name\n}\n"
+                         "view page per project {\n\tname\n}\n"
                          "screen \"Projects\" / {\n\ttable all link /:owner/:project {\n\t\tname\n\t}\n}\n"
                          "screen \"Project\" /:owner/:project {\n\ttext \"{page.name}\"\n\tlink /:owner/:project/more \"More\"\n}\n"
                          "screen \"More\" /:owner/:project/more {\n\ttext \"{page.name}\"\n}\n"
@@ -1383,7 +1404,7 @@ TEST_CASE("a timeline can say what it's of, and a row can open what it points at
                          "entity issue history {\n\tproject  project  required  key\n\tnumber  serial  per project  key\n\ttitle  text\n\tassignees  list of user\n}\n"
                          "entity link {\n\tproject  project  required\n\tfrom  issue  required\n\tto  issue  required\n}\n"
                          "view news per user {\n\tchanges = each change in issue where assignees has me {\n\t\tproject  issue  issue.title  field  before  after  created_at\n\t}\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tlinks = each link where from == issue.id {\n\t\tto  to.title\n\t}\n}\n"
+                         "view issue_page per issue {\n\ttitle\n\tlinks = each link where from == issue.id {\n\t\tto  to.title\n\t}\n}\n"
                          "screen \"Home\" / {\n\ttimeline news.changes \"What's new\" link /:project/:issue\n}\n"
                          "screen \"{issue_page.title}\" /:project/:issue {\n\ttable issue_page.links link /:project/:to {\n\t\tto.title \"Issue\"\n\t}\n}\n"
                          "}\n");
@@ -1409,7 +1430,7 @@ TEST_CASE("a copy holds the lists a screen shows, not those only its buttons go 
                          "entity issue {\n\ttitle  text\n\tstage  stage\n}\n"
                          "entity comment {\n\tissue  issue\n\tbody  text\n}\n"
                          "command issue::move {\n\tchanges stage\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tstage = issue.stage\n"
+                         "view issue_page per issue {\n\ttitle\n\tstage\n"
                          "\tsteps = each step {\n\t\tfrom  to  title\n\t}\n"
                          "\tcomments = each comment in issue {\n\t\tbody\n\t}\n}\n"
                          "screen \"{issue_page.title}\" /issues/:issue {\n\tissue::move along issue_page.steps\n\ttable issue_page.comments {\n\t\tbody\n\t}\n"
@@ -1489,7 +1510,7 @@ TEST_CASE("a table keeps only some rows, rows are tinted by a choice, and a box 
                          "view project_page per project {\n"
                          "\tissues = each issue in project {\n\t\tnumber  title  priority\n\t}\n"
                          "\tmilestones = each milestone in project {\n\t\ttitle  due\n\t}\n}\n"
-                         "view issue_page per issue {\n\ttitle = issue.title\n\tpriority = issue.priority\n}\n"
+                         "view issue_page per issue {\n\ttitle\n\tpriority\n}\n"
                          "screen \"Project\" /:project {\n"
                          "\tfind \"Search this project\" {\n\t\tproject_page.issues \"Issues\" link /:project/:issue by number title\n\t}\n"
                          "\ttable project_page.milestones {\n\t\tonly due <= 2 weeks from now\n\t\ttitle\n\t}\n"
@@ -1568,7 +1589,7 @@ TEST_CASE("a file is uploaded from a form, and shown as a link to it") {
     platform::write_file((dir / "main.one").string(),
                          "namespace press {\nentity order {\n\ttitle  text\n\tproof  file\n\tpictures  list of file\n}\n"
                          "command order::create\n"
-                         "view order_page per order {\n\ttitle = order.title\n\tproof = order.proof\n\tpictures = order.pictures\n}\n"
+                         "view order_page per order {\n\ttitle\n\tproof\n\tpictures\n}\n"
                          "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tproof\n\t\tpictures\n\t}\n"
                          "\tform order::create {\n\t\ttitle\n\t\tproof\n\t\tpictures\n\t}\n}\n}\n");
     auto generated = generate_at(dir.string());

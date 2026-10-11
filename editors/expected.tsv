@@ -155,8 +155,8 @@ examples/tracker/main.one	assignees  list of user	user	type
 editors/fixtures/roles.one	tags    list of label	list	type
 editors/fixtures/roles.one	tags    list of label	of	type
 editors/fixtures/roles.one	tags    list of label	label	type
-examples/tracker/main.one	title = issue.title	title	variable
-examples/tracker/main.one	title = issue.title	issue.title	plain
+examples/tracker/main.one	visibility = issue.project.visibility	visibility	variable
+examples/tracker/main.one	visibility = issue.project.visibility	issue.project.visibility	plain
 examples/tracker/main.one	changes = each change in issue {	changes	variable
 examples/tracker/main.one	changes = each change in issue {	in	keyword
 examples/tracker/main.one	field  before  after  created_by.name	after	plain

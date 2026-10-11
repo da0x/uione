@@ -101,6 +101,45 @@ TEST_CASE("the library example's backend is generated exactly as its target says
     CHECK(file->content == without_license(*target));
 }
 
+TEST_CASE("a view per something takes its fields bare, and what they point at by their own names") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shop {
+entity stage {
+	title  text
+}
+entity order {
+	number  serial  key
+	title   text
+	stage   stage
+}
+view order_page per order {
+	number  title
+	stage  stage.title
+}
+screen "{order_page.title}" /orders/:order {
+	text "In {order_page.stage.title}"
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(Copy("number", "number"))") != std::string::npos);
+    CHECK(found->content.find(R"(Copy("title", "title"))") != std::string::npos);
+    CHECK(found->content.find(R"(Copy("stage", "stage"))") != std::string::npos);
+    CHECK(found->content.find(R"(Copy("stage.title", "stage.title"))") != std::string::npos);
+    // A view that isn't per anything has nothing to take them from.
+    language::diagnostics wrong;
+    std::vector<language::file> others;
+    others.push_back(language::parse("main.one", "namespace shop {\nentity order {\n\ttitle  text\n}\nview orders {\n\ttitle\n}\n}\n", wrong));
+    REQUIRE(wrong.size() == 1);
+    CHECK(wrong[0].message == "a view per something takes its fields bare, like view order_page per order { title }; this one says what each value is, like total = count(order)");
+}
+
 TEST_CASE("an update changes what its forms ask for and what it says it changes, and nothing else") {
     language::diagnostics out;
     std::vector<language::file> files;
@@ -115,7 +154,7 @@ command issue::update {
 }
 command issue::create
 view issue_page per issue {
-	title = issue.title
+	title
 }
 screen "Issue" /issues/:issue {
 	form issue::update {
@@ -402,7 +441,7 @@ screen "Cards" /cards {
 	}
 }
 view card_page per card {
-	title = card.title
+	title
 }
 screen "Card" /cards/:card {
 	form card::update {
@@ -435,7 +474,7 @@ entity issue {
 	title  text
 }
 view issue_page per issue {
-	title = issue.title
+	title
 	steps = each step where board == issue.board {
 		title
 	}

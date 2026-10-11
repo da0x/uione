@@ -957,7 +957,7 @@ namespace one::generators {
                 }
                 if (open > at) add(web_detail::js_string(text.substr(at, open - at)));
                 std::string_view value = text.substr(open + 1, close - open - 1);
-                std::size_t dot = value.rfind('.');
+                std::size_t dot = value.find('.');  // a view's name has none; its value may, like stage.title
                 if (dot == std::string_view::npos) {
                     add(web_detail::js_string(text.substr(open, close - open + 1)));
                 } else {
@@ -994,7 +994,7 @@ namespace one::generators {
                 }
                 out += web_detail::jsx_text(text.substr(at, open - at));
                 std::string_view value = text.substr(open + 1, close - open - 1);
-                std::size_t dot = value.rfind('.');
+                std::size_t dot = value.find('.');  // a view's name has none; its value may, like stage.title
                 // The year it's read in, and what the site was built from.
                 if (value == "year" || value == "build.version" || value == "build.commit") {
                     parts.components.insert("Built");
@@ -1143,10 +1143,18 @@ namespace one::generators {
             }
             if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + condition_of(parts, ns, *unary->operand, read);
             if (auto* member = std::get_if<language::member_expression>(&e.node)) {
-                auto* object = std::get_if<language::name_expression>(&member->object->node);
-                std::string variable = view_variable(parts, full_view(ns, object->name.text()));
+                // order_page.stage.title: the view, then its value by its name, dots and all.
+                std::string value = member->member;
+                const language::expression* object = member->object.get();
+                while (auto* inner = std::get_if<language::member_expression>(&object->node)) {
+                    value = inner->member + "." + value;
+                    object = inner->object.get();
+                }
+                auto* view = std::get_if<language::name_expression>(&object->node);
+                if (!view) return "false";
+                std::string variable = view_variable(parts, full_view(ns, view->name.text()));
                 read.insert(variable);
-                return "(" + variable + ".data?.[" + web_detail::js_string(member->member) + "] ?? null)";
+                return "(" + variable + ".data?.[" + web_detail::js_string(value) + "] ?? null)";
             }
             if (auto* name = std::get_if<language::name_expression>(&e.node)) {
                 const std::string word = name->name.text();
@@ -1647,7 +1655,7 @@ namespace one::generators {
                 if (text.value.starts_with("{") && text.value.ends_with("}")) {
                     // A markdown field of a view, like {book_page.summary}, shown rendered.
                     std::string inside = text.value.substr(1, text.value.size() - 2);
-                    std::size_t dot = inside.rfind('.');
+                    std::size_t dot = inside.find('.');
                     std::string view = full_view(ns, inside.substr(0, dot));
                     parts.components.insert("Markdown");
                     std::string markdown = "<Markdown view={" + view_variable(parts, view) + "} field=" + web_detail::js_string(inside.substr(dot + 1)) + (text.subtitle ? " plain" : "") + " />";

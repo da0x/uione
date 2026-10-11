@@ -153,9 +153,9 @@ namespace tracker {
 	view project_page per project {
 		readers member
 		public when project.visibility == visibility::public
-		name = project.name
-		repository = project.repository
-		visibility = project.visibility
+		name
+		repository
+		visibility
 		issues = each issue in project {
 			order by status descending  number descending
 			number  title  status  labels  assignees.name  author.picture  author.name
@@ -178,7 +178,7 @@ namespace tracker {
 	// signs its deliveries with. Never public, whatever the project's visibility.
 	view project_settings per project {
 		readers member
-		repository = project.repository
+		repository
 		webhook_secret = github_secret(project.id)
 	}
 
@@ -186,10 +186,10 @@ namespace tracker {
 	view issue_page per issue {
 		readers member
 		public when issue.project.visibility == visibility::public
-		title = issue.title
-		body = issue.body
-		labels = issue.labels
-		status = issue.status
+		title
+		body
+		labels
+		status
 		visibility = issue.project.visibility
 		comments = each comment in issue {
 			order by created_at
@@ -245,16 +245,14 @@ namespace tracker {
 			status
 			labels
 			assignees.name "Assigned"
-			author.picture ""
-			author.name "Author"
+			author "Author"
 			take  drop
 		}
 		issue::create form {
 			title  body  labels
 		}
 		table project_page.members {
-			person.picture ""
-			person.name "Member"
+			person "Member"
 			role.title "Role"
 			delete "Remove" when person != me
 		}
