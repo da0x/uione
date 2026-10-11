@@ -2682,7 +2682,7 @@ namespace one::language {
         // The icons a button or a link can be drawn as; one they don't have would show
         // nothing but its words, so a misspelled one is an error.
         void icon(const std::optional<std::string>& name, location where) {
-            static const std::set<std::string, std::less<>> known{"edit", "add", "follow", "following", "workflow"};
+            static const std::set<std::string, std::less<>> known{"edit", "add", "follow", "following", "settings", "workflow"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + "; there are " + join_words({known.begin(), known.end()}));
         }
 

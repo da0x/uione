@@ -521,6 +521,52 @@ describe("on a phone", () => {
   });
 });
 
+describe("a board's cards, as the relay front page draws them", () => {
+  it("say how urgent they are by their edge alone, and who's working each by face, apart from the rest", () => {
+    const Board = radix.Board;
+    render(
+      <Board
+        status="live"
+        columns={[
+          {
+            id: "todo",
+            title: "To Do",
+            cards: [
+              {
+                id: "a",
+                title: "Proof the menu",
+                details: ["#12", "bug"],
+                people: [{ name: "Ada Lovelace", picture: "https://example.com/ada.png" }, { name: "Grace Hopper" }],
+                reaches: [],
+                tone: 1,
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+    const card = screen.getByRole("region", { name: "To Do" }).querySelector("li")!;
+    // The card stays the page's own color; only its edge is the tone's.
+    expect(card.className).not.toMatch(/bg-tone/);
+    expect(card.querySelector("[data-edge]")?.getAttribute("style")).toContain("--color-tone-1-edge");
+    expect(card.querySelector("[data-details]")?.textContent).toBe("#12bug");
+    // Each person a face: their picture, or their initial, named for whoever can't see it.
+    const people = card.querySelector("[data-people]")!;
+    expect(people.querySelector("img")?.getAttribute("src")).toBe("https://example.com/ada.png");
+    expect(within(people as HTMLElement).getByText("G")).toBeTruthy();
+    expect(within(people as HTMLElement).getByTitle("Grace Hopper")).toBeTruthy();
+    expect(people.textContent).toContain("Ada Lovelace");
+  });
+
+  it("colors a table's rows by their edge alone", () => {
+    const Table = radix.Table;
+    render(<Table status="live" columns={["Title"]} rows={[{ id: "a", cells: ["Proof the menu"], actions: [], tone: 2 }]} />);
+    const row = screen.getByRole("row", { name: /Proof the menu/ });
+    expect(row.className).not.toMatch(/bg-tone/);
+    expect(row.className).toMatch(/--color-tone-2-edge/);
+  });
+});
+
 describe("icons", () => {
   it("draws a link as an icon, still named by its words", () => {
     const Link = radix.Link;

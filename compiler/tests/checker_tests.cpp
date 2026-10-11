@@ -1414,8 +1414,9 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
     CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon workflow\n\ttable issues {\n\t\ttitle\n\t\tissue::create \"New issue\" icon add\n\t}\n"
                               "\tform issue::create {\n\t\ttitle\n\t}\n}\n}\n")
               .empty());
+    CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Settings\" icon settings\n}\n}\n").empty());
     CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message ==
-          "there's no icon flow; there are add, edit, follow, following and workflow");
+          "there's no icon flow; there are add, edit, follow, following, settings and workflow");
 }
 
 TEST_CASE("a section is drawn in one of the library's colors") {

@@ -400,6 +400,38 @@ describe("a board", () => {
   });
 });
 
+describe("a board's cards", () => {
+  it("say a number as one, and the people working each, by name and picture, apart from the rest", () => {
+    const page = {
+      status: "live" as const,
+      data: {
+        stages: [{ id: "ark-reported", title: "Reported" }],
+        issues: [
+          { id: "ark-1", title: "Crash", stage: "ark-reported", number: 1, labels: ["bug"], "assignees.name": ["Ada"], "assignees.picture": ["https://example.com/ada.png"] },
+        ],
+      },
+    };
+    const { container } = renderScreen(memorySource(), () => (
+      <Board
+        view={page}
+        list="issues"
+        by="stage"
+        over={page}
+        overList="stages"
+        columns={{ title: "Title", number: "#", labels: "Labels", "assignees.name": "Assigned to" }}
+        labels={["labels"]}
+        people={{ "assignees.name": "assignees.picture" }}
+      />
+    ));
+    const card = screen.getByRole("region", { name: "Reported" }).querySelector("li");
+    expect(card?.querySelector("[data-details]")?.textContent).toBe("#1bug");
+    const people = card?.querySelector("[data-people]");
+    expect(people?.textContent).toContain("Ada");
+    expect(people?.querySelector("img")?.getAttribute("src")).toBe("https://example.com/ada.png");
+    expect(container.textContent).not.toContain("assignees");
+  });
+});
+
 // A table or a board as far as a switch is concerned: something with a toolbar.
 function Shown({ name, tools }: { name: string; tools?: ReactNode }) {
   return (

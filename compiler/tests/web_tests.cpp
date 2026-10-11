@@ -1125,6 +1125,34 @@ TEST_CASE("a field's label is every screen's, unless one says its own, and a per
     CHECK(tsx.find(R"([["number", "#"], ["packed_by.name", "Packed by"]])") != std::string::npos);
 }
 
+TEST_CASE("a header's menu goes down the side of every screen under its path, beside what each shows") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-header-menu";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "import one\nproject shop {\n\ttitle  \"Shop\"\n}\n"
+                         "namespace work at / {\n"
+                         "header /settings {\n\tmenu {\n\t\tlink /settings \"General\"\n\t\tlink /settings/people \"People\"\n\t}\n}\n"
+                         "screen \"Settings\" /settings {\n\ttext \"general\"\n}\n"
+                         "screen \"People\" /settings/people {\n\ttext \"people\"\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    const std::string menu = R"(<Menu links={[{ to: "/settings", label: "General" }, { to: "/settings/people", label: "People" }]}>)";
+    for (const char* shown : {"general", "people"}) {
+        std::size_t text = tsx.find(std::string(">") + shown + "<");
+        REQUIRE(text != std::string::npos);
+        std::size_t opened = tsx.rfind(menu, text), closed = tsx.find("</Menu>", text);
+        CHECK(opened != std::string::npos);
+        CHECK(closed != std::string::npos);
+        CHECK(tsx.rfind("= screen(", text) < opened);
+    }
+}
+
 TEST_CASE("a screen can be untitled and at several addresses, and a header sits above every screen under its path") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-addresses";

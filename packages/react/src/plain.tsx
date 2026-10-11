@@ -474,9 +474,22 @@ export const plain: ComponentSet = {
               {column.cards.map((card, at) => (
                 <li key={card.id}>
                   {card.link ? <a {...card.link}>{card.title}</a> : card.title}
-                  {card.details.map((detail, i) => (
-                    <span key={i}> {detail}</span>
-                  ))}
+                  {card.details.length > 0 && (
+                    <span data-details="">
+                      {card.details.map((detail, i) => (
+                        <span key={i}>{detail}</span>
+                      ))}
+                    </span>
+                  )}
+                  {card.people && card.people.length > 0 && (
+                    <span data-people="">
+                      {card.people.map((person, i) => (
+                        <span key={i}>
+                          {person.picture && <img src={person.picture} alt="" width={20} height={20} referrerPolicy="no-referrer" />} {person.name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {/* Up and down its column, a button each, rather than a drag. */}
                   {onArrange && at > 0 && (
                     <button type="button" onClick={() => onArrange(card.id, column.cards[at - 1].id)}>

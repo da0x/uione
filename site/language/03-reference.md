@@ -1368,7 +1368,7 @@ form step::update "Save" {
   it's drawn as the icon, and its words still name it, shown when it's pointed at.
   So can a link, `link /:project/boards/:board/workflow "Workflow" icon workflow`,
   and a button in a table's or a board's toolbar, `issue::create "New issue" icon
-  add`. The icons are `add`, `edit`, `follow`, `following` and `workflow`.
+  add`. The icons are `add`, `edit`, `follow`, `following`, `settings` and `workflow`.
 - A screen laid out in regions keeps its `heading` and `subtitle` outside them,
   under its title. Beside the page, in `side`, a `section` is a glance at
   something, with a smaller heading.
@@ -1645,7 +1645,18 @@ than none. A site has one header, or none.
 
 `header /:owner/:project { ... }` is what's above every screen whose address goes
 on from that path, like a project's own name and tabs, before the screen's own
-items. It takes what a screen does, checked as on a screen at that path.
+items. It takes what a screen does, checked as on a screen at that path. A `menu`
+in it goes down the side of each of those screens, with what the screen shows beside
+it, so a project's settings are one menu over a page for each part:
+
+```one
+header /:project/settings {
+	menu {
+		link /:project/settings "General"
+		link /:project/settings/people "People"
+	}
+}
+```
 
 ```one
 header {

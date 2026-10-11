@@ -690,12 +690,23 @@ namespace one::generators {
                 auto from_items = items.from(f.path, where.line);
                 items.open("<>");
                 if (std::string trail = crumbs(parts, ns, *s, route); !trail.empty()) items.line(trail);
-                // What a header says above every screen under its path, like a project's own.
+                // What a header says above every screen under its path, like a project's own;
+                // a menu in it goes down the side, with what the screen shows beside it.
+                std::string menu;
                 for (const auto& [header_ns, header] : path_headers_) {
                     std::string path = full_route(header_ns, *header->route);
                     if (!route.starts_with(path) || (route.size() != path.size() && route[path.size()] != '/' && path != "/")) continue;
-                    screen_items(items, parts, header_ns, header->items, header->items);
+                    std::size_t before = header->items.size();
+                    for (std::size_t at = 0; at < header->items.size(); ++at) {
+                        auto* block = std::get_if<language::content_block>(&header->items[at].node);
+                        if (block && block->type == language::content_block::kind::menu && before == header->items.size()) {
+                            before = at;
+                            menu = menu_of(parts, header_ns, *block);
+                        }
+                    }
+                    if (before > 0) screen_items(items, parts, header_ns, header->items, header->items, 0, before);
                 }
+                if (!menu.empty()) items.open(menu);
                 // Laid out in regions, like main and side: as the screen puts its items
                 // in them, or with everything in main.
                 // What sits beside the title, like Edit project.
@@ -744,6 +755,7 @@ namespace one::generators {
                     }
                     items.close("</Layout>");
                 }
+                if (!menu.empty()) items.close("</Menu>");
                 items.close("</>");
 
                 // An untitled screen shows the site's title, as one titled with its name does.
@@ -1249,6 +1261,20 @@ namespace one::generators {
             return "(row[" + web_detail::js_string(word) + "] ?? null)";
         }
 
+        // menu { link /:project/settings "General" ... }: its links, down the side.
+        std::string menu_of(screen_parts& parts, const std::string& ns, const language::content_block& menu) {
+            parts.components.insert("Menu");
+            std::string links;
+            for (const auto& inside : menu.items) {
+                auto* link = std::get_if<language::content_link>(&inside.node);
+                if (!link) continue;
+                std::string target = link->target.starts_with("/") ? full_route(ns, link->target) : link->target;
+                links += (links.empty() ? "" : ", ") + std::string("{ to: ") + web_detail::js_string(target) + ", label: " +
+                         web_detail::js_string(link->label) + " }";
+            }
+            return "<Menu links={[" + links + "]}>";
+        }
+
         void screen_items(stream& out, screen_parts& parts, const std::string& ns,
                           const std::vector<language::screen_item>& items, const std::vector<language::screen_item>& screen,
                           std::size_t first = 0, std::size_t count = std::string::npos) {
@@ -1289,16 +1315,7 @@ namespace one::generators {
                 item_line_ = item.where.line;
                 // A menu's links go down the side, with everything after it beside them.
                 if (auto* menu = std::get_if<language::content_block>(&item.node); menu && menu->type == language::content_block::kind::menu) {
-                    parts.components.insert("Menu");
-                    std::string links;
-                    for (const auto& inside : menu->items) {
-                        auto* link = std::get_if<language::content_link>(&inside.node);
-                        if (!link) continue;
-                        std::string target = link->target.starts_with("/") ? full_route(ns, link->target) : link->target;
-                        links += (links.empty() ? "" : ", ") + std::string("{ to: ") + web_detail::js_string(target) + ", label: " +
-                                 web_detail::js_string(link->label) + " }";
-                    }
-                    out.open("<Menu links={[" + links + "]}>");
+                    out.open(menu_of(parts, ns, *menu));
                     screen_items(out, parts, ns, items, screen, at + 1);
                     out.close("</Menu>");
                     return;

@@ -224,6 +224,13 @@ const buttonIcons: Record<string, ReactNode> = {
       <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" fill="none" />
     </svg>
   ),
+  // A cog: a ring with teeth, and its hole.
+  settings: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6.9 1.5h2.2l.4 1.8 1.2.7 1.8-.6 1.1 1.9-1.4 1.3v1.4l1.4 1.3-1.1 1.9-1.8-.6-1.2.7-.4 1.8H6.9l-.4-1.8-1.2-.7-1.8.6-1.1-1.9 1.4-1.3V7.3L2.4 6l1.1-1.9 1.8.6 1.2-.7z" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  ),
   workflow: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
       <rect x="1.5" y="2" width="4.5" height="4" rx="1" />
@@ -256,15 +263,42 @@ const button: Record<NonNullable<ButtonProps["kind"]>, string> = {
   secondary: "border border-line bg-surface text-ink shadow-panel hover:bg-sunken",
   danger: "bg-danger text-white shadow-panel hover:opacity-90",
 };
-// How urgent a row, a card or a box of details is, as Trac colored a ticket's
-// priority: a fill, and an edge down its left side. 3 is plain, as Trac's normal was.
+// How urgent a row or a box of details is, as Trac colored a ticket's priority: an
+// edge down its left side, and nothing else, so it's seen without being in the way.
+// 3 is plain, as Trac's normal was. A card draws its edge itself, inside its border.
 const tones: Record<number, string> = {
-  1: "bg-tone-1 shadow-[inset_3px_0_0_var(--color-tone-1-edge)]",
-  2: "bg-tone-2 shadow-[inset_3px_0_0_var(--color-tone-2-edge)]",
-  4: "bg-tone-4 shadow-[inset_3px_0_0_var(--color-tone-4-edge)]",
-  5: "bg-tone-5 shadow-[inset_3px_0_0_var(--color-tone-5-edge)]",
+  1: "shadow-[inset_3px_0_0_var(--color-tone-1-edge)]",
+  2: "shadow-[inset_3px_0_0_var(--color-tone-2-edge)]",
+  4: "shadow-[inset_3px_0_0_var(--color-tone-4-edge)]",
+  5: "shadow-[inset_3px_0_0_var(--color-tone-5-edge)]",
 };
 const toned = (tone: number | undefined) => (tone ? (tones[tone] ?? "") : "");
+const edged = (tone: number | undefined) => (tone && tones[tone] ? `var(--color-tone-${tone}-edge)` : undefined);
+
+// Who's working something, each a small round face: their picture, or their first
+// letter, named for whoever can't see it, close together as a group.
+function Faces({ people }: { people: { name: string; picture?: string }[] }) {
+  return (
+    <span data-people="" className="flex shrink-0 items-center -space-x-1">
+      {people.map((person, i) => (
+        <span key={i} title={person.name} className="inline-flex">
+          {person.picture ? (
+            <img src={person.picture} alt="" loading="lazy" referrerPolicy="no-referrer" className="one-person size-5 rounded-full border border-surface object-cover" />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="grid size-5 place-items-center rounded-full border border-surface text-[0.68rem] font-semibold text-accent"
+              style={{ background: "color-mix(in oklab, var(--color-accent) 14%, var(--color-surface))" }}
+            >
+              {person.name.trim().charAt(0).toUpperCase()}
+            </span>
+          )}
+          <span className="sr-only">{person.name}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
 
 const pressable = "inline-flex items-center justify-center gap-2 rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
 
@@ -1103,24 +1137,30 @@ export const radix: ComponentSet = {
                           return;
                         }
                       }}
-                      className={`rounded-box border border-line ${toned(card.tone) || "bg-surface shadow-panel"} px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+                      className={`relative overflow-hidden rounded-control border border-line bg-surface py-2.5 pr-2.5 pl-3.5 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
                         draggable ? "cursor-grab active:cursor-grabbing" : ""
                       } ${dragged?.card === card.id ? "opacity-40" : ""}`}
                     >
+                      {/* How urgent it is, an edge down its left side. */}
+                      {edged(card.tone) && <span data-edge="" aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ background: edged(card.tone) }} />}
                       {card.link ? (
-                        <a {...card.link} draggable={false} className="font-medium text-ink hover:text-accent hover:underline">
+                        <a {...card.link} draggable={false} className="leading-snug font-medium text-ink hover:text-accent hover:underline">
                           {card.title}
                         </a>
                       ) : (
-                        <span className="font-medium">{card.title}</span>
+                        <span className="leading-snug font-medium">{card.title}</span>
                       )}
-                      {card.details.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
-                          {card.details.map((detail, i) => (
-                            <span key={i} className="inline-flex items-center">
-                              {detail}
-                            </span>
-                          ))}
+                      {/* Under it, what else it shows, and who's working it. */}
+                      {(card.details.length > 0 || (card.people?.length ?? 0) > 0) && (
+                        <div className="mt-2 flex items-end justify-between gap-2">
+                          <div data-details="" className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted tabular-nums">
+                            {card.details.map((detail, i) => (
+                              <span key={i} className="inline-flex items-center">
+                                {detail}
+                              </span>
+                            ))}
+                          </div>
+                          {card.people && card.people.length > 0 && <Faces people={card.people} />}
                         </div>
                       )}
                       {/* A finger can't drag one, so on a phone a card says where it can go. */}
@@ -1634,7 +1674,7 @@ export const radix: ComponentSet = {
 
   // What a thing is, label beside value, in a quiet panel.
   Details: ({ items, tone }) => (
-    <dl className={`grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-box border border-line px-4 py-3 text-sm ${toned(tone) || "bg-surface"}`}>
+    <dl className={`grid max-w-xl grid-cols-[max-content_1fr] gap-x-6 gap-y-2 rounded-box border border-line bg-surface px-4 py-3 text-sm ${toned(tone)}`}>
       {items.map((item) => (
         <div key={item.label} className="contents">
           <dt className="text-muted">{item.label}</dt>

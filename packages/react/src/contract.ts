@@ -286,7 +286,8 @@ export interface BoardCard {
   id: string;
   title: ReactNode;
   link?: LinkProps; // the page it opens
-  details: ReactNode[]; // what else it shows, like its priority and labels
+  details: ReactNode[]; // what else it shows, like its number and labels
+  people?: { name: string; picture?: string }[]; // who's working it, shown apart from its details
   reaches: string[]; // the columns it may be moved to
   tone?: number; // how urgent it is, 1 the most, up to 5, as a table's row
 }

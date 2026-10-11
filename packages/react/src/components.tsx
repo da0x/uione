@@ -711,6 +711,22 @@ export function ordered(value: unknown): number | string {
   return String(value);
 }
 
+// Whether a column is something's number, said as #12.
+function numbered(key: string): boolean {
+  return key === "number" || key.endsWith(".number");
+}
+
+// The people a row's column names, each by name and, from an https address only,
+// picture: assignees.name beside assignees.picture.
+function peopleOf(row: Row, key: string, picture: string): { name: string; picture?: string }[] {
+  const names = Array.isArray(row[key]) ? (row[key] as unknown[]) : [row[key]];
+  const seen = Array.isArray(row[picture]) ? (row[picture] as unknown[]) : [row[picture]];
+  return names
+    .map((name, at) => ({ name: show(name), face: seen[at] }))
+    .filter(({ name }) => name !== "")
+    .map(({ name, face }) => (typeof face === "string" && face.startsWith("https://") ? { name, picture: face } : { name }));
+}
+
 // Whether a list from a view has a value, like an issue's assignees having whoever
 // is reading.
 export function listHas(list: unknown, item: unknown): boolean {
@@ -1462,7 +1478,13 @@ export function Board({
               id: card.id,
               title: title ? cellOf(ui, links, card, title, { choices, labels, pictures, people }) : card.id,
               link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
-              details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures, people })).filter((detail) => detail !== ""),
+              // A number said as one, like #12; and who's working it apart, by name
+              // and picture.
+              details: rest
+                .filter((key) => people[key] === undefined)
+                .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, { choices, labels, pictures, people })))
+                .filter((detail) => detail !== ""),
+              people: rest.filter((key) => people[key] !== undefined).flatMap((key) => peopleOf(card, key, people[key])),
               reaches: reaches(where(card)),
               tone: toneOf(card, tint),
             })),
