@@ -395,15 +395,26 @@ export interface LabelsProps {
   items: string[];
 }
 
+// Files, each a link that opens it, and a picture of it when it's an image.
+export interface FilesProps {
+  items: { name: string; preview?: string; onOpen: () => void }[];
+}
+
 export interface FieldProps {
   name: string;
   label: string;
-  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), choice, or pick (one of a list's records, however many)
+  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), choice, pick (one of a list's records, however many), file, or files
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   required?: boolean; // a choice that's always one of them, offering no empty one
   value: string;
   hint?: string;
   onChange: (value: string) => void;
+  // For a file or files: what's there, each by its name, with how far it's come
+  // while it uploads, from 0 to 1, or why it didn't; what to do with files chosen;
+  // and taking one away.
+  files?: { name: string; progress?: number; error?: string }[];
+  onFiles?: (files: File[]) => void;
+  onRemove?: (index: number) => void;
 }
 
 export interface FormProps {
@@ -483,6 +494,7 @@ export interface ComponentSet {
   Cards: ComponentType<CardsProps>;
   Track: ComponentType<TrackProps>;
   Labels: ComponentType<LabelsProps>;
+  Files: ComponentType<FilesProps>;
   Details: ComponentType<DetailsProps>;
   Thread: ComponentType<ThreadProps>;
   Timeline: ComponentType<TimelineProps>;

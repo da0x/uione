@@ -1399,6 +1399,42 @@ export const radix: ComponentSet = {
                 />
                 Yes
               </label>
+            ) : field.type === "file" || field.type === "files" ? (
+              // Each file there, with how far it's come while it uploads, then a way to
+              // choose another, or more.
+              <div className="flex flex-col gap-2">
+                {field.files?.map((file, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-control border border-line bg-surface px-3 py-2 text-sm shadow-panel">
+                    <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                    {file.error ? (
+                      <span role="alert" className="text-xs text-danger">
+                        {file.error}
+                      </span>
+                    ) : (
+                      file.progress !== undefined && <progress value={file.progress} max={1} aria-label={`${file.name}, uploading`} className="h-1.5 w-24 accent-accent" />
+                    )}
+                    <button type="button" onClick={() => field.onRemove?.(i)} className="text-xs text-muted hover:text-ink">
+                      Remove<span className="sr-only"> {file.name}</span>
+                    </button>
+                  </div>
+                ))}
+                <label className="flex w-fit cursor-pointer items-center gap-2 rounded-control border border-dashed border-control-line px-3 py-2 text-sm text-muted transition-colors hover:border-accent hover:text-ink has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-accent-soft">
+                  <input
+                    id={`${id}-${field.name}`}
+                    name={field.name}
+                    type="file"
+                    multiple={field.type === "files"}
+                    aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                    onChange={(event) => {
+                      const chosen = Array.from(event.target.files ?? []);
+                      event.target.value = "";
+                      if (chosen.length) field.onFiles?.(chosen);
+                    }}
+                    className="sr-only"
+                  />
+                  {field.type === "files" ? "Add files" : field.files?.length ? "Choose another" : "Choose a file"}
+                </label>
+              </div>
             ) : field.type === "markdown" ? (
               <MarkdownField
                 id={`${id}-${field.name}`}
@@ -1575,6 +1611,23 @@ export const radix: ComponentSet = {
         <span key={item} className="one-label rounded-full border px-2 py-px text-xs font-medium" style={{ "--label-hue": labelHue(item) } as CSSProperties}>
           {item}
         </span>
+      ))}
+    </span>
+  ),
+
+  // Files, each its name as a link, beside a small picture of it when it's an image.
+  Files: ({ items }) => (
+    <span className="flex flex-col gap-1.5">
+      {items.map((item, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={item.onOpen}
+          className="flex w-fit items-center gap-2.5 rounded-control text-left text-sm text-accent underline-offset-2 hover:underline focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none"
+        >
+          {item.preview && <img src={item.preview} alt="" className="size-10 rounded-control border border-line object-cover" />}
+          <span className="break-all">{item.name}</span>
+        </button>
       ))}
     </span>
   ),

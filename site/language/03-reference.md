@@ -482,11 +482,50 @@ What a field can hold, written after its name: `title  text  required`.
 | `serial` | a whole number counted up as each entity is made, 1, 2, 3, and never typed; `serial per project` counts within each project | a number |
 | `boolean` | true or false | a checkbox |
 | `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
+| `file` | a file someone uploaded, kept in the app's bucket, by its path, whose last part is its name; `list of file` holds several (see [Files](#files)) | a box to choose a file, uploaded as it's chosen; where it's shown, a link that opens it, and a small picture of an image |
 | `list of permission` | the commands a project's role allows, like `issue::create` | a box to tick for each command |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
 
 A field's type can also be another entity, holding its id (`book`), or a `format`.
+
+## Files
+
+A field of type `file` holds a file, and `list of file` several:
+
+```one
+entity order {
+	title     text  required
+	proof     file
+	pictures  list of file
+}
+```
+
+- **Uploading:** a form's file box uploads a file as soon as it's chosen, showing
+  how far it's come, and the form is sent once every file has arrived. The bytes
+  go straight to the app's bucket, never through the backend: the backend gives
+  whoever is signed in somewhere to upload one file, for ten minutes, at
+  `POST /api/files`. A file holds at most 5 GB.
+- **Attaching:** a command that puts the file's path in a field attaches it to
+  that record, in the command's transaction. It has to be an upload of the person
+  running the command, and not attached to anything else; otherwise the command
+  says so, like "Proof is a file someone else uploaded".
+- **Reading:** whoever may read the record may read its files: anyone when a page
+  of it is public, or its readers, like a project's members, people and services
+  alike. A record without a page of its own, like a comment, is read by whoever
+  reads the page of what it points at, its issue. `GET /api/files?path=…` gives
+  somewhere to read it from, for ten minutes.
+- **Deleting:** a file taken out of its field, or whose record is deleted, is
+  deleted too, once the command is done. An upload never attached is deleted a day
+  on.
+- **Where:** a deploy makes a bucket for the project, `<firebase>-uione-files`, in
+  its region, that only its backend reaches, and leaves it, and the files in it,
+  if the stack is ever destroyed. The Storage emulator stands in for it locally.
+- **From a program:** the generated C++ client's `upload(path)` uploads a file
+  from disk and gives the path to put in a field, `download(path, to)` saves one,
+  and `file_address(path)` says where to read it from. Each reads a file whole, so
+  it has to fit in memory.
+- A file can't be a key, unique, after another field, or start with a value.
 
 ## Field rules
 

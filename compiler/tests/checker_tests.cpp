@@ -926,7 +926,7 @@ TEST_CASE("a list holds text, people or entities, changes by add and remove, and
                                "view mine per user {\n\teach issue where assignees has me {\n\t\ttitle  assignees.name  labels.name\n\t}\n}\n")
               .empty());
     auto e = only_error(start + "entity bad {\n\tsizes  list of number\n}\n");
-    CHECK(e.message == "sizes is a list, which holds text, people or entities, like list of label or list of user");
+    CHECK(e.message == "sizes is a list, which holds text, files, people or entities, like list of label or list of user");
     e = only_error(start + "entity bad {\n\tnames  list of text  key\n}\n");
     CHECK(e.message == "names is a list, so it can't be a key, unique, after a field, or start with a value");
     e = only_error(start + "command issue::take {\n\tadd me to title\n}\n");
@@ -1505,4 +1505,14 @@ TEST_CASE("a track picks rows by a field pointing at what its list holds, and it
     parse("test.one", table("track release"), out);
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "expected over and the view's list it picks from, like over board_page.milestones, found the end of the line");
+}
+
+TEST_CASE("a file field holds a file's path, or a list of them, and never names anything") {
+    CHECK(check_source("entity order {\n\ttitle  text\n\tproof  file\n\tpictures  list of file\n}\n").empty());
+    auto e = only_error("entity order {\n\tproof  file  key\n}\n");
+    CHECK(e.message == "proof is a file, so it can't be a key, unique, after a field, or start with a value");
+    e = only_error("entity order {\n\tproof  file  unique\n}\n");
+    CHECK(e.message == "proof is a file, so it can't be a key, unique, after a field, or start with a value");
+    e = only_error("entity order {\n\tsizes  list of number\n}\n");
+    CHECK(e.message == "sizes is a list, which holds text, files, people or entities, like list of label or list of user");
 }

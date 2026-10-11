@@ -53,6 +53,8 @@ entity job {
 	takers    list of user
 	due       date
 	done      boolean
+	sheet     file
+	photos    list of file
 }
 command crew::create {
 	by anyone signed in
@@ -196,4 +198,17 @@ TEST_CASE("the site's C++ client is generated exactly as its target says") {
     auto header = generators::generate_cpp(files, root + "/site");
     CHECK(header.path == "cpp/uione.hpp");
     CHECK(header.content == without_license(*target));
+}
+
+TEST_CASE("an app with files uploads and downloads them through its C++ client, and one without has no way to") {
+    auto with = generated(crew).content;
+    CHECK(has(with, "std::string upload(const std::string& local, const std::string& type = \"application/octet-stream\") {"));
+    CHECK(has(with, "void download(const std::string& path, const std::string& local) {"));
+    CHECK(has(with, "std::string file_address(const std::string& path) {"));
+    CHECK(has(with, "std::string sheet{};"));
+    CHECK(has(with, "std::vector<std::string> photos{};"));
+    std::string without = crew;
+    const std::string files = "\tsheet     file\n\tphotos    list of file\n";
+    without.replace(without.find(files), files.size(), "");
+    CHECK(!has(generated(without).content, "upload("));
 }

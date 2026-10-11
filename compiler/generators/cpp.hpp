@@ -123,6 +123,18 @@ namespace one::generators {
             std::map<std::string, int> entity_lines;
         };
 
+        // Whether a field anywhere holds a file, or a list of them.
+        bool keeps_files() const {
+            for (const auto& [ns, at] : namespaces_) {
+                for (const auto& [e, path] : at.entities) {
+                    for (const auto& f : e->fields) {
+                        if (f.type && f.type->text() == "file") return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         const std::vector<language::file>& files_;
         std::string project_dir_;
         std::map<std::string, place> namespaces_;
@@ -620,6 +632,47 @@ namespace one::generators {
             out.line("return out;");
             out.close("}");
             out.line();
+            if (keeps_files()) {
+                out.line("// Uploads a file from disk, and gives its path, which a command attaches by");
+                out.line("// putting it in a file field. It's read whole, so it has to fit in memory.");
+                out.open("std::string upload(const std::string& local, const std::string& type = \"application/octet-stream\") {");
+                out.line("std::ifstream in(local, std::ios::binary | std::ios::ate);");
+                out.line("if (!in) throw refused(0, local + \" can't be read\");");
+                out.line("std::string body(static_cast<std::size_t>(in.tellg()), '\\0');");
+                out.line("in.seekg(0);");
+                out.line("in.read(body.data(), static_cast<std::streamsize>(body.size()));");
+                out.line("std::string name = local.substr(local.find_last_of('/') + 1);");
+                out.line("auto given = ember::parse_json(post(\"/api/files\", \"{\\\"name\\\":\" + detail::json(name) + \",\\\"type\\\":\" + detail::json(type) + \",\\\"size\\\":\" + std::to_string(body.size()) + \"}\"));");
+                out.line("std::vector<std::pair<std::string, std::string>> headers;");
+                out.line("for (const auto& [header, value] : given[\"headers\"].as_map()) headers.emplace_back(header, detail::text(value));");
+                out.line("auto to = detail::text(given[\"url\"]);");
+                out.line("auto answer = detail::text(given[\"method\"]) == \"PUT\" ? ember::https_put(to, headers, body) : ember::https_post(to, headers, body);");
+                out.line("if (answer.status >= 300) throw refused(answer.status, name + \" didn't upload\");");
+                out.line("return detail::text(given[\"path\"]);");
+                out.close("}");
+                out.line();
+                out.line("// Where a file can be read from for a few minutes, by whoever may read its record.");
+                out.open("std::string file_address(const std::string& path) {");
+                out.line("std::string escaped;");
+                out.open("for (unsigned char c : path) {");
+                out.line("if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') { escaped += char(c); continue; }");
+                out.line("char hex[4];");
+                out.line("std::snprintf(hex, sizeof hex, \"%%%02X\", c);");
+                out.line("escaped += hex;");
+                out.close("}");
+                out.line("return detail::text(ember::parse_json(get(\"/api/files?path=\" + escaped))[\"url\"]);");
+                out.close("}");
+                out.line();
+                out.line("// Downloads a file to disk, read whole, so it has to fit in memory.");
+                out.open("void download(const std::string& path, const std::string& local) {");
+                out.line("auto answer = ember::https_get(file_address(path), {});");
+                out.line("if (answer.status != 200) throw refused(answer.status, path + \" didn't download\");");
+                out.line("std::ofstream out(local, std::ios::binary);");
+                out.line("out.write(answer.body.data(), static_cast<std::streamsize>(answer.body.size()));");
+                out.line("if (!out) throw refused(0, local + \" can't be written\");");
+                out.close("}");
+                out.line();
+            }
             for (auto& [ns, at] : namespaces_) {
                 if (ns.empty()) continue;
                 std::string space = cpp_detail::identifier(ns);

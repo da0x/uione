@@ -1315,3 +1315,25 @@ once "2026-10-09 captains" {
     CHECK(go.find(R"(if m.Role == one.Key(m.Crew, "captain") {)") != std::string::npos);
     CHECK(go.find(R"(found, err := one.Exists[Member](c, one.Where[Member]("role", r.ID), nil))") != std::string::npos);
 }
+
+TEST_CASE("a file field is a path the library attaches, one or a list") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace press {
+entity order {
+	title     text  required
+	proof     file
+	pictures  list of file
+}
+command order::create
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "press/press.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find("Proof    string   `firestore:\"proof\" one:\"file\"`") != std::string::npos);
+    CHECK(found->content.find("Pictures []string `firestore:\"pictures\" one:\"file\"`") != std::string::npos);
+}

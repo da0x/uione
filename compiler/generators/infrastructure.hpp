@@ -37,6 +37,7 @@ namespace one::generators {
         std::string github;  // where GitHub's webhook comes in, which needs a secret
         bool services = false;  // a role is made for services, whose tokens the backend signs
         bool signs_in = false;  // people sign in, so programs on their computers may too, with a token the backend signs
+        bool files = false;  // a field holds a file, kept in a bucket of the project's
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
@@ -55,6 +56,19 @@ namespace one::generators {
         for (const auto& d : declarations) {
             if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_services(n->declarations)) return true;
             if (auto* r = std::get_if<language::define_role_declaration>(&d.node); r && r->services) return true;
+        }
+        return false;
+    }
+
+    // Whether a field anywhere holds a file, or a list of them.
+    static bool has_files(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_files(n->declarations)) return true;
+            if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
+                for (const auto& f : e->fields) {
+                    if (f.type && f.type->text() == "file") return true;
+                }
+            }
         }
         return false;
     }
@@ -80,6 +94,7 @@ namespace one::generators {
                 for (const auto& other : files) {
                     if (s.github.empty()) s.github = github_route(other.declarations);
                     s.services = s.services || has_services(other.declarations);
+                    s.files = s.files || has_files(other.declarations);
                 }
                 return s;
             }
@@ -180,6 +195,7 @@ namespace one::generators {
             if (!s.github.empty()) g.line("GitHub:   " + quoted(s.github) + ",");
             if (s.services) g.line("Services: true,");
             if (s.signs_in) g.line("SignIn:   true,");
+            if (s.files) g.line("Files:    true,");
             g.close("})");
             g.close("}");
             out.push_back(file("infrastructure/main.go", g));

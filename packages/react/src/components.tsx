@@ -11,7 +11,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn } from "./app.js";
 import type { FieldProps, Filtered, Hue } from "./contract.js";
-import { useAuth, useRunner } from "./data.js";
+import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
 
@@ -127,25 +127,79 @@ export function Markdown({ view, field, plain }: { view: ViewState; field: strin
   return <ui.Markdown status={view.status} source={typeof value === "string" ? value : undefined} plain={plain} />;
 }
 
+// Whether a file is a picture, by its name, to show it as one.
+function picture(path: string): boolean {
+  return /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(path);
+}
+
+// Files, by their paths: each a link that opens it, and a picture of it when it's
+// an image, read from where the backend says, for whoever may read its record.
+export function Files({ paths }: { paths: string[] }) {
+  const ui = useUI();
+  const store = useFiles();
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const key = paths.join("\n");
+  useEffect(() => {
+    if (!store) return;
+    let gone = false;
+    for (const path of paths.filter(picture)) {
+      store.address(path).then(
+        (address) => !gone && setPreviews((current) => ({ ...current, [path]: address })),
+        () => {},
+      );
+    }
+    return () => {
+      gone = true;
+    };
+    // The paths are what the key says.
+  }, [store, key]);
+  if (paths.length === 0) return null;
+  return (
+    <ui.Files
+      items={paths.map((path) => ({
+        name: fileName(path),
+        preview: previews[path],
+        onOpen: () => {
+          // Opened at once, so the browser doesn't take it for a popup, and sent
+          // where the file is once that's known.
+          const opened = window.open("", "_blank");
+          store?.address(path).then(
+            (address) => {
+              if (opened) opened.location.href = address;
+            },
+            () => opened?.close(),
+          );
+        },
+      }))}
+    />
+  );
+}
+
 // A view's values, each beside what it is: a choice as it's shown, a list of words
-// each on its own, and none of the ones with nothing in them.
+// each on its own, a file as a link to it, and none of the ones with nothing in them.
 export function Details({
   view,
   fields,
   choices = {},
   labels = [],
+  files = [],
   tint,
 }: {
   view: ViewState;
   fields: readonly (readonly [name: string, label: string])[];
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
+  files?: string[]; // the values holding a file, or a list of them
   tint?: Tint; // the box colored by how urgent what it's about is, like its priority
 }) {
   const ui = useUI();
   if (view.status !== "live") return null;
   const items = fields.flatMap<{ label: string; value: ReactNode }>(([name, label]) => {
     const value = view.data?.[name];
+    if (files.includes(name)) {
+      const paths = (Array.isArray(value) ? value : [value]).filter((path): path is string => typeof path === "string" && path !== "");
+      return paths.length ? [{ label, value: <Files paths={paths} /> }] : [];
+    }
     if (labels.includes(name) && Array.isArray(value)) {
       const words = value.map((word) => show(word)).filter((word) => word !== "");
       return words.length ? [{ label, value: <ui.Labels items={words} /> }] : [];
@@ -1560,21 +1614,24 @@ export interface FieldSpec {
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
-// input takes it, a list separated by commas, and anything else as text.
-function asField(value: unknown): string {
+// input takes it, a list separated by commas, files a path a line, and anything
+// else as text.
+function asField(value: unknown, type?: string): string {
   if (value instanceof Date) {
     const pad = (n: number) => String(n).padStart(2, "0");
     if (dateOnly(value)) return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
     return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
   }
-  if (Array.isArray(value)) return value.map(asField).join(", ");
+  if (Array.isArray(value)) return value.map((item) => asField(item)).join(type === "files" ? "\n" : ", ");
   return value === null || value === undefined ? "" : String(value);
 }
 
-// What a form sends for a field: a yes or no as true or false, and a list, written
-// separated by commas, or several choices ticked, as the list of what's between them.
+// What a form sends for a field: a yes or no as true or false, files as the list of
+// their paths, and a list, written separated by commas, or several choices ticked,
+// as the list of what's between them.
 function asInput(value: string, type: string | undefined): unknown {
   if (type === "boolean") return value === "true";
+  if (type === "files") return value.split("\n").filter((path) => path !== "");
   if (type !== "list" && type !== "choices") return value;
   return value
     .split(",")
@@ -1625,6 +1682,12 @@ export function Form({
   const empty = () => Object.fromEntries(specs.map((f) => [f.name, f.start ?? ""]));
   const [values, setValues] = useState<Record<string, string>>(empty);
   const [open, setOpen] = useState(false);
+  // Files on their way up, for each field: each by its name, how far it's come, and
+  // why it didn't arrive, if it didn't.
+  const store = useFiles();
+  const [uploading, setUploading] = useState<Record<string, { id: number; name: string; progress: number; error?: string }[]>>({});
+  const uploads = useRef(0);
+  const sending = Object.values(uploading).some((list) => list.some((u) => u.error === undefined));
   // An update form starts from what's stored, and follows it until someone types.
   // After an update it keeps what was sent until the view has a newer document,
   // rather than showing the old one for a moment.
@@ -1633,11 +1696,42 @@ export function Form({
   const stored = from?.status === "live" ? from.data : undefined;
   useEffect(() => {
     if (!stored || touched || stored === sent) return;
-    setValues(Object.fromEntries(specs.map((f) => [f.name, asField(stored[f.name])])));
+    setValues(Object.fromEntries(specs.map((f) => [f.name, asField(stored[f.name], f.type)])));
     // The fields come from the screen and never change, so they aren't a dependency.
   }, [stored, touched, sent]);
 
+  // A file chosen goes up at once, and its path is the field's once it's there: in
+  // place of the one before, or beside the others.
+  const choose = (f: FieldSpec, chosen: File[]) => {
+    runner.clear(command);
+    setTouched(true);
+    for (const file of f.type === "files" ? chosen : chosen.slice(0, 1)) {
+      const id = ++uploads.current;
+      const change = (patch: Partial<{ progress: number; error: string }> | null) =>
+        setUploading((current) => ({
+          ...current,
+          [f.name]: (current[f.name] ?? []).flatMap((u) => (u.id !== id ? [u] : patch === null ? [] : [{ ...u, ...patch }])),
+        }));
+      setUploading((current) => ({ ...current, [f.name]: [...(f.type === "files" ? (current[f.name] ?? []) : []), { id, name: file.name, progress: 0 }] }));
+      if (!store) {
+        change({ error: "this app keeps no files" });
+        continue;
+      }
+      store.upload(file, (progress) => change({ progress })).then(
+        (path) => {
+          change(null);
+          setValues((current) => ({
+            ...current,
+            [f.name]: f.type === "files" ? [...(current[f.name] ?? "").split("\n").filter((p) => p !== ""), path].join("\n") : path,
+          }));
+        },
+        (error: unknown) => change({ error: error instanceof Error ? error.message : `${file.name} didn't upload` }),
+      );
+    }
+  };
+
   const submit = async () => {
+    if (sending) return;
     const typed = Object.fromEntries(specs.map((f) => [f.name, asInput(values[f.name] ?? "", f.type)]));
     const input = { ...typed, ...given };
     if (await runner.run(command, id === undefined ? input : { ...input, id })) {
@@ -1647,6 +1741,7 @@ export function Form({
       } else {
         setValues(empty());
       }
+      setUploading({});
       setOpen(false);
       onDone?.();
       if (after !== undefined) void navigate(filled(after));
@@ -1669,10 +1764,32 @@ export function Form({
             setTouched(true);
             setValues((current) => ({ ...current, [f.name]: value }));
           },
+          ...(f.type === "file" || f.type === "files"
+            ? {
+                files: [
+                  ...(values[f.name] ?? "")
+                    .split("\n")
+                    .filter((path) => path !== "")
+                    .map((path) => ({ name: fileName(path) })),
+                  ...(uploading[f.name] ?? []).map((u) => ({ name: u.name, progress: u.progress, error: u.error })),
+                ],
+                onFiles: (chosen: File[]) => choose(f, chosen),
+                onRemove: (index: number) => {
+                  const kept = (values[f.name] ?? "").split("\n").filter((path) => path !== "");
+                  setTouched(true);
+                  if (index < kept.length) {
+                    setValues((current) => ({ ...current, [f.name]: kept.filter((_, i) => i !== index).join("\n") }));
+                  } else {
+                    const gone = (uploading[f.name] ?? [])[index - kept.length];
+                    setUploading((current) => ({ ...current, [f.name]: (current[f.name] ?? []).filter((u) => u.id !== gone?.id) }));
+                  }
+                },
+              }
+            : {}),
         }),
       )}
       submit={says ?? label(action(command))}
-      busy={runner.busy(command)}
+      busy={runner.busy(command) || sending}
       error={runner.error(command)}
       onSubmit={() => void submit()}
     />

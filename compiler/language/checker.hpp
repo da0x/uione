@@ -1205,6 +1205,11 @@ namespace one::language {
                 }
                 if (f.per) verify_serial(ns, e, f);
                 if (f.list) verify_list(ns, f);
+                // A file is uploaded and then attached, so it names nothing and is never
+                // worked out.
+                if (f.type && f.type->text() == "file" && !f.list && (f.key || f.unique || f.after || f.initial)) {
+                    error(f.where, f.name + " is a file, so it can't be a key, unique, after a field, or start with a value");
+                }
                 if (f.initial && is_serial(f)) {
                     error(f.initial->where, f.name + " is counted, so it doesn't start with a value");
                 }
@@ -1263,12 +1268,12 @@ namespace one::language {
             }
         }
 
-        // labels  list of label: a list holds text, people, or entities' ids. A list
-        // isn't a key, a serial, unique, or after anything.
+        // labels  list of label: a list holds text, files, people, or entities' ids. A
+        // list isn't a key, a serial, unique, or after anything.
         void verify_list(const std::string& ns, const field& f) {
             const std::string held = f.type ? f.type->text() : "";
-            if (held != "text" && held != "user" && held != "permission" && !(f.type && find_entity(ns, *f.type))) {
-                error(f.where, f.name + " is a list, which holds text, people or entities, like list of label or list of user");
+            if (held != "text" && held != "file" && held != "user" && held != "permission" && !(f.type && find_entity(ns, *f.type))) {
+                error(f.where, f.name + " is a list, which holds text, files, people or entities, like list of label or list of user");
             }
             // A list can be the people a field mentions, like mentions(body), and nothing
             // else worked out.
@@ -1303,7 +1308,7 @@ namespace one::language {
         }
 
         void verify_type(const std::string& ns, const qualified_name& type) {
-            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user", "permission"};
+            static const std::set<std::string, std::less<>> built_in{"text", "markdown", "email", "slug", "date", "number", "serial", "boolean", "user", "file", "permission"};
             snake(type);
             if (type.parts.size() == 1 && built_in.contains(type.parts[0])) {
                 mean(type.where, type.parts[0].size(), "built-in type " + type.parts[0], std::nullopt, "built-in-types");
@@ -1322,7 +1327,7 @@ namespace one::language {
                 return;
             }
             error(type.where, "'" + type.text() + "' isn't a type; use text, markdown, email, date, number, serial, boolean, "
-                              "user, a format, or an entity");
+                              "user, file, a format, or an entity");
         }
 
         void verify(const std::string& ns, location where, const command_declaration& c) {

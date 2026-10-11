@@ -39,6 +39,7 @@ struct failure : std::runtime_error { int status; using std::runtime_error::runt
 struct response { int status; std::string body; };
 response https_post(const std::string&, const std::vector<std::pair<std::string, std::string>>&, const std::string&);
 response https_get(const std::string&, const std::vector<std::pair<std::string, std::string>>&);
+response https_put(const std::string&, const std::vector<std::pair<std::string, std::string>>&, const std::string&);
 class executor { public: virtual ~executor() = default; virtual void post(std::function<void()>) = 0; };
 class database { public: database(options, auth* = nullptr, executor* = nullptr); ~database();
   snapshot get(const std::string&);

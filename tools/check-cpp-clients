@@ -8,7 +8,7 @@
 # runs the checks has it.
 
 set -eu
-version=v0.1.0
+version=v0.1.1
 here=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

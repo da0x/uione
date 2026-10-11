@@ -180,3 +180,24 @@ TEST_CASE("a redirect goes into Hosting's settings") {
     CHECK(hosting->content.find(R"({ "source": "/install.sh", "destination": "https://www.p.io/install.sh", "type": 301 })") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a project with a file field gets a bucket for its files") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "files-project";
+    fs::create_directories(dir);
+    std::string source = "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n"
+                         "namespace press {\n\tentity order {\n\t\ttitle  text\n\t\tproof  file\n\t}\n\tcommand order::create {\n\t\tby anyone signed in\n\t}\n}\n";
+    auto program_of = [&](const std::string& text) {
+        REQUIRE(platform::write_file((dir / "main.one").string(), text));
+        auto generated = generate_at(dir.string());
+        for (const auto& f : generated.files) {
+            if (f.path == "infrastructure/main.go") return f.content;
+        }
+        return std::string();
+    };
+    CHECK(program_of(source).find("\t\tFiles:    true,\n") != std::string::npos);
+    std::string without = source;
+    without.replace(without.find("\t\tproof  file\n"), 14, "");
+    CHECK(program_of(without).find("Files") == std::string::npos);
+    fs::remove_all(dir);
+}

@@ -14,12 +14,12 @@ RUN apt-get update \
 RUN npm install --global firebase-tools@15.32.0
 
 WORKDIR /emulators
-COPY firebase.json .
+COPY firebase.json storage.rules .
 
 # Download the emulators now rather than on first start, so starting is quick.
-RUN firebase setup:emulators:firestore
+RUN firebase setup:emulators:firestore && firebase setup:emulators:storage
 
-EXPOSE 8080 9099
+EXPOSE 8080 9099 9199
 
 # demo- projects never touch a real Firebase project.
-CMD ["firebase", "emulators:start", "--project", "demo-uione", "--only", "firestore,auth"]
+CMD ["firebase", "emulators:start", "--project", "demo-uione", "--only", "firestore,auth,storage"]

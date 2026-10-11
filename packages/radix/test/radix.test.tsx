@@ -635,3 +635,27 @@ describe("a dialog", () => {
     expect(within(scrolls[0] as HTMLElement).queryByRole("button", { name: "Close" })).toBeNull();
   });
 });
+
+describe("a file field", () => {
+  it("asks for a file, shows it on its way up, and offers to take it away", async () => {
+    let arrive: (path: string) => void = () => {};
+    const source = memorySource({
+      files: {
+        upload: (_file, progress) => {
+          progress(0.25);
+          return new Promise((done) => (arrive = done));
+        },
+      },
+    });
+    renderScreen(() => <Form command="press::order::create" fields={[{ name: "proof", type: "file" }]} />, source);
+    expect(screen.getByText("Choose a file")).toBeTruthy();
+    await act(async () => void fireEvent.change(screen.getByLabelText("Proof"), { target: { files: [new File(["%PDF"], "proof.pdf")] } }));
+    const progress = screen.getByRole("progressbar", { name: "proof.pdf, uploading" }) as HTMLProgressElement;
+    expect(progress.value).toBe(0.25);
+    await act(async () => arrive("files/you/1/proof.pdf"));
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.getByText("Choose another")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove proof.pdf" }));
+    expect(screen.queryByText("proof.pdf")).toBeNull();
+  });
+});

@@ -804,3 +804,57 @@ func keys(resources map[string]resource.PropertyMap) []string {
 	}
 	return out
 }
+
+func TestFilesAreKeptInABucketOnlyTheBackendTouches(t *testing.T) {
+	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Files = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	bucket := m.get(t, "gcp:storage/bucket:Bucket::files")
+	if got := bucket["name"].StringValue(); got != "ui-one-uione-files" {
+		t.Errorf("files go to %s", got)
+	}
+	if got := bucket["location"].StringValue(); got != "US-EAST4" {
+		t.Errorf("files are kept in %s, not beside the database", got)
+	}
+	if !bucket["uniformBucketLevelAccess"].BoolValue() || bucket["publicAccessPrevention"].StringValue() != "enforced" {
+		t.Errorf("the bucket isn't closed to everyone but its own account: %v", bucket)
+	}
+	if bucket["forceDestroy"].BoolValue() {
+		t.Errorf("destroying the stack would delete people's files with it")
+	}
+	cors := bucket["cors"].ArrayValue()[0].ObjectValue()
+	var origins, methods []string
+	for _, o := range cors["origins"].ArrayValue() {
+		origins = append(origins, o.StringValue())
+	}
+	for _, o := range cors["methods"].ArrayValue() {
+		methods = append(methods, o.StringValue())
+	}
+	if strings.Join(origins, " ") != "https://uione.io https://ui-one.web.app https://ui-one.firebaseapp.com" || strings.Join(methods, " ") != "GET PUT" {
+		t.Errorf("a browser uploads and downloads from the site alone: %v %v", origins, methods)
+	}
+	access := m.get(t, "gcp:storage/bucketIAMMember:BucketIAMMember::runtime-files")
+	if access["role"].StringValue() != "roles/storage.objectAdmin" || access["member"].StringValue() != "serviceAccount:uione-api@ui-one.iam.gserviceaccount.com" {
+		t.Errorf("the bucket is reached by %v as %v", access["member"], access["role"])
+	}
+	// The addresses it gives are signed as the backend's own account.
+	m.get(t, "gcp:serviceaccount/iAMMember:IAMMember::runtime-signs-tokens")
+	container := m.get(t, "gcp:cloudrunv2/service:Service::backend")["template"].ObjectValue()["containers"].ArrayValue()[0].ObjectValue()
+	found := false
+	for _, env := range container["envs"].ArrayValue() {
+		e := env.ObjectValue()
+		found = found || (e["name"].StringValue() == "ONE_FILES_BUCKET" && e["value"].StringValue() == "ui-one-uione-files")
+	}
+	if !found {
+		t.Errorf("the backend isn't told its bucket")
+	}
+
+	m, err = declare(t, build(t), settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m.resources["gcp:storage/bucket:Bucket::files"]; ok {
+		t.Errorf("a project without files has a bucket for them")
+	}
+}

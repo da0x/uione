@@ -35,6 +35,7 @@ func (ev event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, e
 // when the library runs in the cloud.
 func (a *App) publish(ctx context.Context, events ...event) {
 	ctx = context.WithoutCancel(ctx)
+	a.forgetFiles(ctx, events)
 	type page struct {
 		view    *ViewSpec
 		subject string

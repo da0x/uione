@@ -68,6 +68,7 @@ import (
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/projects"
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/secretmanager"
 	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/serviceaccount"
+	"github.com/pulumi/pulumi-gcp/sdk/v9/go/gcp/storage"
 	"github.com/pulumi/pulumi-random/sdk/v4/go/random"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -95,6 +96,11 @@ type Project struct {
 	// Whether people sign in. A program on someone's computer, like the app's command,
 	// signs in as them through their browser and is given a custom token too.
 	SignIn bool
+
+	// Whether a field holds a file. Files are kept in a bucket of the project's own,
+	// which browsers upload to and download from through addresses the backend signs
+	// as itself, for ten minutes at a time.
+	Files bool
 
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
 	// parent of the Pulumi program's folder unless it's set.
@@ -147,8 +153,10 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	if p.GitHub != "" {
 		needed = append(needed, "secretmanager.googleapis.com")
 	}
-	// A custom token, a service's or a program's, is signed through IAM Credentials.
-	if p.Services || p.SignIn {
+	// A custom token, a service's or a program's, or an address for a file, is
+	// signed through IAM Credentials.
+	signs := p.Services || p.SignIn || p.Files
+	if signs {
 		needed = append(needed, "iamcredentials.googleapis.com")
 	}
 	var enabled []pulumi.Resource
@@ -248,9 +256,9 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	}); err != nil {
 		return err
 	}
-	// Signing a custom token is asking Google to sign as the backend's own account,
-	// which it may do for itself and for no other account.
-	if p.Services || p.SignIn {
+	// Signing a custom token, or a file's address, is asking Google to sign as the
+	// backend's own account, which it may do for itself and for no other account.
+	if signs {
 		if _, err := serviceaccount.NewIAMMember(ctx, "runtime-signs-tokens", &serviceaccount.IAMMemberArgs{
 			ServiceAccountId: runtime.Name,
 			Role:             pulumi.String("roles/iam.serviceAccountTokenCreator"),
@@ -266,6 +274,14 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	backendNeeds := []pulumi.Resource{db}
 	if p.GitHub != "" {
 		env, access, err := githubSecret(ctx, p, project, runtime, after)
+		if err != nil {
+			return err
+		}
+		envs = append(envs, env)
+		backendNeeds = append(backendNeeds, access)
+	}
+	if p.Files {
+		env, access, err := filesBucket(ctx, p, project, runtime, after)
 		if err != nil {
 			return err
 		}
@@ -424,6 +440,44 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// filesBucket makes the bucket a project's files are kept in, beside its database:
+// closed to everyone but the backend's account, which gives browsers addresses to
+// upload and download each file, from the site alone. Destroying the stack leaves
+// it, and the files in it, where they are. The backend is told its name.
+func filesBucket(ctx *pulumi.Context, p Project, project pulumi.StringInput, runtime *serviceaccount.Account,
+	after pulumi.ResourceOrInvokeOption) (*cloudrunv2.ServiceTemplateContainerEnvArgs, pulumi.Resource, error) {
+	bucket, err := storage.NewBucket(ctx, "files", &storage.BucketArgs{
+		Project:                  project,
+		Name:                     pulumi.String(p.Firebase + "-uione-files"),
+		Location:                 pulumi.String(strings.ToUpper(p.Region)),
+		UniformBucketLevelAccess: pulumi.Bool(true),
+		PublicAccessPrevention:   pulumi.String("enforced"),
+		ForceDestroy:             pulumi.Bool(false),
+		Cors: storage.BucketCorArray{&storage.BucketCorArgs{
+			Origins: pulumi.StringArray{
+				pulumi.String("https://" + p.Domain),
+				pulumi.String("https://" + p.Firebase + ".web.app"),
+				pulumi.String("https://" + p.Firebase + ".firebaseapp.com"),
+			},
+			Methods:         pulumi.StringArray{pulumi.String("GET"), pulumi.String("PUT")},
+			ResponseHeaders: pulumi.StringArray{pulumi.String("Content-Type"), pulumi.String("x-goog-content-length-range")},
+			MaxAgeSeconds:   pulumi.Int(3600),
+		}},
+	}, after, pulumi.RetainOnDelete(true))
+	if err != nil {
+		return nil, nil, err
+	}
+	access, err := storage.NewBucketIAMMember(ctx, "runtime-files", &storage.BucketIAMMemberArgs{
+		Bucket: bucket.Name,
+		Role:   pulumi.String("roles/storage.objectAdmin"),
+		Member: pulumi.Sprintf("serviceAccount:%s", runtime.Email),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return &cloudrunv2.ServiceTemplateContainerEnvArgs{Name: pulumi.String("ONE_FILES_BUCKET"), Value: bucket.Name}, access, nil
 }
 
 // githubSecret makes the master secret the backend derives each project's webhook

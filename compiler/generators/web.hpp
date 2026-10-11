@@ -1618,7 +1618,7 @@ namespace one::generators {
                     if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
                 }
             }
-            std::string fields, shown, labels;
+            std::string fields, shown, labels, files;
             for (const auto& f : details.fields) {
                 std::string key = web_detail::text_of(*f.value);
                 fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
@@ -1635,12 +1635,15 @@ namespace one::generators {
                                      ": Object.fromEntries(" + choice_options(field) + ")";
                         }
                         if (field.list && field.type && field.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
+                        // A file, or a list of them, is a link to each.
+                        if (field.type && field.type->text() == "file") files += (files.empty() ? "" : ", ") + web_detail::js_string(key);
                     }
                 }
             }
             std::string line = "<Details view={" + view_variable(parts, full) + "} fields={[" + fields + "]}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
+            if (!files.empty()) line += " files={[" + files + "]}";
             // tint by priority: a value of the view holding a choice of the entity's.
             if (details.tint && view && entity) {
                 for (const auto& value : view->values) {
@@ -2190,6 +2193,8 @@ namespace one::generators {
                             const auto& t = field.type->parts[0];
                             if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") type = t;
                             if (field.list) type = "list";
+                            // A file is chosen and uploaded, or several.
+                            if (t == "file") type = field.list ? "files" : "file";
                         }
                         for (const auto& held : held_) {
                             if (field.name != f.name || !field.type || held.allows.empty() || held.ns != ns) continue;

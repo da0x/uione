@@ -1433,3 +1433,23 @@ TEST_CASE("a track draws a list's records above a table, and a board beside it t
     CHECK(screens->content.find("shown: true") != std::string::npos);
     fs::remove_all(dir);
 }
+
+TEST_CASE("a file is uploaded from a form, and shown as a link to it") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-files";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace press {\nentity order {\n\ttitle  text\n\tproof  file\n\tpictures  list of file\n}\n"
+                         "command order::create\n"
+                         "view order_page per order {\n\ttitle = order.title\n\tproof = order.proof\n\tpictures = order.pictures\n}\n"
+                         "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tproof\n\t\tpictures\n\t}\n"
+                         "\tform order::create {\n\t\ttitle\n\t\tproof\n\t\tpictures\n\t}\n}\n}\n");
+    auto generated = generate_at(dir.string());
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(fields={["title", { name: "proof", type: "file" }, { name: "pictures", type: "files" }]})") != std::string::npos);
+    CHECK(screens->content.find(R"(<Details view={orderPage} fields={[["proof", "Proof"], ["pictures", "Pictures"]]} files={["proof", "pictures"]} />)") !=
+          std::string::npos);
+    fs::remove_all(dir);
+}

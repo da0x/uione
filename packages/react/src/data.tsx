@@ -41,6 +41,24 @@ export interface DataSource {
   run(command: string, input: CommandInput): Promise<CommandReply | void>;
   // Who's signed in, for a source that has sign-in.
   auth?: AuthSource;
+  // Files, for an app with a file field.
+  files?: FileStore;
+}
+
+// Where an app's files go. A file is uploaded on its own, then a command puts its
+// path in a field, which attaches it to that record.
+export interface FileStore {
+  // Uploads a file, saying how far it's come, from 0 to 1, and gives its path. It
+  // rejects with a readable message when it can't.
+  upload(file: File, progress: (done: number) => void): Promise<string>;
+  // Somewhere to read a file from for a few minutes, for whoever may read its
+  // record; with download, a browser saves it rather than showing it.
+  address(path: string, download?: boolean): Promise<string>;
+}
+
+// A file's name: the last part of its path.
+export function fileName(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
 }
 
 // A signed-in person. uid is the id their per-person views are stored under.
@@ -93,6 +111,11 @@ export function DataProvider({ source, children }: { source: DataSource; childre
 // The key a command's answer is showing, and how to stop showing it.
 export function useShownOnce(): ShownOnce {
   return useContext(ShownContext);
+}
+
+// Where the app's files go, when it keeps any.
+export function useFiles(): FileStore | undefined {
+  return useContext(DataContext)?.files;
 }
 
 function useSource(): DataSource {

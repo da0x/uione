@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Cards, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Cards, Details, Diagram, Form, Grid, Live, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -519,5 +519,77 @@ describe("a form's fields", () => {
     expect(describedBy(name)).toEqual(["that isn't an email address"]);
     expect(email.getAttribute("aria-invalid")).toBe("true");
     expect(name.getAttribute("aria-invalid")).toBe("true");
+  });
+});
+
+describe("files", () => {
+  // Chosen, and what the choosing set off let finish.
+  const choose = (input: HTMLElement, ...files: File[]) => act(async () => void fireEvent.change(input, { target: { files } }));
+
+  it("are uploaded as they're chosen, and sent as their paths", async () => {
+    const source = memorySource({ files: true });
+    renderScreen(source, () => <Form command="press::order::create" fields={["title", { name: "proof", type: "file" }, { name: "pictures", type: "files" }]} />);
+    await choose(screen.getByLabelText("Proof"), new File(["%PDF"], "proof.pdf", { type: "application/pdf" }));
+    await choose(screen.getByLabelText("Pictures"), new File(["a"], "front.jpg"), new File(["b"], "back.jpg"));
+    await vi.waitFor(() => expect(source.uploads.map((u) => u.file.name)).toEqual(["proof.pdf", "front.jpg", "back.jpg"]));
+    await screen.findByText(/^back\.jpg/);
+    // The one chosen first is taken away again before it's sent.
+    fireEvent.click(screen.getByRole("button", { name: "Remove front.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await vi.waitFor(() =>
+      expect(source.runs.at(-1)).toEqual({
+        command: "press::order::create",
+        input: { title: "", proof: "files/you/1/proof.pdf", pictures: ["files/you/3/back.jpg"] },
+      }),
+    );
+  });
+
+  it("aren't sent while one is still on its way, and say why one didn't arrive", async () => {
+    let arrive: (path: string) => void = () => {};
+    const source = memorySource({
+      files: {
+        upload: (file, progress) => {
+          progress(0.5);
+          if (file.name === "huge.mov") return Promise.reject(new Error("a file can hold at most 5 GB"));
+          return new Promise((done) => (arrive = done));
+        },
+      },
+    });
+    renderScreen(source, () => <Form command="press::order::create" fields={[{ name: "pictures", type: "files" }]} />);
+    await choose(screen.getByLabelText("Pictures"), new File(["a"], "front.jpg"), new File(["b"], "huge.mov"));
+    await screen.findByText(/huge\.mov: a file can hold at most 5 GB/);
+    expect(screen.getByText("front.jpg 50%")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    expect(source.runs).toEqual([]);
+    await act(async () => arrive("files/you/9/front.jpg"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove huge.mov" }));
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: "Create" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await vi.waitFor(() => expect(source.runs.at(-1)?.input).toEqual({ pictures: ["files/you/9/front.jpg"] }));
+  });
+
+  it("start from what's stored, a path a line", async () => {
+    const source = memorySource({ files: true, views: { "press::order_page": { pictures: ["files/a/1/front.jpg", "files/a/2/back.jpg"] } } });
+    renderScreen(source, () => {
+      const page = useView("press::order_page");
+      return <Form command="press::order::update" id="o1" from={page} fields={[{ name: "pictures", type: "files" }]} />;
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Remove front.jpg" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await vi.waitFor(() => expect(source.runs.at(-1)?.input).toEqual({ pictures: ["files/a/2/back.jpg"], id: "o1" }));
+  });
+
+  it("are shown as links that open each, a picture beside an image", async () => {
+    const source = memorySource({ files: true, views: { "press::order_page": { proof: "files/a/1/proof.pdf", pictures: ["files/a/2/front.jpg"] } } });
+    const opened = { location: { href: "" } };
+    const open = vi.spyOn(window, "open").mockReturnValue(opened as unknown as Window);
+    renderScreen(source, () => {
+      const page = useView("press::order_page");
+      return <Details view={page} fields={[["proof", "Proof"], ["pictures", "Pictures"]]} files={["proof", "pictures"]} />;
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "proof.pdf" }));
+    await vi.waitFor(() => expect(opened.location.href).toBe("memory:files/a/1/proof.pdf"));
+    await vi.waitFor(() => expect(document.querySelector("img")?.getAttribute("src")).toBe("memory:files/a/2/front.jpg"));
+    open.mockRestore();
   });
 });

@@ -17,7 +17,7 @@
 //   - After a minute in a hidden tab, a view stops listening, so a forgotten tab
 //     costs nothing. It starts again the moment the tab is shown.
 
-import type { AuthSource, CommandInput, DataSource, ViewData, ViewState } from "./data.js";
+import type { AuthSource, CommandInput, DataSource, FileStore, ViewData, ViewState } from "./data.js";
 
 export interface Backend {
   // Watches the document at path. next gets its data, which is undefined when the
@@ -222,6 +222,8 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
       };
     },
 
+    files: liveFiles(backend, api, options.fetch ?? ((...args) => fetch(...args))),
+
     async run(command, input: CommandInput) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       let response: Response;
@@ -245,6 +247,50 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
       }
       const message = (body as { error?: unknown } | undefined)?.error;
       throw new Error(typeof message === "string" ? message : "something went wrong on our side; try again");
+    },
+  };
+}
+
+// Files go to the app's bucket, never through its backend: the backend gives
+// somewhere to upload each one, for a few minutes, and the browser sends it there,
+// saying how far it's come; reading one, the backend gives somewhere to read it from.
+function liveFiles(backend: Backend, api: string, fetching: typeof fetch): FileStore {
+  const ask = async (method: string, path: string, body?: unknown): Promise<Record<string, unknown>> => {
+    const headers: Record<string, string> = {};
+    let response: Response;
+    try {
+      const token = await backend.token();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      response = await fetching(`${api}/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    } catch {
+      throw new Error("couldn't reach the server; check your connection and try again");
+    }
+    const reply = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) throw new Error(typeof reply.error === "string" ? reply.error : "something went wrong on our side; try again");
+    return reply;
+  };
+  return {
+    async upload(file, progress) {
+      const given = await ask("POST", "files", { name: file.name, type: file.type, size: file.size });
+      const headers = (given.headers ?? {}) as Record<string, string>;
+      await new Promise<void>((done, failed) => {
+        const request = new XMLHttpRequest();
+        request.open(String(given.method), String(given.url));
+        for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value);
+        request.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) progress(event.loaded / event.total);
+        };
+        request.onload = () => (request.status < 300 ? done() : failed(new Error(`${file.name} didn't upload; try again`)));
+        request.onerror = () => failed(new Error(`${file.name} didn't upload; check your connection and try again`));
+        request.send(file);
+      });
+      progress(1);
+      return String(given.path);
+    },
+    async address(path, download) {
+      const reply = await ask("GET", `files?path=${encodeURIComponent(path)}${download ? "&download=1" : ""}`);
+      return String(reply.url);
     },
   };
 }

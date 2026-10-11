@@ -372,7 +372,7 @@ namespace one::generators {
                 return std::nullopt;
             }
             const auto& t = f.type->parts[0];
-            if (t == "text" || t == "markdown" || t == "email" || t == "slug" || t == "user") return go_type{"string"};
+            if (t == "text" || t == "markdown" || t == "email" || t == "slug" || t == "user" || t == "file") return go_type{"string"};
             if (t == "date") return go_type{"time.Time", true};
             if (t == "number" || t == "serial") return go_type{"float64"};
             if (t == "boolean") return go_type{"bool"};
@@ -437,6 +437,7 @@ namespace one::generators {
                     if (f.type && f.type->text() == "serial") rules.push_back(f.per ? "serial=" + *f.per : "serial");
                     if (f.type && f.type->text() == "email") rules.push_back("email");
                     if (f.type && f.type->text() == "slug") rules.push_back("slug");
+                    if (f.type && f.type->text() == "file") rules.push_back("file");
                     if (f.after) rules.push_back("after=" + *f.after);
                     if (f.type && f.type->parts.size() == 1 && entity(pkg, f.type->parts[0])) {
                         rules.push_back("refers=" + web_detail::join(ns, f.type->parts[0]));

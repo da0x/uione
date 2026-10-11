@@ -1,0 +1,14 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+rules_version = '2';
+
+// Browsers never reach the bucket through Firebase's own SDK: files go up and down
+// through addresses the backend gives, so its rules let nothing through.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{all=**} {
+      allow read, write: if false;
+    }
+  }
+}

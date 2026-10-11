@@ -250,3 +250,6 @@ editors/fixtures/workflow.one	define workflow order by stage {	workflow	declare
 editors/fixtures/workflow.one	define workflow order by stage {	order	name
 editors/fixtures/workflow.one	worked by worked_by	worked	keyword
 editors/fixtures/workflow.one	lease 30 minutes	minutes	keyword
+editors/fixtures/files.one	proof     file	file	type
+editors/fixtures/files.one	pictures  list of file	list	type
+editors/fixtures/files.one	pictures  list of file	file	type

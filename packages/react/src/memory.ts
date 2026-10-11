@@ -5,7 +5,7 @@
 // running before it has a backend. A view with no data stays loading, exactly as a
 // real view would before its first document arrives.
 
-import type { AuthSource, AuthenticationMethod, CommandInput, CommandReply, DataSource, Person, ViewData, ViewState, ViewStatus } from "./data.js";
+import type { AuthSource, AuthenticationMethod, CommandInput, CommandReply, DataSource, FileStore, Person, ViewData, ViewState, ViewStatus } from "./data.js";
 
 export interface MemorySource extends DataSource {
   // Replaces a view's data and marks it live, telling everyone listening.
@@ -16,6 +16,8 @@ export interface MemorySource extends DataSource {
   readonly runs: { command: string; input: CommandInput }[];
   // The way each sign-in used, by its id, in order.
   readonly signIns: (string | undefined)[];
+  // Every file uploaded so far, by its path, in order.
+  readonly uploads: { path: string; file: File }[];
 }
 
 export interface MemoryOptions {
@@ -26,6 +28,9 @@ export interface MemoryOptions {
   person?: Person | null;
   // The ways it offers to sign in; one, unnamed, when it doesn't say.
   methods?: AuthenticationMethod[];
+  // Gives the source files, kept as uploaded; with upload, a way of its own to
+  // upload them, like one that waits or fails.
+  files?: boolean | { upload: FileStore["upload"] };
 }
 
 export function memorySource(options: MemoryOptions = {}): MemorySource {
@@ -34,6 +39,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
   const listeners = new Map<string, Set<(state: ViewState) => void>>();
   const runs: { command: string; input: CommandInput }[] = [];
   const signIns: (string | undefined)[] = [];
+  const uploads: { path: string; file: File }[] = [];
 
   for (const [view, data] of Object.entries(options.views ?? {})) {
     states.set(view, { status: "live", data });
@@ -69,10 +75,26 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
     };
   }
 
+  let files: FileStore | undefined;
+  if (options.files) {
+    const own = typeof options.files === "object" ? options.files.upload : undefined;
+    files = {
+      async upload(file, progress) {
+        const path = own ? await own(file, progress) : `files/you/${uploads.length + 1}/${file.name}`;
+        progress(1);
+        uploads.push({ path, file });
+        return path;
+      },
+      address: async (path, download) => `memory:${path}${download ? "?download" : ""}`,
+    };
+  }
+
   return {
     runs,
     signIns,
+    uploads,
     auth,
+    files,
 
     subscribe(view, subject, emit) {
       const k = key(view, subject);

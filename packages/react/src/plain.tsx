@@ -138,6 +138,19 @@ export const plain: ComponentSet = {
 
   Labels: ({ items }) => <span>{items.join(", ")}</span>,
 
+  Files: ({ items }) => (
+    <span>
+      {items.map((item, i) => (
+        <span key={i}>
+          {item.preview && <img src={item.preview} alt="" width={48} height={48} />}
+          <button type="button" onClick={item.onOpen}>
+            {item.name}
+          </button>{" "}
+        </span>
+      ))}
+    </span>
+  ),
+
   Details: ({ items }) => (
     <dl>
       {items.map((item) => (
@@ -596,6 +609,32 @@ export const plain: ComponentSet = {
               <label htmlFor={`${id}-${field.name}`}>{field.label}</label>
               {field.type === "markdown" ? (
                 <textarea {...common} onChange={(event) => field.onChange(event.target.value)} />
+              ) : field.type === "file" || field.type === "files" ? (
+                // What's there, each with how far it's come or why it didn't, then a
+                // way to choose more.
+                <span>
+                  {field.files?.map((file, i) => (
+                    <span key={i}>
+                      {file.name}
+                      {file.error ? `: ${file.error}` : file.progress !== undefined ? ` ${Math.round(file.progress * 100)}%` : ""}{" "}
+                      <button type="button" aria-label={`Remove ${file.name}`} onClick={() => field.onRemove?.(i)}>
+                        Remove
+                      </button>{" "}
+                    </span>
+                  ))}
+                  <input
+                    id={common.id}
+                    name={field.name}
+                    type="file"
+                    multiple={field.type === "files"}
+                    aria-describedby={described}
+                    onChange={(event) => {
+                      const chosen = Array.from(event.target.files ?? []);
+                      event.target.value = "";
+                      if (chosen.length) field.onFiles?.(chosen);
+                    }}
+                  />
+                </span>
               ) : field.type === "choices" && field.choices ? (
                 // Several choices, each a box to tick, sent as the list of those ticked.
                 <span role="group" aria-label={field.label}>

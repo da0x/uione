@@ -26,6 +26,7 @@ func TestMain(m *testing.M) {
 	for name, value := range map[string]string{
 		"FIRESTORE_EMULATOR_HOST":     "localhost:8080",
 		"FIREBASE_AUTH_EMULATOR_HOST": "localhost:9099",
+		"STORAGE_EMULATOR_HOST":       "localhost:9199",
 	} {
 		if os.Getenv(name) == "" {
 			os.Setenv(name, value)
@@ -85,6 +86,7 @@ var modules = []one.Item{
 	code,
 	builds,
 	repositories,
+	press,
 	one.Module("waitlist",
 		one.Command[Signup]("signup::create").Allow(one.Anyone),
 		one.View("signups").Public().Count("total", one.All[Signup]()),

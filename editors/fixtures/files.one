@@ -1,0 +1,14 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Files, for the highlighting test: file is a type, alone or in a list.
+
+namespace press {
+
+	entity order {
+		title     text  required
+		proof     file
+		pictures  list of file
+	}
+
+}

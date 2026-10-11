@@ -54,6 +54,14 @@ type Ctx struct {
 	service  bool                 // run by a service account, with its key
 	writes   []write              // what it changes outside any entity, like a key
 	revealed map[string]any       // what its answer shows once, like a new key
+	own      *owning              // its own entity as it's saved, for the files it attaches
+}
+
+// owning is the command's own entity, before and after the command.
+type owning struct {
+	schema        *schema
+	id            string
+	before, after map[string]any
 }
 
 // gone is an entity a command's body deletes with DeleteWhere.
@@ -199,8 +207,30 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 // checking each against its rules, and returns the events to publish once the
 // transaction commits.
 func (c *Ctx) save() ([]event, error) {
-	// What goes with what's deleted is read first, as a transaction reads before it
-	// writes.
+	// The files put in fields are claimed first, and what goes with what's deleted
+	// read, as a transaction reads before it writes.
+	var claimed []write
+	claim := func(s *schema, id string, before, after map[string]any) error {
+		w, err := c.claim(s, id, before, after)
+		claimed = append(claimed, w...)
+		return err
+	}
+	if c.own != nil {
+		if err := claim(c.own.schema, c.own.id, c.own.before, c.own.after); err != nil {
+			return nil, err
+		}
+	}
+	for _, m := range c.made {
+		if err := claim(m.schema, m.ref.ID, m.before, m.schema.data(m.value)); err != nil {
+			return nil, err
+		}
+	}
+	for _, r := range c.reads {
+		if err := claim(r.schema, r.ref.ID, r.stored, r.schema.data(r.value)); err != nil {
+			return nil, err
+		}
+	}
+	c.writes = append(c.writes, claimed...)
 	forgotten, err := c.forgetting()
 	if err != nil {
 		return nil, err
@@ -839,6 +869,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 			id, after = ref.ID, s.data(v)
+			body.own = &owning{s, id, before, after}
 			changed, err := body.save()
 			if err != nil {
 				return err
@@ -945,6 +976,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		record.UpdatedAt, record.UpdatedBy = now, c.me
 		after = s.data(v)
+		body.own = &owning{s, id, before, after}
 		changed, err := body.save()
 		if err != nil {
 			return err

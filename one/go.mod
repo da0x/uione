@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	cloud.google.com/go/firestore v1.26.0
+	cloud.google.com/go/storage v1.62.1
 	firebase.google.com/go/v4 v4.22.0
 	google.golang.org/api v0.287.1
 	google.golang.org/grpc v1.83.1
@@ -18,7 +19,6 @@ require (
 	cloud.google.com/go/iam v1.11.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.29.0 // indirect
-	cloud.google.com/go/storage v1.62.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.56.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.56.0 // indirect

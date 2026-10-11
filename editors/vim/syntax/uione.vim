@@ -89,11 +89,11 @@ syn match   uioneFieldWord "\<\%(per\|of\)\>" contained
 " A list's type is one type, read as a unit: list of text, list of label. Defined
 " after uioneFieldWord, so of in a list's type is the type's own.
 syn match   uioneListOf    "\%(^\s*\h\w*\s\+list\s\+\)\@<=of\>" contained nextgroup=uioneListType,uioneUserType skipwhite
-syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|permission\)\>" contained
+syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|file\|permission\)\>" contained
 
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
-syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|list\|enum\)\>"
+syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|file\|list\|enum\)\>"
 
 " A name given a value with =, like title = issue.title in a view or status =
 " status::closed in a command: the field it sets.

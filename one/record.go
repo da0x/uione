@@ -90,6 +90,7 @@ type field struct {
 	refers   string // the entity this field points at, like library::book
 	mentions string // for a list of people: the field whose text names them, like a comment's body, with @username
 	history  bool   // what it points at keeps this entity's changes in its own history, as an issue does its comments'
+	file     bool   // a file's path in the app's bucket, or a list of them (files.go)
 }
 
 type schema struct {
@@ -159,6 +160,8 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.mentions = value
 			case "history":
 				fd.history = true
+			case "file":
+				fd.file = true
 			case "refers":
 				fd.refers = value
 			}

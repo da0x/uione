@@ -198,6 +198,7 @@ type App struct {
 	auth  *auth.Client
 	reg   *registry
 	log   *log.Logger
+	files *files // the bucket files are kept in, for an app with a file field
 
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
@@ -258,6 +259,9 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 		}
 	}
 	a := &App{store: store, auth: authClient, reg: reg, log: log.Default()}
+	if a.files, err = filesFor(ctx, project, reg); err != nil {
+		return nil, err
+	}
 
 	for name, permissions := range reg.roles {
 		if _, err := store.Collection("roles").Doc(name).Set(ctx, map[string]any{"permissions": permissions}); err != nil {
@@ -302,7 +306,12 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 }
 
 // Close lets go of the app's connection to Firestore.
-func (a *App) Close() error { return a.store.Close() }
+func (a *App) Close() error {
+	if a.files != nil {
+		a.files.client.Close()
+	}
+	return a.store.Close()
+}
 
 // Handler serves commands at POST /api/<namespace>/<entity>/<action>, with a JSON
 // object as the body, and GET /health. (Cloud Run keeps paths ending in z, like
@@ -317,6 +326,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /api/token", a.serveToken)
 	mux.HandleFunc("POST /api/authorize", a.serveAuthorize)
 	mux.HandleFunc("GET /api/me", a.serveMe)
+	mux.HandleFunc("POST /api/files", a.serveUpload)
+	mux.HandleFunc("GET /api/files", a.serveDownload)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
 	}
