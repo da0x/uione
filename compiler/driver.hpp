@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <regex>
+#include <sstream>
 #include <tuple>
 #include <type_traits>
 #include <string>
@@ -607,6 +608,105 @@ namespace one::driver {
         return moved;
     }
 
+    // A screen titled only with the site's own title, which an untitled screen shows
+    // anyway, says nothing: screen "uione" /:owner/:project/theme is screen
+    // /:owner/:project/theme.
+    inline std::size_t drop_site_titles(sources& files) {
+        static const std::regex project(R"re((^|\n)[ \t]*project[ \t]+\w+[ \t]*\{[^}]*?\n[ \t]+title[ \t]+"([^"\n]*)")re");
+        std::string site;
+        for (const auto& [path, text] : files) {
+            std::smatch m;
+            if (std::regex_search(text, m, project)) site = m[2];
+        }
+        if (site.empty()) return 0;
+        const std::regex titled("(^|\n)([ \t]*)screen[ \t]+\"" + std::regex_replace(site, std::regex(R"([.^$|()\[\]{}*+?\\])"), R"(\$&)") + "\"[ \t]+/");
+        std::size_t dropped = 0;
+        for (auto& [path, text] : files) {
+            std::string out;
+            auto from = text.cbegin();
+            for (std::sregex_iterator it(text.begin(), text.end(), titled), end; it != end; ++it) {
+                const auto& m = *it;
+                out.append(from, m[0].first);
+                out += m[1].str() + m[2].str() + "screen /";
+                from = m[0].second;
+                ++dropped;
+            }
+            out.append(from, text.cend());
+            text = std::move(out);
+        }
+        return dropped;
+    }
+
+    // Screens in one file that say the same, titled alike with the same items, are one
+    // screen at all their addresses: the first keeps its place, the others' addresses
+    // join it on lines of their own, and their comments go above it after its own.
+    inline std::size_t join_screens(sources& files) {
+        static const std::regex opens(R"re(^([ \t]*)screen((?:[ \t]+"[^"\n]*"|[ \t]+\w+)?)((?:[ \t]+/\S*)+)((?:[ \t]+landing[ \t]+\w+)?)[ \t]*\{[ \t]*$)re");
+        std::size_t joined = 0;
+        for (auto& [path, text] : files) {
+            std::vector<std::string> lines;
+            std::size_t at = 0;
+            for (std::size_t end; (end = text.find('\n', at)) != std::string::npos; at = end + 1) lines.push_back(text.substr(at, end - at));
+            lines.push_back(text.substr(at));
+            struct block {
+                std::size_t comments, open, close;
+                std::string indent, title, routes, landing, body;
+            };
+            std::vector<block> blocks;
+            for (std::size_t i = 0; i < lines.size(); ++i) {
+                std::smatch m;
+                if (!std::regex_match(lines[i], m, opens)) continue;
+                block b{i, i, i, m[1], m[2], m[3], m[4], ""};
+                std::size_t j = i + 1;
+                while (j < lines.size() && lines[j] != b.indent + "}") b.body += lines[j++] + "\n";
+                if (j == lines.size()) continue;
+                b.close = j;
+                while (b.comments > 0 && lines[b.comments - 1].starts_with(b.indent + "//")) --b.comments;
+                blocks.push_back(std::move(b));
+                i = j;
+            }
+            std::vector<bool> gone(lines.size(), false);
+            std::map<std::size_t, std::vector<std::string>> more_routes, more_comments;
+            for (std::size_t a = 0; a < blocks.size(); ++a) {
+                if (gone[blocks[a].open]) continue;
+                for (std::size_t b = a + 1; b < blocks.size(); ++b) {
+                    const auto &x = blocks[a], &y = blocks[b];
+                    if (gone[y.open] || x.indent != y.indent || x.title != y.title || x.landing != y.landing || x.body != y.body) continue;
+                    std::istringstream routes(y.routes);
+                    for (std::string route; routes >> route;) more_routes[a].push_back(route);
+                    for (std::size_t c = y.comments; c < y.open; ++c) more_comments[a].push_back(lines[c]);
+                    for (std::size_t c = y.comments; c <= y.close; ++c) gone[c] = true;
+                    if (y.comments > 0 && lines[y.comments - 1].find_first_not_of(" \t") == std::string::npos) gone[y.comments - 1] = true;
+                    ++joined;
+                }
+            }
+            if (more_routes.empty()) continue;
+            std::string out;
+            auto put = [&](const std::string& line) { out += line + "\n"; };
+            for (std::size_t i = 0; i < lines.size(); ++i) {
+                if (gone[i]) continue;
+                auto owner = std::find_if(blocks.begin(), blocks.end(), [&](const block& b) { return b.open == i; });
+                if (owner != blocks.end() && more_routes.contains(static_cast<std::size_t>(owner - blocks.begin()))) {
+                    std::size_t index = static_cast<std::size_t>(owner - blocks.begin());
+                    for (const auto& comment : more_comments[index]) put(comment);
+                    std::string head = lines[i].substr(0, lines[i].rfind('{'));
+                    while (!head.empty() && (head.back() == ' ' || head.back() == '\t')) head.pop_back();
+                    // The landing, if it has one, stays after the last address.
+                    std::string landing = owner->landing;
+                    if (!landing.empty()) head = head.substr(0, head.size() - landing.size());
+                    out += head;
+                    for (const auto& route : more_routes[index]) out += "\n" + owner->indent + "\t" + route;
+                    out += landing + " {\n";
+                    continue;
+                }
+                put(lines[i]);
+            }
+            out.pop_back();  // the last line had no newline after it
+            text = std::move(out);
+        }
+        return joined;
+    }
+
     struct upgraded {
         sources changed;                 // the files it changed, as they are now
         language::diagnostics problems;  // what's left that has no fix; nothing is changed while there's any
@@ -636,6 +736,8 @@ namespace one::driver {
             }
         }
         if (!out.problems.empty()) return out;
+        out.fixes += drop_site_titles(files);
+        out.fixes += join_screens(files);
         for (auto& [path, text] : files) {
             // Lined up against the file as it was, with the import its fix added, so the
             // lines still pair up.

@@ -326,6 +326,8 @@ namespace one::generators {
                     find_screens(web_detail::join(ns, n->name), n->declarations, found);
                 } else if (auto* s = std::get_if<language::screen_declaration>(&d.node)) {
                     found.push_back({ns, s, d.where});
+                } else if (auto* h = std::get_if<language::header_declaration>(&d.node); h && h->route && &found == &every_screen_) {
+                    path_headers_.emplace_back(ns, h);
                 }
             }
         }
@@ -607,6 +609,7 @@ namespace one::generators {
         };
 
         std::vector<found_screen> every_screen_;
+        std::vector<std::pair<std::string, const language::header_declaration*>> path_headers_;  // header /:project { … }, by namespace
 
         // The pages above a screen: those whose address its own goes on from, like
         // /projects/:project above /projects/:project/boards/:board, nearest last,
@@ -631,7 +634,7 @@ namespace one::generators {
                 std::string theirs_route = full_route(ns, s->route);
                 auto theirs = segments(theirs_route);
                 if (theirs.empty() || theirs.size() >= mine.size() || !std::equal(theirs.begin(), theirs.end(), mine.begin())) continue;
-                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title;
+                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title.empty() ? (title_.empty() ? name_ : title_) : s->title;
                 std::string spoken = title.find('{') != std::string::npos ? title_parts(parts, ns, title) : web_detail::js_string(title);
                 above.emplace_back(theirs.size(), "{ to: " + web_detail::js_string(theirs_route) + ", title: [" + spoken + "] }");
             }
@@ -687,6 +690,12 @@ namespace one::generators {
                 auto from_items = items.from(f.path, where.line);
                 items.open("<>");
                 if (std::string trail = crumbs(parts, ns, *s, route); !trail.empty()) items.line(trail);
+                // What a header says above every screen under its path, like a project's own.
+                for (const auto& [header_ns, header] : path_headers_) {
+                    std::string path = full_route(header_ns, *header->route);
+                    if (!route.starts_with(path) || (route.size() != path.size() && route[path.size()] != '/' && path != "/")) continue;
+                    screen_items(items, parts, header_ns, header->items, header->items);
+                }
                 // Laid out in regions, like main and side: as the screen puts its items
                 // in them, or with everything in main.
                 // What sits beside the title, like Edit project.
@@ -737,7 +746,8 @@ namespace one::generators {
                 }
                 items.close("</>");
 
-                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title;
+                // An untitled screen shows the site's title, as one titled with its name does.
+                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title.empty() ? (title_.empty() ? name_ : title_) : s->title;
                 // A title that shows live values, like "#{issue_page.number} {issue_page.title}",
                 // is set by the screen once they've arrived; until then it has none.
                 std::string titling;
@@ -756,7 +766,7 @@ namespace one::generators {
                     if (route.substr(at, end == std::string::npos ? std::string::npos : end - at).back() != '?') needs_parameter = true;
                 }
                 // The app's own name is its home, which its logo already links to.
-                if (!ns.empty() && !needs_parameter && title != name_) info += ", nav: " + web_detail::js_string(title);
+                if (!ns.empty() && !needs_parameter && title != name_ && !s->title.empty()) info += ", nav: " + web_detail::js_string(title);
                 if (parts.shown_in_path) info += ", shown: true";
                 info += " }";
 
@@ -774,7 +784,7 @@ namespace one::generators {
                     if (!part.empty() && part[0] != ':') word_of_route = part;
                     start = end == std::string::npos ? route.size() : end;
                 }
-                std::string name = web_detail::js_name(found.size() == 1 ? stem : titling.empty() ? s->title : word_of_route);
+                std::string name = web_detail::js_name(found.size() == 1 ? stem : titling.empty() && !s->title.empty() ? s->title : word_of_route);
                 bool shared = std::count_if(found.begin(), found.end(), [&](const found_screen& other) {
                                   return other.screen->title == s->title;
                               }) > 1;

@@ -22,6 +22,7 @@
 #include <optional>
 #include <regex>
 #include <set>
+#include <tuple>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -892,7 +893,19 @@ namespace one::language {
 
         // header { badge news.unread }: one for the whole site, its badges each a value
         // of a view.
-        void verify(const std::string&, location where, const header_declaration& h) {
+        void verify(const std::string& ns, location where, const header_declaration& h) {
+            // header /:project { … }: items above the screens under a path, checked as on
+            // a screen at that path.
+            if (h.route) {
+                std::string route = full_route(ns, *h.route);
+                bool under = std::any_of(routes_.begin(), routes_.end(), [&](const auto& r) {
+                    const std::string& other = r.first;
+                    return other.starts_with(route) && (other.size() == route.size() || other[route.size()] == '/' || route == "/");
+                });
+                if (!under) error(h.route_where, "there's no screen at " + route + " or under it for this header to sit above");
+                screen_items(ns, h.items, route);
+                return;
+            }
             if (++headers_ > 1) error(where, "a site has one header, beside its name on every page");
             for (const auto& badge : h.badges) {
                 const view_declaration* found = nullptr;
@@ -3761,15 +3774,32 @@ namespace one::language {
     // Checks what a project's files mean, once what they say in short is said in full.
     // Call it only after every file has parsed without errors, since a half-read file
     // would only produce follow-on errors.
+    // A screen at several addresses is checked at each, so what's wrong in it is said
+    // once: the same words at the same place are one mistake.
+    inline void said_once(diagnostics& out, std::size_t from) {
+        std::set<std::tuple<std::string, int, int, std::string>> seen;
+        std::size_t kept = from;
+        for (std::size_t at = from; at < out.size(); ++at) {
+            if (!seen.insert({out[at].path, out[at].where.line, out[at].where.column, out[at].message}).second) continue;
+            if (kept != at) out[kept] = std::move(out[at]);
+            ++kept;
+        }
+        out.resize(kept);
+    }
+
     inline void check(std::vector<file>& files, diagnostics& out) {
+        const std::size_t from = out.size();
         lower(files, out);
         checker(out).check(files);
+        said_once(out, from);
     }
 
     // Checks, and says what each name means where it's written.
     inline void check(std::vector<file>& files, diagnostics& out, meanings& meant) {
+        const std::size_t from = out.size();
         lower(files, out);
         checker(out, &meant).check(files);
+        said_once(out, from);
     }
 
 } // namespace one::language

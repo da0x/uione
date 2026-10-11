@@ -133,7 +133,8 @@ TEST_CASE("each screen is outlined by line: its layout, its regions and their it
     language::diagnostics found;
     std::vector<language::file> files;
     files.push_back(language::parse("issues.one", R"(namespace tracker {
-	screen "Issue" /issues/:issue layout two_columns {
+	screen "Issue" /issues/:issue {
+		layout two_columns
 		main {
 			markdown "{issue_page.body}"
 			thread issue_page.comments
@@ -159,16 +160,16 @@ TEST_CASE("each screen is outlined by line: its layout, its regions and their it
     CHECK(issue.route == "/issues/:issue");
     CHECK(issue.line == 2);
     CHECK(issue.layout == "two_columns");
-    CHECK(issue.layout_line == 2);
+    CHECK(issue.layout_line == 3);
     REQUIRE(issue.items.size() == 2);
     CHECK(issue.items[0].kind == "region");
     CHECK(issue.items[0].subject == "main");
-    CHECK(issue.items[0].line == 3);
+    CHECK(issue.items[0].line == 4);
     REQUIRE(issue.items[0].items.size() == 2);
     CHECK(issue.items[0].items[0].kind == "markdown");
     CHECK(issue.items[0].items[1].kind == "thread");
     CHECK(issue.items[0].items[1].subject == "issue_page.comments");
-    CHECK(issue.items[0].items[1].line == 5);
+    CHECK(issue.items[0].items[1].line == 6);
     const auto& side = issue.items[1];
     CHECK(side.subject == "side");
     REQUIRE(side.items.size() == 2);
@@ -176,7 +177,7 @@ TEST_CASE("each screen is outlined by line: its layout, its regions and their it
     CHECK(side.items[0].subject == "issue::close");
     CHECK(side.items[0].label == "Close");
     CHECK(side.items[1].kind == "details");
-    CHECK(side.items[1].line == 9);
+    CHECK(side.items[1].line == 10);
     CHECK(screens[1].layout.empty());
     CHECK(screens[1].layout_line == 0);
     REQUIRE(screens[1].items.size() == 1);
@@ -292,6 +293,30 @@ TEST_CASE("an upgrade says what's new in a timeline as a condition, and what it 
     REQUIRE(done.problems.empty());
     const auto& text = done.changed.begin()->second;
     CHECK(text.find("\t\t\tnew when created_at > news.seen\n\t\t\ton open dispatch reader::create\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("an upgrade moves under and layout into a screen, drops a title that's only the site's, and joins screens that are the same") {
+    auto dir = project("uione-upgrade-screens",
+                       "import one\n\nproject shop {\n\ttitle  \"Shop\"\n}\n\n"
+                       "namespace work at / {\n"
+                       "\tentity order {\n\t\ttitle  text\n\t}\n"
+                       "\tview order_page per order {\n\t\ttitle = order.title\n\t}\n"
+                       "\tscreen \"Orders\" /orders {\n\t\ttext \"all\"\n\t}\n"
+                       "\tscreen \"{order_page.title}\" /:order under /orders \"Orders\" layout two_columns {\n\t\ttext \"one\"\n\t}\n\n"
+                       "\t// Its proof.\n"
+                       "\tscreen \"Shop\" /:order/proof {\n\t\ttext \"proof\"\n\t}\n\n"
+                       "\t// Its proof, printed.\n"
+                       "\tscreen \"Shop\" /:order/proof/printed {\n\t\ttext \"proof\"\n\t}\n"
+                       "}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\tscreen \"{order_page.title}\" /:order {\n\t\tunder /orders \"Orders\"\n\t\tlayout two_columns\n\t\ttext \"one\"\n\t}\n") != std::string::npos);
+    CHECK(text.find("\t// Its proof.\n\t// Its proof, printed.\n\tscreen /:order/proof\n\t\t/:order/proof/printed {\n\t\ttext \"proof\"\n\t}\n}\n") != std::string::npos);
+    CHECK(text.find("screen \"Orders\" /orders {") != std::string::npos);
     std::filesystem::remove_all(dir);
 }
 

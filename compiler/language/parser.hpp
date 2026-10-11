@@ -51,6 +51,7 @@ namespace one::language {
         std::vector<token> tokens_;
         std::vector<int> depth_;  // how many braces are open before each token
         std::size_t pos_ = 0;
+        location fix_where_;  // where a fix that moves text begins
         bool relative_times_ = false;  // while reading a filter, where 7 days ago is a time
         std::optional<screen_item> button_form_;  // the form a button's line ended with, put after it
 
@@ -157,6 +158,23 @@ namespace one::language {
                 std::size_t start = pos_;
                 try {
                     result.push_back(parse_declaration());
+                    // A screen at several addresses is read once for each, from its block,
+                    // and what's wrong in it is said once.
+                    if (auto* first = std::get_if<screen_declaration>(&result.back().node); first && !first->more_routes.empty()) {
+                        const std::size_t after = pos_, said = out_.size();
+                        const location where = result.back().where;
+                        const screen_declaration shape{first->title, first->title_is_name, {}, {}, first->block_at, first->layout, first->layout_where,
+                                                       first->landing, first->landing_where, first->under, first->under_title, first->under_where, {}};
+                        for (const auto& route : std::vector<std::string>(first->more_routes)) {
+                            screen_declaration next{shape.title, shape.title_is_name, route, {}, shape.block_at, shape.layout, shape.layout_where,
+                                                    shape.landing, shape.landing_where, shape.under, shape.under_title, shape.under_where, {}};
+                            pos_ = next.block_at;
+                            parse_screen_body(next);
+                            out_.resize(said);
+                            result.push_back({where, std::move(next)});
+                        }
+                        pos_ = after;
+                    }
                 } catch (const parse_error&) {
                     recover(start, inside_block);
                 }
@@ -211,6 +229,16 @@ namespace one::language {
                 footer.items = parse_screen_block();
                 end_line();
                 return {where, std::move(footer)};
+            }
+            // header /:project { component project_header }
+            if (word == "header" && peek(1).kind == token_kind::route) {
+                advance();
+                header_declaration header;
+                header.route_where = peek().where;
+                header.route = advance().text;
+                header.items = parse_screen_block();
+                end_line();
+                return {where, std::move(header)};
             }
             // header { badge news.unread }
             if (word == "header" && peek(1).kind == token_kind::left_brace) {
@@ -922,36 +950,106 @@ namespace one::language {
         }
 
         screen_declaration parse_screen() {
-            advance();
+            const token& keyword = advance();
             screen_declaration screen;
             if (at(token_kind::string)) {
                 screen.title = advance().text;
             } else if (at(token_kind::identifier)) {
                 screen.title = advance().text;
                 screen.title_is_name = true;
-            } else {
-                fail_expecting("the screen's title, like \"Shelf\"");
+            } else if (!at(token_kind::route)) {
+                fail_expecting("the screen's title, like \"Shelf\", or its address, like /shelf");
             }
             screen.route = expect(token_kind::route, "the screen's route, like /shelf").text;
+            // Its other addresses, on the same line or each on a line of its own.
+            for (;;) {
+                if (at(token_kind::route)) {
+                    screen.more_routes.push_back(advance().text);
+                } else if (at(token_kind::newline) && peek(1).kind == token_kind::route) {
+                    advance();
+                } else {
+                    break;
+                }
+            }
+            // Said before 0.9.5 beside the address: under and layout, which now go inside.
+            std::optional<std::size_t> moved_from;
+            std::string moved;
             if (at_word("under")) {
-                advance();
+                const token& word = advance();
+                moved_from = word.begin;
                 screen.under_where = peek().where;
                 screen.under = expect(token_kind::route, "the page above it, like /:project/boards/:board").text;
-                screen.under_title = expect(token_kind::string, "what that page is called from here, like \"{issue_page.board_title}\"").text;
+                const token& title = expect(token_kind::string, "what that page is called from here, like \"{issue_page.board_title}\"");
+                screen.under_title = title.text;
+                moved += std::string(source_.substr(word.begin, title.end - word.begin));
+                fix_where_ = word.where;
             }
             if (at_word("layout")) {
-                advance();
+                const token& word = advance();
+                if (!moved_from) {
+                    moved_from = word.begin;
+                    fix_where_ = word.where;
+                }
                 screen.layout_where = peek().where;
-                screen.layout = expect(token_kind::identifier, "a layout, like single or two_columns").text;
+                const token& name = expect(token_kind::identifier, "a layout, like single or two_columns");
+                screen.layout = name.text;
+                moved += (moved.empty() ? "" : "\n") + std::string(source_.substr(word.begin, name.end - word.begin));
             }
+            std::string landing;
             if (at_word("landing")) {
-                advance();
+                const token& word = advance();
                 screen.landing_where = peek().where;
-                screen.landing = expect(token_kind::identifier, "a landing design: waveform, studio, aurora, grid or relay").text;
+                const token& name = expect(token_kind::identifier, "a landing design: waveform, studio, aurora, grid or relay");
+                screen.landing = name.text;
+                landing = std::string(source_.substr(word.begin, name.end - word.begin)) + " ";
             }
-            screen.items = parse_screen_block();
+            if (moved_from && at(token_kind::left_brace)) {
+                // Each moved line indented one more than the screen's own line.
+                std::size_t line = source_.rfind('\n', keyword.begin);
+                std::string indent(source_.substr(line == std::string_view::npos ? 0 : line + 1, keyword.begin - (line == std::string_view::npos ? 0 : line + 1)));
+                std::string inside;
+                for (std::size_t at = 0; at <= moved.size();) {
+                    std::size_t end = moved.find('\n', at);
+                    inside += "\n" + indent + "\t" + moved.substr(at, end == std::string::npos ? std::string::npos : end - at);
+                    if (end == std::string::npos) break;
+                    at = end + 1;
+                }
+                out_.push_back({path_, fix_where_, "say under and layout inside the screen, each on a line of its own",
+                                fix{fix_where_, peek().end - *moved_from, landing + "{" + inside}});
+            }
+            screen.block_at = pos_;
+            parse_screen_body(screen);
             end_line();
             return screen;
+        }
+
+        // A screen's block: its items, and where it sits and how it's laid out, as
+        // under /:project/boards/:board "{issue_page.board.title}" and layout two_columns.
+        void parse_screen_body(screen_declaration& screen) {
+            expect(token_kind::left_brace, "'{'");
+            while (in_block()) {
+                if (at_word("under") && peek(1).kind == token_kind::route) {
+                    advance();
+                    screen.under_where = peek().where;
+                    screen.under = advance().text;
+                    screen.under_title = expect(token_kind::string, "what that page is called from here, like \"{issue_page.board.title}\"").text;
+                    end_line();
+                    continue;
+                }
+                if (at_word("layout") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::newline || peek(2).kind == token_kind::right_brace)) {
+                    advance();
+                    screen.layout_where = peek().where;
+                    screen.layout = advance().text;
+                    end_line();
+                    continue;
+                }
+                screen.items.push_back(parse_screen_item());
+                if (button_form_) {
+                    screen.items.push_back(std::move(*button_form_));
+                    button_form_.reset();
+                }
+            }
+            expect(token_kind::right_brace, "'}'");
         }
 
         std::vector<screen_item> parse_screen_block() {

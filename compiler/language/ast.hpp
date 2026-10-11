@@ -727,9 +727,13 @@ namespace one::language {
     };
 
     struct screen_declaration {
-        std::string title;
+        std::string title;           // empty for an untitled screen, screen /:project/settings, which shows the site's
         bool title_is_name = false;  // screen docs /:page, rather than screen "Shelf" /shelf
         std::string route;
+        // screen /a /b { … }: its other addresses, each read as a screen of its own with
+        // the same items, from the block's first token.
+        std::vector<std::string> more_routes;
+        std::size_t block_at = 0;
         std::optional<std::string> layout;  // layout two_columns: how its regions are laid out
         location layout_where;
         std::optional<std::string> landing;  // landing grid: a front page drawn in one of uione's designs
@@ -825,8 +829,13 @@ namespace one::language {
         std::string value;  // unread
     };
 
+    // header /:project { component project_header }: items above every screen whose
+    // address goes on from that path.
     struct header_declaration {
         std::vector<header_badge> badges;
+        std::optional<std::string> route;
+        location route_where;
+        std::vector<screen_item> items;
     };
 
     struct declaration {

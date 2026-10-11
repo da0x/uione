@@ -247,8 +247,8 @@ TEST_CASE("a screen is laid out in regions, everything in main unless it says") 
     fs::create_directories(dir);
     platform::write_file((dir / "main.one").string(),
                          "namespace tracker {\nentity issue {\n\ttitle  text\n}\nview issue_page per issue {\n\ttitle = issue.title\n}\n"
-                         "screen \"Issue\" /issues/:issue layout two_columns {\n\tmain {\n\t\ttext \"{issue_page.title}\"\n\t}\n\tside {\n\t\ttext \"aside\"\n\t}\n}\n"
-                         "screen \"Other\" /other layout two_columns {\n\ttext \"all in main\"\n}\n"
+                         "screen \"Issue\" /issues/:issue {\n\tlayout two_columns\n\tmain {\n\t\ttext \"{issue_page.title}\"\n\t}\n\tside {\n\t\ttext \"aside\"\n\t}\n}\n"
+                         "screen \"Other\" /other {\n\tlayout two_columns\n\ttext \"all in main\"\n}\n"
                          "screen \"Plain\" /plain {\n\ttext \"as it was\"\n}\n}\n");
     auto screens_files = generate_at(dir.string());
     const auto* screens = find(screens_files, "src/screens/main.tsx");
@@ -1053,7 +1053,7 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
                          "view issue_page per issue {\n\ttitle = issue.title\n\tboard = issue.board\n\tboard_title = issue.board.title\n}\n"
                          "screen \"{project_page.name}\" /:project {\n\ttext \"hi\"\n}\n"
                          "screen \"{board_page.title}\" /:project/boards/:board {\n\ttext \"hi\"\n}\n"
-                         "screen \"{issue_page.title}\" /:project/:issue under /:project/boards/:board \"{issue_page.board_title}\" {\n\ttext \"hi\"\n}\n"
+                         "screen \"{issue_page.title}\" /:project/:issue {\n\tunder /:project/boards/:board \"{issue_page.board_title}\"\n\ttext \"hi\"\n}\n"
                          "}\n");
     auto screens_files = generate_at(dir.string());
     const auto* screens = find(screens_files, "src/screens/main.tsx");
@@ -1072,11 +1072,43 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
                                                 "entity issue {\n\ttitle  text\n}\n"
                                                 "view issue_page per issue {\n\ttitle = issue.title\n}\n"
                                                 "screen \"Board\" /boards/:board {\n\ttext \"hi\"\n}\n"
-                                                "screen \"Issue\" /issues/:issue under /boards/:board \"Board\" {\n\ttext \"hi\"\n}\n"
+                                                "screen \"Issue\" /issues/:issue {\n\tunder /boards/:board \"Board\"\n\ttext \"hi\"\n}\n"
                                                 "}\n", out));
     language::check(files, out);
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "this screen's address has no :board, so a view per what it shows holds it, like board = issue.board");
+}
+
+TEST_CASE("a screen can be untitled and at several addresses, and a header sits above every screen under its path") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-addresses";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "import one\nproject shop {\n\ttitle  \"Shop\"\n}\n"
+                         "namespace work at / {\n"
+                         "header /orders {\n\ttext \"Orders above\"\n}\n"
+                         "screen \"Orders\" /orders {\n\ttext \"all\"\n}\n"
+                         "screen /orders/:order\n\t/orders/:order/proof {\n\ttext \"one\"\n}\n"
+                         "screen \"Help\" /help {\n\ttext \"help\"\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    // Each address is its own screen, with the same items, and an untitled one shows
+    // the site's title and isn't in the navigation.
+    CHECK(tsx.find(R"({ title: "Shop", route: "/orders/:order" })") != std::string::npos);
+    CHECK(tsx.find(R"({ title: "Shop", route: "/orders/:order/proof" })") != std::string::npos);
+    CHECK(tsx.find(R"({ title: "Help", route: "/help", nav: "Help" })") != std::string::npos);
+    // The header's items come first on every screen under /orders, and on no other.
+    std::size_t above = 0;
+    for (std::size_t at = tsx.find("Orders above"); at != std::string::npos; at = tsx.find("Orders above", at + 1)) ++above;
+    CHECK(above == 3);
+    std::size_t help = tsx.find("route: \"/help\"");
+    REQUIRE(help != std::string::npos);
+    CHECK(tsx.find("Orders above", help) == std::string::npos);
 }
 
 TEST_CASE("cards show a list's rows large, with a tally and filters, under a subtitle and an icon to edit") {
@@ -1402,7 +1434,7 @@ TEST_CASE("a link and a toolbar's button can be drawn as icons, and a subtitle s
                          "entity issue {\n\ttitle  text\n}\ncommand issue::create\n"
                          "view issues {\n\teach issue {\n\t\ttitle\n\t}\n}\n"
                          "screen \"Workflow\" /workflow {\n\ttext \"a\"\n}\n"
-                         "screen \"Issues\" /issues layout two_columns {\n\tsubtitle \"All of them\"\n"
+                         "screen \"Issues\" /issues {\n\tlayout two_columns\n\tsubtitle \"All of them\"\n"
                          "\tmain {\n\t\ttable issues {\n\t\t\ttitle\n\t\t\tissue::create \"New issue\" icon add\n\t\t}\n\t\tform issue::create {\n\t\t\ttitle\n\t\t}\n\t}\n"
                          "\tside {\n\t\tlink /workflow \"Workflow\" icon workflow\n\t}\n}\n"
                          "}\n");

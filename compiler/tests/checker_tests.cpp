@@ -1333,10 +1333,10 @@ TEST_CASE("details show values the view has") {
 
 TEST_CASE("a screen's regions are its layout's, and hold everything once there are any") {
     const std::string start = "namespace a {\n";
-    CHECK(check_source(start + "screen \"S\" /s layout two_columns {\n\tmain {\n\t\ttext \"a\"\n\t}\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
-    CHECK(only_error(start + "screen \"S\" /s layout three_columns {\n\ttext \"a\"\n}\n}\n").message == "layout is single or two_columns");
+    CHECK(check_source(start + "screen \"S\" /s {\n\tlayout two_columns\n\tmain {\n\t\ttext \"a\"\n\t}\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
+    CHECK(only_error(start + "screen \"S\" /s {\n\tlayout three_columns\n\ttext \"a\"\n}\n}\n").message == "layout is single or two_columns");
     CHECK(only_error(start + "screen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").message == "layout single has no region side; its regions are main");
-    CHECK(only_error(start + "screen \"S\" /s layout two_columns {\n\tmain {\n\t\ttext \"a\"\n\t}\n\ttext \"b\"\n}\n}\n").message ==
+    CHECK(only_error(start + "screen \"S\" /s {\n\tlayout two_columns\n\tmain {\n\t\ttext \"a\"\n\t}\n\ttext \"b\"\n}\n}\n").message ==
           "this screen puts its items in regions, so this goes in one too, like main { ... }");
     CHECK(check_source("import one\nproject p {\n\tlayout  two_columns\n}\nnamespace a {\nscreen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
 }
@@ -1398,14 +1398,14 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
 }
 
 TEST_CASE("a section is drawn in one of the library's colors") {
-    std::string code = "namespace work {\nscreen \"Home\" / layout two_columns {\n\tside {\n\t\tsection \"Wiki\" color ";
+    std::string code = "namespace work {\nscreen \"Home\" / {\n\tlayout two_columns\n\tside {\n\t\tsection \"Wiki\" color ";
     CHECK(check_source(code + "violet {\n\t\t\ttext \"a\"\n\t\t}\n\t}\n}\n}\n").empty());
     CHECK(only_error(code + "purple {\n\t\t\ttext \"a\"\n\t\t}\n\t}\n}\n}\n").message ==
           "there's no color purple; there are blue, teal, green, amber, red and violet");
 }
 
 TEST_CASE("a subtitle sits under the title of a screen laid out in regions") {
-    CHECK(check_source("namespace work {\nscreen \"Home\" / layout two_columns {\n\tsubtitle \"Everything at a glance\"\n\tmain {\n\t\ttext \"a\"\n\t}\n"
+    CHECK(check_source("namespace work {\nscreen \"Home\" / {\n\tlayout two_columns\n\tsubtitle \"Everything at a glance\"\n\tmain {\n\t\ttext \"a\"\n\t}\n"
                        "\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n")
               .empty());
 }
@@ -1561,6 +1561,6 @@ TEST_CASE("a landing page is drawn in one of uione's designs") {
     wrong.replace(wrong.find("grid"), 4, "neon");
     CHECK(only_error(wrong).message == "landing is waveform, studio, aurora, grid or relay");
     std::string both = page;
-    both.replace(both.find("landing grid"), 12, "layout two_columns landing grid");
+    both.replace(both.find("landing grid {\n"), 14, "landing grid {\n\tlayout two_columns\n");
     CHECK(only_error(both).message == "a landing page is laid out by its design, so it says no layout");
 }

@@ -94,6 +94,8 @@ rule           ::= "required" | "unique" | "key" | "after" NAME
  * view, like what's new to the person reading, when it's more than none */
 
 header         ::= "header" "{" NEWLINE? badge* "}" END
+                 | "header" ROUTE screen_block END
+/* header /:project { … }: items above every screen whose address goes on from that path */
 badge          ::= "badge" NAME "." NAME END
 
 /* footer: what's at the foot of every page, in one line or in columns of sections,
@@ -184,7 +186,13 @@ function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
 
 /* screen */
 
-screen         ::= "screen" (STRING | NAME) ROUTE ("under" ROUTE STRING)? ("layout" NAME)? ("landing" NAME)? screen_block END
+screen         ::= "screen" (STRING | NAME)? ROUTE (NEWLINE? ROUTE)* ("landing" NAME)? screen_body END
+/* an untitled screen shows the site's title; each address is the same screen */
+screen_body    ::= "{" NEWLINE? (screen_place | screen_item)* "}"
+screen_place   ::= "under" ROUTE STRING END
+                 | "layout" NAME END
+/* under /:project/boards/:board "{issue_page.board.title}": the page above it, though its
+   address doesn't say so; layout two_columns: how its regions are laid out */
 /* landing waveform | studio | aurora | grid | relay: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_block END

@@ -1178,7 +1178,17 @@ function sort_title(title) {
 
 ## screen
 
-A page: a title, a route, and what is on it.
+A page: a title, a route, and what is on it. A screen without a title, `screen
+/:project/settings { ... }`, shows the site's own, and isn't in the menu. A screen
+at several addresses says each, the others on lines of their own under the first,
+and each is the same page:
+
+```one
+screen /:owner/:project/deployments
+	/:owner/:project/deployments/:place/setup {
+	component deployments
+}
+```
 
 ```one
 screen "Shelf" /shelf {
@@ -1327,8 +1337,8 @@ form step::update "Save" {
 - A screen whose address goes on from another's, like `/:project/boards/:board`
   from `/:project`, shows the trail of pages above it, each by its title and
   linked, above its own title: Projects › neotrac › Product.
-- `screen "#{issue_page.number}" /:project/:issue under /:project/boards/:board
-  "{issue_page.board_title}"` puts a screen under a page its address doesn't name:
+- `under /:project/boards/:board "{issue_page.board_title}"`, a line of a screen's
+  own, puts it under a page its address doesn't name:
   its trail is that page's, then that page, called as it says, with what its
   address needs taken from the screen's views, like `board = issue.board`.
 - A link that names something keyed by several parts, like a board in
@@ -1399,7 +1409,7 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   it copies. The ids of people are left out, since they mean nothing pasted
   elsewhere, and so is a list only buttons go by, like the steps of an issue's Move
   buttons.
-- `layout two_columns` after a screen's address lays it out in two columns: `main`,
+- `layout two_columns`, a line of a screen's own, lays it out in two columns: `main`,
   wide, for what the page is about, and `side`, narrow, beside it on a wide screen
   and after it on a phone. A screen puts its items in them with `main { ... }` and
   `side { ... }`, every item in one once it uses any, or leaves them all in main.
@@ -1613,6 +1623,10 @@ view project_settings per project {
 What's beside the site's name on every page. A `badge` shows a value of a view,
 like what's new to the person reading, once they're signed in and while it's more
 than none. A site has one header, or none.
+
+`header /:owner/:project { ... }` is what's above every screen whose address goes
+on from that path, like a project's own name and tabs, before the screen's own
+items. It takes what a screen does, checked as on a screen at that path.
 
 ```one
 header {
