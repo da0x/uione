@@ -320,6 +320,24 @@ TEST_CASE("an upgrade moves under and layout into a screen, drops a title that's
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("an upgrade shows a person as one column, their picture beside their name") {
+    auto dir = project("uione-upgrade-people",
+                       "import one\n\nnamespace work at / {\n"
+                       "\tentity order {\n\t\ttitle  text\n\t\tauthor  user  = me\n\t}\n"
+                       "\tview orders {\n\t\teach order {\n\t\t\ttitle  author.picture  author.name\n\t\t}\n\t}\n"
+                       "\tscreen \"Orders\" /orders {\n\t\ttable orders {\n\t\t\ttitle\n\t\t\tauthor.picture \"\"\n\t\t\tauthor.name \"Opened by\"\n\t\t}\n"
+                       "\t\ttable orders {\n\t\t\ttitle  author.picture \"\"  author.name\n\t\t}\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\t\t\ttitle\n\t\t\tauthor \"Opened by\"\n\t\t}\n") != std::string::npos);
+    CHECK(text.find("\t\t\ttitle  author\n") != std::string::npos);
+    CHECK(text.find("\t\t\ttitle  author.picture  author.name\n") != std::string::npos);  // the view's rows hold both still
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade says each change in, in project and me") {
     auto dir = project("uione-upgrade-in",
                        "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"

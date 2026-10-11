@@ -405,6 +405,32 @@ describe("a table with people in it", () => {
   });
 });
 
+describe("a person's column", () => {
+  it("shows each person's picture beside their name in one cell, and only an https picture", () => {
+    const source = memorySource({
+      views: {
+        "shop::orders": {
+          rows: [
+            { id: "o1", "author.name": "Ada", "author.picture": "https://example.com/ada.png", "packed_by.name": ["Eve", "Max"], "packed_by.picture": ["https://example.com/eve.png", "javascript:alert(1)"] },
+          ],
+        },
+      },
+    });
+    const { container } = renderScreen(source, () => (
+      <Table
+        view={useView("shop::orders")}
+        columns={{ "author.name": "Opened by", "packed_by.name": "Packed by" }}
+        people={{ "author.name": "author.picture", "packed_by.name": "packed_by.picture" }}
+      />
+    ));
+    const cells = container.querySelectorAll("tbody td");
+    expect(cells[0].textContent).toBe("Ada");
+    expect(cells[0].querySelector("img")?.getAttribute("src")).toBe("https://example.com/ada.png");
+    expect(cells[1].textContent).toBe("EveMax");
+    expect(Array.from(cells[1].querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["https://example.com/eve.png"]);
+  });
+});
+
 describe("a web address in a table", () => {
   it("is a link to wherever it is, which says it leaves the app, with the address shortened", () => {
     const log = "https://console.cloud.google.com/cloud-build/builds/a2d3012f-883f-4aef-b810-5e9611c75899?project=39906949747";

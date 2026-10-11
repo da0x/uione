@@ -540,6 +540,8 @@ What a field must be, written after its type: `shelfmark  shelfmark  required  u
   shelfmark, or a project's owner and slug.
 - `after lent_at`: a date that has to come after another field's.
 - `= value`: what it starts as, like `= now`, `= me` or `= status::open`.
+- `"#"`, before any `= value`: what every screen calls it, like `number  serial  per
+  project  key  "#"`, unless a screen says its own.
 
 ## format
 
@@ -1214,8 +1216,10 @@ screen "Book" /books/:book {
 }
 ```
 
-- A column like `member.picture` shows the person's picture, small and round, so
-  `member.picture ""` and `member.name "Member"` put a face beside a name.
+- A column that's a person, like `member` or `assignees`, shows each one's name
+  with their picture, small and round, beside it, when the rows hold
+  `member.name` and `member.picture`. A column like `member.picture` alone shows
+  just the picture.
 - A route's last parameter can take the rest of the address, slashes and all:
   `screen "Code" /:project/code/:file*` is at `/neotrac/code/components/chart.tsx`,
   where `useParam("file")` is `components/chart.tsx`. Going from one such address to

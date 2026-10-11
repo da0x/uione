@@ -1079,6 +1079,31 @@ TEST_CASE("a screen's trail is the pages its address goes on from, or the page i
     CHECK(out[0].message == "this screen's address has no :board, so a view per what it shows holds it, like board = issue.board");
 }
 
+TEST_CASE("a field's label is every screen's, unless one says its own, and a person's column shows their picture beside their name") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-labels";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity order {\n\tnumber  serial  key  \"#\"\n\ttitle  text\n\tpacked_by  list of user  \"Packed by\"\n\tauthor  user  = me\n}\n"
+                         "command order::update\n"
+                         "view orders {\n\teach order {\n\t\tnumber  title  packed_by.name  packed_by.picture  author.name  author.picture\n\t}\n}\n"
+                         "view order_page per order {\n\tnumber = order.number\n\ttitle = order.title\n\tpacked_by = order.packed_by\n}\n"
+                         "screen \"Orders\" /orders {\n\ttable orders {\n\t\tnumber  title  packed_by  author \"Opened by\"\n\t}\n}\n"
+                         "screen \"Order\" /orders/:order {\n\tdetails order_page {\n\t\tnumber\n\t}\n\tform order::update {\n\t\ttitle  packed_by\n\t}\n}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(columns={{ number: "#", title: "Title", "packed_by.name": "Packed by", "author.name": "Opened by" }})") != std::string::npos);
+    CHECK(tsx.find(R"(people={{ "packed_by.name": "packed_by.picture", "author.name": "author.picture" }})") != std::string::npos);
+    CHECK(tsx.find(R"({ name: "packed_by", label: "Packed by")") != std::string::npos);
+    CHECK(tsx.find(R"([["number", "#"]])") != std::string::npos);
+}
+
 TEST_CASE("a screen can be untitled and at several addresses, and a header sits above every screen under its path") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-addresses";

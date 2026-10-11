@@ -2474,7 +2474,9 @@ namespace one::language {
                 }
             }
             if (column.when) error(column.when->where, "only a row's button has a when, like delete \"Remove\" when person != me");
-            if (!in_rows(each, key)) {
+            // author: a person, shown by their name, and their picture beside it when the
+            // rows hold it.
+            if (!in_rows(each, key) && !in_rows(each, key + ".name")) {
                 std::string where = each.name ? *each.name : "rows";
                 error(column.where, "view " + view_name + " has no " + key + " in its " + where + "; add it to the list's block");
             }

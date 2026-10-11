@@ -1038,9 +1038,30 @@ function cellOf(
   links: ReturnType<typeof useLinks>,
   row: Row,
   key: string,
-  { choices = {}, labels = [], pictures = [] }: { choices?: Record<string, Record<string, string>>; labels?: string[]; pictures?: string[] },
+  {
+    choices = {},
+    labels = [],
+    pictures = [],
+    people = {},
+  }: { choices?: Record<string, Record<string, string>>; labels?: string[]; pictures?: string[]; people?: Record<string, string> },
 ): ReactNode {
   const value = row[key];
+  // A person, or several, each their picture beside their name.
+  const picture = people[key];
+  if (picture !== undefined) {
+    const names = Array.isArray(value) ? value : [value];
+    const seen = row[picture];
+    const faces = Array.isArray(seen) ? seen : [seen];
+    return names
+      .map((name, at) => [show(name), faces[at]] as const)
+      .filter(([name]) => name !== "")
+      .map(([name, face], at) => (
+        <span key={at} style={{ display: "inline-flex", alignItems: "center", gap: "0.4em", marginInlineEnd: "0.75em" }}>
+          {typeof face === "string" && face.startsWith("https://") ? <ui.Picture source={face} /> : null}
+          {name}
+        </span>
+      ));
+  }
   const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
   if (shown !== undefined) return shown;
   if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map((item) => show(item)).filter((item) => item !== "")} />;
@@ -1111,6 +1132,7 @@ export function Table({
   keyed,
   named,
   pictures = [],
+  people = {},
   choices = {},
   labels = [],
   by,
@@ -1133,6 +1155,7 @@ export function Table({
   keyed?: string[]; // the key's parts before the last, when the link names them, like owner in /:owner/:project
   named?: Record<string, number>; // parameters a row fills with the last part of an id keyed by that many, like a board in /:project/boards/:board
   pictures?: string[];
+  people?: Record<string, string>; // a person's column by their name, and their picture beside it, like { "author.name": "author.picture" }
   choices?: Record<string, Record<string, string>>; // a choice column's values, as they're shown, like private as Private
   labels?: string[]; // columns holding a list of words, each shown on its own, like an issue's labels
   by?: string; // a choice column whose choices are tabs, each showing the rows that have it
@@ -1248,7 +1271,7 @@ export function Table({
         rows={rows.map((row) => ({
           id: row.id,
           link: link ? links(rowLink(link, row, params, keyed, named)) : undefined,
-          cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })),
+          cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people })),
           tone: toneOf(row, tint),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
@@ -1312,6 +1335,7 @@ export function Board({
   keyed,
   named,
   pictures = [],
+  people = {},
   choices = {},
   labels = [],
   move,
@@ -1332,6 +1356,7 @@ export function Board({
   keyed?: string[];
   named?: Record<string, number>; // parameters a row fills with the last part of an id keyed by that many, like a board in /:project/boards/:board
   pictures?: string[];
+  people?: Record<string, string>; // a person's column by their name, and their picture beside it, like { "author.name": "author.picture" }
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   move?: BoardMove;
@@ -1435,9 +1460,9 @@ export function Board({
             .filter((card) => where(card) === thing.id)
             .map((card) => ({
               id: card.id,
-              title: title ? cellOf(ui, links, card, title, { choices, labels, pictures }) : card.id,
+              title: title ? cellOf(ui, links, card, title, { choices, labels, pictures, people }) : card.id,
               link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
-              details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
+              details: rest.map((key) => cellOf(ui, links, card, key, { choices, labels, pictures, people })).filter((detail) => detail !== ""),
               reaches: reaches(where(card)),
               tone: toneOf(card, tint),
             })),
@@ -1530,6 +1555,7 @@ export function Cards({
   keyed,
   named,
   pictures = [],
+  people = {},
   choices = {},
   labels = [],
   tally,
@@ -1542,6 +1568,7 @@ export function Cards({
   keyed?: string[];
   named?: Record<string, number>;
   pictures?: string[];
+  people?: Record<string, string>; // a person's column by their name, and their picture beside it, like { "author.name": "author.picture" }
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   tally?: Tally;
@@ -1571,9 +1598,9 @@ export function Cards({
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
         return {
           id: row.id,
-          title: title ? cellOf(ui, links, row, title, { choices, labels, pictures }) : row.id,
+          title: title ? cellOf(ui, links, row, title, { choices, labels, pictures, people }) : row.id,
           link: to ? links(to) : undefined,
-          details: rest.map((key) => cellOf(ui, links, row, key, { choices, labels, pictures })).filter((detail) => detail !== ""),
+          details: rest.map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people })).filter((detail) => detail !== ""),
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],

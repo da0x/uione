@@ -539,6 +539,8 @@ namespace one::language {
                                      "unique, key or after");
                 }
             }
+            // number  serial  key  "#": what screens call it.
+            if (at(token_kind::string)) f.label = advance().text;
             if (at(token_kind::assign)) {
                 advance();
                 f.initial = parse_expression();

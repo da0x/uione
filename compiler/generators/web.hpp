@@ -1552,13 +1552,15 @@ namespace one::generators {
                    const language::table_item* beside = nullptr) {
             parts.components.insert("Board");
             const language::entity_declaration* entity = listed(ns, board.view.text(), board.list);
-            std::string columns, pictures, labels, shown;
+            std::string columns, pictures, people, labels, shown;
             for (const auto& column : board.columns) {
                 std::string key = web_detail::text_of(*column.value);
                 if (key.find("::") != std::string::npos) continue;  // a button in its toolbar
-                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
+                auto column_shown = shown_as(ns, board.view.text(), board.list, entity, key, column.label);
+                if (column_shown.picture) people += (people.empty() ? "" : ", ") + web_detail::js_string(column_shown.key) + ": " + web_detail::js_string(*column_shown.picture);
+                key = column_shown.key;
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
-                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+                           web_detail::js_string(column_shown.label);
                 if (key.ends_with(".picture")) pictures += (pictures.empty() ? "" : ", ") + web_detail::js_string(key);
                 for (const auto& f : entity ? entity->fields : nothing_) {
                     if (f.name != key) continue;
@@ -1593,6 +1595,7 @@ namespace one::generators {
                 line += named_by(ns, target);
             }
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!people.empty()) line += " people={{ " + people + " }}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             const std::vector<std::string>& search = board.search.empty() && beside ? beside->search : board.search;
@@ -1694,8 +1697,13 @@ namespace one::generators {
             std::string fields, shown, labels, files;
             for (const auto& f : details.fields) {
                 std::string key = web_detail::text_of(*f.value);
+                // Called as it says, or as its field is everywhere.
+                std::optional<std::string> label = f.label;
+                for (const auto& field : entity ? entity->fields : nothing_) {
+                    if (!label && field.name == key && field.label) label = field.label;
+                }
                 fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
-                          web_detail::js_string(f.label ? *f.label : web_detail::label(key)) + "]";
+                          web_detail::js_string(label ? *label : web_detail::label(key)) + "]";
                 if (!view || !entity) continue;
                 for (const auto& value : view->values) {
                     if ((value.name ? *value.name : web_detail::text_of(*value.value)) != key) continue;
@@ -1872,12 +1880,14 @@ namespace one::generators {
         void cards(stream& out, screen_parts& parts, const std::string& ns, const language::cards_item& cards) {
             parts.components.insert("Cards");
             const language::entity_declaration* entity = listed(ns, cards.view.text(), cards.list);
-            std::string columns, pictures, labels, shown;
+            std::string columns, pictures, people, labels, shown;
             for (const auto& column : cards.columns) {
                 std::string key = web_detail::text_of(*column.value);
-                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
+                auto column_shown = shown_as(ns, cards.view.text(), cards.list, entity, key, column.label);
+                if (column_shown.picture) people += (people.empty() ? "" : ", ") + web_detail::js_string(column_shown.key) + ": " + web_detail::js_string(*column_shown.picture);
+                key = column_shown.key;
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
-                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+                           web_detail::js_string(column_shown.label);
                 if (key.ends_with(".picture")) pictures += (pictures.empty() ? "" : ", ") + web_detail::js_string(key);
                 for (const auto& f : entity ? entity->fields : nothing_) {
                     if (f.name != key) continue;
@@ -1900,6 +1910,7 @@ namespace one::generators {
                 line += named_by(ns, target);
             }
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!people.empty()) line += " people={{ " + people + " }}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             if (cards.tally) {
@@ -2027,12 +2038,49 @@ namespace one::generators {
             out.line(line + " />");
         }
 
+        // A column as it's shown: author, a person, is their name, with their picture
+        // beside it when the rows hold it; and it's called as the screen says, or as its
+        // field is everywhere, like number "#", or by its name.
+        struct shown_column {
+            std::string key;
+            std::string label;
+            std::optional<std::string> picture;
+        };
+        shown_column shown_as(const std::string& ns, const std::string& view, const std::optional<std::string>& list,
+                           const language::entity_declaration* entity, const std::string& written, const std::optional<std::string>& said) const {
+            shown_column out{written, "", std::nullopt};
+            std::vector<std::string> columns;
+            if (auto scope = views_.find(ns); scope != views_.end()) {
+                if (auto v = scope->second.find(view); v != scope->second.end()) {
+                    for (const auto& each : v->second->each) {
+                        if (each.name != list) continue;
+                        for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
+                    }
+                }
+            }
+            auto held = [&](const std::string& name) { return std::find(columns.begin(), columns.end(), name) != columns.end(); };
+            if (!held(written) && held(written + ".name")) {
+                out.key = written + ".name";
+                if (held(written + ".picture")) out.picture = written + ".picture";
+            }
+            std::string first = written.substr(0, written.find('.'));
+            std::string rest = written.find('.') == std::string::npos ? "" : written.substr(written.find('.') + 1);
+            std::optional<std::string> field_label;
+            for (const auto& f : entity ? entity->fields : nothing_) {
+                if (f.name == first && (rest.empty() || rest == "name" || rest == "title")) field_label = f.label;
+            }
+            std::string name = out.key.substr(out.key.rfind('.') == std::string::npos ? 0 : out.key.rfind('.') + 1);
+            out.label = said ? *said : field_label ? *field_label : web_detail::label(rest == "" && out.key != written ? written : name);
+            return out;
+        }
+
         void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table, const std::vector<language::screen_item>& screen) {
             parts.components.insert("Table");
             std::string view = full_view(ns, table.view.text());
             std::string columns;
             std::string actions;
             std::string pictures;
+            std::string people;  // a person's column, by their name, and their picture beside it
             std::string labels;
             std::string shown;  // a choice column's values, as they're shown
             const language::entity_declaration* entity = listed(ns, table.view.text(), table.list);
@@ -2087,9 +2135,10 @@ namespace one::generators {
                         }
                     }
                 }
-                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
-                std::string label = column.label ? *column.label : web_detail::label(name);
-                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(label);
+                auto column_shown = shown_as(ns, table.view.text(), table.list, entity, key, column.label);
+                if (column_shown.picture) people += (people.empty() ? "" : ", ") + web_detail::js_string(column_shown.key) + ": " + web_detail::js_string(*column_shown.picture);
+                key = column_shown.key;
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(column_shown.label);
             }
             std::string line = "<Table view={" + view_variable(parts, view) + "}";
             if (table.list) line += " list=" + web_detail::js_string(*table.list);
@@ -2127,6 +2176,7 @@ namespace one::generators {
             line += " columns={{ " + columns + " }}";
             if (!actions.empty()) line += " actions={[" + actions + "]}";
             if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!people.empty()) line += " people={{ " + people + " }}";
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             if (table.by) line += " by=" + web_detail::js_string(*table.by);
@@ -2323,9 +2373,14 @@ namespace one::generators {
                         }
                     }
                 }
-                std::string spec = type == "text" && !f.hint && !f.label
+                // Called as the form says, or as its field is everywhere.
+                std::optional<std::string> label = f.label;
+                for (const auto& field : entity ? entity->fields : nothing_) {
+                    if (!label && field.name == f.name && field.label) label = field.label;
+                }
+                std::string spec = type == "text" && !f.hint && !label
                     ? web_detail::js_string(f.name)
-                    : "{ name: " + web_detail::js_string(f.name) + (f.label ? ", label: " + web_detail::js_string(*f.label) : "") +
+                    : "{ name: " + web_detail::js_string(f.name) + (label ? ", label: " + web_detail::js_string(*label) : "") +
                           (type == "text" ? "" : ", type: " + web_detail::js_string(type)) + choices +
                           (f.hint ? ", hint: " + web_detail::js_string(*f.hint) : "") + " }";
                 fields += (fields.empty() ? "" : ", ") + spec;

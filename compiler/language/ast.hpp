@@ -290,6 +290,7 @@ namespace one::language {
         std::optional<std::string> per;       // serial per book: counted within each book
         std::optional<std::string> after;
         expression_ptr initial;               // = on_shelf
+        std::optional<std::string> label;     // number  serial  "#": what every screen calls it, unless one says its own
     };
 
     struct entity_declaration {

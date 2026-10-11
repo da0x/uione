@@ -81,7 +81,8 @@ example        ::= "example" PATTERN END
 /* entity comment history of issue: a comment's changes are kept in its issue's history */
 /* entity invitation invites member: when someone signs in with its email, they become one */
 entity         ::= "entity" NAME ("invites" NAME)? ("history" ("of" NAME)?)? "{" NEWLINE? field* "}" END
-field          ::= NAME (enum | type) rule* ("=" expression)? END
+field          ::= NAME (enum | type) rule* STRING? ("=" expression)? END
+/* number  serial  key  "#": what every screen calls it, unless one says its own */
 enum           ::= "enum" (choice ("|" choice)* | "{" NEWLINE? (choice+ END)* "}")
 choice         ::= NAME STRING?
 enum_type      ::= "enum" NAME "{" NEWLINE? (choice+ END)* "}" END

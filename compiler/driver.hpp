@@ -608,6 +608,31 @@ namespace one::driver {
         return moved;
     }
 
+    // A person's picture with no label, then their name, as a table, a board or cards
+    // shows them, is one column of theirs: author.picture "" author.name "Opened by"
+    // is author "Opened by", on one line or two. A view's own rows say both still.
+    inline std::size_t join_people(sources& files) {
+        static const std::regex lines(R"re(([ \t]*)(\w+)\.picture[ \t]+""[ \t]*\n\1\2\.name\b)re");
+        static const std::regex beside(R"re(\b(\w+)\.picture[ \t]+""[ \t]+\1\.name\b)re");
+        std::size_t joined = 0;
+        for (auto& [path, text] : files) {
+            for (const auto* pattern : {&lines, &beside}) {
+                std::string out;
+                auto from = text.cbegin();
+                for (std::sregex_iterator it(text.begin(), text.end(), *pattern), end; it != end; ++it) {
+                    const auto& m = *it;
+                    out.append(from, m[0].first);
+                    out += pattern == &lines ? m[1].str() + m[2].str() : m[1].str();
+                    from = m[0].second;
+                    ++joined;
+                }
+                out.append(from, text.cend());
+                text = std::move(out);
+            }
+        }
+        return joined;
+    }
+
     // A screen titled only with the site's own title, which an untitled screen shows
     // anyway, says nothing: screen "uione" /:owner/:project/theme is screen
     // /:owner/:project/theme.
@@ -725,6 +750,7 @@ namespace one::driver {
         out.fixes += move_copyright(files);
         out.fixes += move_unread(files);
         out.fixes += join_forms(files);
+        out.fixes += join_people(files);
         for (int round = 0; round < 100; ++round) {
             language::diagnostics found;
             check_sources(files, found);
