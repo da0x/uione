@@ -386,7 +386,9 @@ TEST_CASE("what a project's components need is added to the app's dependencies, 
     fs::remove_all(dir);
     const auto* manifest = find(files, "package.json");
     REQUIRE(manifest != nullptr);
-    CHECK(manifest->content.find("\"@uione/editor\": \"0.1.0\",\n") != std::string::npos);
+    // uione's own packages move with the compiler, whatever the components say.
+    CHECK(manifest->content.find("\"@uione/editor\": \"" + std::string(version) + "\",\n") != std::string::npos);
+    CHECK(manifest->content.find("\"@uione/compiler\": \"" + std::string(version) + "\",\n") != std::string::npos);
     CHECK(manifest->content.find("\"react\": \"^19.3.0\",\n") != std::string::npos);  // the app's own version wins
     const auto* vite = find(files, "vite.config.ts");
     REQUIRE(vite != nullptr);

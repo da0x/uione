@@ -392,6 +392,28 @@ TEST_CASE("an upgrade drops what a field works out, and what it starts as alread
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("a project for another compiler says so, rather than being checked by this one") {
+    auto dir = project("uione-other-compiler", "import one\n\nproject shop {\n\tone  \"0.0.1\"\n}\n");
+    unsetenv("UIONE_TOOLCHAIN");
+    language::diagnostics found;
+    driver::check_project(dir.string(), found);
+    REQUIRE(found.size() == 1);
+    CHECK(found[0].message == "this project is for one 0.0.1, and this is one " + std::string(version) +
+                                  ", which can't check it; check it with one 0.0.1, or run one upgrade to move it to " + std::string(version));
+    CHECK(found[0].where.line == 4);
+    // Built here on purpose, it's checked as it is.
+    setenv("UIONE_TOOLCHAIN", "local", 1);
+    found.clear();
+    driver::check_project(dir.string(), found);
+    CHECK(found.empty());
+    unsetenv("UIONE_TOOLCHAIN");
+    // An upgrade moves it on.
+    auto done = driver::upgrade(dir.string(), version);
+    CHECK(done.problems.empty());
+    CHECK(done.recorded);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade says each change in, in project and me") {
     auto dir = project("uione-upgrade-in",
                        "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"

@@ -27,6 +27,7 @@
 #include "language/diagnostics.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 namespace one::driver {
 
@@ -317,7 +318,30 @@ namespace one::driver {
         std::size_t errors_before = found.size();
         auto read = read_sources(root, found);
         if (read.empty()) return 0;
-        if (found.size() == errors_before) check_sources(read, found, kept);
+        if (found.size() == errors_before) {
+            std::vector<language::file> files;
+            check_sources(read, found, &files);
+            // A project says which compiler it's for, one "0.9.6". The command line runs
+            // that one in this one's place, so only one that can't, like the studio's,
+            // or one run on purpose with UIONE_TOOLCHAIN=local, gets here with another:
+            // the first says so, rather than checking it by rules it doesn't know.
+            const char* toolchain = std::getenv("UIONE_TOOLCHAIN");
+            bool local = toolchain && std::string_view(toolchain) == "local";
+            for (const auto& f : files) {
+                for (const auto& d : f.declarations) {
+                    auto* p = std::get_if<language::project_declaration>(&d.node);
+                    if (!p || local) continue;
+                    for (const auto& setting : p->settings) {
+                        if (setting.key != "one" || setting.value == version) continue;
+                        found.push_back({f.path, setting.where,
+                                         "this project is for one " + setting.value + ", and this is one " + std::string(version) +
+                                             ", which can't check it; check it with one " + setting.value + ", or run one upgrade to move it to " +
+                                             std::string(version)});
+                    }
+                }
+            }
+            if (kept) *kept = std::move(files);
+        }
         return platform::find_one_files({root}).size();
     }
 

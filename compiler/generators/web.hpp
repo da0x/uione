@@ -2503,7 +2503,10 @@ namespace one::generators {
             std::map<std::string, std::string> dependencies{
                 {"@uione/" + ui_, std::string(version)}, {"@uione/react", std::string(version)}, {"firebase", "^12.19.0"},
                 {"react", "^19.3.0"},                    {"react-dom", "^19.3.0"},                 {"react-router", "^7.18.4"}};
-            for (const auto& [package, wanted] : dependencies_) dependencies.emplace(package, wanted);
+            // uione's own packages are the compiler's version, whatever the components'
+            // package.json says, since they're released together: an editor checking
+            // with an older compiler would call what's new a mistake.
+            for (const auto& [package, wanted] : dependencies_) dependencies.emplace(package, package.starts_with("@uione/") ? std::string(version) : wanted);
             out.open("\"dependencies\": {");
             std::size_t n = 0;
             for (const auto& [package, wanted] : dependencies) {
