@@ -58,7 +58,8 @@ export function Link({ to, icon, children }: { to: string; icon?: string; childr
 
 // A front page drawn in one of uione's designs: its hero, its sections of words
 // alone as what it offers, and its other sections, like one with a form, as what
-// it asks; anything else, like a component of its own, comes first, as written.
+// it asks; anything else, like a table, comes first, as written, or where the
+// design puts it.
 export function Landing({ design, children }: { design: string; children?: ReactNode }) {
   const ui = useUI();
   const link = useLinks();

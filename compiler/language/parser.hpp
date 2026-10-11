@@ -947,7 +947,7 @@ namespace one::language {
             if (at_word("landing")) {
                 advance();
                 screen.landing_where = peek().where;
-                screen.landing = expect(token_kind::identifier, "a landing design: waveform, studio, aurora or grid").text;
+                screen.landing = expect(token_kind::identifier, "a landing design: waveform, studio, aurora, grid or relay").text;
             }
             screen.items = parse_screen_block();
             end_line();

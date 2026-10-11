@@ -1407,13 +1407,15 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `layout` setting says otherwise.
 - `landing grid` after a screen's address draws it as a front page, in one of
   uione's designs: `waveform`, a wave of bars under the hero; `studio`, the hero
-  beside a player and its timeline; `aurora`, drifting light behind glass; or
-  `grid`, a neon floor under the site's name, and a band of what it offers. The
-  design takes the screen's `hero`, with its words and links, the first link the
-  one it's for; its sections of words alone, as what the site offers; and its other
-  sections, like one with a form, as what it asks. Each is drawn in the theme's
-  colors, with a gradient from its accent, and its motion stops for whoever asks
-  for less. A landing page has no `layout`; its design lays it out.
+  beside a player and its timeline; `aurora`, drifting light behind glass; `grid`,
+  a neon floor under the site's name, and a band of what it offers; or `relay`, a
+  board of work under the hero, what the site offers on its cards, where an
+  agent's card moves on a stage. The design takes the screen's `hero`, with its
+  words and links, the first link the one it's for; its sections of words alone, as
+  what the site offers; and its other sections, like one with a form, as what it
+  asks. Anything else, like a table, comes before the design, or, in `relay`, right
+  under its board. Each is drawn in the theme's colors, and its motion stops for
+  whoever asks for less. A landing page has no `layout`; its design lays it out.
 
 ```one
 screen "Press" / landing grid {

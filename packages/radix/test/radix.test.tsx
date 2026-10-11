@@ -659,3 +659,47 @@ describe("a file field", () => {
     expect(screen.queryByText("proof.pdf")).toBeNull();
   });
 });
+
+describe("a front page in relay", () => {
+  const Landing = radix.Landing;
+  const page = (design: string) => (
+    <Landing
+      design={design}
+      name="Press"
+      title="Print that arrives on time."
+      text={["Orders, proofs and shipping for a print shop."]}
+      links={[{ href: "/signin", label: "Sign in" }]}
+      features={[{ title: "You approve every proof", text: "Nothing goes to press unseen." }]}
+      asks={[{ title: "Ask for a quote", id: "quote", children: <p>Leave your address.</p> }]}
+      before={[<table key="orders" aria-label="Your orders" />]}
+    />
+  );
+  const follows = (first: Element, second: Element) => Boolean(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it("puts the screen's other items, like a table, under the hero's board, where the other designs put them first", () => {
+    const { unmount } = render(page("relay"));
+    const title = screen.getByRole("heading", { level: 1, name: "Print that arrives on time." });
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/signin");
+    const orders = screen.getByRole("table", { name: "Your orders" });
+    expect(follows(title, orders)).toBe(true);
+    expect(follows(orders, screen.getByRole("heading", { level: 2, name: "You approve every proof" }))).toBe(true);
+    expect(document.getElementById("quote")?.textContent).toContain("Leave your address.");
+    unmount();
+    render(page("grid"));
+    expect(follows(screen.getByRole("table", { name: "Your orders" }), screen.getByRole("heading", { level: 1 }))).toBe(true);
+  });
+
+  it("draws a board whose cards are what the site offers, one worked by an agent, hidden from a screen reader", () => {
+    const { container } = render(page("relay"));
+    const board = container.querySelector(".one-landing [aria-hidden=true]")!;
+    expect(board.textContent).toContain("You approve every proof");
+    expect(board.textContent).toContain("Review");
+    expect(board.querySelector(".one-landing-carry")?.textContent).toContain("agent");
+  });
+
+  it("moves its card once, and not for whoever asks for less motion", () => {
+    const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
+    expect(text).toMatch(/\.one-landing-carry\{animation:[^}]*1\.2s both one-landing-carry\}/);
+    expect(text).toMatch(/prefers-reduced-motion:\s*reduce\)\{\.one-landing \[class\*=one-landing-\]\{animation:none\}/);
+  });
+});

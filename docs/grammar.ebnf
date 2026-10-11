@@ -185,7 +185,7 @@ function       ::= "function" NAME "(" (NAME ("," NAME)*)? ")" block END
 /* screen */
 
 screen         ::= "screen" (STRING | NAME) ROUTE ("under" ROUTE STRING)? ("layout" NAME)? ("landing" NAME)? screen_block END
-/* landing waveform | studio | aurora | grid: a front page drawn in one of uione's designs */
+/* landing waveform | studio | aurora | grid | relay: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_block END
                  | "menu" screen_block END

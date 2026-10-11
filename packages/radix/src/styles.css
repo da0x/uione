@@ -503,6 +503,27 @@
 .one-landing-floor { animation: one-landing-floor 1.4s linear infinite; }
 .one-landing-track { animation: one-landing-track 36s linear infinite; }
 .one-landing-neon { animation: one-landing-neon 4s ease-in-out infinite; }
+/* relay: an agent's card carried a stage on, by its own width and the gap between
+   stages, the card it leaves settling up into its place, and the move logged once it
+   lands, with the two stages' counts. It happens once; without motion, the board is
+   drawn as it ends. */
+@keyframes one-landing-carry {
+  0% { transform: translateX(calc(-100% - 1.75rem)); box-shadow: none; }
+  16% { transform: translateX(calc(-100% - 1.75rem)) translateY(-4px) rotate(-1.5deg); box-shadow: var(--shadow-raised); }
+  82% { transform: translateY(-4px) rotate(0.75deg); box-shadow: var(--shadow-raised); }
+  100% { transform: none; box-shadow: none; }
+}
+@keyframes one-landing-target { 0%, 12% { opacity: 0; } 30%, 82% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes one-landing-settle { 0%, 60% { transform: translateY(6.25rem); } 100% { transform: none; } }
+@keyframes one-landing-logged { 0%, 88% { opacity: 0; transform: translateY(-0.25rem); } 100% { opacity: 1; transform: none; } }
+@keyframes one-landing-counted { 0%, 80% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes one-landing-counting { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+.one-landing-counted { animation: one-landing-counted 2.2s steps(1, end) 1.2s both; }
+.one-landing-counting { animation: one-landing-counting 2.2s steps(1, end) 1.2s both; }
+.one-landing-carry { animation: one-landing-carry 2.2s cubic-bezier(0.65, 0, 0.35, 1) 1.2s both; }
+.one-landing-target { animation: one-landing-target 2.2s ease 1.2s both; }
+.one-landing-settle { animation: one-landing-settle 2.6s cubic-bezier(0.3, 0, 0.2, 1) 1.2s both; }
+.one-landing-logged { animation: one-landing-logged 2.8s ease-out 1.2s both; }
 @media (prefers-reduced-motion: reduce) {
   .one-landing [class*="one-landing-"] { animation: none; }
 }
