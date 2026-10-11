@@ -35,7 +35,7 @@ const { site } = await import(pathToFileURL(join(web, "build-ssr/app.js")).href)
 
 const pages = {
   "/": ['src="/icon.svg"', "Tab width", ">Default</option>", "Write a whole app in your browser.", 'class="shiki', "namespace library", "Join the waitlist", 'type="email"'],
-  "/install": ["Install one", "curl -fsSL https://www.uione.io/install.sh | sh", "Select an editor"],
+  "/install": ["Install one", "curl -fsSL https://uione.io/install.sh | sh", "Select an editor"],
   "/install/docker": ["ghcr.io/da0x/uione"],
   "/language": ["Start", "Your first project"],
   "/language/overview": ["Overview", "One architecture"],

@@ -1,13 +1,18 @@
 # site
 
-uione.io, written in uione. It is the first real project the toolchain builds, so it
-uses every layer: pages, a public command, a public live view, sign-in, and a
-private per-person view.
+uione.io's pages, written in uione: the language, the releases, installing, the
+mission and the waitlist. They're written here, beside the compiler they describe,
+and the studio at uione.io copies them when it moves to a release, so the site
+always says the version it was built with.
+
+It's also the first real project the toolchain builds, so it uses every layer:
+pages, a public command, a public live view, sign-in, and a private per-person view.
+`tools/develop` and the end-to-end test run it.
 
 | File | What it is |
 |---|---|
 | `site.one` | the project: domain, Firebase project, region, component adapter, sign-in |
-| `home.one` | the front page of www.uione.io: the studio first, then the compiler, installing it, and the waitlist |
+| `home.one` | the front page: the studio first, then the compiler, installing it, and the waitlist |
 | `waitlist.one` | the waitlist: an entity, a public command, and a public count |
 | `language.one` | `/language/:page`, one page per file in `language/`: starting, the overview, the reference |
 | `releases.one` | `/releases/:page`, one page per release in `releases/`, newest first |
@@ -28,33 +33,8 @@ address Vite prints, join the waitlist in one tab, and watch the count change in
 another. Sign-in goes to the Auth emulator, which offers a made-up Google account,
 so no real account is involved.
 
-## Before the first deploy
-
-A few steps happen outside Pulumi, because no resource can do them or because
-they belong to another service:
-
-1. **Link billing to the `uione-web` project.** A project can't pay for itself, and
-   Cloud Run and Cloud Build don't run without billing.
-2. **Sign in to Pulumi Cloud** with `pulumi login`, where the stack's state is
-   kept (decision 0009).
-3. **Point `www` at the site at Squarespace**, with the CNAME the deploy prints.
-   uione.io itself is the studio's, from its own repository.
-
-The site has no sign-in, so there's nothing to turn on in the Firebase console;
-the deploy adds Firebase to the project itself.
-
-Everything else is declared by the generated Pulumi program.
-
 ## Deploying
 
-With the compiler built and `yarn install` done:
-
-```
-compiler/build/one build site
-yarn workspace @uione/react build && yarn workspace @uione/radix build
-site/build/deploy
-```
-
-The deploy shows Pulumi's preview and asks before changing anything. It needs
-Pulumi and gcloud (signed in, with application default credentials). `--yes`
-deploys without asking, and `--json` reports each step as a line of JSON.
+This folder isn't deployed by itself any more. uione.io is the studio's, and
+www.uione.io sends people there; the studio's `tools/pages-from-uione` copies these
+pages, `public/install.sh` and the library example into its own `site/` folder.

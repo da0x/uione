@@ -10,7 +10,7 @@ import type { Extension } from "@codemirror/state";
 import { EditorView, hoverTooltip, keymap } from "@codemirror/view";
 import type { Compiler, Definition, Files } from "@uione/compiler";
 
-export const reference = "https://www.uione.io/language/reference";
+export const reference = "https://uione.io/language/reference";
 
 export interface DefinitionsOptions {
   compiler: Pick<Compiler, "define">;

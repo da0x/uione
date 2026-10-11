@@ -70,7 +70,7 @@ export function fontFamily(look: Look): string {
 // What each color means: a kind of word, a piece of .one where it's that kind, and
 // the word, so its colors are read from the highlighter itself, and the section of
 // the language reference that says what that kind of word is.
-const reference = "https://www.uione.io/language/reference";
+const reference = "https://uione.io/language/reference";
 const kinds: { kind: string; says: string; code: string; word: string; nth?: number; section: string }[] = [
   { kind: "Declarations", says: "start what a file declares", code: "entity book {\n}\n", word: "entity", section: "declarations" },
   { kind: "Declared names", says: "what's declared", code: "entity book {\n}\n", word: "book", section: "names" },

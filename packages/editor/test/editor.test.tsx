@@ -425,9 +425,9 @@ describe("toolbar", () => {
     // Each kind links to the section of the reference that says what it is.
     const links = [...legend.querySelectorAll("a")];
     expect(links.length).toBe(14);
-    expect(links.every((a) => a.getAttribute("href")!.startsWith("https://www.uione.io/language/reference#"))).toBe(true);
-    expect(screen.getByRole("link", { name: /Built-in types/ }).getAttribute("href")).toBe("https://www.uione.io/language/reference#built-in-types");
-    expect(screen.getByRole("link", { name: /Comments/ }).getAttribute("href")).toBe("https://www.uione.io/language/reference#comments");
+    expect(links.every((a) => a.getAttribute("href")!.startsWith("https://uione.io/language/reference#"))).toBe(true);
+    expect(screen.getByRole("link", { name: /Built-in types/ }).getAttribute("href")).toBe("https://uione.io/language/reference#built-in-types");
+    expect(screen.getByRole("link", { name: /Comments/ }).getAttribute("href")).toBe("https://uione.io/language/reference#comments");
     const samples = [...legend.querySelectorAll(".uione-legend-sample")] as HTMLElement[];
     expect(samples.every((sample) => sample.style.color !== "")).toBe(true);
     const color = (word: string) => samples.find((sample) => sample.textContent === word)!.style.color;

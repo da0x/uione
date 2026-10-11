@@ -6,7 +6,7 @@ One command installs the latest release of `one`, the uione compiler, on a Mac w
 Apple silicon:
 
 ```sh
-curl -fsSL https://www.uione.io/install.sh | sh
+curl -fsSL https://uione.io/install.sh | sh
 ```
 
 The installer picks the build for your Mac, checks it against the release's

@@ -7,7 +7,7 @@ is [0.9.1](/releases/v0-8-4).
 ## Install the compiler
 
 ```sh
-curl -fsSL https://www.uione.io/install.sh | sh
+curl -fsSL https://uione.io/install.sh | sh
 ```
 
 [Install](/install) has the other ways: macOS, Docker, and building it from source.
