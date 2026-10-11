@@ -1070,7 +1070,7 @@ namespace one::language {
                     break;
                 }
             }
-            // Said before 0.9.5 beside the address: under and layout, which now go inside.
+            // Said before 0.9.6 beside the address: under and layout, which now go inside.
             std::optional<std::size_t> moved_from;
             std::string moved;
             if (at_word("under")) {
@@ -1700,7 +1700,7 @@ namespace one::language {
                         if (at_word("new")) {
                             advance();
                             if (at_word("since")) {
-                                // Said before 0.9.5 as new since news.seen, which compared when each was made.
+                                // Said before 0.9.6 as new since news.seen, which compared when each was made.
                                 const token since = advance();
                                 out_.push_back({path_, since.where, "say what's new as a condition, like new when created_at > news.seen",
                                                 fix{since.where, since.text.size(), "when created_at >"}});
@@ -1721,7 +1721,7 @@ namespace one::language {
                             timeline.opened_where = peek().where;
                             timeline.opened = parse_qualified_name("the command it runs, like reader::create");
                         } else if (at_word("seen")) {
-                            // Said before 0.9.5 as seen reader::create.
+                            // Said before 0.9.6 as seen reader::create.
                             const token seen = advance();
                             out_.push_back({path_, seen.where, "say what a timeline runs once it's looked at as on open dispatch reader::create",
                                             fix{seen.where, seen.text.size(), "on open dispatch"}});
