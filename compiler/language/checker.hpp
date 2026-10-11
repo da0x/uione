@@ -1228,7 +1228,7 @@ namespace one::language {
                     error(f.where, "a role allows several commands, so " + f.name + " is a list of them, like " + f.name + "  list of permission");
                 }
                 if (f.per) verify_serial(ns, e, f);
-                if (f.list) verify_list(ns, f);
+                if (f.list) verify_list(ns, e, f);
                 // A file is uploaded and then attached, so it names nothing and is never
                 // worked out.
                 if (f.type && f.type->text() == "file" && !f.list && (f.key || f.unique || f.after || f.initial)) {
@@ -1270,8 +1270,27 @@ namespace one::language {
                     if (auto* m = std::get_if<member_expression>(&f.initial->node)) {
                         auto* object = std::get_if<name_expression>(&m->object->node);
                         bool username = object && object->name.text() == "me" && m->member == "username";
-                        if (!username) {
-                            error(f.initial->where, "a field starts as a value, me, me.username or now, not " + written(*f.initial));
+                        // project = board.project: worked out from what another field points at.
+                        const field* source = nullptr;
+                        for (const auto& other : e.fields) {
+                            if (object && object->name.parts.size() == 1 && other.name == object->name.parts[0] && &other != &f) source = &other;
+                        }
+                        const entity_declaration* pointed = source && source->type && !source->list ? find_entity(ns, *source->type) : nullptr;
+                        if (pointed) {
+                            const field* through = nullptr;
+                            for (const auto& g : pointed->fields) {
+                                if (g.name == m->member) through = &g;
+                            }
+                            if (!through) {
+                                error(f.initial->where, "entity " + pointed->name + " has no field " + m->member + " for " + f.name + " to be worked out from");
+                            } else if (!f.type || !through->type || f.type->text() != through->type->text() || f.list != through->list) {
+                                error(f.initial->where, f.name + " is " + (f.type ? f.type->text() : "a choice") + ", and " + written(*f.initial) + " is a" +
+                                                            (through->type && std::string("aeiou").find(through->type->text()[0]) != std::string::npos ? "n " : " ") +
+                                                            (through->type ? through->type->text() : "choice"));
+                            }
+                        } else if (!username) {
+                            error(f.initial->where, "a field starts as a value, me, me.username, now, or a field of what another points at, like board.project, not " +
+                                                        written(*f.initial));
                         } else if (!f.type || f.type->text() != "text") {
                             error(f.initial->where, f.name + " starts as me.username, so it's text");
                         }
@@ -1294,7 +1313,7 @@ namespace one::language {
 
         // labels  list of label: a list holds text, files, people, or entities' ids. A
         // list isn't a key, a serial, unique, or after anything.
-        void verify_list(const std::string& ns, const field& f) {
+        void verify_list(const std::string& ns, const entity_declaration& e, const field& f) {
             const std::string held = f.type ? f.type->text() : "";
             if (held != "text" && held != "file" && held != "user" && held != "permission" && !(f.type && find_entity(ns, *f.type))) {
                 error(f.where, f.name + " is a list, which holds text, files, people or entities, like list of label or list of user");
@@ -1304,9 +1323,32 @@ namespace one::language {
             auto* call = f.initial ? std::get_if<call_expression>(&f.initial->node) : nullptr;
             auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
             bool mentions = callee && callee->name.text() == "mentions";
-            if (f.key || f.unique || f.after || (f.initial && !mentions)) {
+            // roles  list of role  = [role::maintainer]: roles every project starts with,
+            // made within the record's own project.
+            auto* items = f.initial ? std::get_if<list_expression>(&f.initial->node) : nullptr;
+            if (f.key || f.unique || f.after || (f.initial && !mentions && !items)) {
                 error(f.where, f.name + " is a list, so it can't be a key, unique, after a field, or start with a value");
             }
+            if (!items) return;
+            const roles_declaration* roles = defined_roles(ns, f);
+            if (!roles) {
+                error(f.initial->where, f.name + " can start as roles every project starts with, like [role::maintainer], and nothing else yet");
+                return;
+            }
+            std::set<std::string> known;
+            for (const auto& d : roles->defaults) known.insert(d.name);
+            for (const auto& item : items->items) {
+                auto* n = std::get_if<name_expression>(&item->node);
+                if (!n || n->name.parts.size() != 2 || n->name.parts[0] != roles->entity || !known.contains(n->name.parts[1])) {
+                    std::string names;
+                    for (const auto& k : known) names += (names.empty() ? "" : ", ") + roles->entity + "::" + k;
+                    error(item->where, written(*item) + " isn't a role every " + roles->per + " starts with; those are " + names);
+                }
+            }
+            bool within = std::any_of(e.fields.begin(), e.fields.end(), [&](const field& g) {
+                return g.type && !g.list && g.type->parts.back() == roles->per;
+            });
+            if (!within) error(f.initial->where, f.name + " starts as roles within a " + roles->per + ", so entity " + e.name + " needs a field pointing at one");
         }
 
         // serial per book counts within each book, so book has to be a field that
@@ -1685,6 +1727,20 @@ namespace one::language {
                     names_in(*v.value);
                     misnamed = true;
                     continue;
+                }
+                // project, worked out from board.project, is never given; and roles needn't
+                // be given what they start as already.
+                if (f->initial) {
+                    auto* m = std::get_if<member_expression>(&f->initial->node);
+                    auto* object = m ? std::get_if<name_expression>(&m->object->node) : nullptr;
+                    if (object && object->name.parts.size() == 1 && find_field(*target, object->name.parts[0])) {
+                        error(v.where, f->name + " is worked out from " + written(*f->initial) + ", so it isn't given", fix{v.cut_where, v.cut_length, ""});
+                        continue;
+                    }
+                    if (action == "create" && !listed(*f->initial).empty() && listed(*v.value) == listed(*f->initial)) {
+                        error(v.where, f->name + " starts as " + listed(*f->initial) + " already", fix{v.cut_where, v.cut_length, ""});
+                        continue;
+                    }
                 }
                 // A once may give what was made before a key existed its key, like the
                 // board a project's stages were in before it had boards.
@@ -2459,6 +2515,20 @@ namespace one::language {
 
         // How a value is written, like title or book.title, which is also its name in
         // a view's rows.
+        // [role::maintainer, role::contributor], as written; nothing for anything but a
+        // list of names.
+        static std::string listed(const expression& e) {
+            auto* items = std::get_if<list_expression>(&e.node);
+            if (!items) return "";
+            std::string out;
+            for (const auto& item : items->items) {
+                std::string one = written(*item);
+                if (one.empty()) return "";
+                out += (out.empty() ? "" : ", ") + one;
+            }
+            return "[" + out + "]";
+        }
+
         static std::string written(const expression& e) {
             if (auto* name = std::get_if<name_expression>(&e.node)) return name->name.text();
             if (auto* member = std::get_if<member_expression>(&e.node)) return written(*member->object) + "." + member->member;

@@ -1203,7 +1203,7 @@ TEST_CASE("a field can start as the person's username") {
     CHECK(check_source("namespace a {\nentity project {\n\towner  text  key  = me.username\n\tslug  text  key\n}\n}\n").empty());
     CHECK(only_error("namespace a {\nentity project {\n\towner  user  = me.username\n}\n}\n").message == "owner starts as me.username, so it's text");
     CHECK(only_error("namespace a {\nentity project {\n\towner  text  = me.name\n}\n}\n").message ==
-          "a field starts as a value, me, me.username or now, not me.name");
+          "a field starts as a value, me, me.username, now, or a field of what another points at, like board.project, not me.name");
 }
 
 TEST_CASE("a namespace's screens can be at another address") {
@@ -1278,6 +1278,27 @@ TEST_CASE("a timeline says what's new by its rows and another view's values, and
     CHECK(old[0].message == "say what's new as a condition, like new when created_at > news.seen");
     CHECK(old[0].fix->text == "when created_at >");
     CHECK(old[1].fix->text == "on open dispatch");
+}
+
+TEST_CASE("a field worked out from what another points at is never given, and a list's start isn't said again") {
+    const std::string start = "entity project {\n\tslug  text  required  key\n}\n"
+                              "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n}\n"
+                              "entity step {\n\tboard  board  required  key\n\tname  text  required  key\n"
+                              "\tproject  project  = board.project\n\troles  list of role  = [role::clerk]\n}\n"
+                              "define role clerk \"Clerk\" in project {\n\tstep::create\n}\n"
+                              "command step::create\n";
+    auto made = [&](const std::string& fields) { return start + "command board::create {\n\tby anyone signed in\n\tdispatch step::create { " + fields + " }\n}\n"; };
+    CHECK(check_source(made("board = id  name = \"a\"")).empty());
+    auto e = only_error(made("board = id  project = project  name = \"a\""));
+    CHECK(e.message == "project is worked out from board.project, so it isn't given");
+    REQUIRE(e.fix);
+    CHECK(e.fix->text.empty());
+    e = only_error(made("board = id  name = \"a\"  roles = [role::clerk]"));
+    CHECK(e.message == "roles starts as [role::clerk] already");
+    CHECK(only_error(start + "entity other {\n\tboard  board\n\tproject  project  = board.owner\n}\n").message ==
+          "entity board has no field owner for project to be worked out from");
+    CHECK(only_error(start + "entity other {\n\tboard  board\n\tname  text  = board.project\n}\n").message ==
+          "name is text, and board.project is a project");
 }
 
 TEST_CASE("a table's tabs are by a choice it shows") {

@@ -489,6 +489,30 @@ namespace one::language {
             return entity;
         }
 
+        // What taking a field's value out of a block cuts, from its first token to the
+        // last one just read.
+        void cut(field_value& value, std::size_t first) const {
+            const token& begin = tokens_[first];
+            const token& end = tokens_[pos_ - 1];
+            const token& next = tokens_[pos_];
+            const token* before = first > 0 ? &tokens_[first - 1] : nullptr;
+            bool alone_after = next.kind == token_kind::newline || next.kind == token_kind::right_brace;
+            if (!alone_after) {
+                value.cut_where = begin.where;
+                value.cut_length = next.begin - begin.begin;
+            } else if (before && before->kind != token_kind::newline && before->kind != token_kind::left_brace) {
+                value.cut_where = location{before->where.line, before->where.column + static_cast<int>(before->end - before->begin)};
+                value.cut_length = end.end - before->end;
+            } else {
+                std::size_t start = source_.rfind('\n', begin.begin == 0 ? 0 : begin.begin - 1);
+                start = start == std::string_view::npos || begin.begin == 0 ? 0 : start + 1;
+                std::size_t stop = source_.find('\n', end.end);
+                stop = stop == std::string_view::npos ? source_.size() : stop + 1;
+                value.cut_where = location{begin.where.line, 1};
+                value.cut_length = stop - start;
+            }
+        }
+
         // The whole line a token begins, with its newline: where it starts and how long.
         std::pair<location, std::size_t> line_of(const token& first) const {
             std::size_t start = source_.rfind('\n', first.begin == 0 ? 0 : first.begin - 1);
@@ -1919,10 +1943,12 @@ namespace one::language {
                         }
                         while (!at_line_end()) {
                             field_value value;
+                            const std::size_t first = pos_;
                             value.where = peek().where;
                             value.name = expect(token_kind::identifier, "a field of what it acts on, like stage").text;
                             expect(token_kind::assign, "'='");
                             value.value = parse_postfix();
+                            cut(value, first);
                             s.values.push_back(std::move(value));
                         }
                         end_line();
@@ -2066,10 +2092,12 @@ namespace one::language {
                 while (in_block()) {
                     while (!at_line_end()) {
                         field_value value;
+                        const std::size_t first = pos_;
                         value.where = peek().where;
                         value.name = expect(token_kind::identifier, "a field of what's made, like role").text;
                         expect(token_kind::assign, "'='");
                         value.value = parse_postfix();
+                        cut(value, first);
                         s.values.push_back(std::move(value));
                     }
                     end_line();

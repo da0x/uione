@@ -546,6 +546,12 @@ What a field must be, written after its type: `shelfmark  shelfmark  required  u
   shelfmark, or a project's owner and slug.
 - `after lent_at`: a date that has to come after another field's.
 - `= value`: what it starts as, like `= now`, `= me` or `= status::open`.
+- `= board.project`: worked out when it's made, from what another of its fields
+  points at, like a step's project from its board's, read in the same transaction,
+  even when the board is made in the same command. It's never given: a command or
+  a dispatch that sets it is an error.
+- `= [role::maintainer, role::contributor]`: a list of roles starts as those every
+  project starts with, each the one in the record's own project.
 - `"#"`, before any `= value`: what every screen calls it, like `number  serial  per
   project  key  "#"`, unless a screen says its own.
 

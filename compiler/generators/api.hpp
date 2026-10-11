@@ -136,6 +136,7 @@ namespace one::generators {
         language::diagnostics errors_;
         std::string path_;  // the file being written, for errors
         const package* pkg_ = nullptr;  // the package being written
+        const language::entity_declaration* entity_ = nullptr;  // the entity whose fields are being written
         // Where each declaration is, so every generated line can say what it came from.
         std::map<const void*, code::source> declared_;
         code::source project_;  // the project block, or fixed without one
@@ -401,6 +402,34 @@ namespace one::generators {
             }
             if (name && name->name.parts.size() == 1) return "default=" + name->name.parts[0];
             if (web_detail::text_of(*f.initial) == "me.username") return std::string("default=me.username");
+            // project = board.project: read, when it's made, from what board points at.
+            if (auto* m = std::get_if<language::member_expression>(&f.initial->node)) {
+                if (auto* object = std::get_if<language::name_expression>(&m->object->node); object && object->name.parts.size() == 1 && entity_) {
+                    for (const auto& g : entity_->fields) {
+                        if (g.name == object->name.parts[0]) return "through=" + g.name + "." + m->member;
+                    }
+                }
+            }
+            // roles = [role::maintainer, role::contributor]: roles every project starts with,
+            // made within the record's own project.
+            if (auto* items = std::get_if<language::list_expression>(&f.initial->node); items && entity_ && pkg_) {
+                std::string names, within;
+                for (const auto& item : items->items) {
+                    auto* n = std::get_if<language::name_expression>(&item->node);
+                    if (n) names += (names.empty() ? "" : "|") + n->name.parts.back();
+                }
+                if (f.type) {
+                    if (const auto* role = entity(*pkg_, f.type->parts.back())) {
+                        for (const auto& key : role->fields) {
+                            if (!key.key || !key.type) continue;
+                            for (const auto& g : entity_->fields) {
+                                if (within.empty() && g.type && !g.list && g.type->parts.back() == key.type->parts.back()) within = g.name;
+                            }
+                        }
+                    }
+                }
+                return "default=" + names + (within.empty() ? "" : ",within=" + within);
+            }
             // slug(title): made from the title when it isn't given.
             if (auto* call = std::get_if<language::call_expression>(&f.initial->node); call && call->arguments.size() == 1) {
                 // mentions(body): the people the body names.
@@ -427,6 +456,7 @@ namespace one::generators {
             stream body("\t");
 
             for (auto* e : pkg.entities) {
+                entity_ = e;
                 auto from_entity = in(body, at(e), at(e).line);
                 path_ = at(e).path.empty() ? pkg.path : at(e).path;
                 struct line {

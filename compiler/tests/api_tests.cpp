@@ -101,6 +101,45 @@ TEST_CASE("the library example's backend is generated exactly as its target says
     CHECK(file->content == without_license(*target));
 }
 
+TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shop {
+entity project {
+	slug  text  required  key
+}
+entity board {
+	project  project  required  key
+	name     text     required  key
+}
+entity step {
+	board    board    required  key
+	name     text     required  key
+	project  project  = board.project
+	roles    list of role  = [role::clerk, role::printer]
+}
+define role clerk "Clerk" in project {
+	step::create
+}
+define role printer "Printer" in project {
+}
+command step::create
+command board::create {
+	by anyone signed in
+	dispatch step::create { board = id  name = "proof" }
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(one:"refers=shop::project,through=board.project")") != std::string::npos);
+    CHECK(found->content.find(R"(one:"refers=shop::role,default=clerk|printer,within=project")") != std::string::npos);
+}
+
 TEST_CASE("who may read is said once on an entity, and the views of what's within it read the same") {
     language::diagnostics out;
     std::vector<language::file> files;

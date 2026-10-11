@@ -335,6 +335,9 @@ namespace one::driver {
             });
             std::string& text = files[path];
             std::pair<std::size_t, std::size_t> last{0, 0};
+            // Applied from the end back, each before the last one applied: one that runs
+            // into it waits for the next round, when it's worked out again.
+            std::size_t before = std::string::npos;
             for (auto* d : list) {
                 std::pair<std::size_t, std::size_t> at{d->fix->where.line, d->fix->where.column};
                 if (at == last) continue;
@@ -348,7 +351,9 @@ namespace one::driver {
                 if (offset == std::string::npos) continue;
                 offset += at.second - 1;
                 if (offset + d->fix->length > text.size()) continue;
+                if (before != std::string::npos && offset + d->fix->length > before) continue;
                 text.replace(offset, d->fix->length, d->fix->text);
+                before = offset;
                 ++applied;
             }
         }

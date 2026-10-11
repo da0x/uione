@@ -373,6 +373,25 @@ TEST_CASE("an upgrade drops a view's readers when they're what its project says"
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("an upgrade drops what a field works out, and what it starts as already") {
+    auto dir = project("uione-upgrade-derived",
+                       "import one\n\nnamespace shop {\n"
+                       "\tentity project {\n\t\tslug  text  required  key\n\t}\n"
+                       "\tentity board {\n\t\tproject  project  required  key\n\t\tname  text  required  key\n\t}\n"
+                       "\tentity step {\n\t\tboard  board  required  key\n\t\tname  text  required  key\n"
+                       "\t\tproject  project  = board.project\n\t\troles  list of role  = [role::clerk]\n\t}\n"
+                       "\tdefine role clerk \"Clerk\" in project {\n\t\tstep::create\n\t}\n"
+                       "\tcommand step::create\n"
+                       "\tcommand board::create {\n\t\tby anyone signed in\n"
+                       "\t\tdispatch step::create {\n\t\t\tboard = id  project = project  roles = [role::clerk]\n\t\t\tname = \"a\"\n\t\t}\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    CHECK(done.changed.begin()->second.find("\t\tdispatch step::create {\n\t\t\tboard = id\n\t\t\tname = \"a\"\n\t\t}\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade says each change in, in project and me") {
     auto dir = project("uione-upgrade-in",
                        "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"

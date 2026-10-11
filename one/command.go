@@ -105,6 +105,9 @@ func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 		}
 	}
 	madeFrom := s.start(v, c.me, username, c.now)
+	if err := c.derive(s, v); err != nil {
+		return err
+	}
 	s.normalize(v)
 	counted, err := c.app.serials(c.tx, s, v, c.counters)
 	if err != nil {
@@ -155,6 +158,78 @@ func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 	}
 	c.made = append(c.made, &made{schema: s, ref: ref, value: v, before: before})
 	return nil
+}
+
+// derive works out what a new entity reads from what it points at, like a step's
+// project from its board's, whatever it was given, and then names the roles a list
+// starts with within it, like the project's clerk. What it points at may have been
+// made earlier in the same command, so that's looked at first.
+func (c *Ctx) derive(s *schema, v reflect.Value) error {
+	for _, f := range s.fields {
+		if f.through == "" {
+			continue
+		}
+		from, member, _ := strings.Cut(f.through, ".")
+		source := s.field(from)
+		if source == nil || source.refers == "" {
+			return fmt.Errorf("one: %s is worked out from %s, which %s doesn't point with", f.name, f.through, s.name)
+		}
+		id := fmt.Sprint(v.FieldByIndex(source.index).Interface())
+		data, err := c.pointedAt(source.refers, id)
+		if err != nil {
+			return err
+		}
+		if data == nil {
+			return invalid("there's no such %s", strings.ToLower(label(source.name)))
+		}
+		target := v.FieldByIndex(f.index)
+		if value, ok := data[member].(string); ok && target.Kind() == reflect.String {
+			target.SetString(value)
+		}
+	}
+	for _, f := range s.fields {
+		target := v.FieldByIndex(f.index)
+		if f.within == "" || f.initial == "" || target.Len() > 0 {
+			continue
+		}
+		holder := s.field(f.within)
+		if holder == nil {
+			return fmt.Errorf("one: %s starts within %s, which %s doesn't have", f.name, f.within, s.name)
+		}
+		within := fmt.Sprint(v.FieldByIndex(holder.index).Interface())
+		var keyed []string
+		for _, name := range strings.Split(f.initial, "|") {
+			keyed = append(keyed, Key(within, name))
+		}
+		target.Set(reflect.ValueOf(keyed))
+	}
+	return nil
+}
+
+// pointedAt is what's stored of an entity by its id, or what this command has made
+// of it so far: the command's own entity, then what it made, then the store.
+func (c *Ctx) pointedAt(entity, id string) (map[string]any, error) {
+	if id == "" || !validID(id) {
+		return nil, nil
+	}
+	if c.entity != nil && c.entity.schema.entity == entity {
+		if own := c.entity.value.Addr().Interface().(interface{ record() *Record }).record(); own.ID == id {
+			return c.entity.schema.data(c.entity.value), nil
+		}
+	}
+	for _, m := range c.made {
+		if m.schema.entity == entity && m.ref.ID == id {
+			return m.schema.data(m.value), nil
+		}
+	}
+	snap, err := c.tx.Get(c.app.store.Collection(strings.ReplaceAll(entity, "::", "_")).Doc(id))
+	if status.Code(err) == codes.NotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return snap.Data(), nil
 }
 
 // read is an entity a command read with Read, and how it was before.
@@ -799,6 +874,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				return err
 			}
 			madeFrom := s.start(v, c.me, username, now)
+			if err := body.derive(s, v); err != nil {
+				return err
+			}
 			s.normalize(v)
 			if err := a.mentionsIn(ctx, tx, s, v); err != nil {
 				return err

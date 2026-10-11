@@ -91,6 +91,8 @@ type field struct {
 	mentions string // for a list of people: the field whose text names them, like a comment's body, with @username
 	history  bool   // what it points at keeps this entity's changes in its own history, as an issue does its comments'
 	file     bool   // a file's path in the app's bucket, or a list of them (files.go)
+	through  string // worked out when it's made from what another field points at, like board.project
+	within   string // for a list of roles it starts with: the field naming where they're held, like project
 }
 
 type schema struct {
@@ -164,6 +166,10 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.file = true
 			case "refers":
 				fd.refers = value
+			case "through":
+				fd.through = value
+			case "within":
+				fd.within = value
 			}
 		}
 		s.fields = append(s.fields, fd)
@@ -364,6 +370,14 @@ func (s *schema) start(v reflect.Value, me, username string, now time.Time) (mad
 		}
 		target := v.FieldByIndex(f.index)
 		if !target.IsZero() && f.initial != "me" && f.initial != "me.username" {
+			continue
+		}
+		// A list starts as its values, unless they're held within something, which
+		// derive names them by once that's known.
+		if target.Kind() == reflect.Slice && target.Type().Elem().Kind() == reflect.String {
+			if f.within == "" {
+				target.Set(reflect.ValueOf(strings.Split(f.initial, "|")))
+			}
 			continue
 		}
 		switch {

@@ -148,6 +148,10 @@ namespace one::language {
         std::string name;
         location where;
         expression_ptr value;
+        // What taking it out cuts: it and the space after it, or before it when it's
+        // last on its line, or its whole line when it's alone on it.
+        location cut_where;
+        std::size_t cut_length = 0;
     };
 
     // create member { project = id  person = me }: another entity, made in the same
