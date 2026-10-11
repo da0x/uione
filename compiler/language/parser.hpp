@@ -1804,7 +1804,8 @@ namespace one::language {
         }
 
         // A line of a form: several fields (title author), or one field with a starting
-        // value, which can carry a hint: code = suggest(start) { hint "..." }.
+        // value, which can carry a hint: code = suggest(start) { hint "..." }; any field
+        // can, to say what it means: takes_reports "Reports" { hint "..." }.
         void parse_form_line(std::vector<form_field>& fields) {
             while (!at_line_end()) {
                 form_field f;
@@ -1812,6 +1813,18 @@ namespace one::language {
                 f.name = name.text;
                 f.where = name.where;
                 if (at(token_kind::string)) f.label = advance().text;
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    skip_newlines();
+                    if (!at_word("hint")) fail_expecting("'hint'");
+                    advance();
+                    f.hint = expect(token_kind::string, "the hint's text").text;
+                    end_line();
+                    skip_newlines();
+                    expect(token_kind::right_brace, "'}'");
+                    fields.push_back(std::move(f));
+                    break;
+                }
                 if (at(token_kind::assign)) {
                     advance();
                     f.value = parse_expression();

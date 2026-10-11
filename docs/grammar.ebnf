@@ -230,7 +230,8 @@ board_line     ::= ("move" qualified "along" qualified "." NAME | "tint" "by" NA
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
-form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint?) END
+form_line      ::= ((NAME STRING?)+ | (NAME STRING?)* NAME STRING? "=" expression hint? | (NAME STRING?)* NAME STRING? hint) END
+/* takes_reports "Reports" { hint "..." }: any field can say what it means, under it */
 hint           ::= "{" NEWLINE? "hint" STRING END "}"
 
 /* picker */

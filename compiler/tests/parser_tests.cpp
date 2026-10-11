@@ -227,6 +227,16 @@ screen "Shelf" /shelf {
     CHECK(std::get<confirm_item>(screen.items[5].node).message == "Withdraw {title}?");
 }
 
+TEST_CASE("any field of a form can carry a hint, saying what it means") {
+    auto f = parse_ok("screen \"New\" /new {\n\tform shop::create {\n\t\tname\n\t\topen_late \"Open late\" {\n\t\t\thint \"Orders taken until midnight\"\n\t\t}\n\t\tcity\n\t}\n}\n");
+    const auto& form = std::get<form_item>(only<screen_declaration>(f).items[0].node);
+    REQUIRE(form.fields.size() == 3);
+    CHECK(form.fields[1].name == "open_late");
+    CHECK(form.fields[1].label == "Open late");
+    CHECK(form.fields[1].hint == "Orders taken until midnight");
+    CHECK(form.fields[2].name == "city");
+}
+
 TEST_CASE("a screen named rather than titled, at the root") {
     auto f = parse_ok("screen docs /:page {\n\tmarkdown \"docs/*.md\"\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
     REQUIRE(f.declarations.size() == 2);

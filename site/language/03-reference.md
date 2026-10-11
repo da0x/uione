@@ -1532,6 +1532,8 @@ issue::verify "Verify" when {
   written on its own.
 - A field can be called something other than its name: `form comment::create
   "Comment" { body "Comment" }` asks for the body, labelled Comment.
+- A field can say what it means under it: `takes_reports "Public reports" { hint
+  "Anyone may report a problem, signed in or not" }`.
 - `confirm` asks before a command runs.
 - `component opening_hours` draws a hand-written React component: the default
   export of `components/opening_hours.tsx`, beside the `.one` file. It's for
