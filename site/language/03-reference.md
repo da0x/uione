@@ -76,6 +76,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`view`](#view) | a document built ahead of time for a screen |
 | [`role`](#role) | permissions a person can be given |
 | [`define role`](#define-role) | a role each project starts with, kept as records its people edit |
+| [`define workflow`](#define-workflow) | the rules an entity moves by: its stages, who works each, and the steps between them |
 | [`define theme`](#define-theme) | how a site looks: its colors, light and dark, fonts, corners and depth |
 | [`define service`](#define-service) | a system that runs commands, like GitHub, and the commands it may run |
 | [`function`](#function) | a value worked out from others |
@@ -120,7 +121,10 @@ Words for values that aren't written out:
 - `now`, the moment a command runs;
 - `me`, the person running it, and `me.username`, their GitHub username;
 - `none`, no value, as an empty field holds;
-- `true` and `false`.
+- `true` and `false`;
+- a time counted from now, like `10 minutes from now` or `2 days ago`, in minutes,
+  hours, days or weeks: from the moment a command runs, or in a filter, from when
+  it's opened.
 
 ## Keywords
 
@@ -133,6 +137,7 @@ The language's own words, inside what a declaration says:
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a define role, `in` and `for services`; in a picker, `from`;
+- in a define workflow: `by`, `worked by`, `steps`, `lease`;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
@@ -962,6 +967,94 @@ sign in as them, through their browser, the way native apps do with OAuth:
 The generated C++ client does all of it with `sign_in_with_browser(open)`, where
 `open` shows the address, and keeps the refresh token the program stores.
 
+## define workflow
+
+The rules an entity moves by: the stages it goes through, which roles work each,
+and the steps from one to another. Its stages are records, so each project makes
+its own, and whoever works one takes what's in it for a while, its lease, so two
+never work the same thing at once. Here a print shop's orders move from proofing to
+press to shipping:
+
+```one
+entity stage {
+	shop       shop  required  key
+	name       slug  required  key = slug(title)
+	title      text  required
+	// The roles whose people and services work its orders.
+	worked_by  list of role
+}
+
+// From one stage to another, for the roles it names.
+entity step {
+	shop   shop   required  key
+	from   stage  required  key
+	to     stage  required  key
+	roles  list of role
+}
+
+entity order {
+	shop   shop   required
+	title  text   required
+	stage  stage
+}
+
+define workflow order by stage {
+	worked by worked_by
+	steps step
+	lease 30 minutes
+}
+```
+
+- `by` names the field it moves along, pointing at its stages; `worked by` names
+  the stage's field listing the roles that work it; `steps` names the entity whose
+  records go `from` one stage `to` another for the `roles` they list. `lease` says
+  how long a claim lasts, in minutes or hours, unless it's renewed; it's 10 minutes
+  when it isn't said.
+- The workflow adds to the entity who holds it and until when, and the commands
+  that work it, said in full as a project could write them:
+
+```one
+	held_by     user
+	held_until  date
+
+command order::claim {
+	require held(stage.worked_by)  "this stage isn't worked by a role you hold"
+	require held_by == none || held_by == me || held_until < now  "someone else holds it"
+	held_by = me
+	held_until = 30 minutes from now
+}
+command order::renew {
+	require held_by == me  "you don't hold it"
+	held_until = 30 minutes from now
+}
+command order::release {
+	require held_by == me  "you don't hold it"
+	held_by = none
+	held_until = none
+}
+command order::move {
+	changes stage
+	require "your role doesn't move an order from there to there" {
+		exists(step where from == was order.stage && to == order.stage && held(roles))
+	}
+	require held_by == none || held_by == me || held_until < now  "someone else holds it"
+	held_by = none
+	held_until = none
+}
+```
+
+- A claim lasts until its lease runs out, so a worker that stops, like a laptop
+  that sleeps, lets go by itself; one still working renews it. Moving it on ends
+  the claim. Each command is allowed by a role, as any is: `order::claim`,
+  `order::renew`, `order::release` and `order::move`.
+- Each role's queue is a view the workflow adds, `order_work` per role, read by the
+  people of the role's project: what's in the stages the role works, with every
+  field, the stage's title and roles, and who holds it until when. A worker listens
+  to it, and takes what's free, or held past its lease.
+- The roles are a [define role](#define-role)'s, and the entity is held in what
+  they're in, like a shop. Writing `held_by`, `held_until` or any of the four
+  commands as well is a mistake.
+
 ## define theme
 
 How a site looks: a color for what each is for, light and dark, its fonts, its
@@ -1212,7 +1305,7 @@ form step::update "Save" {
   the list has them. `filter "Opened by me" author == me` is a link that opens the
   card filtered; three at most. A filter can keep the rows whose time is after or
   before one counted from when it's opened: `filter "Changed this week" updated_at
-  > 7 days ago`, or `due <= 2 weeks from now`, in hours, days or weeks.
+  > 7 days ago`, or `due <= 2 weeks from now`, in minutes, hours, days or weeks.
 - A filter and a section can each have a color, so the parts of a page can be told
   apart at a glance: `filter "High priority" priority == priority::high color red`,
   `section "Wiki" color violet { ... }`. A section's heading, links and tables

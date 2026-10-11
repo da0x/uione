@@ -68,14 +68,18 @@ export function label(name: string): string {
 
 // How a value from a view is shown: a date as a date, anything else as text.
 // A date picked without a time is stored at midnight UTC, so it's shown as that day
-// wherever the reader is, not the evening before.
+// wherever the reader is, not the evening before. A moment today is shown as its
+// time, as mail is, so a claim held until 7:25 PM says so.
 export function dateOnly(value: Date): boolean {
   return value.getUTCHours() === 0 && value.getUTCMinutes() === 0 && value.getUTCSeconds() === 0 && value.getUTCMilliseconds() === 0;
 }
 
-export function show(value: unknown): string {
+export function show(value: unknown, now = new Date()): string {
+  if (value instanceof Date && !dateOnly(value) && value.toDateString() === now.toDateString()) {
+    return value.toLocaleTimeString(undefined, { timeStyle: "short" });
+  }
   if (value instanceof Date) return value.toLocaleDateString(undefined, { dateStyle: "medium", ...(dateOnly(value) ? { timeZone: "UTC" } : {}) });
-  if (Array.isArray(value)) return value.map(show).filter((item) => item !== "").join(", ");
+  if (Array.isArray(value)) return value.map((item) => show(item, now)).filter((item) => item !== "").join(", ");
   return String(value ?? "");
 }
 

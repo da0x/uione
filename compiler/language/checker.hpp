@@ -656,6 +656,9 @@ namespace one::language {
             }
         }
 
+        // What's wrong with a workflow is said as it's lowered (lower.hpp).
+        void verify(const std::string&, location, const define_workflow_declaration&) {}
+
         // define service github "GitHub" in project { mention::create }: each is a
         // command, and with in, one on what's in a project, as a role's are.
         void verify(const std::string& ns, location, const define_service_declaration& v) {

@@ -441,6 +441,23 @@ namespace one::language {
         std::vector<qualified_name> permissions;
     };
 
+    // define workflow issue by phase { worked by worked_by  steps step }: the rules an
+    // entity moves by. Its stages are the records its field points at, each listing the
+    // roles that work it; its steps say which roles move it from one to another. A
+    // worker claims one for a while, its lease, and moves it on.
+    struct define_workflow_declaration {
+        std::string entity;  // issue
+        location where;
+        std::string by;  // phase: the field it moves along
+        location by_where;
+        std::string worked_by;  // worked_by: the stage's field listing the roles that work it
+        location worked_by_where;
+        std::string steps;  // step: the entity of moves, with from, to and roles
+        location steps_where;
+        int lease_minutes = 10;  // how long a claim lasts unless it's renewed
+        location lease_where;
+    };
+
     struct function_declaration {
         std::string name;
         std::vector<std::string> parameters;
@@ -815,7 +832,7 @@ namespace one::language {
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
-                     define_service_declaration, theme_declaration>
+                     define_service_declaration, theme_declaration, define_workflow_declaration>
             node;
     };
 

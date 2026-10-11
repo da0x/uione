@@ -705,3 +705,29 @@ TEST_CASE("a time counted from now is said with ago or from now, in a filter") {
     REQUIRE(out.size() == 1);
     CHECK(out[0].message == "expected ago or from now, like 7 days ago, found the end of the line");
 }
+
+TEST_CASE("a time counted from now goes anywhere a value does, in minutes too") {
+    auto f = parse_ok("command job::claim {\n\theld_until = 10 minutes from now\n\trequire due > 2 days ago  \"too late\"\n}\n");
+    const auto& command = std::get<command_declaration>(f.declarations[0].node);
+    const auto& set = std::get<assign_statement>(command.body[0].node);
+    const auto& when = std::get<literal_expression>(set.value->node);
+    CHECK(when.type == literal_expression::kind::time);
+    CHECK(when.value == "+10m");
+}
+
+TEST_CASE("a workflow says who works its stages, its steps, and how long a claim lasts") {
+    auto f = parse_ok("define workflow issue by phase {\n\tworked by worked_by\n\tsteps step\n\tlease 2 hours\n}\n");
+    const auto& w = std::get<define_workflow_declaration>(f.declarations[0].node);
+    CHECK(w.entity == "issue");
+    CHECK(w.by == "phase");
+    CHECK(w.worked_by == "worked_by");
+    CHECK(w.steps == "step");
+    CHECK(w.lease_minutes == 120);
+    CHECK(std::get<define_workflow_declaration>(parse_ok("define workflow issue by phase {\n\tsteps step\n}\n").declarations[0].node).lease_minutes == 10);
+    auto out = parse_errors("define workflow issue by phase {\n\tlease 3 days\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "a lease lasts minutes or hours, like lease 10 minutes");
+    out = parse_errors("define workflow issue by phase {\n\tstarts at backlog\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "expected worked by, steps or lease, one a line, found 'starts'");
+}

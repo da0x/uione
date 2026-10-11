@@ -872,6 +872,8 @@ describe("filters by time", () => {
     expect(keptByTime(tenDaysAgo, ">", "-7d", now)).toBe(false);
     expect(keptByTime(tenDaysAgo.toISOString(), "<", "-1w", now)).toBe(true);
     expect(keptByTime(new Date(now + 3 * 3600 * 1000), "<=", "+4h", now)).toBe(true);
+    expect(keptByTime(new Date(now - 20 * 60 * 1000), ">", "-30m", now)).toBe(true);
+    expect(keptByTime(new Date(now - 40 * 60 * 1000), ">", "-30m", now)).toBe(false);
     expect(keptByTime(undefined, ">", "-7d", now)).toBe(false);
     expect(keptByTime(twoDaysAgo, ">", "seven days", now)).toBe(false);
   });

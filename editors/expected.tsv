@@ -245,3 +245,8 @@ editors/fixtures/match.one	each other link where	other	keyword
 editors/fixtures/match.one	\t\tother  text	other	variable
 editors/fixtures/track.one	track release over desk.releases	track	keyword
 editors/fixtures/track.one	track release over desk.releases	over	keyword
+editors/fixtures/workflow.one	define workflow order by stage {	define	declare
+editors/fixtures/workflow.one	define workflow order by stage {	workflow	declare
+editors/fixtures/workflow.one	define workflow order by stage {	order	name
+editors/fixtures/workflow.one	worked by worked_by	worked	keyword
+editors/fixtures/workflow.one	lease 30 minutes	minutes	keyword

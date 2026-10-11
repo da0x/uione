@@ -143,6 +143,7 @@ namespace one::generators {
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
         std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
         int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
+        bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
 
         code::source at(const void* declaration) const {
             auto it = declared_.find(declaration);
@@ -413,6 +414,7 @@ namespace one::generators {
                 for (const auto& h : w->handlers) find_run(h.body);
             }
             bool uses_time = false;
+            counts_time_ = false;
             stream body("\t");
 
             for (auto* e : pkg.entities) {
@@ -633,7 +635,7 @@ namespace one::generators {
             auto fixed = out.fixed();  // what every package file has
             out.line("package " + package_name(ns));
             out.line();
-            if (uses_time) {
+            if (uses_time || counts_time_) {
                 out.open("import (");
                 out.line("\"time\"");
                 out.line();
@@ -1529,6 +1531,7 @@ namespace one::generators {
                 if (object && object->name.text() == e.name && field(e, m->member)) return me + "." + api_detail::go_name(m->member);
             }
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
+                if (lit->type == language::literal_expression::kind::time) return counted(lit->value);
                 return lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
             }
             if (auto* m = std::get_if<language::match_expression>(&x.node)) return matched(e, *m, me, beside);
@@ -1581,12 +1584,36 @@ namespace one::generators {
                     if (it->second == "==" || it->second == "!=") return compare(e, *b, me, it->second);
                     auto l = expression(e, *b->left, me, nullptr);
                     auto r = expression(e, *b->right, me, nullptr);
-                    if (l && r) return *l + " " + it->second + " " + *r;
-                    return std::nullopt;
+                    if (!l || !r) return std::nullopt;
+                    // held_until < now: Go's times are compared by Before and After.
+                    if (is_time(e, *b->left, me) || is_time(e, *b->right, me)) {
+                        if (it->second == "<") return *l + ".Before(" + *r + ")";
+                        if (it->second == ">") return *l + ".After(" + *r + ")";
+                        if (it->second == "<=") return "!" + *l + ".After(" + *r + ")";
+                        if (it->second == ">=") return "!" + *l + ".Before(" + *r + ")";
+                    }
+                    return *l + " " + it->second + " " + *r;
                 }
             }
             unsupported(path_, x.where, "this expression in a command; a command can use its own fields, now, me, none, and plain values");
             return std::nullopt;
+        }
+
+        // 10 minutes from now, or 2 days ago: a time counted from when the command runs.
+        std::string counted(const std::string& offset) {
+            counts_time_ = true;
+            static const std::map<char, std::string> units{{'m', "time.Minute"}, {'h', "time.Hour"}, {'d', "24 * time.Hour"}, {'w', "7 * 24 * time.Hour"}};
+            std::string sign = offset.substr(0, 1) == "-" ? "-" : "";
+            std::string amount = offset.substr(1, offset.size() - 2);
+            return "c.Now().Add(" + sign + amount + " * " + units.at(offset.back()) + ")";
+        }
+
+        // Whether an expression is a time: now, one counted from now, or a date field.
+        bool is_time(const language::entity_declaration& e, const language::expression& x, const std::string& me) {
+            if (auto* lit = std::get_if<language::literal_expression>(&x.node)) return lit->type == language::literal_expression::kind::time;
+            if (auto* n = std::get_if<language::name_expression>(&x.node); n && n->name.text() == "now") return true;
+            auto f = resolve(e, x, me);
+            return f && f->second && f->second->type && f->second->type->text() == "date";
         }
 
         // match relation { blocks  blocked_by … }: one.Match with the value for each

@@ -1,0 +1,44 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A workflow, for the highlighting test: define workflow declares, worked and
+// minutes are keywords.
+
+namespace shop {
+
+	entity shop {
+		slug  slug  required  unique  key
+	}
+
+	define role proofreader "Proofreader" in shop {
+		order::claim
+		order::renew
+		order::release
+		order::move
+	}
+
+	entity stage {
+		shop       shop  required  key
+		name       slug  required  key
+		worked_by  list of role
+	}
+
+	entity step {
+		shop   shop   required  key
+		from   stage  required  key
+		to     stage  required  key
+		roles  list of role
+	}
+
+	entity order {
+		shop   shop   required
+		stage  stage
+	}
+
+	define workflow order by stage {
+		worked by worked_by
+		steps step
+		lease 30 minutes
+	}
+
+}

@@ -147,7 +147,7 @@ export function Details({
   const items = fields.flatMap<{ label: string; value: ReactNode }>(([name, label]) => {
     const value = view.data?.[name];
     if (labels.includes(name) && Array.isArray(value)) {
-      const words = value.map(show).filter((word) => word !== "");
+      const words = value.map((word) => show(word)).filter((word) => word !== "");
       return words.length ? [{ label, value: <ui.Labels items={words} /> }] : [];
     }
     const said = typeof value === "string" ? (choices[name]?.[value] ?? value) : show(value);
@@ -819,13 +819,13 @@ export interface RowAction {
 }
 
 // Whether a row's time is before or after one counted from now, as a filter like
-// updated_at > 7 days ago asks with updated_at>=-7d: hours, days or weeks, ago (-)
+// updated_at > 7 days ago asks with updated_at>=-7d: minutes, hours, days or weeks, ago (-)
 // or from now (+). A row with no time is kept by neither.
 export function keptByTime(held: unknown, op: string, offset: string, now = Date.now()): boolean {
-  const counted = /^([+-])(\d+)([hdw])$/.exec(offset);
+  const counted = /^([+-])(\d+)([mhdw])$/.exec(offset);
   const at = held instanceof Date ? held.getTime() : typeof held === "string" || typeof held === "number" ? new Date(held).getTime() : Number.NaN;
   if (!counted || Number.isNaN(at)) return false;
-  const hours = { h: 1, d: 24, w: 24 * 7 }[counted[3] as "h" | "d" | "w"];
+  const hours = { m: 1 / 60, h: 1, d: 24, w: 24 * 7 }[counted[3] as "m" | "h" | "d" | "w"];
   const then = now + (counted[1] === "-" ? -1 : 1) * Number(counted[2]) * hours * 3600 * 1000;
   return op === "<" ? at < then : op === ">" ? at > then : op === "<=" ? at <= then : at >= then;
 }
@@ -891,7 +891,7 @@ function cellOf(
   const value = row[key];
   const shown = typeof value === "string" ? choices[key]?.[value] : undefined;
   if (shown !== undefined) return shown;
-  if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map(show).filter((item) => item !== "")} />;
+  if (labels.includes(key) && Array.isArray(value)) return <ui.Labels items={value.map((item) => show(item)).filter((item) => item !== "")} />;
   // A web address is a link, to wherever it is, shown shortened.
   if (!pictures.includes(key) && typeof value === "string" && /^https?:\/\/\S+$/i.test(value)) {
     return (

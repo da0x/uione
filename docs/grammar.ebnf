@@ -44,7 +44,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme | define_workflow
                  | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
@@ -157,6 +157,13 @@ role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? 
  * records, given to people by member records, with the commands it allows, one
  * a line. */
 define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? (qualified END)* "}" END
+/* define workflow: the rules an entity moves by, along a field pointing at its
+ * stages: the stage's field listing the roles that work it, the entity of steps
+ * between them, and how long a claim lasts. */
+define_workflow ::= "define" "workflow" NAME "by" NAME "{" NEWLINE? workflow_line* "}" END
+workflow_line  ::= ( "worked" "by" NAME
+                   | "steps" NAME
+                   | "lease" WHOLE ("minute" | "minutes" | "hour" | "hours") ) END
 /* define theme: how a site looks, as a color for each role, light and dark, its
  * fonts, corners and depth; from another, it changes only what it says. */
 define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END
@@ -229,7 +236,7 @@ product        ::= unary ("*" unary)*
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
-primary        ::= STRING | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
+primary        ::= STRING | time | NUMBER | built_in | qualified | "(" expression ")" | "[" NEWLINE? (expression NEWLINE? ("," NEWLINE? expression NEWLINE?)* ("," NEWLINE?)?)? "]"
                  | match
 /* a value for each choice of an enum, one a line, and else for the rest */
 match          ::= "match" NAME ("." NAME)* "{" NEWLINE? (NAME expression END)+ ("else" expression END)? "}"
@@ -237,9 +244,10 @@ match          ::= "match" NAME ("." NAME)* "{" NEWLINE? (NAME expression END)+ 
 timeline_line  ::= "new" "since" qualified "." NAME END
                  | "seen" qualified END
 /* a card's filter: a field and what it holds, or a time it's before or after, counted
-   from when it's opened: updated_at > 7 days ago, due <= 2 weeks from now */
+   from when it's opened: updated_at > 7 days ago, due <= 2 weeks from now; in a
+   command, a time is counted from when it runs: held_until = 10 minutes from now */
 filter         ::= NAME "==" expression | NAME ("<" | ">" | "<=" | ">=") time
-time           ::= NUMBER ("hour" | "hours" | "day" | "days" | "week" | "weeks") ("ago" | "from" "now")
+time           ::= NUMBER ("minute" | "minutes" | "hour" | "hours" | "day" | "days" | "week" | "weeks") ("ago" | "from" "now")
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 

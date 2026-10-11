@@ -292,6 +292,11 @@ namespace one::language {
                 end_line();
                 return {where, std::move(role)};
             }
+            if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "workflow") {
+                advance();
+                advance();
+                return {where, parse_define_workflow()};
+            }
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
@@ -310,7 +315,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, define role, define service, define theme, function, screen, picker, webhook, backend, header, footer or once");
+                        "format, enum, entity, command, view, define role, define service, define theme, define workflow, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -763,6 +768,47 @@ namespace one::language {
             }
             end_line();
             return role;
+        }
+
+        // define workflow issue by phase { worked by worked_by  steps step  lease 10 minutes }
+        define_workflow_declaration parse_define_workflow() {
+            define_workflow_declaration w;
+            w.where = peek().where;
+            w.entity = expect(token_kind::identifier, "what moves by it, like issue").text;
+            if (!at_word("by")) fail_expecting("'by' and the field it moves along, like define workflow issue by phase");
+            advance();
+            w.by_where = peek().where;
+            w.by = expect(token_kind::identifier, "the field it moves along, like phase").text;
+            expect(token_kind::left_brace, "'{' and its rules, one a line: worked by, steps and lease");
+            while (in_block()) {
+                if (at_word("worked")) {
+                    advance();
+                    if (!at_word("by")) fail_expecting("'by', as in worked by worked_by");
+                    advance();
+                    w.worked_by_where = peek().where;
+                    w.worked_by = expect(token_kind::identifier, "the field listing the roles that work each stage, like worked_by").text;
+                } else if (at_word("steps")) {
+                    advance();
+                    w.steps_where = peek().where;
+                    w.steps = expect(token_kind::identifier, "the entity of its steps, like step").text;
+                } else if (at_word("lease")) {
+                    advance();
+                    w.lease_where = peek().where;
+                    const token& amount = expect(token_kind::number, "how long a claim lasts, like lease 10 minutes");
+                    const token& unit = expect(token_kind::identifier, "minutes or hours, like lease 10 minutes");
+                    int minutes = 0;
+                    std::from_chars(amount.text.data(), amount.text.data() + amount.text.size(), minutes);
+                    if (unit.text == "hour" || unit.text == "hours") minutes *= 60;
+                    else if (unit.text != "minute" && unit.text != "minutes") fail(unit.where, "a lease lasts minutes or hours, like lease 10 minutes");
+                    w.lease_minutes = minutes;
+                } else {
+                    fail_expecting("worked by, steps or lease, one a line");
+                }
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return w;
         }
 
         // define theme harbor "Harbor" from papercolor { ... }, one thing a line.
@@ -2022,10 +2068,19 @@ namespace one::language {
 
         // The units a time is counted in, as its offset writes them.
         static const char* unit_of(std::string_view word) {
+            if (word == "minute" || word == "minutes") return "m";
             if (word == "hour" || word == "hours") return "h";
             if (word == "day" || word == "days") return "d";
             if (word == "week" || word == "weeks") return "w";
             return nullptr;
+        }
+
+        // 10 minutes from now, or 2 days ago, outside a filter: said in full, so a
+        // number and a word after it are never taken for one by mistake.
+        bool counted_from_now() {
+            const token& after = peek(2);
+            if (after.kind != token_kind::identifier) return false;
+            return after.text == "ago" || (after.text == "from" && peek(3).kind == token_kind::identifier && peek(3).text == "now");
         }
 
         expression_ptr parse_primary() {
@@ -2033,7 +2088,8 @@ namespace one::language {
             e->where = peek().where;
             if (at(token_kind::string)) {
                 e->node = literal_expression{literal_expression::kind::string, advance().text};
-            } else if (at(token_kind::number) && relative_times_ && peek(1).kind == token_kind::identifier && unit_of(peek(1).text)) {
+            } else if (at(token_kind::number) && peek(1).kind == token_kind::identifier && unit_of(peek(1).text) &&
+                       (relative_times_ || counted_from_now())) {
                 // 7 days ago, 2 weeks from now: a time counted from when it's read.
                 std::string amount = advance().text;
                 const token& unit = advance();

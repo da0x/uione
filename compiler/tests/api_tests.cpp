@@ -654,6 +654,144 @@ command job::claim {
     CHECK(go.find("[]string{}") == std::string::npos);
 }
 
+TEST_CASE("a lease is held until a time counted from now, and runs out by the clock") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace crew {
+entity crew {
+	slug  slug  required  unique  key
+}
+define role hand "Hand" in crew {
+	job::claim
+	job::release
+}
+entity job {
+	crew        crew  required
+	held_by     user
+	held_until  date
+}
+command job::claim {
+	require held_by == none || held_by == me || held_until < now  "someone else holds it"
+	held_by = me
+	held_until = 10 minutes from now
+}
+command job::release {
+	require held_by == me  "you don't hold it"
+	held_by = none
+	held_until = none
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "crew/crew.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CAPTURE(go);
+    CHECK(go.find("j.HeldUntil.Before(c.Now())") != std::string::npos);
+    CHECK(go.find("j.HeldUntil = c.Now().Add(10 * time.Minute)") != std::string::npos);
+    CHECK(go.find("j.HeldBy = \"\"") != std::string::npos);
+    CHECK(go.find("j.HeldUntil = time.Time{}") != std::string::npos);
+}
+
+TEST_CASE("a workflow says in full who claims a job, for how long, and where it moves") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shop {
+entity shop {
+	slug  slug  required  unique  key
+}
+define role proofreader "Proofreader" in shop {
+	order::claim
+	order::renew
+	order::release
+	order::move
+}
+entity stage {
+	shop       shop  required  key
+	name       slug  required  key
+	title      text
+	worked_by  list of role
+}
+entity step {
+	shop   shop   required  key
+	from   stage  required  key
+	to     stage  required  key
+	roles  list of role
+}
+entity order {
+	shop   shop   required
+	title  text
+	stage  stage
+}
+define workflow order by stage {
+	worked by worked_by
+	steps step
+	lease 30 minutes
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CAPTURE(go);
+    // Who holds it, and until when.
+    CHECK(go.find("HeldBy    string    `firestore:\"held_by\"") != std::string::npos);
+    CHECK(go.find("HeldUntil time.Time `firestore:\"held_until\"") != std::string::npos);
+    // A claim: a role of the stage's, nobody else holding it, and a lease.
+    CHECK(go.find(R"(var Claim = one.Command[Order]("order::claim").)") != std::string::npos);
+    CHECK(go.find("held, err := c.Held(stage.WorkedBy)") != std::string::npos);
+    CHECK(go.find("if !(o.HeldBy == \"\" || o.HeldBy == c.Me() || o.HeldUntil.Before(c.Now())) {") != std::string::npos);
+    CHECK(go.find("o.HeldUntil = c.Now().Add(30 * time.Minute)") != std::string::npos);
+    CHECK(go.find(R"(var Renew = one.Command[Order]("order::renew").)") != std::string::npos);
+    CHECK(go.find(R"(var Release = one.Command[Order]("order::release").)") != std::string::npos);
+    // A move: along a step a role holds, by whoever holds it, which ends the lease.
+    CHECK(go.find(R"(var Move = one.Command[Order]("order::move").Fields("stage").)") != std::string::npos);
+    CHECK(go.find(R"(one.Where[Step]("from", c.Was("stage")).And("to", o.Stage))") != std::string::npos);
+    // What each role works, for the shop's people.
+    CHECK(go.find(R"(one.View("order_work").Per(one.Entity[Role]()).Readers(one.Entity[Member]()))") != std::string::npos);
+    CHECK(go.find(R"(Has("stage.worked_by", one.Subject))") != std::string::npos);
+}
+
+TEST_CASE("a workflow is for an entity moving along stages that roles work, by steps") {
+    auto errors = [](const std::string& workflow, const std::string& extra = "") {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", "namespace shop {\nentity shop {\n\tslug  slug  required  unique  key\n}\n"
+                                                    "define role proofreader \"Proofreader\" in shop {\n\tshop::create\n}\n"
+                                                    "command shop::create  by anyone signed in\n"
+                                                    "entity stage {\n\tshop  shop  required  key\n\tname  slug  required  key\n\tworked_by  list of role\n\tlabel  text\n}\n"
+                                                    "entity step {\n\tshop  shop  required  key\n\tfrom  stage  required  key\n\tto  stage  required  key\n\troles  list of role\n}\n"
+                                                    "entity order {\n\tshop  shop  required\n\tstage  stage\n\ttitle  text\n}\n" + extra + workflow + "}\n", out));
+        language::check(files, out);
+        std::vector<std::string> messages;
+        for (const auto& d : out) messages.push_back(d.message);
+        return messages;
+    };
+    auto says = [](const std::vector<std::string>& messages, const std::string& message) {
+        CAPTURE(messages);
+        return std::find(messages.begin(), messages.end(), message) != messages.end();
+    };
+    CHECK(says(errors("define workflow bill by stage {\n\tworked by worked_by\n\tsteps step\n}\n"),
+               "a workflow is for an entity, and there's no entity bill in namespace shop"));
+    CHECK(says(errors("define workflow order by title {\n\tworked by worked_by\n\tsteps step\n}\n"),
+               "order moves along a field pointing at its stages, and title isn't one of its fields that does"));
+    CHECK(says(errors("define workflow order by stage {\n\tworked by label\n\tsteps step\n}\n"),
+               "stage's label isn't a list of roles, like worked_by  list of role"));
+    CHECK(says(errors("define workflow order by stage {\n\tworked by worked_by\n}\n"),
+               "say which entity's records are the steps between stages, like steps step"));
+    CHECK(says(errors("define workflow order by stage {\n\tworked by worked_by\n\tsteps shop\n}\n"),
+               "a step goes from one stage to another: shop needs from  stage"));
+    CHECK(says(errors("define workflow order by stage {\n\tworked by worked_by\n\tsteps step\n}\n", "command order::claim\n"),
+               "the workflow makes order::claim; take out the one declared"));
+}
+
 TEST_CASE("exists and was are a command's, and held takes a project's roles") {
     language::diagnostics out;
     std::vector<language::file> files;

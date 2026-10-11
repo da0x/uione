@@ -15,6 +15,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <type_traits>
 #include <variant>
 #include <string>
@@ -371,12 +372,182 @@ namespace one::language {
             }
         };
 
+        // define workflow issue by phase { worked by worked_by  steps step }, said in
+        // full, as a project that wrote it out would have: the lease on the entity,
+        //
+        //     held_by     user
+        //     held_until  date
+        //
+        // the commands that claim it, renew and release the claim, and move it along a
+        // step, and a view for each role of what it works, read by the project's people:
+        //
+        //     command issue::claim {
+        //         require held(phase.worked_by)  "this phase isn't worked by a role you hold"
+        //         require held_by == none || held_by == me || held_until < now  "someone else holds it"
+        //         held_by = me
+        //         held_until = 10 minutes from now
+        //     }
+        //     view issue_work per role { readers member  items = each issue where phase.worked_by has role.id { … } }
+        struct workflower {
+            diagnostics& out;
+            struct found {
+                define_workflow_declaration* workflow;
+                std::vector<declaration>* declarations;
+                const std::string* path;
+                std::string ns;
+            };
+            std::vector<found> workflows;
+            std::map<std::string, entity_declaration*> entities;  // by namespace::name
+            std::map<std::string, std::string> scopes;           // a namespace's roles are in this, like project
+            std::set<std::string> commands;                       // namespace::entity::command
+
+            static std::string full(const std::string& ns, const std::string& name) { return ns.empty() ? name : ns + "::" + name; }
+
+            void find(std::vector<declaration>& declarations, const std::string& ns, const std::string& path) {
+                for (auto& d : declarations) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) {
+                        find(n->declarations, full(ns, n->name), path);
+                    } else if (auto* w = std::get_if<define_workflow_declaration>(&d.node)) {
+                        workflows.push_back({w, &declarations, &path, ns});
+                    } else if (auto* e = std::get_if<entity_declaration>(&d.node)) {
+                        entities[full(ns, e->name)] = e;
+                    } else if (auto* r = std::get_if<define_role_declaration>(&d.node)) {
+                        scopes.emplace(ns, r->in);
+                    } else if (auto* c = std::get_if<command_declaration>(&d.node)) {
+                        commands.insert(full(ns, c->name.text()));
+                    }
+                }
+            }
+
+            static const field* field_named(const entity_declaration& e, const std::string& name) {
+                for (const auto& f : e.fields) {
+                    if (f.name == name) return &f;
+                }
+                return nullptr;
+            }
+
+            static bool lists_roles(const field* f) { return f && f->list && f->type && f->type->text() == "role"; }
+
+            static std::string a(const std::string& word) {
+                return std::string(std::string("aeiou").find(word.front()) == std::string::npos ? "a " : "an ") + word;
+            }
+
+            void define() {
+                std::vector<std::pair<std::vector<declaration>*, declaration>> made_here;
+                for (auto& [w, declarations, path, ns] : workflows) {
+                    auto error = [&, path = path](location where, std::string message) { out.push_back({*path, where, std::move(message)}); };
+                    entity_declaration* moving = entities.contains(full(ns, w->entity)) ? entities[full(ns, w->entity)] : nullptr;
+                    if (!moving) {
+                        error(w->where, "a workflow is for an entity, and there's no entity " + w->entity + (ns.empty() ? "" : " in namespace " + ns));
+                        continue;
+                    }
+                    const field* along = field_named(*moving, w->by);
+                    const entity_declaration* stage = along && along->type && entities.contains(full(ns, along->type->text()))
+                                                          ? entities[full(ns, along->type->text())] : nullptr;
+                    if (!stage || along->list) {
+                        error(w->by_where, w->entity + " moves along a field pointing at its stages, and " + w->by + " isn't one of its fields that does");
+                        continue;
+                    }
+                    if (w->worked_by.empty()) {
+                        error(w->where, "say which field of " + stage->name + " lists the roles that work it, like worked by worked_by");
+                        continue;
+                    }
+                    if (!lists_roles(field_named(*stage, w->worked_by))) {
+                        error(w->worked_by_where, stage->name + "'s " + w->worked_by + " isn't a list of roles, like worked_by  list of role");
+                        continue;
+                    }
+                    const entity_declaration* steps = w->steps.empty() || !entities.contains(full(ns, w->steps)) ? nullptr : entities[full(ns, w->steps)];
+                    if (w->steps.empty()) {
+                        error(w->where, "say which entity's records are the steps between stages, like steps step");
+                        continue;
+                    }
+                    if (!steps) {
+                        error(w->steps_where, "there's no entity " + w->steps + " for the workflow's steps");
+                        continue;
+                    }
+                    bool shaped = true;
+                    for (const char* end : {"from", "to"}) {
+                        const field* f = field_named(*steps, end);
+                        if (!f || f->list || !f->type || f->type->text() != stage->name) {
+                            error(w->steps_where, "a step goes from one " + stage->name + " to another: " + steps->name + " needs " + end + "  " + stage->name);
+                            shaped = false;
+                        }
+                    }
+                    if (!lists_roles(field_named(*steps, "roles"))) {
+                        error(w->steps_where, "a step says which roles take it: " + steps->name + " needs roles  list of role");
+                        shaped = false;
+                    }
+                    if (!shaped) continue;
+                    auto scope = scopes.find(ns);
+                    if (scope == scopes.end()) {
+                        error(w->where, "a workflow's stages are worked by roles: define role, like define role maintainer \"Maintainer\" in project { ... }");
+                        continue;
+                    }
+                    const std::string& in = scope->second;
+                    if (!field_named(*moving, in)) {
+                        error(w->where, w->entity + " is worked by a " + in + "'s roles, so it needs its " + in + ": " + in + "  " + in + "  required");
+                        continue;
+                    }
+                    for (const char* own : {"held_by", "held_until"}) {
+                        if (const field* f = field_named(*moving, own)) error(f->where, std::string("the workflow keeps who holds ") + a(w->entity) + " in " + own + "; take out this field");
+                    }
+                    bool taken = false;
+                    for (const char* command : {"claim", "renew", "release", "move"}) {
+                        if (commands.contains(full(ns, w->entity + "::" + command))) {
+                            error(w->where, "the workflow makes " + w->entity + "::" + command + "; take out the one declared");
+                            taken = true;
+                        }
+                    }
+                    if (taken || field_named(*moving, "held_by") || field_named(*moving, "held_until")) continue;
+
+                    std::string lease = std::to_string(w->lease_minutes) + " minutes from now";
+                    std::string free = "held_by == none || held_by == me || held_until < now";
+                    const std::string& e = w->entity;
+                    std::string text = "entity lease {\n\theld_by  user\n\theld_until  date\n}\n";
+                    text += "command " + e + "::claim {\n\trequire held(" + w->by + "." + w->worked_by + ")  \"this " + w->by +
+                            " isn't worked by a role you hold\"\n\trequire " + free + "  \"someone else holds it\"\n\theld_by = me\n\theld_until = " +
+                            lease + "\n}\n";
+                    text += "command " + e + "::renew {\n\trequire held_by == me  \"you don't hold it\"\n\theld_until = " + lease + "\n}\n";
+                    text += "command " + e + "::release {\n\trequire held_by == me  \"you don't hold it\"\n\theld_by = none\n\theld_until = none\n}\n";
+                    text += "command " + e + "::move {\n\tchanges " + w->by + "\n\trequire \"your role doesn't move " + a(e) +
+                            " from there to there\" {\n\t\texists(" + steps->name + " where from == was " + e + "." + w->by + " && to == " + e + "." +
+                            w->by + " && held(roles))\n\t}\n\trequire " + free + "  \"someone else holds it\"\n\theld_by = none\n\theld_until = none\n}\n";
+                    // What's worked, with every field of each, its stage, and who holds it.
+                    std::string rows;
+                    for (const auto& f : moving->fields) rows += "  " + f.name;
+                    if (field_named(*stage, "title")) rows += "  " + w->by + ".title";
+                    rows += "  " + w->by + "." + w->worked_by + "  held_by  held_by.name  held_until";
+                    text += "view " + e + "_work per role {\n\treaders member\n\titems = each " + e + " where " + w->by + "." + w->worked_by +
+                            " has role.id {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
+                    diagnostics ignored;
+                    file made = parse("<define workflow>", text, ignored);
+                    for (const auto& d : ignored) out.push_back({*path, w->where, "the workflow for " + e + " can't be said in full: " + d.message});
+                    for (auto& d : made.declarations) {
+                        d.where = w->where;
+                        if (auto* lease_fields = std::get_if<entity_declaration>(&d.node)) {
+                            for (auto& f : lease_fields->fields) {
+                                f.where = w->where;
+                                moving->fields.push_back(std::move(f));
+                            }
+                            continue;
+                        }
+                        made_here.emplace_back(declarations, std::move(d));
+                    }
+                }
+                // Added once every workflow is said, so no entity found above has moved.
+                for (auto& [declarations, d] : made_here) declarations->push_back(std::move(d));
+            }
+        };
+
     } // namespace lowering
 
     inline void lower(std::vector<file>& files, diagnostics& out) {
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);
         roles.define(files);
+        lowering::workflower workflows{out, {}, {}, {}, {}};
+        for (auto& f : files) workflows.find(f.declarations, "", f.path);
+        workflows.define();
         lowering::lowerer l{nullptr, out, {}};
         for (const auto& f : files) l.index(f.declarations);
         for (auto& f : files) {

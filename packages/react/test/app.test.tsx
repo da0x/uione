@@ -120,6 +120,10 @@ describe("signing in", () => {
 describe("values from a view", () => {
   it("show a date as a date, and anything else as text", () => {
     expect(show(new Date(2026, 8, 30))).toBe(new Date(2026, 8, 30).toLocaleDateString(undefined, { dateStyle: "medium" }));
+    // A moment today, as its time; another day's, as its day.
+    const now = new Date(2026, 9, 11, 9, 0);
+    expect(show(new Date(2026, 9, 11, 19, 25), now)).toBe(new Date(2026, 9, 11, 19, 25).toLocaleTimeString(undefined, { timeStyle: "short" }));
+    expect(show(new Date(2026, 9, 12, 19, 25), now)).toBe(new Date(2026, 9, 12, 19, 25).toLocaleDateString(undefined, { dateStyle: "medium" }));
     expect(show(12)).toBe("12");
     expect(show(undefined)).toBe("");
   });
