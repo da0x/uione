@@ -630,6 +630,11 @@ TEST_CASE("a project's theme is drawn from its roles, and its corners and appear
     CHECK(css->content.find(":root[data-theme=\"dark\"] {\n  --std-page: #1c1c1c;\n") != std::string::npos);
     CHECK(css->content.find(":root {\n  --color-page: var(--std-page);\n") != std::string::npos);
     CHECK(css->content.find("  --color-accent-hover: color-mix(in oklch, var(--color-accent) 85%, var(--color-ink));\n") != std::string::npos);
+    // How urgent something is: each in its role's hue made vivid, so a dark warning
+    // isn't mixed to tan, over the surface without its own hue, so dark pages stay warm.
+    CHECK(css->content.find("  --color-tone-2: color-mix(in oklab, oklch(from var(--color-warning) 0.76 0.16 calc(h - 18)) 18%, oklch(from var(--color-surface) l 0 0));\n") != std::string::npos);
+    CHECK(css->content.find("  --color-tone-2-edge: oklch(from var(--color-warning) 0.76 0.16 calc(h - 18));\n") != std::string::npos);
+    CHECK(css->content.find("  --color-tone-5: color-mix(in oklab, oklch(from var(--color-accent) 0.68 0.16 h) 14%, oklch(from var(--color-surface) l 0 0));\n") != std::string::npos);
     // More contrast when the system asks, unless the reader says standard, or when they ask.
     CHECK(css->content.find("@media (prefers-contrast: more) {\n  :root:not([data-contrast=\"standard\"]) {\n  --color-page: var(--more-page);\n") != std::string::npos);
     CHECK(css->content.find(":root[data-contrast=\"more\"] {\n  --color-page: var(--more-page);\n") != std::string::npos);
