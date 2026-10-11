@@ -1,6 +1,6 @@
 # uione
 
-> **0.9.3.** The language is young and designed in the open. The compiler and its
+> **0.9.4.** The language is young and designed in the open. The compiler and its
 > libraries are released together; see [uione.io/releases](https://uione.io/releases)
 > and [getting started](https://uione.io/language/start).
 
