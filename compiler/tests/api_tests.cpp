@@ -101,6 +101,53 @@ TEST_CASE("the library example's backend is generated exactly as its target says
     CHECK(file->content == without_license(*target));
 }
 
+TEST_CASE("who may read is said once on an entity, and the views of what's within it read the same") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shop {
+entity project {
+	readers member
+	public when visibility == visibility::public
+	slug        text  required  key
+	visibility  enum  public | private = visibility::private
+}
+entity order {
+	project  project  required
+	title    text
+	author   user  = me
+}
+define role clerk "Clerk" in project {
+}
+view project_page per project {
+	slug
+}
+view order_page per order {
+	title
+}
+view order_notes per order {
+	readers order.author
+	title
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    auto view = [&](const std::string& name) {
+        std::size_t at = go.find("one.View(\"" + name + "\")");
+        return at == std::string::npos ? std::string() : go.substr(at, go.find('\n', at) - at);
+    };
+    CHECK(view("project_page").find(R"(.Readers(one.Entity[Member]()).PublicWhen("visibility", "public"))") != std::string::npos);
+    CHECK(view("order_page").find(R"(.Readers(one.Entity[Member]()).PublicWhen("project.visibility", "public"))") != std::string::npos);
+    // A view that says its own readers says all of who may read it.
+    CHECK(view("order_notes").find("PublicWhen") == std::string::npos);
+    CHECK(view("order_notes").find("Readers(one.Entity[Member]())") == std::string::npos);
+}
+
 TEST_CASE("a view per something takes its fields bare, and what they point at by their own names") {
     language::diagnostics out;
     std::vector<language::file> files;

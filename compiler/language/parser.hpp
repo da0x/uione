@@ -13,6 +13,7 @@
 #include <charconv>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -466,11 +467,35 @@ namespace one::language {
             }
             expect(token_kind::left_brace, "'{'");
             while (in_block()) {
+                // readers member, and public when visibility == visibility::public
+                if (at_word("readers") && peek(1).kind == token_kind::identifier &&
+                    (peek(2).kind == token_kind::newline || peek(2).kind == token_kind::right_brace)) {
+                    entity.readers_where = advance().where;
+                    entity.readers = advance().text;
+                    end_line();
+                    continue;
+                }
+                if (at_word("public") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                    advance();
+                    advance();
+                    entity.public_when = parse_when();
+                    end_line();
+                    continue;
+                }
                 entity.fields.push_back(parse_field());
             }
             expect(token_kind::right_brace, "'}'");
             end_line();
             return entity;
+        }
+
+        // The whole line a token begins, with its newline: where it starts and how long.
+        std::pair<location, std::size_t> line_of(const token& first) const {
+            std::size_t start = source_.rfind('\n', first.begin == 0 ? 0 : first.begin - 1);
+            start = start == std::string_view::npos || first.begin == 0 ? 0 : start + 1;
+            std::size_t end = source_.find('\n', tokens_[pos_ - 1].end);
+            end = end == std::string_view::npos ? source_.size() : end + 1;
+            return {location{first.where.line, 1}, end - start};
         }
 
         field parse_field() {
@@ -611,6 +636,7 @@ namespace one::language {
                 if (at_word("order")) {
                     fail(peek().where, "order goes inside the list it sorts: each book { order title ... }");
                 } else if (at_word("readers") && peek(1).kind == token_kind::identifier) {
+                    const token& first = peek();
                     location where = advance().where;
                     expression_ptr readers = parse_postfix();
                     auto* name = std::get_if<name_expression>(&readers->node);
@@ -618,14 +644,17 @@ namespace one::language {
                         if (view.readers) fail(where, "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
                         view.readers_where = where;
                         view.readers = name->name.parts[0];
+                        std::tie(view.readers_line, view.readers_length) = line_of(first);
                     } else {
                         view.reader_people.push_back(std::move(readers));
                     }
                     end_line();
                 } else if (at_word("public") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                    const token& first = peek();
                     advance();
                     advance();
                     view.public_when = parse_when();
+                    std::tie(view.public_line, view.public_length) = line_of(first);
                     end_line();
                 } else if (at_word("each")) {
                     view.each.push_back(parse_each());

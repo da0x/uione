@@ -353,6 +353,26 @@ TEST_CASE("an upgrade takes a view's own fields bare") {
     std::filesystem::remove_all(dir);
 }
 
+TEST_CASE("an upgrade drops a view's readers when they're what its project says") {
+    auto dir = project("uione-upgrade-readers",
+                       "import one\n\nnamespace shop {\n"
+                       "\tentity project {\n\t\treaders member\n\t\tpublic when visibility == visibility::public\n"
+                       "\t\tslug  text  required  key\n\t\tvisibility  enum  public | private = visibility::private\n\t}\n"
+                       "\tentity order {\n\t\tproject  project  required\n\t\ttitle  text\n\t}\n"
+                       "\tdefine role clerk \"Clerk\" in project {\n\t}\n"
+                       "\tview order_page per order {\n\t\treaders member\n\t\tpublic when order.project.visibility == visibility::public\n\t\ttitle\n\t}\n"
+                       "\tview order_staff per order {\n\t\treaders member\n\t\ttitle\n\t}\n}\n");
+    auto done = driver::upgrade(dir.string(), "9.9.9");
+    for (const auto& d : done.problems) CAPTURE(language::format(d));
+    REQUIRE(done.problems.empty());
+    REQUIRE(done.changed.size() == 1);
+    const auto& text = done.changed.begin()->second;
+    CHECK(text.find("\tview order_page per order {\n\t\ttitle\n\t}\n") != std::string::npos);
+    // Members only, and not public: it says so still.
+    CHECK(text.find("\tview order_staff per order {\n\t\treaders member\n\t\ttitle\n\t}\n") != std::string::npos);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("an upgrade says each change in, in project and me") {
     auto dir = project("uione-upgrade-in",
                        "import one\n\nentity project {\n\tname  text\n}\nentity issue history {\n\tproject  project  required\n\towner  user\n}\n"

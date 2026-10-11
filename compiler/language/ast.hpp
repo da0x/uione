@@ -305,6 +305,11 @@ namespace one::language {
         // the one signing in, and it's deleted, both at once.
         std::optional<std::string> invites;
         location invites_where;
+        // readers member and public when visibility == visibility::public: who may read
+        // the views of it, and of what's within it, unless a view says its own.
+        std::optional<std::string> readers;
+        location readers_where;
+        expression_ptr public_when;
         std::vector<field> fields;
     };
 
@@ -355,6 +360,10 @@ namespace one::language {
         location readers_where;
         std::vector<expression_ptr> reader_people;  // readers report.author: who a field of the entity names
         expression_ptr public_when;          // public when project.visibility == public
+        // Where each of those lines is, whole, so a line that says what its entity
+        // already does can be taken out.
+        location readers_line, public_line;
+        std::size_t readers_length = 0, public_length = 0;
         std::vector<view_value> values;
         std::vector<view_each> each;
     };

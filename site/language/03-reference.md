@@ -388,6 +388,12 @@ entity loan {
 }
 ```
 
+- `readers member` and `public when visibility == visibility::public`, lines of an
+  entity's own, say who may read the views of it and of what's within it: a view
+  per project, or per an issue whose one field points at its project, reads as
+  the project says, with `visibility` read as `issue.project.visibility`. A view
+  that says its own readers says all of who may read it, and inherits nothing. A
+  field can't be called `readers`.
 - Every field has a type, so what it holds is never worked out from how it's used.
 - A field's type is one of the [built-in types](#built-in-types), a `format`
   declared in the file, or another entity (`book`), which stores its id and reads

@@ -12,6 +12,7 @@
 //                                    the role and member entities each project's roles
 //                                    are kept in, and the roles it starts with
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <memory>
@@ -541,7 +542,122 @@ namespace one::language {
 
     } // namespace lowering
 
+    namespace lowering {
+
+        // An entity's public when, said for a view of it or of what's within it: each of
+        // its own fields read through the path from the view's entity, like visibility
+        // as order.project.visibility. Nothing when it says more than fields and values.
+        inline expression_ptr rooted(const expression& e, const entity_declaration& owner, const std::vector<std::string>& path, location where) {
+            if (auto* n = std::get_if<name_expression>(&e.node)) {
+                bool own = n->name.parts.size() == 1 &&
+                           std::any_of(owner.fields.begin(), owner.fields.end(), [&](const field& f) { return f.name == n->name.parts[0]; });
+                if (!own) {
+                    auto out = std::make_unique<expression>();
+                    out->where = where;
+                    out->node = name_expression{qualified_name{n->name.parts, where}};
+                    return out;
+                }
+                expression_ptr out = name(path[0], where);
+                for (std::size_t i = 1; i < path.size(); ++i) out = member(std::move(out), path[i], where);
+                return member(std::move(out), n->name.parts[0], where);
+            }
+            if (auto* l = std::get_if<literal_expression>(&e.node)) {
+                auto out = std::make_unique<expression>();
+                out->where = where;
+                out->node = *l;
+                return out;
+            }
+            if (auto* b = std::get_if<binary_expression>(&e.node)) {
+                auto left = rooted(*b->left, owner, path, where), right = rooted(*b->right, owner, path, where);
+                return left && right ? binary(b->op, std::move(left), std::move(right), where) : nullptr;
+            }
+            if (auto* u = std::get_if<unary_expression>(&e.node)) {
+                auto operand = rooted(*u->operand, owner, path, where);
+                if (!operand) return nullptr;
+                auto out = std::make_unique<expression>();
+                out->where = where;
+                out->node = unary_expression{u->op, std::move(operand)};
+                return out;
+            }
+            return nullptr;
+        }
+
+        // A condition as words, to compare one with another.
+        inline std::string spoken(const expression& e) {
+            if (auto* n = std::get_if<name_expression>(&e.node)) return n->name.text();
+            if (auto* m = std::get_if<member_expression>(&e.node)) return spoken(*m->object) + "." + m->member;
+            if (auto* l = std::get_if<literal_expression>(&e.node)) return "\"" + l->value + "\"";
+            if (auto* b = std::get_if<binary_expression>(&e.node)) return "(" + spoken(*b->left) + " " + std::to_string(static_cast<int>(b->op)) + " " + spoken(*b->right) + ")";
+            if (auto* u = std::get_if<unary_expression>(&e.node)) return std::to_string(static_cast<int>(u->op)) + spoken(*u->operand);
+            return "?";
+        }
+
+        // Who may read the views of an entity, and of what's within it, said once on
+        // it: a view per project, or per an order whose one field points at its
+        // project, reads as the project says, unless it says its own readers. A view
+        // whose own lines say just what its entity does has them taken out.
+        inline void inherit_readers(std::vector<file>& files, diagnostics& out) {
+            std::map<std::string, std::map<std::string, const entity_declaration*>> entities;  // by namespace, then name
+            std::function<void(const std::vector<declaration>&, const std::string&)> find = [&](const std::vector<declaration>& ds, const std::string& ns) {
+                for (const auto& d : ds) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) find(n->declarations, ns.empty() ? n->name : ns + "::" + n->name);
+                    if (auto* e = std::get_if<entity_declaration>(&d.node)) entities[ns][e->name] = e;
+                }
+            };
+            for (const auto& f : files) find(f.declarations, "");
+            std::function<void(std::vector<declaration>&, const std::string&, const std::string&)> each = [&](std::vector<declaration>& ds, const std::string& ns, const std::string& path) {
+                for (auto& d : ds) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) each(n->declarations, ns.empty() ? n->name : ns + "::" + n->name, path);
+                    auto* v = std::get_if<view_declaration>(&d.node);
+                    if (!v || !v->per) continue;
+                    auto& here = entities[ns];
+                    auto per = here.find(*v->per);
+                    if (per == here.end()) continue;
+                    // The entity that says who reads: the view's own, or the one its one
+                    // field of that type points at.
+                    const entity_declaration* owner = nullptr;
+                    std::vector<std::string> through{*v->per};
+                    if (per->second->readers || per->second->public_when) {
+                        owner = per->second;
+                    } else {
+                        for (const auto& f : per->second->fields) {
+                            if (!f.type || f.list || f.type->parts.size() != 1) continue;
+                            auto it = here.find(f.type->parts[0]);
+                            if (it == here.end() || !(it->second->readers || it->second->public_when)) continue;
+                            if (owner) {
+                                owner = nullptr;  // two ways in, so it's for the view to say
+                                break;
+                            }
+                            owner = it->second;
+                            through = {*v->per, f.name};
+                        }
+                    }
+                    if (!owner) continue;
+                    expression_ptr public_when = owner->public_when ? rooted(*owner->public_when, *owner, through, d.where) : nullptr;
+                    bool says_readers = v->readers || !v->reader_people.empty();
+                    if (!says_readers && !v->public_when) {
+                        v->readers = owner->readers;
+                        v->readers_where = d.where;
+                        v->public_when = std::move(public_when);
+                        continue;
+                    }
+                    // Lines that say only what the entity says.
+                    bool same_readers = v->readers == owner->readers && v->reader_people.empty();
+                    bool same_public = (!v->public_when && !public_when) ||
+                                       (v->public_when && public_when && spoken(*v->public_when) == spoken(*public_when));
+                    if (!same_readers || !same_public) continue;
+                    const std::string why = "who may read view " + v->name + " is said by entity " + owner->name + "; take out its own readers";
+                    if (v->readers) out.push_back({path, v->readers_line, why, fix{v->readers_line, v->readers_length, ""}});
+                    if (v->public_when) out.push_back({path, v->public_line, why, fix{v->public_line, v->public_length, ""}});
+                }
+            };
+            for (auto& f : files) each(f.declarations, "", f.path);
+        }
+
+    } // namespace lowering
+
     inline void lower(std::vector<file>& files, diagnostics& out) {
+        lowering::inherit_readers(files, out);
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);
         roles.define(files);
