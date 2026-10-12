@@ -26,7 +26,7 @@ namespace one::desktop {
 		inline constexpr std::uint32_t backspace = 0xff08, tab = 0xff09, enter = 0xff0d, escape = 0xff1b;
 		inline constexpr std::uint32_t home = 0xff50, left = 0xff51, up = 0xff52, right = 0xff53, down = 0xff54;
 		inline constexpr std::uint32_t page_up = 0xff55, page_down = 0xff56, end = 0xff57;
-		inline constexpr std::uint32_t keypad_enter = 0xff8d, left_tab = 0xfe20, space = 0x20;
+		inline constexpr std::uint32_t keypad_enter = 0xff8d, left_tab = 0xfe20, space = 0x20, delete_key = 0xffff;
 	}  // namespace keys
 
 }  // namespace one::desktop

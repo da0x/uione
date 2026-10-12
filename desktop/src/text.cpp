@@ -177,9 +177,17 @@ namespace one::desktop {
 			return point;
 		}
 
+		// A place a caret can stand within a word: a byte of the whole text, and its x
+		// from the word's start.
+		struct stop {
+			std::size_t at = 0;
+			float x = 0;
+		};
+
 		// A word and the space after it, shaped, in one style: what a line is filled with.
 		struct word {
 			std::vector<placed_glyph> glyphs;  // x from the word's start
+			std::vector<stop> stops;           // before each character, and after the last
 			float width = 0;                   // without the trailing space
 			float advance = 0;                 // with it
 			bool breaks_after = false;         // a newline ends the line after it
@@ -188,9 +196,13 @@ namespace one::desktop {
 		};
 
 		// Shapes a piece of text in its style, splitting it where a character needs
-		// another face.
-		void shape(std::string_view text, const text_style& style, const fonts::face& first, word& into) {
+		// another face. `from` is where it starts in the whole text, for its carets.
+		void shape(std::string_view text, std::size_t from, const text_style& style, const fonts::face& first, word& into) {
 			owned<hb_buffer_t, hb_buffer_destroy> buffer = hb_buffer_create();
+			// Where each cluster HarfBuzz made starts, and its x: a caret stands before
+			// each, and within one made of several characters, like a ligature, at a
+			// share of its width.
+			std::vector<stop> clusters;
 			std::size_t i = 0;
 			while (i < text.size()) {
 				std::size_t start = i;
@@ -210,9 +222,20 @@ namespace one::desktop {
 				hb_glyph_info_t* info = hb_buffer_get_glyph_infos(buffer, &count);
 				hb_glyph_position_t* position = hb_buffer_get_glyph_positions(buffer, &count);
 				for (unsigned g = 0; g < count; ++g) {
+					if (clusters.empty() || clusters.back().at != info[g].cluster) clusters.push_back({info[g].cluster, into.advance});
 					into.glyphs.push_back({f, info[g].codepoint, into.advance + position[g].x_offset / 64.f, -position[g].y_offset / 64.f, style.color});
 					into.advance += position[g].x_advance / 64.f;
 				}
+			}
+			std::ranges::sort(clusters, {}, &stop::at);
+			clusters.push_back({text.size(), into.advance});
+			for (std::size_t c = 0; c + 1 < clusters.size(); ++c) {
+				std::vector<std::size_t> starts;
+				for (std::size_t k = clusters[c].at; k < clusters[c + 1].at; ++k) {
+					if ((static_cast<unsigned char>(text[k]) & 0xc0) != 0x80) starts.push_back(k);
+				}
+				float width = clusters[c + 1].x - clusters[c].x;
+				for (std::size_t n = 0; n < starts.size(); ++n) into.stops.push_back({from + starts[n], clusters[c].x + width * n / starts.size()});
 			}
 		}
 
@@ -225,11 +248,15 @@ namespace one::desktop {
 
 		// Words, each a run of text up to and including the spaces after it.
 		std::vector<word> words;
+		std::size_t base = 0;  // where each span starts in the whole text
 		for (const auto& span : spans) {
 			float pixel_size = static_cast<float>(span.style.size * scale);
 			const fonts::face& first = fonts::find(span.style, pixel_size);
 			std::string_view text = span.text;
 			std::size_t i = 0;
+			auto stops_from = [&](word& w, std::size_t at) {
+				for (auto& s : w.stops) s.at += at;
+			};
 			while (i < text.size()) {
 				std::size_t end = i;
 				while (end < text.size() && text[end] != ' ' && text[end] != '\n') ++end;
@@ -238,23 +265,29 @@ namespace one::desktop {
 				word w;
 				w.first = &first;
 				w.style = &span.style;
-				shape(text.substr(i, word_end - i), span.style, first, w);
+				shape(text.substr(i, word_end - i), i, span.style, first, w);
 				w.width = w.advance;
 				if (end > word_end) {
 					word spaces;
-					shape(text.substr(word_end, end - word_end), span.style, first, spaces);
+					shape(text.substr(word_end, end - word_end), word_end, span.style, first, spaces);
+					for (const auto& s : spaces.stops) w.stops.push_back({s.at, w.advance + s.x});
 					w.advance += spaces.advance;
 				}
+				w.stops.push_back({end, w.advance});  // after it and its spaces: the next word's start, or the line's end
 				if (end < text.size() && text[end] == '\n') {
 					w.breaks_after = true;
 					++end;
 				}
+				stops_from(w, base);
 				i = end;
 				words.push_back(std::move(w));
 			}
+			base += text.size();
 		}
 
-		// Lines, filled with words while they fit.
+		// Lines, filled with words while they fit. A line with no words, at the end after
+		// a newline or of no text at all, has a caret at the end.
+		std::size_t base_of_empty = base;
 		float top = 0;
 		std::size_t at = 0;
 		auto finish = [&](std::size_t from, std::size_t to) {
@@ -271,9 +304,16 @@ namespace one::desktop {
 			}
 			height = std::max(height, ascent + descent);
 			float baseline = std::round(top + (height - ascent - descent) / 2 + ascent);
+			std::size_t line = out.lines_.size();
+			if (from == to) out.carets_.push_back({base_of_empty, line, 0});
 			for (std::size_t k = from; k < to; ++k) {
 				const word& w = words[k];
 				for (const auto& g : w.glyphs) out.glyphs_.push_back({g.face, g.id, x + g.x, baseline + g.y, g.color});
+				for (const auto& s : w.stops) {
+					// A stop after a word is the start of the next, unless a line ends here.
+					if (&s == &w.stops.back() && k + 1 < to) continue;
+					out.carets_.push_back({s.at, line, x + s.x});
+				}
 				float drawn = k + 1 == to ? w.width : w.advance;
 				if (w.style->underline || w.style->strike) {
 					const auto& f = *w.first;
@@ -300,9 +340,37 @@ namespace one::desktop {
 			finish(at, end);
 			at = end;
 		}
-		if (words.empty()) finish(0, 0);
+		if (words.empty() || words.back().breaks_after) finish(words.size(), words.size());
 		out.height_ = top;
 		return out;
+	}
+
+
+	text_caret text_layout::caret(std::size_t at) const {
+		text_caret found;
+		for (const auto& c : carets_) {
+			if (c.at > at) break;
+			// The last of those at this byte, so a wrapped line's start wins over the end before it.
+			found = c;
+		}
+		return found;
+	}
+
+	std::size_t text_layout::offset_at(float x, float y) const {
+		if (lines_.empty()) return 0;
+		std::size_t line = lines_.size() - 1;
+		for (std::size_t l = 0; l < lines_.size(); ++l) {
+			if (y < lines_[l].top + lines_[l].height) {
+				line = l;
+				break;
+			}
+		}
+		const text_caret* best = nullptr;
+		for (const auto& c : carets_) {
+			if (c.line != line) continue;
+			if (!best || std::abs(c.x - x) < std::abs(best->x - x)) best = &c;
+		}
+		return best ? best->at : 0;
 	}
 
 }  // namespace one::desktop

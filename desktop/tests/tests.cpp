@@ -11,6 +11,7 @@
 
 #include "check.hpp"
 #include "one/desktop/canvas.hpp"
+#include "one/desktop/editing.hpp"
 #include "one/desktop/state.hpp"
 #include "one/desktop/ui.hpp"
 #include "offscreen.hpp"
@@ -243,6 +244,129 @@ TEST("a view: rows, a list, buttons, an avatar and a divider, at scale 1") {
 		                       .spacing(12)
 		                       .padding(20),
 		                   {0, 0, 520, 260});
+		root->paint(c);
+	});
+}
+
+TEST("a caret stands before each character, at a wrapped line's start, and on the line after a final newline") {
+	auto laid = one::desktop::lay_out({"Ship it", body}, 0, 1);
+	CHECK(laid.carets().front().at == 0);
+	CHECK(laid.carets().back().at == 7);
+	CHECK(laid.caret(4).x > laid.caret(3).x);  // the space has its width
+	CHECK(laid.caret(7).x == laid.lines()[0].width);
+	auto accented = one::desktop::lay_out({"café", body}, 0, 1);
+	std::vector<std::size_t> places;
+	for (const auto& c : accented.carets()) places.push_back(c.at);
+	CHECK((places == std::vector<std::size_t>{0, 1, 2, 3, 5}));  // é is two bytes, one character
+	auto wrapped = one::desktop::lay_out({"Open project tracking for everyone", body}, 120, 1);
+	CHECK(wrapped.lines().size() > 1);
+	std::size_t second = 0;
+	for (const auto& c : wrapped.carets()) {
+		if (c.line == 1) {
+			second = c.at;
+			break;
+		}
+	}
+	CHECK(wrapped.caret(second).line == 1);
+	CHECK(wrapped.caret(second).x == 0);
+	auto ended = one::desktop::lay_out({"one\n", body}, 0, 1);
+	CHECK(ended.lines().size() == 2);
+	CHECK(ended.caret(4).line == 1);
+	CHECK(laid.offset_at(laid.caret(5).x + 1, 5) == 5);
+	CHECK(laid.offset_at(-10, 5) == 0);
+	CHECK(laid.offset_at(1000, 5) == 7);
+}
+
+TEST("editing: typing, erasing and moving by characters and words, selecting, and undoing a word at a time") {
+	one::desktop::editing e("Hello");
+	CHECK(e.caret() == 5);
+	e.type(",");
+	e.type(" ");
+	for (char c : std::string("world")) e.type(std::string(1, c));
+	CHECK(e.text() == "Hello, world");
+	e.left(true, true);
+	CHECK(e.selected() == "world");
+	e.erase_back(false);
+	CHECK(e.text() == "Hello, ");
+	CHECK(e.undo());
+	CHECK(e.text() == "Hello, world");
+	CHECK(e.undo());  // the word typed letter by letter, whole
+	CHECK(e.text() == "Hello, ");
+	CHECK(e.redo());
+	CHECK(e.text() == "Hello, world");
+	e.start(false);
+	e.right(true, false);
+	CHECK(e.caret() == 7);  // past "Hello, " to "world"
+	e.erase_forward(true);
+	CHECK(e.text() == "Hello, ");
+	one::desktop::editing arabic("سلام عليكم");
+	arabic.left(false, false);
+	CHECK(arabic.caret() == arabic.text().size() - 2);  // a character is two bytes here
+	arabic.left(true, false);
+	CHECK(arabic.caret() == std::string("سلام ").size());
+	one::desktop::editing one_line("a", false);
+	one_line.type("b\nc");
+	CHECK(one_line.text() == "ab c");
+	one::desktop::editing lines("first\nsecond", true);
+	lines.line_start(false);
+	CHECK(lines.caret() == 6);
+	lines.select_word(8);
+	CHECK(lines.selected() == "second");
+	lines.select_line(2);
+	CHECK(lines.selected() == "first");
+	lines.replace_all("x");
+	CHECK(lines.caret() <= 1);
+	CHECK(!lines.undo());  // nothing before what came from elsewhere
+}
+
+TEST("a field takes what's typed into its state, with the clipboard, undo, and Enter submitting") {
+	one::desktop::state<std::string> title("Ship");
+	int submitted = 0;
+	auto root = placed(one::desktop::field(title, {.placeholder = "Title", .on_submit = [&] { ++submitted; }}), {0, 0, 300, 40});
+	auto& f = *root;
+	CHECK(f.focusable());
+	CHECK(f.handle_key(key(' ', " ")));
+	CHECK(f.handle_key(key('i', "i")));
+	CHECK(f.handle_key(key('t', "t")));
+	CHECK(title.peek() == "Ship it");
+	CHECK(f.handle_key(key('h', "h")));  // a letter, not a move to the left
+	CHECK(f.handle_key(key(one::desktop::keys::backspace)));
+	CHECK(title.peek() == "Ship it");
+	one::desktop::key_event all{.symbol = 'a', .text = "", .control = true};
+	one::desktop::key_event copy{.symbol = 'c', .text = "", .control = true};
+	one::desktop::key_event paste{.symbol = 'v', .text = "", .control = true};
+	one::desktop::key_event undo{.symbol = 'z', .text = "", .control = true};
+	CHECK(f.handle_key(all));
+	CHECK(f.handle_key(copy));
+	CHECK(f.handle_key(key(one::desktop::keys::end)));
+	CHECK(f.handle_key(key(' ', " ")));
+	CHECK(f.handle_key(paste));
+	CHECK(title.peek() == "Ship it Ship it");
+	CHECK(f.handle_key(undo));
+	CHECK(title.peek() == "Ship it ");
+	CHECK(f.handle_key(key(one::desktop::keys::enter)));
+	CHECK(submitted == 1);
+	CHECK(!f.handle_key(key(one::desktop::keys::escape)));  // for what it's in, like going back
+	// Built again, it takes a value set elsewhere, its caret where it was.
+	title.set("Ship it now");
+	auto again = placed(one::desktop::field(title, {}), {0, 0, 300, 40});
+	one::desktop::detail::reconcile(*again, f);
+	CHECK(again->handle_key(key('!', "!")));
+	CHECK(title.peek() == "Ship it !now");
+}
+
+TEST("fields: typed in with a word selected, empty with a placeholder, and several lines, at scale 1") {
+	matches_golden("field-1", {360, 230}, 1, [](one::desktop::canvas& c) {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		one::desktop::state<std::string> title("Ship the desktop app"), empty, body("First line\nand a second, which is long enough to wrap onto a third");
+		auto root = placed(one::desktop::column(one::desktop::field(title), one::desktop::field(empty, {.placeholder = "Search issues"}),
+		                                        one::desktop::field(body, {.multiline = true, .lines = 3}))
+		                       .spacing(10)
+		                       .padding(16),
+		                   {0, 0, 360, 230});
+		auto& first = *root->children[0];
+		first.focused = true;
+		first.press({first.frame.x + 70, first.frame.y + 15}, 2);  // a double click on "desktop"
 		root->paint(c);
 	});
 }

@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cmath>
 
 #include "app_internal.hpp"
 
@@ -89,11 +90,21 @@ namespace one::desktop {
 			        set_cursor(s, cursor_at(*s.pointer_over, s.pointer_at));
 		        },
 		    .button =
-		        [](void*, wl_pointer*, std::uint32_t, std::uint32_t, std::uint32_t button, std::uint32_t state) {
+		        [](void*, wl_pointer*, std::uint32_t serial, std::uint32_t time, std::uint32_t button, std::uint32_t state) {
 			        auto& s = *owning->input;
+			        s.input_serial = serial;
 			        if (!s.pointer_over || button != BTN_LEFT) return;
-			        if (state == WL_POINTER_BUTTON_STATE_PRESSED) deliver_press(*s.pointer_over, s.pointer_at);
-			        else deliver_release(*s.pointer_over, s.pointer_at);
+			        if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+				        // A double or triple click: pressed again soon, near where it was.
+				        bool again = s.clicks > 0 && time - s.pressed_at_time < 400 && std::abs(s.pointer_at.x - s.pressed_at.x) < 4 &&
+				                     std::abs(s.pointer_at.y - s.pressed_at.y) < 4;
+				        s.clicks = again ? s.clicks % 3 + 1 : 1;
+				        s.pressed_at_time = time;
+				        s.pressed_at = s.pointer_at;
+				        deliver_press(*s.pointer_over, s.pointer_at, s.clicks);
+			        } else {
+				        deliver_release(*s.pointer_over, s.pointer_at);
+			        }
 		        },
 		    .axis =
 		        [](void*, wl_pointer*, std::uint32_t, std::uint32_t axis, wl_fixed_t value) {
@@ -141,8 +152,9 @@ namespace one::desktop {
 			        arm(s, 0, 0);
 		        },
 		    .key =
-		        [](void*, wl_keyboard*, std::uint32_t, std::uint32_t, std::uint32_t key, std::uint32_t state) {
+		        [](void*, wl_keyboard*, std::uint32_t serial, std::uint32_t, std::uint32_t key, std::uint32_t state) {
 			        auto& s = *owning->input;
+			        s.input_serial = serial;
 			        if (!s.key_state) return;
 			        std::uint32_t code = key + 8;  // evdev's codes to XKB's
 			        if (state == WL_KEYBOARD_KEY_STATE_RELEASED) {

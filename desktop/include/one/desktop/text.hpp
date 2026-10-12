@@ -54,6 +54,14 @@ namespace one::desktop {
 		float width = 0;
 	};
 
+	// Where a caret can stand: before the character at a byte of the text, every
+	// span's text taken together, on a line, at an x in pixels. The text's end is one.
+	struct text_caret {
+		std::size_t at = 0;
+		std::size_t line = 0;
+		float x = 0;
+	};
+
 	class text_layout {
 	public:
 		// Its size in logical pixels.
@@ -63,6 +71,13 @@ namespace one::desktop {
 		const std::vector<text_line>& lines() const { return lines_; }
 		const std::vector<placed_glyph>& glyphs() const { return glyphs_; }
 		const std::vector<text_rule>& rules() const { return rules_; }
+		// Every place a caret can stand, in the order of the text.
+		const std::vector<text_caret>& carets() const { return carets_; }
+		// Where the caret stands before a byte: at the start of a line the text wraps
+		// onto, rather than the end of the one before.
+		text_caret caret(std::size_t at) const;
+		// The byte nearest a point in pixels from the layout's top left.
+		std::size_t offset_at(float x, float y) const;
 
 	private:
 		friend text_layout lay_out(std::span<const text_span>, float, double);
@@ -71,6 +86,7 @@ namespace one::desktop {
 		std::vector<text_line> lines_;
 		std::vector<placed_glyph> glyphs_;
 		std::vector<text_rule> rules_;
+		std::vector<text_caret> carets_;
 	};
 
 	// Lays spans out within a width in logical pixels, breaking lines between words

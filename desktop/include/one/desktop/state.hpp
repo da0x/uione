@@ -59,15 +59,19 @@ namespace one::desktop {
 			return cell_->value;
 		}
 		const T& operator*() const { return get(); }
+		// Its value, without becoming one of its readers: for what keeps its own copy,
+		// like a field being typed in, and needn't be built again when it changes.
+		const T& peek() const { return cell_->value; }
 		const T* operator->() const { return &get(); }
 
-		void set(T value) {
+		// Setting it through any copy, even a const one, as a lambda holds it, sets it for all.
+		void set(T value) const {
 			cell_->value = std::move(value);
 			tell();
 		}
 		// Changes the value in place, then tells its readers once.
 		template <class F>
-		void change(F&& how) {
+		void change(F&& how) const {
 			std::forward<F>(how)(cell_->value);
 			tell();
 		}
@@ -87,7 +91,7 @@ namespace one::desktop {
 			cell_->readers.push_back(r);
 		}
 
-		void tell() {
+		void tell() const {
 			// Each reader once; one that's gone, like a view since built again, is dropped.
 			auto readers = std::move(cell_->readers);
 			cell_->readers.clear();

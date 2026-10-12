@@ -29,6 +29,7 @@
 
 #include "one/desktop/canvas.hpp"
 #include "one/desktop/input.hpp"
+#include "one/desktop/state.hpp"
 #include "one/desktop/text.hpp"
 #include "one/desktop/theme.hpp"
 
@@ -83,6 +84,10 @@ namespace one::desktop {
 		// Input, each saying whether it was handled.
 		virtual bool handle_key(const key_event& e);
 		virtual bool click(point at);
+		// The button pressed on it, once, or twice or three times quickly; when it's
+		// taken, the pointer's moves while it's held are told to drag.
+		virtual bool press(point, int) { return false; }
+		virtual void drag(point) {}
 		virtual bool wheel(point at, float dx, float dy);
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
@@ -173,6 +178,19 @@ namespace one::desktop {
 	}
 
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
+
+	// Text typed into a box, kept in a state: a caret moved with the arrows, Home and
+	// End, a word at a time with Control; a selection made with Shift or the pointer,
+	// a double click picking a word and a triple its line; cut, copy and paste with
+	// the clipboard; and undo. Enter submits one of one line, and Control+Enter one of
+	// several.
+	struct field_options {
+		std::string placeholder = "";  // shown while it's empty
+		bool multiline = false;
+		int lines = 4;  // how tall one of several lines is, at least
+		std::function<void()> on_submit = {};
+	};
+	view field(state<std::string> value, field_options options = {});
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs
 	view divider();

@@ -59,6 +59,9 @@ set_source_files_properties(src/renderer.cpp PROPERTIES OBJECT_DEPENDS "${shader
 
 add_library(one_desktop
 	src/app.cpp
+	src/clipboard.cpp
+	src/editing.cpp
+	src/field.cpp
 	src/gpu.cpp
 	src/offscreen.cpp
 	src/renderer.cpp
@@ -80,6 +83,10 @@ if(PROJECT_IS_TOP_LEVEL)
 add_executable(hello examples/hello.cpp)
 target_link_libraries(hello PRIVATE one_desktop)
 target_compile_options(hello PRIVATE -Wall -Wextra -Werror)
+
+add_executable(typing examples/typing.cpp)
+target_link_libraries(typing PRIVATE one_desktop)
+target_compile_options(typing PRIVATE -Wall -Wextra -Werror)
 
 add_executable(drawing examples/drawing.cpp)
 target_link_libraries(drawing PRIVATE one_desktop)

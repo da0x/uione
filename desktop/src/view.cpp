@@ -106,7 +106,7 @@ namespace one::desktop {
 			w.reading = std::move(reader);
 			if (built && w.root) detail::reconcile(*built, *w.root);
 			w.root = std::move(built);
-			w.pressed = nullptr;
+			w.pressed = w.dragging = nullptr;
 			w.needs_building = false;
 			w.needs_placing = true;
 			// Something to type into from the start: what asks for it, or a list, or the
@@ -171,6 +171,7 @@ namespace one::desktop {
 	void deliver_pointer(window::state& w, one::desktop::point at) {
 		bring_up_to_date(w);
 		in_window context(w);
+		if (w.dragging) w.dragging->drag(at);
 		point_to(w, at);
 		w.redraw();
 	}
@@ -178,19 +179,26 @@ namespace one::desktop {
 	void deliver_leave(window::state& w) {
 		in_window context(w);
 		point_to(w, std::nullopt);
-		w.pressed = nullptr;
+		w.pressed = w.dragging = nullptr;
 		w.redraw();
 	}
 
-	void deliver_press(window::state& w, one::desktop::point at) {
+	void deliver_press(window::state& w, one::desktop::point at, int clicks) {
 		bring_up_to_date(w);
 		in_window context(w);
 		if (!w.root) return;
 		element* target = w.root->hit(at);
 		w.pressed = target;
+		w.dragging = nullptr;
 		for (element* e = target; e; e = e->parent) {
 			if (e->focusable()) {
 				focus(w, e);
+				break;
+			}
+		}
+		for (element* e = target; e; e = e->parent) {
+			if (e->press(at, clicks)) {
+				w.dragging = e;
 				break;
 			}
 		}
@@ -201,6 +209,7 @@ namespace one::desktop {
 		bring_up_to_date(w);
 		in_window context(w);
 		element* pressed = std::exchange(w.pressed, nullptr);
+		w.dragging = nullptr;
 		if (!pressed || !w.root) return;
 		// A click is a press and a release over the same thing.
 		for (element* e = pressed; e; e = e->parent) {

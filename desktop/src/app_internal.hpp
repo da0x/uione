@@ -52,7 +52,22 @@ namespace one::desktop {
 		inline void wl_keyboard_release(wl_keyboard* held) { ::wl_keyboard_release(held); }
 		inline void wl_pointer_release(wl_pointer* held) { ::wl_pointer_release(held); }
 		inline void wp_cursor_shape_device_v1_destroy(wp_cursor_shape_device_v1* held) { ::wp_cursor_shape_device_v1_destroy(held); }
+		inline void wl_data_device_manager_destroy(wl_data_device_manager* held) { ::wl_data_device_manager_destroy(held); }
+		inline void wl_data_device_release(wl_data_device* held) { ::wl_data_device_release(held); }
+		inline void wl_data_offer_destroy(wl_data_offer* held) { ::wl_data_offer_destroy(held); }
+		inline void wl_data_source_destroy(wl_data_source* held) { ::wl_data_source_destroy(held); }
 	}  // namespace released
+
+	// The clipboard, through the seat's data device: what we offer, and what's offered.
+	struct clipboard {
+		owned<wl_data_source, released::wl_data_source_destroy> source;  // ours, while it's the clipboard
+		std::string copied;                                              // what it offers
+		owned<wl_data_offer, released::wl_data_offer_destroy> offered;   // another program's, while it's the clipboard
+		std::string offered_type;                                        // the kind of text it's read as
+		wl_data_offer* coming = nullptr;                                 // an offer whose types are arriving
+		std::string coming_type;
+		owned<wl_data_device, released::wl_data_device_release> device;
+	};
 
 	// The seat: its pointer and keyboard, which window each is over, and the keyboard's
 	// layout and repeat. Its members go in the reverse of their order here: the cursor
@@ -66,6 +81,11 @@ namespace one::desktop {
 		owned<wl_keyboard, released::wl_keyboard_release> keyboard;
 		owned<wl_pointer, released::wl_pointer_release> pointer;
 		owned<wp_cursor_shape_device_v1, released::wp_cursor_shape_device_v1_destroy> cursor;
+		one::desktop::clipboard clipboard;
+		std::uint32_t input_serial = 0;  // the last key's or button's, which the clipboard is set with
+		std::uint32_t pressed_at_time = 0;  // the last press: when, where, and how many came quickly before
+		point pressed_at;
+		int clicks = 0;
 		std::uint32_t pointer_serial = 0;  // the last enter's, which a cursor shape is set with
 		window::state* pointer_over = nullptr;
 		window::state* keyboard_in = nullptr;
@@ -88,6 +108,7 @@ namespace one::desktop {
 		owned<wp_fractional_scale_manager_v1, released::wp_fractional_scale_manager_v1_destroy> fractional;
 		owned<wp_viewporter, released::wp_viewporter_destroy> viewporter;
 		owned<wp_cursor_shape_manager_v1, released::wp_cursor_shape_manager_v1_destroy> cursors;
+		owned<wl_data_device_manager, released::wl_data_device_manager_destroy> data_devices;
 		std::optional<gpu::device> gpu;
 		std::optional<one::desktop::seat> input;
 		std::vector<std::unique_ptr<window>> windows;
@@ -130,6 +151,7 @@ namespace one::desktop {
 		one::desktop::size placed_at{};
 		double placed_scale = 0;
 		element* pressed = nullptr;
+		element* dragging = nullptr;  // what took the press, and hears the pointer move while it's held
 
 		one::desktop::size pixels() const {
 			return {static_cast<int>(std::lround(size.width * scale)), static_cast<int>(std::lround(size.height * scale))};
@@ -143,7 +165,7 @@ namespace one::desktop {
 	void bring_up_to_date(window::state& w);
 	void deliver_key(window::state& w, const key_event& e);
 	void deliver_pointer(window::state& w, point at);
-	void deliver_press(window::state& w, point at);
+	void deliver_press(window::state& w, point at, int clicks);
 	void deliver_release(window::state& w, point at);
 	void deliver_wheel(window::state& w, point at, float dx, float dy);
 	void deliver_leave(window::state& w);
@@ -152,5 +174,9 @@ namespace one::desktop {
 	// The seat's part of the app, in seat.cpp.
 	void bind_seat(app::state& a, wl_registry* registry, std::uint32_t name, std::uint32_t version);
 	void repeat_key(app::state& a);
+
+	// The clipboard's part, in clipboard.cpp: its device, once both the seat and the
+	// data device manager are bound.
+	void connect_clipboard(app::state& a);
 
 }  // namespace one::desktop

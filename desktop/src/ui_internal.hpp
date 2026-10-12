@@ -6,9 +6,16 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+
 #include "one/desktop/ui.hpp"
 
 namespace one::desktop::detail {
+
+	// The clipboard, as a field copies to it and pastes from it.
+	void copy_text(std::string text);
+	std::optional<std::string> pasted_text();
 
 	// The scale and theme in use while a window builds, lays out and draws.
 	double& layout_scale();
