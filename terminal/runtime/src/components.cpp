@@ -251,6 +251,9 @@ namespace one::terminal::runtime {
 				field_parts.push_back(terminal::toggle(model.ticked(f, "true"), shown));
 			} else if (f.type == "choice" || f.type == "pick") {
 				field_parts.push_back(terminal::picker(model.written(f), drawn_options(model.choices_of(f)), model.picking(f), "Choose " + lowered_first(shown) + "…"));
+			} else if (f.type == "file" || f.type == "files") {
+				// Uploading isn't drawn in a terminal yet: what's attached stays as it is.
+				field_parts.push_back(quiet("Files are attached on the web"));
 			} else if (f.type == "choices") {
 				std::vector<terminal::view> each;
 				for (const auto& o : f.choices) each.push_back(terminal::toggle(model.ticked(f, o.value), o.label));

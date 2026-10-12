@@ -44,6 +44,9 @@ namespace one::desktop::runtime {
 				std::string lower = shown;
 				if (!lower.empty() && lower[0] >= 'A' && lower[0] <= 'Z') lower[0] = static_cast<char>(lower[0] - 'A' + 'a');
 				field_parts.push_back(desktop::picker(model.written(f), drawn_options(model.choices_of(f)), model.picking(f), "Choose " + lower + "…"));
+			} else if (f.type == "file" || f.type == "files") {
+				// Uploading isn't drawn in a window yet: what's attached stays as it is.
+				field_parts.push_back(desktop::text("Files are attached on the web", t.quiet()));
 			} else if (f.type == "choices") {
 				std::vector<desktop::view> each;
 				for (const auto& o : f.choices) each.push_back(desktop::toggle(model.ticked(f, o.value), o.label));

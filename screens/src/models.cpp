@@ -464,6 +464,8 @@ namespace one::screens {
 		if (page_.running(spec_.command)) return;
 		std::map<std::string, value> fields;
 		for (const auto& f : spec_.fields) {
+			// Files aren't uploaded from here yet, so what's attached isn't sent, and stays.
+			if (f.type == "file" || f.type == "files") continue;
 			fields[f.name] = as_input(current(f), f.type);
 		}
 		for (const auto& [name, given] : spec_.given) fields[name] = value(given);
