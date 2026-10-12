@@ -124,7 +124,10 @@ namespace loom {
 		return this;
 	}
 
-	void element::adopt(element& before) { focused = before.focused; }
+	void element::adopt(element& before) {
+		focused = before.focused;
+		focused_by_default = before.focused_by_default;
+	}
 
 	void element::reveal(const rect& area) {
 		for (element* e = parent; e; e = e->parent) {
@@ -285,10 +288,14 @@ namespace loom {
 					offset_ = std::clamp(offset_, 0.f, std::max(0.f, length_ - area.width));
 					content.place({area.x - offset_, area.y, std::max(length_, area.width), area.height});
 				} else {
-					extent e = content.measure(area.width);
+					// Content of a fixed width narrower than the scroll is centered in it, as a
+					// page of text is, when the scroll aligns its content to the center.
+					float width = content.fixed_width ? std::min(*content.fixed_width, area.width) : area.width;
+					float x = cross == align::center ? area.x + (area.width - width) / 2 : area.x;
+					extent e = content.measure(width);
 					length_ = e.height;
 					offset_ = std::clamp(offset_, 0.f, std::max(0.f, length_ - area.height));
-					content.place({area.x, area.y - offset_, area.width, std::max(length_, area.height)});
+					content.place({x, area.y - offset_, width, std::max(length_, area.height)});
 				}
 			}
 
@@ -311,6 +318,8 @@ namespace loom {
 			// A scroll given the keyboard, as a page of text is, scrolls with it.
 			bool focusable() const override { return wants_focus; }
 			bool handle_key(const key_event& e) override {
+				// Only its own keys, not those of what's inside it, like a list's.
+				if (!focused) return false;
 				float visible = across_ ? viewport_.width : viewport_.height;
 				float by = 0;
 				bool forward = across_ ? (e.is(keys::right) || e.is('l')) : (e.is(keys::down) || e.is('j'));
@@ -396,16 +405,25 @@ namespace loom {
 				std::size_t chosen = index_of(chosen_);
 				for (std::size_t i = 0; i < children.size(); ++i) {
 					const rect& r = children[i]->frame;
-					if (i == chosen) {
+					// The chosen row is shown while the list has the keyboard; otherwise only
+					// the row under the pointer is.
+					if (i == chosen && focused) {
 						color tint = t.accent;
-						tint.alpha = focused ? 0.12f : 0.07f;
+						tint.alpha = 0.12f;
 						c.box(r, {.fill = tint, .radius = 6});
-						if (focused) c.box({r.x, r.y + 4, 3, r.height - 8}, {.fill = t.accent, .radius = 1.5f});
+						c.box({r.x, r.y + 4, 3, r.height - 8}, {.fill = t.accent, .radius = 1.5f});
 					} else if (keys_[i] == hovered_) {
 						c.box(r, {.fill = t.sunken, .radius = 6});
 					}
 				}
 				element::paint_content(c);
+				// A chosen row that's a card of its own, with a background, is outlined, as
+				// the tint behind it is mostly hidden.
+				if (focused && chosen < children.size() && !children[chosen]->children.empty()) {
+					const element& card = *children[chosen]->children.front();
+					if (card.background.fill.alpha > 0)
+						c.box(card.frame.inset(-2), {.border = t.accent, .border_width = 2, .radius = card.background.radius + 2});
+				}
 			}
 
 			bool handle_key(const key_event& e) override {
@@ -641,10 +659,14 @@ namespace loom {
 		for (auto& r : rows) {
 			if (!r.shown.get()) continue;
 			keys.push_back(r.key);
-			auto e = std::move(r.shown).take();
-			e->key = r.key;
-			e->padding.top += 7, e->padding.bottom += 7, e->padding.left += 12, e->padding.right += 12;
-			shown.push_back(std::move(e));
+			// Each row in a cell of its own, the space around it the list's, so a row
+			// with a background, like a card, keeps a gap to the next.
+			auto cell = std::make_unique<element>();
+			cell->key = r.key;
+			cell->padding = edges(5, 8);
+			cell->children.push_back(std::move(r.shown).take());
+			adopt_children(*cell);
+			shown.push_back(std::move(cell));
 		}
 		auto e = std::make_unique<list_element>(std::move(keys), std::move(on_open));
 		e->children = std::move(shown);

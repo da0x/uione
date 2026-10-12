@@ -31,7 +31,7 @@ namespace loom {
 
 		void focus(window::state& w, element* chosen) {
 			if (!w.root) return;
-			each_element(*w.root, [](element& e) { e.focused = false; });
+			each_element(*w.root, [](element& e) { e.focused = e.focused_by_default = false; });
 			if (chosen) {
 				chosen->focused = true;
 				chosen->reveal(chosen->frame);
@@ -109,14 +109,22 @@ namespace loom {
 			w.pressed = nullptr;
 			w.needs_building = false;
 			w.needs_placing = true;
-			// Something to type into from the start: the first that takes keys.
-			if (w.root && !detail::focused_in(*w.root)) {
+			// Something to type into from the start: what asks for it, or a list, or the
+			// first that takes keys. Focus given that way moves on when something better
+			// arrives, as a screen's list does once its data has.
+			element* had = w.root ? detail::focused_in(*w.root) : nullptr;
+			if (w.root && (!had || had->focused_by_default)) {
 				std::vector<element*> all;
 				detail::focusables(*w.root, all);
 				auto first = std::ranges::find_if(all, [](element* e) { return e->wants_focus; });
 				if (first == all.end()) first = std::ranges::find_if(all, [](element* e) { return e->prefers_focus(); });
-				if (first == all.end()) first = all.begin();
-				if (first != all.end()) (*first)->focused = true;
+				bool better = first != all.end();
+				if (!better) first = all.begin();
+				if (first != all.end() && (!had || better)) {
+					if (had) had->focused = had->focused_by_default = false;
+					(*first)->focused = true;
+					(*first)->focused_by_default = !better;
+				}
 			}
 		}
 		if (w.root && (w.needs_placing || w.placed_at != w.size || w.placed_scale != w.scale)) {

@@ -93,6 +93,7 @@ namespace loom {
 		virtual void adopt(element& before);
 
 		bool focused = false;
+		bool focused_by_default = false;  // given focus because nothing better took keys yet
 		bool hovered = false;
 
 		// Brings an area of this element into view, through any scroll above it.
