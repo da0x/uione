@@ -45,6 +45,14 @@ namespace one::desktop::runtime {
 	};
 	desktop::view crumbs(page& p, std::vector<crumb> trail);
 
+	// Code, as an example to read, in the theme's code font; a license header at the
+	// top of the file it comes from isn't shown, being about the file, not the idea.
+	desktop::view code(std::string language, std::string source);
+
+	// An icon by its name, like edit, as the glyph drawn before what a button or a
+	// link says; nothing for one it doesn't know.
+	std::string glyph_of(const std::string& icon);
+
 	// A section: a title over what's in it, in one of the library's colors when it
 	// says, like violet: section({"More", "violet"}, text(...), ...).
 	struct section_title {
@@ -52,6 +60,8 @@ namespace one::desktop::runtime {
 		std::string color = "";
 	};
 	desktop::view section(section_title title, std::vector<desktop::view> inside);
+	// One of the library's colors, like violet, in the theme's shade of it.
+	color section_color(const std::string& name);
 	template <std::convertible_to<desktop::view>... V>
 	desktop::view section(section_title title, V&&... each) {
 		std::vector<desktop::view> all;
@@ -60,7 +70,7 @@ namespace one::desktop::runtime {
 	}
 	// A link to another page, its parameters the page's own, like /:project/settings;
 	// or to another site, opened in the browser.
-	desktop::view link(page& p, std::string words, std::string to);
+	desktop::view link(page& p, std::string words, std::string to, std::string icon = "");
 
 	// A front page's opening: its title, large, over what it says.
 	desktop::view hero(std::string title, std::vector<desktop::view> inside);
@@ -86,6 +96,7 @@ namespace one::desktop::runtime {
 		bool primary = false;
 		std::string id = "";  // what it acts on, sent as id
 		bool when = true;     // whether it applies now, like Follow for someone who doesn't
+		std::string icon = "";
 	};
 	desktop::view command(page& p, command_button b);
 
@@ -183,6 +194,7 @@ namespace one::desktop::runtime {
 		std::string after = "";
 		std::function<void()> on_done = {};  // once what it sent is done, like closing what it opened in
 		std::string key = "";  // what keeps what's typed apart from another form for the command; its id unless it says
+		std::string icon = "";  // drawn on the button opening it
 	};
 	desktop::view form(page& p, form_spec spec);
 
@@ -299,6 +311,7 @@ namespace one::desktop::runtime {
 		std::optional<tint_spec> tint = std::nullopt;
 		std::optional<track_spec> track = std::nullopt;
 		std::optional<reorder_spec> reorder = std::nullopt;
+		std::string color = "";  // what its rows open in this color, rather than the theme's
 		std::string empty = "Nothing here yet.";
 	};
 	desktop::view table(page& p, table_spec spec);
@@ -426,6 +439,7 @@ namespace one::desktop::runtime {
 	std::string when(const value& at);
 
 	// A document's fields, each beside its label.
-	desktop::view details(page& p, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices = {});
+	desktop::view details(page& p, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices = {},
+	                      std::optional<tint_spec> tint = std::nullopt);
 
 }  // namespace one::desktop::runtime

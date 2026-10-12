@@ -94,6 +94,8 @@ namespace one::desktop::runtime {
 		return {};
 	}
 
+	color section_color(const std::string& name) { return named_color(name); }
+
 	desktop::view section(section_title title, std::vector<desktop::view> inside) {
 		const auto& t = current_theme();
 		auto heading = t.strong();
@@ -105,7 +107,31 @@ namespace one::desktop::runtime {
 		return desktop::column(std::move(parts)).spacing(10).padding(edges(8, 0, 0, 0));
 	}
 
-	desktop::view link(page& p, std::string words, std::string to) {
+	std::string glyph_of(const std::string& icon) {
+		static const std::map<std::string, std::string> glyphs{{"add", "+"},        {"edit", "✎"},    {"follow", "☆"},  {"following", "★"}, {"settings", "⚙"},
+		                                                       {"workflow", "⇄"},   {"delete", "✕"},  {"copy", "⧉"},    {"search", "⌕"},    {"back", "‹"},
+		                                                       {"link", "↗"},       {"table", "▤"},   {"board", "▥"},   {"done", "✓"}};
+		auto found = glyphs.find(icon);
+		return found == glyphs.end() ? "" : found->second;
+	}
+
+	desktop::view code(std::string, std::string source) {
+		// Without the license header the file it comes from starts with.
+		if (source.starts_with("// Copyright ") || source.starts_with("# Copyright ")) {
+			std::size_t at = source.find("SPDX-License-Identifier: ");
+			if (at != std::string::npos) {
+				at = source.find('\n', at);
+				while (at != std::string::npos && at + 1 < source.size() && source[at + 1] == '\n') ++at;
+				source = at == std::string::npos ? "" : source.substr(at + 1);
+			}
+		}
+		while (!source.empty() && source.back() == '\n') source.pop_back();
+		const auto& t = current_theme();
+		return desktop::text(source, t.code()).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
+	}
+
+	desktop::view link(page& p, std::string words, std::string to, std::string icon) {
+		if (std::string g = glyph_of(icon); !g.empty()) words = g + " " + words;
 		if (to.starts_with("https://") || to.starts_with("http://") || to.starts_with("mailto:")) {
 			return desktop::link(std::move(words), [to] { open_in_browser(to); });
 		}
@@ -132,6 +158,7 @@ namespace one::desktop::runtime {
 
 	desktop::view command(page& p, command_button b) {
 		if (!b.allowed || !b.when) return {};
+		if (std::string g = glyph_of(b.icon); !g.empty()) b.label = g + " " + b.label;
 		bool busy = p.running(b.command);
 		std::string command = b.command;
 		value fields = b.fields;
@@ -233,7 +260,8 @@ namespace one::desktop::runtime {
 		});
 	}
 
-	desktop::view details(page&, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices) {
+	desktop::view details(page&, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices,
+	                      std::optional<tint_spec> tint) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
@@ -245,7 +273,12 @@ namespace one::desktop::runtime {
 					if (o.value == said_now) said_now = o.label;
 				}
 			}
-			shown.push_back(desktop::row(quiet(f.label).width(140), desktop::text(said_now.empty() ? "—" : said_now, t.body()).grow()).spacing(8));
+			// The field it's tinted by, in its color.
+			auto tone = tint && tint->field == f.field ? tint_of(v.data, tint) : std::nullopt;
+			std::vector<desktop::view> value_parts;
+			if (tone) value_parts.push_back(desktop::edge(*tone));
+			value_parts.push_back(desktop::text(said_now.empty() ? "—" : said_now, t.body()).grow());
+			shown.push_back(desktop::row(quiet(f.label).width(140), desktop::row(std::move(value_parts)).spacing(8).grow()).spacing(8));
 		}
 		return desktop::column(std::move(shown)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});
 	}

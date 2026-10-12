@@ -197,7 +197,16 @@ namespace one::desktop::runtime {
 				auto tone = tint_of(row, spec.tint);
 				cells.push_back(tone ? desktop::edge(*tone) : desktop::spacer().grow(0).width(3));
 			}
-			for (const auto& c : spec.columns) cells.push_back(sized(cell(spec, row, c.field), c.field));
+			for (std::size_t c = 0; c < spec.columns.size(); ++c) {
+				// What a row opens is said in the table's color, when it has one, by its first column.
+				if (c == 0 && !spec.color.empty() && !spec.link.empty() && !spec.people.contains(spec.columns[c].field) && !std::ranges::contains(spec.labels, spec.columns[c].field)) {
+					auto look = t.body();
+					look.color = section_color(spec.color);
+					cells.push_back(sized(desktop::text(chosen_as(spec, spec.columns[c].field, field_of(row, spec.columns[c].field)), look), spec.columns[c].field));
+					continue;
+				}
+				cells.push_back(sized(cell(spec, row, spec.columns[c].field), spec.columns[c].field));
+			}
 			std::vector<desktop::view> buttons;
 			for (const auto& a : spec.actions) {
 				if (!a.allowed || (a.when && !a.when(row))) continue;

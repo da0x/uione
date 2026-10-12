@@ -136,6 +136,7 @@ namespace one::desktop::runtime {
 		}
 		std::string says = spec.submit.empty() ? label(action_of(spec.command)) : spec.submit;
 		std::string opens = !spec.opener.empty() ? spec.opener : says;
+		if (std::string g = glyph_of(spec.icon); !g.empty()) opens = g + " " + opens;
 		if (spec.button && !open.get()) return desktop::button(opens, [open] { open.set(true); }, true);
 
 		std::vector<desktop::view> parts;

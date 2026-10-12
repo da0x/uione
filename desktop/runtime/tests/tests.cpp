@@ -893,6 +893,24 @@ TEST("a board's cards are put in order with Alt and the arrows, and kept to a mi
 	matches_golden("board-track", {1000, 520}, [&] { return nav.show(); });
 }
 
+TEST("code without the license header its file starts with, icons on buttons and links, and a tinted detail") {
+	memory_source data;
+	data.set("projects::issue_page", "atlas-12", value(fields{{"priority", "critical"}, {"stage.title", "To do"}}));
+	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Example", "/example", "", [](page& p) {
+		                     auto issue = p.view("projects::issue_page", "atlas-12");
+		                     heading(p, actions(command(p, {.command = "projects::board::follow", .label = "Follow", .icon = "follow"}),
+		                                        link(p, "Settings", "/example/settings", "settings")));
+		                     return items(details(p, issue, {{"priority", "Priority"}, {"stage.title", "Stage"}}, {{"priority", {{"critical", "Critical"}}}},
+		                                          tint_spec{"priority", {"critical", "high", "normal", "low", "trivial"}}),
+		                                  code("cpp", "// Copyright 2026 Daher Alfawares\n// SPDX-License-Identifier: Apache-2.0\n\n#include <print>\n\nint main() { std::println(\"Hello\"); }\n"));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/example");
+	matches_golden("code-icons", {900, 400}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();
