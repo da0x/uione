@@ -47,12 +47,12 @@ namespace one::desktop::runtime {
 				else line.push_back(desktop::text(e.subject, t.strong()));
 			}
 			if (!e.after.empty()) line.push_back(desktop::text(e.after, t.body()));
-			line.push_back(desktop::spacer());
-			line.push_back(desktop::text(e.when, t.quiet()));
+			// What was done goes on to a new line where it's long, and when at the side.
 			std::vector<desktop::view> entry;
 			entry.push_back(desktop::edge(e.fresh ? t.accent : t.line));
 			entry.push_back(desktop::avatar(e.who, 22));
-			entry.push_back(desktop::row(std::move(line)).spacing(6).align(align::center).grow());
+			entry.push_back(desktop::flow(std::move(line)).spacing(6).grow());
+			entry.push_back(desktop::text(e.when, t.quiet()));
 			parts.push_back(desktop::row(std::move(entry)).spacing(10).align(align::center).padding(edges(4, 0)));
 		}
 		return desktop::column(std::move(parts)).spacing(4);

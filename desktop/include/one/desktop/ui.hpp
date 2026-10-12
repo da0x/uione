@@ -176,6 +176,9 @@ namespace one::desktop {
 	}
 
 	// One view scrolled within the space given, down, or across.
+	// Children left to right, going on to a new line when the next doesn't fit, like
+	// buttons in a narrow column.
+	view flow(std::vector<view> children);
 	view scroll(view content);
 	view scroll_across(view content);
 

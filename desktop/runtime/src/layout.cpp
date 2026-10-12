@@ -14,7 +14,7 @@ namespace one::desktop::runtime {
 	desktop::view actions(std::vector<desktop::view> all) {
 		std::erase_if(all, [](const desktop::view& v) { return !v.get(); });
 		if (all.empty()) return {};
-		return desktop::row(std::move(all)).spacing(8).align(align::center);
+		return desktop::flow(std::move(all)).spacing(8);
 	}
 
 	desktop::view heading(page& p, desktop::view beside) {
@@ -72,7 +72,7 @@ namespace one::desktop::runtime {
 				if (!busy) p.run(command_name, fields);
 			}, true));
 		}
-		return desktop::row(std::move(buttons)).spacing(8);
+		return desktop::flow(std::move(buttons)).spacing(8);
 	}
 
 }  // namespace one::desktop::runtime

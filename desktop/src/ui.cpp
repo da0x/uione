@@ -267,6 +267,57 @@ namespace one::desktop {
 			bool across_;
 		};
 
+		// Children left to right at the widths they want, going on to a new line, as
+		// words do, when the next doesn't fit; each line as tall as its tallest.
+		class flow_element : public element {
+		public:
+			extent measure_content(float width) override {
+				extent out;
+				for (const auto& line : lines(width)) {
+					out.width = std::max(out.width, line.width);
+					out.height += line.height + (out.height > 0 ? spacing : 0);
+				}
+				return out;
+			}
+
+			void place_content(const rect& area) override {
+				float y = area.y;
+				for (const auto& line : lines(area.width)) {
+					float x = area.x;
+					for (std::size_t i = line.first; i < line.last; ++i) {
+						extent e = children[i]->measure(area.width);
+						float width = std::min(e.width, area.width);
+						children[i]->place({x, y + (line.height - e.height) / 2, width, e.height});
+						x += width + spacing;
+					}
+					y += line.height + spacing;
+				}
+			}
+
+		private:
+			struct line {
+				std::size_t first = 0, last = 0;
+				float width = 0, height = 0;
+			};
+			std::vector<line> lines(float width) {
+				std::vector<line> out;
+				line now;
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					extent e = children[i]->measure(width);
+					float w = std::min(e.width, width);
+					if (now.last > now.first && now.width + spacing + w > width) {
+						out.push_back(now);
+						now = {i, i, 0, 0};
+					}
+					now.width += (now.last > now.first ? spacing : 0) + w;
+					now.height = std::max(now.height, e.height);
+					now.last = i + 1;
+				}
+				if (now.last > now.first) out.push_back(now);
+				return out;
+			}
+		};
+
 		// scrolling
 
 		class scroll_element : public element {
@@ -692,6 +743,13 @@ namespace one::desktop {
 	view row(std::vector<view> children) {
 		auto e = std::make_unique<stack_element>(true);
 		e->cross = align::center;
+		e->children = taken(children);
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
+	view flow(std::vector<view> children) {
+		auto e = std::make_unique<flow_element>();
 		e->children = taken(children);
 		adopt_children(*e);
 		return view(std::move(e));
