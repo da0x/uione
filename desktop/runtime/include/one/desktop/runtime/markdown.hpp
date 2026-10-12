@@ -20,11 +20,6 @@ namespace one::desktop::runtime {
 
 	// A set of Markdown pages under one address, like /docs/:page: the page its
 	// address names, or the first, beside links to them all.
-	struct written_page {
-		std::string name;    // its part of the address, like getting-started
-		std::string title;
-		std::string source;  // its Markdown
-	};
 	desktop::view pages(page& p, std::string base, std::vector<written_page> all);
 
 }  // namespace one::desktop::runtime

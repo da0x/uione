@@ -41,7 +41,7 @@ namespace {
 		}
 	};
 
-	const std::vector<one::desktop::option> priorities{{"high", "High"}, {"normal", "Normal"}, {"low", "Low"}};
+	const std::vector<one::screens::option> priorities{{"high", "High"}, {"normal", "Normal"}, {"low", "Low"}};
 
 	site tracker() {
 		site s{.name = "tracker", .id = "org.uione.runtime-tracker"};

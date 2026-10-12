@@ -17,9 +17,9 @@
 #include <mutex>
 #include <thread>
 
-#include "one/desktop/runtime/source.hpp"
+#include "one/screens/source.hpp"
 
-namespace one::desktop::runtime {
+namespace one::screens {
 
 	class client_source : public source {
 	public:
@@ -42,4 +42,4 @@ namespace one::desktop::runtime {
 		std::thread sender_;
 	};
 
-}  // namespace one::desktop::runtime
+}  // namespace one::screens

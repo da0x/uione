@@ -108,6 +108,13 @@ Treat every file as published, whatever the repository's visibility today.
   client/build && cmake --build client/build`, then `client/tests/run
   client/build/tests`, which runs the tasks example's backend on the emulators and
   tests against it. Apache-2.0. POSIX for now; a Windows build adds its own sockets.
+- `screens/` is `one::screens`, what a native app's screens are and do whatever draws
+  them: sites, pages, the navigator, the data sources (`one::client`'s, and memory
+  for tests), every component's spec, and the model each works out before it's
+  drawn, as `@uione/react` does on the web. `desktop/runtime/` and the terminal's
+  runtime draw them, so a generated app's screens are the same C++ for both.
+  `cmake -S screens -B screens/build && cmake --build screens/build`, then
+  `screens/build/tests`.
 - `markdown/` is `one::markdown`, one header that lays Markdown out for terminals and
   reads it as a tree for windows, and `md`, which prints Markdown in a terminal. It
   began as libmarkdown, whose history it keeps. Apache-2.0, as the toolkits are, so

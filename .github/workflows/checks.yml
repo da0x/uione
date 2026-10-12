@@ -161,6 +161,12 @@ jobs:
           VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/tests
           VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/runtime_tests
 
+      - name: Build and test what native apps' screens are and do
+        run: |
+          cmake -S screens -B screens/build
+          cmake --build screens/build --parallel
+          screens/build/tests
+
       - name: Build the terminal toolkit
         run: |
           cmake -S terminal -B terminal/build

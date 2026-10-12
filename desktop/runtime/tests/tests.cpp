@@ -136,7 +136,7 @@ TEST("a page opens by its address, with what its parameters said, and goes back"
 	CHECK(nav.current().param("project") == "atlas one");
 	CHECK(nav.depth() == 2);
 	CHECK(nav.back());
-	CHECK(nav.current().shown().route == "/projects");
+	CHECK(nav.shown(nav.current()).route == "/projects");
 	CHECK(!nav.back());  // the first page stays
 }
 
@@ -200,7 +200,7 @@ TEST("a project's page: the bar, its trail, live title, details, and its issues 
 	navigator nav(s, data);
 	nav.open("/projects");
 	nav.open("/projects/atlas");
-	matches_golden("project-page", {900, 560}, [&] { return nav.show(); });
+	matches_golden("project-page", {900, 560}, [&] { return drawn(nav); });
 }
 
 namespace {
@@ -208,7 +208,7 @@ namespace {
 	// The window's view built and placed, as it is each time something it read changes.
 	std::unique_ptr<one::desktop::element> built(navigator& nav) {
 		one::desktop::detail::theme_in_use() = &tested_theme();
-		auto root = nav.show().take();
+		auto root = drawn(nav).take();
 		root->place({0, 0, 900, 900});
 		return root;
 	}
@@ -323,7 +323,7 @@ TEST("a form's fields: text, several lines, a choice, a list's pick, a box, seve
 	nav.current().kept<std::string>("form:tracker::issue::create::title").set("Draw forms natively");
 	nav.current().kept<bool>("form:tracker::issue::create::platforms:linux").set(true);
 	nav.current().run("tracker::issue::create", value::map(), {}, true);
-	matches_golden("form", {900, 860}, [&] { return nav.show(); });
+	matches_golden("form", {900, 860}, [&] { return drawn(nav); });
 }
 
 TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
@@ -396,7 +396,7 @@ TEST("an issue's page: its body in Markdown, its comments, and its timeline with
 	                     }});
 	navigator nav(s, data);
 	nav.open("/issues/atlas-12");
-	matches_golden("issue-page", {900, 760}, [&] { return nav.show(); });
+	matches_golden("issue-page", {900, 760}, [&] { return drawn(nav); });
 	CHECK(data.runs().size() == 1);  // said it's been seen, once
 	CHECK(data.runs().front().command == "tracker::seen::touch");
 }
@@ -507,7 +507,7 @@ TEST("a board: its columns, cards tinted by priority with their labels and peopl
 	navigator nav(s, data);
 	nav.open("/atlas/boards/main");
 	nav.current().kept<std::string>("board:issues:moving").set("atlas-12");
-	matches_golden("board", {1000, 600}, [&] { return nav.show(); });
+	matches_golden("board", {1000, 600}, [&] { return drawn(nav); });
 }
 
 TEST("a card's link opens its page filtered, said in words, and Show all opens it whole in its place") {
@@ -558,7 +558,7 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	                     }});
 	navigator nav(s, data);
 	nav.open("/atlas");
-	matches_golden("cards", {900, 520}, [&] { return nav.show(); });
+	matches_golden("cards", {900, 520}, [&] { return drawn(nav); });
 }
 
 namespace {
@@ -650,11 +650,11 @@ TEST("an issue in two columns, its buttons beside its title, the steps it can ta
 	auto s = with_issue();
 	navigator nav(s, data);
 	nav.open("/atlas/atlas-12");
-	matches_golden("two-columns", {1000, 520}, [&] { return nav.show(); });
+	matches_golden("two-columns", {1000, 520}, [&] { return drawn(nav); });
 	nav.open("/atlas/settings");
 	nav.current().ask_before("projects::project::delete", "Delete this project and everything in it?");
 	nav.current().run("projects::project::delete", value::map());
-	matches_golden("menu", {1000, 420}, [&] { return nav.show(); });
+	matches_golden("menu", {1000, 420}, [&] { return drawn(nav); });
 }
 
 namespace {
@@ -733,7 +733,7 @@ TEST("a table: tabs by a choice, searched, sorted and in pages, with a row's act
 	CHECK(data.runs().back().fields["id"].as_string() == "atlas-15");
 	CHECK(data.runs().back().fields["title"].as_string() == "Search by labels");
 	p.kept<std::string>("table:issues:acting").set("");
-	matches_golden("table", {1000, 420}, [&] { return nav.show(); });
+	matches_golden("table", {1000, 420}, [&] { return drawn(nav); });
 }
 
 TEST("what a view holds is copied as Markdown: values, written fields under their names, and lists") {
@@ -809,7 +809,7 @@ TEST("a grid adds what goes between two from its empty cell, and changes what's 
 	CHECK(p.kept<std::string>("form:projects::step::update:m1:title").peek() == "Start");
 	p.kept<std::string>("grid:steps").set("");
 	p.kept<std::string>("find").set("#9");
-	matches_golden("workflow", {1000, 640}, [&] { return nav.show(); });
+	matches_golden("workflow", {1000, 640}, [&] { return drawn(nav); });
 }
 
 TEST("a front page: a hero, links within the app and out of it, a badge beside the name, and the footer; and a set of written pages") {
@@ -830,9 +830,9 @@ TEST("a front page: a hero, links within the app and out of it, a badge beside t
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");
-	matches_golden("front-page", {1000, 520}, [&] { return nav.show(); });
+	matches_golden("front-page", {1000, 520}, [&] { return drawn(nav); });
 	nav.open("/docs/why");
-	matches_golden("pages", {1000, 420}, [&] { return nav.show(); });
+	matches_golden("pages", {1000, 420}, [&] { return drawn(nav); });
 }
 
 TEST("a board's cards are put in order with Alt and the arrows, and kept to a milestone picked above it") {
@@ -890,7 +890,7 @@ TEST("a board's cards are put in order with Alt and the arrows, and kept to a mi
 	root = built(nav);
 	CHECK(list_holding(*root, "atlas-2") == nullptr);
 	CHECK(list_holding(*root, "atlas-3") != nullptr);
-	matches_golden("board-track", {1000, 520}, [&] { return nav.show(); });
+	matches_golden("board-track", {1000, 520}, [&] { return drawn(nav); });
 }
 
 TEST("code without the license header its file starts with, icons on buttons and links, and a tinted detail") {
@@ -908,7 +908,7 @@ TEST("code without the license header its file starts with, icons on buttons and
 	                     }});
 	navigator nav(s, data);
 	nav.open("/example");
-	matches_golden("code-icons", {900, 400}, [&] { return nav.show(); });
+	matches_golden("code-icons", {900, 400}, [&] { return drawn(nav); });
 }
 
 int main() {

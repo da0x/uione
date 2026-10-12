@@ -1,7 +1,7 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: Apache-2.0
 
-// Where a desktop app's screens read their views and send their commands, as
+// Where a native app's screens read their views and send their commands, as
 // @uione/react's DataSource is for the web: an app's own backend through one::client,
 // or what's kept in memory, for tests and for trying a screen out.
 //
@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-namespace one::desktop::runtime {
+namespace one::screens {
 
 	using value = ember::value;
 
@@ -29,7 +29,7 @@ namespace one::desktop::runtime {
 	// readable, or failed to arrive.
 	enum class status { loading, ready, missing, failed };
 	struct view_state {
-		runtime::status status = status::loading;
+		screens::status status = status::loading;
 		value data = value::map();
 		std::string error = "";
 	};
@@ -107,4 +107,4 @@ namespace one::desktop::runtime {
 		std::optional<person> reader_;
 	};
 
-}  // namespace one::desktop::runtime
+}  // namespace one::screens

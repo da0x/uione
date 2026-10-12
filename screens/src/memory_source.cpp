@@ -1,9 +1,9 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: Apache-2.0
 
-#include "one/desktop/runtime/source.hpp"
+#include "one/screens/source.hpp"
 
-namespace one::desktop::runtime {
+namespace one::screens {
 
 	void memory_source::set(const std::string& view, const std::string& subject, value data) {
 		std::string at = key(view, subject);
@@ -43,4 +43,4 @@ namespace one::desktop::runtime {
 		answered(found == commands_.end() ? answer(std::string()) : found->second(fields, *this));
 	}
 
-}  // namespace one::desktop::runtime
+}  // namespace one::screens

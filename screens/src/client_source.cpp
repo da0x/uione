@@ -1,9 +1,9 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: Apache-2.0
 
-#include "one/desktop/runtime/client_source.hpp"
+#include "one/screens/client_source.hpp"
 
-namespace one::desktop::runtime {
+namespace one::screens {
 
 	client_source::client_source(one::client::session& session, std::function<void(std::function<void()>)> deliver)
 	    : session_(session), deliver_(std::move(deliver)) {
@@ -65,4 +65,4 @@ namespace one::desktop::runtime {
 		waiting_.notify_one();
 	}
 
-}  // namespace one::desktop::runtime
+}  // namespace one::screens

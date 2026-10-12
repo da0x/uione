@@ -74,8 +74,9 @@ add_library(one_desktop
 	src/view.cpp
 	${protocol_sources})
 add_dependencies(one_desktop one_desktop_shaders)
+# Views are built from one::screens' states, a header of uione's screens/ beside it.
 target_include_directories(one_desktop
-	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
+	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../screens/include> $<INSTALL_INTERFACE:include>
 	PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/protocols)
 target_link_libraries(one_desktop PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
 add_library(one::desktop ALIAS one_desktop)
@@ -85,19 +86,13 @@ target_compile_options(one_desktop PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wext
 # one::client from uione's client/ beside it, and Markdown through one::markdown.
 option(ONE_DESKTOP_RUNTIME "Build one::desktop::runtime, which needs uione's client/" ON)
 if(ONE_DESKTOP_RUNTIME)
-	if(NOT TARGET one_client)
-		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../client ${CMAKE_CURRENT_BINARY_DIR}/client)
-	endif()
 	add_library(one_desktop_runtime
-		runtime/src/arranging.cpp
 		runtime/src/between.cpp
 		runtime/src/board.cpp
-		runtime/src/client_source.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp
 		runtime/src/markdown.cpp
 		runtime/src/layout.cpp
-		runtime/src/memory_source.cpp
 		runtime/src/runtime.cpp
 		runtime/src/table.cpp
 		runtime/src/timeline.cpp)
@@ -106,7 +101,10 @@ if(ONE_DESKTOP_RUNTIME)
 	if(NOT TARGET one_markdown)
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../markdown ${CMAKE_CURRENT_BINARY_DIR}/markdown)
 	endif()
-	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_client PRIVATE one_markdown)
+	if(NOT TARGET one_screens)
+		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../screens ${CMAKE_CURRENT_BINARY_DIR}/screens)
+	endif()
+	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_screens PRIVATE one_markdown)
 	target_compile_options(one_desktop_runtime PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 
 endif()
