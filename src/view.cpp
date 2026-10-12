@@ -32,8 +32,45 @@ namespace loom {
 		void focus(window::state& w, element* chosen) {
 			if (!w.root) return;
 			each_element(*w.root, [](element& e) { e.focused = false; });
-			if (chosen) chosen->focused = true;
+			if (chosen) {
+				chosen->focused = true;
+				chosen->reveal(chosen->frame);
+			}
 			w.redraw();
+		}
+
+		// The focusable element nearest in a direction from the focused one: what h, j,
+		// k, l and the arrows move to when what's focused doesn't take them, like the
+		// next column of a board.
+		bool move_focus(window::state& w, const key_event& e) {
+			int dx = 0, dy = 0;
+			if (e.is(keys::left) || e.is('h')) dx = -1;
+			else if (e.is(keys::right) || e.is('l')) dx = 1;
+			else if (e.is(keys::up) || e.is('k')) dy = -1;
+			else if (e.is(keys::down) || e.is('j')) dy = 1;
+			else return false;
+			element* from = detail::focused_in(*w.root);
+			if (!from) return false;
+			std::vector<element*> all;
+			detail::focusables(*w.root, all);
+			auto middle = [](const rect& r) { return loom::point{r.x + r.width / 2, r.y + r.height / 2}; };
+			loom::point here = middle(from->frame);
+			element* best = nullptr;
+			float best_score = 0;
+			for (element* candidate : all) {
+				if (candidate == from) continue;
+				const rect& r = candidate->frame;
+				// Ahead in that direction, by its near edge.
+				float ahead = dx > 0 ? r.x - from->frame.right() : dx < 0 ? from->frame.x - r.right() : dy > 0 ? r.y - from->frame.bottom() : from->frame.y - r.bottom();
+				if (ahead < -1) continue;
+				loom::point there = middle(r);
+				float aside = dx ? std::abs(there.y - here.y) : std::abs(there.x - here.x);
+				float score = std::max(0.f, ahead) + 2 * aside;
+				if (!best || score < best_score) best = candidate, best_score = score;
+			}
+			if (!best) return false;
+			focus(w, best);
+			return true;
 		}
 
 		// Which element the pointer is over, and those it's within, marked as hovered.
@@ -118,6 +155,7 @@ namespace loom {
 				w.redraw();
 				return;
 			}
+			if (!e.control && !e.alt && !e.super && move_focus(w, e)) return;
 		}
 		if (w.outside->on_key && w.outside->on_key(e)) w.redraw();
 	}

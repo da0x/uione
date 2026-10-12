@@ -73,6 +73,8 @@ target_include_directories(loom
 target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
 target_compile_options(loom PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 
+# Its examples and tests, when it's built on its own rather than inside an app.
+if(PROJECT_IS_TOP_LEVEL)
 add_executable(hello examples/hello.cpp)
 target_link_libraries(hello PRIVATE loom)
 target_compile_options(hello PRIVATE -Wall -Wextra -Werror)
@@ -90,3 +92,4 @@ target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
 add_executable(demo examples/demo.cpp)
 target_link_libraries(demo PRIVATE loom)
 target_compile_options(demo PRIVATE -Wall -Wextra -Werror)
+endif()

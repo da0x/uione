@@ -308,6 +308,23 @@ namespace loom {
 
 			element* hit(point at) override { return viewport_.contains(at) ? element::hit(at) : nullptr; }
 
+			// A scroll given the keyboard, as a page of text is, scrolls with it.
+			bool focusable() const override { return wants_focus; }
+			bool handle_key(const key_event& e) override {
+				float visible = across_ ? viewport_.width : viewport_.height;
+				float by = 0;
+				bool forward = across_ ? (e.is(keys::right) || e.is('l')) : (e.is(keys::down) || e.is('j'));
+				bool backward = across_ ? (e.is(keys::left) || e.is('h')) : (e.is(keys::up) || e.is('k'));
+				if (forward) by = 48;
+				else if (backward) by = -48;
+				else if (e.is(keys::page_down) || e.is(keys::space)) by = visible - 48;
+				else if (e.is(keys::page_up)) by = -(visible - 48);
+				else if (e.is(keys::home) || e.is('g')) by = -offset_;
+				else if (e.is(keys::end) || e.is('G')) by = length_;
+				else return false;
+				return across_ ? wheel({}, by, 0) : wheel({}, 0, by);
+			}
+
 			bool wheel(point, float dx, float dy) override {
 				float delta = across_ ? (dx != 0 ? dx : dy) : dy;
 				float limit = std::max(0.f, length_ - (across_ ? viewport_.width : viewport_.height));
@@ -395,8 +412,14 @@ namespace loom {
 				if (keys_.empty()) return false;
 				std::size_t at = index_of(chosen_), last = keys_.size() - 1;
 				std::size_t to = at;
-				if (e.is(keys::down) || e.is('j')) to = std::min(at + 1, last);
-				else if (e.is(keys::up) || e.is('k')) to = at == 0 ? 0 : at - 1;
+				// Past either end, the key is left for what's beyond, like the next list.
+				if (e.is(keys::down) || e.is('j')) {
+					if (at == last) return false;
+					to = at + 1;
+				} else if (e.is(keys::up) || e.is('k')) {
+					if (at == 0) return false;
+					to = at - 1;
+				}
 				else if (e.is(keys::home) || e.is('g')) to = 0;
 				else if (e.is(keys::end) || e.is('G')) to = last;
 				else if (e.is(keys::page_down)) to = std::min(at + 10, last);

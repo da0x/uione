@@ -192,6 +192,8 @@ TEST("a list is chosen with j, k and the arrows, opened with Enter or a click") 
 	CHECK(l.handle_key(key(loom::keys::enter)));
 	CHECK(opened == "b");
 	CHECK(!l.handle_key(key('x', "x")));  // not the list's to take
+	CHECK(l.handle_key(key('k', "k")));
+	CHECK(!l.handle_key(key('k', "k")));  // past the first row: for whatever's above
 	auto& last = l.children[3]->frame;
 	CHECK(l.click({last.x + 5, last.y + 5}));
 	CHECK(opened == "d");
