@@ -7,7 +7,6 @@
 // chosen row and the scroll stay put through all of it.
 
 #include <algorithm>
-#include <atomic>
 #include <format>
 #include <print>
 #include <random>
@@ -120,13 +119,12 @@ int main() {
 	};
 
 	// Changes from elsewhere, as a listener on another thread would hear them.
-	std::atomic<bool> running = true;
-	std::thread elsewhere([&, issues, changed]() mutable {
+	std::jthread elsewhere([&, issues, changed](std::stop_token stopping) mutable {
 		std::mt19937 random(7);
 		int round = 0;
-		while (running) {
-			for (int i = 0; i < 20 && running; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			if (!running) break;
+		while (!stopping.stop_requested()) {
+			for (int i = 0; i < 20 && !stopping.stop_requested(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			if (stopping.stop_requested()) break;
 			++round;
 			std::size_t which = random() % 40;
 			app->post([=]() mutable {
@@ -142,8 +140,5 @@ int main() {
 			});
 		}
 	});
-	int code = app->run();
-	running = false;
-	elsewhere.join();
-	return code;
+	return app->run();
 }

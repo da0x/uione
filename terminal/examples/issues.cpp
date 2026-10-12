@@ -5,7 +5,6 @@
 // of its own, and a thread that changes an issue every two seconds, as a live view
 // would. What changed is shown in yellow for a few seconds.
 
-#include <atomic>
 #include <format>
 #include <random>
 #include <thread>
@@ -79,17 +78,13 @@ int main() {
 	auto first = std::make_unique<issue_list>();
 	auto* list = first.get();
 	app.status = [](const terminal::screen&) { return terminal::row{{"● live", terminal::colored(terminal::color::green)}}; };
-	std::atomic<bool> running = true;
-	std::thread elsewhere([&] {
+	std::jthread elsewhere([&](std::stop_token stopping) {
 		std::mt19937 random(7);
-		for (int round = 1; running; ++round) {
-			for (int i = 0; i < 20 && running; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		for (int round = 1; !stopping.stop_requested(); ++round) {
+			for (int i = 0; i < 20 && !stopping.stop_requested(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(100));
 			std::size_t which = random();
 			app.post([=] { list->changed(which, round); });
 		}
 	});
-	int code = app.run(std::move(first));
-	running = false;
-	elsewhere.join();
-	return code;
+	return app.run(std::move(first));
 }

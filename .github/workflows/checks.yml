@@ -133,8 +133,8 @@ jobs:
       - name: Run the site end to end against the emulators
         run: node tools/end-to-end.mjs
 
-  # The desktop and terminal toolkits, on Arch, whose g++ has the C++26 they're
-  # written in. The desktop's tests draw offscreen with Mesa's software Vulkan, as
+  # The desktop and terminal toolkits and Markdown, on Arch, whose g++ has the C++26
+  # they're written in. The desktop's tests draw offscreen with Mesa's software Vulkan, as
   # the runners have no GPU, and compare with tests/golden.
   toolkits:
     runs-on: ubuntu-latest
@@ -151,9 +151,15 @@ jobs:
         run: |
           cmake -S desktop -B desktop/build
           cmake --build desktop/build --parallel
-          VK_DRIVER_FILES=$(ls /usr/share/vulkan/icd.d/lvp_icd.*.json) desktop/build/tests
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/tests
 
       - name: Build the terminal toolkit
         run: |
           cmake -S terminal -B terminal/build
           cmake --build terminal/build --parallel
+
+      - name: Build Markdown and md, and test its layout
+        run: |
+          cmake -S markdown -B markdown/build
+          cmake --build markdown/build --parallel
+          markdown/build/layout_test markdown/test/sample.md

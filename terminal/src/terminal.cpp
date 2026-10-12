@@ -77,6 +77,29 @@ namespace one::terminal {
 			return a;
 		}
 
+		// The terminal in curses' hands while it lives, given back as it was when it
+		// goes, however it goes, so an exception never leaves a shell in raw mode.
+		class session {
+		public:
+			session() {
+				std::setlocale(LC_ALL, "");
+				initscr();
+				cbreak();
+				noecho();
+				keypad(stdscr, TRUE);
+				curs_set(0);
+				set_escdelay(25);
+				timeout(100);
+				if (has_colors()) {
+					start_color();
+					use_default_colors();
+				}
+			}
+			~session() { endwin(); }
+			session(const session&) = delete;
+			session& operator=(const session&) = delete;
+		};
+
 	}  // namespace
 
 	int display_width(std::string_view text) {
@@ -276,18 +299,7 @@ namespace one::terminal {
 	int app::run(std::vector<std::unique_ptr<screen>> trail) {
 		trail_ = std::move(trail);
 		if (trail_.empty()) return 0;
-		std::setlocale(LC_ALL, "");
-		initscr();
-		cbreak();
-		noecho();
-		keypad(stdscr, TRUE);
-		curs_set(0);
-		set_escdelay(25);
-		timeout(100);
-		if (has_colors()) {
-			start_color();
-			use_default_colors();
-		}
+		session terminal;
 		auto last_draw = std::chrono::steady_clock::now();
 		for (;;) {
 			int pressed = getch();
@@ -317,7 +329,6 @@ namespace one::terminal {
 				last_draw = std::chrono::steady_clock::now();
 			}
 		}
-		endwin();
 		trail_.clear();
 		return 0;
 	}

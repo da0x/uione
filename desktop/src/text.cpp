@@ -17,6 +17,7 @@
 #include <stdexcept>
 
 #include "fonts.hpp"
+#include "owned.hpp"
 
 namespace one::desktop::fonts {
 
@@ -46,9 +47,12 @@ namespace one::desktop::fonts {
 			return one;
 		}
 
+		using pattern = owned<FcPattern, FcPatternDestroy>;
+		using character_set = owned<FcCharSet, FcCharSetDestroy>;
+
 		// A pattern asking for a style, to which fontconfig adds what it's configured to.
-		FcPattern* asking(const text_style& style) {
-			FcPattern* p = FcPatternCreate();
+		pattern asking(const text_style& style) {
+			pattern p = FcPatternCreate();
 			FcPatternAddString(p, FC_FAMILY, reinterpret_cast<const FcChar8*>(style.family.c_str()));
 			FcPatternAddInteger(p, FC_WEIGHT, FcWeightFromOpenType(style.weight));
 			FcPatternAddInteger(p, FC_SLANT, style.italic ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
@@ -101,14 +105,12 @@ namespace one::desktop::fonts {
 		std::string key = style_key(style);
 		auto it = l.matched.find(key);
 		if (it == l.matched.end()) {
-			FcPattern* p = asking(style);
+			pattern p = asking(style);
 			FcConfigSubstitute(l.config, p, FcMatchPattern);
 			FcDefaultSubstitute(p);
 			FcResult result;
-			FcPattern* found = FcFontMatch(l.config, p, &result);
+			pattern found = FcFontMatch(l.config, p, &result);
 			auto where = file_of(found);
-			if (found) FcPatternDestroy(found);
-			FcPatternDestroy(p);
 			if (where.first.empty()) throw std::runtime_error("fontconfig found no font for " + style.family);
 			it = l.matched.emplace(key, where).first;
 		}
@@ -122,21 +124,18 @@ namespace one::desktop::fonts {
 		auto key = std::pair{style_key(style), character};
 		auto it = l.fallbacks.find(key);
 		if (it == l.fallbacks.end()) {
-			FcPattern* p = asking(style);
-			FcCharSet* wanted = FcCharSetCreate();
+			pattern p = asking(style);
+			character_set wanted = FcCharSetCreate();
 			FcCharSetAddChar(wanted, character);
 			FcPatternAddCharSet(p, FC_CHARSET, wanted);
 			FcConfigSubstitute(l.config, p, FcMatchPattern);
 			FcDefaultSubstitute(p);
 			FcResult result;
-			FcPattern* found = FcFontMatch(l.config, p, &result);
+			pattern found = FcFontMatch(l.config, p, &result);
 			// Only a face that has it; otherwise the first, which draws its missing glyph.
 			FcCharSet* has = nullptr;
 			std::pair<std::string, int> where{first.file, static_cast<int>(first.freetype->face_index)};
 			if (found && FcPatternGetCharSet(found, FC_CHARSET, 0, &has) == FcResultMatch && FcCharSetHasChar(has, character)) where = file_of(found);
-			if (found) FcPatternDestroy(found);
-			FcCharSetDestroy(wanted);
-			FcPatternDestroy(p);
 			it = l.fallbacks.emplace(key, where).first;
 		}
 		return opened(l, it->second, first.pixel_size);
@@ -191,7 +190,7 @@ namespace one::desktop {
 		// Shapes a piece of text in its style, splitting it where a character needs
 		// another face.
 		void shape(std::string_view text, const text_style& style, const fonts::face& first, word& into) {
-			hb_buffer_t* buffer = hb_buffer_create();
+			owned<hb_buffer_t, hb_buffer_destroy> buffer = hb_buffer_create();
 			std::size_t i = 0;
 			while (i < text.size()) {
 				std::size_t start = i;
@@ -215,7 +214,6 @@ namespace one::desktop {
 					into.advance += position[g].x_advance / 64.f;
 				}
 			}
-			hb_buffer_destroy(buffer);
 		}
 
 	}  // namespace

@@ -59,7 +59,7 @@ namespace one::desktop {
 			when.it_value.tv_nsec = (first_milliseconds % 1000) * 1'000'000L;
 			when.it_interval.tv_sec = every_milliseconds / 1000;
 			when.it_interval.tv_nsec = (every_milliseconds % 1000) * 1'000'000L;
-			timerfd_settime(s.repeat_timer, 0, &when, nullptr);
+			timerfd_settime(s.repeat_timer.get(), 0, &when, nullptr);
 		}
 
 		const wl_pointer_listener pointer_listener{
@@ -121,18 +121,14 @@ namespace one::desktop {
 		    .keymap =
 		        [](void*, wl_keyboard*, std::uint32_t format, std::int32_t fd, std::uint32_t size) {
 			        auto& s = *owning->input;
-			        if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
-				        close(fd);
-				        return;
-			        }
-			        void* mapped = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
-			        close(fd);
+			        owned_descriptor given{fd};
+			        if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) return;
+			        void* mapped = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, given.get(), 0);
 			        if (mapped == MAP_FAILED) return;
 			        xkb_keymap* keymap = xkb_keymap_new_from_string(s.keys, static_cast<const char*>(mapped), XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
 			        munmap(mapped, size);
 			        if (!keymap) return;
-			        if (s.key_state) xkb_state_unref(s.key_state);
-			        if (s.keymap) xkb_keymap_unref(s.keymap);
+			        s.key_state.reset();  // before the keymap it was made from
 			        s.keymap = keymap;
 			        s.key_state = xkb_state_new(keymap);
 		        },
@@ -195,31 +191,20 @@ namespace one::desktop {
 
 	}  // namespace
 
-	seat::~seat() {
-		if (cursor) wp_cursor_shape_device_v1_destroy(cursor);
-		if (pointer) wl_pointer_release(pointer);
-		if (keyboard) wl_keyboard_release(keyboard);
-		if (handle) wl_seat_release(handle);
-		if (key_state) xkb_state_unref(key_state);
-		if (keymap) xkb_keymap_unref(keymap);
-		if (keys) xkb_context_unref(keys);
-		if (repeat_timer >= 0) close(repeat_timer);
-	}
-
 	void bind_seat(app::state& a, wl_registry* registry, std::uint32_t name, std::uint32_t version) {
 		owning = &a;
 		a.input.emplace();
 		auto& s = *a.input;
 		s.handle = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, std::min(version, 9u)));
 		s.keys = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-		s.repeat_timer = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK);
+		s.repeat_timer = owned_descriptor(timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC | TFD_NONBLOCK));
 		wl_seat_add_listener(s.handle, &seat_listener, nullptr);
 	}
 
 	void repeat_key(app::state& a) {
 		auto& s = *a.input;
 		std::uint64_t times = 0;
-		(void)!read(s.repeat_timer, &times, sizeof times);
+		(void)!read(s.repeat_timer.get(), &times, sizeof times);
 		if (!s.repeating || !s.keyboard_in || !s.key_state) return;
 		for (std::uint64_t i = 0; i < std::min<std::uint64_t>(times, 4); ++i) deliver_key(*s.keyboard_in, event_for(s, s.repeating));
 	}

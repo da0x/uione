@@ -67,9 +67,8 @@ namespace one::desktop {
 		const wl_callback_listener frame_listener{
 		    .done =
 		        [](void* data, wl_callback* callback, std::uint32_t) {
-			        auto* w = as<window::state>(data);
-			        wl_callback_destroy(callback);
-			        w->frame = nullptr;
+			        (void)callback;
+			        as<window::state>(data)->frame.reset();
 		        },
 		};
 
@@ -120,36 +119,11 @@ namespace one::desktop {
 
 	}  // namespace
 
-	app::state::~state() {
-		windows.clear();
-		input.reset();
-		gpu.reset();
-		if (cursors) wp_cursor_shape_manager_v1_destroy(cursors);
-		if (viewporter) wp_viewporter_destroy(viewporter);
-		if (fractional) wp_fractional_scale_manager_v1_destroy(fractional);
-		if (decorations) zxdg_decoration_manager_v1_destroy(decorations);
-		if (shell) xdg_wm_base_destroy(shell);
-		if (compositor) wl_compositor_destroy(compositor);
-		if (registry) wl_registry_destroy(registry);
-		if (display) wl_display_disconnect(display);
-		if (wake >= 0) close(wake);
-	}
-
 	window::state::~state() {
 		if (owner && owner->input) {
 			if (owner->input->pointer_over == this) owner->input->pointer_over = nullptr;
 			if (owner->input->keyboard_in == this) owner->input->keyboard_in = nullptr;
 		}
-		root.reset();
-		painter.reset();
-		drawn.reset();  // the swapchain goes before the surface it's on
-		if (frame) wl_callback_destroy(frame);
-		if (viewport) wp_viewport_destroy(viewport);
-		if (fraction) wp_fractional_scale_v1_destroy(fraction);
-		if (decoration) zxdg_toplevel_decoration_v1_destroy(decoration);
-		if (toplevel) xdg_toplevel_destroy(toplevel);
-		if (shell_surface) xdg_surface_destroy(shell_surface);
-		if (surface) wl_surface_destroy(surface);
 	}
 
 	// window
@@ -195,7 +169,7 @@ namespace one::desktop {
 		} catch (const std::exception& e) {
 			return std::unexpected(std::string("Vulkan: ") + e.what());
 		}
-		s->wake = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+		s->wake = owned_descriptor(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK));
 		return app{std::move(s)};
 	}
 
@@ -236,7 +210,7 @@ namespace one::desktop {
 			state_->posted.push_back(std::move(task));
 		}
 		std::uint64_t one = 1;
-		(void)!write(state_->wake, &one, sizeof one);
+		(void)!write(state_->wake.get(), &one, sizeof one);
 	}
 
 	void app::quit() { state_->quitting = true; }
@@ -300,8 +274,8 @@ namespace one::desktop {
 				continue;
 			}
 			wl_display_flush(s.display);
-			int repeat = s.input ? s.input->repeat_timer : -1;
-			std::array<pollfd, 3> fds{pollfd{.fd = fd, .events = POLLIN, .revents = 0}, pollfd{.fd = s.wake, .events = POLLIN, .revents = 0},
+			int repeat = s.input ? s.input->repeat_timer.get() : -1;
+			std::array<pollfd, 3> fds{pollfd{.fd = fd, .events = POLLIN, .revents = 0}, pollfd{.fd = s.wake.get(), .events = POLLIN, .revents = 0},
 			                          pollfd{.fd = repeat, .events = POLLIN, .revents = 0}};
 			if (poll(fds.data(), fds.size(), -1) < 0) {
 				wl_display_cancel_read(s.display);
@@ -317,7 +291,7 @@ namespace one::desktop {
 			if (repeat >= 0 && (fds[2].revents & POLLIN)) repeat_key(s);
 			if (fds[1].revents & POLLIN) {
 				std::uint64_t count = 0;
-				(void)!read(s.wake, &count, sizeof count);
+				(void)!read(s.wake.get(), &count, sizeof count);
 				std::vector<std::function<void()>> tasks;
 				{
 					std::lock_guard hold(s.lock);

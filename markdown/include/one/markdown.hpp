@@ -1,4 +1,8 @@
-// markdown.hpp — libmarkdown: lay Markdown out for a terminal.
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: GPL-3.0-only
+
+// one::markdown: lay Markdown out for a terminal, or read it as a tree for a window.
+// It began as libmarkdown, whose history this directory keeps.
 //
 // One header, everything inline, no third-party libraries. `layout()` parses
 // Markdown and lays it out as rows of styled runs: already wrapped to a width,
@@ -7,9 +11,9 @@
 // the `md` tool prints — and a curses program can map each run's style onto its
 // own attributes instead.
 //
-//     markdown::options settings{.width = 72};
-//     for (const markdown::line& row : markdown::layout(source, settings))
-//         for (const markdown::run& piece : row)
+//     one::markdown::options settings{.width = 72};
+//     for (const one::markdown::line& row : markdown::layout(source, settings))
+//         for (const one::markdown::run& piece : row)
 //             draw(piece.text, piece.look);  // bold, colors, link, …
 #pragma once
 
@@ -25,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-namespace markdown {
+namespace one::markdown {
 
 // ---- The layout ----------------------------------------------------------
 
@@ -1977,4 +1981,4 @@ inline std::string ansi(const std::vector<line>& rows, bool colored) {
     return out;
 }
 
-}  // namespace markdown
+}  // namespace one::markdown

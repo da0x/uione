@@ -1,37 +1,30 @@
-cmake_minimum_required(VERSION 3.20)
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: GPL-3.0-only
 
-project(md
-    VERSION 0.1.0
-    DESCRIPTION "A terminal Markdown renderer"
-    LANGUAGES CXX)
+# one::markdown: Markdown laid out for terminals, and read as a tree for windows. One
+# header, and md, the command that prints Markdown in a terminal. It began as
+# libmarkdown.
+
+cmake_minimum_required(VERSION 3.28)
+project(one_markdown VERSION 0.9.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+# The library: one header, nothing to compile.
+add_library(one_markdown INTERFACE)
+add_library(one::markdown ALIAS one_markdown)
+target_include_directories(one_markdown INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_compile_features(one_markdown INTERFACE cxx_std_23)
+
+# md and its test, when it's built on its own rather than inside an app.
+if(PROJECT_IS_TOP_LEVEL)
+	add_executable(md src/main.cpp)
+	target_link_libraries(md PRIVATE one_markdown)
+	target_compile_options(md PRIVATE -Wall -Wextra -Wpedantic -Werror)
+	add_executable(layout_test test/layout_test.cpp)
+	target_link_libraries(layout_test PRIVATE one_markdown)
+	target_compile_options(layout_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+	install(TARGETS md RUNTIME DESTINATION bin)
 endif()
-
-include(GNUInstallDirs)
-
-# libmarkdown: one header, nothing to compile.
-add_library(markdown INTERFACE)
-target_include_directories(markdown INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_compile_features(markdown INTERFACE cxx_std_23)
-
-add_executable(md src/main.cpp)
-target_link_libraries(md PRIVATE markdown)
-target_compile_options(md PRIVATE -Wall -Wextra -Wpedantic)
-
-enable_testing()
-add_executable(layout_test test/layout_test.cpp)
-target_link_libraries(layout_test PRIVATE markdown)
-target_compile_options(layout_test PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME layout
-    COMMAND layout_test ${CMAKE_CURRENT_SOURCE_DIR}/test/sample.md)
-
-install(TARGETS md RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES include/markdown.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

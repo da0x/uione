@@ -94,6 +94,12 @@ Treat every file as published, whatever the repository's visibility today.
   a trail, lists and documents of styled rows, a top bar, and a loop other threads
   post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build
   terminal/build`, then `terminal/build/issues` for its example.
+- `markdown/` is `one::markdown`, one header that lays Markdown out for terminals and
+  reads it as a tree for windows, and `md`, which prints Markdown in a terminal. It
+  began as libmarkdown, whose history it keeps, and is GPL-3.0-only, so a desktop or
+  terminal app that shows Markdown is GPL when it's distributed. `cmake -S markdown
+  -B markdown/build && cmake --build markdown/build`, then
+  `markdown/build/layout_test markdown/test/sample.md`.
 - `docs/grammar.ebnf` is the language's grammar, the specification the hand-written
   parser is held to. `compiler/tests/grammar_tests.cpp` checks it both ways: programs
   made from its rules must parse, and every `.one` file in the repository must fit

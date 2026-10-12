@@ -1,3 +1,6 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: GPL-3.0-only
+
 // main.cpp — the `md` command-line entry point, a thin user of markdown.hpp.
 //
 // The library lays Markdown out; this file only reads input, probes the
@@ -13,7 +16,7 @@
 #include <sstream>
 #include <string>
 
-#include "markdown.hpp"
+#include "one/markdown.hpp"
 
 namespace {
 
@@ -136,8 +139,8 @@ int main(int argc, char** argv) {
 
     // Without color there are no clickable links, so the layout spells out
     // each URL after its text.
-    markdown::options settings{.width = width, .hyperlinks = colored};
-    std::string output = markdown::ansi(markdown::layout(source, settings), colored);
+    one::markdown::options settings{.width = width, .hyperlinks = colored};
+    std::string output = one::markdown::ansi(one::markdown::layout(source, settings), colored);
     if (!output.empty()) std::cout << output << "\n";
     return 0;
 }

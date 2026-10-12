@@ -19,6 +19,7 @@
 #include "cursor-shape-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "gpu.hpp"
+#include "owned.hpp"
 #include "one/desktop/app.hpp"
 #include "one/desktop/state.hpp"
 #include "one/desktop/theme.hpp"
@@ -30,62 +31,84 @@
 
 namespace one::desktop {
 
+	// Wayland's protocol functions are static inline, so each is given here a name that
+	// an owned<> can hold: released::wl_surface_destroy, and the rest.
+	namespace released {
+		inline void wl_registry_destroy(wl_registry* held) { ::wl_registry_destroy(held); }
+		inline void wl_compositor_destroy(wl_compositor* held) { ::wl_compositor_destroy(held); }
+		inline void xdg_wm_base_destroy(xdg_wm_base* held) { ::xdg_wm_base_destroy(held); }
+		inline void zxdg_decoration_manager_v1_destroy(zxdg_decoration_manager_v1* held) { ::zxdg_decoration_manager_v1_destroy(held); }
+		inline void wp_fractional_scale_manager_v1_destroy(wp_fractional_scale_manager_v1* held) { ::wp_fractional_scale_manager_v1_destroy(held); }
+		inline void wp_viewporter_destroy(wp_viewporter* held) { ::wp_viewporter_destroy(held); }
+		inline void wp_cursor_shape_manager_v1_destroy(wp_cursor_shape_manager_v1* held) { ::wp_cursor_shape_manager_v1_destroy(held); }
+		inline void wl_surface_destroy(wl_surface* held) { ::wl_surface_destroy(held); }
+		inline void xdg_surface_destroy(xdg_surface* held) { ::xdg_surface_destroy(held); }
+		inline void xdg_toplevel_destroy(xdg_toplevel* held) { ::xdg_toplevel_destroy(held); }
+		inline void zxdg_toplevel_decoration_v1_destroy(zxdg_toplevel_decoration_v1* held) { ::zxdg_toplevel_decoration_v1_destroy(held); }
+		inline void wp_fractional_scale_v1_destroy(wp_fractional_scale_v1* held) { ::wp_fractional_scale_v1_destroy(held); }
+		inline void wp_viewport_destroy(wp_viewport* held) { ::wp_viewport_destroy(held); }
+		inline void wl_callback_destroy(wl_callback* held) { ::wl_callback_destroy(held); }
+		inline void wl_seat_release(wl_seat* held) { ::wl_seat_release(held); }
+		inline void wl_keyboard_release(wl_keyboard* held) { ::wl_keyboard_release(held); }
+		inline void wl_pointer_release(wl_pointer* held) { ::wl_pointer_release(held); }
+		inline void wp_cursor_shape_device_v1_destroy(wp_cursor_shape_device_v1* held) { ::wp_cursor_shape_device_v1_destroy(held); }
+	}  // namespace released
+
 	// The seat: its pointer and keyboard, which window each is over, and the keyboard's
-	// layout and repeat.
+	// layout and repeat. Its members go in the reverse of their order here: the cursor
+	// before the pointer it's for, and the keymap's state before the keymap.
 	struct seat {
-		wl_seat* handle = nullptr;
-		wl_pointer* pointer = nullptr;
-		wl_keyboard* keyboard = nullptr;
-		wp_cursor_shape_device_v1* cursor = nullptr;
+		owned<xkb_context, xkb_context_unref> keys;
+		owned<xkb_keymap, xkb_keymap_unref> keymap;
+		owned<xkb_state, xkb_state_unref> key_state;
+		owned_descriptor repeat_timer;  // a timerfd
+		owned<wl_seat, released::wl_seat_release> handle;
+		owned<wl_keyboard, released::wl_keyboard_release> keyboard;
+		owned<wl_pointer, released::wl_pointer_release> pointer;
+		owned<wp_cursor_shape_device_v1, released::wp_cursor_shape_device_v1_destroy> cursor;
 		std::uint32_t pointer_serial = 0;  // the last enter's, which a cursor shape is set with
 		window::state* pointer_over = nullptr;
 		window::state* keyboard_in = nullptr;
 		point pointer_at;
 		float wheel_x = 0, wheel_y = 0;  // since the last frame of pointer events
 		int shape = -1;                  // the cursor shape last set
-
-		xkb_context* keys = nullptr;
-		xkb_keymap* keymap = nullptr;
-		xkb_state* key_state = nullptr;
 		int repeat_rate = 25, repeat_delay = 600;  // per second, and milliseconds before
-		int repeat_timer = -1;                     // a timerfd
 		std::uint32_t repeating = 0;               // the key held, or 0
-
-		~seat();
 	};
 
+	// The app's globals, freed after every window and the seat, the display last.
 	struct app::state {
-		wl_display* display = nullptr;
-		wl_registry* registry = nullptr;
-		wl_compositor* compositor = nullptr;
+		owned_descriptor wake;  // an eventfd post() writes to
+		owned<wl_display, wl_display_disconnect> display;
+		owned<wl_registry, released::wl_registry_destroy> registry;
+		owned<wl_compositor, released::wl_compositor_destroy> compositor;
 		std::uint32_t compositor_version = 0;
-		xdg_wm_base* shell = nullptr;
-		zxdg_decoration_manager_v1* decorations = nullptr;
-		wp_fractional_scale_manager_v1* fractional = nullptr;
-		wp_viewporter* viewporter = nullptr;
-		wp_cursor_shape_manager_v1* cursors = nullptr;
+		owned<xdg_wm_base, released::xdg_wm_base_destroy> shell;
+		owned<zxdg_decoration_manager_v1, released::zxdg_decoration_manager_v1_destroy> decorations;
+		owned<wp_fractional_scale_manager_v1, released::wp_fractional_scale_manager_v1_destroy> fractional;
+		owned<wp_viewporter, released::wp_viewporter_destroy> viewporter;
+		owned<wp_cursor_shape_manager_v1, released::wp_cursor_shape_manager_v1_destroy> cursors;
 		std::optional<gpu::device> gpu;
 		std::optional<one::desktop::seat> input;
 		std::vector<std::unique_ptr<window>> windows;
 
-		int wake = -1;  // an eventfd post() writes to
 		std::mutex lock;
 		std::vector<std::function<void()>> posted;
 		bool quitting = false;
-
-		~state();
 	};
 
 	struct window::state {
 		app::state* owner = nullptr;
 		window* outside = nullptr;  // the window this is the state of
-		wl_surface* surface = nullptr;
-		xdg_surface* shell_surface = nullptr;
-		xdg_toplevel* toplevel = nullptr;
-		zxdg_toplevel_decoration_v1* decoration = nullptr;
-		wp_fractional_scale_v1* fraction = nullptr;
-		wp_viewport* viewport = nullptr;
-		wl_callback* frame = nullptr;
+		// The surface and its roles, freed after the swapchain drawn on it, the surface
+		// itself last.
+		owned<wl_surface, released::wl_surface_destroy> surface;
+		owned<xdg_surface, released::xdg_surface_destroy> shell_surface;
+		owned<xdg_toplevel, released::xdg_toplevel_destroy> toplevel;
+		owned<zxdg_toplevel_decoration_v1, released::zxdg_toplevel_decoration_v1_destroy> decoration;
+		owned<wp_fractional_scale_v1, released::wp_fractional_scale_v1_destroy> fraction;
+		owned<wp_viewport, released::wp_viewport_destroy> viewport;
+		owned<wl_callback, released::wl_callback_destroy> frame;
 		std::optional<gpu::surface> drawn;
 		std::optional<one::desktop::renderer> painter;
 

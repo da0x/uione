@@ -4,8 +4,8 @@
 
 # Every source file starts with its copyright and license, after a shebang if it
 # has one: LGPL-3.0-only in the four libraries apps are built on, Apache-2.0 in the
-# desktop and terminal toolkits, so any program may use them, and AGPL-3.0-only
-# everywhere else. A file type with no rule below is an error, so a
+# desktop and terminal toolkits, so any program may use them, GPL-3.0-only in
+# Markdown, and AGPL-3.0-only everywhere else. A file type with no rule below is an error, so a
 # new kind of file is a decision rather than an omission.
 #
 #   tools/check-license            every tracked file, as it is on disk
@@ -18,6 +18,7 @@ license() {
 	case "$1" in
 		one/*|infrastructure/*|packages/react/*|packages/radix/*) echo LGPL-3.0-only ;;
 		desktop/*|terminal/*) echo Apache-2.0 ;;
+		markdown/*) echo GPL-3.0-only ;;
 		*) echo AGPL-3.0-only ;;
 	esac
 }
