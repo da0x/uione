@@ -132,6 +132,11 @@ namespace one::desktop {
 		}
 		if (w.root && (w.needs_placing || w.placed_at != w.size || w.placed_scale != w.scale)) {
 			w.root->place({0, 0, static_cast<float>(w.size.width), static_cast<float>(w.size.height)});
+			each_element(*w.root, [](element& e) {
+				if (!e.to_top || e.brought) return;
+				e.brought = true;
+				e.bring_to_top();
+			});
 			w.placed_at = w.size;
 			w.placed_scale = w.scale;
 			w.needs_placing = false;

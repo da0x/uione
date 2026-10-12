@@ -17,7 +17,7 @@ namespace app {
 				section({"One file in, a whole project out"}, text({words("one, the compiler, turns a folder of .one files into a React app, a Go backend, the Firestore rules that guard its data, and a Pulumi program for the cloud it runs on. What it writes is short enough to read and built with the tools you already use.")}), text({words("Every app works the same way: commands are the only writes, every write is an event, views are built from events, and every screen is live.")})),
 				section({"Install"}, text({words("uione 0.9.8 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh")}), actions(link(p, "Install", "/install"), link(p, "What's new in 0.9.8", "/releases"))),
 				section({"Free software"}, text({words("uione is free software under the AGPL. What the compiler generates belongs to you.")}), link(p, "Why uione exists", "/mission")),
-				section({"Join the waitlist"}, text({words("Leave your address to hear about new releases.")}), form(p, {.command = "waitlist::signup::create", .fields = {{.name = "email", .type = "email"}}}), text({live(signups, "total"), words(" people are waiting.")}))
+				anchored(p, "waitlist", section({"Join the waitlist"}, text({words("Leave your address to hear about new releases.")}), form(p, {.command = "waitlist::signup::create", .fields = {{.name = "email", .type = "email"}}}), text({live(signups, "total"), words(" people are waiting.")})))
 			);
 		}});
 	}

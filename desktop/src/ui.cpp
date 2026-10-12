@@ -128,11 +128,18 @@ namespace one::desktop {
 		carried = true;
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
+		brought = before.brought;
 	}
 
 	void element::reveal(const rect& area) {
 		for (element* e = parent; e; e = e->parent) {
 			if (e->reveal_here(area)) return;
+		}
+	}
+
+	void element::bring_to_top() {
+		for (element* e = parent; e; e = e->parent) {
+			if (e->top_here(frame)) return;
 		}
 	}
 
@@ -409,6 +416,14 @@ namespace one::desktop {
 				if (start < 0) offset_ += start - 8;
 				else if (start + size > visible) offset_ += start + size - visible + 8;
 				if (offset_ != before) place_content(viewport_);
+				return true;
+			}
+
+			bool top_here(const rect& area) override {
+				float start = across_ ? area.x - viewport_.x : area.y - viewport_.y;
+				float visible = across_ ? viewport_.width : viewport_.height;
+				offset_ = std::clamp(offset_ + start - 8, 0.f, std::max(0.f, length_ - visible));
+				place_content(viewport_);
 				return true;
 			}
 

@@ -46,7 +46,10 @@ namespace one::desktop::runtime {
 	// A tone of one::screens' tone_of, as it's drawn: none for 3, plain.
 	std::optional<color> tone_color(int tone);
 
+	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	desktop::view link(page& p, std::string words, std::string to, std::string icon = "");
+	// A part of the page a link names, like #projects, brought to the top when it's followed.
+	desktop::view anchored(page& p, std::string name, desktop::view part);
 	desktop::view hero(std::string title, std::vector<desktop::view> inside);
 	template <std::convertible_to<desktop::view>... V>
 	desktop::view hero(std::string title, V&&... each) {

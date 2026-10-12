@@ -985,6 +985,8 @@ namespace one::generators {
                     auto inside = items(parts, ns, block->items, screen);
                     if (block->type == kind::hero) code = "hero(" + str(block->title) + (inside.empty() ? "" : ", " + joined_items(inside)) + ")";
                     else code = "section({" + str(block->title) + (block->hue.empty() ? "" : ", " + str(block->hue)) + "}" + (inside.empty() ? "" : ", " + joined_items(inside)) + ")";
+                    // One a link on the page names, like #projects, is brought into view when it's followed.
+                    if (block->anchor) code = "anchored(p, " + str(*block->anchor) + ", " + code + ")";
                 } else if (auto* text = std::get_if<language::content_text>(&item.node)) {
                     code = text_item(parts, ns, *text);
                 } else if (auto* link = std::get_if<language::content_link>(&item.node)) {

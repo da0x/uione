@@ -33,7 +33,10 @@ namespace one::terminal::runtime {
 		(all.push_back(terminal::view(std::forward<V>(each))), ...);
 		return section(std::move(title), std::move(all));
 	}
+	// A link to another screen, to a part of this one, like #projects, or out of the app.
 	terminal::view link(page& p, std::string words, std::string to, std::string icon = "");
+	// A part of the page a link names, like #projects, brought to the top when it's followed.
+	terminal::view anchored(page& p, std::string name, terminal::view part);
 	terminal::view hero(std::string title, std::vector<terminal::view> inside);
 	template <std::convertible_to<terminal::view>... V>
 	terminal::view hero(std::string title, V&&... each) {

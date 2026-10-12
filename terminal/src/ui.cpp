@@ -184,11 +184,18 @@ namespace one::terminal {
 		carried = true;
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
+		brought = before.brought;
 	}
 
 	void element::reveal(const area& a) {
 		for (element* e = parent; e; e = e->parent) {
 			if (e->reveal_here(a)) return;
+		}
+	}
+
+	void element::bring_to_top() {
+		for (element* e = parent; e; e = e->parent) {
+			if (e->top_here(frame)) return;
 		}
 	}
 
@@ -503,6 +510,13 @@ namespace one::terminal {
 				else return false;
 				offset_ = std::clamp(offset_, 0, std::max(0, content_height_ - a.height));
 				if (offset_ != before) place(frame);
+				return true;
+			}
+
+			bool top_here(const area& wanted) override {
+				area a = inner();
+				offset_ = std::clamp(wanted.y - (a.y - offset_), 0, std::max(0, content_height_ - a.height));
+				place(frame);
 				return true;
 			}
 			void adopt(element& before) override {
@@ -993,6 +1007,11 @@ namespace one::terminal {
 		}
 		if (root_ && (width != width_ || height != height_ || dirty_)) {
 			root_->place({0, 0, width, height});
+			each_element(*root_, [](element& e) {
+				if (!e.to_top || e.brought) return;
+				e.brought = true;
+				e.bring_to_top();
+			});
 			width_ = width;
 			height_ = height;
 		}

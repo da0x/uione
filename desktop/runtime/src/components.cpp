@@ -116,9 +116,24 @@ namespace one::desktop::runtime {
 		return desktop::text(without_license(std::move(source)), t.code()).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
 	}
 
+	// The part of the page a link last brought into view, and how many times one has.
+	using anchor = std::pair<std::string, int>;
+
+	desktop::view anchored(page& p, std::string name, desktop::view part) {
+		auto [wanted, times] = p.kept<anchor>("anchor").get();
+		if (wanted != name || !part.get()) return part;
+		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
+	}
+
 	desktop::view link(page& p, std::string words, std::string to, std::string icon) {
 		if (std::string g = glyph_of(icon); !g.empty()) words = g + " " + words;
 		if (leaves(to)) return desktop::link(std::move(words), [to] { open_in_browser(to); });
+		if (to.starts_with("#")) {
+			return desktop::link(std::move(words), [&p, name = to.substr(1)] {
+				auto at = p.kept<anchor>("anchor");
+				at.set({name, at.peek().second + 1});
+			});
+		}
 		return desktop::link(std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
 	}
 

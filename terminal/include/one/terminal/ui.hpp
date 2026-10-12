@@ -137,6 +137,10 @@ namespace one::terminal {
 		virtual bool prefers_focus() const { return false; }
 		virtual void adopt(element& before);
 		void reveal(const area& a);
+		// Brought to the top of what scrolls it, once, when it's first placed, as a
+		// section is when a link to it is followed.
+		bool to_top = false, brought = false;
+		void bring_to_top();
 
 		bool focused = false;
 		bool focused_by_default = false;
@@ -147,6 +151,7 @@ namespace one::terminal {
 		virtual void place_content(const area& inner);
 		virtual void paint_content(canvas& c);
 		virtual bool reveal_here(const area&) { return false; }
+		virtual bool top_here(const area&) { return false; }
 		area inner() const;
 		int frame_width() const { return boxed ? 2 : 0; }
 	};
@@ -175,6 +180,7 @@ namespace one::terminal {
 		view&& key(std::string k) && { element_->key = std::move(k); return std::move(*this); }
 		view&& on_key(std::function<bool(const key_press&)> f) && { element_->on_key = std::move(f); return std::move(*this); }
 		view&& autofocus() && { element_->wants_focus = true; return std::move(*this); }
+		view&& brought_to_top() && { element_->to_top = true; return std::move(*this); }
 		// A line drawn around it, with a title in its top edge.
 		view&& boxed(std::string title = "") && {
 			element_->boxed = true;

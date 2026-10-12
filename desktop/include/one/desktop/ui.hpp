@@ -120,12 +120,17 @@ namespace one::desktop {
 
 		// Brings an area of this element into view, through any scroll above it.
 		void reveal(const rect& area);
+		// Brought to the top of what scrolls it, once, when it's first placed, as a
+		// section is when a link to it is followed.
+		bool to_top = false, brought = false;
+		void bring_to_top();
 
 	protected:
 		virtual extent measure_content(float width);
 		virtual void place_content(const rect& inner);
 		virtual void paint_content(canvas& c);
 		virtual bool reveal_here(const rect&) { return false; }
+		virtual bool top_here(const rect&) { return false; }
 		rect inner() const;
 	};
 
@@ -147,6 +152,7 @@ namespace one::desktop {
 		view&& on_click(std::function<void()> f) && { element_->on_click = std::move(f); return std::move(*this); }
 		view&& on_key(std::function<bool(const key_event&)> f) && { element_->on_key = std::move(f); return std::move(*this); }
 		view&& autofocus() && { element_->wants_focus = true; return std::move(*this); }
+		view&& brought_to_top() && { element_->to_top = true; return std::move(*this); }
 
 		std::unique_ptr<element> take() && { return std::move(element_); }
 		element* get() const { return element_.get(); }
