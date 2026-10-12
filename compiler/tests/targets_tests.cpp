@@ -25,7 +25,7 @@ namespace {
     const std::string home = "namespace shop {\n\tscreen \"Home\" / {\n\t\ttext \"Hello\"\n\t\tsection \"More\" color violet {\n\t\t\ttext \"Inside\"\n\t\t}\n\t\tcomponent banner\n\t}\n}\n";
 
     std::string project_with(const std::string& targets) {
-        return "import one\nproject shop {\n\tone  \"0.10.2\"\n" + (targets.empty() ? std::string() : "\ttarget  " + targets + "\n") + "}\n" + home;
+        return "import one\nproject shop {\n\tone  \"0.10.3\"\n" + (targets.empty() ? std::string() : "\ttarget  " + targets + "\n") + "}\n" + home;
     }
 
     std::vector<std::string> messages(const std::string& source) {
@@ -58,7 +58,7 @@ TEST_CASE("a project builds the web alone unless its targets say more, several t
 }
 
 TEST_CASE("the ways people sign in are said on one line, in their order") {
-    const std::string source = "import one\nproject shop {\n\tone  \"0.10.2\"\n\tsignin  google github\n}\n" + home;
+    const std::string source = "import one\nproject shop {\n\tone  \"0.10.3\"\n\tsignin  google github\n}\n" + home;
     CHECK(messages(source).empty());
     language::diagnostics out;
     std::vector<language::file> files;
@@ -66,7 +66,7 @@ TEST_CASE("the ways people sign in are said on one line, in their order") {
     language::check(files, out);
     generators::screens::model m(files);
     CHECK(m.project.authentication == std::vector<std::string>{"google", "github"});
-    CHECK(messages("import one\nproject shop {\n\tone  \"0.10.2\"\n\tsignin  google gitlab\n}\n" + home).size() == 1);
+    CHECK(messages("import one\nproject shop {\n\tone  \"0.10.3\"\n\tsignin  google gitlab\n}\n" + home).size() == 1);
 }
 
 TEST_CASE("each element a target doesn't draw is one error for it, saying what it lacks and what to do") {
