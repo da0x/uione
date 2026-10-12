@@ -17,6 +17,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan)
 pkg_check_modules(TEXT REQUIRED IMPORTED_TARGET harfbuzz freetype2 fontconfig)
+pkg_check_modules(KEYS REQUIRED IMPORTED_TARGET xkbcommon)
 find_program(GLSLC glslc REQUIRED)
 pkg_get_variable(PROTOCOLS wayland-protocols pkgdatadir)
 pkg_get_variable(SCANNER wayland-scanner wayland_scanner)
@@ -26,7 +27,9 @@ set(protocols
 	stable/xdg-shell/xdg-shell.xml
 	stable/viewporter/viewporter.xml
 	staging/fractional-scale/fractional-scale-v1.xml
-	unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
+	unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+	unstable/tablet/tablet-unstable-v2.xml
+	staging/cursor-shape/cursor-shape-v1.xml)
 set(protocol_sources)
 foreach(protocol ${protocols})
 	get_filename_component(name ${protocol} NAME_WE)
@@ -58,13 +61,16 @@ add_library(loom
 	src/gpu.cpp
 	src/offscreen.cpp
 	src/renderer.cpp
+	src/seat.cpp
 	src/text.cpp
+	src/ui.cpp
+	src/view.cpp
 	${protocol_sources})
 add_dependencies(loom loom_shaders)
 target_include_directories(loom
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
 	PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/protocols)
-target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT)
+target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
 target_compile_options(loom PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 
 add_executable(hello examples/hello.cpp)
@@ -80,3 +86,7 @@ target_link_libraries(tests PRIVATE loom PkgConfig::VULKAN)
 target_include_directories(tests PRIVATE src ${CMAKE_CURRENT_BINARY_DIR}/protocols)
 target_compile_definitions(tests PRIVATE LOOM_TESTS="${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
+
+add_executable(demo examples/demo.cpp)
+target_link_libraries(demo PRIVATE loom)
+target_compile_options(demo PRIVATE -Wall -Wextra -Werror)

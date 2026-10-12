@@ -25,6 +25,8 @@
 #include <memory>
 #include <string>
 
+#include "loom/input.hpp"
+
 namespace loom {
 
 	// A size in logical pixels, the ones layout speaks in. On a screen scaled by
@@ -50,6 +52,8 @@ namespace loom {
 
 	class app;
 	class canvas;
+	class view;
+	struct theme;
 
 	// What a window is opened with.
 	struct window_options {
@@ -75,7 +79,17 @@ namespace loom {
 		void redraw();
 		void title(const std::string& text);
 
-		// Draws what's in the window, over its background, each time it's drawn.
+		// Shows a view, built now and again whenever a state it read changes.
+		void show(std::function<view()> build);
+		// Builds the view again, for a change no state says.
+		void rebuild();
+		// The theme its view is built and drawn with; harbor unless it's given one.
+		void look(const loom::theme& t);
+
+		// A key nothing in the view took, like Escape for going back.
+		std::function<bool(const key_event&)> on_key;
+
+		// Draws in the window, over its background and any view, each time it's drawn.
 		std::function<void(canvas&)> on_draw;
 
 		// Called when the window is asked to close, by its decoration or a shortcut.

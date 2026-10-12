@@ -19,61 +19,10 @@
 #include <optional>
 #include <vector>
 
-#include <wayland-client.h>
-
-#include "fractional-scale-v1-client-protocol.h"
-#include "gpu.hpp"
-#include "renderer.hpp"
-#include "viewporter-client-protocol.h"
-#include "xdg-decoration-unstable-v1-client-protocol.h"
-#include "xdg-shell-client-protocol.h"
+#include "app_internal.hpp"
+#include "ui_internal.hpp"
 
 namespace loom {
-
-	struct app::state {
-		wl_display* display = nullptr;
-		wl_registry* registry = nullptr;
-		wl_compositor* compositor = nullptr;
-		std::uint32_t compositor_version = 0;
-		xdg_wm_base* shell = nullptr;
-		zxdg_decoration_manager_v1* decorations = nullptr;
-		wp_fractional_scale_manager_v1* fractional = nullptr;
-		wp_viewporter* viewporter = nullptr;
-		std::optional<gpu::device> gpu;
-		std::vector<std::unique_ptr<window>> windows;
-
-		int wake = -1;  // an eventfd post() writes to
-		std::mutex lock;
-		std::vector<std::function<void()>> posted;
-		bool quitting = false;
-
-		~state();
-	};
-
-	struct window::state {
-		app::state* owner = nullptr;
-		wl_surface* surface = nullptr;
-		xdg_surface* shell_surface = nullptr;
-		xdg_toplevel* toplevel = nullptr;
-		zxdg_toplevel_decoration_v1* decoration = nullptr;
-		wp_fractional_scale_v1* fraction = nullptr;
-		wp_viewport* viewport = nullptr;
-		wl_callback* frame = nullptr;
-		std::optional<gpu::surface> drawn;
-		std::optional<loom::renderer> painter;
-
-		loom::size size{};
-		loom::size asked{};    // what the compositor's last configure said, 0 for ours
-		double scale = 1;      // from fractional-scale, or the surface's preferred integer scale
-		bool configured = false;
-		bool dirty = true;
-		bool closed = false;
-
-		loom::size pixels() const {
-			return {static_cast<int>(std::lround(size.width * scale)), static_cast<int>(std::lround(size.height * scale))};
-		}
-		~state();
-	};
 
 	namespace {
 
@@ -106,6 +55,10 @@ namespace loom {
 				            static_cast<wp_fractional_scale_manager_v1*>(wl_registry_bind(registry, name, &wp_fractional_scale_manager_v1_interface, 1));
 			        } else if (is(wp_viewporter_interface)) {
 				        s->viewporter = static_cast<wp_viewporter*>(wl_registry_bind(registry, name, &wp_viewporter_interface, 1));
+			        } else if (is(wp_cursor_shape_manager_v1_interface)) {
+				        s->cursors = static_cast<wp_cursor_shape_manager_v1*>(wl_registry_bind(registry, name, &wp_cursor_shape_manager_v1_interface, 1));
+			        } else if (is(wl_seat_interface) && !s->input) {
+				        bind_seat(*s, registry, name, version);
 			        }
 		        },
 		    .global_remove = [](void*, wl_registry*, std::uint32_t) {},
@@ -169,7 +122,9 @@ namespace loom {
 
 	app::state::~state() {
 		windows.clear();
+		input.reset();
 		gpu.reset();
+		if (cursors) wp_cursor_shape_manager_v1_destroy(cursors);
 		if (viewporter) wp_viewporter_destroy(viewporter);
 		if (fractional) wp_fractional_scale_manager_v1_destroy(fractional);
 		if (decorations) zxdg_decoration_manager_v1_destroy(decorations);
@@ -181,6 +136,11 @@ namespace loom {
 	}
 
 	window::state::~state() {
+		if (owner && owner->input) {
+			if (owner->input->pointer_over == this) owner->input->pointer_over = nullptr;
+			if (owner->input->keyboard_in == this) owner->input->keyboard_in = nullptr;
+		}
+		root.reset();
 		painter.reset();
 		drawn.reset();  // the swapchain goes before the surface it's on
 		if (frame) wl_callback_destroy(frame);
@@ -199,6 +159,20 @@ namespace loom {
 	loom::size window::size() const { return state_->size; }
 	double window::scale() const { return state_->scale; }
 	void window::redraw() { state_->dirty = true; }
+	void window::show(std::function<view()> build) {
+		state_->build = std::move(build);
+		state_->needs_building = true;
+		state_->dirty = true;
+	}
+	void window::rebuild() {
+		state_->needs_building = true;
+		state_->dirty = true;
+	}
+	void window::look(const loom::theme& t) {
+		state_->look = t;
+		background = t.page;
+		rebuild();
+	}
 	void window::title(const std::string& text) { xdg_toplevel_set_title(state_->toplevel, text.c_str()); }
 
 	// app
@@ -249,7 +223,10 @@ namespace loom {
 		// Committed with nothing in it, the compositor answers with a configure.
 		wl_surface_commit(w->surface);
 		w->drawn.emplace(*state_->gpu, state_->display, w->surface);
+		auto* inside = w.get();
 		state_->windows.push_back(std::make_unique<window>(std::move(w)));
+		inside->outside = state_->windows.back().get();
+		state_->windows.back()->background = inside->look.page;
 		return *state_->windows.back();
 	}
 
@@ -268,6 +245,7 @@ namespace loom {
 	// asks for the frame after, then presents, which commits both.
 	static bool ready(window& shown) {
 		auto& w = shown.internals();
+		if (w.needs_building || w.needs_placing) w.dirty = true;
 		return w.configured && w.dirty && !w.frame && w.size.width > 0 && w.size.height > 0;
 	}
 	static void draw(window& shown) {
@@ -278,12 +256,19 @@ namespace loom {
 		w.frame = wl_surface_frame(w.surface);
 		wl_callback_add_listener(w.frame, &frame_listener, &w);
 		if (!w.painter) w.painter.emplace(*w.owner->gpu, w.drawn->format());
+		bring_up_to_date(w);
 		loom::size pixels = w.pixels();
 		gpu::surface::work work{
 		    .prepare =
 		        [&](const vk::raii::CommandBuffer& commands, std::size_t slot) {
 			        w.painter->begin(pixels, w.scale, slot);
 			        canvas c{*w.painter};
+			        if (w.root) {
+				        detail::theme_in_use() = &w.look;
+				        detail::layout_scale() = w.scale;
+				        w.root->paint(c);
+				        detail::theme_in_use() = nullptr;
+			        }
 			        if (shown.on_draw) shown.on_draw(c);
 			        w.painter->upload(commands);
 		        },
@@ -315,7 +300,9 @@ namespace loom {
 				continue;
 			}
 			wl_display_flush(s.display);
-			std::array<pollfd, 2> fds{pollfd{.fd = fd, .events = POLLIN, .revents = 0}, pollfd{.fd = s.wake, .events = POLLIN, .revents = 0}};
+			int repeat = s.input ? s.input->repeat_timer : -1;
+			std::array<pollfd, 3> fds{pollfd{.fd = fd, .events = POLLIN, .revents = 0}, pollfd{.fd = s.wake, .events = POLLIN, .revents = 0},
+			                          pollfd{.fd = repeat, .events = POLLIN, .revents = 0}};
 			if (poll(fds.data(), fds.size(), -1) < 0) {
 				wl_display_cancel_read(s.display);
 				continue;
@@ -327,6 +314,7 @@ namespace loom {
 			}
 			if (fds[0].revents & (POLLERR | POLLHUP)) return 1;
 			if (wl_display_dispatch_pending(s.display) < 0) return 1;
+			if (repeat >= 0 && (fds[2].revents & POLLIN)) repeat_key(s);
 			if (fds[1].revents & POLLIN) {
 				std::uint64_t count = 0;
 				(void)!read(s.wake, &count, sizeof count);
