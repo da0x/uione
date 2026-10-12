@@ -217,6 +217,14 @@ namespace one::terminal {
 		return row(std::move(all));
 	}
 
+	// Views across, going on to the next line where there's no more room, like a row of
+	// buttons in a narrow column.
+	view flow(std::vector<view> children);
+
+	// A main view and what goes beside it, side by side where the width is wide_from or
+	// more, a third of it the side's, else one after the other, main first.
+	view beside(view main, view side, int wide_from = 100);
+
 	// One view scrolled within the rows given, following what has the keyboard.
 	view scroll(view content);
 

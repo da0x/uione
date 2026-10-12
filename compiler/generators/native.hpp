@@ -594,7 +594,7 @@ namespace one::generators {
                 }
             }
             std::string fields;
-            std::vector<std::string> choices;
+            std::vector<std::string> choices, labels;
             std::string tint;
             for (const auto& f : d.fields) {
                 std::string key = screens::text_of(*f.value);
@@ -610,7 +610,10 @@ namespace one::generators {
                     auto* member = std::get_if<language::member_expression>(&v.value->node);
                     if (!member) continue;
                     for (const auto& field : entity->fields) {
-                        if (field.name == member->member && !field.choices.empty()) choices.push_back(choices_entry(key, field));
+                        if (field.name != member->member) continue;
+                        if (!field.choices.empty()) choices.push_back(choices_entry(key, field));
+                        // A list of words is labels, each drawn on its own.
+                        if (field.list && field.type && field.type->text() == "text") labels.push_back(key);
                     }
                 }
             }
@@ -625,7 +628,12 @@ namespace one::generators {
             }
             std::string c;
             for (const auto& one : choices) c += (c.empty() ? "" : ", ") + one;
-            return "details(p, " + view_variable(parts, full) + ", {" + fields + "}" + (c.empty() && tint.empty() ? "" : ", {" + c + "}") + (tint.empty() ? "" : ", " + tint) + ")";
+            std::string out = "details(p, " + view_variable(parts, full) + ", {" + fields + "}";
+            if (!c.empty() || !tint.empty() || !labels.empty()) out += ", {" + c + "}";
+            if (!tint.empty()) out += ", " + tint;
+            else if (!labels.empty()) out += ", std::nullopt";
+            if (!labels.empty()) out += ", " + native_detail::strings(labels);
+            return out + ")";
         }
 
         std::string cards(screen_parts& parts, const std::string& ns, const language::cards_item& c) {

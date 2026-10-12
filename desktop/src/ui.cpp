@@ -594,7 +594,8 @@ namespace one::desktop {
 				color fill = primary_ ? t.accent : t.surface;
 				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
-				if (focused) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
+				// The ring once the person moves to it, not where the window put the keyboard first.
+				if (focused && !focused_by_default) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
 				rect area = inner();
 				const auto& laid = laid_out();
 				c.text(laid, {area.x + (area.width - laid.width()) / 2, area.y + (area.height - laid.height()) / 2});
@@ -646,7 +647,7 @@ namespace one::desktop {
 			void place_content(const rect& area) override { laid_out(area.width); }
 			void paint_content(canvas& c) override {
 				rect area = inner();
-				if (focused) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
+				if (focused && !focused_by_default) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
 				c.text(laid_out(area.width), {area.x, area.y});
 			}
 			bool handle_key(const key_event& e) override {

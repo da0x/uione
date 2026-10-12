@@ -954,8 +954,10 @@ namespace one::screens {
 	                                    const std::optional<tint_spec>& tint) {
 		std::vector<detail_line> out;
 		for (const auto& f : fields) {
+			// What holds nothing isn't said, as the web leaves it out.
 			std::string says = cell_text(choices, v.data, f.field);
-			out.push_back({f.label, says.empty() ? "—" : says, tint && tint->field == f.field ? tone_of(v.data, tint) : 3});
+			if (says.empty()) continue;
+			out.push_back({f.field, f.label, says, tint && tint->field == f.field ? tone_of(v.data, tint) : 3});
 		}
 		return out;
 	}

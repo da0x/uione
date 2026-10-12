@@ -203,7 +203,7 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,
-	                      std::optional<tint_spec> tint) {
+	                      std::optional<tint_spec> tint, std::vector<std::string> labels) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
@@ -211,8 +211,20 @@ namespace one::desktop::runtime {
 		for (const auto& line : details_of(v, fields, choices, tint)) {
 			std::vector<desktop::view> value_parts;
 			if (auto tone = tone_color(line.tone)) value_parts.push_back(desktop::edge(*tone));
-			value_parts.push_back(desktop::text(line.value, t.body()).grow());
-			shown.push_back(desktop::row(quiet(line.label).width(140), desktop::row(std::move(value_parts)).spacing(8).grow()).spacing(8));
+			if (std::ranges::contains(labels, line.field)) {
+				// Labels as the table draws them, each on its own, going on to a new line.
+				std::vector<desktop::view> words_shown;
+				for (const auto& word : field_of(v.data, line.field).as_array()) {
+					if (screens::show(word).empty()) continue;
+					auto look = t.quiet();
+					look.color = t.accent;
+					words_shown.push_back(desktop::text(screens::show(word), look).padding(edges(1, 7)).background({.fill = t.sunken, .radius = 9}));
+				}
+				value_parts.push_back(desktop::flow(std::move(words_shown)).spacing(4).grow());
+			} else {
+				value_parts.push_back(desktop::text(line.value, t.body()).grow());
+			}
+			shown.push_back(desktop::row(quiet(line.label).width(108), desktop::row(std::move(value_parts)).spacing(8).grow()).spacing(8));
 		}
 		return desktop::column(std::move(shown)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});
 	}

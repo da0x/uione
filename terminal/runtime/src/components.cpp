@@ -187,7 +187,7 @@ namespace one::terminal::runtime {
 	terminal::view actions(std::vector<terminal::view> all) {
 		std::erase_if(all, [](const terminal::view& v) { return !v.get(); });
 		if (all.empty()) return {};
-		return terminal::row(std::move(all)).spacing(2);
+		return terminal::flow(std::move(all)).spacing(2);
 	}
 
 	terminal::view heading(page& p, terminal::view beside) {
@@ -195,13 +195,19 @@ namespace one::terminal::runtime {
 		return {};
 	}
 
-	// A terminal has no room for two columns: regions go one after another.
+	// The main region with the others beside it, in a terminal wide enough, as the web
+	// lays them out; one after another in a narrow one, main first.
 	terminal::view layout(std::string, std::vector<region> regions) {
-		std::vector<terminal::view> stacked;
+		terminal::view main;
+		std::vector<terminal::view> others;
 		for (auto& r : regions) {
-			if (r.inside.get()) stacked.push_back(std::move(r.inside));
+			if (!r.inside.get()) continue;
+			if (r.name == "main" && !main.get()) main = std::move(r.inside);
+			else others.push_back(std::move(r.inside));
 		}
-		return terminal::column(std::move(stacked)).spacing(1);
+		if (!main.get()) return terminal::column(std::move(others)).spacing(1);
+		if (others.empty()) return main;
+		return terminal::beside(std::move(main), terminal::column(std::move(others)).spacing(1));
 	}
 
 	terminal::view menu(page& p, std::vector<menu_link> links, terminal::view beside) {
@@ -235,7 +241,7 @@ namespace one::terminal::runtime {
 				if (!busy) p.run(command_name, fields);
 			}, true));
 		}
-		return terminal::row(std::move(buttons)).spacing(2);
+		return terminal::flow(std::move(buttons)).spacing(2);
 	}
 
 	terminal::view form(page& p, form_spec spec) {
@@ -324,9 +330,39 @@ namespace one::terminal::runtime {
 			parts.push_back(quiet(spec.empty));
 			return terminal::column(std::move(parts));
 		}
-		auto sized = [](terminal::view view_of, const std::string& column) {
-			if (column == "number" || column.ends_with(".number")) return std::move(view_of).width(6);
-			return std::move(view_of).grow(column == "title" || column.ends_with(".title") ? 2.f : 1.f);
+		// What each cell says, so each column is as wide as what it holds, up to a
+		// point, and the title takes the rest: a short stage doesn't get as much room
+		// as a long title, which would wrap.
+		auto said = [&](const value& row, const std::string& field) {
+			std::string out;
+			if (spec.people.contains(field)) {
+				for (const auto& name : people_in(row, field)) out += (out.empty() ? "" : ", ") + name;
+			} else if (std::ranges::contains(spec.labels, field)) {
+				for (const auto& word : field_of(row, field).as_array()) out += (out.empty() ? "" : " ") + ("[" + screens::show(word) + "]");
+			} else {
+				out = cell_text(spec.choices, row, field);
+			}
+			return out;
+		};
+		std::map<std::string, int> widest;
+		for (const auto& c : spec.columns) {
+			int w = display_width(c.label);
+			for (const auto& row : model.rows) w = std::max(w, display_width(said(row, c.field)));
+			widest[c.field] = w;
+		}
+		// The title takes what's left, or with none, the widest column.
+		std::string growing;
+		for (const auto& c : spec.columns) {
+			if (growing.empty() && (c.field == "title" || c.field.ends_with(".title"))) growing = c.field;
+		}
+		if (growing.empty()) {
+			for (const auto& c : spec.columns) {
+				if (growing.empty() || widest[c.field] > widest[growing]) growing = c.field;
+			}
+		}
+		auto sized = [&](terminal::view view_of, const std::string& column) {
+			if (column == growing) return std::move(view_of).grow(1.f);
+			return std::move(view_of).width(std::min(widest[column], 28));
 		};
 		// Each row keeps the same room for its actions, so its columns line up with the others'.
 		int acting = 0;
@@ -346,15 +382,7 @@ namespace one::terminal::runtime {
 			std::vector<terminal::view> cells;
 			if (spec.tint) cells.push_back(edge(tone_of(row, spec.tint)));
 			for (const auto& c : spec.columns) {
-				std::string said_now;
-				if (spec.people.contains(c.field)) {
-					for (const auto& name : people_in(row, c.field)) said_now += (said_now.empty() ? "" : ", ") + name;
-				} else if (std::ranges::contains(spec.labels, c.field)) {
-					for (const auto& word : field_of(row, c.field).as_array()) said_now += (said_now.empty() ? "" : " ") + ("[" + screens::show(word) + "]");
-				} else {
-					said_now = cell_text(spec.choices, row, c.field);
-				}
-				cells.push_back(sized(terminal::text(said_now), c.field));
+				cells.push_back(sized(terminal::text(said(row, c.field)), c.field));
 			}
 			std::vector<terminal::view> buttons;
 			for (const auto& a : spec.actions) {
@@ -642,31 +670,43 @@ namespace one::terminal::runtime {
 		if (model.entries.empty()) return {};
 		std::vector<terminal::view> parts;
 		if (!model.title.empty()) parts.push_back(terminal::text(model.title, {.bold = true}));
-		for (const auto& e : model.entries) {
-			std::vector<terminal::view> said_row;
-			said_row.push_back(terminal::text(e.fresh ? "●" : " ", {.foreground = color::blue}).width(1));
-			said_row.push_back(terminal::text(e.who, {.bold = true}));
-			said_row.push_back(terminal::text(e.what));
-			if (!e.subject.empty()) {
-				if (!e.address.empty()) said_row.push_back(terminal::link(e.subject, [&p, to = e.address] { p.open(to); }));
-				else said_row.push_back(terminal::text(e.subject, {.bold = true}));
-			}
-			if (!e.after.empty()) said_row.push_back(terminal::text(e.after));
-			said_row.push_back(terminal::spacer());
-			said_row.push_back(quiet(e.when));
-			parts.push_back(terminal::row(std::move(said_row)).spacing(1));
+		// Each change one sentence, wrapped as a whole, its time beside it keeping its
+		// width; one with an address is chosen and opened as a table's row is.
+		std::vector<terminal::list_row> rows;
+		std::map<std::string, std::string> addresses;
+		for (std::size_t i = 0; i < model.entries.size(); ++i) {
+			const auto& e = model.entries[i];
+			terminal::line said{{e.who, {.bold = true}}, {" " + e.what, {}}};
+			if (!e.subject.empty()) said.push_back({" " + e.subject, {.bold = true, .underline = !e.address.empty()}});
+			if (!e.after.empty()) said.push_back({" " + e.after, {}});
+			std::string key = std::to_string(i);
+			if (!e.address.empty()) addresses[key] = e.address;
+			rows.push_back({key, terminal::row(terminal::text(e.fresh ? "●" : " ", {.foreground = color::blue}).width(1), terminal::text(std::move(said)).grow(),
+			                                   quiet(e.when).width(display_width(e.when)))
+			                         .spacing(1)});
 		}
+		parts.push_back(terminal::list(std::move(rows), {.on_open = [&p, addresses](const std::string& key) {
+			if (auto found = addresses.find(key); found != addresses.end()) p.open(found->second);
+		}}));
 		return terminal::column(std::move(parts));
 	}
 
 	terminal::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,
-	                       std::optional<tint_spec> tint) {
+	                       std::optional<tint_spec> tint, std::vector<std::string> labels) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		std::vector<terminal::view> shown;
 		for (const auto& d : details_of(v, fields, choices, tint)) {
 			auto c = tone(d.tone);
-			shown.push_back(terminal::row(quiet(d.label).width(16), terminal::text(d.value, {.foreground = c.value_or(color::none)}).grow()).spacing(1));
+			std::string said = d.value;
+			if (std::ranges::contains(labels, d.field)) {
+				// Labels as the table says them, each in brackets.
+				said.clear();
+				for (const auto& word : field_of(v.data, d.field).as_array()) {
+					if (!screens::show(word).empty()) said += (said.empty() ? "" : " ") + ("[" + screens::show(word) + "]");
+				}
+			}
+			shown.push_back(terminal::row(quiet(d.label).width(16), terminal::text(said, {.foreground = c.value_or(color::none)}).grow()).spacing(1));
 		}
 		return terminal::column(std::move(shown));
 	}

@@ -265,7 +265,7 @@ namespace one::screens {
 
 	// A document's fields as details say them, each with the tone of the one it's tinted by.
 	struct detail_line {
-		std::string label, value;
+		std::string field, label, value;
 		int tone = 3;
 	};
 	std::vector<detail_line> details_of(const view_state& v, const std::vector<column>& fields, const std::map<std::string, std::vector<option>>& choices,

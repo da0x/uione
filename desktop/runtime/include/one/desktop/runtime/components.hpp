@@ -101,7 +101,7 @@ namespace one::desktop::runtime {
 	desktop::view thread(page& p, thread_spec spec);
 	desktop::view timeline(page& p, timeline_spec spec);
 	desktop::view details(page& p, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices = {},
-	                      std::optional<tint_spec> tint = std::nullopt);
+	                      std::optional<tint_spec> tint = std::nullopt, std::vector<std::string> labels = {});
 
 	// The cards above a list for another list's records, picking one keeping its rows.
 	desktop::view track(const std::optional<track_model>& model);

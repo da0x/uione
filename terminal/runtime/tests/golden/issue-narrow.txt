@@ -1,0 +1,30 @@
+ tracker   Projects                             Maya Garcia
+────────────────────────────────────────────────────────────
+
+  Copy an issue whole
+
+  Copy its title, body and labels, so a new one starts
+  where this one is, with its links and comments left
+  behind.
+
+  [ Edit ]  [ Link an issue ]
+  [ Transfer to another board ]  [ Copy issue ]
+
+  Status           open
+  Labels           [issues] [copy]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ tab moves   enter opens   q quits

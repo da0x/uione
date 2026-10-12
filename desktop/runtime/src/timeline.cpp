@@ -39,21 +39,23 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::text(model.title, heading_style));
 		}
 		for (const auto& e : model.entries) {
-			std::vector<desktop::view> line;
-			line.push_back(desktop::text(e.who, t.strong()));
-			line.push_back(desktop::text(e.what, t.body()));
+			// What was done is one sentence, wrapped word by word where it's long, what
+			// it's about in the accent color when it opens; when it was goes at the side.
+			std::vector<text_span> said{{e.who, t.strong()}, {" " + e.what, t.body()}};
 			if (!e.subject.empty()) {
-				if (!e.address.empty()) line.push_back(desktop::link(e.subject, [&p, to = e.address] { p.open(to); }));
-				else line.push_back(desktop::text(e.subject, t.strong()));
+				auto about = t.strong();
+				if (!e.address.empty()) about.color = t.accent;
+				said.push_back({" " + e.subject, about});
 			}
-			if (!e.after.empty()) line.push_back(desktop::text(e.after, t.body()));
-			// What was done goes on to a new line where it's long, and when at the side.
+			if (!e.after.empty()) said.push_back({" " + e.after, t.body()});
 			std::vector<desktop::view> entry;
 			entry.push_back(desktop::edge(e.fresh ? t.accent : t.line));
 			entry.push_back(desktop::avatar(e.who, 22));
-			entry.push_back(desktop::flow(std::move(line)).spacing(6).grow());
+			entry.push_back(desktop::text(std::move(said)).grow());
 			entry.push_back(desktop::text(e.when, t.quiet()));
-			parts.push_back(desktop::row(std::move(entry)).spacing(10).align(align::center).padding(edges(4, 0)));
+			auto shown = desktop::row(std::move(entry)).spacing(10).align(align::center).padding(edges(4, 0));
+			if (!e.address.empty()) shown = std::move(shown).on_click([&p, to = e.address] { p.open(to); });
+			parts.push_back(std::move(shown));
 		}
 		return desktop::column(std::move(parts)).spacing(4);
 	}

@@ -86,7 +86,7 @@ namespace one::terminal::runtime {
 	terminal::view thread(page& p, thread_spec spec);
 	terminal::view timeline(page& p, timeline_spec spec);
 	terminal::view details(page& p, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices = {},
-	                       std::optional<tint_spec> tint = std::nullopt);
+	                       std::optional<tint_spec> tint = std::nullopt, std::vector<std::string> labels = {});
 	terminal::view track(const std::optional<track_model>& model);
 
 	// Markdown, laid out by one::markdown for the width it's given.

@@ -84,7 +84,16 @@ namespace {
 			                                  form(p, {.command = "tracker::issue::create", .fields = {{"title"}, {.name = "body", .label = "Description", .type = "markdown"}},
 			                                           .given = {{"project", p.param("project")}}, .submit = "Open issue"}));
 		                     }});
-		s.screens.push_back({"Issue", "/issues/:issue", "", [](page& p) { return items(text({words("Issue "), words(p.param("issue"))})); }});
+		s.screens.push_back({"", "/issues/:issue", "", [](page& p) {
+			                     auto issue = p.view("tracker::issue_page", p.param("issue"));
+			                     p.title({live(issue, "title")});
+			                     auto doing = [&p](std::string label) { return command(p, {.command = "tracker::issue::" + label, .label = label}); };
+			                     return items(layout("two_columns",
+			                                         region{"main", items(markdown(p, issue, "body"))},
+			                                         region{"side", items(actions(doing("Edit"), doing("Link an issue"), doing("Transfer to another board"), doing("Copy issue")),
+			                                                              details(p, issue, {{"status", "Status"}, {"labels", "Labels"}, {"milestone", "Milestone"}}, {},
+			                                                                      std::nullopt, {"labels"}))}));
+		                     }});
 		return s;
 	}
 
@@ -97,6 +106,12 @@ namespace {
 		                      {"owner", value(fields{{"name", "Maya Garcia"}})},
 		                      {"issues", list{value(fields{{"id", "atlas-12"}, {"number", 12}, {"title", "Copy an issue whole"}, {"status", "open"}}),
 		                                      value(fields{{"id", "atlas-9"}, {"number", 9}, {"title", "Search by label"}, {"status", "closed"}})}}}));
+		data.set("tracker::issue_page", "atlas-12",
+		         value(fields{{"title", "Copy an issue whole"},
+		                      {"body", "Copy its title, body and labels, so a new one starts where this one is, with its links and comments left behind."},
+		                      {"status", "open"},
+		                      {"labels", list{"issues", "", "copy"}},
+		                      {"milestone", ""}}));
 		data.sign_in(person{"maya", "Maya Garcia"});
 	}
 
@@ -111,6 +126,18 @@ TEST("a project's page in a terminal: the bar, the trail above, its title, detai
 	nav.open("/projects/atlas");
 	screen_at terminal_now(nav, 80, 40);
 	matches_golden("project-page", terminal_now.text());
+}
+
+TEST("an issue in two columns where the terminal is wide, one after the other where it's narrow, its buttons going on to new lines") {
+	memory_source data;
+	fill(data);
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/issues/atlas-12");
+	screen_at wide(nav, 120, 20);
+	matches_golden("issue-wide", wide.text());
+	screen_at narrow(nav, 60, 30);
+	matches_golden("issue-narrow", narrow.text());
 }
 
 TEST("keys open a row, type into a form and send it, and Esc goes back") {

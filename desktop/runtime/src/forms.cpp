@@ -30,8 +30,9 @@ namespace one::desktop::runtime {
 		const auto& t = current_theme();
 		if (!model.open()) {
 			std::string opens = model.opens();
+			// A button with an icon is a quiet one, as on the web, beside the page's main ones.
 			if (std::string g = glyph_of(spec.icon); !g.empty()) opens = g + " " + opens;
-			return desktop::button(opens, [model] { model.set_open(true); }, true);
+			return desktop::button(opens, [model] { model.set_open(true); }, spec.icon.empty());
 		}
 		std::vector<desktop::view> parts;
 		for (const auto& f : model.fields()) {

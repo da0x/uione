@@ -887,6 +887,103 @@ namespace one::terminal {
 	view text_rows(std::vector<terminal::line> rows) { return made<rows_element>(std::move(rows)); }
 	view text_laid(std::function<std::vector<terminal::line>(int)> lay_out) { return made<laid_element>(std::move(lay_out)); }
 
+	namespace {
+
+		// The main view and what goes beside it: two columns side by side where there's
+		// room, the side a third of the width, else one after the other, main first.
+		class beside_element : public element {
+		public:
+			explicit beside_element(int wide_from) : wide_from_(wide_from) {}
+
+			extent measure_content(int width) override {
+				if (width < wide_from_) {
+					extent main = children[0]->measure(width), side = children[1]->measure(width);
+					return {std::max(main.width, side.width), main.height + spacing + side.height};
+				}
+				auto [main_width, side_width] = widths(width);
+				return {width, std::max(children[0]->measure(main_width).height, children[1]->measure(side_width).height)};
+			}
+
+			void place_content(const area& a) override {
+				if (a.width < wide_from_) {
+					int main = children[0]->measure(a.width).height;
+					children[0]->place({a.x, a.y, a.width, main});
+					children[1]->place({a.x, a.y + main + spacing, a.width, std::max(0, a.height - main - spacing)});
+					return;
+				}
+				auto [main_width, side_width] = widths(a.width);
+				children[0]->place({a.x, a.y, main_width, a.height});
+				children[1]->place({a.right() - side_width, a.y, side_width, a.height});
+			}
+
+		private:
+			int wide_from_;
+			std::pair<int, int> widths(int width) const {
+				int side = std::clamp(width / 3, 30, 44);
+				return {width - side - gap, side};
+			}
+			static constexpr int gap = 3;
+		};
+
+	}  // namespace
+
+	namespace {
+
+		// Views one after another across, going on to the next line when there's no
+		// more room, as words do.
+		class flow_element : public element {
+		public:
+			extent measure_content(int width) override {
+				extent out;
+				lay_out(width, [&](element&, const area& at) {
+					out.width = std::max(out.width, at.right());
+					out.height = std::max(out.height, at.y + at.height);
+				});
+				return out;
+			}
+
+			void place_content(const area& a) override {
+				lay_out(a.width, [&](element& child, const area& at) { child.place({a.x + at.x, a.y + at.y, at.width, at.height}); });
+			}
+
+		private:
+			void lay_out(int width, const std::function<void(element&, const area&)>& each) {
+				int x = 0, y = 0, tallest = 0;
+				for (auto& child : children) {
+					extent e = child->measure(width);
+					int w = std::min(width, e.width);
+					if (x > 0 && x + w > width) {
+						x = 0;
+						y += tallest;
+						tallest = 0;
+					}
+					each(*child, {x, y, w, e.height});
+					x += w + spacing;
+					tallest = std::max(tallest, e.height);
+				}
+			}
+		};
+
+	}  // namespace
+
+	view flow(std::vector<view> children) {
+		auto e = std::make_unique<flow_element>();
+		e->children = taken(children);
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
+	view beside(view main, view side, int wide_from) {
+		auto e = std::make_unique<beside_element>(wide_from);
+		std::vector<view> both;
+		both.push_back(std::move(main));
+		both.push_back(std::move(side));
+		e->children = taken(both);
+		e->spacing = 1;
+		adopt_children(*e);
+		return view(std::move(e));
+	}
+
 	view column(std::vector<view> children) {
 		auto e = std::make_unique<stack_element>(false);
 		e->children = taken(children);
