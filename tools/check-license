@@ -17,7 +17,7 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 license() {
 	case "$1" in
 		one/*|infrastructure/*|packages/react/*|packages/radix/*) echo LGPL-3.0-only ;;
-		desktop/*|terminal/*) echo Apache-2.0 ;;
+		desktop/*|terminal/*|client/*) echo Apache-2.0 ;;
 		markdown/*) echo GPL-3.0-only ;;
 		*) echo AGPL-3.0-only ;;
 	esac

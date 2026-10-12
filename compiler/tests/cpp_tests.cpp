@@ -212,3 +212,9 @@ TEST_CASE("an app with files uploads and downloads them through its C++ client, 
     without.replace(without.find(files), files.size(), "");
     CHECK(!has(generated(without).content, "upload("));
 }
+
+TEST_CASE("one::client signs in through the browser with the very code an app's C++ client is given") {
+    auto client = platform::read_file(root + "/client/src/browser.hpp");
+    REQUIRE(client);
+    CHECK(client->find(std::string(generators::cpp_detail::browser_support)) != std::string::npos);
+}

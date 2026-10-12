@@ -90,6 +90,13 @@ jobs:
       - name: Compile the generated C++ clients
         run: CXX=g++-14 tools/check-cpp-clients
 
+      # one::client against the tasks example's backend, on the emulators started above.
+      - name: Build one::client, and test it against a running app
+        run: |
+          CXX=g++-14 cmake -S client -B client/build -DONE_CLIENT_TLS=openssl
+          cmake --build client/build --parallel
+          client/tests/run client/build/tests
+
       - name: Vet and test the infrastructure library, and build the site's Pulumi program
         run: |
           (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test ./...)

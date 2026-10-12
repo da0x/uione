@@ -1,0 +1,27 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs one::client's tests against a real app: the tasks example, built by one, its
+# backend serving on the Firebase emulators (tools/emulators/run starts them), with
+# its rules loaded.
+#
+#   client/tests/run client/build/tests
+
+set -eu
+root=$(cd "$(dirname "$0")/../.." && pwd)
+tests=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+work=$(mktemp -d)
+server=
+trap '[ -n "$server" ] && kill "$server" 2>/dev/null; rm -rf "$work"' EXIT
+
+"$root/compiler/build/one" build "$root/examples/tasks" >/dev/null
+node "$root/tools/emulators/rules.mjs" "$root/examples/tasks/build/firestore.rules" >/dev/null
+(cd "$root/examples/tasks/build/api" && go mod tidy >/dev/null 2>&1 && go build -o "$work/api" .)
+PORT=8097 FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 "$work/api" >"$work/api.log" 2>&1 &
+server=$!
+for i in $(seq 1 100); do
+	curl -s -o /dev/null http://localhost:8097/health && break
+	sleep 0.1
+done
+ONE_CLIENT_SERVER=http://localhost:8097 XDG_CONFIG_HOME="$work/config" "$tests" || { tail -20 "$work/api.log"; exit 1; }

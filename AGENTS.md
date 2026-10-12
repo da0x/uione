@@ -94,6 +94,15 @@ Treat every file as published, whatever the repository's visibility today.
   a trail, lists and documents of styled rows, a top bar, and a loop other threads
   post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build
   terminal/build`, then `terminal/build/issues` for its example.
+- `client/` is `one::client`, how the desktop and terminal apps uione writes reach
+  their app, as `@uione/react/firebase` does for the web: sign-in (the browser, a
+  kept refresh token, or a service's key), views read live by name through libember,
+  whose header is pinned in `client/include/ember.hpp`, commands run by name, and what
+  a person's roles allow. Its browser sign-in is the very code the compiler writes
+  into an app's C++ client, held so by `cpp_tests.cpp`. `cmake -S client -B
+  client/build && cmake --build client/build`, then `client/tests/run
+  client/build/tests`, which runs the tasks example's backend on the emulators and
+  tests against it. Apache-2.0. POSIX for now; a Windows build adds its own sockets.
 - `markdown/` is `one::markdown`, one header that lays Markdown out for terminals and
   reads it as a tree for windows, and `md`, which prints Markdown in a terminal. It
   began as libmarkdown, whose history it keeps, and is GPL-3.0-only, so a desktop or
