@@ -16,7 +16,7 @@ namespace one::desktop {
 
 	namespace {
 
-		class field_element : public element {
+		class field_element : public element, public text_entry {
 		public:
 			field_element(state<std::string> value, field_options options)
 			    : value_(std::move(value)), options_(std::move(options)), edit_(value_.peek(), options_.multiline) {
@@ -25,6 +25,33 @@ namespace one::desktop {
 
 			bool focusable() const override { return true; }
 			one::desktop::cursor cursor() const override { return cursor::text; }
+			text_entry* entry() override { return this; }
+
+			// An input method's part.
+			const std::string& surrounding(std::size_t& caret, std::size_t& anchor) const override {
+				caret = edit_.caret();
+				anchor = edit_.anchor();
+				return edit_.text();
+			}
+			bool multiline() const override { return options_.multiline; }
+			rect caret_area() override {
+				rect area = inner();
+				const text_layout& laid = laid_out(area.width);
+				float scale = static_cast<float>(laid.scale());
+				auto at = laid.caret(edit_.caret() + composing_caret());
+				const auto& line = laid.lines()[std::min(at.line, laid.lines().size() - 1)];
+				return {area.x - scroll_ + at.x / scale, area.y + line.top / scale, 1, line.height / scale};
+			}
+			void compose(std::string text, int caret) override {
+				composing_ = std::move(text);
+				composing_at_ = caret;
+			}
+			void commit(std::string text, std::size_t erase_before, std::size_t erase_after) override {
+				changed([&] {
+					edit_.erase_around(erase_before, erase_after);
+					edit_.type(text);
+				});
+			}
 
 			// What it was typing keeps, unless the value was changed elsewhere since.
 			void adopt(element& before) override {
@@ -32,6 +59,8 @@ namespace one::desktop {
 				auto& was = static_cast<field_element&>(before);
 				edit_ = std::move(was.edit_);
 				scroll_ = was.scroll_;
+				composing_ = std::move(was.composing_);
+				composing_at_ = was.composing_at_;
 				edit_.replace_all(value_.peek());
 			}
 
@@ -52,13 +81,13 @@ namespace one::desktop {
 				float scale = static_cast<float>(laid.scale());
 				// One line keeps its caret in sight, scrolling across as it moves.
 				if (!options_.multiline) {
-					float caret_x = laid.caret(edit_.caret()).x / scale;
+					float caret_x = laid.caret(edit_.caret() + composing_caret()).x / scale;
 					if (caret_x - scroll_ > area.width - 2) scroll_ = caret_x - area.width + 2;
 					if (caret_x < scroll_) scroll_ = caret_x;
 					scroll_ = std::max(0.f, std::min(scroll_, std::max(0.f, laid.width() - area.width + 2)));
 				}
 				point origin{area.x - scroll_, area.y};
-				if (edit_.text().empty()) {
+				if (edit_.text().empty() && composing_.empty()) {
 					if (!options_.placeholder.empty()) c.text(lay_out({options_.placeholder, t.quiet()}, options_.multiline ? area.width : 0, laid.scale()), origin);
 				} else {
 					if (edit_.selecting()) {
@@ -76,7 +105,7 @@ namespace one::desktop {
 					c.text(laid, origin);
 				}
 				if (focused) {
-					auto at = laid.caret(edit_.caret());
+					auto at = laid.caret(edit_.caret() + composing_caret());
 					const auto& line = laid.lines()[std::min(at.line, laid.lines().size() - 1)];
 					c.box({origin.x + at.x / scale - 0.75f, origin.y + line.top / scale + 2, 1.5f, line.height / scale - 4}, {.fill = t.ink});
 				}
@@ -140,9 +169,16 @@ namespace one::desktop {
 			const text_layout& laid_out(float width) {
 				double scale = detail::layout_scale();
 				float wrap = options_.multiline ? width : 0;
-				if (!laid_ || laid_text_ != edit_.text() || wrap != width_ || scale != scale_) {
-					laid_ = lay_out({edit_.text(), current_theme().body()}, wrap, scale);
-					laid_text_ = edit_.text();
+				// What an input method is composing shows at the caret, underlined, before it's typed.
+				std::string shown = composing_.empty() ? edit_.text() : edit_.text() + '\0' + composing_;
+				if (!laid_ || laid_text_ != shown || wrap != width_ || scale != scale_) {
+					text_style body = current_theme().body(), composed = body;
+					composed.underline = true;
+					std::vector<text_span> spans{{edit_.text().substr(0, edit_.caret()), body}};
+					if (!composing_.empty()) spans.push_back({composing_, composed});
+					spans.push_back({edit_.text().substr(edit_.caret()), body});
+					laid_ = lay_out(spans, wrap, scale);
+					laid_text_ = shown;
 					width_ = wrap;
 					scale_ = scale;
 				}
@@ -196,8 +232,16 @@ namespace one::desktop {
 				reveal({area.x + at.x / scale, area.y + line.top / scale, 2, line.height / scale});
 			}
 
+			// Where the caret is within what's composed, in bytes from where it starts.
+			std::size_t composing_caret() const {
+				if (composing_.empty()) return 0;
+				return composing_at_ < 0 ? composing_.size() : std::min(composing_.size(), static_cast<std::size_t>(composing_at_));
+			}
+
 			state<std::string> value_;
 			field_options options_;
+			std::string composing_;  // what an input method is composing, shown but not yet typed
+			int composing_at_ = -1;
 			editing edit_;
 			float scroll_ = 0;  // across, for one line
 			std::optional<text_layout> laid_;

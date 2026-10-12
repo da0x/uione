@@ -355,6 +355,26 @@ TEST("a field takes what's typed into its state, with the clipboard, undo, and E
 	CHECK(title.peek() == "Ship it !now");
 }
 
+TEST("a field shows what an input method composes at its caret, and takes what it types, erasing what it says") {
+	one::desktop::state<std::string> name("Tokyo ");
+	auto root = placed(one::desktop::field(name, {}), {0, 0, 300, 40});
+	auto* typing = root->entry();
+	CHECK(typing != nullptr);
+	if (!typing) return;
+	std::size_t caret = 0, anchor = 0;
+	CHECK(typing->surrounding(caret, anchor) == "Tokyo ");
+	CHECK(caret == 6);
+	auto before = typing->caret_area();
+	typing->compose("にほ", -1);
+	CHECK(name.peek() == "Tokyo ");  // shown, not yet typed
+	CHECK(typing->caret_area().x > before.x);  // after what's composed
+	typing->commit("日本", 0, 0);
+	typing->compose("", -1);
+	CHECK(name.peek() == "Tokyo 日本");
+	typing->commit("東京", std::string("日本").size(), 0);
+	CHECK(name.peek() == "Tokyo 東京");
+}
+
 TEST("fields: typed in with a word selected, empty with a placeholder, and several lines, at scale 1") {
 	matches_golden("field-1", {360, 230}, 1, [](one::desktop::canvas& c) {
 		one::desktop::detail::theme_in_use() = &tested_theme();

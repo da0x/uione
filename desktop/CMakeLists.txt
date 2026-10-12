@@ -30,7 +30,8 @@ set(protocols
 	staging/fractional-scale/fractional-scale-v1.xml
 	unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
 	unstable/tablet/tablet-unstable-v2.xml
-	staging/cursor-shape/cursor-shape-v1.xml)
+	staging/cursor-shape/cursor-shape-v1.xml
+	unstable/text-input/text-input-unstable-v3.xml)
 set(protocol_sources)
 foreach(protocol ${protocols})
 	get_filename_component(name ${protocol} NAME_WE)
@@ -67,6 +68,7 @@ add_library(one_desktop
 	src/renderer.cpp
 	src/seat.cpp
 	src/text.cpp
+	src/text_input.cpp
 	src/ui.cpp
 	src/view.cpp
 	${protocol_sources})

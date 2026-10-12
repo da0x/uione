@@ -53,6 +53,21 @@ namespace one::desktop {
 
 	enum class cursor { normal, pointer, text };
 
+	// What an element typed into tells an input method, the way a language like
+	// Japanese is typed: the text around the caret and where the caret is; and what
+	// it's told, text being composed, shown but not yet typed, and text typed.
+	class text_entry {
+	public:
+		virtual ~text_entry() = default;
+		// The text, and the caret and the selection's other end in it, in bytes.
+		virtual const std::string& surrounding(std::size_t& caret, std::size_t& anchor) const = 0;
+		virtual bool multiline() const = 0;
+		virtual rect caret_area() = 0;  // in the window
+		virtual void compose(std::string text, int caret) = 0;  // the caret in it, or -1 for none
+		// Erases bytes before and after the caret, then types `text` there.
+		virtual void commit(std::string text, std::size_t erase_before, std::size_t erase_after) = 0;
+	};
+
 	// An element of a built view. Most programs use the functions below instead of
 	// these; a new kind of element derives from it.
 	class element {
@@ -92,6 +107,7 @@ namespace one::desktop {
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
 		virtual bool prefers_focus() const { return false; }  // given the keyboard first, as a list is
+		virtual text_entry* entry() { return nullptr; }       // typed into, as a field is
 		virtual one::desktop::cursor cursor() const { return on_click ? cursor::pointer : cursor::normal; }
 
 		// Takes over what a view kept from the element it replaces.

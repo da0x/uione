@@ -49,6 +49,8 @@ namespace one::desktop {
 		// Backspace and Delete: what's selected, or a character, or a word.
 		void erase_back(bool word);
 		void erase_forward(bool word);
+		// Bytes before and after the caret, as an input method asks, kept to whole characters.
+		void erase_around(std::size_t before, std::size_t after);
 
 		// Moving the caret, and with `extend` the selection's end with it.
 		void move_to(std::size_t at, bool extend);

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -25,6 +26,7 @@
 #include "one/desktop/theme.hpp"
 #include "one/desktop/ui.hpp"
 #include "renderer.hpp"
+#include "text-input-unstable-v3-client-protocol.h"
 #include "viewporter-client-protocol.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
@@ -56,6 +58,8 @@ namespace one::desktop {
 		inline void wl_data_device_release(wl_data_device* held) { ::wl_data_device_release(held); }
 		inline void wl_data_offer_destroy(wl_data_offer* held) { ::wl_data_offer_destroy(held); }
 		inline void wl_data_source_destroy(wl_data_source* held) { ::wl_data_source_destroy(held); }
+		inline void zwp_text_input_manager_v3_destroy(zwp_text_input_manager_v3* held) { ::zwp_text_input_manager_v3_destroy(held); }
+		inline void zwp_text_input_v3_destroy(zwp_text_input_v3* held) { ::zwp_text_input_v3_destroy(held); }
 	}  // namespace released
 
 	// The clipboard, through the seat's data device: what we offer, and what's offered.
@@ -67,6 +71,27 @@ namespace one::desktop {
 		wl_data_offer* coming = nullptr;                                 // an offer whose types are arriving
 		std::string coming_type;
 		owned<wl_data_device, released::wl_data_device_release> device;
+	};
+
+	// What an input method was last told of the field with the keyboard.
+	struct typing_told {
+		text_entry* entry = nullptr;
+		std::string text;
+		std::size_t caret = 0, anchor = 0;
+		std::array<int, 4> area{};  // the caret's, in the window
+		bool operator==(const typing_told&) const = default;
+	};
+
+	// The seat's text input, and what an input method has said since it was last done.
+	struct typing {
+		bool entered = false;  // the compositor says it's in one of our windows
+		bool enabled = false;
+		std::uint32_t commits = 0;
+		typing_told told;
+		std::string pending_preedit, pending_commit;
+		int pending_caret = 0;
+		std::uint32_t pending_before = 0, pending_after = 0;
+		owned<zwp_text_input_v3, released::zwp_text_input_v3_destroy> handle;
 	};
 
 	// The seat: its pointer and keyboard, which window each is over, and the keyboard's
@@ -82,6 +107,7 @@ namespace one::desktop {
 		owned<wl_pointer, released::wl_pointer_release> pointer;
 		owned<wp_cursor_shape_device_v1, released::wp_cursor_shape_device_v1_destroy> cursor;
 		one::desktop::clipboard clipboard;
+		one::desktop::typing typing;
 		std::uint32_t input_serial = 0;  // the last key's or button's, which the clipboard is set with
 		std::uint32_t pressed_at_time = 0;  // the last press: when, where, and how many came quickly before
 		point pressed_at;
@@ -109,6 +135,7 @@ namespace one::desktop {
 		owned<wp_viewporter, released::wp_viewporter_destroy> viewporter;
 		owned<wp_cursor_shape_manager_v1, released::wp_cursor_shape_manager_v1_destroy> cursors;
 		owned<wl_data_device_manager, released::wl_data_device_manager_destroy> data_devices;
+		owned<zwp_text_input_manager_v3, released::zwp_text_input_manager_v3_destroy> text_inputs;
 		std::optional<gpu::device> gpu;
 		std::optional<one::desktop::seat> input;
 		std::vector<std::unique_ptr<window>> windows;
@@ -178,5 +205,11 @@ namespace one::desktop {
 	// The clipboard's part, in clipboard.cpp: its device, once both the seat and the
 	// data device manager are bound.
 	void connect_clipboard(app::state& a);
+
+	// Input methods' part, in text_input.cpp: the seat's text input, once there's both
+	// a seat and the manager; and telling it about the field with the keyboard, after
+	// each frame is drawn.
+	void connect_text_input(app::state& a);
+	void tell_input_method(app::state& a);
 
 }  // namespace one::desktop

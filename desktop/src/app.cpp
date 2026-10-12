@@ -60,9 +60,13 @@ namespace one::desktop {
 			        } else if (is(wl_data_device_manager_interface)) {
 				        s->data_devices = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, std::min(version, 3u)));
 				        connect_clipboard(*s);
+			        } else if (is(zwp_text_input_manager_v3_interface)) {
+				        s->text_inputs = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1));
+				        connect_text_input(*s);
 			        } else if (is(wl_seat_interface) && !s->input) {
 				        bind_seat(*s, registry, name, version);
 				        connect_clipboard(*s);
+				        connect_text_input(*s);
 			        }
 		        },
 		    .global_remove = [](void*, wl_registry*, std::uint32_t) {},
@@ -269,6 +273,7 @@ namespace one::desktop {
 			std::erase_if(s.windows, [](const auto& w) { return w->internals().closed; });
 			if (s.windows.empty()) break;
 			for (auto& w : s.windows) draw(*w);
+			tell_input_method(s);
 
 			// Events already read, like a configure the GPU driver's own reading took in,
 			// are dispatched first; a window they made ready is drawn before waiting.

@@ -92,6 +92,15 @@ namespace one::desktop {
 		erase(caret_, word ? next_word(text_, caret_) : next_character(text_, caret_));
 	}
 
+	void editing::erase_around(std::size_t before, std::size_t after) {
+		if (before == 0 && after == 0) return;
+		keep(doing::erasing, false);
+		std::size_t from = clamped(caret_ > before ? caret_ - before : 0);
+		std::size_t to = after >= text_.size() - caret_ ? text_.size() : caret_ + after;
+		while (to < text_.size() && continuing(static_cast<unsigned char>(text_[to]))) ++to;
+		erase(from, to);
+	}
+
 	void editing::move_to(std::size_t at, bool extend) {
 		caret_ = clamped(at);
 		if (!extend) anchor_ = caret_;

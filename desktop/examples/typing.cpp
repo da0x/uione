@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Fields: a title of one line, submitted with Enter, and a description of several,
-// with what's typed shown beneath as it's kept.
+// with what's typed shown beneath as it's kept. `typing <title>` starts with a title.
 
 #include <format>
 #include <print>
@@ -12,14 +12,14 @@
 #include "one/desktop/theme.hpp"
 #include "one/desktop/ui.hpp"
 
-int main() {
+int main(int count, char** given) {
 	auto app = one::desktop::app::connect();
 	if (!app) {
 		std::println(stderr, "typing: {}", app.error());
 		return 1;
 	}
 	auto& window = app->open({.title = "Typing", .id = "org.uione.typing", .size = {640, 480}});
-	one::desktop::state<std::string> title, description;
+	one::desktop::state<std::string> title(count > 1 ? given[1] : ""), description;
 	one::desktop::state<std::string> submitted;
 	window.background = one::desktop::theme::harbor().page;
 	window.show([=] {
