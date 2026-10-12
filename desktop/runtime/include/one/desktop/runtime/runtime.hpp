@@ -126,6 +126,17 @@ namespace one::desktop::runtime {
 		// ran it says so itself, as a form does, the page's problem().
 		void run(const std::string& command, const value& fields, std::function<void(const answer&)> after = {}, bool says_why_itself = false);
 		bool running(const std::string& command) const;
+		// A question asked before a command runs from this page, like "Remove this
+		// person?", answered on the page itself; and the one being asked, if any.
+		void ask_before(const std::string& command, std::string question) { questions_[command] = std::move(question); }
+		struct asking {
+			std::string command, question;
+			value fields;
+			std::function<void(const answer&)> after;
+			bool says_why_itself = false;
+		};
+		state<std::optional<asking>> asked() { return asked_; }
+		void answer_asked(bool yes);
 		state<std::string> problem() { return problem_; }
 		// What turned a command down the last time it ran here, until it runs again.
 		std::string error(const std::string& command) const;
@@ -176,6 +187,8 @@ namespace one::desktop::runtime {
 		state<std::map<std::string, int>> running_;  // commands on their way, by name
 		state<std::map<std::string, std::string>> errors_;  // why each was last turned down
 		state<std::string> problem_;
+		std::map<std::string, std::string> questions_;
+		state<std::optional<asking>> asked_;
 	};
 
 	// The trail of pages opened, the last of them shown.

@@ -73,8 +73,67 @@ namespace one::desktop::runtime {
 		value fields = value::map();
 		bool allowed = true;
 		bool primary = false;
+		std::string id = "";  // what it acts on, sent as id
+		bool when = true;     // whether it applies now, like Follow for someone who doesn't
 	};
 	desktop::view command(page& p, command_button b);
+
+	// A question asked before a command runs from the page, like "Remove this person?".
+	desktop::view confirm(page& p, std::string command, std::string question);
+
+	// Buttons side by side, and what sits beside the page's title.
+	desktop::view actions(std::vector<desktop::view> all);
+	template <std::convertible_to<desktop::view>... V>
+	desktop::view actions(V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return actions(std::move(all));
+	}
+	desktop::view heading(page& p, desktop::view beside);
+
+	// A screen laid out in regions, like two_columns' main and side; a layout it
+	// doesn't know is one column, its regions one after another.
+	struct region {
+		std::string name;
+		desktop::view inside;
+	};
+	desktop::view layout(std::string name, std::vector<region> regions);
+
+	// Links down the side to a part's pages, like a project's settings, beside what
+	// this page shows; the one open marked.
+	struct menu_link {
+		std::string to;
+		std::string label;
+	};
+	desktop::view menu(page& p, std::vector<menu_link> links, desktop::view beside);
+
+	// One of several ways of showing the same thing, like as a table or a board,
+	// chosen with the buttons above it and kept while the page is open.
+	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, std::vector<desktop::view> ways);
+
+	// The steps something can be moved along from where it is, like an issue's stage,
+	// a button for each the person's roles may take.
+	struct steps_spec {
+		std::string command;
+		std::string id = "";
+		std::string field;
+		state<view_state> current;
+		state<view_state> steps;
+		std::string list;
+		std::string shown = "";  // a step's own title, like Start work
+		std::string to = "";     // the title of where it goes, like to.title
+		std::string from = "";
+		std::string here = "";
+		std::string held = "";
+		std::optional<state<view_state>> roles = std::nullopt;
+		std::string within = "";
+		std::string place = "project";
+		std::string role = "role";
+	};
+	desktop::view steps(page& p, steps_spec spec);
+
+	// An address with the page's own parameters filled in, like /:project/settings.
+	std::string filled(page& p, const std::string& route);
 
 	// A view's rows, or one of its lists, a column each for the fields named: a
 	// row opens `link`, filled from it, and runs each action on it, as its id.

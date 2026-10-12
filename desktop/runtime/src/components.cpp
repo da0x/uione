@@ -109,10 +109,12 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view command(page& p, command_button b) {
-		if (!b.allowed) return {};
+		if (!b.allowed || !b.when) return {};
 		bool busy = p.running(b.command);
 		std::string command = b.command;
 		value fields = b.fields;
+		if (!b.id.empty()) fields.fields["id"] = value(b.id);
+		if (!fields.is_map()) fields = value::map();
 		return desktop::button(busy ? b.label + "…" : b.label, [&p, command, fields, busy] {
 			if (!busy) p.run(command, fields);
 		}, b.primary);
@@ -165,6 +167,23 @@ namespace one::desktop::runtime {
 			};
 		}
 		return desktop::column(std::move(note), desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)), desktop::list(std::move(shown), std::move(opening))).spacing(6);
+	}
+
+	desktop::view confirm(page& p, std::string command, std::string question) {
+		p.ask_before(command, std::move(question));
+		return {};
+	}
+
+	std::string filled(page& p, const std::string& route) {
+		std::string out;
+		std::size_t at = 0;
+		while (at < route.size()) {
+			std::size_t end = route.find('/', at + 1);
+			std::string segment = route.substr(at + 1, end == std::string::npos ? std::string::npos : end - at - 1);
+			out += "/" + (segment.starts_with(':') ? p.param(segment.substr(1)) : segment);
+			at = end == std::string::npos ? route.size() : end;
+		}
+		return out.empty() ? "/" : out;
 	}
 
 	desktop::view filter_note(page& p) {

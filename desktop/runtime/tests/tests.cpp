@@ -140,6 +140,22 @@ TEST("a page opens by its address, with what its parameters said, and goes back"
 	CHECK(!nav.back());  // the first page stays
 }
 
+TEST("an address opens the screen most particular to it, a part named outright before a parameter") {
+	memory_source data;
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Issue", "/:project/:issue"});
+	s.screens.push_back({"Settings", "/:project/settings"});
+	s.screens.push_back({"Docs", "/docs/:page?"});
+	navigator nav(s, data);
+	std::map<std::string, std::string> params;
+	CHECK(nav.match("/atlas/settings", params)->title == "Settings");
+	CHECK(nav.match("/atlas/12", params)->title == "Issue");
+	CHECK(params.at("issue") == "12");
+	CHECK(nav.match("/docs", params)->title == "Docs");
+	CHECK(nav.match("/docs/start", params)->title == "Docs");
+	CHECK(nav.match("/docs/start/more", params) == nullptr);
+}
+
 TEST("a page's views are read live, and its title with them") {
 	memory_source data;
 	auto s = tracker();
@@ -543,6 +559,102 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	navigator nav(s, data);
 	nav.open("/atlas");
 	matches_golden("cards", {900, 520}, [&] { return nav.show(); });
+}
+
+namespace {
+
+	site with_issue() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"", "/:project/:issue", "", [](page& p) {
+			                     auto issue = p.view("projects::issue_page", p.param("issue"));
+			                     auto roles = p.view("projects::member_roles");
+			                     p.title({words("#"), live(issue, "number"), words(" "), live(issue, "title")});
+			                     confirm(p, "projects::issue::close", "Close this issue?");
+			                     heading(p, actions(command(p, {.command = "projects::issue::follow", .label = "Follow", .id = p.param("issue"), .when = !issue->data["followed"].as_bool()}),
+			                                        command(p, {.command = "projects::issue::close", .label = "Close", .id = p.param("issue")})));
+			                     std::vector<region> regions;
+			                     regions.push_back({"main", items(text({live(issue, "body")}))});
+			                     regions.push_back({"side", items(details(p, issue, {{"stage.title", "Stage"}, {"priority", "Priority"}}),
+			                                                      steps(p, {.command = "projects::issue::move",
+			                                                                .id = p.param("issue"),
+			                                                                .field = "stage",
+			                                                                .current = issue,
+			                                                                .steps = issue,
+			                                                                .list = "steps",
+			                                                                .to = "to.title",
+			                                                                .here = "stage.title",
+			                                                                .held = "roles",
+			                                                                .roles = roles,
+			                                                                .within = p.param("project")}))});
+			                     return items(layout("two_columns", std::move(regions)));
+		                     }});
+		s.screens.push_back({"Settings", "/:project/settings", "", [](page& p) {
+			                     return items(menu(p, {{"/:project/settings", "General"}, {"/:project/settings/people", "People"}, {"/:project/settings/roles", "Roles"}},
+			                                       items(text({words("Who may do what in this project.")}))));
+		                     }});
+		return s;
+	}
+
+	void fill_issue(memory_source& data, const std::string& role) {
+		data.set("projects::issue_page", "atlas-12",
+		         value(fields{{"number", 12},
+		                      {"title", "Copy an issue whole"},
+		                      {"body", "Copy its title, body and labels."},
+		                      {"stage", "s1"},
+		                      {"stage.title", "To do"},
+		                      {"priority", "high"},
+		                      {"steps", list{value(fields{{"from", "s1"}, {"to", "s2"}, {"to.title", "Doing"}, {"roles", list{"atlas-maintainer", "atlas-contributor"}}}),
+		                                     value(fields{{"from", "s1"}, {"to", "s3"}, {"to.title", "Done"}, {"roles", list{"atlas-maintainer"}}})}}}));
+		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", role}})}}}));
+	}
+
+}  // namespace
+
+TEST("a command is asked about first when the screen says so, runs on yes and not on cancel, and steps are those the reader's roles may take") {
+	memory_source data;
+	fill_issue(data, "atlas-contributor");
+	auto s = with_issue();
+	navigator nav(s, data);
+	nav.open("/atlas/atlas-12");
+	auto& p = nav.current();
+	auto root = built(nav);
+	p.run("projects::issue::close", value(fields{{"id", "atlas-12"}}));
+	CHECK(data.runs().empty());
+	CHECK(p.asked().peek().has_value());
+	p.answer_asked(false);
+	CHECK(data.runs().empty());
+	p.run("projects::issue::close", value(fields{{"id", "atlas-12"}}));
+	p.answer_asked(true);
+	CHECK(data.runs().size() == 1);
+	CHECK(data.runs().back().fields["id"].as_string() == "atlas-12");
+	// A contributor may move it to doing, not done; a reader holding no role there sees no steps.
+	std::vector<std::string> buttons;
+	std::function<void(one::desktop::element&)> look = [&](one::desktop::element& e) {
+		if (e.focusable() && e.children.empty() && e.cursor() == one::desktop::cursor::pointer && !e.prefers_focus()) buttons.push_back("button");
+		for (auto& c : e.children) look(*c);
+	};
+	look(*root);
+	CHECK(buttons.size() >= 4);  // name link, Follow, Close, Move to Doing
+	fill_issue(data, "atlas-reporter");
+	auto none = built(nav);
+	std::size_t before = buttons.size();
+	buttons.clear();
+	look(*none);
+	CHECK(buttons.size() == before - 1);  // no move for a reporter's role
+}
+
+TEST("an issue in two columns, its buttons beside its title, the steps it can take, and a question asked") {
+	memory_source data;
+	fill_issue(data, "atlas-maintainer");
+	auto s = with_issue();
+	navigator nav(s, data);
+	nav.open("/atlas/atlas-12");
+	matches_golden("two-columns", {1000, 520}, [&] { return nav.show(); });
+	nav.open("/atlas/settings");
+	nav.current().ask_before("projects::project::delete", "Delete this project and everything in it?");
+	nav.current().run("projects::project::delete", value::map());
+	matches_golden("menu", {1000, 420}, [&] { return nav.show(); });
 }
 
 int main() {

@@ -93,6 +93,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/client_source.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp
+		runtime/src/layout.cpp
 		runtime/src/memory_source.cpp
 		runtime/src/runtime.cpp
 		runtime/src/timeline.cpp)

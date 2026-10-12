@@ -308,7 +308,20 @@ namespace one::desktop::runtime {
 
 	void page::open(const std::string& address) { navigator_.open(address); }
 
+	void page::answer_asked(bool yes) {
+		auto was = asked_.peek();
+		asked_.set(std::nullopt);
+		if (!yes || !was) return;
+		std::string question = std::exchange(questions_[was->command], "");  // asked once
+		run(was->command, was->fields, was->after, was->says_why_itself);
+		questions_[was->command] = question;
+	}
+
 	void page::run(const std::string& command, const value& fields, std::function<void(const answer&)> after, bool says_why_itself) {
+		if (auto q = questions_.find(command); q != questions_.end() && !q->second.empty()) {
+			asked_.set(asking{command, q->second, fields, std::move(after), says_why_itself});
+			return;
+		}
 		// Told through states, which outlive the page if it's left before the answer.
 		auto running = running_;
 		auto problem = problem_;
@@ -346,14 +359,19 @@ namespace one::desktop::runtime {
 
 	navigator::navigator(const runtime::site& s, runtime::source& from) : site_(s), source_(from) {}
 
+	// The screen an address opens: of those whose route fits it, the one most
+	// particular, a part named outright before one a parameter takes, as the web's
+	// router does; and the first of those equally so.
 	const screen* navigator::match(const std::string& address, std::map<std::string, std::string>& params) const {
 		auto given = segments(address.substr(0, address.find('?')));
+		const screen* best = nullptr;
+		int best_score = -1;
 		for (const auto& s : site_.screens) {
 			auto wanted = segments(s.route);
 			std::map<std::string, std::string> found;
-			bool fits = true;
-			std::size_t at = 0;
-			for (; at < wanted.size() && fits; ++at) {
+			bool fits = given.size() <= wanted.size();
+			int score = 0;
+			for (std::size_t at = 0; at < wanted.size() && fits; ++at) {
 				const std::string& w = wanted[at];
 				bool optional = w.starts_with(':') && w.ends_with('?');
 				if (at >= given.size()) {
@@ -364,16 +382,20 @@ namespace one::desktop::runtime {
 					auto value = decoded(given[at]);
 					if (!value) fits = false;
 					else found[w.substr(1, optional ? w.size() - 2 : std::string::npos)] = *value;
+					score += optional ? 2 : 3;
 				} else if (w != given[at]) {
 					fits = false;
+				} else {
+					score += 10;  // as the web's router weighs a part named outright
 				}
 			}
-			if (fits && given.size() <= wanted.size()) {
+			if (fits && score > best_score) {
+				best = &s;
+				best_score = score;
 				params = std::move(found);
-				return &s;
 			}
 		}
-		return nullptr;
+		return best;
 	}
 
 	namespace {
@@ -430,6 +452,17 @@ namespace one::desktop::runtime {
 		for (auto& v : around.beside) title_row.push_back(std::move(v));
 		parts.push_back(desktop::row(std::move(title_row)).spacing(10).align(align::center));
 		for (auto& v : around.under) parts.push_back(std::move(v));
+		// A question asked before a command runs, answered here.
+		auto asked = p.asked();
+		if (const auto& asking = asked.get()) {
+			auto s = t.strong();
+			parts.push_back(desktop::column(desktop::text(asking->question, s),
+			                                desktop::row(desktop::button("Yes, go ahead", [&p] { p.answer_asked(true); }, true).autofocus(),
+			                                             desktop::button("Cancel", [&p] { p.answer_asked(false); })).spacing(8))
+			                    .spacing(10)
+			                    .padding(16)
+			                    .background({.fill = t.surface, .border = t.warning, .border_width = 1.5f, .radius = t.corners}));
+		}
 		if (std::string wrong = *p.problem(); !wrong.empty()) {
 			auto style = t.strong();
 			style.color = t.danger;
