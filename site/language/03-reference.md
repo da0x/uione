@@ -219,7 +219,8 @@ order, `redirect "/old" "https://example.com/new"`. `domain` can name a second
 domain after the first, `domain "uione.io" "www.uione.io"`: the same site answers
 there, and sends whoever opens it to the first, so one project serves both. A setting
 is said once,
-unless its type is a `list of`, whose lines each add one. A name the library
+unless its type is a `list of`, whose lines each add one, or one line several,
+`targets web desktop terminal`. A name the library
 doesn't define isn't a setting, and the checker says so with the ones there are.
 
 `one "0.4.0"` is the compiler the project is for, the last version it was checked
@@ -245,6 +246,16 @@ app's name at the top of every page. `serve` names a folder whose files are serv
 as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redirect "/install.sh"
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
+
+`targets web desktop terminal` names the apps `one build` writes from the screens:
+the web site in `build/web`, and a desktop app and a terminal app drawn from the same
+screens in `build/desktop` and `build/terminal`. With none named, it's the web alone.
+Each target draws the screen elements its toolkit has a part for, and says so in the
+compiler, so a screen using one a target doesn't draw is an error, on its line, for
+that target: "a board's move … along isn't drawn by the terminal app yet; take
+terminal out of targets, or build with --targets web". `one build --targets web`
+builds fewer of the targets for one run, never others. The desktop and terminal apps
+are being made now: until their parts are, naming them is an error for every screen.
 
 `theme papercolor` gives the site a [theme](#define-theme): its colors, light and
 dark, its fonts, its corners and its depth. It's uione's own `harbor` unless it

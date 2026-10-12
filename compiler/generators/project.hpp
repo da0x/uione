@@ -16,6 +16,7 @@
 #include "generators/roles.hpp"
 #include "generators/rules.hpp"
 #include "generators/web.hpp"
+#include "language/targets.hpp"
 #include "language/ast.hpp"
 #include "language/diagnostics.hpp"
 
@@ -32,7 +33,7 @@ namespace one::generators {
     // The views that say who holds which roles (roles.hpp) are added to the files
     // first, so every generator sees them.
     inline generated_project generate_project(std::vector<language::file>& files, const std::string& project_dir,
-                                              const std::string& out_dir) {
+                                              const std::string& out_dir, const std::vector<std::string>& targets = {"web"}) {
         for (auto& view : roles_of(files).files) files.push_back(std::move(view));
         generated_project out;
         auto api = generate_api(files, project_dir, out_dir + "/api");
@@ -44,7 +45,8 @@ namespace one::generators {
                 out.files.push_back(std::move(f));
             }
         };
-        under("web", generate_web(files, project_dir, out_dir + "/web"));
+        // Each app the project's targets name, from its screens.
+        if (language::listed(targets, "web")) under("web", generate_web(files, project_dir, out_dir + "/web"));
         under("api", api.files);
         under("", {rules_file(project_dir), indexes_file(files), generate_cpp(files, project_dir)});
         auto deploy = generate_infrastructure(files, project_dir, out_dir);

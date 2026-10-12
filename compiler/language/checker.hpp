@@ -37,6 +37,7 @@
 #include "language/lower.hpp"
 #include "language/parser.hpp"
 #include "language/names.hpp"
+#include "language/targets.hpp"
 #include "platform/files.hpp"
 
 namespace one::language {
@@ -3901,6 +3902,7 @@ namespace one::language {
         const std::size_t from = out.size();
         lower(files, out);
         checker(out).check(files);
+        check_targets(files, out);
         said_once(out, from);
     }
 
@@ -3909,6 +3911,7 @@ namespace one::language {
         const std::size_t from = out.size();
         lower(files, out);
         checker(out, &meant).check(files);
+        check_targets(files, out);
         said_once(out, from);
     }
 

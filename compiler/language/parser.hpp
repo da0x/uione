@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -370,21 +371,29 @@ namespace one::language {
                     advance();
                     s.to = dotted("when they last looked, like news.seen");
                     end_line();
-                    return s;
+                    return std::vector<setting>{s};
                 }
                 s.value_where = peek().where;
                 if (at(token_kind::string)) {
                     s.value = advance().text;
                     s.is_string = true;
                     if (at(token_kind::string)) s.to = advance().text;  // redirect "/from" "to"
-                } else {
-                    // corners square, or in full, corners one::corners::square.
-                    qualified_name value = parse_qualified_name("the setting's value");
-                    s.value = value.parts.back();
-                    if (value.parts.size() > 1) s.qualified = value.text();
+                    end_line();
+                    return std::vector<setting>{s};
                 }
+                // corners square, or in full, corners one::corners::square; a list may say
+                // several on a line, targets web desktop terminal, each one of its values.
+                std::vector<setting> said;
+                do {
+                    setting one = s;
+                    one.value_where = peek().where;
+                    qualified_name value = parse_qualified_name("the setting's value");
+                    one.value = value.parts.back();
+                    if (value.parts.size() > 1) one.qualified = value.text();
+                    said.push_back(std::move(one));
+                } while (at(token_kind::identifier));
                 end_line();
-                return s;
+                return said;
             };
             while (in_block()) {
                 // environment staging { ... }: a place the project runs, and what's its own there.
@@ -393,13 +402,13 @@ namespace one::language {
                     environment.where = advance().where;
                     environment.name = advance().text;
                     advance();
-                    while (in_block()) environment.settings.push_back(one_setting());
+                    while (in_block()) std::ranges::move(one_setting(), std::back_inserter(environment.settings));
                     environment.end = expect(token_kind::right_brace, "'}'").where;
                     end_line();
                     project.environments.push_back(std::move(environment));
                     continue;
                 }
-                project.settings.push_back(one_setting());
+                std::ranges::move(one_setting(), std::back_inserter(project.settings));
             }
             project.end = expect(token_kind::right_brace, "'}'").where;
             end_line();

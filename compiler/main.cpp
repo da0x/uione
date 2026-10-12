@@ -19,6 +19,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <optional>
 #include <vector>
 
 #include "driver.hpp"
@@ -31,7 +32,7 @@ namespace {
 
     int usage() {
         std::cerr << "usage: one check <path>...\n"
-                     "       one build <project> [--out <folder>] [--for <environment>]\n"
+                     "       one build <project> [--out <folder>] [--for <environment>] [--targets <target>[,<target>...]]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one --version\n";
@@ -54,9 +55,21 @@ namespace {
         return 0;
     }
 
-    int build(const std::string& project, std::string out, const std::string& environment) {
+    int build(const std::string& project, std::string out, const std::string& environment, const std::string& targets) {
         if (out.empty()) out = project + "/build";
-        auto built = one::driver::build(project, out, environment);
+        // --targets web,desktop: fewer of the project's targets, for this run.
+        std::optional<std::vector<std::string>> only;
+        if (!targets.empty()) {
+            only.emplace();
+            for (std::size_t from = 0; from <= targets.size();) {
+                std::size_t comma = targets.find(',', from);
+                std::string one_target = targets.substr(from, comma == std::string::npos ? std::string::npos : comma - from);
+                if (!one_target.empty()) only->push_back(one_target);
+                if (comma == std::string::npos) break;
+                from = comma + 1;
+            }
+        }
+        auto built = one::driver::build(project, out, environment, only);
         report(built.problems);
         if (!built.refusal.empty()) {
             std::cerr << "one: " << built.refusal << "\n";
@@ -156,13 +169,13 @@ int main(int argc, char** argv) {
         return check({args.begin() + 1, args.end()});
     }
     if (args.size() >= 2 && args.size() % 2 == 0 && args[0] == "build") {
-        std::string out, environment;
+        std::string out, environment, targets;
         for (std::size_t i = 2; i < args.size(); i += 2) {
-            std::string& value = args[i] == "--out" ? out : args[i] == "--for" ? environment : out;
-            if ((args[i] != "--out" && args[i] != "--for") || !value.empty() || args[i + 1].empty()) return usage();
+            std::string& value = args[i] == "--out" ? out : args[i] == "--for" ? environment : args[i] == "--targets" ? targets : out;
+            if ((args[i] != "--out" && args[i] != "--for" && args[i] != "--targets") || !value.empty() || args[i + 1].empty()) return usage();
             value = args[i + 1];
         }
-        return build(args[1], out, environment);
+        return build(args[1], out, environment, targets);
     }
     if (args.size() == 2 && args[0] == "show") return show(args[1]);
     return usage();

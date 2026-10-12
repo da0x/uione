@@ -12,6 +12,14 @@ namespace one {
 		radix  "Radix"
 	}
 
+	// An app one build writes from a project's screens: the web site, and a desktop
+	// and a terminal app drawn from the same screens.
+	enum target {
+		web       "Web"
+		desktop   "Desktop"
+		terminal  "Terminal"
+	}
+
 	// A way people sign in, one to a line.
 	enum signin {
 		google     "Google"
@@ -114,6 +122,10 @@ namespace one {
 		ui          ui
 		// The ways people sign in, one to a line.
 		signin      list of signin
+		// The apps one build writes from the screens, several to a line, like targets web
+		// desktop terminal; the web alone when it isn't said. Every screen has to be one
+		// each of them draws.
+		targets     list of target
 		// The site's icon: an SVG file beside the project's .one files.
 		icon        file
 		// How the site looks: a theme of its own, or uione's, like papercolor.

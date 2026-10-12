@@ -1105,10 +1105,32 @@ namespace one::driver {
     // Checks a project, and only when it's clean, generates everything it becomes,
     // for the environment named, or the first. Nothing is written; that's up to the
     // caller.
-    inline built build(const std::string& project, const std::string& out, const std::string& environment = "") {
+    // The targets --targets names, while a build checks and generates, and none after.
+    class building_only {
+    public:
+        explicit building_only(std::optional<std::vector<std::string>> targets) { language::building_targets() = std::move(targets); }
+        ~building_only() { language::building_targets().reset(); }
+        building_only(const building_only&) = delete;
+        building_only& operator=(const building_only&) = delete;
+    };
+
+    inline built build(const std::string& project, const std::string& out, const std::string& environment = "",
+                       std::optional<std::vector<std::string>> targets = std::nullopt) {
         built result;
+        building_only only(targets);
         std::vector<language::file> files;
         std::size_t count = check_project(project, result.problems, &files);
+        if (targets && count > 0) {
+            // --targets builds fewer than the project says, never others.
+            auto said = language::targets_of(files);
+            for (const auto& t : *targets) {
+                if (language::listed(said, t)) continue;
+                std::string listed;
+                for (const auto& s : said) listed += (listed.empty() ? "" : " ") + s;
+                result.refusal = "--targets names " + t + ", which this project doesn't build; its targets are " + listed;
+                return result;
+            }
+        }
         if (!result.problems.empty() || count == 0) {
             result.refusal = "nothing was built, because the project has errors";
             return result;
@@ -1118,7 +1140,7 @@ namespace one::driver {
             result.refusal = wrong;
             return result;
         }
-        auto generated = generators::generate_project(files, project, out);
+        auto generated = generators::generate_project(files, project, out, targets ? *targets : language::targets_of(files));
         if (!generated.errors.empty()) {
             result.problems = std::move(generated.errors);
             result.refusal = "nothing was built, because the backend can't be generated yet";
