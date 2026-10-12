@@ -10,10 +10,11 @@ curl -fsSL https://uione.io/install.sh | sh
 ```
 
 The installer picks the build for your Mac, checks it against the release's
-checksums, and puts it in `~/.local/bin`. It changes nothing else: no profile is
-edited, and nothing runs as root. [Read it first](/install.sh) if you like, and
-set `UIONE_VERSION=0.9.8` for a particular release or `UIONE_INSTALL` for another
-folder. On an Intel Mac, [build it from source](/install/source).
+checksums, and puts it in `~/.local/bin`, with the libraries the desktop and
+terminal apps it writes are built on in `~/.local/share/uione/<version>`. It
+changes nothing else: no profile is edited, and nothing runs as root. [Read it
+first](/install.sh) if you like, and set `UIONE_VERSION=0.9.8` for a particular
+release or `UIONE_INSTALL` for another folder. On an Intel Mac, [build it from source](/install/source).
 
 Check it:
 

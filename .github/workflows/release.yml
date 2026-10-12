@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 # Builds the compiler for each platform when a release is tagged, like v0.2.0, and
-# publishes it: the builds and their SHA256SUMS on the GitHub release, which
-# uione.io/install.sh downloads, the container image on ghcr.io/da0x/uione, and the
+# publishes it: the builds, the libraries the desktop and terminal apps it writes are
+# built on, and their SHA256SUMS on the GitHub release, which uione.io/install.sh
+# downloads, the container image on ghcr.io/da0x/uione, and the
 # image deploys are built in on ghcr.io/da0x/uione-builder.
 
 name: release
@@ -66,9 +67,11 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      - name: Pack the libraries the desktop and terminal apps are built on
+        run: tools/release/libraries release
       - name: List the builds' checksums
         working-directory: release
-        run: sha256sum one-*.tar.gz > SHA256SUMS && cat SHA256SUMS
+        run: sha256sum one-*.tar.gz uione-libraries.tar.gz > SHA256SUMS && cat SHA256SUMS
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

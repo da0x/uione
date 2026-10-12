@@ -1,0 +1,17 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Packs the libraries the desktop and terminal apps one build writes are built on,
+# uione-libraries.tar.gz: client/, screens/, desktop/, terminal/ and markdown/ as they
+# are in the repository at the commit checked out, with the license. install.sh puts
+# them in ~/.local/share/uione/<version>, where a generated CMakeLists.txt looks.
+#
+#   tools/release/libraries <folder>
+
+set -eu
+root=$(cd "$(dirname "$0")/../.." && pwd)
+out=$1
+mkdir -p "$out"
+git -C "$root" archive --format=tar.gz -o "$(cd "$out" && pwd)/uione-libraries.tar.gz" HEAD client screens desktop terminal markdown LICENSE
+echo "$out/uione-libraries.tar.gz"

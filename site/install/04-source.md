@@ -20,6 +20,10 @@ one --version
 
 `make -C compiler test` builds it and runs its tests as well.
 
+The desktop and terminal apps it writes are built against this checkout's
+libraries when `UIONE` names it: `UIONE=~/uione cmake -S build/desktop -B
+build/desktop/out`.
+
 ## The browser build
 
 The same compiler builds to WebAssembly with Emscripten, in Docker, for the studio
