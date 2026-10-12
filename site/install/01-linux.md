@@ -13,7 +13,7 @@ The installer picks the build for your machine, checks it against the release's
 checksums, and puts it in `~/.local/bin`, with the libraries the desktop and
 terminal apps it writes are built on in `~/.local/share/uione/<version>`. It
 changes nothing else: no profile is edited, and nothing runs as root. [Read it
-first](/install.sh) if you like, and set `UIONE_VERSION=0.10.0` for a particular
+first](/install.sh) if you like, and set `UIONE_VERSION=0.10.1` for a particular
 release or `UIONE_INSTALL` for another folder.
 
 The build is a single static binary, so it runs on any distribution. Check it:
@@ -35,7 +35,7 @@ uione in [the studio](https://uione.io/signin), in your browser, with every line
 
 ```sh
 mkdir tasks && cd tasks
-curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.10.0/examples/tasks/main.one -o main.one
+curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.10.1/examples/tasks/main.one -o main.one
 one check .
 one build .
 ```
