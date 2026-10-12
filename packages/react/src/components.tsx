@@ -733,6 +733,12 @@ export function listHas(list: unknown, item: unknown): boolean {
   return Array.isArray(list) && list.includes(item);
 }
 
+// Whether a field holds none: it's missing or null, or it's empty text or an empty
+// list, as an entity's field reads before it's given a value.
+export function isNone(value: unknown): boolean {
+  return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
+}
+
 // Whether a person holds one of some roles within something, like maintainer in a
 // project, as the view of their roles says: its rows each name where, in a field
 // like project, and the role. Not while it hasn't arrived, so a button that may not

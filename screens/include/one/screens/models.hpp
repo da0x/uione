@@ -51,6 +51,7 @@ namespace one::screens {
 	// before everything.
 	bool ready(const state<view_state>& v);
 	const value& at(const state<view_state>& v, const std::string& field);
+	bool none(const value& v);
 	bool same(const value& a, const value& b);
 	bool has(const value& list, const value& item);
 	int compared(const value& a, const value& b);

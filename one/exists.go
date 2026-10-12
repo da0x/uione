@@ -26,7 +26,7 @@ func Exists[E any, P entityPointer[E]](c *Ctx, q Query, keep func(*E) (bool, err
 		switch {
 		case cond.has:
 			query = query.Where(cond.field, "array-contains", cond.value)
-		case !cond.except:
+		case !cond.except && cond.value != nil:
 			query = query.Where(cond.field, "==", cond.value)
 		}
 	}
@@ -38,6 +38,11 @@ func Exists[E any, P entityPointer[E]](c *Ctx, q Query, keep func(*E) (bool, err
 		excepted := false
 		for _, cond := range q.conditions {
 			if cond.except && same(doc.Data()[cond.field], cond.value) {
+				excepted = true
+			}
+			// A field wanted to have none, which Firestore can't ask of a field that's
+			// missing or empty.
+			if !cond.except && !cond.has && cond.value == nil && !none(doc.Data()[cond.field]) {
 				excepted = true
 			}
 		}

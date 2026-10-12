@@ -295,7 +295,15 @@ namespace one::screens {
 
 	const value& at(const state<view_state>& v, const std::string& field) { return field_of(v.get().data, field); }
 
+	// Whether a field holds none: it's missing or null, or it's empty text or an empty
+	// list, as an entity's field reads before it's given a value.
+	bool none(const value& v) {
+		return v.is_null() || (v.is_string() && v.as_string().empty()) || (v.is_array() && v.as_array().empty());
+	}
+
 	bool same(const value& a, const value& b) {
+		// Compared with none, anything holding nothing is none.
+		if (a.is_null() || b.is_null()) return none(a) && none(b);
 		// A number is a number, whether it came as a whole one or not.
 		if (number_of(a) && number_of(b)) return *number_of(a) == *number_of(b);
 		return ember::to_json(a) == ember::to_json(b);

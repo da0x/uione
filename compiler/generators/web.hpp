@@ -765,6 +765,25 @@ namespace one::generators {
             return ready + "(" + test + ")";
         }
 
+        // x == none, or none != x: the side that isn't none, when the other is. A field
+        // holds none when it's missing, null, empty text or an empty list, which
+        // isNone asks, so the generated code doesn't compare with null alone.
+        std::optional<const language::expression*> against_none(screen_parts& parts, const language::binary_expression& binary) {
+            using language::token_kind;
+            if (binary.op != token_kind::equal && binary.op != token_kind::not_equal) return std::nullopt;
+            auto none = [](const language::expression& side) {
+                auto* name = std::get_if<language::name_expression>(&side.node);
+                return name && name->name.text() == "none";
+            };
+            if (!none(*binary.left) && !none(*binary.right)) return std::nullopt;
+            parts.components.insert("isNone");
+            return none(*binary.right) ? binary.left.get() : binary.right.get();
+        }
+
+        std::string none_test(const language::binary_expression& binary, const std::string& other) {
+            return std::string(binary.op == language::token_kind::not_equal ? "!" : "") + "isNone(" + other + ")";
+        }
+
         std::string condition_of(screen_parts& parts, const std::string& ns, const language::expression& e, std::set<std::string>& read) {
             using language::token_kind;
             if (auto* binary = std::get_if<language::binary_expression>(&e.node)) {
@@ -773,6 +792,7 @@ namespace one::generators {
                     parts.components.insert("listHas");
                     return "listHas(" + condition_of(parts, ns, *binary->left, read) + ", " + condition_of(parts, ns, *binary->right, read) + ")";
                 }
+                if (auto other = against_none(parts, *binary)) return none_test(*binary, condition_of(parts, ns, **other, read));
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
                                : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"
@@ -846,6 +866,7 @@ namespace one::generators {
                     parts.components.insert("listHas");
                     return "listHas(" + fresh_condition(parts, ns, *binary->left, views) + ", " + fresh_condition(parts, ns, *binary->right, views) + ")";
                 }
+                if (auto other = against_none(parts, *binary)) return none_test(*binary, fresh_condition(parts, ns, **other, views));
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : "||";
                 return "(" + fresh_condition(parts, ns, *binary->left, views) + " " + op + " " + fresh_condition(parts, ns, *binary->right, views) + ")";
@@ -864,6 +885,7 @@ namespace one::generators {
                     parts.components.insert("listHas");
                     return "listHas(" + row_condition(parts, *binary->left) + ", " + row_condition(parts, *binary->right) + ")";
                 }
+                if (auto other = against_none(parts, *binary)) return none_test(*binary, row_condition(parts, **other));
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
                                : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"

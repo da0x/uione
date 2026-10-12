@@ -865,7 +865,7 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 				return nil, err
 			}
 			for _, doc := range docs {
-				if !seen[doc.Ref.Path] && !excepted(ctx, way, doc, subject, row) {
+				if !seen[doc.Ref.Path] && !leftOut(ctx, way, doc, subject, row) {
 					seen[doc.Ref.Path] = true
 					all = append(all, doc)
 				}
@@ -878,7 +878,8 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 // stores is one way of a query as what the store is asked: one query, or, for a
 // condition read through what the entity points at, like board.followers, one for
 // each 30 of what it points at, the boards the person follows, as Firestore allows.
-// An Except isn't asked; excepted checks it on what comes back.
+// An Except isn't asked, nor a field having none, which Firestore can't ask of a field
+// that's missing or empty; leftOut checks them on what comes back.
 func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]firestore.Query, error) {
 	s := a.reg.schemas[way.typ]
 	query := a.store.Collection(s.collection).Query
@@ -910,7 +911,7 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]fir
 			}
 		case c.has:
 			query = query.Where(c.field, "array-contains", givenIn(ctx, c.value, subject, row))
-		case !c.except:
+		case !c.except && c.value != nil:
 			query = query.Where(c.field, "==", givenIn(ctx, c.value, subject, row))
 		}
 	}
@@ -924,10 +925,14 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]fir
 	return queries, nil
 }
 
-// excepted says whether one of a way's Excepts leaves a document out.
-func excepted(ctx context.Context, way Query, doc *firestore.DocumentSnapshot, subject, row string) bool {
+// leftOut says whether one of a way's Excepts, or a field it wants to have none,
+// leaves a document out.
+func leftOut(ctx context.Context, way Query, doc *firestore.DocumentSnapshot, subject, row string) bool {
 	for _, c := range way.conditions {
 		if c.except && same(doc.Data()[c.field], givenIn(ctx, c.value, subject, row)) {
+			return true
+		}
+		if !c.except && !c.has && !c.gate && c.value == nil && !strings.Contains(c.field, ".") && !none(doc.Data()[c.field]) {
 			return true
 		}
 	}
@@ -974,7 +979,7 @@ func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*fire
 				}
 				var fresh []*firestore.DocumentSnapshot
 				for _, doc := range got {
-					if !excepted(ctx, way, doc, subject, "") {
+					if !leftOut(ctx, way, doc, subject, "") {
 						fresh = append(fresh, doc)
 					}
 				}
@@ -1005,7 +1010,7 @@ func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*fire
 // unless an Except has to be checked on each one.
 func (a *App) count(ctx context.Context, q Query, subject string) (int64, error) {
 	for _, c := range q.conditions {
-		if c.except || c.gate || strings.Contains(c.field, ".") || len(q.or) > 0 {
+		if c.except || c.gate || c.value == nil || strings.Contains(c.field, ".") || len(q.or) > 0 {
 			docs, err := a.find(ctx, q, subject, "")
 			return int64(len(docs)), err
 		}
@@ -1054,7 +1059,7 @@ func given(v any, subject, row string) any {
 // StatusWithdrawn is a named string, so it's compared as the text it's stored as.
 func same(stored, wanted any) bool {
 	if wanted == nil {
-		return stored == nil
+		return none(stored)
 	}
 	w := reflect.ValueOf(wanted)
 	if w.Kind() == reflect.String {
@@ -1062,6 +1067,23 @@ func same(stored, wanted any) bool {
 		return ok && text == w.String()
 	}
 	return reflect.DeepEqual(stored, wanted)
+}
+
+// none says whether a stored field holds nothing: it's missing or null, or it's
+// empty text, an empty list, or a time never set, as an entity's field reads before
+// it's given a value.
+func none(stored any) bool {
+	switch v := stored.(type) {
+	case nil:
+		return true
+	case string:
+		return v == ""
+	case []any:
+		return len(v) == 0
+	case time.Time:
+		return v.IsZero()
+	}
+	return false
 }
 
 // called is what an id, or each in a list of them, names something by: its title, or

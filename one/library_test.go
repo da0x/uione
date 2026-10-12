@@ -27,6 +27,7 @@ type Book struct {
 	one.Record
 	Title  string     `firestore:"title" one:"required"`
 	Status BookStatus `firestore:"status" one:"choices=on_shelf|lent|withdrawn,default=on_shelf"`
+	Series string     `firestore:"series"`
 }
 
 type Loan struct {
@@ -93,6 +94,14 @@ var library = one.Module("library",
 		Order(one.By("title", SortTitle)).
 		Fields("title", "status").
 		Value("lent_to", one.First[Loan]("book", one.Row).And("returned_at", nil), "member"),
+	one.View("standalone").Public().
+		Each(one.Where[Book]("series", nil)).
+		Order("title").
+		Fields("title"),
+	one.View("in_series").Public().
+		Each(one.All[Book]().Except("series", nil)).
+		Order("title").
+		Fields("title"),
 	one.View("desk").Public().
 		Each(one.Where[Loan]("returned_at", nil)).
 		Fields("book.title", "member"),
@@ -147,6 +156,19 @@ func TestTheShelfLeavesOutWithdrawnBooksAndIgnoresTheInItsOrder(t *testing.T) {
 	h.mustRun("library/book/withdraw", token, map[string]any{"id": anathem})
 	if got := column(h.view("library::shelf"), "title"); !reflect.DeepEqual(got, []any{"Dune", "The Hobbit", "Ivanhoe"}) {
 		t.Errorf("after withdrawing Anathem the shelf holds %v", got)
+	}
+}
+
+func TestATextFieldWithNoValueIsNoneAsTheViewsAskIt(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("librarian@example.com")
+	h.mustRun("library/book/create", token, map[string]any{"title": "Emma"})
+	h.mustRun("library/book/create", token, map[string]any{"title": "Dune", "series": "Dune"})
+	if got := column(h.view("library::standalone"), "title"); !reflect.DeepEqual(got, []any{"Emma"}) {
+		t.Errorf("the books in no series are %v", got)
+	}
+	if got := column(h.view("library::in_series"), "title"); !reflect.DeepEqual(got, []any{"Dune"}) {
+		t.Errorf("the books in a series are %v", got)
 	}
 }
 

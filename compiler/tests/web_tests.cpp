@@ -305,7 +305,7 @@ TEST_CASE("a text can be shown only while its when holds") {
     auto screens_files = generate_at(dir.string());
     const auto* screens = find(screens_files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"({issuePage.status === "live" && (((issuePage.data?.["owner"] ?? null) !== null)) && <Text>Taken by <Live view={issuePage} field="owner_name" /></Text>})") !=
+    CHECK(screens->content.find(R"({issuePage.status === "live" && (!isNone((issuePage.data?.["owner"] ?? null))) && <Text>Taken by <Live view={issuePage} field="owner_name" /></Text>})") !=
           std::string::npos);
     fs::remove_all(dir);
 }

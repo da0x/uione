@@ -87,6 +87,16 @@ TEST("a value reads as the web shows it: a date alone as that day, wherever it's
 	CHECK(show(value(std::vector<value>{"ui", "", "desktop"})) == "ui, desktop");
 }
 
+TEST("a field with nothing in it is none, as a condition compares it") {
+	CHECK(same(value(""), value()));
+	CHECK(same(value(std::vector<value>{}), value()));
+	CHECK(same(value(), value()));
+	CHECK(!same(value("duplicate"), value()));
+	CHECK(!same(value(0), value()));
+	CHECK(same(value("open"), value("open")));
+	CHECK(!same(value(""), value("open")));
+}
+
 TEST("a change is said in words, a command's action as done") {
 	CHECK(done("close") == "closed");
 	CHECK(done("take_over") == "took over");
