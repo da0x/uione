@@ -812,6 +812,29 @@ TEST("a grid adds what goes between two from its empty cell, and changes what's 
 	matches_golden("workflow", {1000, 640}, [&] { return nav.show(); });
 }
 
+TEST("a front page: a hero, links within the app and out of it, a badge beside the name, and the footer; and a set of written pages") {
+	memory_source data;
+	data.sign_in(person{"maya", "Maya Garcia"});
+	data.set("projects::news", "maya", value(fields{{"unread", 3}}));
+	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.badges = {{"projects::news", "unread", "new"}};
+	s.footer = [](page& p) { return items(text({words("neotrac is open source.")}), link(p, "Source", "https://github.com/da0x/neotrac")); };
+	s.screens.push_back({"neotrac", "/", "", [](page& p) {
+		                     return items(hero("Boards where people and agents move the same issues", text({words("Each project sets its own stages and who may move what.")}),
+		                                       actions(link(p, "Browse public projects", "/projects"), link(p, "Why neotrac", "/docs/why"))));
+	                     }});
+	s.screens.push_back({"Docs", "/docs/:page?", "", [](page& p) {
+		                     return items(pages(p, "/docs", {{"start", "Getting started", "Make a project, then a board.\n\n- Name it\n- Add stages"},
+		                                                     {"why", "Why neotrac", "Every change is **kept**, so anyone can read how work got done."}}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("front-page", {1000, 520}, [&] { return nav.show(); });
+	nav.open("/docs/why");
+	matches_golden("pages", {1000, 420}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

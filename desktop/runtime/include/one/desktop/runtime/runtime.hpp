@@ -50,11 +50,24 @@ namespace one::desktop::runtime {
 
 	// The app: its name, the id its windows are grouped by, how it looks, and its
 	// screens, the first match for an address opening it.
+	struct site;
+
+	// A number beside the app's name, like what's new to whoever's reading, shown
+	// while it's more than none.
+	struct badge {
+		std::string view;
+		std::string field;
+		std::string label;
+	};
+
 	struct site {
 		std::string name;
 		std::string id = "org.uione.app";
 		desktop::theme look = desktop::theme::harbor();
 		std::vector<screen> screens = {};
+		std::vector<badge> badges = {};
+		// What's at the foot of every page, built as a screen is.
+		std::function<desktop::view(page&)> footer = {};
 	};
 
 	// Text a screen shows: words as written, and values read live from a view.
@@ -214,6 +227,8 @@ namespace one::desktop::runtime {
 		desktop::view show();
 		// A screen's own part: its title and what it's built of, scrolled.
 		desktop::view page_view(page& p);
+		// Views read for the bar across the top, like its badges', kept while the app runs.
+		state<view_state> view(const std::string& name, const std::string& subject = "");
 
 		// The screen whose route an address matches, and what its parameters said.
 		const screen* match(const std::string& address, std::map<std::string, std::string>& params) const;
@@ -222,7 +237,8 @@ namespace one::desktop::runtime {
 		const runtime::site& site_;
 		runtime::source& source_;
 		std::vector<std::unique_ptr<page>> trail_;
-		state<int> changed_ = 0;  // read by the window's view, so a page opened or left builds it again
+		state<int> changed_ = 0;
+		std::map<std::string, std::pair<state<view_state>, listening>> views_;  // read by the window's view, so a page opened or left builds it again
 	};
 
 	// Runs a site in a window until it's closed: opens `address`, or the first

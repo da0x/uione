@@ -133,6 +133,27 @@ namespace one::desktop::runtime {
 
 	desktop::view markdown_view(const std::string& source) { return blocks(md::parse(source)); }
 
+	desktop::view pages(page& p, std::string base, std::vector<written_page> all) {
+		if (all.empty()) return {};
+		const auto& t = current_theme();
+		std::string here = p.param("page");
+		const written_page* shown = &all.front();
+		for (const auto& w : all) {
+			if (w.name == here) shown = &w;
+		}
+		std::vector<desktop::view> side;
+		for (const auto& w : all) {
+			if (&w == shown) {
+				auto s = t.strong();
+				s.color = t.accent;
+				side.push_back(desktop::text(w.title, s).padding(edges(5, 10)).background({.fill = t.sunken, .radius = std::min(t.corners, 6.f)}));
+			} else {
+				side.push_back(desktop::link(w.title, [&p, to = base + "/" + w.name] { p.open(to); }, t.body()).padding(edges(5, 10)));
+			}
+		}
+		return desktop::row(desktop::column(std::move(side)).spacing(2).width(200), markdown_view(shown->source).grow()).spacing(28).align(align::start);
+	}
+
 	desktop::view markdown(page&, state<view_state> from, std::string field, std::string empty) {
 		const view_state& v = *from;
 		if (v.status != status::ready) return {};

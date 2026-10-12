@@ -58,7 +58,18 @@ namespace one::desktop::runtime {
 		(all.push_back(desktop::view(std::forward<V>(each))), ...);
 		return section(std::move(title), std::move(all));
 	}
+	// A link to another page, its parameters the page's own, like /:project/settings;
+	// or to another site, opened in the browser.
 	desktop::view link(page& p, std::string words, std::string to);
+
+	// A front page's opening: its title, large, over what it says.
+	desktop::view hero(std::string title, std::vector<desktop::view> inside);
+	template <std::convertible_to<desktop::view>... V>
+	desktop::view hero(std::string title, V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return hero(std::move(title), std::move(all));
+	}
 
 	// Whether the person reading may run a command within a place, from the view of
 	// their roles: by what their role's record allows, or by holding a role that grants it.
@@ -381,6 +392,6 @@ namespace one::desktop::runtime {
 	std::string when(const value& at);
 
 	// A document's fields, each beside its label.
-	desktop::view details(page& p, state<view_state> from, std::vector<column> fields);
+	desktop::view details(page& p, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices = {});
 
 }  // namespace one::desktop::runtime

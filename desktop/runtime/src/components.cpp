@@ -5,8 +5,13 @@
 
 #include <one/client/client.hpp>
 
+#include <spawn.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
 #include <algorithm>
 #include <format>
+#include <thread>
 
 namespace one::desktop::runtime {
 
@@ -33,6 +38,17 @@ namespace one::desktop::runtime {
 				return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, s);
 			}
 			return std::nullopt;
+		}
+
+		// Another site's address, in the browser, without waiting on it.
+		void open_in_browser(const std::string& address) {
+			pid_t child = 0;
+			char opener[] = "xdg-open";
+			std::string copied = address;
+			char* arguments[] = {opener, copied.data(), nullptr};
+			if (posix_spawnp(&child, opener, nullptr, nullptr, arguments, environ) == 0) {
+				std::thread([child] { waitpid(child, nullptr, 0); }).detach();
+			}
 		}
 
 	}  // namespace
@@ -90,7 +106,20 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view link(page& p, std::string words, std::string to) {
-		return desktop::link(std::move(words), [&p, to] { p.open(to); });
+		if (to.starts_with("https://") || to.starts_with("http://") || to.starts_with("mailto:")) {
+			return desktop::link(std::move(words), [to] { open_in_browser(to); });
+		}
+		std::string address = to.find(':') != std::string::npos ? filled(p, to) : to;
+		return desktop::link(std::move(words), [&p, address] { p.open(address); });
+	}
+
+	desktop::view hero(std::string title, std::vector<desktop::view> inside) {
+		std::vector<desktop::view> parts;
+		parts.push_back(desktop::text(std::move(title), current_theme().heading(32)));
+		for (auto& v : inside) {
+			if (v.get()) parts.push_back(std::move(v));
+		}
+		return desktop::column(std::move(parts)).spacing(14).padding(edges(16, 0, 24, 0));
 	}
 
 	bool allows(const state<view_state>& roles, const std::string& place_field, const std::string& place, const std::string& command, const std::string& allowed) {
@@ -204,13 +233,18 @@ namespace one::desktop::runtime {
 		});
 	}
 
-	desktop::view details(page&, state<view_state> from, std::vector<column> fields) {
+	desktop::view details(page&, state<view_state> from, std::vector<column> fields, std::map<std::string, std::vector<desktop::option>> choices) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
 		std::vector<desktop::view> shown;
 		for (const auto& f : fields) {
 			std::string said_now = show(field_of(v.data, f.field));
+			if (auto found = choices.find(f.field); found != choices.end()) {
+				for (const auto& o : found->second) {
+					if (o.value == said_now) said_now = o.label;
+				}
+			}
 			shown.push_back(desktop::row(quiet(f.label).width(140), desktop::text(said_now.empty() ? "—" : said_now, t.body()).grow()).spacing(8));
 		}
 		return desktop::column(std::move(shown)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});

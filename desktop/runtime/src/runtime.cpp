@@ -448,10 +448,14 @@ namespace one::desktop::runtime {
 		auto around = p.take_around();
 		std::vector<desktop::view> parts;
 		for (auto& v : around.above) parts.push_back(std::move(v));
-		std::vector<desktop::view> title_row;
-		title_row.push_back(desktop::text(p.title(), t.heading(26)).grow());
-		for (auto& v : around.beside) title_row.push_back(std::move(v));
-		parts.push_back(desktop::row(std::move(title_row)).spacing(10).align(align::center));
+		// A page called by the app's own name, like its front page, doesn't say it again under the bar.
+		std::string title = p.title();
+		if (!(title.empty() || title == site_.name) || !around.beside.empty()) {
+			std::vector<desktop::view> title_row;
+			title_row.push_back(desktop::text(title == site_.name ? "" : title, t.heading(26)).grow());
+			for (auto& v : around.beside) title_row.push_back(std::move(v));
+			parts.push_back(desktop::row(std::move(title_row)).spacing(10).align(align::center));
+		}
 		for (auto& v : around.under) parts.push_back(std::move(v));
 		// A question asked before a command runs, answered here.
 		auto asked = p.asked();
@@ -470,8 +474,22 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::text(wrong, style));
 		}
 		parts.push_back(std::move(built));
+		if (site_.footer) {
+			parts.push_back(desktop::divider());
+			parts.push_back(site_.footer(p));
+		}
 		if (p.take_wide()) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
 		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
+	}
+
+	state<view_state> navigator::view(const std::string& name, const std::string& subject) {
+		std::string at = subject.empty() ? name : name + ":" + subject;
+		auto found = views_.find(at);
+		if (found == views_.end()) {
+			state<view_state> current;
+			found = views_.emplace(at, std::pair{current, source_.listen(name, subject, [current](const view_state& v) { current.set(v); })}).first;
+		}
+		return found->second.first;
 	}
 
 	desktop::view navigator::show() {
@@ -490,6 +508,15 @@ namespace one::desktop::runtime {
 			if (s.nav.empty()) continue;
 			std::string route = s.route;
 			bar.push_back(desktop::link(s.nav, [this, route] { open(route); }, s.route == here.shown().route ? t.strong() : t.body()));
+		}
+		for (const auto& b : site_.badges) {
+			std::string subject = here.reader() ? here.reader()->uid : "";
+			auto counted = runtime::show(field_of(view(b.view, subject)->data, b.field));
+			if (counted.empty() || counted == "0") continue;
+			auto s = t.strong();
+			s.color = color::hex(0xffffff);
+			s.size -= 2;
+			bar.push_back(desktop::text(counted + " " + b.label, s).padding(edges(2, 8)).background({.fill = t.accent, .radius = 10}));
 		}
 		bar.push_back(desktop::spacer());
 		if (auto who = here.reader(); who && !who->name.empty()) {
