@@ -1,7 +1,7 @@
 # one::desktop
 
 uione's toolkit for desktop apps: modern C++ on Wayland, drawing with Vulkan.
-Apache-2.0, so any program may use it.
+AGPL-3.0-only, as all of uione is.
 
 It's written in C++26 on the system's own libraries: Wayland, Vulkan, HarfBuzz,
 FreeType, fontconfig and xkbcommon. Nothing is downloaded while it builds.

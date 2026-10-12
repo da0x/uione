@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A component set that draws everything as plain, semantic HTML with no styling. The
 // tests use it, and it shows that nothing in @uione/react depends on any one look.

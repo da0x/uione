@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // An app's own backend as a desktop app's source: views read live through
 // one::client, whose session delivers on the loop, and commands sent one after

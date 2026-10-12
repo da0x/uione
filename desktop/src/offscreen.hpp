@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Drawing without a window, for tests: a canvas drawn into an image on the GPU and
 // read back, and that image kept as a PNG.

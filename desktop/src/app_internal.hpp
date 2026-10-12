@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What the app and its windows keep: the compositor's globals, the seat's pointer and
 // keyboard, and for each window its surfaces, its swapchain and the view it shows.

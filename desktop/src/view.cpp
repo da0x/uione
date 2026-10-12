@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A window's view: built again when what it read changes, matched with what it
 // replaces, placed in the window, and given the keyboard and the pointer.

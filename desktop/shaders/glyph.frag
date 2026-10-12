@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A glyph's coverage from the atlas, in its color. Coverage is lifted a little, as
 // blending in linear light thins dark text on a light page otherwise.

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What a canvas draws into: boxes and glyphs as instances, in the order they came,
 // drawn with two pipelines, and the atlas glyphs are drawn from, filled as new ones

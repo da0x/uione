@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A box's color at a pixel, from its rounded rectangle's signed distance: its fill,
 // its border inside the edge, or, blurred, a shadow falling off as a Gaussian does.

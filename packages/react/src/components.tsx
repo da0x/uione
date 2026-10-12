@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The components a generated screen is made of. Each one does the work, like running
 // a command, asking before it does, or hiding a value that can't be trusted, and

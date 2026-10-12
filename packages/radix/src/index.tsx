@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // @uione/radix: a styled component set for uione apps. It only draws. Everything a
 // screen does, from routing to commands to hiding values that aren't live, happens

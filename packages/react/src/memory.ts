@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A data source that keeps everything in memory. Tests use it, and so does an app
 // running before it has a backend. A view with no data stays loading, exactly as a

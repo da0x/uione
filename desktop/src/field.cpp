@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A field: text typed into a box, edited by one::desktop::editing, drawn with its
 // selection and caret, and kept in a state. It keeps its own copy as it's typed in,

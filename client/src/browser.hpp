@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Signing in through the browser: SHA-256 and base64url for the PKCE challenge, and a
 // listener on 127.0.0.1 for the one request the app's /authorize page sends back. The

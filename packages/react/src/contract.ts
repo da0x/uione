@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The contract between @uione/react and a component set. @uione/react decides what's
 // on a screen and how it behaves. A component set decides only how it looks, so

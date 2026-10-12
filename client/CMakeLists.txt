@@ -1,5 +1,5 @@
 # Copyright 2026 Daher Alfawares
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # one::client: how a desktop or terminal app uione writes reaches its app, on libember
 # (its header pinned here, in include/ember.hpp). TLS is Botan 3 unless

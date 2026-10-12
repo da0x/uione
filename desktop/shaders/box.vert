@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A box: one instance a rectangle, drawn as two triangles grown by its blur, so a
 // shadow's soft edge has room.

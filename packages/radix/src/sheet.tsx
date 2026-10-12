@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Everything that opens over the page opens in this, so it behaves the same
 // everywhere: a dialog in the middle of a wide screen, and the whole screen on a

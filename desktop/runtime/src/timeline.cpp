@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Threads and timelines, drawn: what people wrote, one after another, and what
 // happened to something, each change in the words one::screens says it with.

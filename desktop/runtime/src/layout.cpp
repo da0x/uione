@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // How a screen is laid out, drawn: buttons together, what's beside its title,
 // regions, a menu down the side, ways of showing the same thing, and the steps

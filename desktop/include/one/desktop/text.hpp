@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Text: spans of styled words, shaped by HarfBuzz in fonts fontconfig finds, and laid
 // out in lines that fit a width. A layout is made for one scale, so its glyphs land

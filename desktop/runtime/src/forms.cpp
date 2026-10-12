@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Forms, drawn: each field as its kind is, a field to type in, a box to tick, a
 // picker or boxes for several, from what one::screens keeps of them and sends.

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Markdown as views: one::markdown's tree of blocks, each laid out by one::desktop,
 // its spans in the theme's styles.

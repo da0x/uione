@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The seat: the pointer, given to the window it's over; the keyboard, through
 // xkbcommon's reading of the compositor's layout, repeating a held key on a timer;

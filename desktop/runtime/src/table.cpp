@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Tables, drawn: a column each, in tabs by a choice, with search and pages, each
 // row opening its address and running its actions, some asking first with a form

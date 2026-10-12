@@ -1,5 +1,5 @@
 # Copyright 2026 Daher Alfawares
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # one::screens: what a native app's screens are and do, whatever draws them, shared
 # by one::desktop::runtime and one::terminal::runtime. Its views are read through

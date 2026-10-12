@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Input methods, through text-input-v3: while a field has the keyboard, the
 // compositor is told the text around its caret and where the caret is, and passes

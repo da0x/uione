@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Fonts, kept for the whole process: each face fontconfig finds for a style, open in
 // FreeType at one pixel size with a HarfBuzz font over it, and the faces that have

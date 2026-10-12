@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Signing in with a Microsoft account, as authentication microsoft says: a personal
 // one, like Outlook.com's, or one from work or school, since Firebase asks

@@ -1,7 +1,7 @@
 # 0004: The compiler is AGPL, the libraries are LGPL, and the code is original
 
-- Status: Accepted, extended by [0013](0013-native-libraries-are-apache.md) for the
-  libraries native apps are built on
+- Status: Accepted; the libraries' licenses superseded by
+  [0013](0013-everything-is-agpl.md), everything AGPL-3.0-only
 - Date: 2026-10-02
 - Deciders: Daher Alfawares
 

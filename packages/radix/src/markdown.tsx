@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Markdown that people write, like a book's summary or an issue's description,
 // drawn as React elements rather than as HTML, so nothing in it can add markup or

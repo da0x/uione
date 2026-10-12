@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::client: what a desktop or terminal app uione writes uses to reach its app, the
 // way @uione/react's data source does for the web. It signs a person in, through the

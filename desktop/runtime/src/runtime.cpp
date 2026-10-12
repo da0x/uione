@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The window: the bar across its top with the app's name, its navigation, its
 // badges and who's reading, and the page shown, with its title and what goes

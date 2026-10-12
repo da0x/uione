@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::desktop::runtime's tests: addresses and keys made as the web makes them,
 // pages opened by address and left, views read live from a source, commands run and
@@ -904,7 +904,7 @@ TEST("code without the license header its file starts with, icons on buttons and
 		                                        link(p, "Settings", "/example/settings", "settings")));
 		                     return items(details(p, issue, {{"priority", "Priority"}, {"stage.title", "Stage"}}, {{"priority", {{"critical", "Critical"}}}},
 		                                          tint_spec{"priority", {"critical", "high", "normal", "low", "trivial"}}),
-		                                  code("cpp", "// Copyright 2026 Daher Alfawares\n// SPDX-License-Identifier: Apache-2.0\n\n#include <print>\n\nint main() { std::println(\"Hello\"); }\n"));
+		                                  code("cpp", "// Copyright 2026 Daher Alfawares\n// SPDX-License-Identifier: AGPL-3.0-only\n\n#include <print>\n\nint main() { std::println(\"Hello\"); }\n"));
 	                     }});
 	navigator nav(s, data);
 	nav.open("/example");

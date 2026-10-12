@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package hosting puts a built web app on Firebase Hosting through its REST API,
 // the way firebase deploy does, without firebase-tools. A deploy is a new version

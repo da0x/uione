@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A tracker's issues in a window: a list chosen with the keys or the mouse, the
 // chosen one's details beside it, buttons that add issues and turn the order around,

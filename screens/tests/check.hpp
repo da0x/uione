@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A small test harness: TEST("what it shows") { CHECK(condition); }, each test run
 // in turn, every failed check said with its file and line, and main's exit code the

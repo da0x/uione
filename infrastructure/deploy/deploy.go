@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package deploy deploys a project that `one build` wrote: everything in Google
 // Cloud through its Pulumi program, then the web app, built with what Pulumi made,

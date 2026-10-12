@@ -2,7 +2,7 @@
   "name": "@uione/radix",
   "version": "0.9.8",
   "description": "A styled component set for uione apps, written for uione on Radix primitives, with its CSS prebuilt.",
-  "license": "LGPL-3.0-only",
+  "license": "AGPL-3.0-only",
   "author": "Daher Alfawares",
   "repository": {
     "type": "git",
@@ -19,8 +19,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "COPYING"
+    "dist"
   ],
   "sideEffects": [
     "*.css"

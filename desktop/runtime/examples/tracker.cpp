@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A small tracker on one::desktop::runtime, its data kept in memory: written as the
 // desktop apps `one build` writes are, a screen to a function, so what they'll be

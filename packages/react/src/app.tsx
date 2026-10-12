@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // An app is a list of screens. Each screen knows its own title and route, so the
 // app can build the routes and the navigation without anyone writing them twice.

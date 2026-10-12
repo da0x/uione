@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What a screen is made of, as @uione/react's components are on the web, drawn by
 // one::desktop in the site's theme. Each takes the page it's on and what the

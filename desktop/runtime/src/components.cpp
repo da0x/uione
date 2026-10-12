@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What's on a screen, drawn: text and titles, the pages above, sections, links,
 // commands, cards and details, each from what one::screens works out of it.

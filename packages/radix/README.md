@@ -35,8 +35,4 @@ or a recent webpack 5.
 
 ## License
 
-LGPL-3.0-only. See `LICENSE`, and `COPYING` for the GNU GPL it builds on.
-
-The uione TextMate grammar shipped in `dist/grammar/uione.json` is also offered under
-LGPL-3.0-only here, by its author, though its source in the uione repository's
-`editors/` folder is AGPL-3.0-only.
+AGPL-3.0-only, as all of uione is. See `LICENSE`.

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Finding things across a page's lists, copying what a view holds, and what goes
 // between a list's things as a grid and as a list of moves, drawn.

@@ -2,11 +2,11 @@
 # Copyright 2026 Daher Alfawares
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# Every source file starts with its copyright and license, after a shebang if it
-# has one: LGPL-3.0-only in the four libraries apps are built on, Apache-2.0 in the
-# desktop and terminal toolkits, so any program may use them, GPL-3.0-only in
-# Markdown, and AGPL-3.0-only everywhere else. A file type with no rule below is an error, so a
-# new kind of file is a decision rather than an omission.
+# Every source file starts with its copyright and its license, AGPL-3.0-only, after
+# a shebang if it has one (decision 0013). The one exception is libember's header,
+# a pinned copy of another project, which keeps that project's own. A file type with
+# no rule below is an error, so a new kind of file is a decision rather than an
+# omission.
 #
 #   tools/check-license            every tracked file, as it is on disk
 #   tools/check-license --staged   the staged version of each staged file
@@ -16,8 +16,7 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 
 license() {
 	case "$1" in
-		one/*|infrastructure/*|packages/react/*|packages/radix/*) echo LGPL-3.0-only ;;
-		desktop/*|terminal/*|client/*|markdown/*|screens/*) echo Apache-2.0 ;;
+		client/include/ember.hpp) echo Apache-2.0 ;;  # libember's, pinned by its sha256
 		*) echo AGPL-3.0-only ;;
 	esac
 }

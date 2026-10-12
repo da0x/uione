@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What each thing on a screen works out before it's drawn, the same for every
 // toolkit: which rows a table shows on which tab and page, where a board's cards

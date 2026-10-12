@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Highlighting for .one code, using the same TextMate grammar as the editors, so code
 // on a page looks the way it does in VS Code. The highlighter runs on JavaScript's own

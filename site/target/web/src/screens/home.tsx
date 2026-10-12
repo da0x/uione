@@ -29,7 +29,7 @@ export const home = screen({ title: "uione", route: "/" }, () => {
         <Link to="/releases">What's new in 0.9.8</Link>
       </Section>
       <Section title="Free software">
-        <Text>The compiler is under the AGPL, and the libraries apps are built on are under the LGPL. What the compiler generates belongs to you.</Text>
+        <Text>uione is free software under the AGPL. What the compiler generates belongs to you.</Text>
         <Link to="/mission">Why uione exists</Link>
       </Section>
       <Section title="Join the waitlist" id="waitlist">

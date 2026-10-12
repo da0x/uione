@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // State: a value whose readers are known. A view reads states while it's built, as
 // a window's or a terminal's is; setting one of them builds that view again and

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The id of an entity whose key has several parts, like a project keyed by its
 // owner and its name, made exactly as the one library makes it: each part escaped

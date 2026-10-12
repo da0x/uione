@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::desktop's tests: colors, text layout, and scenes drawn offscreen compared with the
 // images in tests/golden. ONE_DESKTOP_GOLDEN=write draws them again; each is then looked at

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Boards, drawn: a list's rows as cards in columns, m on a card offering the steps
 // its reader's roles may take, and Alt with the arrows putting cards in order.

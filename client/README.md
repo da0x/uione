@@ -1,7 +1,7 @@
 # one::client
 
 How the desktop and terminal apps uione writes reach their app, as
-`@uione/react/firebase` does for the web. Apache-2.0.
+`@uione/react/firebase` does for the web. AGPL-3.0-only, as all of uione is.
 
 - **Signing in:** through the person's browser (PKCE, the code coming back to
   127.0.0.1), with a refresh token kept from before, or with a service's key.

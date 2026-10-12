@@ -43,8 +43,6 @@ tools/           repository checks, run by the pre-commit hook and on every push
 
 ## License
 
-Copyright 2026 Daher Alfawares. The compiler, tools and site are licensed under the
-GNU Affero General Public License v3 (`LICENSE`). The libraries apps are built on,
-`one/`, `infrastructure/`, `packages/react/` and `packages/radix/`, are licensed
-under the GNU Lesser General Public License v3 (their own `LICENSE` and
-`COPYING`). Code uione generates belongs to whoever generated it.
+Copyright 2026 Daher Alfawares. All of uione is licensed under the GNU Affero
+General Public License v3 (`LICENSE`). Code uione generates belongs to whoever
+generated it.

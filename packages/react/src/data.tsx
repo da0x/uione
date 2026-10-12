@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // How screens read and write. A screen reads views and runs commands, and never talks
 // to a backend directly: a DataSource does that. The source decides where data

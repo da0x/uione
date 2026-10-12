@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The app and its windows on Wayland: the globals it binds, each window's surface
 // and how the compositor sizes and scales it, and the loop that reads the socket,

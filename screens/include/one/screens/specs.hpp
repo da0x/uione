@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What a screen says of each thing on it, worked out by the compiler and written as
 // these, the same for every toolkit: a table's view, columns and link, a board's

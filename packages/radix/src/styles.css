@@ -1,6 +1,6 @@
 /*
  * Copyright 2026 Daher Alfawares
- * SPDX-License-Identifier: LGPL-3.0-only
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 /*
@@ -9,7 +9,7 @@
  */
 
 /* The minified file keeps only comments marked "!", so the copyright goes again as one. */
-/*! @uione/radix | Copyright 2026 Daher Alfawares | SPDX-License-Identifier: LGPL-3.0-only */
+/*! @uione/radix | Copyright 2026 Daher Alfawares | SPDX-License-Identifier: AGPL-3.0-only */
 
 /* Classes come only from the components, not from whatever other files sit beside them. */
 @import "tailwindcss" source(none);

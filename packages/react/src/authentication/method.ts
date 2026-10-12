@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A way of signing in through Firebase, like Google: what a page shows for it, the
 // provider Firebase signs in with, and how to read back the credential a sign-in

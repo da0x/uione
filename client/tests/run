@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright 2026 Daher Alfawares
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # Runs one::client's tests against a real app: the tasks example, built by one, its
 # backend serving on the Firebase emulators (tools/emulators/run starts them), with

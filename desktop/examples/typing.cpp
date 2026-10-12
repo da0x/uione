@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Fields: a title of one line, submitted with Enter, and a description of several,
 // with what's typed shown beneath as it's kept. `typing <title>` starts with a title.

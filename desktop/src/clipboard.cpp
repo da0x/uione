@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The clipboard, through the seat's data device: text copied is offered to every
 // program as UTF-8 until another copies something, and text pasted is read from

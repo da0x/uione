@@ -11,9 +11,8 @@ Treat every file as published, whatever the repository's visibility today.
   designs from another codebase into this one, including as a reference or a test
   fixture. Examples are written from scratch for this repository.
 - **Every source file starts with its copyright, held by Daher Alfawares, and its
-  license: LGPL-3.0-only in the four web libraries, Apache-2.0 in those native apps
-  are built on (`desktop/`, `terminal/`, `client/`, `markdown/`), AGPL-3.0-only
-  everywhere else** (decisions 0004 and 0013). `tools/check-license` enforces it, and `.githooks/pre-commit`
+  license, AGPL-3.0-only, everywhere** (decision 0013). The one exception is
+  `client/include/ember.hpp`, a pinned copy of libember, which keeps its own. `tools/check-license` enforces it, and `.githooks/pre-commit`
   runs it on every commit. Files that cannot hold a comment are listed in that
   script, with the reason.
 - **Code that uione generates for someone else's project is theirs.** The generators
@@ -93,8 +92,7 @@ Treat every file as published, whatever the repository's visibility today.
   `one build` writes run on: screens found by address and built from views read live
   through `one::client`, as `@uione/react`'s are on the web, tested on its in-memory
   source by `desktop/build/runtime_tests` against `desktop/runtime/tests/golden`. It
-  began as libloom, whose history it keeps. Apache-2.0, as is `terminal/`, so any
-  program may use them.
+  began as libloom, whose history it keeps.
 - `terminal/` is `one::terminal`, the toolkit terminal apps are built on: screens in
   a trail, lists and documents of styled rows, a top bar, and a loop other threads
   post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build
@@ -107,7 +105,7 @@ Treat every file as published, whatever the repository's visibility today.
   into an app's C++ client, held so by `cpp_tests.cpp`. `cmake -S client -B
   client/build && cmake --build client/build`, then `client/tests/run
   client/build/tests`, which runs the tasks example's backend on the emulators and
-  tests against it. Apache-2.0. POSIX for now; a Windows build adds its own sockets.
+  tests against it. POSIX for now; a Windows build adds its own sockets.
 - `screens/` is `one::screens`, what a native app's screens are and do whatever draws
   them: sites, pages, the navigator, the data sources (`one::client`'s, and memory
   for tests), every component's spec, and the model each works out before it's
@@ -117,8 +115,7 @@ Treat every file as published, whatever the repository's visibility today.
   `screens/build/tests`.
 - `markdown/` is `one::markdown`, one header that lays Markdown out for terminals and
   reads it as a tree for windows, and `md`, which prints Markdown in a terminal. It
-  began as libmarkdown, whose history it keeps. Apache-2.0, as the toolkits are, so
-  an app that shows Markdown may be under any license. `cmake -S markdown
+  began as libmarkdown, whose history it keeps. `cmake -S markdown
   -B markdown/build && cmake --build markdown/build`, then
   `markdown/build/layout_test markdown/test/sample.md`.
 - `docs/grammar.ebnf` is the language's grammar, the specification the hand-written

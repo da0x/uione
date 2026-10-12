@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::terminal, uione's toolkit for terminal apps, drawn with ncurses: screens kept
 // in a trail, each a list of choices or a document of styled rows, a bar at the top

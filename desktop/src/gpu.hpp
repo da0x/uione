@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // The GPU, through Vulkan 1.3: one device shared by every window, and for each window
 // a swapchain on its Wayland surface, drawn with dynamic rendering.

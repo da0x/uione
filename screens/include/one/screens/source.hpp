@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Where a native app's screens read their views and send their commands, as
 // @uione/react's DataSource is for the web: an app's own backend through one::client,

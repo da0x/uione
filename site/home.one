@@ -29,7 +29,7 @@ screen "uione" / {
 	}
 
 	section "Free software" {
-		text "The compiler is under the AGPL, and the libraries apps are built on are under the LGPL. What the compiler generates belongs to you."
+		text "uione is free software under the AGPL. What the compiler generates belongs to you."
 		link namespace mission "Why uione exists"
 	}
 

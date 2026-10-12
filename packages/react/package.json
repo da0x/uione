@@ -2,7 +2,7 @@
   "name": "@uione/react",
   "version": "0.9.8",
   "description": "The runtime every uione screen is built on: routing, live views, commands, and the component contract.",
-  "license": "LGPL-3.0-only",
+  "license": "AGPL-3.0-only",
   "author": "Daher Alfawares",
   "repository": {
     "type": "git",
@@ -26,8 +26,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "COPYING"
+    "dist"
   ],
   "sideEffects": false,
   "engines": {

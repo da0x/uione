@@ -1,5 +1,5 @@
 # Copyright 2026 Daher Alfawares
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: AGPL-3.0-only
 
 # one::desktop: uione's toolkit for desktop apps, in modern C++ on Wayland, drawing
 # with Vulkan. It began as libloom. Built with g++ and

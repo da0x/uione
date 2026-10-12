@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A tracker's issues in a terminal: a list chosen with j and k, each opening a page
 // of its own, and a thread that changes an issue every two seconds, as a live view

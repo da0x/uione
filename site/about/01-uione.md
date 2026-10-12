@@ -22,8 +22,8 @@ everything else should follow from it. The [mission](/mission) says why.
 
 ## Open
 
-The compiler is free software under the AGPL, and the libraries apps are built on are
-under the LGPL, so an app of any kind can use them. The source is on
+uione is free software under the AGPL, the compiler and the libraries apps are built
+on alike. The source is on
 [GitHub](https://github.com/da0x/uione), and every release is listed on
 [releases](/releases).
 

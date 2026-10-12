@@ -68,4 +68,4 @@ commands itself; the types are in `ComponentSet` and the `...Props` interfaces.
 
 ## License
 
-LGPL-3.0-only. See `LICENSE` for the LGPL and `COPYING` for the GPL it builds on.
+AGPL-3.0-only, as all of uione is. See `LICENSE`.

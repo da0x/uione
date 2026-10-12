@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Text being edited: the text, the caret, and the other end of what's selected, with
 // what each key does to them. It knows nothing of how the text is drawn, so a field

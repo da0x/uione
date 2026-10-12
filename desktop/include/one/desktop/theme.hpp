@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // How things look: the same roles a uione theme gives, so an app looks as it does on
 // the web, and the text styles worked out from them.

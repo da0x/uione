@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // How code is shown: how wide a tab is, and how names look. Both are the reader's
 // choice (decisions 0007 and 0011), the same for every piece of code on the page,

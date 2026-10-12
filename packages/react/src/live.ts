@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // A data source for a real backend, with the rules that keep a screen honest about
 // how current its data is. It doesn't know about Firebase: it's given a Backend that

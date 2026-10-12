@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Owning what C libraries hand out: a pointer freed by the library's own function, and
 // a file descriptor closed, each when its owner goes. Members owning these are freed

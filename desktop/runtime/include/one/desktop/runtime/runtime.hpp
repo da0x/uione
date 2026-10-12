@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What a desktop app uione writes runs on: one::screens' sites, pages and
 // components, drawn in a window by one::desktop. A generated app's screens are the

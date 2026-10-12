@@ -21,7 +21,7 @@ export const mission = screen({ title: "Mission", route: "/mission", nav: "Missi
       <Text>What the compiler writes is short, plain React, Go and Pulumi, built with the tools you already use. It belongs to whoever generated it. Anything it would repeat lives in a library instead.</Text>
     </Section>
     <Section title="Open, and yours">
-      <Text>The compiler is free software under the AGPL, and the libraries apps are built on are under the LGPL, so an app of any kind can use them. Your app runs in your own Google Cloud project, and you can leave with all of it.</Text>
+      <Text>uione is free software under the AGPL, the compiler and the libraries apps are built on alike. Your app runs in your own Google Cloud project, and you can leave with all of it.</Text>
     </Section>
     <Section title="For everyone">
       <Text>Writing software shouldn't need a team to keep a dozen files in step. The studio puts the whole language in a browser, with nothing to install, so anyone who can describe what they want can build it.</Text>

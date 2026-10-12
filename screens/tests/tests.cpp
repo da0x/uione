@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::screens' tests: values read as people read them, addresses, keys and routes
 // as the web makes them, changes said in words, and what a page does: its views read

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // one::client's tests: reading fields and roles, keeping a sign-in, and, through
 // tests/run, a person signed in to the tasks example on the emulators, watching their

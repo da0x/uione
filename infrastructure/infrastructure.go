@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Package infrastructure declares everything a uione project runs on in Google
 // Cloud, so a generated Pulumi program is only the project's settings. Every

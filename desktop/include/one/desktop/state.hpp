@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // State, as one::screens has it for every toolkit: a value whose readers are known,
 // so a window's view is built again when one it read changes.

@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // @uione/react/firebase: views read live from Firestore, commands sent to the Go
 // backend, and signing in the ways the project names. Firebase is a peer dependency, so an app that doesn't

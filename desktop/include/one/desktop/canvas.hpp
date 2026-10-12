@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // What a window draws with, in logical pixels: boxes with rounded corners, borders
 // and soft shadows, and laid-out text. Everything is drawn in the order it's asked

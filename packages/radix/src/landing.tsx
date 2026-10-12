@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only
 
 // Front pages, in five designs: waveform, studio, aurora, grid and relay. Each draws
 // the same parts, a hero, what the site offers and what it asks, in its own way, in
