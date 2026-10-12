@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "loom/app.hpp"
@@ -34,8 +35,12 @@ namespace loom::gpu {
 		std::string name;  // the GPU's, for saying which was chosen
 
 		// The first GPU that can present to this Wayland display, a discrete one if
-		// there is one.
+		// there is one; with no display, the first that draws, for drawing offscreen.
 		explicit device(wl_display* display);
+
+		// Memory of a kind this device has, for what `allowed` (a memory requirement's
+		// bits) permits.
+		std::uint32_t memory_type(std::uint32_t allowed, vk::MemoryPropertyFlags wanted) const;
 	};
 
 	// A window's swapchain and what draws into it, two frames in flight.
@@ -44,10 +49,19 @@ namespace loom::gpu {
 		surface(device& gpu, wl_display* display, wl_surface* surface);
 		~surface();
 
-		// Draws a frame of `pixels` size: clears to `background`, then lets `record`
-		// add its commands. Returns false when the swapchain went out of date, which
-		// the next frame recreates it for.
-		bool draw(loom::size pixels, color background, const std::function<void(const vk::raii::CommandBuffer&)>& record = {});
+		// What a frame does besides clearing: `prepare` records what has to come before
+		// drawing, like uploads, given which of the frames in flight this is; `record`
+		// draws.
+		struct work {
+			std::function<void(const vk::raii::CommandBuffer&, std::size_t slot)> prepare;
+			std::function<void(const vk::raii::CommandBuffer&)> record;
+		};
+
+		// Draws a frame of `pixels` size, cleared to `background`. Returns false when
+		// the swapchain went out of date, which the next frame recreates it for.
+		bool draw(loom::size pixels, color background, const work& w = {});
+		vk::Format format() const { return format_.format; }
+		static constexpr std::size_t in_flight = 2;
 
 	private:
 		void make_swapchain(loom::size pixels);
@@ -61,7 +75,6 @@ namespace loom::gpu {
 		std::vector<vk::Image> images_;
 		std::vector<vk::raii::ImageView> views_;
 		std::vector<vk::raii::Semaphore> rendered_;  // one per image, signalled when it's drawn
-		std::vector<bool> drawn_once_;                // whether an image has been presented, so its layout is known
 
 		struct frame {
 			vk::raii::CommandBuffer commands = nullptr;
@@ -69,7 +82,7 @@ namespace loom::gpu {
 			vk::raii::Fence done = nullptr;
 		};
 		vk::raii::CommandPool pool_ = nullptr;
-		std::array<frame, 2> frames_;
+		std::array<frame, in_flight> frames_;
 		std::size_t next_ = 0;
 		bool stale_ = true;  // the swapchain needs making again
 	};

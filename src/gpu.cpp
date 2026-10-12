@@ -27,7 +27,7 @@ namespace loom::gpu {
 			auto families = candidate.getQueueFamilyProperties();
 			for (std::uint32_t i = 0; i < families.size(); ++i) {
 				bool draws = static_cast<bool>(families[i].queueFlags & vk::QueueFlagBits::eGraphics);
-				if (!draws || !candidate.getWaylandPresentationSupportKHR(i, *display)) continue;
+				if (!draws || (display && !candidate.getWaylandPresentationSupportKHR(i, *display))) continue;
 				bool discrete = properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
 				if (!chosen || (discrete && !chosen_discrete)) {
 					chosen.emplace(candidate, i);
@@ -36,7 +36,7 @@ namespace loom::gpu {
 				break;
 			}
 		}
-		if (!chosen) throw std::runtime_error("no GPU here draws with Vulkan 1.3 on Wayland");
+		if (!chosen) throw std::runtime_error(display ? "no GPU here draws with Vulkan 1.3 on Wayland" : "no GPU here draws with Vulkan 1.3");
 		physical = std::move(chosen->first);
 		family = chosen->second;
 		name = physical.getProperties().deviceName.data();
@@ -51,6 +51,14 @@ namespace loom::gpu {
 		                                                          .enabledExtensionCount = device_extensions.size(),
 		                                                          .ppEnabledExtensionNames = device_extensions.data()}};
 		queue = logical.getQueue(family, 0);
+	}
+
+	std::uint32_t device::memory_type(std::uint32_t allowed, vk::MemoryPropertyFlags wanted) const {
+		auto kinds = physical.getMemoryProperties();
+		for (std::uint32_t i = 0; i < kinds.memoryTypeCount; ++i) {
+			if ((allowed & (1u << i)) && (kinds.memoryTypes[i].propertyFlags & wanted) == wanted) return i;
+		}
+		throw std::runtime_error("the GPU has no memory of the kind asked for");
 	}
 
 	surface::surface(device& gpu, wl_display* display, wl_surface* surface) : gpu_(gpu) {
@@ -119,7 +127,6 @@ namespace loom::gpu {
 			                                                          .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
 			rendered_.emplace_back(gpu_.logical, vk::SemaphoreCreateInfo{});
 		}
-		drawn_once_.assign(images_.size(), false);
 		extent_ = {static_cast<int>(extent.width), static_cast<int>(extent.height)};
 		stale_ = false;
 	}
@@ -138,9 +145,10 @@ namespace loom::gpu {
 		commands.pipelineBarrier2(vk::DependencyInfo{.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
 	}
 
-	bool surface::draw(loom::size pixels, color background, const std::function<void(const vk::raii::CommandBuffer&)>& record) {
+	bool surface::draw(loom::size pixels, color background, const work& w) {
 		if (stale_ || pixels != extent_) make_swapchain(pixels);
-		frame& f = frames_[next_];
+		std::size_t slot = next_;
+		frame& f = frames_[slot];
 		next_ = (next_ + 1) % frames_.size();
 		(void)gpu_.logical.waitForFences(*f.done, true, std::numeric_limits<std::uint64_t>::max());
 
@@ -158,6 +166,7 @@ namespace loom::gpu {
 		const auto& commands = f.commands;
 		commands.reset();
 		commands.begin(vk::CommandBufferBeginInfo{.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+		if (w.prepare) w.prepare(commands, slot);
 		transition(commands, images_[index], vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
 		           vk::PipelineStageFlagBits2::eColorAttachmentOutput, {}, vk::PipelineStageFlagBits2::eColorAttachmentOutput,
 		           vk::AccessFlagBits2::eColorAttachmentWrite);
@@ -170,7 +179,7 @@ namespace loom::gpu {
 		commands.beginRendering(vk::RenderingInfo{.renderArea = {{0, 0}, extent}, .layerCount = 1, .colorAttachmentCount = 1, .pColorAttachments = &target});
 		commands.setViewport(0, vk::Viewport{0, 0, static_cast<float>(extent.width), static_cast<float>(extent.height), 0, 1});
 		commands.setScissor(0, vk::Rect2D{{0, 0}, extent});
-		if (record) record(commands);
+		if (w.record) w.record(commands);
 		commands.endRendering();
 		transition(commands, images_[index], vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR,
 		           vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eColorAttachmentWrite,
@@ -199,7 +208,6 @@ namespace loom::gpu {
 		} catch (const vk::OutOfDateKHRError&) {
 			stale_ = true;
 		}
-		drawn_once_[index] = true;
 		return true;
 	}
 

@@ -49,6 +49,7 @@ namespace loom {
 	};
 
 	class app;
+	class canvas;
 
 	// What a window is opened with.
 	struct window_options {
@@ -73,6 +74,9 @@ namespace loom {
 
 		void redraw();
 		void title(const std::string& text);
+
+		// Draws what's in the window, over its background, each time it's drawn.
+		std::function<void(canvas&)> on_draw;
 
 		// Called when the window is asked to close, by its decoration or a shortcut.
 		// Closing it by default ends the app when it's the last one.

@@ -16,6 +16,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan)
+pkg_check_modules(TEXT REQUIRED IMPORTED_TARGET harfbuzz freetype2 fontconfig)
+find_program(GLSLC glslc REQUIRED)
 pkg_get_variable(PROTOCOLS wayland-protocols pkgdatadir)
 pkg_get_variable(SCANNER wayland-scanner wayland_scanner)
 
@@ -38,16 +40,43 @@ foreach(protocol ${protocols})
 	list(APPEND protocol_sources ${header} ${code})
 endforeach()
 
+# The shaders, compiled to SPIR-V, which the renderer takes in with #embed.
+set(shader_outputs)
+foreach(shader box.vert box.frag glyph.vert glyph.frag)
+	set(output ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv)
+	add_custom_command(OUTPUT ${output}
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
+		COMMAND ${GLSLC} --target-env=vulkan1.3 -Werror -O ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader} -o ${output}
+		DEPENDS shaders/${shader})
+	list(APPEND shader_outputs ${output})
+endforeach()
+add_custom_target(loom_shaders DEPENDS ${shader_outputs})
+set_source_files_properties(src/renderer.cpp PROPERTIES OBJECT_DEPENDS "${shader_outputs}")
+
 add_library(loom
 	src/app.cpp
 	src/gpu.cpp
+	src/offscreen.cpp
+	src/renderer.cpp
+	src/text.cpp
 	${protocol_sources})
+add_dependencies(loom loom_shaders)
 target_include_directories(loom
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
 	PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/protocols)
-target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN)
-target_compile_options(loom PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror>)
+target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT)
+target_compile_options(loom PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 
 add_executable(hello examples/hello.cpp)
 target_link_libraries(hello PRIVATE loom)
 target_compile_options(hello PRIVATE -Wall -Wextra -Werror)
+
+add_executable(drawing examples/drawing.cpp)
+target_link_libraries(drawing PRIVATE loom)
+target_compile_options(drawing PRIVATE -Wall -Wextra -Werror)
+
+add_executable(tests tests/tests.cpp)
+target_link_libraries(tests PRIVATE loom PkgConfig::VULKAN)
+target_include_directories(tests PRIVATE src ${CMAKE_CURRENT_BINARY_DIR}/protocols)
+target_compile_definitions(tests PRIVATE LOOM_TESTS="${CMAKE_CURRENT_SOURCE_DIR}/tests")
+target_compile_options(tests PRIVATE -Wall -Wextra -Werror)

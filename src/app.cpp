@@ -23,6 +23,7 @@
 
 #include "fractional-scale-v1-client-protocol.h"
 #include "gpu.hpp"
+#include "renderer.hpp"
 #include "viewporter-client-protocol.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
@@ -59,6 +60,7 @@ namespace loom {
 		wp_viewport* viewport = nullptr;
 		wl_callback* frame = nullptr;
 		std::optional<gpu::surface> drawn;
+		std::optional<loom::renderer> painter;
 
 		loom::size size{};
 		loom::size asked{};    // what the compositor's last configure said, 0 for ours
@@ -179,6 +181,7 @@ namespace loom {
 	}
 
 	window::state::~state() {
+		painter.reset();
 		drawn.reset();  // the swapchain goes before the surface it's on
 		if (frame) wl_callback_destroy(frame);
 		if (viewport) wp_viewport_destroy(viewport);
@@ -274,7 +277,19 @@ namespace loom {
 		if (w.viewport) wp_viewport_set_destination(w.viewport, w.size.width, w.size.height);
 		w.frame = wl_surface_frame(w.surface);
 		wl_callback_add_listener(w.frame, &frame_listener, &w);
-		if (!w.drawn->draw(w.pixels(), shown.background)) w.dirty = true;
+		if (!w.painter) w.painter.emplace(*w.owner->gpu, w.drawn->format());
+		loom::size pixels = w.pixels();
+		gpu::surface::work work{
+		    .prepare =
+		        [&](const vk::raii::CommandBuffer& commands, std::size_t slot) {
+			        w.painter->begin(pixels, w.scale, slot);
+			        canvas c{*w.painter};
+			        if (shown.on_draw) shown.on_draw(c);
+			        w.painter->upload(commands);
+		        },
+		    .record = [&](const vk::raii::CommandBuffer& commands) { w.painter->draw(commands); },
+		};
+		if (!w.drawn->draw(pixels, shown.background, work)) w.dirty = true;
 	}
 
 	int app::run() {
