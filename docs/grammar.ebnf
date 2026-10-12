@@ -55,10 +55,10 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 /* project */
 
 project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
-setting        ::= setting_name (STRING | qualified+) END   /* a list may say several, targets web desktop */
+setting        ::= setting_name (STRING | qualified+) END   /* a list may say several, target web desktop */
                  | "redirect" STRING STRING END
                  | "domain" STRING STRING END     /* a second domain, like www, sends people to the first */
-setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "targets" | "icon" | "layout" | "serve"
+setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "target" | "icon" | "layout" | "serve"
                  | "title" | "one" | "analytics" | "theme" | "appearance" | "accessibility"
 
 /* A place the project runs: its own domain, Firebase project and region, which take

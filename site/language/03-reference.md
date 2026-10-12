@@ -178,8 +178,7 @@ project uione {
 	firebase        "uione-web"
 	region          "us-east4"
 	ui              radix
-	signin          google
-	signin          github
+	signin          google github
 	icon            "assets/icon.svg"
 	serve           "public"
 }
@@ -199,7 +198,7 @@ namespace one {
 	settings project {
 		// Where it's served, like "neotrac.org".
 		domain      domain
-		// The ways people sign in, one to a line.
+		// The ways people sign in, several to a line, like signin google github.
 		signin      list of signin
 		// Whether it opens light or dark, rather than as the visitor's system is.
 		appearance  appearance
@@ -220,7 +219,7 @@ domain after the first, `domain "uione.io" "www.uione.io"`: the same site answer
 there, and sends whoever opens it to the first, so one project serves both. A setting
 is said once,
 unless its type is a `list of`, whose lines each add one, or one line several,
-`targets web desktop terminal`. A name the library
+`signin google github`. A name the library
 doesn't define isn't a setting, and the checker says so with the ones there are.
 
 `one "0.4.0"` is the compiler the project is for, the last version it was checked
@@ -235,7 +234,7 @@ nothing otherwise. `UIONE_TOOLCHAIN=local` keeps the `one` you ran.
 it isn't the project's own: the studio's project is `studio`, which names what it
 runs on in Google Cloud, and its pages say uione. `ui` picks the component adapter
 that renders every screen. `signin` names a way people sign in: `google`,
-`github` or `microsoft`, one to a line. With one, the Sign in button goes straight
+`github` or `microsoft`, several to a line, `signin google github`. With one, the Sign in button goes straight
 to it; with more, it offers each, in the order they're written. A project that names
 none signs no one in. Each way is turned on for the project in Firebase, which the
 studio's checklist walks through. Someone who signs in one way and later another,
@@ -247,13 +246,13 @@ as they are, at the site's root: `public/install.sh` is at `/install.sh`. `redir
 "https://www.uione.io/install.sh"` sends whoever asks for an address that has
 moved on to where it is now, and a project can have as many as it needs.
 
-`targets web desktop terminal` names the apps `one build` writes from the screens:
+`target web desktop terminal` names the apps `one build` writes from the screens:
 the web site in `build/web`, and a desktop app and a terminal app drawn from the same
 screens in `build/desktop` and `build/terminal`. With none named, it's the web alone.
 Each target draws the screen elements its toolkit has a part for, and says so in the
 compiler, so a screen using one a target doesn't draw is an error, on its line, for
 that target: "a board's move … along isn't drawn by the terminal app yet; take
-terminal out of targets, or build with --targets web". `one build --targets web`
+terminal out of target, or build with --target web". `one build --target web`
 builds fewer of the targets for one run, never others. The desktop and terminal apps
 are being made now: until their parts are, naming them is an error for every screen.
 

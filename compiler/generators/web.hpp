@@ -26,6 +26,7 @@
 #include "code/stream.hpp"
 #include "generators/markdown.hpp"
 #include "generators/roles.hpp"
+#include "generators/screens.hpp"
 #include "generators/theme.hpp"
 #include "language/ast.hpp"
 #include "language/names.hpp"
@@ -121,27 +122,9 @@ namespace one::generators {
             return out;
         }
 
-        // A readable label, the same way @uione/react makes one: created_at becomes
-        // "Created at".
-        inline std::string label(std::string_view name) {
-            std::string out;
-            for (char c : name) out += c == '_' ? ' ' : c;
-            if (!out.empty() && out[0] >= 'a' && out[0] <= 'z') out[0] = static_cast<char>(out[0] - 'a' + 'A');
-            return out;
-        }
-
-        inline std::string join(const std::string& ns, const std::string& name) {
-            if (ns.empty()) return name;
-            if (name.empty()) return ns;
-            return ns + "::" + name;
-        }
-
-        // The written name of a value, like book.title or waitlist::signups.
-        inline std::string text_of(const language::expression& e) {
-            if (auto* name = std::get_if<language::name_expression>(&e.node)) return name->name.text();
-            if (auto* member = std::get_if<language::member_expression>(&e.node)) return text_of(*member->object) + "." + member->member;
-            return "";
-        }
+        using screens::join;
+        using screens::label;
+        using screens::text_of;
 
         inline bool is_identifier(std::string_view key) {
             if (key.empty() || (key[0] >= '0' && key[0] <= '9')) return false;
@@ -158,22 +141,13 @@ namespace one::generators {
         // from, and `out_dir` is where the web app goes, so imports between the two can
         // be worked out.
         web_generator(const std::vector<language::file>& files, std::string project_dir, std::string out_dir)
-            : files_(files), project_dir_(std::move(project_dir)), out_dir_(std::move(out_dir)), held_(roles_of(files).held) {
-            for (const auto& f : files_) place("", f.declarations);
-            for (const auto& f : files_) {
-                indexing_ = f.path;
-                index("", f.declarations);
-            }
-        }
+            : files_(files), model_(files), project_dir_(std::move(project_dir)), out_dir_(std::move(out_dir)) {}
 
         std::vector<output_file> generate() {
             std::vector<output_file> out;
             std::vector<screen_import> screens;
-            // Every screen, for the trail of pages above each.
-            for (const auto& f : files_) find_screens("", f.declarations, every_screen_);
             for (const auto& f : files_) {
-                std::vector<found_screen> found;
-                find_screens("", f.declarations, found);
+                std::vector<found_screen> found = model_.screens_in(f);
                 if (found.empty()) continue;
                 std::string stem = std::filesystem::path(f.path).stem().string();
                 out.push_back(file("src/screens/" + stem + ".tsx", screen_file(f, found, screens, stem)));
@@ -208,30 +182,36 @@ namespace one::generators {
         using stream = code::stream;
 
         const std::vector<language::file>& files_;
+        screens::model model_;  // what the screens mean, which this writes as React
         std::string project_dir_;
         std::string out_dir_;
-        std::string name_ = "app";
-        std::vector<held_roles> held_;
-        std::string screen_title_;
-        int in_block_ = 0;  // how deep in heroes and sections the items being written are  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"  // the roles held within something, and what grants each command
-        std::string title_;  // the name shown at the top of every page, when it isn't the project's
-        std::string theme_;    // the component set's theme the site's colors are, like papercolor
-        bool display_ = false;  // display settings beside light and dark, with accessibility menu
-        std::string appearance_;  // light or dark, which the site opens in; empty for the system's
-        std::string layout_ = "single";  // how screens are laid out unless they say
-        std::string ui_ = "radix";
-        std::vector<std::string> authentication_;  // the ways people sign in, as the project names them: google, github, microsoft
+        std::string screen_title_;  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"
+        int in_block_ = 0;  // how deep in heroes and sections the items being written are
+        // The project, as the model indexed it.
+        const std::string& name_ = model_.project.name;
+        const std::string& title_ = model_.project.title;
+        const std::string& theme_ = model_.project.theme;
+        const bool& display_ = model_.project.display;
+        const std::string& appearance_ = model_.project.appearance;
+        const std::string& layout_ = model_.project.layout;
+        const std::string& ui_ = model_.project.ui;
+        const std::vector<std::string>& authentication_ = model_.project.authentication;
+        const bool& analytics_ = model_.project.analytics;
+        const bool& has_project_ = model_.project.has_project;
+        const code::source& project_ = model_.project.project;
+        const std::string& icon_ = model_.project.icon;
+        const code::source& icon_source_ = model_.project.icon_source;
+        const std::string& served_ = model_.project.served;
+        const code::source& served_source_ = model_.project.served_source;
+        const std::map<std::string, std::map<std::string, const language::entity_declaration*>>& entities_ = model_.entities;
+        const std::map<std::string, std::map<std::string, const language::view_declaration*>>& views_ = model_.views;
+        const std::map<std::string, std::set<std::string>>& commands_ = model_.commands;
+        const std::map<std::string, const language::command_declaration*>& command_nodes_ = model_.command_nodes;
+        const std::set<std::string>& open_ = model_.open;
+        const std::vector<std::string>& personal_ = model_.personal;
+        const std::vector<language::field> nothing_;  // the fields of no entity
         bool footer_ = false;  // whether the site has a footer, in src/footer.tsx
         std::string footer_layout_;  // bar or columns
-        bool analytics_ = false;  // whether visitors are counted, with Firebase Analytics, once they agree
-        bool has_project_ = false;  // a project block, which says whether people sign in at all
-        std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities_;
-        std::map<std::string, std::map<std::string, const language::view_declaration*>> views_;
-        std::map<std::string, std::set<std::string>> commands_;  // namespace to entity::command
-        const std::vector<language::field> nothing_;  // the fields of no entity
-        std::map<std::string, const language::command_declaration*> command_nodes_;  // by full name, like projects::issue::move
-        std::set<std::string> open_;  // commands anyone may run, signed in or not, in full
-        std::vector<std::string> personal_;  // views with one document per person
         // A set of markdown pages, one per file, shown by a screen like /docs/:page.
         struct page_set {
             std::string pattern;  // the files, like docs/*.md
@@ -243,270 +223,51 @@ namespace one::generators {
 
         // Where generated lines come from. Files every app has, like package.json, come
         // from the project block; a screen's lines come from the screen and its items.
-        std::string indexing_;           // the file being indexed
-        code::source project_;           // the project block, or fixed without one
-        std::string icon_;               // the app's icon, an .svg file, when the project names one
-        code::source icon_source_;       // the setting that names it
-        std::string served_;             // a folder whose files are served as they are, when the project names one
-        code::source served_source_;     // the setting that names it
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
         int item_line_ = 0;              // the screen item being written
         std::map<std::string, std::string> components_;    // hand-written components, by name, to their file
         std::map<std::string, std::string> dependencies_;  // npm packages they need, from components/package.json
 
-        struct found_screen {
-            std::string ns;
-            const language::screen_declaration* screen;
-            language::location where;
-        };
+        using found_screen = screens::found_screen;
 
         struct screen_import {
             std::string name, module;
             code::source from;
         };
 
-        // Where each namespace is, read first, since one of its files says it for all.
-        void place(const std::string& ns, const std::vector<language::declaration>& declarations) {
-            for (const auto& d : declarations) {
-                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
-                    if (n->at) prefixes_[web_detail::join(ns, n->name)] = *n->at == "/" ? "" : *n->at;
-                    place(web_detail::join(ns, n->name), n->declarations);
-                }
-            }
+        // What the model knows, asked as this writes.
+        static std::string full_command(const std::string& ns, const language::qualified_name& name) { return screens::full_command(ns, name); }
+        static std::string full_view(const std::string& ns, const std::string& name) { return screens::full_view(ns, name); }
+        static bool names_parameter(const std::string& route, const std::string& name) { return screens::names_parameter(route, name); }
+        std::set<std::string> inputs_of(const std::string& command) const { return model_.inputs_of(command); }
+        std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity, const language::form_item& form) const {
+            return model_.edit_view(ns, entity, form);
         }
-
-        void index(const std::string& ns, const std::vector<language::declaration>& declarations) {
-            for (const auto& d : declarations) {
-                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
-                    index(web_detail::join(ns, n->name), n->declarations);
-                } else if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
-                    name_ = p->name;
-                    has_project_ = true;
-                    project_ = {indexing_, d.where.line};
-                    for (const auto& s : p->settings) {
-                        if (s.key == "ui") ui_ = s.value;
-                        if (s.key == "title") title_ = s.value;
-                        if (s.key == "theme") theme_ = s.value;
-                        if (s.key == "appearance" && s.value != "system") appearance_ = s.value;
-                        if (s.key == "layout") layout_ = s.value;
-                        if (s.key == "signin") authentication_.push_back(s.value);
-                        if (s.key == "analytics") analytics_ = s.value == "google";
-                        if (s.key == "accessibility") display_ = s.value == "menu";
-                        if (s.key == "serve") {
-                            std::string dir = std::filesystem::path(indexing_).parent_path().string();
-                            served_ = platform::resolve(dir.empty() ? "." : dir, s.value);
-                            served_source_ = {indexing_, s.where.line};
-                        }
-                        if (s.key == "icon") {
-                            std::string dir = std::filesystem::path(indexing_).parent_path().string();
-                            icon_ = platform::resolve(dir.empty() ? "." : dir, s.value);
-                            icon_source_ = {indexing_, s.where.line};
-                        }
-                    }
-                } else if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
-                    entities_[ns][e->name] = e;
-                } else if (auto* v = std::get_if<language::view_declaration>(&d.node)) {
-                    views_[ns][v->name] = v;
-                    if (v->per == "user") personal_.push_back(web_detail::join(ns, v->name));
-                } else if (auto* c = std::get_if<language::command_declaration>(&d.node)) {
-                    commands_[ns].insert(c->name.text());
-                    command_nodes_[web_detail::join(ns, c->name.text())] = c;
-                    for (const auto& s : c->body) {
-                        auto* p = std::get_if<language::permission_statement>(&s.node);
-                        if (p && p->permission.text() == "anyone") open_.insert(web_detail::join(ns, c->name.text()));
-                    }
-                }
-            }
-        }
-
-        void find_screens(const std::string& ns, const std::vector<language::declaration>& declarations, std::vector<found_screen>& found) {
-            for (const auto& d : declarations) {
-                if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
-                    find_screens(web_detail::join(ns, n->name), n->declarations, found);
-                } else if (auto* s = std::get_if<language::screen_declaration>(&d.node)) {
-                    found.push_back({ns, s, d.where});
-                } else if (auto* h = std::get_if<language::header_declaration>(&d.node); h && h->route && &found == &every_screen_) {
-                    path_headers_.emplace_back(ns, h);
-                }
-            }
-        }
-
-        // What a name written inside a namespace refers to, in full. A command written
-        // as entity::action, or a view written by its name alone, is in the same
-        // namespace; one written with its namespace stays as written.
-        static std::string full_command(const std::string& ns, const language::qualified_name& name) {
-            return name.parts.size() == 2 ? web_detail::join(ns, name.text()) : name.text();
-        }
-        // The view per entity that holds every field an update form asks for.
-        // What a command is sent besides its entity's fields, like the address typed to
-        // delete a project: never stored, so a form starts it empty.
-        std::set<std::string> inputs_of(const std::string& command) const {
-            std::set<std::string> out;
-            auto it = command_nodes_.find(command);
-            if (it == command_nodes_.end()) return out;
-            for (const auto& st : it->second->body) {
-                if (auto* input = std::get_if<language::input_statement>(&st.node)) out.insert(input->name);
-            }
-            return out;
-        }
-
-        std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity,
-                                             const language::form_item& form) const {
-            auto scope = views_.find(ns);
-            if (scope == views_.end()) return std::nullopt;
-            auto inputs = inputs_of(web_detail::join(ns, form.commands.front().text()));
-            for (const auto& [name, view] : scope->second) {
-                if (!view->per || *view->per != entity.name) continue;
-                bool holds = std::all_of(form.fields.begin(), form.fields.end(), [&](const language::form_field& f) {
-                    return inputs.contains(f.name) ||
-                           std::any_of(view->values.begin(), view->values.end(),
-                                       [&](const language::view_value& v) { return v.name && *v.name == f.name; });
-                });
-                if (holds) return web_detail::join(ns, name);
-            }
-            return std::nullopt;
-        }
-
-        // The entity a view has one document per, like book, if it's a view per entity.
-        std::optional<std::string> per_entity(const std::string& full) const {
-            std::size_t cut = full.rfind("::");
-            std::string ns = cut == std::string::npos ? "" : full.substr(0, cut);
-            std::string name = cut == std::string::npos ? full : full.substr(cut + 2);
-            auto scope = views_.find(ns);
-            if (scope == views_.end()) return std::nullopt;
-            auto view = scope->second.find(name);
-            if (view == scope->second.end() || !view->second->per || *view->second->per == "user") return std::nullopt;
-            return *view->second->per;
-        }
-
-        static std::string full_view(const std::string& ns, const std::string& name) {
-            return name.find("::") == std::string::npos ? web_detail::join(ns, name) : name;
-        }
-
-        // Where a namespace's screens are: under its name, like /docs, unless it says
-        // otherwise with at, like namespace studio at /.
-        std::map<std::string, std::string> prefixes_;
-
-        std::string prefix_of(const std::string& ns) const {
-            if (ns.empty()) return "";
-            if (auto it = prefixes_.find(ns); it != prefixes_.end()) return it->second;
-            std::size_t cut = ns.rfind("::");
-            std::string outer = cut == std::string::npos ? "" : ns.substr(0, cut);
-            return prefix_of(outer) + "/" + ns.substr(cut == std::string::npos ? 0 : cut + 2);
-        }
-
-        std::string full_route(const std::string& ns, const std::string& route) const {
-            std::string prefix = prefix_of(ns);
-            if (prefix.empty()) return route;
-            return route == "/" ? prefix : prefix + route;
-        }
-
-        bool entity_named(const std::string& ns, const std::string& name) const {
-            auto scope = entities_.find(ns);
-            return scope != entities_.end() && scope->second.contains(name);
-        }
-
-        // Whether a route has a parameter: /projects/:project has project.
-        // The key's parts before the last, when an address names an entity by them:
-        // owner, in /:owner/:project, for a project keyed owner and slug. Empty when
-        // the address names it by its whole id, or it has a key of one part.
+        std::optional<std::string> per_entity(const std::string& full) const { return model_.per_entity(full); }
+        std::string full_route(const std::string& ns, const std::string& route) const { return model_.full_route(ns, route); }
+        bool entity_named(const std::string& ns, const std::string& name) const { return model_.entity_named(ns, name); }
         std::vector<std::string> keyed_by(const std::string& ns, const std::string& entity, const std::string& route) const {
-            auto scope = entities_.find(ns);
-            if (scope == entities_.end() || !scope->second.contains(entity)) return {};
-            std::vector<std::string> keys;
-            for (const auto& f : scope->second.at(entity)->fields) {
-                if (f.key) keys.push_back(f.name);
-            }
-            if (keys.size() < 2) return {};
-            keys.pop_back();
-            for (const auto& key : keys) {
-                if (!names_parameter(route, key)) return {};
-            }
-            return keys;
+            return model_.keyed_by(ns, entity, route);
         }
-
-        // The parameters of a link before its last that name something keyed by
-        // several parts, like a board by its project and name, with how many: a row
-        // holding its id fills the parameter with its last part.
-        std::string named_by(const std::string& ns, const std::string& route) const {
-            std::string named;
-            std::size_t last = route.rfind("/:");
-            for (std::size_t at = route.find("/:"); at != std::string::npos && at < last; at = route.find("/:", at + 1)) {
-                std::size_t end = route.find('/', at + 1);
-                std::string name = route.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
-                auto scope = entities_.find(ns);
-                if (scope == entities_.end() || !scope->second.contains(name)) continue;
-                int keys = 0;
-                for (const auto& f : scope->second.at(name)->fields) keys += f.key ? 1 : 0;
-                if (keys > 1) named += (named.empty() ? "" : ", ") + name + ": " + std::to_string(keys);
-            }
-            return named.empty() ? "" : " named={{ " + named + " }}";
-        }
-
-        static bool names_parameter(const std::string& route, const std::string& name) {
-            std::string wanted = "/:" + name;
-            for (std::size_t at = route.find(wanted); at != std::string::npos; at = route.find(wanted, at + 1)) {
-                std::size_t end = at + wanted.size();
-                if (end == route.size() || route[end] == '/') return true;
-            }
-            return false;
-        }
-
-        const language::entity_declaration* entity_of_command(const std::string& full) const {
-            auto cut = full.rfind("::");
-            if (cut == std::string::npos) return nullptr;
-            auto entity_end = cut;
-            auto entity_start = full.rfind("::", entity_end - 1);
-            std::string ns = entity_start == std::string::npos ? "" : full.substr(0, entity_start);
-            std::string entity = full.substr(entity_start == std::string::npos ? 0 : entity_start + 2,
-                                             entity_end - (entity_start == std::string::npos ? 0 : entity_start + 2));
-            auto scope = entities_.find(ns);
-            if (scope == entities_.end()) return nullptr;
-            auto e = scope->second.find(entity);
-            return e == scope->second.end() ? nullptr : e->second;
-        }
-
-        // The entity a view lists, and the commands on it, so a table column naming one
-        // of those commands becomes an action on every row.
-        // The entity a view's list is of: book, for the shelf's each book.
+        const language::entity_declaration* entity_of_command(const std::string& full) const { return model_.entity_of_command(full); }
         const language::entity_declaration* listed(const std::string& ns, const std::string& view, const std::optional<std::string>& list) const {
-            auto scope = views_.find(ns);
-            if (scope == views_.end()) return nullptr;
-            auto v = scope->second.find(view);
-            if (v == scope->second.end()) return nullptr;
-            auto each = std::find_if(v->second->each.begin(), v->second->each.end(), [&](const auto& e) { return e.name == list; });
-            if (each == v->second->each.end() || each->changes) return nullptr;  // a change has no commands, and no people of its own
-            auto* source = std::get_if<language::name_expression>(&each->source->node);
-            if (!source || source->name.parts.size() != 1) return nullptr;
-            auto entities = entities_.find(ns);
-            if (entities == entities_.end()) return nullptr;
-            auto e = entities->second.find(source->name.parts[0]);
-            return e == entities->second.end() ? nullptr : e->second;
+            return model_.listed(ns, view, list);
         }
-
-        // The columns a view's list holds, as written, like issue.number.
         std::vector<std::string> listed_columns(const std::string& ns, const std::string& view, const std::string& list) const {
-            std::vector<std::string> columns;
-            auto scope = views_.find(ns);
-            if (scope == views_.end()) return columns;
-            auto v = scope->second.find(view);
-            if (v == scope->second.end()) return columns;
-            for (const auto& each : v->second->each) {
-                if (each.name != list) continue;
-                for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
-            }
-            return columns;
+            return model_.listed_columns(ns, view, list);
         }
-
         std::optional<std::string> row_command(const std::string& ns, const std::string& view, const std::optional<std::string>& list,
                                                const std::string& column) const {
-            const language::entity_declaration* entity = listed(ns, view, list);
-            if (!entity) return std::nullopt;
-            std::string command = entity->name + "::" + column;
-            auto commands = commands_.find(ns);
-            if (commands == commands_.end() || !commands->second.contains(command)) return std::nullopt;
-            return web_detail::join(ns, command);
+            return model_.row_command(ns, view, list, column);
+        }
+
+        // The parameters of a link that name something keyed by several parts, as
+        // Link takes them: named={{ board: 2 }}.
+        std::string named_by(const std::string& ns, const std::string& route) const {
+            std::string named;
+            for (const auto& [name, keys] : model_.named_by(ns, route)) named += (named.empty() ? "" : ", ") + name + ": " + std::to_string(keys);
+            return named.empty() ? "" : " named={{ " + named + " }}";
         }
 
         // hand-written components
@@ -608,64 +369,20 @@ namespace one::generators {
             bool shown_in_path = false;
         };
 
-        std::vector<found_screen> every_screen_;
-        std::vector<std::pair<std::string, const language::header_declaration*>> path_headers_;  // header /:project { … }, by namespace
-
-        // The pages above a screen: those whose address its own goes on from, like
-        // /projects/:project above /projects/:project/boards/:board, nearest last,
-        // each by its address and its title. The app's home isn't one; its name is.
+        // The pages above a screen, nearest last, each by its address and its title,
+        // as Crumbs takes them.
         std::string crumbs(screen_parts& parts, const std::string& ns, const language::screen_declaration& screen, const std::string& here) {
-            // Under a page its address doesn't name, like an issue under its board: that
-            // page's trail, then that page, called as this screen says.
-            std::string route = screen.under ? full_route(ns, *screen.under) : here;
-            auto segments = [](const std::string& path) {
-                std::vector<std::string> out;
-                for (std::size_t at = 0; at < path.size();) {
-                    std::size_t end = path.find('/', at + 1);
-                    std::string part = path.substr(at + 1, end == std::string::npos ? std::string::npos : end - at - 1);
-                    if (!part.empty()) out.push_back(part);
-                    at = end == std::string::npos ? path.size() : end;
-                }
-                return out;
-            };
-            auto mine = segments(route);
             std::vector<std::pair<std::size_t, std::string>> above;
-            for (const auto& [ns, s, _] : every_screen_) {
-                std::string theirs_route = full_route(ns, s->route);
-                auto theirs = segments(theirs_route);
-                if (theirs.empty() || theirs.size() >= mine.size() || !std::equal(theirs.begin(), theirs.end(), mine.begin())) continue;
-                std::string title = s->title_is_name ? web_detail::label(s->title) : s->title.empty() ? (title_.empty() ? name_ : title_) : s->title;
-                std::string spoken = title.find('{') != std::string::npos ? title_parts(parts, ns, title) : web_detail::js_string(title);
-                above.emplace_back(theirs.size(), "{ to: " + web_detail::js_string(theirs_route) + ", title: [" + spoken + "] }");
+            for (const auto& c : model_.crumbs(ns, screen, here)) {
+                std::string spoken = title_parts(parts, c.title);
+                std::string fill;
+                for (const auto& f : c.fill) {
+                    fill += (fill.empty() ? "" : ", ") + f.parameter + ": [" + view_variable(parts, f.view) + ", " + web_detail::js_string(f.field) + ", " +
+                            std::to_string(f.keys) + "]";
+                }
+                above.emplace_back(c.depth, "{ to: " + web_detail::js_string(c.to) + ", title: [" + spoken + "]" + (fill.empty() ? "" : ", fill: { " + fill + " }") + " }");
             }
             std::sort(above.begin(), above.end());
-            if (screen.under) {
-                std::string spoken = screen.under_title.find('{') != std::string::npos ? title_parts(parts, ns, screen.under_title) : web_detail::js_string(screen.under_title);
-                // Its parameters this address doesn't have, from the view holding them,
-                // like the issue's board, by its own part when it's keyed by several.
-                std::string fill;
-                for (std::size_t at = route.find("/:"); at != std::string::npos; at = route.find("/:", at + 1)) {
-                    std::size_t end = route.find('/', at + 1);
-                    std::string name = route.substr(at + 2, end == std::string::npos ? std::string::npos : end - at - 2);
-                    if (names_parameter(here, name)) continue;
-                    int keys = 1;
-                    if (auto scope = entities_.find(ns); scope != entities_.end() && scope->second.contains(name)) {
-                        keys = 0;
-                        for (const auto& f : scope->second.at(name)->fields) keys += f.key ? 1 : 0;
-                    }
-                    if (auto scope = views_.find(ns); scope != views_.end()) {
-                        for (const auto& [view_name, view] : scope->second) {
-                            if (!view->per || !names_parameter(here, *view->per)) continue;
-                            bool holds = std::any_of(view->values.begin(), view->values.end(), [&](const language::view_value& v) { return v.name && *v.name == name; });
-                            if (!holds) continue;
-                            fill += (fill.empty() ? "" : ", ") + name + ": [" + view_variable(parts, web_detail::join(ns, view_name)) + ", " + web_detail::js_string(name) +
-                                    ", " + std::to_string(std::max(keys, 1)) + "]";
-                            break;
-                        }
-                    }
-                }
-                above.emplace_back(above.size() + 1000, "{ to: " + web_detail::js_string(route) + ", title: [" + spoken + "]" + (fill.empty() ? "" : ", fill: { " + fill + " }") + " }");
-            }
             if (above.empty()) return "";
             std::string items;
             for (const auto& [_, item] : above) items += (items.empty() ? "" : ", ") + item;
@@ -693,9 +410,7 @@ namespace one::generators {
                 // What a header says above every screen under its path, like a project's own;
                 // a menu in it goes down the side, with what the screen shows beside it.
                 std::string menu;
-                for (const auto& [header_ns, header] : path_headers_) {
-                    std::string path = full_route(header_ns, *header->route);
-                    if (!route.starts_with(path) || (route.size() != path.size() && route[path.size()] != '/' && path != "/")) continue;
+                for (const auto& [header_ns, header] : model_.headers_over(route)) {
                     std::size_t before = header->items.size();
                     for (std::size_t at = 0; at < header->items.size(); ++at) {
                         auto* block = std::get_if<language::content_block>(&header->items[at].node);
@@ -956,30 +671,15 @@ namespace one::generators {
 
         // A title with {view.field} in it, as useTitle takes it: the plain parts as
         // strings, and each value as the view it's read from and its field.
-        std::string title_parts(screen_parts& parts, const std::string& ns, std::string_view text) {
+        std::string title_parts(screen_parts& parts, const std::vector<screens::title_part>& title) {
             std::string out;
-            auto add = [&](const std::string& part) { out += (out.empty() ? "" : ", ") + part; };
-            std::size_t at = 0;
-            while (at < text.size()) {
-                std::size_t open = text.find('{', at);
-                std::size_t close = open == std::string_view::npos ? open : text.find('}', open);
-                if (close == std::string_view::npos) {
-                    add(web_detail::js_string(text.substr(at)));
-                    break;
-                }
-                if (open > at) add(web_detail::js_string(text.substr(at, open - at)));
-                std::string_view value = text.substr(open + 1, close - open - 1);
-                std::size_t dot = value.find('.');  // a view's name has none; its value may, like stage.title
-                if (dot == std::string_view::npos) {
-                    add(web_detail::js_string(text.substr(open, close - open + 1)));
-                } else {
-                    std::string view = full_view(ns, std::string(value.substr(0, dot)));
-                    add("[" + view_variable(parts, view) + ", " + web_detail::js_string(value.substr(dot + 1)) + "]");
-                }
-                at = close + 1;
+            for (const auto& part : title) {
+                out += (out.empty() ? "" : ", ") +
+                       (part.live() ? "[" + view_variable(parts, part.view) + ", " + web_detail::js_string(part.field) + "]" : web_detail::js_string(part.text));
             }
             return out;
         }
+        std::string title_parts(screen_parts& parts, const std::string& ns, std::string_view text) { return title_parts(parts, model_.title_parts(ns, text)); }
 
         // Text with {view.field} in it: the plain parts as they are, and each value as
         // a <Live> reading that view.
@@ -1025,108 +725,34 @@ namespace one::generators {
         }
 
         static bool has_form_for(const std::vector<language::screen_item>& items, const language::qualified_name& command) {
-            for (const auto& item : items) {
-                if (auto* form = std::get_if<language::form_item>(&item.node)) {
-                    for (const auto& c : form->commands) {
-                        if (c.text() == command.text()) return true;
-                    }
-                }
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
-                    if (has_form_for(block->items, command)) return true;
-                }
-            }
-            return false;
+            return screens::model::has_form_for(items, command);
         }
-
-        // The form a screen has for a command, written anywhere on it.
         static const language::form_item* form_for(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) {
-            for (const auto& item : items) {
-                if (auto* form = std::get_if<language::form_item>(&item.node)) {
-                    if (full_command(ns, form->commands.front()) == command) return form;
-                }
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
-                    if (auto* found = form_for(ns, block->items, command)) return found;
-                }
-            }
-            return nullptr;
+            return screens::model::form_for(ns, items, command);
         }
-
-        // Whether a command is a button on each row of a table on the screen, like
-        // stage::update "Rename": its form then opens from the row rather than being
-        // drawn on its own.
         bool on_rows(const std::string& ns, const std::vector<language::screen_item>& items, const std::string& command) const {
-            for (const auto& item : items) {
-                // A grid's cells open its entity's create and update.
-                if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
-                    if (const language::entity_declaration* entry = listed(ns, grid->view.text(), grid->list)) {
-                        if (command == web_detail::join(ns, entry->name + "::create") || command == web_detail::join(ns, entry->name + "::update")) return true;
-                    }
-                }
-                // A command in a table's or a board's block is a button in its toolbar.
-                std::vector<const language::table_column*> tools;
-                if (auto* t = std::get_if<language::table_item>(&item.node)) {
-                    for (const auto& column : t->columns) tools.push_back(&column);
-                } else if (auto* b = std::get_if<language::board_item>(&item.node)) {
-                    for (const auto& column : b->columns) tools.push_back(&column);
-                }
-                for (const auto* column : tools) {
-                    std::string key = web_detail::text_of(*column->value);
-                    if (key.find("::") != std::string::npos && web_detail::join(ns, key) == command) return true;
-                }
-                if (auto* table = std::get_if<language::table_item>(&item.node)) {
-                    for (const auto& column : table->columns) {
-                        std::string key = web_detail::text_of(*column.value);
-                        if (key.find('.') != std::string::npos) continue;
-                        if (auto found = row_command(ns, table->view.text(), table->list, key); found && *found == command) return true;
-                    }
-                }
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
-                    if (on_rows(ns, block->items, command)) return true;
-                }
-            }
-            return false;
+            return model_.on_rows(ns, items, command);
         }
-
         static const language::button_item* button_for(const std::vector<language::screen_item>& items, const language::qualified_name& command) {
-            for (const auto& item : items) {
-                if (auto* button = std::get_if<language::button_item>(&item.node)) {
-                    if (button->command.text() == command.text()) return button;
-                }
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
-                    if (auto* found = button_for(block->items, command)) return found;
-                }
-            }
-            return nullptr;
+            return screens::model::button_for(items, command);
         }
 
-        // Whether the person reading may run a command a role grants, on a page whose
-        // address names where the role is held, like the project in
-        // /:project/issues/:issue: one of the roles granting it, held there. Nothing,
-        // when no role grants it or the page doesn't say where.
+        // Whether the person reading may run a command, as a button's allowed: allows
+        // for a project's own roles, holds for those it declares.
         std::string allowed(screen_parts& parts, const std::string& ns, const std::string& command) {
-            for (const auto& held : held_) {
-                // A project's own roles allow what their records say now: any command of
-                // theirs but one anyone may run.
-                if (!held.allows.empty()) {
-                    if (!command.starts_with(held.ns + "::") || held.open.contains(command)) continue;
-                    if (!names_parameter(route_, held.within) || !entity_named(ns, held.within)) continue;
-                    parts.params.insert(held.within);
-                    parts.components.insert("allows");
-                    return " allowed={allows(" + view_variable(parts, held.view) + ", " + web_detail::js_string(held.field) + ", " +
-                           web_detail::js_name(held.within + "_id") + ", " + web_detail::js_string(command.substr(held.ns.size() + 2)) + ", " +
-                           web_detail::js_string(held.allows) + ")}";
-                }
-                auto granting = held.granting.find(command);
-                if (granting == held.granting.end()) continue;
-                if (!names_parameter(route_, held.within) || !entity_named(ns, held.within)) continue;
-                parts.params.insert(held.within);
-                parts.components.insert("holds");
-                std::string roles;
-                for (const auto& role : granting->second) roles += (roles.empty() ? "" : ", ") + web_detail::js_string(role);
-                return " allowed={holds(" + view_variable(parts, held.view) + ", " + web_detail::js_string(held.field) + ", " +
-                       web_detail::js_name(held.within + "_id") + ", [" + roles + "])}";
+            auto may = model_.allowed(ns, route_, command);
+            if (!may) return "";
+            parts.params.insert(may->within);
+            if (may->by_record()) {
+                parts.components.insert("allows");
+                return " allowed={allows(" + view_variable(parts, may->view) + ", " + web_detail::js_string(may->field) + ", " +
+                       web_detail::js_name(may->within + "_id") + ", " + web_detail::js_string(may->command) + ", " + web_detail::js_string(may->allows) + ")}";
             }
-            return "";
+            parts.components.insert("holds");
+            std::string roles;
+            for (const auto& role : may->roles) roles += (roles.empty() ? "" : ", ") + web_detail::js_string(role);
+            return " allowed={holds(" + view_variable(parts, may->view) + ", " + web_detail::js_string(may->field) + ", " +
+                   web_detail::js_name(may->within + "_id") + ", [" + roles + "])}";
         }
 
         // A button's when, as JavaScript reading the page's views: false until every
@@ -1483,7 +1109,7 @@ namespace one::generators {
         void steps(stream& out, screen_parts& parts, const std::string& ns, const language::button_item& button) {
             std::string command = full_command(ns, button.command);
             const language::entity_declaration* entity = entity_of_command(command);
-            const language::command_declaration* declared = command_nodes_.count(command) ? command_nodes_[command] : nullptr;
+            const language::command_declaration* declared = command_nodes_.count(command) ? command_nodes_.at(command) : nullptr;
             std::string field;
             if (declared) {
                 for (const auto& st : declared->body) {
@@ -1531,39 +1157,17 @@ namespace one::generators {
             out.line(line + " />");
         }
 
-        // Whose roles may take each step a button goes along: the step's list of the
-        // project's roles, the view of the person's roles, and where they're held,
-        // each as a property and its JavaScript.
+        // Whose roles may take each step a button goes along, each as a property and
+        // its JavaScript.
         std::vector<std::pair<std::string, std::string>> held_by(screen_parts& parts, const std::string& ns, const language::button_item& button) {
             std::vector<std::pair<std::string, std::string>> props;
-            const language::view_declaration* view = nullptr;
-            if (auto scope = views_.find(ns); scope != views_.end()) {
-                if (auto it = scope->second.find(button.along->parts.back()); it != scope->second.end()) view = it->second;
-            }
-            for (std::size_t at = 0; view && at < view->each.size(); ++at) {
-                const auto& each = view->each[at];
-                if (!each.name || *each.name != button.along_list) continue;
-                auto* source = std::get_if<language::name_expression>(&each.source->node);
-                const language::entity_declaration* step = nullptr;
-                if (auto scope = entities_.find(ns); source && scope != entities_.end()) {
-                    if (auto it = scope->second.find(source->name.text()); it != scope->second.end()) step = it->second;
-                }
-                for (const auto& row : each.rows) {
-                    std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
-                    for (const auto& held : held_) {
-                        if (held.allows.empty() || held.ns != ns || !step || !names_parameter(route_, held.within)) continue;
-                        for (const auto& f : step->fields) {
-                            if (f.name == column && f.list && f.type && f.type->text() == held.record) {
-                                parts.params.insert(held.within);
-                                props = {{"held", web_detail::js_string(column)},
-                                         {"roles", view_variable(parts, held.view)},
-                                         {"within", web_detail::js_name(held.within + "_id")},
-                                         {"place", web_detail::js_string(held.field)},
-                                         {"role", web_detail::js_string(held.allows.substr(0, held.allows.find('.')))}};
-                            }
-                        }
-                    }
-                }
+            for (const auto& h : model_.held_by(ns, route_, button)) {
+                parts.params.insert(h.within);
+                props = {{"held", web_detail::js_string(h.held)},
+                         {"roles", view_variable(parts, h.view)},
+                         {"within", web_detail::js_name(h.within + "_id")},
+                         {"place", web_detail::js_string(h.place)},
+                         {"role", web_detail::js_string(h.role)}};
             }
             return props;
         }
@@ -1869,7 +1473,7 @@ namespace one::generators {
                         // nothing pasted; its name or title is a value of its own, like
                         // implementer or stage_title.
                         if (f->type && f->type->text() == "user") kind = "people";
-                        if (f->type && entities_.count(view_ns) && entities_[view_ns].count(f->type->text())) kind = "people";
+                        if (f->type && entities_.count(view_ns) && entities_.at(view_ns).count(f->type->text())) kind = "people";
                         // A choice as it's shown, like In progress.
                         if (!f->choices.empty()) {
                             shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) +
@@ -2065,45 +1669,10 @@ namespace one::generators {
             out.line(line + " />");
         }
 
-        // A column as it's shown: author, a person, is their name, with their picture
-        // beside it when the rows hold it; and it's called as the screen says, or as its
-        // field is everywhere, like number "#", or by its name.
-        struct shown_column {
-            std::string key;
-            std::string label;
-            std::optional<std::string> picture;
-        };
+        using shown_column = screens::shown_column;
         shown_column shown_as(const std::string& ns, const std::string& view, const std::optional<std::string>& list,
-                           const language::entity_declaration* entity, const std::string& written, const std::optional<std::string>& said) const {
-            shown_column out{written, "", std::nullopt};
-            std::vector<std::string> columns;
-            if (auto scope = views_.find(ns); scope != views_.end()) {
-                if (auto v = scope->second.find(view); v != scope->second.end()) {
-                    for (const auto& each : v->second->each) {
-                        if (each.name != list) continue;
-                        for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
-                    }
-                }
-            }
-            auto held = [&](const std::string& name) { return std::find(columns.begin(), columns.end(), name) != columns.end(); };
-            // A person is shown by their name even where the rows hold who they are too.
-            bool person = false;
-            for (const auto& f : entity ? entity->fields : nothing_) {
-                if (f.name == written && f.type && f.type->text() == "user") person = true;
-            }
-            if ((!held(written) || person) && held(written + ".name")) {
-                out.key = written + ".name";
-                if (held(written + ".picture")) out.picture = written + ".picture";
-            }
-            std::string first = written.substr(0, written.find('.'));
-            std::string rest = written.find('.') == std::string::npos ? "" : written.substr(written.find('.') + 1);
-            std::optional<std::string> field_label;
-            for (const auto& f : entity ? entity->fields : nothing_) {
-                if (f.name == first && (rest.empty() || rest == "name" || rest == "title")) field_label = f.label;
-            }
-            std::string name = out.key.substr(out.key.rfind('.') == std::string::npos ? 0 : out.key.rfind('.') + 1);
-            out.label = said ? *said : field_label ? *field_label : web_detail::label(rest == "" && out.key != written ? written : name);
-            return out;
+                              const language::entity_declaration* entity, const std::string& written, const std::optional<std::string>& said) const {
+            return model_.shown_as(ns, view, list, entity, written, said);
         }
 
         void table(stream& out, screen_parts& parts, const std::string& ns, const language::table_item& table, const std::vector<language::screen_item>& screen) {
@@ -2239,181 +1808,72 @@ namespace one::generators {
         // track={{ field: "milestone", view: boardPage, list: "milestones", shown: "title",
         // columns: { due: "Due" } }}: a list's records as cards in a row, picking one
         // keeping the rows whose field is it, which is in the page's path.
-        std::string track_on(screen_parts& parts, const std::string& ns, const language::track_setting* track) {
-            if (!track) return "";
+        std::string track_on(screen_parts& parts, const std::string& ns, const language::track_setting* setting) {
+            if (!setting) return "";
             parts.shown_in_path = true;
-            auto over = listed_columns(ns, track->over.text(), track->over_list);
-            std::string shown = std::find(over.begin(), over.end(), "title") != over.end() ? "title" : "name";
+            auto track = model_.track_of(ns, *setting);
             std::string columns;
-            for (const auto& column : track->columns) {
-                std::string key = web_detail::text_of(*column.value);
-                std::string name = key.substr(key.rfind('.') == std::string::npos ? 0 : key.rfind('.') + 1);
-                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " +
-                           web_detail::js_string(column.label ? *column.label : web_detail::label(name));
+            for (const auto& [key, label] : track.columns) {
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(label);
             }
-            return " track={{ field: " + web_detail::js_string(track->field) + ", view: " + view_variable(parts, full_view(ns, track->over.text())) +
-                   ", list: " + web_detail::js_string(track->over_list) + ", shown: " + web_detail::js_string(shown) + ", columns: { " + columns + " } }}";
+            return " track={{ field: " + web_detail::js_string(track.field) + ", view: " + view_variable(parts, track.view) +
+                   ", list: " + web_detail::js_string(track.list) + ", shown: " + web_detail::js_string(track.shown) + ", columns: { " + columns + " } }}";
         }
 
-        // A choice field's choices, each with how it's shown: [["mit", "MIT"], ...].
         // tint={{ field: "priority", order: [...] }}: the field's choices, the first
         // the most urgent, which color what shows it.
-        static std::string tint_of(const std::string& name, const language::field& f) {
+        static std::string tint_of(const screens::tint& tint) {
             std::string order;
-            for (const auto& c : f.choices) order += (order.empty() ? "" : ", ") + web_detail::js_string(c);
-            return " tint={{ field: " + web_detail::js_string(name) + ", order: [" + order + "] }}";
+            for (const auto& c : tint.order) order += (order.empty() ? "" : ", ") + web_detail::js_string(c);
+            return " tint={{ field: " + web_detail::js_string(tint.field) + ", order: [" + order + "] }}";
         }
+        static std::string tint_of(const std::string& name, const language::field& f) { return tint_of(screens::model::tint_of(name, f)); }
 
         // A list's tint, from the field of its rows' entity that the block names.
         std::string tint_on(const std::string& ns, const language::qualified_name& view, const std::optional<std::string>& list, const std::optional<std::string>& tint) {
-            if (!tint) return "";
-            const language::entity_declaration* rows = listed(ns, view.text(), list);
-            for (const auto& f : rows ? rows->fields : nothing_) {
-                if (f.name == *tint) return tint_of(*tint, f);
-            }
-            return "";
+            auto found = model_.tint_on(ns, view, list, tint);
+            return found ? tint_of(*found) : "";
         }
 
-        static std::string choice_options(const language::field& f) {
+        // A choice field's choices, each with how it's shown: [["mit", "MIT"], ...].
+        static std::string choice_options(const std::vector<std::pair<std::string, std::string>>& choices) {
             std::string options;
-            for (std::size_t i = 0; i < f.choices.size(); ++i) {
-                std::string shown = i < f.choice_labels.size() && !f.choice_labels[i].empty() ? f.choice_labels[i] : web_detail::label(f.choices[i]);
-                options += (options.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(f.choices[i]) + ", " + web_detail::js_string(shown) + "]";
+            for (const auto& [value, shown] : choices) {
+                options += (options.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(value) + ", " + web_detail::js_string(shown) + "]";
             }
             return "[" + options + "]";
         }
+        static std::string choice_options(const language::field& f) { return choice_options(screens::model::choice_options(f)); }
 
-        // A list of an entity, like a project's roles, in a view per something the
-        // screen's address names, like project_page: the view, the list, and what each
-        // is shown by, its title or its name: projectPage, "roles", "title".
-        std::optional<std::string> listed_on_screen(screen_parts& parts, const std::string& ns, const std::string& entity, const std::string& asking = "") {
-            auto scope = views_.find(ns);
-            if (scope == views_.end()) return std::nullopt;
-            // A person: from a list whose rows hold one, with their name, like a
-            // project's members, each person offered once.
-            if (entity == "user") {
-                for (const auto& [name, view] : scope->second) {
-                    if (!view->per || !names_parameter(route_, *view->per)) continue;
-                    for (const auto& each : view->each) {
-                        auto* source = std::get_if<language::name_expression>(&each.source->node);
-                        // Not from a list of what the form makes, like adding someone to a
-                        // project from its members, who are there already.
-                        if (!each.name || each.changes || !source || source->name.text() == asking) continue;
-                        auto listed = entities_.find(ns);
-                        if (listed == entities_.end() || !listed->second.contains(source->name.text())) continue;
-                        std::vector<std::string> columns;
-                        for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : web_detail::text_of(*row.value));
-                        for (const auto& f : listed->second.at(source->name.text())->fields) {
-                            if (f.list || !f.type || f.type->text() != "user") continue;
-                            bool both = std::find(columns.begin(), columns.end(), f.name) != columns.end() &&
-                                        std::find(columns.begin(), columns.end(), f.name + ".name") != columns.end();
-                            if (!both) continue;
-                            parts.params.insert(*view->per);
-                            return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name) + ", " +
-                                   web_detail::js_string(f.name + ".name") + ", " + web_detail::js_string(f.name);
-                        }
-                    }
-                }
-                return std::nullopt;
-            }
-            for (const auto& [name, view] : scope->second) {
-                if (!view->per || !names_parameter(route_, *view->per)) continue;
-                for (const auto& each : view->each) {
-                    auto* source = std::get_if<language::name_expression>(&each.source->node);
-                    if (!each.name || each.changes || !source || source->name.text() != entity) continue;
-                    std::string shown;
-                    for (const auto& row : each.rows) {
-                        std::string column = row.name ? *row.name : web_detail::text_of(*row.value);
-                        if (column == "title" || (column == "name" && shown.empty())) shown = column;
-                    }
-                    if (shown.empty()) continue;
-                    parts.params.insert(*view->per);
-                    return view_variable(parts, web_detail::join(ns, name)) + ", " + web_detail::js_string(*each.name) + ", " + web_detail::js_string(shown);
-                }
-            }
-            return std::nullopt;
+        // A list of an entity on the screen, as listChoices takes it: projectPage,
+        // "roles", "title"; for people, their name and who they are.
+        std::string listing(screen_parts& parts, const screens::listing& list) {
+            parts.params.insert(list.within);
+            return view_variable(parts, list.view) + ", " + web_detail::js_string(list.list) + ", " + web_detail::js_string(list.shown) +
+                   (list.person ? ", " + web_detail::js_string(*list.person) : "");
         }
 
         // What a form asks for, as the Form component takes it: each field with its
         // kind and choices.
         std::string form_fields(screen_parts& parts, const std::string& ns, const language::form_item& form) {
-            const language::entity_declaration* entity = entity_of_command(full_command(ns, form.commands.front()));
             std::string fields;
-            for (const auto& f : form.fields) {
-                std::string type = "text";
+            for (const auto& f : model_.form_fields(ns, route_, form)) {
                 std::string choices;
-                if (entity) {
-                    for (const auto& field : entity->fields) {
-                        if (field.name == f.name && field.type && field.type->parts.size() == 1) {
-                            const auto& t = field.type->parts[0];
-                            if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") type = t;
-                            if (field.list) type = "list";
-                            // A file is chosen and uploaded, or several.
-                            if (t == "file") type = field.list ? "files" : "file";
-                        }
-                        for (const auto& held : held_) {
-                            if (field.name != f.name || !field.type || held.allows.empty() || held.ns != ns) continue;
-                            // What a role allows: a box to tick for each command there is.
-                            if (field.list && field.type->text() == "permission") {
-                                type = "choices";
-                                std::string options;
-                                for (const auto& c : commands_[ns]) {
-                                    if (held.open.contains(web_detail::join(ns, c))) continue;
-                                    std::string action = c.substr(c.rfind("::") + 2), on = c.substr(0, c.rfind("::"));
-                                    std::replace(on.begin(), on.end(), '_', ' ');
-                                    options += (options.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(c) + ", " +
-                                               web_detail::js_string(web_detail::label(action) + " " + on) + "]";
-                                }
-                                choices = ", choices: [" + options + "]";
-                            }
-                        }
-                        // Another entity, like a person's role or a step's stages: one
-                        // of those a view on the screen lists, or several for a list.
-                        if (field.name == f.name && field.type && choices.empty()) {
-                            if (auto list = listed_on_screen(parts, ns, field.type->text(), entity->name)) {
-                                type = field.list ? "choices" : "pick";
-                                parts.components.insert("listChoices");
-                                choices = ", choices: listChoices(" + *list + ")";
-                            }
-                        }
-                        // A choice is picked from its choices, not typed.
-                        if (field.name == f.name && !field.choices.empty()) {
-                            type = "choice";
-                            choices = ", choices: " + choice_options(field);
-                            // A new one starts on the field's own starting choice.
-                            if (auto* start = field.initial ? std::get_if<language::name_expression>(&field.initial->node) : nullptr) {
-                                choices += ", start: " + web_detail::js_string(start->name.parts.back());
-                            }
-                            // A required choice is always one of them, so there's no empty one.
-                            if (field.required) choices += ", required: true";
-                        }
-                    }
+                for (const auto& looked : f.looked_at) {
+                    parts.components.insert("listChoices");
+                    listing(parts, looked);
                 }
-                // What the command is sent besides its entity's fields, like the stage
-                // a removed stage's issues move to: picked like a field of its type.
-                if (auto c = command_nodes_.find(full_command(ns, form.commands.front())); c != command_nodes_.end()) {
-                    for (const auto& st : c->second->body) {
-                        auto* input = std::get_if<language::input_statement>(&st.node);
-                        if (!input || input->name != f.name) continue;
-                        const std::string t = input->type.text();
-                        if (t == "number" || t == "date" || t == "boolean" || t == "email") {
-                            type = t;
-                        } else if (auto list = listed_on_screen(parts, ns, t)) {
-                            type = "pick";
-                            parts.components.insert("listChoices");
-                            choices = ", choices: listChoices(" + *list + ")";
-                        }
-                    }
+                if (f.from) {
+                    choices = ", choices: listChoices(" + listing(parts, *f.from) + ")";
+                } else if (f.options) {
+                    choices = ", choices: " + choice_options(*f.options);
+                    if (f.start) choices += ", start: " + web_detail::js_string(*f.start);
+                    if (f.required) choices += ", required: true";
                 }
-                // Called as the form says, or as its field is everywhere.
-                std::optional<std::string> label = f.label;
-                for (const auto& field : entity ? entity->fields : nothing_) {
-                    if (!label && field.name == f.name && field.label) label = field.label;
-                }
-                std::string spec = type == "text" && !f.hint && !label
+                std::string spec = f.type == "text" && !f.hint && !f.label
                     ? web_detail::js_string(f.name)
-                    : "{ name: " + web_detail::js_string(f.name) + (label ? ", label: " + web_detail::js_string(*label) : "") +
-                          (type == "text" ? "" : ", type: " + web_detail::js_string(type)) + choices +
+                    : "{ name: " + web_detail::js_string(f.name) + (f.label ? ", label: " + web_detail::js_string(*f.label) : "") +
+                          (f.type == "text" ? "" : ", type: " + web_detail::js_string(f.type)) + choices +
                           (f.hint ? ", hint: " + web_detail::js_string(*f.hint) : "") + " }";
                 fields += (fields.empty() ? "" : ", ") + spec;
             }

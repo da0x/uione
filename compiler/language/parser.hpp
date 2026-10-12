@@ -382,7 +382,7 @@ namespace one::language {
                     return std::vector<setting>{s};
                 }
                 // corners square, or in full, corners one::corners::square; a list may say
-                // several on a line, targets web desktop terminal, each one of its values.
+                // several on a line, target web desktop terminal, each one of its values.
                 std::vector<setting> said;
                 do {
                     setting one = s;

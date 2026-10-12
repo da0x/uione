@@ -1,12 +1,12 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Targets: the apps one build writes from a project's screens, targets web desktop
+// Targets: the apps one build writes from a project's screens, target web desktop
 // terminal in its project block, the web alone when it says none. Each target says
 // here, explicitly, every screen element and setting it draws; a screen using one
 // that a target it's built for doesn't draw is an error, naming the element, where
 // it is, and the target, so what the compiler answers is always complete. one build
-// --targets builds fewer for one run.
+// --target builds fewer for one run.
 
 #pragma once
 
@@ -124,7 +124,7 @@ namespace one::language {
                 auto* p = std::get_if<project_declaration>(&d.node);
                 if (!p) continue;
                 for (const auto& s : p->settings) {
-                    if (s.key == "targets" && !listed(out, s.value)) out.push_back(s.value);
+                    if (s.key == "target" && !listed(out, s.value)) out.push_back(s.value);
                 }
             }
         }
@@ -132,7 +132,7 @@ namespace one::language {
         return out;
     }
 
-    // The targets one build was asked for with --targets, while it checks and builds:
+    // The targets one build was asked for with --target, while it checks and builds:
     // fewer than the project says, for one run.
     inline std::optional<std::vector<std::string>>& building_targets() {
         thread_local std::optional<std::vector<std::string>> asked;
@@ -295,8 +295,8 @@ namespace one::language {
                         what += std::string(i == 0 ? "" : i + 1 == lacking.size() ? " and " : ", ") + std::string(lacking[i]);
                     }
                     out.push_back({f.path, said[at].where,
-                                   what + (lacking.size() == 1 ? " isn't" : " aren't") + " drawn by the " + t + " app yet; take " + t + " out of targets" +
-                                       (drawing.empty() ? "" : ", or build with --targets " + drawing)});
+                                   what + (lacking.size() == 1 ? " isn't" : " aren't") + " drawn by the " + t + " app yet; take " + t + " out of target" +
+                                       (drawing.empty() ? "" : ", or build with --target " + drawing)});
                 }
                 at = end;
             }

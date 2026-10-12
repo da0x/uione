@@ -32,7 +32,7 @@ namespace {
 
     int usage() {
         std::cerr << "usage: one check <path>...\n"
-                     "       one build <project> [--out <folder>] [--for <environment>] [--targets <target>[,<target>...]]\n"
+                     "       one build <project> [--out <folder>] [--for <environment>] [--target <target>[,<target>...]]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one --version\n";
@@ -57,7 +57,7 @@ namespace {
 
     int build(const std::string& project, std::string out, const std::string& environment, const std::string& targets) {
         if (out.empty()) out = project + "/build";
-        // --targets web,desktop: fewer of the project's targets, for this run.
+        // --target web,desktop: fewer of the project's targets, for this run.
         std::optional<std::vector<std::string>> only;
         if (!targets.empty()) {
             only.emplace();
@@ -171,8 +171,8 @@ int main(int argc, char** argv) {
     if (args.size() >= 2 && args.size() % 2 == 0 && args[0] == "build") {
         std::string out, environment, targets;
         for (std::size_t i = 2; i < args.size(); i += 2) {
-            std::string& value = args[i] == "--out" ? out : args[i] == "--for" ? environment : args[i] == "--targets" ? targets : out;
-            if ((args[i] != "--out" && args[i] != "--for" && args[i] != "--targets") || !value.empty() || args[i + 1].empty()) return usage();
+            std::string& value = args[i] == "--out" ? out : args[i] == "--for" ? environment : args[i] == "--target" ? targets : out;
+            if ((args[i] != "--out" && args[i] != "--for" && args[i] != "--target") || !value.empty() || args[i + 1].empty()) return usage();
             value = args[i + 1];
         }
         return build(args[1], out, environment, targets);

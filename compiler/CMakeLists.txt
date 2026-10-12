@@ -91,7 +91,8 @@ if(ONE_TESTS)
         tests/upgrade_tests.cpp
         tests/environments_tests.cpp
         tests/define_tests.cpp
-        tests/targets_tests.cpp)
+        tests/targets_tests.cpp
+        tests/screens_tests.cpp)
     target_include_directories(one_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_include_directories(one_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR})
     target_compile_definitions(one_tests PRIVATE UIONE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")

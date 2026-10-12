@@ -1105,7 +1105,7 @@ namespace one::driver {
     // Checks a project, and only when it's clean, generates everything it becomes,
     // for the environment named, or the first. Nothing is written; that's up to the
     // caller.
-    // The targets --targets names, while a build checks and generates, and none after.
+    // The targets --target names, while a build checks and generates, and none after.
     class building_only {
     public:
         explicit building_only(std::optional<std::vector<std::string>> targets) { language::building_targets() = std::move(targets); }
@@ -1121,13 +1121,13 @@ namespace one::driver {
         std::vector<language::file> files;
         std::size_t count = check_project(project, result.problems, &files);
         if (targets && count > 0) {
-            // --targets builds fewer than the project says, never others.
+            // --target builds fewer than the project says, never others.
             auto said = language::targets_of(files);
             for (const auto& t : *targets) {
                 if (language::listed(said, t)) continue;
                 std::string listed;
                 for (const auto& s : said) listed += (listed.empty() ? "" : " ") + s;
-                result.refusal = "--targets names " + t + ", which this project doesn't build; its targets are " + listed;
+                result.refusal = "--target names " + t + ", which this project doesn't build; its targets are " + listed;
                 return result;
             }
         }

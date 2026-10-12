@@ -20,7 +20,7 @@ namespace one {
 		terminal  "Terminal"
 	}
 
-	// A way people sign in, one to a line.
+	// A way people sign in.
 	enum signin {
 		google     "Google"
 		github     "GitHub"
@@ -120,12 +120,12 @@ namespace one {
 		region      slug
 		// The component set it's drawn with.
 		ui          ui
-		// The ways people sign in, one to a line.
+		// The ways people sign in, several to a line, like signin google github.
 		signin      list of signin
-		// The apps one build writes from the screens, several to a line, like targets web
+		// The apps one build writes from the screens, several to a line, like target web
 		// desktop terminal; the web alone when it isn't said. Every screen has to be one
 		// each of them draws.
-		targets     list of target
+		target      list of target
 		// The site's icon: an SVG file beside the project's .one files.
 		icon        file
 		// How the site looks: a theme of its own, or uione's, like papercolor.
