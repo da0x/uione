@@ -103,7 +103,8 @@ namespace one::desktop::runtime {
 		auto started = p.kept<view_state>("table:" + list + ":" + action.command + ":" + id + ":row");
 		if (started.peek().status != status::ready || ember::to_json(started.peek().data) != ember::to_json(row)) started.set(view_state{status::ready, row, ""});
 		auto acting = p.kept<std::string>("table:" + list + ":acting");
-		auto shown = form(p, {.command = action.command, .fields = action.form, .from = started, .id = id, .submit = action.submit.empty() ? action.label : action.submit});
+		auto shown = form(p, {.command = action.command, .fields = action.form, .from = started, .id = id, .submit = action.submit.empty() ? action.label : action.submit,
+		                      .on_done = [acting] { acting.set(""); }});
 		return desktop::column(std::move(shown), desktop::row(desktop::button("Cancel", [acting] { acting.set(""); }))).spacing(8);
 	}
 

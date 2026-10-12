@@ -736,6 +736,82 @@ TEST("a table: tabs by a choice, searched, sorted and in pages, with a row's act
 	matches_golden("table", {1000, 420}, [&] { return nav.show(); });
 }
 
+TEST("what a view holds is copied as Markdown: values, written fields under their names, and lists") {
+	value data(fields{{"priority", "high"},
+	                  {"stage.title", "To do"},
+	                  {"body", "  Copy it whole.  "},
+	                  {"comments", list{value(fields{{"author.name", "Maya Garcia"}, {"body", "Seen."}, {"created_at", "Monday"}})}},
+	                  {"links", list{value(fields{{"relation", "blocks"}, {"to.number", 9}})}}});
+	std::string md = markdown_of("#12 Copy an issue whole", data, {{"priority", "Priority"}, {"stage.title", "Stage"}, {"body", "Body", true}},
+	                             {{"comments", "Comments", "thread"}, {"links", "Links", "rows", {"relation", "to.number"}}}, {{"priority", {{"high", "High"}}}});
+	CHECK(md == "# #12 Copy an issue whole\n\n**Priority:** High  \n**Stage:** To do  \n\n## Body\n\nCopy it whole.\n\n## Comments\n\n**Maya Garcia** · Monday\n\nSeen.\n\n## Links\n\n- blocks · 9\n");
+}
+
+namespace {
+
+	site with_workflow() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Workflow", "/:project/boards/:board/workflow", "", [](page& p) {
+			                     auto board = p.view("projects::board_page", "atlas-main");
+			                     between_spec moves{.view = board,
+			                                        .list = "steps",
+			                                        .from = "from",
+			                                        .to = "to",
+			                                        .cell = "roles.title",
+			                                        .over = board,
+			                                        .over_list = "stages",
+			                                        .create = between_command{.command = "projects::step::create", .fields = {{.name = "title", .label = "Says"}}, .submit = "Allow"},
+			                                        .update = between_command{.command = "projects::step::update", .fields = {{.name = "title", .label = "Says"}}, .submit = "Save"},
+			                                        .remove = between_command{.command = "projects::step::delete", .submit = "Remove"}};
+			                     return items(find(p, "Search this board", {{.view = board, .list = "issues", .label = "Issues", .link = "/:project/:issue", .keyed = {"project"}, .by = {"number", "title"}}}),
+			                                  diagram(p, moves), grid(p, moves));
+		                     }});
+		return s;
+	}
+
+	void fill_workflow(memory_source& data) {
+		data.set("projects::board_page", "atlas-main",
+		         value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}}), value(fields{{"id", "s2"}, {"title", "Doing"}}), value(fields{{"id", "s3"}, {"title", "Done"}})}},
+		                      {"steps", list{value(fields{{"id", "m1"}, {"from", "s1"}, {"to", "s2"}, {"title", "Start"}, {"roles.title", list{"Maintainer", "Contributor"}}}),
+		                                     value(fields{{"id", "m2"}, {"from", "s2"}, {"to", "s3"}, {"title", "Finish"}, {"roles.title", list{"Maintainer"}}})}},
+		                      {"issues", list{value(fields{{"id", "atlas-12"}, {"number", 12}, {"title", "Copy an issue whole"}}),
+		                                      value(fields{{"id", "atlas-9"}, {"number", 9}, {"title", "Search by label"}})}}}));
+	}
+
+}  // namespace
+
+TEST("a grid adds what goes between two from its empty cell, and changes what's there from its full one; find finds by number or words") {
+	memory_source data;
+	fill_workflow(data);
+	auto s = with_workflow();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main/workflow");
+	auto& p = nav.current();
+	p.kept<std::string>("grid:steps").set("s3|s1");  // Done to To do, empty
+	auto root = built(nav);
+	p.kept<std::string>("form:projects::step::create:s3|s1:title").set("Reopen");
+	root = built(nav);
+	auto parts = focusable_in(*root);
+	std::size_t caret = 0, anchor = 0;
+	auto field = std::ranges::find_if(parts, [&](one::desktop::element* e) { return e->entry() && e->entry()->surrounding(caret, anchor) == "Reopen"; });
+	CHECK(field != parts.end());
+	if (field == parts.end()) return;
+	(*std::next(field))->handle_key(enter);
+	CHECK(data.runs().back().command == "projects::step::create");
+	CHECK(data.runs().back().fields["from"].as_string() == "s3");
+	CHECK(data.runs().back().fields["to"].as_string() == "s1");
+	CHECK(data.runs().back().fields["title"].as_string() == "Reopen");
+	CHECK(data.runs().back().fields.find("id") == nullptr);  // a new one has none yet
+	CHECK(p.kept<std::string>("grid:steps").peek().empty());  // closed once it's done
+	p.kept<std::string>("grid:steps").set("s1|s2");  // To do to Doing, there
+	built(nav);
+	CHECK(p.kept<std::string>("form:projects::step::update:m1:title").peek() == "Start");
+	p.kept<std::string>("grid:steps").set("");
+	p.kept<std::string>("find").set("#9");
+	matches_golden("workflow", {1000, 640}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

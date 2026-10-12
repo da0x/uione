@@ -97,6 +97,8 @@ namespace one::desktop {
 		wl_data_device_add_listener(c.device, &device_listener, nullptr);
 	}
 
+	void copy_text(std::string text) { detail::copy_text(std::move(text)); }
+
 	namespace detail {
 
 		void copy_text(std::string text) {

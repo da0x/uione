@@ -221,6 +221,9 @@ namespace one::desktop {
 	};
 	view field(state<std::string> value, field_options options = {});
 
+	// Puts text on the clipboard, as copying does.
+	void copy_text(std::string text);
+
 	// A box ticked or not, with what it says, flipped with a click, Space or Enter.
 	view toggle(state<bool> on, std::string label);
 

@@ -170,6 +170,8 @@ namespace one::desktop::runtime {
 		bool when = true;
 		bool allowed = true;
 		std::string after = "";
+		std::function<void()> on_done = {};  // once what it sent is done, like closing what it opened in
+		std::string key = "";  // what keeps what's typed apart from another form for the command; its id unless it says
 	};
 	desktop::view form(page& p, form_spec spec);
 
@@ -288,6 +290,59 @@ namespace one::desktop::runtime {
 	// What a list on the page is filtered by, with a button showing it all again;
 	// nothing when it isn't.
 	desktop::view filter_note(page& p);
+
+	// A box finding things across a page's lists, like a project's issues by number
+	// or title and its wiki by title, each found opening its address.
+	struct find_source {
+		state<view_state> view;
+		std::string list;
+		std::string label;
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::vector<std::string> by = {};
+	};
+	desktop::view find(page& p, std::string label, std::vector<find_source> sources);
+
+	// What a view holds, as Markdown to paste somewhere else whole, and a button
+	// copying it to the clipboard, saying so.
+	struct copied_field {
+		std::string name, label;
+		bool markdown = false;
+	};
+	struct copied_list {
+		std::string name, label;
+		std::string kind;  // thread, changes or rows
+		std::vector<std::string> columns = {};
+	};
+	std::string markdown_of(const std::string& title, const value& data, const std::vector<copied_field>& fields, const std::vector<copied_list>& lists,
+	                        const std::map<std::string, std::vector<desktop::option>>& choices = {});
+	desktop::view copy(page& p, state<view_state> from, std::string label, std::vector<copied_field> fields, std::vector<copied_list> lists,
+	                   std::map<std::string, std::vector<desktop::option>> choices = {});
+
+	// What goes between two of a list's things, like the moves between a board's
+	// stages: a row and a column for each, and in each cell the entry from the row's
+	// to the column's. Pressing an empty cell asks create's form with the two filled
+	// in; a full one, update's, started from it, with remove beside it. A diagram is
+	// the same, said as a list of what goes from where to where.
+	struct between_command {
+		std::string command;
+		std::vector<form_field> fields = {};
+		std::string submit = "";
+		std::map<std::string, std::string> given = {};
+		bool allowed = true;
+	};
+	struct between_spec {
+		state<view_state> view;
+		std::string list;
+		std::string from, to;
+		std::string cell = "";
+		state<view_state> over;
+		std::string over_list;
+		std::string shown = "title";
+		std::optional<between_command> create = std::nullopt, update = std::nullopt, remove = std::nullopt;
+	};
+	desktop::view grid(page& p, between_spec spec);
+	desktop::view diagram(page& p, between_spec spec);
 
 	// One of a view's lists as a thread, like an issue's comments: each by who wrote
 	// it and when, its body drawn by `body`, like markdown_view, or as text.

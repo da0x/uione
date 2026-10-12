@@ -87,7 +87,7 @@ namespace one::desktop::runtime {
 	desktop::view form(page& p, form_spec spec) {
 		if (!spec.when || !spec.allowed) return {};
 		const auto& t = current_theme();
-		std::string key = "form:" + spec.command + ":" + spec.id;
+		std::string key = "form:" + spec.command + ":" + (spec.key.empty() ? spec.id : spec.key);
 		auto touched = p.kept<bool>(key + ":touched", false);
 		auto open = p.kept<bool>(key + ":open", false);
 		// Each field's value as it's written, and for a box or several choices, each ticked or not.
@@ -206,6 +206,7 @@ namespace one::desktop::runtime {
 				for (const auto& o : f.type == "boolean" ? std::vector<desktop::option>{{"true", ""}} : f.choices) unticked.push_back(ticked(f, o.value));
 			}
 			std::string after = spec.after;
+			auto on_done = spec.on_done;
 			std::map<std::string, std::string> params = p.params();
 			page* here = &p;
 			p.run(spec.command, value(std::move(fields)), [=](const answer& a) {
@@ -218,6 +219,7 @@ namespace one::desktop::runtime {
 					for (const auto& b : unticked) b.set(false);
 				}
 				open.set(false);
+				if (on_done) on_done();
 				if (!after.empty()) here->open(row_link(after, value::map(), params));
 			}, true);
 		};
