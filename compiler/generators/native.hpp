@@ -119,7 +119,7 @@ namespace one::generators {
             std::vector<std::pair<std::string, std::string>> views;  // variable, full view name
             std::set<std::string> params;                           // entities, like project
         };
-        std::string screen_path_, route_, title_;
+        std::string screen_path_, route_, under_, title_;
         int item_line_ = 0;
 
         void find_project(const std::vector<language::declaration>& declarations, const std::string& path) {
@@ -422,18 +422,8 @@ namespace one::generators {
                     from = view_variable(parts, *view);
                     id = id_of(parts, entity->name);
                 }
-                // Once what the address names is deleted, the form goes to the address above it.
-                if (action == "delete" && screens::names_parameter(route_, entity->name)) {
-                    std::string wanted = "/:" + entity->name, above = route_;
-                    for (std::size_t at = route_.find(wanted); at != std::string::npos; at = route_.find(wanted, at + 1)) {
-                        std::size_t end = at + wanted.size();
-                        if (end == route_.size() || route_[end] == '/') {
-                            above = route_.substr(0, at);
-                            break;
-                        }
-                    }
-                    after = above.empty() ? "/" : above;
-                }
+                // Once what the address names is deleted, the form goes to the page above it.
+                if (action == "delete" && screens::names_parameter(route_, entity->name)) after = model_.after_delete(route_, under_, entity->name);
             }
             if (!from.empty()) out += ", .from = " + from;
             if (!id.empty()) out += ", .id = " + id;
@@ -1117,6 +1107,7 @@ namespace one::generators {
             for (const auto& [ns, s, where] : found) {
                 auto from_screen = bodies.from(f.path, where.line);
                 route_ = model_.full_route(ns, s->route);
+                under_ = s->under ? model_.full_route(ns, *s->under) : "";
                 shows_pages_ = false;
                 title_ = s->title_is_name ? "" : s->title;
                 screen_parts parts;

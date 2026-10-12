@@ -225,6 +225,7 @@ namespace one::generators {
         // from the project block; a screen's lines come from the screen and its items.
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
+        std::string under_;              // the page it's under, when it says one, like /:project/roadmap
         int item_line_ = 0;              // the screen item being written
         std::map<std::string, std::string> components_;    // hand-written components, by name, to their file
         std::map<std::string, std::string> dependencies_;  // npm packages they need, from components/package.json
@@ -401,6 +402,7 @@ namespace one::generators {
                 screen_parts parts;
                 std::string route = full_route(ns, s->route);
                 route_ = route;
+                under_ = s->under ? full_route(ns, *s->under) : "";
                 screen_title_ = s->title_is_name ? "" : s->title;
                 docs_base_ = route.substr(0, route.find("/:"));  // where its pages live, if it has any
                 stream items;
@@ -1921,17 +1923,9 @@ namespace one::generators {
                     edit = " from={" + view_variable(parts, *view) + "} id={" + web_detail::js_name(entity->name + "_id") + "}";
                 }
                 // Once what the address names is deleted, its page has nothing to show, so
-                // the form goes to the address above it: /:project/settings to /.
+                // the form goes to the page above it: /:project/settings to /.
                 if (command.substr(command.rfind("::") + 2) == "delete" && names_parameter(route_, entity->name)) {
-                    std::string wanted = "/:" + entity->name, above = route_;
-                    for (std::size_t at = route_.find(wanted); at != std::string::npos; at = route_.find(wanted, at + 1)) {
-                        std::size_t end = at + wanted.size();
-                        if (end == route_.size() || route_[end] == '/') {
-                            above = route_.substr(0, at);
-                            break;
-                        }
-                    }
-                    edit += " after=" + web_detail::js_string(above.empty() ? "/" : above);
+                    edit += " after=" + web_detail::js_string(model_.after_delete(route_, under_, entity->name));
                 }
             }
             // A create form on a screen whose address names what the entity points at,

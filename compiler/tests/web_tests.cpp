@@ -1576,8 +1576,36 @@ TEST_CASE("a form of only what a command is sent besides its fields acts on the 
     auto files = generate_at(dir.string());
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    CHECK(screens->content.find(R"(<Form command="shop::shop::delete" fields={[{ name: "address", label: "Type its address" }]} id={shopId} after="/shop" submit="Delete it")") != std::string::npos);
+    CHECK(screens->content.find(R"(<Form command="shop::shop::delete" fields={[{ name: "address", label: "Type its address" }]} id={shopId} after="/" submit="Delete it")") != std::string::npos);
     CHECK(screens->content.find(R"(const shopId = useParam("shop");)") != std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("a form deleting what its address names goes to the page it's under, or the nearest page above") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-delete-goes";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "entity project {\n\tslug  text  required  unique  key\n}\n"
+                         "entity board {\n\tproject  project  required  key\n\tname  text  required  key\n}\n"
+                         "entity milestone {\n\tproject  project  required  key\n\tname  text  required  key\n}\n"
+                         "command board::delete {\n\tinput typed text\n\trequire typed == name  \"type its name\"\n}\n"
+                         "command milestone::delete {\n\tinput typed text\n\trequire typed == name  \"type its name\"\n}\n"
+                         "screen \"Project\" /:project {\n\ttext \"Boards\"\n}\n"
+                         "screen \"Roadmap\" /:project/roadmap {\n\ttext \"Milestones\"\n}\n"
+                         "screen \"Board\" /:project/boards/:board {\n"
+                         "\tform board::delete \"Delete it\" {\n\t\ttyped \"Type its name\"\n\t}\n"
+                         "}\n"
+                         "screen \"Milestone\" /:project/milestones/:milestone {\n"
+                         "\tunder /:project/roadmap \"Roadmap\"\n"
+                         "\tform milestone::delete \"Delete it\" {\n\t\ttyped \"Type its name\"\n\t}\n"
+                         "}\n");
+    auto files = generate_at(dir.string());
+    const auto* screens = find(files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CHECK(screens->content.find(R"(id={boardId} after="/:project" submit="Delete it")") != std::string::npos);
+    CHECK(screens->content.find(R"(id={milestoneId} after="/:project/roadmap" submit="Delete it")") != std::string::npos);
     fs::remove_all(dir);
 }
 

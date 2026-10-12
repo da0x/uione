@@ -321,6 +321,28 @@ namespace one::generators::screens {
             return out;
         }
 
+        // Where a form that deletes what a screen's address names goes once it's done:
+        // the page the screen is under, when it says one that doesn't name it, else the
+        // nearest page above its address, /:project for /:project/boards/:board, since
+        // /:project/boards may be no page at all.
+        std::string after_delete(const std::string& route, const std::string& under, const std::string& entity) const {
+            if (!under.empty() && !names_parameter(under, entity)) return under;
+            std::string wanted = "/:" + entity, above = route;
+            for (std::size_t at = route.find(wanted); at != std::string::npos; at = route.find(wanted, at + 1)) {
+                std::size_t end = at + wanted.size();
+                if (end == route.size() || route[end] == '/') {
+                    above = route.substr(0, at);
+                    break;
+                }
+            }
+            for (auto mine = segments(above); !mine.empty(); mine.pop_back()) {
+                for (const auto& [their_ns, s, _] : every_screen) {
+                    if (segments(full_route(their_ns, s->route)) == mine) return full_route(their_ns, s->route);
+                }
+            }
+            return "/";
+        }
+
         // The pages above a screen at `here`: those whose address its own goes on
         // from, like /projects/:project above /projects/:project/boards/:board, in the
         // order the project declares them; sort by depth for nearest last. The app's
