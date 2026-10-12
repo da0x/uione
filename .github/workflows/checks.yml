@@ -152,13 +152,14 @@ jobs:
       - name: Install what they're built with
         run: |
           pacman -Syu --noconfirm --needed gcc cmake make pkgconf wayland wayland-protocols vulkan-headers \
-            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts
+            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts botan
 
-      - name: Build and test the desktop toolkit
+      - name: Build and test the desktop toolkit and the runtime desktop apps run on
         run: |
           cmake -S desktop -B desktop/build
           cmake --build desktop/build --parallel
           VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/tests
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/runtime_tests
 
       - name: Build the terminal toolkit
         run: |

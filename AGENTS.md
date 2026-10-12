@@ -88,8 +88,12 @@ Treat every file as published, whatever the repository's visibility today.
   desktop/build && cmake --build desktop/build`, then `desktop/build/tests`, which
   draws scenes offscreen and compares them with `desktop/tests/golden`
   (`ONE_DESKTOP_GOLDEN=write` draws them again, to be looked at before they're
-  committed). It began as libloom, whose history it keeps. Apache-2.0, as is
-  `terminal/`, so any program may use them.
+  committed). `desktop/runtime/` is `one::desktop::runtime`, what the desktop apps
+  `one build` writes run on: screens found by address and built from views read live
+  through `one::client`, as `@uione/react`'s are on the web, tested on its in-memory
+  source by `desktop/build/runtime_tests` against `desktop/runtime/tests/golden`. It
+  began as libloom, whose history it keeps. Apache-2.0, as is `terminal/`, so any
+  program may use them.
 - `terminal/` is `one::terminal`, the toolkit terminal apps are built on: screens in
   a trail, lists and documents of styled rows, a top bar, and a loop other threads
   post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build

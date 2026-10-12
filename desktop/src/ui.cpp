@@ -559,6 +559,57 @@ namespace one::desktop {
 			double scale_ = 0;
 		};
 
+		class link_element : public element {
+		public:
+			link_element(std::string words, std::function<void()> go, std::optional<text_style> style)
+			    : words_(std::move(words)), go_(std::move(go)), style_(std::move(style)) {}
+
+			bool focusable() const override { return true; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+			extent measure_content(float width) override {
+				const auto& laid = laid_out(width);
+				return {laid.width(), laid.height()};
+			}
+			void place_content(const rect& area) override { laid_out(area.width); }
+			void paint_content(canvas& c) override {
+				rect area = inner();
+				if (focused) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
+				c.text(laid_out(area.width), {area.x, area.y});
+			}
+			bool handle_key(const key_event& e) override {
+				if (!e.is(keys::enter) && !e.is(keys::keypad_enter)) return false;
+				if (go_) go_();
+				return true;
+			}
+			bool click(point) override {
+				if (go_) go_();
+				return true;
+			}
+
+		private:
+			const text_layout& laid_out(float width) {
+				double scale = detail::layout_scale();
+				bool underlined = hovered || focused;
+				if (!laid_ || width != width_ || scale != scale_ || underlined != underlined_) {
+					text_style s = style_.value_or(current_theme().body());
+					if (!style_) s.color = current_theme().accent;
+					s.underline = underlined;
+					laid_ = lay_out({words_, s}, width, scale);
+					width_ = width;
+					scale_ = scale;
+					underlined_ = underlined;
+				}
+				return *laid_;
+			}
+			std::string words_;
+			std::function<void()> go_;
+			std::optional<text_style> style_;
+			std::optional<text_layout> laid_;
+			float width_ = -1;
+			double scale_ = 0;
+			bool underlined_ = false;
+		};
+
 		class edge_element : public element {
 		public:
 			edge_element(color c, float width) : color_(c) {
@@ -676,6 +727,9 @@ namespace one::desktop {
 
 	view button(std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary);
+	}
+	view link(std::string words, std::function<void()> go, std::optional<text_style> style) {
+		return made<link_element>(std::move(words), std::move(go), std::move(style));
 	}
 	view edge(color c, float width) { return made<edge_element>(c, width); }
 	view avatar(const std::string& name, float size) { return made<avatar_element>(name, size); }

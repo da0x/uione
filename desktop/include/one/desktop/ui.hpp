@@ -194,6 +194,9 @@ namespace one::desktop {
 	}
 
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
+	// Words that go somewhere: in the accent color, underlined while pointed at or
+	// focused, followed with a click or Enter.
+	view link(std::string words, std::function<void()> go, std::optional<text_style> style = {});
 
 	// Text typed into a box, kept in a state: a caret moved with the arrows, Home and
 	// End, a word at a time with Control; a selection made with Shift or the pointer,
