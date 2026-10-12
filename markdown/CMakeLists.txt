@@ -1,5 +1,5 @@
 # Copyright 2026 Daher Alfawares
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: Apache-2.0
 
 # one::markdown: Markdown laid out for terminals, and read as a tree for windows. One
 # header, and md, the command that prints Markdown in a terminal. It began as

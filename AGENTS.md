@@ -11,8 +11,9 @@ Treat every file as published, whatever the repository's visibility today.
   designs from another codebase into this one, including as a reference or a test
   fixture. Examples are written from scratch for this repository.
 - **Every source file starts with its copyright, held by Daher Alfawares, and its
-  license: LGPL-3.0-only in the four libraries, AGPL-3.0-only everywhere else**
-  (decision 0004). `tools/check-license` enforces it, and `.githooks/pre-commit`
+  license: LGPL-3.0-only in the four web libraries, Apache-2.0 in those native apps
+  are built on (`desktop/`, `terminal/`, `client/`, `markdown/`), AGPL-3.0-only
+  everywhere else** (decisions 0004 and 0013). `tools/check-license` enforces it, and `.githooks/pre-commit`
   runs it on every commit. Files that cannot hold a comment are listed in that
   script, with the reason.
 - **Code that uione generates for someone else's project is theirs.** The generators
@@ -109,8 +110,8 @@ Treat every file as published, whatever the repository's visibility today.
   tests against it. Apache-2.0. POSIX for now; a Windows build adds its own sockets.
 - `markdown/` is `one::markdown`, one header that lays Markdown out for terminals and
   reads it as a tree for windows, and `md`, which prints Markdown in a terminal. It
-  began as libmarkdown, whose history it keeps, and is GPL-3.0-only, so a desktop or
-  terminal app that shows Markdown is GPL when it's distributed. `cmake -S markdown
+  began as libmarkdown, whose history it keeps. Apache-2.0, as the toolkits are, so
+  an app that shows Markdown may be under any license. `cmake -S markdown
   -B markdown/build && cmake --build markdown/build`, then
   `markdown/build/layout_test markdown/test/sample.md`.
 - `docs/grammar.ebnf` is the language's grammar, the specification the hand-written

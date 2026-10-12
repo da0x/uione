@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: Apache-2.0
 
 // layout_test.cpp — checks that layout() keeps its promises on a document
 // (test/sample.md by default): every row fits the width, and no run's text

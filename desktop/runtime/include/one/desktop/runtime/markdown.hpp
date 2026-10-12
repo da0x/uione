@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Markdown on a desktop app's screens, drawn from one::markdown's tree in the
-// theme's styles. It's a library of its own, one_desktop_markdown, because
-// one::markdown is GPL-3.0: an app whose screens show Markdown links it, and one
-// whose screens don't, needn't.
+// theme's styles.
 
 #pragma once
 

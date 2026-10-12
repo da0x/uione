@@ -18,6 +18,7 @@ relevant record before changing what it covers.
 | [0010](0010-who-may-do-and-read-what.md) | Who may do and read what |
 | [0011](0011-services-with-keys.md) | Services that work beside people, with keys |
 | [0012](0012-programs-sign-in-through-the-browser.md) | Programs sign in as a person through their browser |
+| [0013](0013-native-libraries-are-apache.md) | The libraries native apps are built on are Apache-2.0 |
 
 ## Writing one
 

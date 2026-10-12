@@ -1,5 +1,5 @@
 // Copyright 2026 Daher Alfawares
-// SPDX-License-Identifier: GPL-3.0-only
+// SPDX-License-Identifier: Apache-2.0
 
 // one::markdown: lay Markdown out for a terminal, or read it as a tree for a window.
 // It began as libmarkdown, whose history this directory keeps.

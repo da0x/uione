@@ -82,7 +82,7 @@ add_library(one::desktop ALIAS one_desktop)
 target_compile_options(one_desktop PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 
 # The runtime a desktop app uione writes runs on: its screens, read live through
-# one::client from uione's client/ beside it.
+# one::client from uione's client/ beside it, and Markdown through one::markdown.
 option(ONE_DESKTOP_RUNTIME "Build one::desktop::runtime, which needs uione's client/" ON)
 if(ONE_DESKTOP_RUNTIME)
 	if(NOT TARGET one_client)
@@ -95,6 +95,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/client_source.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp
+		runtime/src/markdown.cpp
 		runtime/src/layout.cpp
 		runtime/src/memory_source.cpp
 		runtime/src/runtime.cpp
@@ -102,18 +103,12 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/timeline.cpp)
 	add_library(one::desktop::runtime ALIAS one_desktop_runtime)
 	target_include_directories(one_desktop_runtime PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/runtime/include> $<INSTALL_INTERFACE:include>)
-	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_client)
-	target_compile_options(one_desktop_runtime PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
-
-	# Markdown on its screens, apart, since one::markdown is GPL-3.0: linked by an
-	# app whose screens show Markdown.
 	if(NOT TARGET one_markdown)
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../markdown ${CMAKE_CURRENT_BINARY_DIR}/markdown)
 	endif()
-	add_library(one_desktop_markdown runtime/markdown/markdown.cpp)
-	add_library(one::desktop::markdown ALIAS one_desktop_markdown)
-	target_link_libraries(one_desktop_markdown PUBLIC one_desktop_runtime PRIVATE one_markdown)
-	target_compile_options(one_desktop_markdown PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
+	target_link_libraries(one_desktop_runtime PUBLIC one_desktop one_client PRIVATE one_markdown)
+	target_compile_options(one_desktop_runtime PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
+
 endif()
 
 # Its examples and tests, when it's built on its own rather than inside an app.
@@ -142,7 +137,7 @@ if(ONE_DESKTOP_RUNTIME)
 	target_compile_options(runtime_tracker PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 
 	add_executable(runtime_tests runtime/tests/tests.cpp)
-	target_link_libraries(runtime_tests PRIVATE one_desktop_runtime one_desktop_markdown PkgConfig::VULKAN)
+	target_link_libraries(runtime_tests PRIVATE one_desktop_runtime PkgConfig::VULKAN)
 	target_include_directories(runtime_tests PRIVATE src tests ${CMAKE_CURRENT_BINARY_DIR}/protocols)
 	target_compile_definitions(runtime_tests PRIVATE ONE_DESKTOP_TESTS="${CMAKE_CURRENT_SOURCE_DIR}/runtime/tests")
 	target_compile_options(runtime_tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
