@@ -13,9 +13,9 @@
 #include <random>
 #include <thread>
 
-#include "loom/app.hpp"
-#include "loom/state.hpp"
-#include "loom/ui.hpp"
+#include "one/desktop/app.hpp"
+#include "one/desktop/state.hpp"
+#include "one/desktop/ui.hpp"
 
 namespace {
 
@@ -28,9 +28,9 @@ namespace {
 		std::string reporter;
 	};
 
-	loom::color urgency_color(int urgency) {
+	one::desktop::color urgency_color(int urgency) {
 		static constexpr std::uint32_t tones[] = {0xc2312d, 0xd4700b, 0x2457d6, 0x8a94a6, 0xc5ccd6};
-		return loom::color::hex(tones[std::clamp(urgency, 0, 4)]);
+		return one::desktop::color::hex(tones[std::clamp(urgency, 0, 4)]);
 	}
 
 	std::vector<issue> made_up(int count) {
@@ -49,19 +49,19 @@ namespace {
 }  // namespace
 
 int main() {
-	auto app = loom::app::connect();
+	auto app = one::desktop::app::connect();
 	if (!app) {
 		std::println(stderr, "demo: {}", app.error());
 		return 1;
 	}
-	auto& window = app->open({.title = "loom: issues", .id = "org.loom.demo", .size = {980, 640}});
+	auto& window = app->open({.title = "Issues", .id = "org.uione.demo", .size = {980, 640}});
 
-	loom::state<std::vector<issue>> issues = made_up(40);
-	loom::state<std::string> opened = std::string("demo-1");
-	loom::state<std::string> changed;  // the issue the thread changed last
+	one::desktop::state<std::vector<issue>> issues = made_up(40);
+	one::desktop::state<std::string> opened = std::string("demo-1");
+	one::desktop::state<std::string> changed;  // the issue the thread changed last
 
 	window.show([=]() mutable {
-		const auto& t = loom::current_theme();
+		const auto& t = one::desktop::current_theme();
 		const auto& all = *issues;
 		auto shown = std::ranges::find(all, *opened, &issue::id);
 
@@ -73,46 +73,46 @@ int main() {
 		};
 		auto reverse = [=]() mutable { issues.change([](auto& list) { std::ranges::reverse(list); }); };
 
-		auto rows = loom::list(
+		auto rows = one::desktop::list(
 		    all, &issue::id,
 		    [&](const issue& i) {
-			    loom::text_style title = t.body();
+			    one::desktop::text_style title = t.body();
 			    if (i.id == *changed) title.color = t.accent;
-			    return loom::row(loom::edge(urgency_color(i.urgency)), loom::text(std::format("#{}", i.number), t.quiet()).width(40),
-			                     loom::text(i.title, title).grow(), loom::text(i.stage, t.quiet()))
+			    return one::desktop::row(one::desktop::edge(urgency_color(i.urgency)), one::desktop::text(std::format("#{}", i.number), t.quiet()).width(40),
+			                     one::desktop::text(i.title, title).grow(), one::desktop::text(i.stage, t.quiet()))
 			        .spacing(10);
 		    },
 		    [=](const std::string& id) mutable { opened.set(id); });
 
-		loom::view details = loom::text("Choose an issue.", t.quiet());
+		one::desktop::view details = one::desktop::text("Choose an issue.", t.quiet());
 		if (shown != all.end()) {
-			details = loom::column(loom::text(std::format("#{}", shown->number), t.quiet()), loom::text(shown->title, t.heading()),
-			                       loom::row(loom::avatar(shown->reporter), loom::text(shown->reporter + " reported it", t.quiet())).spacing(8).align(loom::align::center),
-			                       loom::divider(),
-			                       loom::row(loom::text("Stage", t.quiet()).width(90), loom::text(shown->stage)),
-			                       loom::row(loom::text("Urgency", t.quiet()).width(90), loom::edge(urgency_color(shown->urgency)),
-			                                 loom::text(std::format("{} of 5", shown->urgency + 1)))
+			details = one::desktop::column(one::desktop::text(std::format("#{}", shown->number), t.quiet()), one::desktop::text(shown->title, t.heading()),
+			                       one::desktop::row(one::desktop::avatar(shown->reporter), one::desktop::text(shown->reporter + " reported it", t.quiet())).spacing(8).align(one::desktop::align::center),
+			                       one::desktop::divider(),
+			                       one::desktop::row(one::desktop::text("Stage", t.quiet()).width(90), one::desktop::text(shown->stage)),
+			                       one::desktop::row(one::desktop::text("Urgency", t.quiet()).width(90), one::desktop::edge(urgency_color(shown->urgency)),
+			                                 one::desktop::text(std::format("{} of 5", shown->urgency + 1)))
 			                           .spacing(6),
-			                       loom::text("Each change made elsewhere arrives here as it happens, and the row you've chosen stays chosen."))
+			                       one::desktop::text("Each change made elsewhere arrives here as it happens, and the row you've chosen stays chosen."))
 			              .spacing(12);
 		}
 
-		return loom::column(loom::row(loom::text("Issues", t.heading()), loom::spacer(), loom::button("Turn around", reverse),
-		                              loom::button("Add an issue", add, true))
+		return one::desktop::column(one::desktop::row(one::desktop::text("Issues", t.heading()), one::desktop::spacer(), one::desktop::button("Turn around", reverse),
+		                              one::desktop::button("Add an issue", add, true))
 		                        .spacing(10)
-		                        .align(loom::align::center),
-		                    loom::row(loom::scroll(std::move(rows))
+		                        .align(one::desktop::align::center),
+		                    one::desktop::row(one::desktop::scroll(std::move(rows))
 		                                  .grow(3)
 		                                  .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners}),
 		                              std::move(details).padding(20).grow(2).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners}))
 		                        .spacing(16)
-		                        .align(loom::align::stretch)
+		                        .align(one::desktop::align::stretch)
 		                        .grow())
 		    .spacing(16)
 		    .padding(24);
 	});
-	window.on_key = [&](const loom::key_event& e) {
-		if (e.is(loom::keys::escape) || e.is('q')) {
+	window.on_key = [&](const one::desktop::key_event& e) {
+		if (e.is(one::desktop::keys::escape) || e.is('q')) {
 			app->quit();
 			return true;
 		}

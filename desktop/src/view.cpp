@@ -9,7 +9,7 @@
 #include "app_internal.hpp"
 #include "ui_internal.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace {
 
@@ -53,8 +53,8 @@ namespace loom {
 			if (!from) return false;
 			std::vector<element*> all;
 			detail::focusables(*w.root, all);
-			auto middle = [](const rect& r) { return loom::point{r.x + r.width / 2, r.y + r.height / 2}; };
-			loom::point here = middle(from->frame);
+			auto middle = [](const rect& r) { return one::desktop::point{r.x + r.width / 2, r.y + r.height / 2}; };
+			one::desktop::point here = middle(from->frame);
 			element* best = nullptr;
 			float best_score = 0;
 			for (element* candidate : all) {
@@ -63,7 +63,7 @@ namespace loom {
 				// Ahead in that direction, by its near edge.
 				float ahead = dx > 0 ? r.x - from->frame.right() : dx < 0 ? from->frame.x - r.right() : dy > 0 ? r.y - from->frame.bottom() : from->frame.y - r.bottom();
 				if (ahead < -1) continue;
-				loom::point there = middle(r);
+				one::desktop::point there = middle(r);
 				float aside = dx ? std::abs(there.y - here.y) : std::abs(there.x - here.x);
 				float score = std::max(0.f, ahead) + 2 * aside;
 				if (!best || score < best_score) best = candidate, best_score = score;
@@ -74,7 +74,7 @@ namespace loom {
 		}
 
 		// Which element the pointer is over, and those it's within, marked as hovered.
-		void point_to(window::state& w, std::optional<loom::point> at) {
+		void point_to(window::state& w, std::optional<one::desktop::point> at) {
 			if (!w.root) return;
 			element* over = at ? w.root->hit(*at) : nullptr;
 			each_element(*w.root, [](element& e) {
@@ -168,7 +168,7 @@ namespace loom {
 		if (w.outside->on_key && w.outside->on_key(e)) w.redraw();
 	}
 
-	void deliver_pointer(window::state& w, loom::point at) {
+	void deliver_pointer(window::state& w, one::desktop::point at) {
 		bring_up_to_date(w);
 		in_window context(w);
 		point_to(w, at);
@@ -182,7 +182,7 @@ namespace loom {
 		w.redraw();
 	}
 
-	void deliver_press(window::state& w, loom::point at) {
+	void deliver_press(window::state& w, one::desktop::point at) {
 		bring_up_to_date(w);
 		in_window context(w);
 		if (!w.root) return;
@@ -197,7 +197,7 @@ namespace loom {
 		w.redraw();
 	}
 
-	void deliver_release(window::state& w, loom::point at) {
+	void deliver_release(window::state& w, one::desktop::point at) {
 		bring_up_to_date(w);
 		in_window context(w);
 		element* pressed = std::exchange(w.pressed, nullptr);
@@ -210,7 +210,7 @@ namespace loom {
 		w.redraw();
 	}
 
-	void deliver_wheel(window::state& w, loom::point at, float dx, float dy) {
+	void deliver_wheel(window::state& w, one::desktop::point at, float dx, float dy) {
 		bring_up_to_date(w);
 		in_window context(w);
 		if (!w.root) return;
@@ -223,7 +223,7 @@ namespace loom {
 		}
 	}
 
-	loom::cursor cursor_at(window::state& w, loom::point at) {
+	one::desktop::cursor cursor_at(window::state& w, one::desktop::point at) {
 		if (!w.root) return cursor::normal;
 		for (element* e = w.root->hit(at); e; e = e->parent) {
 			if (e->cursor() != cursor::normal) return e->cursor();
@@ -231,4 +231,4 @@ namespace loom {
 		return cursor::normal;
 	}
 
-}  // namespace loom
+}  // namespace one::desktop

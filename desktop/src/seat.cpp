@@ -14,7 +14,7 @@
 
 #include "app_internal.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace {
 
@@ -28,7 +28,7 @@ namespace loom {
 			return nullptr;
 		}
 
-		void set_cursor(seat& s, loom::cursor c) {
+		void set_cursor(seat& s, one::desktop::cursor c) {
 			if (!s.cursor) return;
 			int shape = c == cursor::pointer ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER
 			            : c == cursor::text  ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT
@@ -224,4 +224,4 @@ namespace loom {
 		for (std::uint64_t i = 0; i < std::min<std::uint64_t>(times, 4); ++i) deliver_key(*s.keyboard_in, event_for(s, s.repeating));
 	}
 
-}  // namespace loom
+}  // namespace one::desktop

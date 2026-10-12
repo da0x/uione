@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace loom {
+namespace one::desktop {
 
 	// A key pressed, or repeating while held: the symbol it means in the keyboard's
 	// layout, the text it types, if any, and the modifiers held with it.
@@ -29,4 +29,4 @@ namespace loom {
 		inline constexpr std::uint32_t keypad_enter = 0xff8d, left_tab = 0xfe20, space = 0x20;
 	}  // namespace keys
 
-}  // namespace loom
+}  // namespace one::desktop

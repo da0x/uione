@@ -5,10 +5,10 @@
 // read changes:
 //
 //     window.show([=] {
-//         return loom::column(
-//             loom::text(page->title, theme.heading()),
-//             loom::scroll(loom::list(page->issues, &issue::id, [](const issue& i) {
-//                 return loom::row(loom::edge(urgency(i)), loom::text(i.title)).spacing(8);
+//         return one::desktop::column(
+//             one::desktop::text(page->title, theme.heading()),
+//             one::desktop::scroll(one::desktop::list(page->issues, &issue::id, [](const issue& i) {
+//                 return one::desktop::row(one::desktop::edge(urgency(i)), one::desktop::text(i.title)).spacing(8);
 //             }, [](const std::string& id) { open(id); }))
 //         ).spacing(12).padding(24);
 //     });
@@ -27,12 +27,12 @@
 #include <string>
 #include <vector>
 
-#include "loom/canvas.hpp"
-#include "loom/input.hpp"
-#include "loom/text.hpp"
-#include "loom/theme.hpp"
+#include "one/desktop/canvas.hpp"
+#include "one/desktop/input.hpp"
+#include "one/desktop/text.hpp"
+#include "one/desktop/theme.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	// Space inside a view's edge.
 	struct edges {
@@ -87,7 +87,7 @@ namespace loom {
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
 		virtual bool prefers_focus() const { return false; }  // given the keyboard first, as a list is
-		virtual loom::cursor cursor() const { return on_click ? cursor::pointer : cursor::normal; }
+		virtual one::desktop::cursor cursor() const { return on_click ? cursor::pointer : cursor::normal; }
 
 		// Takes over what a view kept from the element it replaces.
 		virtual void adopt(element& before);
@@ -119,7 +119,7 @@ namespace loom {
 		view&& height(float h) && { element_->fixed_height = h; return std::move(*this); }
 		view&& grow(float share = 1) && { element_->grow = share; return std::move(*this); }
 		view&& spacing(float s) && { element_->spacing = s; return std::move(*this); }
-		view&& align(loom::align a) && { element_->cross = a; return std::move(*this); }
+		view&& align(one::desktop::align a) && { element_->cross = a; return std::move(*this); }
 		view&& background(box_style s) && { element_->background = s; return std::move(*this); }
 		view&& key(std::string k) && { element_->key = std::move(k); return std::move(*this); }
 		view&& on_click(std::function<void()> f) && { element_->on_click = std::move(f); return std::move(*this); }
@@ -178,4 +178,4 @@ namespace loom {
 	view divider();
 	view spacer();  // takes what's left in a row or column
 
-}  // namespace loom
+}  // namespace one::desktop

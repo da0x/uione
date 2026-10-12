@@ -5,8 +5,8 @@
 // built; setting one of them builds that view again and draws the window, with
 // nothing else to call:
 //
-//     loom::state<int> count = 0;
-//     window.show([=] { return loom::text(std::format("{} issues", *count)); });
+//     one::desktop::state<int> count = 0;
+//     window.show([=] { return one::desktop::text(std::format("{} issues", *count)); });
 //     count.set(3);  // the window says "3 issues" at its next frame
 //
 // A state is a handle: copies share one value, so a lambda can hold one by value.
@@ -20,7 +20,7 @@
 #include <utility>
 #include <vector>
 
-namespace loom {
+namespace one::desktop {
 
 	namespace detail {
 
@@ -99,4 +99,4 @@ namespace loom {
 		std::shared_ptr<cell> cell_;
 	};
 
-}  // namespace loom
+}  // namespace one::desktop

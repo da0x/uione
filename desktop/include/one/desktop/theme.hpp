@@ -8,10 +8,10 @@
 
 #include <string>
 
-#include "loom/app.hpp"
-#include "loom/text.hpp"
+#include "one/desktop/app.hpp"
+#include "one/desktop/text.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	struct theme {
 		color page = color::hex(0xf7f8fa);     // behind everything
@@ -43,4 +43,4 @@ namespace loom {
 	// The theme views are built and drawn with: the window's, while it builds and draws.
 	const theme& current_theme();
 
-}  // namespace loom
+}  // namespace one::desktop

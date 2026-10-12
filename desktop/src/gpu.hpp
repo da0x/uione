@@ -17,12 +17,12 @@
 #include <string>
 #include <vector>
 
-#include "loom/app.hpp"
+#include "one/desktop/app.hpp"
 
 struct wl_display;
 struct wl_surface;
 
-namespace loom::gpu {
+namespace one::desktop::gpu {
 
 	// The device every window draws with, and the queue it draws and presents on.
 	struct device {
@@ -59,19 +59,19 @@ namespace loom::gpu {
 
 		// Draws a frame of `pixels` size, cleared to `background`. Returns false when
 		// the swapchain went out of date, which the next frame recreates it for.
-		bool draw(loom::size pixels, color background, const work& w = {});
+		bool draw(one::desktop::size pixels, color background, const work& w = {});
 		vk::Format format() const { return format_.format; }
 		static constexpr std::size_t in_flight = 2;
 
 	private:
-		void make_swapchain(loom::size pixels);
+		void make_swapchain(one::desktop::size pixels);
 
 		device& gpu_;
 		vk::raii::SurfaceKHR surface_ = nullptr;
 		vk::raii::SwapchainKHR swapchain_ = nullptr;
 		vk::SurfaceFormatKHR format_{};
 		vk::PresentModeKHR present_mode_ = vk::PresentModeKHR::eFifo;
-		loom::size extent_{};
+		one::desktop::size extent_{};
 		std::vector<vk::Image> images_;
 		std::vector<vk::raii::ImageView> views_;
 		std::vector<vk::raii::Semaphore> rendered_;  // one per image, signalled when it's drawn
@@ -87,4 +87,4 @@ namespace loom::gpu {
 		bool stale_ = true;  // the swapchain needs making again
 	};
 
-}  // namespace loom::gpu
+}  // namespace one::desktop::gpu

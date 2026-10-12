@@ -10,7 +10,7 @@
 
 #include "fonts.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace {
 
@@ -157,7 +157,7 @@ namespace loom {
 		b.size = size;
 	}
 
-	void renderer::begin(loom::size pixels, double scale, std::size_t slot) {
+	void renderer::begin(one::desktop::size pixels, double scale, std::size_t slot) {
 		pixels_ = pixels;
 		scale_ = scale;
 		slot_ = slot;
@@ -302,7 +302,7 @@ namespace loom {
 		return {left, top, std::max(0.f, r - left), std::max(0.f, b - top)};
 	}
 
-	loom::size canvas::size() const {
+	one::desktop::size canvas::size() const {
 		double s = renderer_.scale();
 		return {static_cast<int>(renderer_.pixels().width / s), static_cast<int>(renderer_.pixels().height / s)};
 	}
@@ -328,7 +328,7 @@ namespace loom {
 		renderer_.box(in_pixels(area, scale()), style.fill, style.border, style.radius * s, border, 0, clip_in_pixels(clips_, renderer_));
 	}
 
-	void canvas::shadow(const rect& area, float radius, float blur, loom::color tint, point offset) {
+	void canvas::shadow(const rect& area, float radius, float blur, one::desktop::color tint, point offset) {
 		auto s = static_cast<float>(scale());
 		rect moved{area.x + offset.x, area.y + offset.y, area.width, area.height};
 		renderer_.box(in_pixels(moved, scale()), tint, {0, 0, 0, 0}, radius * s, 0, std::max(0.5f, blur * s), clip_in_pixels(clips_, renderer_));
@@ -349,4 +349,4 @@ namespace loom {
 
 	canvas::clip_scope::~clip_scope() { owner_.clips_.pop_back(); }
 
-}  // namespace loom
+}  // namespace one::desktop

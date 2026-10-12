@@ -18,7 +18,7 @@
 
 #include "fonts.hpp"
 
-namespace loom::fonts {
+namespace one::desktop::fonts {
 
 	namespace {
 
@@ -163,9 +163,9 @@ namespace loom::fonts {
 		return out;
 	}
 
-}  // namespace loom::fonts
+}  // namespace one::desktop::fonts
 
-namespace loom {
+namespace one::desktop {
 
 	namespace {
 
@@ -307,4 +307,4 @@ namespace loom {
 		return out;
 	}
 
-}  // namespace loom
+}  // namespace one::desktop

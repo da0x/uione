@@ -13,12 +13,12 @@
 #include "gpu.hpp"
 #include "renderer.hpp"
 
-namespace loom::offscreen {
+namespace one::desktop::offscreen {
 
-	image draw(loom::size size, double scale, color background, const std::function<void(canvas&)>& paint) {
+	image draw(one::desktop::size size, double scale, color background, const std::function<void(canvas&)>& paint) {
 		static gpu::device gpu{nullptr};
 		constexpr vk::Format format = vk::Format::eR8G8B8A8Srgb;
-		loom::size pixels{static_cast<int>(std::lround(size.width * scale)), static_cast<int>(std::lround(size.height * scale))};
+		one::desktop::size pixels{static_cast<int>(std::lround(size.width * scale)), static_cast<int>(std::lround(size.height * scale))};
 		vk::Extent2D extent{static_cast<std::uint32_t>(pixels.width), static_cast<std::uint32_t>(pixels.height)};
 		const auto& device = gpu.logical;
 
@@ -223,4 +223,4 @@ namespace loom::offscreen {
 		return count;
 	}
 
-}  // namespace loom::offscreen
+}  // namespace one::desktop::offscreen

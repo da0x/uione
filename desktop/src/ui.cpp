@@ -6,10 +6,10 @@
 #include <map>
 #include <typeinfo>
 
-#include "loom/ui.hpp"
+#include "one/desktop/ui.hpp"
 #include "ui_internal.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace detail {
 
@@ -374,7 +374,7 @@ namespace loom {
 
 			bool focusable() const override { return !keys_.empty(); }
 			bool prefers_focus() const override { return true; }
-			loom::cursor cursor() const override { return open_ ? cursor::pointer : cursor::normal; }
+			one::desktop::cursor cursor() const override { return open_ ? cursor::pointer : cursor::normal; }
 
 			extent measure_content(float width) override {
 				extent out;
@@ -510,7 +510,7 @@ namespace loom {
 			}
 
 			bool focusable() const override { return true; }
-			loom::cursor cursor() const override { return cursor::pointer; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
 
 			extent measure_content(float) override {
 				const auto& laid = laid_out();
@@ -687,4 +687,4 @@ namespace loom {
 		if (auto* l = dynamic_cast<list_element*>(&e)) l->pointing(at);
 	}
 
-}  // namespace loom
+}  // namespace one::desktop

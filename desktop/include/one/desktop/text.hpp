@@ -12,16 +12,16 @@
 #include <string>
 #include <vector>
 
-#include "loom/app.hpp"
+#include "one/desktop/app.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	struct text_style {
 		std::string family = "sans-serif";  // a fontconfig family, like "IBM Plex Sans", or sans-serif, serif, monospace
 		float size = 15;                    // in logical pixels
 		int weight = 400;                   // 400 regular, 600 semibold, 700 bold
 		bool italic = false;
-		loom::color color = color::hex(0x0e1726);
+		one::desktop::color color = color::hex(0x0e1726);
 		bool underline = false;
 		bool strike = false;
 		float line_height = 1.45f;  // of size, the distance between lines' baselines
@@ -38,13 +38,13 @@ namespace loom {
 		const void* face = nullptr;  // the font it's from, at its pixel size
 		std::uint32_t id = 0;
 		float x = 0, y = 0;  // its origin on the baseline
-		loom::color color;
+		one::desktop::color color;
 	};
 
 	// A line under or through some glyphs, in pixels.
 	struct text_rule {
 		float x = 0, y = 0, width = 0, thickness = 1;
-		loom::color color;
+		one::desktop::color color;
 	};
 
 	struct text_line {
@@ -78,4 +78,4 @@ namespace loom {
 	text_layout lay_out(std::span<const text_span> spans, float width, double scale);
 	inline text_layout lay_out(const text_span& span, float width, double scale) { return lay_out(std::span(&span, 1), width, scale); }
 
-}  // namespace loom
+}  // namespace one::desktop

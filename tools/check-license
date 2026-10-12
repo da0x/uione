@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 # Every source file starts with its copyright and license, after a shebang if it
-# has one: LGPL-3.0-only in the four libraries apps are built on, and
-# AGPL-3.0-only everywhere else. A file type with no rule below is an error, so a
+# has one: LGPL-3.0-only in the four libraries apps are built on, Apache-2.0 in the
+# desktop and terminal toolkits, so any program may use them, and AGPL-3.0-only
+# everywhere else. A file type with no rule below is an error, so a
 # new kind of file is a decision rather than an omission.
 #
 #   tools/check-license            every tracked file, as it is on disk
@@ -16,6 +17,7 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 license() {
 	case "$1" in
 		one/*|infrastructure/*|packages/react/*|packages/radix/*) echo LGPL-3.0-only ;;
+		desktop/*|terminal/*) echo Apache-2.0 ;;
 		*) echo AGPL-3.0-only ;;
 	esac
 }
@@ -42,8 +44,8 @@ marker() {
 		# Legal texts and prose, formats that cannot hold a comment, build
 		# manifests and lockfiles, which tools rewrite, and images: an SVG is
 		# text, but a header in it would be downloaded with every page it's on.
-		LICENSE|COPYING|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg) echo exempt ;;
-		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.hpp.in|*.h|*.rules) echo '//' ;;
+		LICENSE|COPYING|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg|*.png) echo exempt ;;
+		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.hpp.in|*.h|*.rules|*.vert|*.frag) echo '//' ;;
 		*.vim) echo '"' ;;
 		# CSS and the EBNF grammar have only block comments: the header sits inside
 		# /* ... */, each line starting with " *".

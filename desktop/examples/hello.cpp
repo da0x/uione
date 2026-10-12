@@ -5,15 +5,15 @@
 
 #include <print>
 
-#include "loom/app.hpp"
+#include "one/desktop/app.hpp"
 
 int main() {
-	auto app = loom::app::connect();
+	auto app = one::desktop::app::connect();
 	if (!app) {
 		std::println(stderr, "hello: {}", app.error());
 		return 1;
 	}
-	auto& window = app->open({.title = "Hello, loom", .id = "org.loom.hello", .size = {900, 640}});
-	window.background = loom::color::hex(0x2457d6);
+	auto& window = app->open({.title = "Hello", .id = "org.uione.hello", .size = {900, 640}});
+	window.background = one::desktop::color::hex(0x2457d6);
 	return app->run();
 }

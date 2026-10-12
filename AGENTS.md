@@ -81,6 +81,19 @@ Treat every file as published, whatever the repository's visibility today.
   `firebase` project, `region` and `domain`. Nothing is created in the cloud except
   through that program, and anything that can't be is listed in the project's README
   with the reason.
+- `desktop/` is `one::desktop`, the toolkit desktop apps are built on: C++26 on
+  Wayland, drawn with Vulkan, with text through HarfBuzz, FreeType and fontconfig.
+  Views are C++ built again when a `state` they read changes, and matched with what
+  they replace so the chosen row, the scroll and focus stay. `cmake -S desktop -B
+  desktop/build && cmake --build desktop/build`, then `desktop/build/tests`, which
+  draws scenes offscreen and compares them with `desktop/tests/golden`
+  (`ONE_DESKTOP_GOLDEN=write` draws them again, to be looked at before they're
+  committed). It began as libloom, whose history it keeps. Apache-2.0, as is
+  `terminal/`, so any program may use them.
+- `terminal/` is `one::terminal`, the toolkit terminal apps are built on: screens in
+  a trail, lists and documents of styled rows, a top bar, and a loop other threads
+  post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build
+  terminal/build`, then `terminal/build/issues` for its example.
 - `docs/grammar.ebnf` is the language's grammar, the specification the hand-written
   parser is held to. `compiler/tests/grammar_tests.cpp` checks it both ways: programs
   made from its rules must parse, and every `.one` file in the repository must fit

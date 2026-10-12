@@ -19,16 +19,16 @@
 #include "cursor-shape-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "gpu.hpp"
-#include "loom/app.hpp"
-#include "loom/state.hpp"
-#include "loom/theme.hpp"
-#include "loom/ui.hpp"
+#include "one/desktop/app.hpp"
+#include "one/desktop/state.hpp"
+#include "one/desktop/theme.hpp"
+#include "one/desktop/ui.hpp"
 #include "renderer.hpp"
 #include "viewporter-client-protocol.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
-namespace loom {
+namespace one::desktop {
 
 	// The seat: its pointer and keyboard, which window each is over, and the keyboard's
 	// layout and repeat.
@@ -65,7 +65,7 @@ namespace loom {
 		wp_viewporter* viewporter = nullptr;
 		wp_cursor_shape_manager_v1* cursors = nullptr;
 		std::optional<gpu::device> gpu;
-		std::optional<loom::seat> input;
+		std::optional<one::desktop::seat> input;
 		std::vector<std::unique_ptr<window>> windows;
 
 		int wake = -1;  // an eventfd post() writes to
@@ -87,10 +87,10 @@ namespace loom {
 		wp_viewport* viewport = nullptr;
 		wl_callback* frame = nullptr;
 		std::optional<gpu::surface> drawn;
-		std::optional<loom::renderer> painter;
+		std::optional<one::desktop::renderer> painter;
 
-		loom::size size{};
-		loom::size asked{};  // what the compositor's last configure said, 0 for ours
+		one::desktop::size size{};
+		one::desktop::size asked{};  // what the compositor's last configure said, 0 for ours
 		double scale = 1;    // from fractional-scale, or the surface's preferred integer scale
 		bool configured = false;
 		bool dirty = true;
@@ -98,17 +98,17 @@ namespace loom {
 
 		// The view it shows: how it's built, what was built, and whether it needs
 		// building or placing again.
-		loom::theme look = theme::harbor();
+		one::desktop::theme look = theme::harbor();
 		std::function<view()> build;
 		std::unique_ptr<element> root;
 		std::shared_ptr<detail::reader> reading;
 		bool needs_building = false;
 		bool needs_placing = false;
-		loom::size placed_at{};
+		one::desktop::size placed_at{};
 		double placed_scale = 0;
 		element* pressed = nullptr;
 
-		loom::size pixels() const {
+		one::desktop::size pixels() const {
 			return {static_cast<int>(std::lround(size.width * scale)), static_cast<int>(std::lround(size.height * scale))};
 		}
 		void redraw() { dirty = true; }
@@ -124,10 +124,10 @@ namespace loom {
 	void deliver_release(window::state& w, point at);
 	void deliver_wheel(window::state& w, point at, float dx, float dy);
 	void deliver_leave(window::state& w);
-	loom::cursor cursor_at(window::state& w, point at);
+	one::desktop::cursor cursor_at(window::state& w, point at);
 
 	// The seat's part of the app, in seat.cpp.
 	void bind_seat(app::state& a, wl_registry* registry, std::uint32_t name, std::uint32_t version);
 	void repeat_key(app::state& a);
 
-}  // namespace loom
+}  // namespace one::desktop

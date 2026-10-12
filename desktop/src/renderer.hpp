@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "gpu.hpp"
-#include "loom/canvas.hpp"
+#include "one/desktop/canvas.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace fonts {
 		struct face;
@@ -34,11 +34,11 @@ namespace loom {
 
 		// A frame: begun with its size and the frame-in-flight slot whose buffers it
 		// may write, filled through a canvas, then recorded.
-		void begin(loom::size pixels, double scale, std::size_t slot);
+		void begin(one::desktop::size pixels, double scale, std::size_t slot);
 		void upload(const vk::raii::CommandBuffer& commands);  // before rendering
 		void draw(const vk::raii::CommandBuffer& commands);    // within it
 
-		loom::size pixels() const { return pixels_; }
+		one::desktop::size pixels() const { return pixels_; }
 		double scale() const { return scale_; }
 
 		// In pixels, premultiplied, within the clip given in pixels.
@@ -93,11 +93,11 @@ namespace loom {
 		};
 		std::array<slot_buffers, gpu::surface::in_flight> slots_;
 		std::size_t slot_ = 0;
-		loom::size pixels_{};
+		one::desktop::size pixels_{};
 		double scale_ = 1;
 		std::vector<box_instance> boxes_;
 		std::vector<glyph_instance> glyphs_;
 		std::vector<batch> batches_;
 	};
 
-}  // namespace loom
+}  // namespace one::desktop

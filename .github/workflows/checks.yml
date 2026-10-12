@@ -132,3 +132,28 @@ jobs:
 
       - name: Run the site end to end against the emulators
         run: node tools/end-to-end.mjs
+
+  # The desktop and terminal toolkits, on Arch, whose g++ has the C++26 they're
+  # written in. The desktop's tests draw offscreen with Mesa's software Vulkan, as
+  # the runners have no GPU, and compare with tests/golden.
+  toolkits:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install what they're built with
+        run: |
+          pacman -Syu --noconfirm --needed gcc cmake make pkgconf wayland wayland-protocols vulkan-headers \
+            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts
+
+      - name: Build and test the desktop toolkit
+        run: |
+          cmake -S desktop -B desktop/build
+          cmake --build desktop/build --parallel
+          VK_DRIVER_FILES=$(ls /usr/share/vulkan/icd.d/lvp_icd.*.json) desktop/build/tests
+
+      - name: Build the terminal toolkit
+        run: |
+          cmake -S terminal -B terminal/build
+          cmake --build terminal/build --parallel

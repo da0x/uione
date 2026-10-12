@@ -6,7 +6,7 @@
 // runs what other threads post, and draws what changed when the compositor asks for
 // a frame.
 
-#include "loom/app.hpp"
+#include "one/desktop/app.hpp"
 
 #include <poll.h>
 #include <sys/eventfd.h>
@@ -22,7 +22,7 @@
 #include "app_internal.hpp"
 #include "ui_internal.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	namespace {
 
@@ -156,7 +156,7 @@ namespace loom {
 
 	window::window(std::unique_ptr<state> s) : state_(std::move(s)) {}
 	window::~window() = default;
-	loom::size window::size() const { return state_->size; }
+	one::desktop::size window::size() const { return state_->size; }
 	double window::scale() const { return state_->scale; }
 	void window::redraw() { state_->dirty = true; }
 	void window::show(std::function<view()> build) {
@@ -168,7 +168,7 @@ namespace loom {
 		state_->needs_building = true;
 		state_->dirty = true;
 	}
-	void window::look(const loom::theme& t) {
+	void window::look(const one::desktop::theme& t) {
 		state_->look = t;
 		background = t.page;
 		rebuild();
@@ -257,7 +257,7 @@ namespace loom {
 		wl_callback_add_listener(w.frame, &frame_listener, &w);
 		if (!w.painter) w.painter.emplace(*w.owner->gpu, w.drawn->format());
 		bring_up_to_date(w);
-		loom::size pixels = w.pixels();
+		one::desktop::size pixels = w.pixels();
 		gpu::surface::work work{
 		    .prepare =
 		        [&](const vk::raii::CommandBuffer& commands, std::size_t slot) {
@@ -329,4 +329,4 @@ namespace loom {
 		return 0;
 	}
 
-}  // namespace loom
+}  // namespace one::desktop

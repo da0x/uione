@@ -12,10 +12,10 @@
 #include <optional>
 #include <vector>
 
-#include "loom/app.hpp"
-#include "loom/canvas.hpp"
+#include "one/desktop/app.hpp"
+#include "one/desktop/canvas.hpp"
 
-namespace loom::offscreen {
+namespace one::desktop::offscreen {
 
 	// Eight bits each of red, green, blue and alpha, in sRGB, row after row.
 	struct image {
@@ -24,7 +24,7 @@ namespace loom::offscreen {
 	};
 
 	// Draws at a size in logical pixels and a scale, over a background.
-	image draw(loom::size size, double scale, color background, const std::function<void(canvas&)>& paint);
+	image draw(one::desktop::size size, double scale, color background, const std::function<void(canvas&)>& paint);
 
 	// PNG, written uncompressed so nothing but this is needed to read it back.
 	void write_png(const std::filesystem::path& file, const image& picture);
@@ -33,4 +33,4 @@ namespace loom::offscreen {
 	// How many pixels differ by more than `tolerance` in any channel.
 	std::size_t differences(const image& a, const image& b, int tolerance);
 
-}  // namespace loom::offscreen
+}  // namespace one::desktop::offscreen

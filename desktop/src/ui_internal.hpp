@@ -6,9 +6,9 @@
 
 #pragma once
 
-#include "loom/ui.hpp"
+#include "one/desktop/ui.hpp"
 
-namespace loom::detail {
+namespace one::desktop::detail {
 
 	// The scale and theme in use while a window builds, lays out and draws.
 	double& layout_scale();
@@ -22,9 +22,9 @@ namespace loom::detail {
 	void focusables(element& root, std::vector<element*>& into);
 	element* focused_in(element& root);
 
-}  // namespace loom::detail
+}  // namespace one::desktop::detail
 
-namespace loom {
+namespace one::desktop {
 	// For a list under the pointer: which row it's over, or none when it's left.
 	void point_at_list(element& e, std::optional<point> at);
-}  // namespace loom
+}  // namespace one::desktop

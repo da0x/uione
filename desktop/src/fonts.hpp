@@ -11,12 +11,12 @@
 #include <string>
 #include <vector>
 
-#include "loom/text.hpp"
+#include "one/desktop/text.hpp"
 
 typedef struct FT_FaceRec_* FT_Face;
 typedef struct hb_font_t hb_font_t;
 
-namespace loom::fonts {
+namespace one::desktop::fonts {
 
 	struct face {
 		FT_Face freetype = nullptr;
@@ -42,4 +42,4 @@ namespace loom::fonts {
 	};
 	bitmap draw(const face& f, std::uint32_t glyph, float subpixel);
 
-}  // namespace loom::fonts
+}  // namespace one::desktop::fonts

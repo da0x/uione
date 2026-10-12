@@ -9,10 +9,10 @@
 
 #include <vector>
 
-#include "loom/app.hpp"
-#include "loom/text.hpp"
+#include "one/desktop/app.hpp"
+#include "one/desktop/text.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	struct point {
 		float x = 0;
@@ -31,8 +31,8 @@ namespace loom {
 
 	// How a box is drawn: its fill, a border inside its edge, and its corners.
 	struct box_style {
-		loom::color fill{0, 0, 0, 0};
-		loom::color border{0, 0, 0, 0};
+		one::desktop::color fill{0, 0, 0, 0};
+		one::desktop::color border{0, 0, 0, 0};
 		float border_width = 0;
 		float radius = 0;
 	};
@@ -41,14 +41,14 @@ namespace loom {
 
 	class canvas {
 	public:
-		loom::size size() const;
+		one::desktop::size size() const;
 		double scale() const;
 
 		void box(const rect& area, const box_style& style);
 		// A shadow under a box of the same area and corners, softened by blur and
 		// moved by offset.
-		void shadow(const rect& area, float radius, float blur, loom::color tint, point offset = {});
-		// Text laid out by loom::lay_out, its first line's top at `at`.
+		void shadow(const rect& area, float radius, float blur, one::desktop::color tint, point offset = {});
+		// Text laid out by one::desktop::lay_out, its first line's top at `at`.
 		void text(const text_layout& laid, point at);
 
 		// Draws only within an area until the scope ends, within any clip already in force.
@@ -72,4 +72,4 @@ namespace loom {
 		std::vector<rect> clips_;
 	};
 
-}  // namespace loom
+}  // namespace one::desktop

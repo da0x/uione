@@ -1,15 +1,15 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: Apache-2.0
 
-// loom: a modern C++ toolkit for Wayland, drawing with Vulkan.
+// one::desktop, uione's toolkit for desktop apps: modern C++ on Wayland, drawing with Vulkan.
 //
 // An app connects to the compositor and runs the loop; it opens windows, and each
 // window is drawn on the GPU when something in it changes, paced by the compositor:
 //
-//     auto app = loom::app::connect();
+//     auto app = one::desktop::app::connect();
 //     if (!app) return std::println(stderr, "{}", app.error()), 1;
 //     auto& window = app->open({.title = "Hello", .size = {900, 640}});
-//     window.background = loom::color::hex(0xf7f8fa);
+//     window.background = one::desktop::color::hex(0xf7f8fa);
 //     return app->run();
 //
 // Everything runs on the thread that calls run(), except post(), which any thread
@@ -25,9 +25,9 @@
 #include <memory>
 #include <string>
 
-#include "loom/input.hpp"
+#include "one/desktop/input.hpp"
 
-namespace loom {
+namespace one::desktop {
 
 	// A size in logical pixels, the ones layout speaks in. On a screen scaled by
 	// 1.5, a window 800 wide is 1200 pixels on the GPU.
@@ -57,9 +57,9 @@ namespace loom {
 
 	// What a window is opened with.
 	struct window_options {
-		std::string title = "loom";
+		std::string title = "uione";
 		std::string id = "";  // the app's id the compositor groups its windows by, like org.neotrac.desktop
-		loom::size size = {900, 640};
+		one::desktop::size size = {900, 640};
 	};
 
 	// A window on the screen. It's drawn again when redraw() is called or the
@@ -70,10 +70,10 @@ namespace loom {
 		window(const window&) = delete;
 		window& operator=(const window&) = delete;
 
-		loom::color background = color::hex(0xffffff);
+		one::desktop::color background = color::hex(0xffffff);
 
 		// Its size now, in logical pixels, and how many GPU pixels each is.
-		loom::size size() const;
+		one::desktop::size size() const;
 		double scale() const;
 
 		void redraw();
@@ -84,7 +84,7 @@ namespace loom {
 		// Builds the view again, for a change no state says.
 		void rebuild();
 		// The theme its view is built and drawn with; harbor unless it's given one.
-		void look(const loom::theme& t);
+		void look(const one::desktop::theme& t);
 
 		// A key nothing in the view took, like Escape for going back.
 		std::function<bool(const key_event&)> on_key;
@@ -132,4 +132,4 @@ namespace loom {
 		std::unique_ptr<state> state_;
 	};
 
-}  // namespace loom
+}  // namespace one::desktop

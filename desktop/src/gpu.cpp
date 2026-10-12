@@ -8,10 +8,10 @@
 #include <ranges>
 #include <stdexcept>
 
-namespace loom::gpu {
+namespace one::desktop::gpu {
 
 	device::device(wl_display* display) {
-		vk::ApplicationInfo application{.pApplicationName = "loom", .pEngineName = "loom", .apiVersion = vk::ApiVersion13};
+		vk::ApplicationInfo application{.pApplicationName = "uione", .pEngineName = "one::desktop", .apiVersion = vk::ApiVersion13};
 		std::array<const char*, 2> extensions{vk::KHRSurfaceExtensionName, vk::KHRWaylandSurfaceExtensionName};
 		instance = vk::raii::Instance{context, vk::InstanceCreateInfo{.pApplicationInfo = &application,
 		                                                              .enabledExtensionCount = extensions.size(),
@@ -89,7 +89,7 @@ namespace loom::gpu {
 
 	surface::~surface() { gpu_.logical.waitIdle(); }
 
-	void surface::make_swapchain(loom::size pixels) {
+	void surface::make_swapchain(one::desktop::size pixels) {
 		gpu_.logical.waitIdle();
 		auto capabilities = gpu_.physical.getSurfaceCapabilitiesKHR(*surface_);
 		std::uint32_t count = std::max(capabilities.minImageCount, 3u);
@@ -145,7 +145,7 @@ namespace loom::gpu {
 		commands.pipelineBarrier2(vk::DependencyInfo{.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
 	}
 
-	bool surface::draw(loom::size pixels, color background, const work& w) {
+	bool surface::draw(one::desktop::size pixels, color background, const work& w) {
 		if (stale_ || pixels != extent_) make_swapchain(pixels);
 		std::size_t slot = next_;
 		frame& f = frames_[slot];
@@ -211,4 +211,4 @@ namespace loom::gpu {
 		return true;
 	}
 
-}  // namespace loom::gpu
+}  // namespace one::desktop::gpu

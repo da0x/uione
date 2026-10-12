@@ -1,17 +1,20 @@
-# loom
+# one::desktop
 
-A modern C++ toolkit for Wayland, drawing with Vulkan. Apache-2.0.
+uione's toolkit for desktop apps: modern C++ on Wayland, drawing with Vulkan.
+Apache-2.0, so any program may use it.
 
 It's written in C++26 on the system's own libraries: Wayland, Vulkan, HarfBuzz,
-FreeType, fontconfig and xkbcommon, drawn on the GPU with Vulkan 1.3. Nothing is downloaded while it builds.
+FreeType, fontconfig and xkbcommon. Nothing is downloaded while it builds.
 
 ```cpp
-loom::state<std::vector<issue>> issues = load();
+namespace ui = one::desktop;
+
+ui::state<std::vector<issue>> issues = load();
 window.show([=] {
-	return loom::column(
-		loom::text("Issues", loom::current_theme().heading()),
-		loom::scroll(loom::list(*issues, &issue::id, [](const issue& i) {
-			return loom::row(loom::edge(urgency(i)), loom::text(i.title).grow()).spacing(10);
+	return ui::column(
+		ui::text("Issues", ui::current_theme().heading()),
+		ui::scroll(ui::list(*issues, &issue::id, [](const issue& i) {
+			return ui::row(ui::edge(urgency(i)), ui::text(i.title).grow()).spacing(10);
 		}, open))
 	).spacing(16).padding(24);
 });
@@ -22,9 +25,13 @@ matched with what was there before, so the chosen row, the scroll and the focus 
 where they were.
 
 ```sh
-cmake -S . -B build && cmake --build build
-build/demo     # issues in a list, changing as you watch
-build/tests    # layout, state, lists, and scenes drawn offscreen against tests/golden
+cmake -S desktop -B desktop/build && cmake --build desktop/build
+desktop/build/demo     # issues in a list, changing as you watch
+desktop/build/tests    # layout, state, lists, and scenes drawn offscreen against tests/golden
 ```
 
-Building needs g++ 16, CMake, `wayland-protocols`, and `vulkan-headers`.
+Building needs g++ 16, CMake, `wayland-protocols`, `vulkan-headers`, `shaderc`
+(for glslc), HarfBuzz, FreeType, fontconfig and xkbcommon. The tests draw on the GPU,
+or on Mesa's software Vulkan (lavapipe) where there's none.
+
+It began as libloom, whose history this directory keeps.

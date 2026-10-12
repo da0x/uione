@@ -1,12 +1,13 @@
 # Copyright 2026 Daher Alfawares
 # SPDX-License-Identifier: Apache-2.0
 
-# libloom: a modern C++ toolkit for Wayland, drawing with Vulkan. Built with g++ and
+# one::desktop: uione's toolkit for desktop apps, in modern C++ on Wayland, drawing
+# with Vulkan. It began as libloom. Built with g++ and
 # the system's Wayland, Vulkan, HarfBuzz, FreeType, fontconfig and xkbcommon; nothing
 # is downloaded. Wayland's protocol glue is written by wayland-scanner as it builds.
 
 cmake_minimum_required(VERSION 3.28)
-project(loom VERSION 0.1.0 LANGUAGES C CXX)
+project(one_desktop VERSION 0.9.8 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,10 +54,10 @@ foreach(shader box.vert box.frag glyph.vert glyph.frag)
 		DEPENDS shaders/${shader})
 	list(APPEND shader_outputs ${output})
 endforeach()
-add_custom_target(loom_shaders DEPENDS ${shader_outputs})
+add_custom_target(one_desktop_shaders DEPENDS ${shader_outputs})
 set_source_files_properties(src/renderer.cpp PROPERTIES OBJECT_DEPENDS "${shader_outputs}")
 
-add_library(loom
+add_library(one_desktop
 	src/app.cpp
 	src/gpu.cpp
 	src/offscreen.cpp
@@ -66,30 +67,31 @@ add_library(loom
 	src/ui.cpp
 	src/view.cpp
 	${protocol_sources})
-add_dependencies(loom loom_shaders)
-target_include_directories(loom
+add_dependencies(one_desktop one_desktop_shaders)
+target_include_directories(one_desktop
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
 	PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/protocols)
-target_link_libraries(loom PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
-target_compile_options(loom PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
+target_link_libraries(one_desktop PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
+add_library(one::desktop ALIAS one_desktop)
+target_compile_options(one_desktop PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 
 # Its examples and tests, when it's built on its own rather than inside an app.
 if(PROJECT_IS_TOP_LEVEL)
 add_executable(hello examples/hello.cpp)
-target_link_libraries(hello PRIVATE loom)
+target_link_libraries(hello PRIVATE one_desktop)
 target_compile_options(hello PRIVATE -Wall -Wextra -Werror)
 
 add_executable(drawing examples/drawing.cpp)
-target_link_libraries(drawing PRIVATE loom)
+target_link_libraries(drawing PRIVATE one_desktop)
 target_compile_options(drawing PRIVATE -Wall -Wextra -Werror)
 
 add_executable(tests tests/tests.cpp)
-target_link_libraries(tests PRIVATE loom PkgConfig::VULKAN)
+target_link_libraries(tests PRIVATE one_desktop PkgConfig::VULKAN)
 target_include_directories(tests PRIVATE src ${CMAKE_CURRENT_BINARY_DIR}/protocols)
-target_compile_definitions(tests PRIVATE LOOM_TESTS="${CMAKE_CURRENT_SOURCE_DIR}/tests")
+target_compile_definitions(tests PRIVATE ONE_DESKTOP_TESTS="${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
 
 add_executable(demo examples/demo.cpp)
-target_link_libraries(demo PRIVATE loom)
+target_link_libraries(demo PRIVATE one_desktop)
 target_compile_options(demo PRIVATE -Wall -Wextra -Werror)
 endif()
