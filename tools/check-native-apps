@@ -25,7 +25,16 @@ command -v ccache >/dev/null && launcher=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 for app in site tracker; do
 	for target in desktop terminal; do
 		UIONE="$here" cmake -S "$work/$app/$target" -B "$work/$app/$target/out" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher >/dev/null
-		cmake --build "$work/$app/$target/out" --parallel >/dev/null
+		# Built again where the compiler itself crashed, as g++ now and then does, but
+		# never past an error in what it compiled.
+		attempt=1
+		until cmake --build "$work/$app/$target/out" --parallel 8 > "$work/build.log" 2>&1; do
+			if ! grep -q "internal compiler error" "$work/build.log" || [ $attempt -ge 4 ]; then
+				cat "$work/build.log" >&2
+				exit 1
+			fi
+			attempt=$((attempt + 1))
+		done
 		echo "ok: $app's $target app compiles"
 	done
 done
