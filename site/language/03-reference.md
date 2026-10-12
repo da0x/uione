@@ -1094,7 +1094,7 @@ define workflow order by stage {
 
 command order::claim {
 	require "this stage isn't worked by a role you hold" {
-		held(stage.worked_by)
+		held(stage.worked_by) || exists(step where from == order.stage && held(roles))
 	}
 	require held_by == none || held_by == me || held_until < now  "someone else holds it"
 	held_by = me
@@ -1120,6 +1120,9 @@ command order::move {
 }
 ```
 
+- Whoever may take a step out of a stage works it, so the roles a step lists may
+  claim what's in the stage it leaves, as the stage's own roles may. A role's queue
+  holds the stages it's listed to work.
 - A claim lasts until its lease runs out, so a worker that stops, like a laptop
   that sleeps, lets go by itself; one still working renews it. Moving it on ends
   the claim. Each command is allowed by a role, as any is: `order::claim`,
@@ -1170,7 +1173,9 @@ define workflow order by stage {
   commas when there are several. A stage nobody works, like `shipped`, is an end:
   it's in no queue, nobody claims it, and no step leaves it.
 - `proofing -> press` is a step, taken by the roles that work `proofing`. A step
-  can name its own instead: `press -> proofing by foreman`.
+  can name its own instead: `press -> proofing by foreman`. Whoever may take a step
+  out of a stage works it, so foreman works `press` too: claims orders there, and
+  has them in its queue.
 - It adds the same lease, commands and queue as stages kept as records, with who
   works what checked from the code:
 

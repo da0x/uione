@@ -917,9 +917,12 @@ define workflow order by stage {
     // Who holds it, and until when.
     CHECK(go.find("HeldBy    string    `firestore:\"held_by\"") != std::string::npos);
     CHECK(go.find("HeldUntil time.Time `firestore:\"held_until\"") != std::string::npos);
-    // A claim: a role of the stage's, nobody else holding it, and a lease.
+    // A claim: a role of the stage's, or one that may take a step out of it, nobody
+    // else holding it, and a lease.
     CHECK(go.find(R"(var Claim = one.Command[Order]("order::claim").)") != std::string::npos);
     CHECK(go.find("held, err := c.Held(stage.WorkedBy)") != std::string::npos);
+    CHECK(go.find(R"(found2, err := one.Exists(c, one.Where[Step]("from", o.Stage), func(s *Step) (bool, error) { return c.Held(s.Roles) }))") != std::string::npos);
+    CHECK(go.find("if !(held || found2) {") != std::string::npos);
     CHECK(go.find("if !(o.HeldBy == \"\" || o.HeldBy == c.Me() || o.HeldUntil.Before(c.Now())) {") != std::string::npos);
     CHECK(go.find("o.HeldUntil = c.Now().Add(30 * time.Minute)") != std::string::npos);
     CHECK(go.find(R"(var Renew = one.Command[Order]("order::renew").)") != std::string::npos);
@@ -1017,16 +1020,18 @@ define workflow order by stage {
     CAPTURE(go);
     // A role is asked about once, however many stages and steps name it.
     CHECK(go.find(R"(held, err := c.Held([]string{one.Key(o.Shop, "proofreader")}))") != std::string::npos);
-    CHECK(go.find(R"(held2, err := c.Held([]string{one.Key(o.Shop, "press_operator")}))") != std::string::npos);
+    // Whoever may take a step out of a stage works it too: foreman, who sends press back to proofing.
+    CHECK(go.find(R"(held2, err := c.Held([]string{one.Key(o.Shop, "press_operator"), one.Key(o.Shop, "foreman")}))") != std::string::npos);
     CHECK(go.find("if !(o.Stage == StageProofing && held || o.Stage == StagePress && held2) {") != std::string::npos);
     // A step is taken by who works where it starts, or by whom it names.
     CHECK(go.find(R"(held2, err := c.Held([]string{one.Key(o.Shop, "foreman")}))") != std::string::npos);
     CHECK(go.find("c.Was(\"stage\") == string(StageProofing) && o.Stage == StagePress && held || c.Was(\"stage\") == string(StagePress) && "
                   "o.Stage == StageProofing && held2 || c.Was(\"stage\") == string(StagePress) && o.Stage == StageShipped && held3") != std::string::npos);
     CHECK(go.find("o.HeldUntil = c.Now().Add(10 * time.Minute)") != std::string::npos);
-    // Each role's queue: the shop's orders in the stages it works, and none for a role that works none.
+    // Each role's queue: the shop's orders in the stages it works, foreman's in press too, and none for a role that works none.
     CHECK(go.find(R"(List("items", one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StageProofing).When(one.SubjectField("name"), "proofreader").)"
-                  R"(Or(one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StagePress).When(one.SubjectField("name"), "press_operator"))))") != std::string::npos);
+                  R"(Or(one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StagePress).When(one.SubjectField("name"), "press_operator")).)"
+                  R"(Or(one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StagePress).When(one.SubjectField("name"), "foreman"))))") != std::string::npos);
     // A role's name is a word of the code's, like press_operator, so it's text, made from its title when it isn't given.
     CHECK(go.find("Name  string   `firestore:\"name\" one:\"required,key,from=title\"`") != std::string::npos);
 }

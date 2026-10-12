@@ -613,12 +613,22 @@ namespace one::language {
                 if (in.empty()) return;
 
                 auto stage = [&](const std::string& choice) { return by + " == " + by + "::" + choice; };
+                // Whoever may take a step out of a stage works it too: its own roles, then
+                // those its steps name.
+                std::map<std::string, std::vector<std::string>> working;
+                for (const auto& [name, said_stage] : worked) working[name] = said_stage->roles;
+                for (const auto& step : w.moves) {
+                    auto& roles_of = working[step.from];
+                    for (const auto& r : step.by) {
+                        if (std::find(roles_of.begin(), roles_of.end(), r) == roles_of.end()) roles_of.push_back(r);
+                    }
+                }
                 std::string claim, move, work;
                 for (const auto& choice : choices) {
-                    auto it = worked.find(choice);
-                    if (it == worked.end()) continue;
-                    claim += (claim.empty() ? "" : " || ") + stage(choice) + " && held(" + role_list(it->second->roles) + ")";
-                    for (const auto& r : it->second->roles) work += (work.empty() ? "" : " || ") + stage(choice) + " && role.name == \"" + r + "\"";
+                    auto it = working.find(choice);
+                    if (it == working.end()) continue;
+                    claim += (claim.empty() ? "" : " || ") + stage(choice) + " && held(" + role_list(it->second) + ")";
+                    for (const auto& r : it->second) work += (work.empty() ? "" : " || ") + stage(choice) + " && role.name == \"" + r + "\"";
                 }
                 for (const auto& step : w.moves) {
                     const auto& roles_taking = step.by.empty() ? worked[step.from]->roles : step.by;
@@ -698,7 +708,9 @@ namespace one::language {
                     if (!shaped || claimable(*w, *moving, ns, error).empty()) continue;
 
                     const std::string& e = w->entity;
-                    std::string text = commanded(*w, "held(" + w->by + "." + w->worked_by + ")",
+                    // Whoever may take a step out of a stage works it too, as its own roles do.
+                    std::string text = commanded(*w, "held(" + w->by + "." + w->worked_by + ") || exists(" + steps->name + " where from == " + e + "." + w->by +
+                                                         " && held(roles))",
                                                  "exists(" + steps->name + " where from == was " + e + "." + w->by + " && to == " + e + "." + w->by +
                                                      " && held(roles))");
                     // What's worked, with every field of each, its stage, and who holds it.
