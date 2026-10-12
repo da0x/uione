@@ -84,6 +84,7 @@ namespace one::desktop::runtime {
 		};
 		std::string wanted = lower(query.get());
 		auto kept = [&](const value& card) {
+			if (!p.keeps(card)) return false;
 			if (wanted.empty()) return true;
 			return std::ranges::any_of(spec.search, [&](const std::string& f) { return lower(show(field_of(card, f))).find(wanted) != std::string::npos; });
 		};
@@ -98,6 +99,7 @@ namespace one::desktop::runtime {
 
 		std::vector<desktop::view> parts;
 		p.wide();  // a board takes the window's width
+		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		if (!spec.search.empty()) parts.push_back(desktop::row(desktop::field(query, {.placeholder = "Find cards"}).width(320)));
 		// The steps offered for the card being moved, above the columns.
 		if (!moving.get().empty()) {

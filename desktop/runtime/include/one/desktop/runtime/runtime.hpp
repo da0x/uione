@@ -96,7 +96,8 @@ namespace one::desktop::runtime {
 	// it reads, listened to from when it first reads them until it's left.
 	class page {
 	public:
-		page(navigator& opened_by, runtime::source& from, const screen& shows, std::string address, std::map<std::string, std::string> params);
+		page(navigator& opened_by, runtime::source& from, const screen& shows, std::string address, std::map<std::string, std::string> params,
+		     std::vector<std::pair<std::string, std::string>> query = {});
 		page(const page&) = delete;
 		page& operator=(const page&) = delete;
 
@@ -104,6 +105,16 @@ namespace one::desktop::runtime {
 		const std::string& address() const { return address_; }
 		const std::map<std::string, std::string>& params() const { return params_; }
 		std::string param(const std::string& name) const;
+		// What its address's query says, like ?is=Assigned to me&assignees=me.
+		const std::vector<std::pair<std::string, std::string>>& query() const { return query_; }
+
+		// What a list is filtered by from the address, as a card's link opens it:
+		// assignees=me keeps the rows whose assignees hold whoever's reading, and
+		// updated_at>=-7d those changed in the last week. Said in words, its is= or
+		// each part, and cleared by opening the page without it.
+		bool keeps(const value& row) const;
+		std::string filtered() const;
+		void clear_filter();
 
 		// A view, or a view per something, like the issue this page's address names.
 		state<view_state> view(const std::string& name, const std::string& subject = "");
@@ -152,6 +163,7 @@ namespace one::desktop::runtime {
 		const screen* screen_;
 		std::string address_;
 		std::map<std::string, std::string> params_;
+		std::vector<std::pair<std::string, std::string>> query_;
 		struct listened {
 			state<view_state> current;
 			listening keeping;
@@ -175,6 +187,8 @@ namespace one::desktop::runtime {
 		bool open(const std::string& address);
 		// Goes back to the page before; false at the first.
 		bool back();
+		// Shows another address in the current page's place, as clearing a filter does.
+		bool replace(const std::string& address);
 		page& current() { return *trail_.back(); }
 		std::size_t depth() const { return trail_.size(); }
 		const runtime::site& site() const { return site_; }

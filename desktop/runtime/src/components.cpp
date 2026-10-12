@@ -6,6 +6,7 @@
 #include <one/client/client.hpp>
 
 #include <algorithm>
+#include <format>
 
 namespace one::desktop::runtime {
 
@@ -120,8 +121,12 @@ namespace one::desktop::runtime {
 	desktop::view table(page& p, table_spec spec) {
 		const view_state& v = *spec.view;
 		if (auto instead = not_shown(v)) return std::move(*instead);
-		const auto& rows = rows_of(v, spec.list);
-		if (rows.empty()) return quiet(spec.empty);
+		std::vector<value> rows;
+		for (const auto& row : rows_of(v, spec.list)) {
+			if (p.keeps(row)) rows.push_back(row);
+		}
+		auto note = filter_note(p);
+		if (rows.empty()) return note.get() ? desktop::column(std::move(note), quiet(spec.empty)).spacing(8) : quiet(spec.empty);
 		// The columns' labels, then a row for each, each column an equal share.
 		// Each row keeps the same room for its actions, so its columns line up with the
 		// others' whichever actions it has.
@@ -159,7 +164,81 @@ namespace one::desktop::runtime {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 			};
 		}
-		return desktop::column(desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)), desktop::list(std::move(shown), std::move(opening))).spacing(6);
+		return desktop::column(std::move(note), desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)), desktop::list(std::move(shown), std::move(opening))).spacing(6);
+	}
+
+	desktop::view filter_note(page& p) {
+		std::string said = p.filtered();
+		if (said.empty()) return {};
+		const auto& t = current_theme();
+		auto s = t.strong();
+		s.color = t.accent;
+		return desktop::row(desktop::row(desktop::text(said, s), desktop::link("Show all", [&p] { p.clear_filter(); }, t.quiet()))
+		                        .spacing(12)
+		                        .padding(edges(6, 12))
+		                        .background({.fill = t.sunken, .radius = t.corners}));
+	}
+
+	desktop::view cards(page& p, cards_spec spec) {
+		const view_state& v = *spec.view;
+		if (auto instead = not_shown(v)) return std::move(*instead);
+		const auto& t = current_theme();
+		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
+		std::vector<desktop::list_row> shown;
+		std::map<std::string, std::string> opens;
+		for (const auto& row : rows_of(v, spec.list)) {
+			std::string id = row["id"].as_string();
+			std::string to = spec.link.empty() ? "" : row_link(spec.link, row, p.params(), spec.keyed, spec.named);
+			opens[id] = to;
+			std::vector<desktop::view> inside;
+			inside.push_back(desktop::text(show(field_of(row, title)), t.heading(18)));
+			for (std::size_t c = 1; c < spec.columns.size(); ++c) {
+				if (std::string said = show(field_of(row, spec.columns[c].field)); !said.empty()) inside.push_back(quiet(spec.columns[c].label + ": " + said));
+			}
+			// What it holds, counted by what each is at, in order: 3 To do · 1 Done.
+			if (spec.tally) {
+				struct group {
+					std::string label;
+					int count = 0;
+					double order = 0;
+				};
+				std::map<std::string, group> groups;
+				int total = 0;
+				for (const auto& held : rows_of(spec.tally->view.get(), spec.tally->list)) {
+					if (field_of(held, spec.tally->by).as_string() != id) continue;
+					++total;
+					std::string at = show(field_of(held, spec.tally->and_by));
+					auto& g = groups[at];
+					if (g.label.empty()) g.label = show(field_of(held, spec.tally->shown.empty() ? spec.tally->and_by : spec.tally->shown));
+					if (g.label.empty()) g.label = "None";
+					if (!spec.tally->order.empty()) g.order = field_of(held, spec.tally->order).as_double();
+					++g.count;
+				}
+				std::vector<group> sorted;
+				for (auto& [_, g] : groups) sorted.push_back(g);
+				std::ranges::stable_sort(sorted, {}, &group::order);
+				std::string counted;
+				for (const auto& g : sorted) counted += (counted.empty() ? "" : " · ") + std::format("{} {}", g.count, g.label);
+				if (total == 0) counted = "No " + (spec.tally->noun.empty() ? std::string("items") : spec.tally->noun) + " yet";
+				inside.push_back(quiet(counted));
+			}
+			if (!to.empty() && !spec.filters.empty()) {
+				std::vector<desktop::view> links;
+				for (const auto& f : spec.filters) {
+					std::string address = to + "?is=" + f.label;
+					for (const auto& [name, wanted] : f.query) address += "&" + name + "=" + wanted;
+					auto look = t.quiet();
+					look.color = f.color.empty() ? t.accent : named_color(f.color);
+					links.push_back(desktop::link(f.label, [&p, address] { p.open(address); }, look));
+				}
+				inside.push_back(desktop::row(std::move(links)).spacing(14));
+			}
+			shown.push_back({id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
+		}
+		if (shown.empty()) return quiet("Nothing here yet.");
+		return desktop::list(std::move(shown), [&p, opens](const std::string& id) {
+			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
+		});
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<column> fields) {

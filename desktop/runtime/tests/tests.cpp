@@ -494,6 +494,57 @@ TEST("a board: its columns, cards tinted by priority with their labels and peopl
 	matches_golden("board", {1000, 600}, [&] { return nav.show(); });
 }
 
+TEST("a card's link opens its page filtered, said in words, and Show all opens it whole in its place") {
+	memory_source data;
+	fill_board(data);
+	data.sign_in(person{"maya", "Maya Garcia"});
+	data.set("projects::board_page", "atlas-main",
+	         value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}})}},
+	                      {"issues", list{value(fields{{"id", "atlas-12"}, {"title", "Mine"}, {"stage", "s1"}, {"assignees", list{"maya"}}}),
+	                                      value(fields{{"id", "atlas-14"}, {"title", "Ade's"}, {"stage", "s1"}, {"assignees", list{"ade"}}})}}}));
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	nav.open("/atlas/boards/main?is=Assigned+to+me&assignees=me");
+	auto& p = nav.current();
+	CHECK(p.param("board") == "main");
+	CHECK(p.filtered() == "Assigned to me");
+	CHECK(p.keeps(value(fields{{"assignees", list{"maya"}}})));
+	CHECK(!p.keeps(value(fields{{"assignees", list{"ade"}}})));
+	auto root = built(nav);
+	CHECK(list_holding(*root, "atlas-12") != nullptr);
+	CHECK(list_holding(*root, "atlas-14") == nullptr);
+	nav.current().clear_filter();
+	CHECK(nav.depth() == 2);  // in its place, not after it
+	CHECK(nav.current().filtered().empty());
+	root = built(nav);
+	CHECK(list_holding(*root, "atlas-14") != nullptr);
+}
+
+TEST("cards: each with what it holds counted, and links opening it filtered") {
+	memory_source data;
+	data.set("projects::project_page", "atlas",
+	         value(fields{{"boards", list{value(fields{{"id", "atlas-main"}, {"title", "Main"}}), value(fields{{"id", "atlas-ops"}, {"title", "Operations"}})}},
+	                      {"issues", list{value(fields{{"board", "atlas-main"}, {"stage", "s1"}, {"stage.title", "To do"}, {"stage.position", 1}}),
+	                                      value(fields{{"board", "atlas-main"}, {"stage", "s2"}, {"stage.title", "Doing"}, {"stage.position", 2}}),
+	                                      value(fields{{"board", "atlas-main"}, {"stage", "s1"}, {"stage.title", "To do"}, {"stage.position", 1}})}}}));
+	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Atlas", "/:project", "", [](page& p) {
+		                     auto project = p.view("projects::project_page", p.param("project"));
+		                     return items(section({"Boards"}, cards(p, {.view = project,
+		                                                                .list = "boards",
+		                                                                .columns = {{"title", "Title"}},
+		                                                                .link = "/:project/boards/:board",
+		                                                                .keyed = {"project"},
+		                                                                .tally = tally_spec{project, "issues", "board", "stage", "stage.title", "stage.position", "issues"},
+		                                                                .filters = {{"Assigned to me", {{"assignees", "me"}}, "blue"}, {"High priority", {{"priority", "high"}}, "red"}}})));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/atlas");
+	matches_golden("cards", {900, 520}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

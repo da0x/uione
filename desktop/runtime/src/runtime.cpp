@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <format>
 
 #include "one/desktop/app.hpp"
@@ -115,6 +116,25 @@ namespace one::desktop::runtime {
 			return out;
 		}
 
+		std::vector<std::string> segments_by(std::string_view text, char by) {
+			std::vector<std::string> out;
+			std::size_t at = 0;
+			while (at < text.size()) {
+				std::size_t end = text.find(by, at);
+				if (end == std::string_view::npos) end = text.size();
+				if (end > at) out.emplace_back(text.substr(at, end - at));
+				at = end + 1;
+			}
+			return out;
+		}
+
+		std::string label_of(std::string_view name) {
+			std::string out;
+			for (char c : name) out += c == '_' ? ' ' : c;
+			if (!out.empty() && out[0] >= 'a' && out[0] <= 'z') out[0] = static_cast<char>(out[0] - 'a' + 'A');
+			return out;
+		}
+
 		std::vector<std::string> segments(std::string_view path) {
 			std::vector<std::string> out;
 			std::size_t at = 0;
@@ -217,8 +237,57 @@ namespace one::desktop::runtime {
 
 	// page
 
-	page::page(navigator& opened_by, runtime::source& from, const screen& shows, std::string address, std::map<std::string, std::string> params)
-	    : navigator_(opened_by), source_(from), screen_(&shows), address_(std::move(address)), params_(std::move(params)) {}
+	page::page(navigator& opened_by, runtime::source& from, const screen& shows, std::string address, std::map<std::string, std::string> params,
+	           std::vector<std::pair<std::string, std::string>> query)
+	    : navigator_(opened_by), source_(from), screen_(&shows), address_(std::move(address)), params_(std::move(params)), query_(std::move(query)) {}
+
+	namespace {
+		// Whether a time is before or after one counted from now, like -7d.
+		bool kept_by_time(const value& held, const std::string& op, const std::string& offset) {
+			if (!held.is_time() || offset.size() < 3 || (offset[0] != '-' && offset[0] != '+')) return false;
+			char unit = offset.back();
+			double hours = unit == 'm' ? 1.0 / 60 : unit == 'h' ? 1 : unit == 'd' ? 24 : unit == 'w' ? 24 * 7 : 0;
+			if (hours == 0) return false;
+			double count = 0;
+			try {
+				count = std::stod(offset.substr(1, offset.size() - 2));
+			} catch (...) {
+				return false;
+			}
+			auto then = std::chrono::system_clock::now() + std::chrono::duration_cast<std::chrono::system_clock::duration>(
+			                                                     std::chrono::duration<double, std::ratio<3600>>((offset[0] == '-' ? -1 : 1) * count * hours));
+			auto at = held.as_time();
+			return op == "<" ? at < then : op == ">" ? at > then : op == "<=" ? at <= then : at >= then;
+		}
+
+		bool filtering(const std::string& name) { return name != "is" && name != "find" && name != "search"; }
+	}  // namespace
+
+	bool page::keeps(const value& row) const {
+		std::string me = source_.reader() ? source_.reader()->uid : "";
+		return std::ranges::all_of(query_, [&](const auto& pick) {
+			const auto& [name, wanted] = pick;
+			if (!filtering(name)) return true;
+			for (const char* op : {"<=", ">=", "<", ">"}) {
+				if (name.ends_with(op)) return kept_by_time(field_of(row, name.substr(0, name.size() - std::strlen(op))), op, wanted);
+			}
+			std::string looked_for = wanted == "me" ? me : wanted;
+			const value& held = field_of(row, name);
+			if (held.is_array()) return std::ranges::any_of(held.items, [&](const value& item) { return show(item) == looked_for; });
+			return show(held) == looked_for;
+		});
+	}
+
+	std::string page::filtered() const {
+		std::string said, is;
+		for (const auto& [name, wanted] : query_) {
+			if (name == "is") is = wanted;
+			else if (filtering(name)) said += (said.empty() ? "" : ", ") + label_of(name) + ": " + wanted;
+		}
+		return said.empty() ? "" : is.empty() ? said : is;
+	}
+
+	void page::clear_filter() { navigator_.replace(address_.substr(0, address_.find('?'))); }
 
 	std::string page::param(const std::string& name) const {
 		auto found = params_.find(name);
@@ -307,11 +376,38 @@ namespace one::desktop::runtime {
 		return nullptr;
 	}
 
+	namespace {
+		// An address's query, each name and value decoded, + as a space.
+		std::vector<std::pair<std::string, std::string>> query_of(const std::string& address) {
+			std::vector<std::pair<std::string, std::string>> out;
+			std::size_t mark = address.find('?');
+			if (mark == std::string::npos) return out;
+			for (const auto& pair : segments_by(address.substr(mark + 1), '&')) {
+				std::size_t equals = pair.find('=');
+				auto plain = [](std::string s) {
+					std::ranges::replace(s, '+', ' ');
+					return decoded(s).value_or(s);
+				};
+				out.emplace_back(plain(pair.substr(0, equals)), equals == std::string::npos ? "" : plain(pair.substr(equals + 1)));
+			}
+			return out;
+		}
+	}  // namespace
+
 	bool navigator::open(const std::string& address) {
 		std::map<std::string, std::string> params;
 		const screen* s = match(address, params);
 		if (!s) return false;
-		trail_.push_back(std::make_unique<page>(*this, source_, *s, address, std::move(params)));
+		trail_.push_back(std::make_unique<page>(*this, source_, *s, address, std::move(params), query_of(address)));
+		changed_.set(changed_.peek() + 1);
+		return true;
+	}
+
+	bool navigator::replace(const std::string& address) {
+		std::map<std::string, std::string> params;
+		const screen* s = match(address, params);
+		if (!s) return false;
+		trail_.back() = std::make_unique<page>(*this, source_, *s, address, std::move(params), query_of(address));
 		changed_.set(changed_.peek() + 1);
 		return true;
 	}

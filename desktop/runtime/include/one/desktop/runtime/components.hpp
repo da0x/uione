@@ -180,6 +180,39 @@ namespace one::desktop::runtime {
 	};
 	desktop::view board(page& p, board_spec spec);
 
+	// A list's rows as large cards, like a project's boards: each its title, what
+	// else it shows, a tally of what it holds, like 3 To do · 1 Done, and links that
+	// open it filtered, like Assigned to me.
+	struct tally_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;           // like board
+		std::string and_by;       // like stage
+		std::string shown = "";   // like stage.title
+		std::string order = "";   // like stage.position
+		std::string noun = "";    // like issues
+	};
+	struct card_filter {
+		std::string label;
+		std::vector<std::pair<std::string, std::string>> query;
+		std::string color = "";
+	};
+	struct cards_spec {
+		state<view_state> view;
+		std::string list;
+		std::vector<column> columns = {};
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::optional<tally_spec> tally = std::nullopt;
+		std::vector<card_filter> filters = {};
+	};
+	desktop::view cards(page& p, cards_spec spec);
+
+	// What a list on the page is filtered by, with a button showing it all again;
+	// nothing when it isn't.
+	desktop::view filter_note(page& p);
+
 	// One of a view's lists as a thread, like an issue's comments: each by who wrote
 	// it and when, its body drawn by `body`, like markdown_view, or as text.
 	struct thread_spec {
