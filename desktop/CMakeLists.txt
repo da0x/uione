@@ -89,6 +89,7 @@ if(ONE_DESKTOP_RUNTIME)
 		add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../client ${CMAKE_CURRENT_BINARY_DIR}/client)
 	endif()
 	add_library(one_desktop_runtime
+		runtime/src/board.cpp
 		runtime/src/client_source.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp

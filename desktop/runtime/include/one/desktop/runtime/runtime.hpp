@@ -133,6 +133,9 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> above, beside, under;
 		};
 		around take_around() { return {std::exchange(above_, {}), std::exchange(beside_, {}), std::exchange(under_, {})}; }
+		// Drawn across the window, as a board is, rather than at a page's reading width.
+		void wide() { wide_ = true; }
+		bool take_wide() { return std::exchange(wide_, false); }
 
 		// Something the page keeps while it's open, made the first time it's asked for,
 		// like what's typed in a form: the same each time the screen is built.
@@ -156,6 +159,7 @@ namespace one::desktop::runtime {
 		std::map<std::string, std::unique_ptr<listened>> views_;
 		std::vector<part> title_;
 		std::vector<desktop::view> above_, beside_, under_;
+		bool wide_ = false;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;  // commands on their way, by name
 		state<std::map<std::string, std::string>> errors_;  // why each was last turned down

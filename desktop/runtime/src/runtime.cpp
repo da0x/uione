@@ -340,6 +340,7 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::text(wrong, style));
 		}
 		parts.push_back(std::move(built));
+		if (p.take_wide()) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
 		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
 	}
 

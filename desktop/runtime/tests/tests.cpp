@@ -385,6 +385,115 @@ TEST("an issue's page: its body in Markdown, its comments, and its timeline with
 	CHECK(data.runs().front().command == "tracker::seen::touch");
 }
 
+namespace {
+
+	void fill_board(memory_source& data) {
+		auto issue = [](std::string id, int n, std::string title, std::string stage, std::string priority, list labels = {}, list people = {}) {
+			return value(fields{{"id", id}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}});
+		};
+		data.set("projects::board_page", "atlas-main",
+		         value(fields{{"stages", list{value(fields{{"id", "atlas-main-to_do"}, {"title", "To do"}}), value(fields{{"id", "atlas-main-doing"}, {"title", "Doing"}}),
+		                                      value(fields{{"id", "atlas-main-done"}, {"title", "Done"}})}},
+		                      // To do leads to doing for maintainers and contributors; doing to done for maintainers alone.
+		                      {"steps", list{value(fields{{"from", "atlas-main-to_do"}, {"to", "atlas-main-doing"}, {"roles", list{"atlas-maintainer", "atlas-contributor"}}}),
+		                                     value(fields{{"from", "atlas-main-doing"}, {"to", "atlas-main-done"}, {"roles", list{"atlas-maintainer"}}})}},
+		                      {"issues", list{issue("atlas-12", 12, "Copy an issue whole", "atlas-main-to_do", "high", list{"ui"}, list{"Maya Garcia"}),
+		                                      issue("atlas-14", 14, "Draw boards natively", "atlas-main-to_do", "normal"),
+		                                      issue("atlas-9", 9, "Search by label", "atlas-main-doing", "critical", list{"search", "ui"}, list{"Ade Bello", "Maya Garcia"}),
+		                                      issue("atlas-3", 3, "Sign in by key", "atlas-main-done", "low")}}}));
+		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", "atlas-contributor"}})}}}));
+	}
+
+	site with_board() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
+			                     auto roles = p.view("projects::member_roles");
+			                     return items(board(p, {.view = board_page,
+			                                            .list = "issues",
+			                                            .by = "stage",
+			                                            .over = board_page,
+			                                            .over_list = "stages",
+			                                            .columns = {{"title", "Title"}, {"number", "#"}, {"labels", "Labels"}, {"assignees.name", "Assigned to"}},
+			                                            .link = "/:project/:issue",
+			                                            .keyed = {"project"},
+			                                            .people = {{"assignees.name", "assignees.picture"}},
+			                                            .labels = {"labels"},
+			                                            .move = board_move{.command = "projects::issue::move", .steps = board_page, .list = "steps", .held = "roles", .roles = roles, .within = p.param("project")},
+			                                            .search = {"title", "labels"},
+			                                            .tint = tint_spec{"priority", {"critical", "high", "normal", "low", "trivial"}}}));
+		                     }});
+		s.screens.push_back({"Issue", "/:project/:issue", "", [](page& p) { return items(text({words(p.param("issue"))})); }});
+		return s;
+	}
+
+	// A key as a window gives it: to what has focus, then to what it does with keys it doesn't take.
+	bool pressed(one::desktop::element* e, const one::desktop::key_event& k) { return e && (e->handle_key(k) || (e->on_key && e->on_key(k))); }
+
+	one::desktop::element* list_holding(one::desktop::element& e, const std::string& row) {
+		if (e.prefers_focus()) {
+			for (auto& child : e.children) {
+				if (child->key == row) return &e;
+			}
+		}
+		for (auto& child : e.children) {
+			if (auto* found = list_holding(*child, row)) return found;
+		}
+		return nullptr;
+	}
+
+}  // namespace
+
+TEST("a board's card moves along a step the person's roles may take, at once, and back when it's turned down") {
+	memory_source data;
+	fill_board(data);
+	bool refuse = false;
+	data.on("projects::issue::move", [&](const value& f, memory_source&) -> answer {
+		if (refuse) return std::unexpected(std::string("that stage is full"));
+		return f["id"].as_string();
+	});
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	auto root = built(nav);
+	auto* to_do = list_holding(*root, "atlas-12");
+	CHECK(to_do != nullptr);
+	if (!to_do) return;
+	pressed(to_do, typed("m"));
+	CHECK(nav.current().kept<std::string>("board:issues:moving").peek() == "atlas-12");
+	root = built(nav);
+	auto* offered = list_holding(*root, "atlas-main-doing");
+	CHECK(offered != nullptr);  // to do leads to doing, for a contributor
+	CHECK(!list_holding(*root, "atlas-main-done"));  // not done, which only maintainers reach
+	if (!offered) return;
+	offered->handle_key(enter);
+	CHECK(data.runs().back().fields["stage"].as_string() == "atlas-main-doing");
+	auto moved = nav.current().kept<std::map<std::string, std::string>>("board:issues:moved");
+	CHECK(moved.peek().at("atlas-12") == "atlas-main-doing");
+	root = built(nav);
+	CHECK(list_holding(*root, "atlas-12") == list_holding(*root, "atlas-9"));  // shown in doing at once
+	// From doing, a contributor has nowhere to go; and a move turned down goes back.
+	refuse = true;
+	auto* again = list_holding(*root, "atlas-14");
+	pressed(again, typed("m"));
+	root = built(nav);
+	list_holding(*root, "atlas-main-doing")->handle_key(enter);
+	CHECK(nav.current().error("projects::issue::move") == "that stage is full");
+	CHECK(!moved.peek().contains("atlas-14"));
+	CHECK(nav.current().problem().peek().empty());  // said on the board
+}
+
+TEST("a board: its columns, cards tinted by priority with their labels and people, and a move offered") {
+	memory_source data;
+	fill_board(data);
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	nav.current().kept<std::string>("board:issues:moving").set("atlas-12");
+	matches_golden("board", {1000, 600}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

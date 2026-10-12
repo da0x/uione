@@ -484,6 +484,8 @@ namespace one::desktop {
 			}
 
 			const std::string& chosen() const { return chosen_; }
+			// The row shown as chosen: the first, until one's chosen.
+			std::string shown_chosen() const { return keys_.empty() ? "" : keys_[index_of(chosen_)]; }
 			void start_at(const std::string& key) {
 				if (std::ranges::contains(keys_, key)) chosen_ = key;
 			}
@@ -709,6 +711,12 @@ namespace one::desktop {
 	}
 
 	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open, std::string start) {
+		return list(std::move(rows), list_options{std::move(on_open), std::move(start), {}});
+	}
+
+	view list(std::vector<list_row> rows, list_options options) {
+		auto on_open = std::move(options.on_open);
+		auto start = std::move(options.start);
 		std::vector<std::string> keys;
 		std::vector<std::unique_ptr<element>> shown;
 		for (auto& r : rows) {
@@ -725,6 +733,10 @@ namespace one::desktop {
 		}
 		auto e = std::make_unique<list_element>(std::move(keys), std::move(on_open));
 		e->start_at(start);
+		if (options.on_row_key) {
+			list_element* self = e.get();
+			e->on_key = [self, heard = std::move(options.on_row_key)](const key_event& k) { return !self->shown_chosen().empty() && heard(self->shown_chosen(), k); };
+		}
 		e->children = std::move(shown);
 		adopt_children(*e);
 		return view(std::move(e));

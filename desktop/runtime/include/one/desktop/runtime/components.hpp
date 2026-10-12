@@ -138,6 +138,48 @@ namespace one::desktop::runtime {
 	// A readable label, as the web makes one: created_at is "Created at".
 	std::string label(std::string_view name);
 
+	// A field's choices, the first the most urgent, which color what shows it: the
+	// first red, then orange, none in the middle, then green and blue.
+	struct tint_spec {
+		std::string field;
+		std::vector<std::string> order;
+	};
+	std::optional<color> tint_of(const value& row, const std::optional<tint_spec>& tint);
+
+	// A list's rows as cards in columns, like a project's issues in its stages: a
+	// column for each of the over list's things, in its order, each card in the one
+	// its field names. With a move, m on a card offers the columns a step from its own
+	// leads to, for one of the person's roles; it's shown there at once, and back if
+	// the move's turned down.
+	struct board_move {
+		std::string command;
+		state<view_state> steps;
+		std::string list;
+		std::string held = "";  // the step's list of roles that may take it
+		std::optional<state<view_state>> roles = std::nullopt;
+		std::string within = "";  // the place they're held in, like the project's id
+		std::string place = "project";
+		std::string role = "role";
+	};
+	struct board_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;
+		state<view_state> over;
+		std::string over_list;
+		std::string shown = "title";
+		std::vector<column> columns = {};  // what a card shows, its title first
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::map<std::string, std::string> people = {};  // a person's column, by name, and their picture
+		std::vector<std::string> labels = {};             // lists of words shown each on its own
+		std::optional<board_move> move = std::nullopt;
+		std::vector<std::string> search = {};
+		std::optional<tint_spec> tint = std::nullopt;
+	};
+	desktop::view board(page& p, board_spec spec);
+
 	// One of a view's lists as a thread, like an issue's comments: each by who wrote
 	// it and when, its body drawn by `body`, like markdown_view, or as text.
 	struct thread_spec {

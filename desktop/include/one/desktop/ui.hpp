@@ -188,6 +188,13 @@ namespace one::desktop {
 	};
 	// `start` is the row chosen when it's first shown, rather than the first.
 	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open = {}, std::string start = "");
+	// With what a key the list doesn't take itself does to its chosen row, like m to move a card.
+	struct list_options {
+		std::function<void(const std::string&)> on_open = {};
+		std::string start = "";
+		std::function<bool(const std::string& row, const key_event&)> on_row_key = {};
+	};
+	view list(std::vector<list_row> rows, list_options options);
 	template <std::ranges::input_range R, class Key, class Show>
 		requires std::invocable<Key&, std::ranges::range_reference_t<const R>> && std::invocable<Show&, std::ranges::range_reference_t<const R>>
 	view list(const R& items, Key key_of, Show show, std::function<void(const std::string&)> on_open = {}) {
