@@ -19,6 +19,7 @@
 #pragma once
 
 #include <any>
+#include <chrono>
 #include <functional>
 #include <map>
 #include <memory>
@@ -68,6 +69,9 @@ namespace one::desktop::runtime {
 	// A value as a person reads it: a number without needless decimals, a list
 	// joined, a time as a date, and nothing for nothing.
 	std::string show(const value& v);
+	// The zone times are said in: the reader's own, unless one's named, as tests do.
+	const std::chrono::time_zone* time_zone();
+	void use_time_zone(const std::string& name);
 	// The parts as they read now, each live one from its view; reading them makes
 	// whatever's being built a reader of those views.
 	std::string said(const std::vector<part>& parts);

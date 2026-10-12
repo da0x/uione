@@ -138,6 +138,42 @@ namespace one::desktop::runtime {
 	// A readable label, as the web makes one: created_at is "Created at".
 	std::string label(std::string_view name);
 
+	// One of a view's lists as a thread, like an issue's comments: each by who wrote
+	// it and when, its body drawn by `body`, like markdown_view, or as text.
+	struct thread_spec {
+		state<view_state> view;
+		std::string list;
+		std::function<desktop::view(const std::string&)> body = {};
+	};
+	desktop::view thread(page& p, thread_spec spec);
+
+	// One of a view's lists of changes as a timeline, each said in words: who, what
+	// they did, like closed this, and when. With `subject`, each says what it was to,
+	// like #12 Copy an issue whole, opening `link`. Changes `fresh` holds for are
+	// marked new, judged by the views it reads as they were when the page opened, and
+	// `on_open` runs once there are any, like a command saying they've been seen.
+	struct timeline_spec {
+		state<view_state> view;
+		std::string list;
+		std::vector<std::string> subject = {};
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::string title = "";
+		std::vector<state<view_state>> fresh_views = {};
+		std::function<bool(const value& row, const std::vector<value>& read)> fresh = {};
+		std::string on_open = "";
+	};
+	desktop::view timeline(page& p, timeline_spec spec);
+
+	// What a change did, in words, around what it changed: ["changed title of",
+	// "from a to b"]; said of "this", as a thing's own timeline says it; a command's
+	// action as done, like close as closed; and a time as it's said.
+	std::pair<std::string, std::string> phrase(const value& field, const value& before, const value& after, const value& command);
+	std::string changed(const value& field, const value& before, const value& after, const value& command);
+	std::string done(const std::string& action);
+	std::string when(const value& at);
+
 	// A document's fields, each beside its label.
 	desktop::view details(page& p, state<view_state> from, std::vector<column> fields);
 

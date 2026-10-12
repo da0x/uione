@@ -13,6 +13,7 @@
 #include "check.hpp"
 #include "offscreen.hpp"
 #include "one/desktop/runtime/components.hpp"
+#include "one/desktop/runtime/markdown.hpp"
 #include "ui_internal.hpp"
 
 #include <algorithm>
@@ -309,4 +310,82 @@ TEST("a form's fields: text, several lines, a choice, a list's pick, a box, seve
 	matches_golden("form", {900, 860}, [&] { return nav.show(); });
 }
 
-int main() { return check::run(); }
+TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
+	value due;
+	due.type = value::kind::time;
+	due.time.seconds = 1'790'035'200;  // Sep 22, 2026, midnight UTC
+	use_time_zone("America/Los_Angeles");
+	CHECK(show(due) == "Sep 22, 2026");
+	use_time_zone("UTC");
+	CHECK(show(value(3)) == "3");
+	CHECK(show(value(2.5)) == "2.5");
+	CHECK(show(value(std::vector<value>{"ui", "", "desktop"})) == "ui, desktop");
+}
+
+TEST("a change is said in words, a command's action as done, and a command's several changes once") {
+	CHECK(done("close") == "closed");
+	CHECK(done("take") == "took");
+	CHECK(done("take_over") == "took over");
+	CHECK(done("stop") == "stopped");
+	CHECK(done("copy") == "copied");
+	CHECK(done("submit") == "submitted");
+	CHECK(done("visit") == "visited");
+	CHECK(done("reopen") == "reopened");
+	CHECK(done("follow") == "followed");
+	CHECK(changed("status", "open", "closed", "tracker::issue::close") == "closed this");
+	CHECK(changed("stage", "Reported", "Triaged", "tracker::issue::move") == "moved this from Reported to Triaged");
+	CHECK(changed("title", "Old", "New", "tracker::issue::update") == "changed title from Old to New");
+	CHECK(changed("", value(), value(), "tracker::issue::create") == "created this");
+	CHECK(changed("comment", value(), value(), "tracker::comment::create") == "added a comment to this");
+	auto [head, tail] = phrase("due_at", "", "Oct 1", "tracker::milestone::update");
+	CHECK(head == "set due at of");
+	CHECK(tail == "to Oct 1");
+}
+
+TEST("an issue's page: its body in Markdown, its comments, and its timeline with what's new marked") {
+	memory_source data;
+	auto at = [](int minutes) {
+		value v;
+		v.type = value::kind::time;
+		v.time.seconds = 1'790'000'000 + minutes * 60;
+		return v;
+	};
+	data.set("tracker::issue_page", "atlas-12",
+	         value(fields{{"number", 12},
+	                      {"title", "Copy an issue whole"},
+	                      {"body", "Copy its **title**, body and `labels`, so a new one\nstarts where this one is.\n\n- one\n- two"},
+	                      {"comments", list{value(fields{{"id", "c1"}, {"author.name", "Maya Garcia"}, {"body", "Seen."}, {"created_at", at(1)}}),
+	                                        value(fields{{"id", "c2"}, {"author.name", "Ade Bello"}, {"body", "Taking it."}, {"created_at", at(5)}})}},
+	                      {"changes", list{value(fields{{"id", "h1"}, {"field", ""}, {"action", "tracker::issue::create"}, {"created_by.name", "Maya Garcia"}, {"created_at", at(0)}}),
+	                                       value(fields{{"id", "h2"}, {"field", "status"}, {"before", "open"}, {"after", "closed"}, {"action", "tracker::issue::close"},
+	                                                    {"created_by.name", "Ade Bello"}, {"created_at", at(9)}}),
+	                                       value(fields{{"id", "h3"}, {"field", "closed_at"}, {"before", value()}, {"after", at(9)}, {"action", "tracker::issue::close"},
+	                                                    {"created_by.name", "Ade Bello"}, {"created_at", at(9)}})}}}));
+	data.set("tracker::seen", "", value(fields{{"at", at(3)}}));
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"", "/issues/:issue", "", [](page& p) {
+		                     auto issue = p.view("tracker::issue_page", p.param("issue"));
+		                     auto seen = p.view("tracker::seen");
+		                     p.title({words("#"), live(issue, "number"), words(" "), live(issue, "title")});
+		                     return items(markdown(p, issue, "body"), section({"Comments"}, thread(p, {.view = issue, .list = "comments", .body = markdown_view})),
+		                                  timeline(p, {.view = issue,
+		                                               .list = "changes",
+		                                               .title = "History",
+		                                               .fresh_views = {seen},
+		                                               .fresh = [](const value& row, const std::vector<value>& read) {
+			                                               return row["created_at"].time.seconds > read[0]["at"].time.seconds;
+		                                               },
+		                                               .on_open = "tracker::seen::touch"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/issues/atlas-12");
+	matches_golden("issue-page", {900, 760}, [&] { return nav.show(); });
+	CHECK(data.runs().size() == 1);  // said it's been seen, once
+	CHECK(data.runs().front().command == "tracker::seen::touch");
+}
+
+int main() {
+	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
+	return check::run();
+}

@@ -15,6 +15,24 @@ namespace one::desktop::runtime {
 
 	// Values
 
+	namespace {
+		const std::chrono::time_zone*& zone_named() {
+			static const std::chrono::time_zone* named = nullptr;
+			return named;
+		}
+	}  // namespace
+
+	const std::chrono::time_zone* time_zone() {
+		if (zone_named()) return zone_named();
+		try {
+			return std::chrono::current_zone();
+		} catch (const std::exception&) {
+			return std::chrono::locate_zone("UTC");
+		}
+	}
+
+	void use_time_zone(const std::string& name) { zone_named() = std::chrono::locate_zone(name); }
+
 	std::string show(const value& v) {
 		switch (v.type) {
 			case value::kind::string:
@@ -23,11 +41,17 @@ namespace one::desktop::runtime {
 			case value::kind::floating: return std::format("{}", v.floating);
 			case value::kind::boolean: return v.boolean ? "yes" : "no";
 			case value::kind::time: {
-				auto when = v.as_time();
-				auto now = std::chrono::system_clock::now();
+				// A date alone, kept as midnight UTC, is that day wherever it's read.
+				bool date_only = v.time.seconds % 86400 == 0 && v.time.nanos == 0;
+				if (date_only) {
+					std::string day = std::format("{:%b %e, %Y}", std::chrono::floor<std::chrono::days>(v.as_time()));
+					if (auto doubled = day.find("  "); doubled != std::string::npos) day.erase(doubled, 1);
+					return day;
+				}
+				auto when = std::chrono::zoned_time(time_zone(), std::chrono::floor<std::chrono::minutes>(v.as_time())).get_local_time();
+				auto now = std::chrono::zoned_time(time_zone(), std::chrono::system_clock::now()).get_local_time();
 				// Today's by its time, any other by its day.
-				if (std::chrono::floor<std::chrono::days>(when) == std::chrono::floor<std::chrono::days>(now))
-					return std::format("{:%H:%M}", std::chrono::floor<std::chrono::minutes>(when));
+				if (std::chrono::floor<std::chrono::days>(when) == std::chrono::floor<std::chrono::days>(now)) return std::format("{:%H:%M}", when);
 				std::string day = std::format("{:%b %e, %Y}", std::chrono::floor<std::chrono::days>(when));
 				if (auto doubled = day.find("  "); doubled != std::string::npos) day.erase(doubled, 1);
 				return day;

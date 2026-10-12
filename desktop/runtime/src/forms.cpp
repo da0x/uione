@@ -33,7 +33,8 @@ namespace one::desktop::runtime {
 		// What a field shows for a value from a view: a date as 2026-09-30, a list
 		// separated by commas, and anything else as it reads.
 		std::string as_field(const value& v) {
-			if (v.is_time()) return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(v.as_time()));
+			if (v.is_time() && v.time.seconds % 86400 == 0 && v.time.nanos == 0) return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(v.as_time()));
+			if (v.is_time()) return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(std::chrono::zoned_time(time_zone(), v.as_time()).get_local_time()));
 			if (v.is_array()) {
 				std::string out;
 				for (const auto& item : v.items) out += (out.empty() ? "" : ", ") + as_field(item);
