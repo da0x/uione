@@ -96,6 +96,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/layout.cpp
 		runtime/src/memory_source.cpp
 		runtime/src/runtime.cpp
+		runtime/src/table.cpp
 		runtime/src/timeline.cpp)
 	add_library(one::desktop::runtime ALIAS one_desktop_runtime)
 	target_include_directories(one_desktop_runtime PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/runtime/include> $<INSTALL_INTERFACE:include>)

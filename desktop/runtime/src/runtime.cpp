@@ -263,9 +263,10 @@ namespace one::desktop::runtime {
 		bool filtering(const std::string& name) { return name != "is" && name != "find" && name != "search"; }
 	}  // namespace
 
-	bool page::keeps(const value& row) const {
-		std::string me = source_.reader() ? source_.reader()->uid : "";
-		return std::ranges::all_of(query_, [&](const auto& pick) {
+	bool page::keeps(const value& row) const { return runtime::kept(row, query_, source_.reader() ? source_.reader()->uid : ""); }
+
+	bool kept(const value& row, const std::vector<std::pair<std::string, std::string>>& picks, const std::string& me) {
+		return std::ranges::all_of(picks, [&](const auto& pick) {
 			const auto& [name, wanted] = pick;
 			if (!filtering(name)) return true;
 			for (const char* op : {"<=", ">=", "<", ">"}) {

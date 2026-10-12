@@ -657,6 +657,85 @@ TEST("an issue in two columns, its buttons beside its title, the steps it can ta
 	matches_golden("menu", {1000, 420}, [&] { return nav.show(); });
 }
 
+namespace {
+
+	site with_table() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Issues", "/:project/issues", "", [](page& p) {
+			                     auto project = p.view("projects::project_page", p.param("project"));
+			                     return items(table(p, {.view = project,
+			                                            .list = "issues",
+			                                            .columns = {{"number", "#"}, {"title", "Title"}, {"labels", "Labels"}, {"assignees.name", "Assigned to"}, {"stage", "Stage"}},
+			                                            .actions = {{.command = "projects::issue::rename", .label = "Rename", .form = {{"title"}}, .submit = "Rename"}},
+			                                            .people = {{"assignees.name", "assignees.picture"}},
+			                                            .choices = {{"stage", {{"s1", "To do"}, {"s2", "Done"}}}},
+			                                            .labels = {"labels"},
+			                                            .by = "stage",
+			                                            .search = {"title", "labels"},
+			                                            .sort = "-number",
+			                                            .page = 2,
+			                                            .tools = [&p] { return command(p, {.command = "projects::issue::create", .label = "New issue", .primary = true}); },
+			                                            .tint = tint_spec{"priority", {"critical", "high", "normal", "low", "trivial"}}}));
+		                     }});
+		return s;
+	}
+
+	void fill_table(memory_source& data) {
+		auto issue = [](int n, std::string title, std::string stage, std::string priority, list labels, list people) {
+			return value(fields{{"id", "atlas-" + std::to_string(n)}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}});
+		};
+		data.set("projects::project_page", "atlas",
+		         value(fields{{"issues", list{issue(12, "Copy an issue whole", "s1", "high", list{"ui"}, list{"Maya Garcia"}),
+		                                      issue(14, "Draw tables natively", "s1", "normal", list{}, list{}),
+		                                      issue(15, "Search by label", "s1", "critical", list{"search", "ui"}, list{"Ade Bello", "Maya Garcia"}),
+		                                      issue(3, "Sign in by key", "s2", "low", list{}, list{"Ade Bello"})}}}));
+	}
+
+}  // namespace
+
+TEST("a table: tabs by a choice, searched, sorted and in pages, with a row's action asking with its form") {
+	memory_source data;
+	fill_table(data);
+	auto s = with_table();
+	navigator nav(s, data);
+	nav.open("/atlas/issues");
+	auto& p = nav.current();
+	auto root = built(nav);
+	auto* rows = list_holding(*root, "atlas-15");
+	CHECK(rows != nullptr);  // the largest number first, on the first page of two
+	CHECK(list_holding(*root, "atlas-12") == nullptr);  // on the second page
+	CHECK(list_holding(*root, "atlas-3") == nullptr);   // in the Done tab
+	p.kept<int>("table:issues:page").set(1);
+	root = built(nav);
+	CHECK(list_holding(*root, "atlas-12") != nullptr);
+	p.kept<int>("table:issues:page").set(0);
+	p.kept<std::string>("table:issues:search").set("search");
+	root = built(nav);
+	CHECK(list_holding(*root, "atlas-15") != nullptr);
+	CHECK(list_holding(*root, "atlas-14") == nullptr);
+	p.kept<std::string>("table:issues:search").set("");
+	p.kept<std::string>("table:issues:acting").set("atlas-15|projects::issue::rename");
+	root = built(nav);
+	CHECK(p.kept<std::string>("form:projects::issue::rename:atlas-15:title").peek() == "Search by label");  // started from the row
+	p.kept<std::string>("form:projects::issue::rename:atlas-15:title").set("Search by labels");
+	root = built(nav);
+	// The form's own button, Rename, is the one after its field, the only one typed into.
+	auto parts = focusable_in(*root);
+	std::size_t caret = 0, anchor = 0;
+	auto typed_in = std::ranges::find_if(parts, [&](one::desktop::element* e) { return e->entry() && e->entry()->surrounding(caret, anchor) == "Search by labels"; });
+	CHECK(typed_in != parts.end());
+	if (typed_in == parts.end()) return;
+	(*std::next(typed_in))->handle_key(enter);
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "projects::issue::rename");
+	CHECK(data.runs().back().fields["id"].as_string() == "atlas-15");
+	CHECK(data.runs().back().fields["title"].as_string() == "Search by labels");
+	p.kept<std::string>("table:issues:acting").set("");
+	matches_golden("table", {1000, 420}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

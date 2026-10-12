@@ -87,6 +87,10 @@ namespace one::desktop::runtime {
 	// `named` the parameters filled with the last part of an id keyed by so many.
 	std::string row_link(const std::string& route, const value& row, const std::map<std::string, std::string>& params, const std::vector<std::string>& keyed = {},
 	                     const std::map<std::string, int>& named = {});
+	// Whether a row is kept by a filter's parts, each a field and what it holds, like
+	// assignees=me, or a time it's before or after, like updated_at>=-7d.
+	bool kept(const value& row, const std::vector<std::pair<std::string, std::string>>& picks, const std::string& me);
+
 	// An id made of a key's parts, and an id's last `count` parts, as keyOf and
 	// partsOf make and split them on the web.
 	std::string key_of(const std::vector<std::string>& parts);

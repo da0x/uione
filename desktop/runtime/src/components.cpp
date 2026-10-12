@@ -12,13 +12,6 @@ namespace one::desktop::runtime {
 
 	namespace {
 
-		text_style quieter() {
-			auto s = current_theme().strong();
-			s.color = current_theme().muted;
-			s.size -= 2;
-			return s;
-		}
-
 		desktop::view quiet(std::string words) { return desktop::text(std::move(words), current_theme().quiet()); }
 
 		// The library's colors, as a section or a tag is drawn in.
@@ -118,55 +111,6 @@ namespace one::desktop::runtime {
 		return desktop::button(busy ? b.label + "…" : b.label, [&p, command, fields, busy] {
 			if (!busy) p.run(command, fields);
 		}, b.primary);
-	}
-
-	desktop::view table(page& p, table_spec spec) {
-		const view_state& v = *spec.view;
-		if (auto instead = not_shown(v)) return std::move(*instead);
-		std::vector<value> rows;
-		for (const auto& row : rows_of(v, spec.list)) {
-			if (p.keeps(row)) rows.push_back(row);
-		}
-		auto note = filter_note(p);
-		if (rows.empty()) return note.get() ? desktop::column(std::move(note), quiet(spec.empty)).spacing(8) : quiet(spec.empty);
-		// The columns' labels, then a row for each, each column an equal share.
-		// Each row keeps the same room for its actions, so its columns line up with the
-		// others' whichever actions it has.
-		float acting = 0;
-		for (const auto& a : spec.actions) {
-			if (a.allowed) acting += 24 + 9 * static_cast<float>(a.label.size());
-		}
-		std::vector<desktop::view> labels;
-		for (const auto& c : spec.columns) labels.push_back(desktop::text(c.label, quieter()).grow());
-		if (acting > 0) labels.push_back(desktop::spacer().grow(0).width(acting));
-		std::vector<desktop::list_row> shown;
-		for (const auto& row : rows) {
-			std::vector<desktop::view> cells;
-			for (const auto& c : spec.columns) cells.push_back(desktop::text(show(field_of(row, c.field)), current_theme().body()).grow());
-			std::string id = row["id"].as_string();
-			std::vector<desktop::view> actions;
-			for (const auto& a : spec.actions) {
-				if (!a.allowed || (a.when && !a.when(row))) continue;
-				std::string command = a.command;
-				actions.push_back(desktop::button(p.running(command) ? a.label + "…" : a.label, [&p, command, id] {
-					p.run(command, value(std::map<std::string, value>{{"id", id}}));
-				}));
-			}
-			if (acting > 0) {
-				actions.insert(actions.begin(), desktop::spacer());
-				cells.push_back(desktop::row(std::move(actions)).spacing(6).width(acting));
-			}
-			shown.push_back({id, desktop::row(std::move(cells)).spacing(12).align(align::center)});
-		}
-		std::map<std::string, value> by_id;
-		for (const auto& row : rows) by_id.emplace(row["id"].as_string(), row);
-		std::function<void(const std::string&)> opening;
-		if (!spec.link.empty()) {
-			opening = [&p, by_id, link = spec.link, keyed = spec.keyed, named = spec.named](const std::string& id) {
-				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
-			};
-		}
-		return desktop::column(std::move(note), desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)), desktop::list(std::move(shown), std::move(opening))).spacing(6);
 	}
 
 	desktop::view confirm(page& p, std::string command, std::string question) {

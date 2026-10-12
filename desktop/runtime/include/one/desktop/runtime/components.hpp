@@ -135,29 +135,12 @@ namespace one::desktop::runtime {
 	// An address with the page's own parameters filled in, like /:project/settings.
 	std::string filled(page& p, const std::string& route);
 
-	// A view's rows, or one of its lists, a column each for the fields named: a
-	// row opens `link`, filled from it, and runs each action on it, as its id.
+
+	// A field of a view, as a column or a detail shows it, called by its label.
 	struct column {
 		std::string field;
 		std::string label;
 	};
-	struct row_action {
-		std::string command;
-		std::string label;
-		bool allowed = true;
-		std::function<bool(const value& row)> when = {};  // only the rows it holds for
-	};
-	struct table_spec {
-		state<view_state> view;
-		std::string list = "";
-		std::vector<column> columns = {};
-		std::string link = "";
-		std::vector<std::string> keyed = {};
-		std::map<std::string, int> named = {};
-		std::vector<row_action> actions = {};
-		std::string empty = "Nothing here yet.";
-	};
-	desktop::view table(page& p, table_spec spec);
 
 	// A form for a command: each field asked for as its kind is, and a button that
 	// sends them, with what's given besides, like the project an issue is made in. An
@@ -238,6 +221,40 @@ namespace one::desktop::runtime {
 		std::optional<tint_spec> tint = std::nullopt;
 	};
 	desktop::view board(page& p, board_spec spec);
+
+	// A view's rows, or one of its lists, a column each for the fields named: a row
+	// opens `link`, filled from it, and runs each action on it, as its id, or asks
+	// first with the action's form, opened under it and started from it.
+	struct row_action {
+		std::string command;
+		std::string label;
+		bool allowed = true;
+		std::function<bool(const value& row)> when = {};  // only the rows it holds for
+		std::vector<form_field> form = {};
+		std::string submit = "";
+	};
+	struct table_spec {
+		state<view_state> view;
+		std::string list = "";
+		std::vector<column> columns = {};
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::vector<row_action> actions = {};
+		std::map<std::string, std::string> people = {};  // a person's column, by name, and their picture
+		std::map<std::string, std::vector<desktop::option>> choices = {};  // a choice column's values, as they're shown
+		std::vector<std::string> labels = {};  // columns of words, each shown on its own
+		std::string by = "";                   // a choice column whose choices are tabs
+		std::vector<std::string> search = {};
+		std::string sort = "";                 // like -number, largest first
+		int page = 0;                          // how many rows a page has
+		std::function<desktop::view()> tools = {};  // buttons beside its search, like New issue
+		bool hide_empty = false;
+		std::vector<std::pair<std::string, std::string>> only = {};  // the rows it keeps, like due<= +2w
+		std::optional<tint_spec> tint = std::nullopt;
+		std::string empty = "Nothing here yet.";
+	};
+	desktop::view table(page& p, table_spec spec);
 
 	// A list's rows as large cards, like a project's boards: each its title, what
 	// else it shows, a tally of what it holds, like 3 To do · 1 Done, and links that
