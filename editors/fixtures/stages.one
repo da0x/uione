@@ -1,0 +1,44 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A workflow whose stages are written in it, for the highlighting test: worked and
+// by are keywords, and a step's arrow is an operator.
+
+namespace shop {
+
+	entity shop {
+		slug  slug  required  unique  key
+	}
+
+	define role proofreader "Proofreader" in shop {
+		order::claim
+		order::renew
+		order::release
+		order::move
+	}
+
+	define role foreman "Foreman" in shop {
+		order::claim
+		order::renew
+		order::release
+		order::move
+	}
+
+	enum stage {
+		proofing  "Proofing"
+		press     "Press"
+	}
+
+	entity order {
+		shop   shop   required
+		stage  stage = stage::proofing
+	}
+
+	define workflow order by stage {
+		proofing  worked by proofreader
+		press     worked by foreman
+		proofing -> press
+		press -> proofing  by foreman
+	}
+
+}

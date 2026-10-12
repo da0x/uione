@@ -255,3 +255,7 @@ editors/fixtures/files.one	proof     file	file	type
 editors/fixtures/files.one	pictures  list of file	list	type
 editors/fixtures/files.one	pictures  list of file	file	type
 editors/fixtures/files.one	screen "Home" / landing grid {	landing	keyword
+editors/fixtures/stages.one	proofing  worked by proofreader	worked	keyword
+editors/fixtures/stages.one	proofing  worked by proofreader	by	keyword
+editors/fixtures/stages.one	proofing -> press	->	operator
+editors/fixtures/stages.one	press -> proofing  by foreman	by	keyword

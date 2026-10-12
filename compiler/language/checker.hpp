@@ -3791,6 +3791,27 @@ namespace one::language {
             // held(roles): whether the person holds one of these project roles.
             if (name == "held") {
                 if (!arguments(1)) return nullptr;
+                // held([role::proofreader, role::shipper]): roles every project starts with, by name.
+                if (auto* list = std::get_if<list_expression>(&call.arguments[0]->node)) {
+                    if (list->items.empty()) error(call.arguments[0]->where, "held takes the roles it asks about, like held([role::shipper])");
+                    for (const auto& item : list->items) {
+                        auto* named = std::get_if<name_expression>(&item->node);
+                        field kind;
+                        if (named && named->name.parts.size() == 2) kind.type = qualified_name{{named->name.parts[0]}, item->where};
+                        const roles_declaration* roles = kind.type ? defined_roles(in.ns, kind) : nullptr;
+                        if (!roles) {
+                            error(item->where, "held takes a project's roles by name, like held([role::shipper]), or a list of them, like held(roles)");
+                            continue;
+                        }
+                        bool known = std::any_of(roles->defaults.begin(), roles->defaults.end(), [&](const auto& d) { return d.name == named->name.parts[1]; });
+                        if (!known) {
+                            std::string names;
+                            for (const auto& d : roles->defaults) names += (names.empty() ? "" : ", ") + roles->entity + "::" + d.name;
+                            error(item->where, named->name.text() + " isn't a role every project starts with; those are " + names);
+                        }
+                    }
+                    return nullptr;
+                }
                 const field* roles = resolve(in, *call.arguments[0]);
                 if (roles && (!roles->list || !defined_roles(in.ns, *roles))) {
                     error(call.arguments[0]->where, "held takes a list of a project's roles, like held(roles)");

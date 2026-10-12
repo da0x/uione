@@ -137,7 +137,7 @@ The language's own words, inside what a declaration says:
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a define role, `in` and `for services`; in a picker, `from`;
-- in a define workflow: `by`, `worked by`, `steps`, `lease`;
+- in a define workflow: `by`, `worked by`, `steps`, `lease`, and `->` between two stages;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
@@ -922,7 +922,7 @@ command project::create {
 ```one
 entity role {
 	project  project  required  key
-	name     slug     required  key
+	name     text     required  key = slug(title)
 	title    text     required
 	may      list of permission
 }
@@ -1029,15 +1029,16 @@ The generated C++ client does all of it with `sign_in_with_browser(open)`, where
 ## define workflow
 
 The rules an entity moves by: the stages it goes through, which roles work each,
-and the steps from one to another. Its stages are records, so each project makes
-its own, and whoever works one takes what's in it for a while, its lease, so two
-never work the same thing at once. Here a print shop's orders move from proofing to
-press to shipping:
+and the steps from one to another. Whoever works a stage takes what's in it for a
+while, its lease, so two never work the same thing at once. Its stages are records,
+so each project makes its own, or [written in the code](#stages-written-in-the-code)
+when every project works the same ones. Here a print shop's orders move from
+proofing to press to shipping:
 
 ```one
 entity stage {
 	shop       shop  required  key
-	name       slug  required  key = slug(title)
+	name       text  required  key = slug(title)
 	title      text  required
 	// The roles whose people and services work its orders.
 	worked_by  list of role
@@ -1077,7 +1078,9 @@ define workflow order by stage {
 	held_until  date
 
 command order::claim {
-	require held(stage.worked_by)  "this stage isn't worked by a role you hold"
+	require "this stage isn't worked by a role you hold" {
+		held(stage.worked_by)
+	}
 	require held_by == none || held_by == me || held_until < now  "someone else holds it"
 	held_by = me
 	held_until = 30 minutes from now
@@ -1113,6 +1116,77 @@ command order::move {
 - The roles are a [define role](#define-role)'s, and the entity is held in what
   they're in, like a shop. Writing `held_by`, `held_until` or any of the four
   commands as well is a mistake.
+
+### Stages written in the code
+
+When every shop works the same stages, they're choices, and the workflow says who
+works each and the steps between them. Nothing is kept as records, and nothing is
+made for each new shop:
+
+```one
+enum stage {
+	proofing  "Proofing"
+	press     "Press"
+	shipping  "Shipping"
+	shipped   "Shipped"
+}
+
+entity order {
+	shop   shop   required
+	title  text   required
+	stage  stage = stage::proofing
+}
+
+define workflow order by stage {
+	proofing  worked by proofreader
+	press     worked by press_operator
+	shipping  worked by shipper
+	proofing -> press
+	press -> shipping
+	press -> proofing
+	shipping -> shipped
+	lease 30 minutes
+}
+```
+
+- `by` names a field of choices, an enum's or its own, and its choices are the
+  stages. An order starts where the field's default says.
+- `proofing worked by proofreader` names the roles that work a stage, separated by
+  commas when there are several. A stage nobody works, like `shipped`, is an end:
+  it's in no queue, nobody claims it, and no step leaves it.
+- `proofing -> press` is a step, taken by the roles that work `proofing`. A step
+  can name its own instead: `press -> proofing by foreman`.
+- It adds the same lease, commands and queue as stages kept as records, with who
+  works what checked from the code:
+
+```one
+command order::claim {
+	require "this stage isn't worked by a role you hold" {
+		stage == stage::proofing && held([role::proofreader]) || stage == stage::press && held([role::press_operator]) || ...
+	}
+	...
+}
+command order::move {
+	changes stage
+	require "your role doesn't move an order from there to there" {
+		was stage == stage::proofing && stage == stage::press && held([role::proofreader]) || ...
+	}
+	...
+}
+```
+
+- `held([role::proofreader])` asks whether the person holds one of the roles named,
+  the ones every shop starts with, and can be written in any command.
+- `order_work` per role lists the shop's orders in the stages that role works.
+- These are mistakes:
+  - a stage that isn't one of the choices;
+  - a stage said twice;
+  - a role that isn't defined;
+  - a step to the stage it leaves, a step said twice, or a step out of a stage
+    nobody works;
+  - a choice nobody works and no step reaches;
+  - no steps at all;
+  - `worked by` or `steps` with stages written in the code.
 
 ## define theme
 

@@ -965,6 +965,135 @@ TEST_CASE("a workflow is for an entity moving along stages that roles work, by s
                "the workflow makes order::claim; take out the one declared"));
 }
 
+TEST_CASE("a workflow's stages written in it are checked from the code: who claims, who moves where, and each role's queue") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace shop {
+entity shop {
+	slug  slug  required  unique  key
+}
+define role proofreader "Proofreader" in shop {
+	order::claim
+	order::renew
+	order::release
+	order::move
+}
+define role press_operator "Press operator" in shop {
+	order::claim
+	order::move
+}
+define role foreman "Foreman" in shop {
+	order::move
+}
+command shop::create {
+	by anyone signed in
+}
+enum stage {
+	proofing  "Proofing"
+	press     "Press"
+	shipped   "Shipped"
+}
+entity order {
+	shop   shop   required
+	title  text
+	stage  stage = stage::proofing
+}
+define workflow order by stage {
+	proofing  worked by proofreader
+	press     worked by press_operator
+	proofing -> press
+	press -> proofing  by foreman
+	press -> shipped
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CAPTURE(go);
+    // A role is asked about once, however many stages and steps name it.
+    CHECK(go.find(R"(held, err := c.Held([]string{one.Key(o.Shop, "proofreader")}))") != std::string::npos);
+    CHECK(go.find(R"(held2, err := c.Held([]string{one.Key(o.Shop, "press_operator")}))") != std::string::npos);
+    CHECK(go.find("if !(o.Stage == StageProofing && held || o.Stage == StagePress && held2) {") != std::string::npos);
+    // A step is taken by who works where it starts, or by whom it names.
+    CHECK(go.find(R"(held2, err := c.Held([]string{one.Key(o.Shop, "foreman")}))") != std::string::npos);
+    CHECK(go.find("c.Was(\"stage\") == string(StageProofing) && o.Stage == StagePress && held || c.Was(\"stage\") == string(StagePress) && "
+                  "o.Stage == StageProofing && held2 || c.Was(\"stage\") == string(StagePress) && o.Stage == StageShipped && held3") != std::string::npos);
+    CHECK(go.find("o.HeldUntil = c.Now().Add(10 * time.Minute)") != std::string::npos);
+    // Each role's queue: the shop's orders in the stages it works, and none for a role that works none.
+    CHECK(go.find(R"(List("items", one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StageProofing).When(one.SubjectField("name"), "proofreader").)"
+                  R"(Or(one.Where[Order]("shop", one.SubjectField("shop")).And("stage", StagePress).When(one.SubjectField("name"), "press_operator"))))") != std::string::npos);
+    // A role's name is a word of the code's, like press_operator, so it's text, made from its title when it isn't given.
+    CHECK(go.find("Name  string   `firestore:\"name\" one:\"required,key,from=title\"`") != std::string::npos);
+}
+
+TEST_CASE("a workflow's stages written in it are each worked or reached, by roles there are, along steps that leave only worked stages") {
+    auto errors = [](const std::string& workflow, const std::string& stages = "\tproofing  \"Proofing\"\n\tpress  \"Press\"\n\tshipped  \"Shipped\"\n") {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", "namespace shop {\nentity shop {\n\tslug  slug  required  unique  key\n}\n"
+                                                    "define role proofreader \"Proofreader\" in shop {\n\torder::claim\n\torder::renew\n\torder::release\n\torder::move\n}\n"
+                                                    "define role shipper \"Shipper\" in shop {\n\torder::claim\n}\n"
+                                                    "command shop::create {\n\tby anyone signed in\n}\n"
+                                                    "enum stage {\n" + stages + "}\n"
+                                                    "entity order {\n\tshop  shop  required\n\tstage  stage\n}\n" + workflow + "}\n", out));
+        language::check(files, out);
+        std::vector<std::string> messages;
+        for (const auto& d : out) messages.push_back(d.message);
+        return messages;
+    };
+    auto says = [](const std::vector<std::string>& messages, const std::string& message) {
+        CAPTURE(messages);
+        return std::find(messages.begin(), messages.end(), message) != messages.end();
+    };
+    const std::string fine = "\tproofing worked by proofreader\n\tpress worked by shipper\n\tproofing -> press\n\tpress -> shipped\n";
+    auto workflow = [](const std::string& lines) { return "define workflow order by stage {\n" + lines + "}\n"; };
+    auto none = errors(workflow(fine));
+    CAPTURE(none);
+    CHECK(none.empty());
+    CHECK(says(errors(workflow("\tproofing worked by proofreader\n\tproofing -> press\n")),
+               "stage shipped is worked by nobody and no step reaches it; say who works it, like shipped worked by a role, or a step to it"));
+    CHECK(says(errors(workflow(fine + "\tproofng worked by shipper\n")), "proofng isn't a stage of an order: its stages are proofing, press or shipped"));
+    CHECK(says(errors(workflow(fine + "\tpress -> shiped\n")), "shiped isn't a stage of an order: its stages are proofing, press or shipped"));
+    CHECK(says(errors(workflow(fine + "\tproofing worked by shipper\n")),
+               "proofing is said twice; put the roles that work it on one line, like proofing worked by proofreader, shipper"));
+    CHECK(says(errors(workflow("\tproofing worked by proofreeder\n\tpress worked by shipper\n\tproofing -> press\n\tpress -> shipped\n")),
+               "there's no role proofreeder: the roles are proofreader and shipper"));
+    CHECK(says(errors(workflow(fine + "\tpress -> proofing by foreman\n")), "there's no role foreman: the roles are proofreader and shipper"));
+    CHECK(says(errors(workflow(fine + "\tshipped -> press\n")),
+               "shipped is worked by nobody, so it's an end and no step leaves it; say who works it, like shipped worked by a role"));
+    CHECK(says(errors(workflow(fine + "\tpress -> press\n")), "a step goes from one stage to another, and this one stays at press"));
+    CHECK(says(errors(workflow(fine + "\tproofing -> press\n")), "the step proofing -> press is said twice"));
+    CHECK(says(errors(workflow("\tproofing worked by proofreader\n\tpress worked by shipper\n\tshipped worked by shipper\n")),
+               "say the steps between its stages, one a line, like proofing -> shipped"));
+    CHECK(says(errors(workflow(fine + "\tworked by worked_by\n")),
+               "stage is a choice, so its stages are said here: who works each, like proofing worked by a role; worked by and steps are for stages kept as records"));
+    CHECK(says(errors(workflow(fine + "\tsteps step\n")),
+               "stage is a choice, so the steps between its stages are said here, like proofing -> shipped; worked by and steps are for stages kept as records"));
+}
+
+TEST_CASE("held takes a project's roles by name, the ones every project starts with") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace shop {\nentity shop {\n\tslug  slug  required  unique  key\n}\n"
+                                                "define role proofreader \"Proofreader\" in shop {\n\torder::close\n}\n"
+                                                "command shop::create {\n\tby anyone signed in\n}\n"
+                                                "entity order {\n\tshop  shop  required\n}\n"
+                                                "command order::close {\n\trequire held([role::proofreader, role::shipper, crate::x])  \"no\"\n}\n}\n", out));
+    language::check(files, out);
+    std::vector<std::string> messages;
+    for (const auto& d : out) messages.push_back(d.message);
+    CAPTURE(messages);
+    CHECK(messages.size() == 2);
+    CHECK(std::find(messages.begin(), messages.end(), "role::shipper isn't a role every project starts with; those are role::proofreader") != messages.end());
+    CHECK(std::find(messages.begin(), messages.end(),
+                    "held takes a project's roles by name, like held([role::shipper]), or a list of them, like held(roles)") != messages.end());
+}
+
 TEST_CASE("exists and was are a command's, and held takes a project's roles") {
     language::diagnostics out;
     std::vector<language::file> files;

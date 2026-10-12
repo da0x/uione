@@ -62,12 +62,16 @@ type copied struct {
 }
 
 // A condition on one field. Except turns it around: everything but that value.
-// Has asks a list instead: the entities whose list holds the value.
+// Has asks a list instead: the entities whose list holds the value. A gate asks
+// nothing of the entities: its value, a field of what the document is for, has to
+// be wanted, or the way picks nothing.
 type condition struct {
 	field  string
 	value  any // nil means none
 	except bool
 	has    bool
+	gate   bool
+	wanted any
 }
 
 // Query picks the entities a view reads: all of them, or those that meet every
@@ -128,6 +132,14 @@ func (q Query) Has(field string, value any) Query {
 // reading, so no view needs an index declared in advance to ask for it.
 func (q Query) Except(field string, value any) Query {
 	q.conditions = append(append([]condition(nil), q.conditions...), condition{field: field, value: value, except: true})
+	return q
+}
+
+// When keeps a way only for the documents whose entity holds a value, as in
+// When(SubjectField("name"), "shipper") in a view per role: the orders in the
+// shipping stage, picked for the shop's shippers and for no other role.
+func (q Query) When(value any, wanted any) Query {
+	q.conditions = append(append([]condition(nil), q.conditions...), condition{value: value, gate: true, wanted: wanted})
 	return q
 }
 
@@ -718,6 +730,9 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 			var field string
 			var through *subjectField
 			for _, c := range way.conditions {
+				if c.gate {
+					continue
+				}
 				// Leaving the person out, like their own changes, doesn't say whose it is.
 				if (c.value == Viewer || c.value == Subject) && !c.except {
 					field = c.field
@@ -872,6 +887,10 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]fir
 	for _, c := range way.conditions {
 		through, field, hop := strings.Cut(c.field, ".")
 		switch {
+		case c.gate:
+			if !same(givenIn(ctx, c.value, subject, row), c.wanted) {
+				return nil, nil
+			}
 		case hop:
 			target := a.reg.entity(s.through(through).refers)
 			op := "=="
@@ -986,7 +1005,7 @@ func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*fire
 // unless an Except has to be checked on each one.
 func (a *App) count(ctx context.Context, q Query, subject string) (int64, error) {
 	for _, c := range q.conditions {
-		if c.except || strings.Contains(c.field, ".") || len(q.or) > 0 {
+		if c.except || c.gate || strings.Contains(c.field, ".") || len(q.or) > 0 {
 			docs, err := a.find(ctx, q, subject, "")
 			return int64(len(docs)), err
 		}
@@ -1628,6 +1647,10 @@ func (v *ViewSpec) definition() string {
 		for _, way := range q.ways() {
 			s := typeName(way.typ) + "("
 			for _, c := range way.conditions {
+				if c.gate {
+					s += fmt.Sprintf("when %s=%s;", val(c.value), val(c.wanted))
+					continue
+				}
 				s += fmt.Sprintf("%s=%s,except=%t,has=%t;", c.field, val(c.value), c.except, c.has)
 			}
 			ways = append(ways, s+")")

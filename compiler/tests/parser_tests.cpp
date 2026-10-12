@@ -739,5 +739,30 @@ TEST_CASE("a workflow says who works its stages, its steps, and how long a claim
     CHECK(out[0].message == "a lease lasts minutes or hours, like lease 10 minutes");
     out = parse_errors("define workflow issue by stage {\n\tstarts at backlog\n}\n");
     REQUIRE(!out.empty());
-    CHECK(out[0].message == "expected worked by, steps or lease, one a line, found 'starts'");
+    CHECK(out[0].message == "expected a stage and who works it, a step, worked by, steps or lease, one a line, found 'starts'");
+}
+
+TEST_CASE("a workflow's stages can be written in it: who works each, and the steps between them") {
+    auto f = parse_ok("define workflow order by stage {\n\tproofing  worked by proofreader\n\tpress  worked by press_operator, foreman\n"
+                      "\tproofing -> press\n\tpress -> proofing  by foreman\n\tlease 30 minutes\n}\n");
+    const auto& w = std::get<define_workflow_declaration>(f.declarations[0].node);
+    REQUIRE(w.stages.size() == 2);
+    CHECK(w.stages[0].name == "proofing");
+    CHECK(w.stages[0].roles == std::vector<std::string>{"proofreader"});
+    CHECK(w.stages[1].roles == std::vector<std::string>{"press_operator", "foreman"});
+    REQUIRE(w.moves.size() == 2);
+    CHECK(w.moves[0].from == "proofing");
+    CHECK(w.moves[0].to == "press");
+    CHECK(w.moves[0].by.empty());
+    CHECK(w.moves[1].by == std::vector<std::string>{"foreman"});
+    CHECK(w.lease_minutes == 30);
+    CHECK(w.worked_by.empty());
+    // A stage may be named worked, and worked by still says where the roles are kept.
+    auto worked = parse_ok("define workflow order by stage {\n\tworked worked by proofreader\n}\n");
+    const auto& named = std::get<define_workflow_declaration>(worked.declarations[0].node);
+    REQUIRE(named.stages.size() == 1);
+    CHECK(named.stages[0].name == "worked");
+    auto out = parse_errors("define workflow order by stage {\n\tproofing - press\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "expected '->' between two stages, like proofing -> press, found 'press'");
 }

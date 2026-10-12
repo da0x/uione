@@ -897,7 +897,19 @@ namespace one::language {
             return role;
         }
 
-        // define workflow issue by stage { worked by worked_by  steps step  lease 10 minutes }
+        // The roles after worked by, or after a step's by: proofreader, shipper.
+        void parse_workflow_roles(std::vector<std::string>& roles, std::vector<location>& where) {
+            for (;;) {
+                where.push_back(peek().where);
+                roles.push_back(expect(token_kind::identifier, "a role, like proofreader").text);
+                if (peek().kind != token_kind::comma) break;
+                advance();
+            }
+        }
+
+        // define workflow issue by stage { worked by worked_by  steps step  lease 10 minutes },
+        // or, with stages written in the code, define workflow order by stage {
+        // proofing worked by proofreader  proofing -> press  lease 30 minutes }
         define_workflow_declaration parse_define_workflow() {
             define_workflow_declaration w;
             w.where = peek().where;
@@ -908,7 +920,32 @@ namespace one::language {
             w.by = expect(token_kind::identifier, "the field it moves along, like stage").text;
             expect(token_kind::left_brace, "'{' and its rules, one a line: worked by, steps and lease");
             while (in_block()) {
-                if (at_word("worked")) {
+                if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::minus) {
+                    // proofing -> press, and by whom when it isn't who works proofing.
+                    workflow_step step;
+                    step.from_where = peek().where;
+                    step.from = advance().text;
+                    advance();
+                    expect(token_kind::greater, "'->' between two stages, like proofing -> press");
+                    step.to_where = peek().where;
+                    step.to = expect(token_kind::identifier, "the stage it goes to, like proofing -> press").text;
+                    if (at_word("by")) {
+                        advance();
+                        parse_workflow_roles(step.by, step.by_where);
+                    }
+                    w.moves.push_back(std::move(step));
+                } else if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::identifier && peek(1).text == "worked" &&
+                           !(peek().text == "worked" && peek(1).text == "by")) {
+                    // proofing worked by proofreader
+                    workflow_stage stage;
+                    stage.where = peek().where;
+                    stage.name = advance().text;
+                    advance();
+                    if (!at_word("by")) fail_expecting("'by', as in proofing worked by proofreader");
+                    advance();
+                    parse_workflow_roles(stage.roles, stage.role_where);
+                    w.stages.push_back(std::move(stage));
+                } else if (at_word("worked")) {
                     advance();
                     if (!at_word("by")) fail_expecting("'by', as in worked by worked_by");
                     advance();
@@ -929,7 +966,7 @@ namespace one::language {
                     else if (unit.text != "minute" && unit.text != "minutes") fail(unit.where, "a lease lasts minutes or hours, like lease 10 minutes");
                     w.lease_minutes = minutes;
                 } else {
-                    fail_expecting("worked by, steps or lease, one a line");
+                    fail_expecting("a stage and who works it, a step, worked by, steps or lease, one a line");
                 }
                 end_line();
             }

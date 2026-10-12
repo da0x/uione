@@ -144,6 +144,7 @@ namespace one::generators {
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
         std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
         int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
+        std::map<std::string, std::string> held_named_;  // held([role::shipper]) asked so far, by the roles it asks of
         bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
 
         code::source at(const void* declaration) const {
@@ -904,6 +905,7 @@ namespace one::generators {
             pointed_.clear();
             existing_.clear();
             helds_ = 0;
+            held_named_.clear();
             for (const auto* s : body) find_pointed(e, *s);
             // What the body reads through a reference is read first, in the command's
             // own transaction, so its changes are saved with the command's.
@@ -1440,6 +1442,17 @@ namespace one::generators {
                 return value + " " + op + " " + zero(*f);
             }
             auto l = expression(e, *b.left, me, nullptr);
+            // was stage == stage::press: the choice as it's stored, which Was gives.
+            if (auto* call = std::get_if<language::call_expression>(&b.left->node); call && !f && call->arguments.size() == 1) {
+                auto* callee = std::get_if<language::name_expression>(&call->callee->node);
+                std::string name = web_detail::text_of(*call->arguments[0]);
+                if (name.starts_with(e.name + ".")) name = name.substr(e.name.size() + 1);
+                const language::field* was = callee && callee->name.text() == "was" ? field(e, name) : nullptr;
+                auto* choice_named = std::get_if<language::name_expression>(&b.right->node);
+                if (l && was && choice_named && language::choice_of(choice_named->name, *was)) {
+                    return *l + " " + op + " string(" + choice(*was, *language::choice_of(choice_named->name, *was)) + ")";
+                }
+            }
             // role == role::member: the project's own role of that name.
             auto r = f ? own_named(e, me, *f, *b.right) : std::nullopt;
             if (!r) r = expression(e, *b.right, me, f);
@@ -1517,6 +1530,37 @@ namespace one::generators {
         // what the command's entity points at, asked before the require that uses it.
         // What it points at is read once, beside what the body reads the same way.
         bool held_before(stream& out, const language::entity_declaration& e, const language::expression& x, const language::call_expression& call, const std::string& me) {
+            // held([role::proofreader, role::shipper]): the project's own roles by name,
+            // asked once for each set of them, however many times the command names it.
+            if (auto* list = call.arguments.size() == 1 ? std::get_if<language::list_expression>(&call.arguments[0]->node) : nullptr) {
+                std::string roles;
+                for (const auto& item : list->items) {
+                    auto* named = std::get_if<language::name_expression>(&item->node);
+                    std::optional<std::string> role;
+                    if (named && named->name.parts.size() == 2) {
+                        language::field kind;
+                        kind.type = language::qualified_name{{named->name.parts[0]}, item->where};
+                        role = own_named(e, me, kind, *item);
+                    }
+                    if (!role) {
+                        unsupported(path_, item->where, "held of anything but a project's own roles by name, like held([role::shipper])");
+                        return false;
+                    }
+                    roles += (roles.empty() ? "" : ", ") + *role;
+                }
+                if (auto asked = held_named_.find(roles); asked != held_named_.end()) {
+                    existing_[&x] = asked->second;
+                    return true;
+                }
+                std::string answer = "held" + (helds_ ? std::to_string(helds_ + 1) : std::string());
+                ++helds_;
+                out.line(answer + ", err := c.Held([]string{" + roles + "})");
+                out.open("if err != nil {");
+                out.line("return err");
+                out.close("}");
+                existing_[&x] = held_named_[roles] = answer;
+                return true;
+            }
             // It's read as stage.worked_by, a member of a name, or as one dotted name.
             std::string through, listed;
             if (call.arguments.size() == 1) {
@@ -1777,7 +1821,7 @@ namespace one::generators {
                 }
                 return "one.All[" + type + "]()";
             }
-            std::string out;
+            std::string out, gates;
             for (const auto* part : parts) {
                 auto* b = std::get_if<language::binary_expression>(&part->node);
                 bool except = b && b->op == language::token_kind::not_equal;
@@ -1812,6 +1856,18 @@ namespace one::generators {
                     }
                 }
                 const language::field* f = field_name.empty() ? nullptr : field(*e, field_name);
+                // role.name == "shipper", in a view per role: whether this way picks
+                // anything for the role a document is for, asked of the role itself.
+                if (const language::entity_declaration* per = subject_.empty() || f || has || except ? nullptr : entity(pkg, subject_)) {
+                    std::string left = web_detail::text_of(*b->left);
+                    auto* literal = std::get_if<language::literal_expression>(&b->right->node);
+                    if (left.starts_with(subject_ + ".") && field(*per, left.substr(subject_.size() + 1)) && literal &&
+                        literal->type == language::literal_expression::kind::string && kind == "Where") {
+                        gates += ".When(one.SubjectField(" + api_detail::go_string(left.substr(subject_.size() + 1)) + "), " +
+                                 api_detail::go_string(literal->value) + ")";
+                        continue;
+                    }
+                }
                 if (!inside.empty() && f) {
                     if (except || kind != "Where") {
                         unsupported(path_, part->where, "a view condition through " + field_name + " other than == or has");
@@ -1876,7 +1932,8 @@ namespace one::generators {
                     out += (except ? ".Except" : has ? ".Has" : ".And") + args;
                 }
             }
-            return out;
+            if (out.empty()) out = "one.All[" + type + "]()";
+            return out + gates;
         }
 
         // A value worked out for each row: first(loan where ...).member, the member of

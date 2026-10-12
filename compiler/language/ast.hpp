@@ -455,10 +455,38 @@ namespace one::language {
         std::vector<qualified_name> permissions;
     };
 
+    // proofing worked by proofreader, in a workflow whose stages are an enum's
+    // choices: the roles that work that stage.
+    struct workflow_stage {
+        std::string name;  // proofing
+        location where;
+        std::vector<std::string> roles;  // proofreader
+        std::vector<location> role_where;
+    };
+
+    // proofing -> press, or press -> proofing by press_operator: a step between two
+    // stages written in the code, taken by whoever works the first unless it says.
+    struct workflow_step {
+        std::string from;  // proofing
+        location from_where;
+        std::string to;  // press
+        location to_where;
+        std::vector<std::string> by;  // press_operator, or none: whoever works from
+        std::vector<location> by_where;
+    };
+
     // define workflow issue by stage { worked by worked_by  steps step }: the rules an
     // entity moves by. Its stages are the records its field points at, each listing the
     // roles that work it; its steps say which roles move it from one to another. A
     // worker claims one for a while, its lease, and moves it on.
+    //
+    // When the field is an enum, its stages are the enum's choices, and the workflow
+    // says who works each and the steps between them, in the code:
+    //
+    //     define workflow order by stage {
+    //         proofing  worked by proofreader
+    //         proofing -> press
+    //     }
     struct define_workflow_declaration {
         std::string entity;  // issue
         location where;
@@ -470,6 +498,8 @@ namespace one::language {
         location steps_where;
         int lease_minutes = 10;  // how long a claim lasts unless it's renewed
         location lease_where;
+        std::vector<workflow_stage> stages;  // proofing worked by proofreader
+        std::vector<workflow_step> moves;    // proofing -> press
     };
 
     struct function_declaration {

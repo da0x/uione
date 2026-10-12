@@ -170,10 +170,14 @@ role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? 
 define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? (qualified END)* "}" END
 /* define workflow: the rules an entity moves by, along a field pointing at its
  * stages: the stage's field listing the roles that work it, the entity of steps
- * between them, and how long a claim lasts. */
+ * between them, and how long a claim lasts. Along a field of choices, its stages
+ * are written in it instead: the roles that work each, and the steps between
+ * them, taken by who works the first unless a step names its own. */
 define_workflow ::= "define" "workflow" NAME "by" NAME "{" NEWLINE? workflow_line* "}" END
 workflow_line  ::= ( "worked" "by" NAME
                    | "steps" NAME
+                   | NAME "worked" "by" NAME ("," NAME)*
+                   | NAME "-" ">" NAME ("by" NAME ("," NAME)*)?
                    | "lease" WHOLE ("minute" | "minutes" | "hour" | "hours") ) END
 /* define theme: how a site looks, as a color for each role, light and dark, its
  * fonts, corners and depth; from another, it changes only what it says. */
