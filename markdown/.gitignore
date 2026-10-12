@@ -1,0 +1,12 @@
+# Build output
+/build/
+/obj/
+/md
+*.o
+*.obj
+*.d
+
+# Editor/OS cruft
+.cache/
+compile_commands.json
+.DS_Store
