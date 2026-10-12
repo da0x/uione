@@ -6,6 +6,7 @@
 // under the row; and the track of records above a list.
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 
 #include "one/desktop/runtime/components.hpp"
@@ -48,11 +49,17 @@ namespace one::desktop::runtime {
 			return desktop::text(cell_text(spec.choices, row, column), t.body());
 		}
 
-		// How much of a row a column takes: a number little, a title more.
-		desktop::view sized(desktop::view v, const std::string& column) {
-			if (column == "number" || column.ends_with(".number")) return std::move(v).width(56);
-			return std::move(v).grow(column == "title" || column.ends_with(".title") ? 2.f : 1.f);
-		}
+		// How much of a row each column takes: as much as the widest it holds, up to a
+		// point, and the title what's left, or with none, the widest column. A short
+		// stage gets less than a long title, which would wrap.
+		struct column_widths {
+			std::map<std::string, float> widest;
+			std::string growing;
+			desktop::view operator()(desktop::view v, const std::string& column) const {
+				if (column == growing) return std::move(v).grow(1.f);
+				return std::move(v).width(std::min(widest.at(column), 260.f));
+			}
+		};
 
 		desktop::view row_form(page& p, const std::string& list, const row_action& action, const value& row, state<std::string> acting) {
 			auto shown = form(p, {.command = action.command, .fields = action.form, .from = acted_on(p, list, action.command, row), .id = row["id"].as_string(),
@@ -120,6 +127,20 @@ namespace one::desktop::runtime {
 		float acting_width = 0;
 		for (const auto& a : spec.actions) {
 			if (a.allowed) acting_width += 24 + 9 * static_cast<float>(a.label.size());
+		}
+		column_widths sized;
+		for (const auto& c : spec.columns) {
+			float w = desktop::text(c.label, quieter()).get()->measure(100000).width;
+			for (const auto& row : model.rows) w = std::max(w, cell(spec, row, c.field).get()->measure(100000).width);
+			sized.widest[c.field] = std::ceil(w) + 1;
+		}
+		for (const auto& c : spec.columns) {
+			if (sized.growing.empty() && (c.field == "title" || c.field.ends_with(".title"))) sized.growing = c.field;
+		}
+		if (sized.growing.empty()) {
+			for (const auto& c : spec.columns) {
+				if (sized.growing.empty() || sized.widest[c.field] > sized.widest[sized.growing]) sized.growing = c.field;
+			}
 		}
 		std::vector<desktop::view> labels;
 		if (spec.tint) labels.push_back(desktop::spacer().grow(0).width(3));
