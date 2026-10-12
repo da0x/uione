@@ -107,10 +107,14 @@ namespace one::desktop::runtime {
 		// Opens another page by its address, after this one.
 		void open(const std::string& address);
 		// Runs a command, telling `after` what it answered; while it's on its way,
-		// running() says so, and what went wrong last is problem().
-		void run(const std::string& command, const value& fields, std::function<void(const answer&)> after = {});
+		// running() says so, and what turned it down is its error() and, unless what
+		// ran it says so itself, as a form does, the page's problem().
+		void run(const std::string& command, const value& fields, std::function<void(const answer&)> after = {}, bool says_why_itself = false);
 		bool running(const std::string& command) const;
 		state<std::string> problem() { return problem_; }
+		// What turned a command down the last time it ran here, until it runs again.
+		std::string error(const std::string& command) const;
+		void clear(const std::string& command);
 		std::optional<person> reader() const { return source_.reader(); }
 
 		// A title read from views, like "#{number} {title}", which it shows once they've arrived.
@@ -150,6 +154,7 @@ namespace one::desktop::runtime {
 		std::vector<desktop::view> above_, beside_, under_;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;  // commands on their way, by name
+		state<std::map<std::string, std::string>> errors_;  // why each was last turned down
 		state<std::string> problem_;
 	};
 

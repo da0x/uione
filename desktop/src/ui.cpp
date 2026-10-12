@@ -125,6 +125,7 @@ namespace one::desktop {
 	}
 
 	void element::adopt(element& before) {
+		carried = true;
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
 	}
@@ -483,6 +484,9 @@ namespace one::desktop {
 			}
 
 			const std::string& chosen() const { return chosen_; }
+			void start_at(const std::string& key) {
+				if (std::ranges::contains(keys_, key)) chosen_ = key;
+			}
 
 		private:
 			std::size_t index_of(const std::string& key) const {
@@ -704,7 +708,7 @@ namespace one::desktop {
 		return view(std::move(e));
 	}
 
-	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open) {
+	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open, std::string start) {
 		std::vector<std::string> keys;
 		std::vector<std::unique_ptr<element>> shown;
 		for (auto& r : rows) {
@@ -720,6 +724,7 @@ namespace one::desktop {
 			shown.push_back(std::move(cell));
 		}
 		auto e = std::make_unique<list_element>(std::move(keys), std::move(on_open));
+		e->start_at(start);
 		e->children = std::move(shown);
 		adopt_children(*e);
 		return view(std::move(e));

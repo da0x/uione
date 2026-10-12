@@ -215,22 +215,37 @@ namespace one::desktop::runtime {
 
 	void page::open(const std::string& address) { navigator_.open(address); }
 
-	void page::run(const std::string& command, const value& fields, std::function<void(const answer&)> after) {
+	void page::run(const std::string& command, const value& fields, std::function<void(const answer&)> after, bool says_why_itself) {
 		// Told through states, which outlive the page if it's left before the answer.
 		auto running = running_;
 		auto problem = problem_;
+		auto errors = errors_;
 		running.change([&](auto& now) { ++now[command]; });
 		problem.set("");
-		source_.run(command, fields, [running, problem, command, after = std::move(after)](const answer& a) {
+		clear(command);
+		source_.run(command, fields, [running, problem, errors, command, says_why_itself, after = std::move(after)](const answer& a) {
 			running.change([&](auto& now) {
 				if (--now[command] <= 0) now.erase(command);
 			});
-			if (!a) problem.set(a.error());
+			if (!a) {
+				if (!says_why_itself) problem.set(a.error());
+				errors.change([&](auto& now) { now[command] = a.error(); });
+			}
 			if (after) after(a);
 		});
 	}
 
 	bool page::running(const std::string& command) const { return running_.get().contains(command); }
+
+	std::string page::error(const std::string& command) const {
+		auto found = errors_.get().find(command);
+		return found == errors_.get().end() ? "" : found->second;
+	}
+
+	void page::clear(const std::string& command) {
+		if (!errors_.peek().contains(command)) return;
+		errors_.change([&](auto& now) { now.erase(command); });
+	}
 
 	std::string page::title() const { return title_.empty() ? screen_->title : said(title_); }
 

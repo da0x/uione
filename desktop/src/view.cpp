@@ -116,7 +116,10 @@ namespace one::desktop {
 			if (w.root && (!had || had->focused_by_default)) {
 				std::vector<element*> all;
 				detail::focusables(*w.root, all);
-				auto first = std::ranges::find_if(all, [](element* e) { return e->wants_focus; });
+				// What's just appeared asking for the keyboard, like a list a picker opened,
+				// before what asked for it in the view before.
+				auto first = std::ranges::find_if(all, [](element* e) { return e->wants_focus && !e->carried; });
+				if (first == all.end()) first = std::ranges::find_if(all, [](element* e) { return e->wants_focus; });
 				if (first == all.end()) first = std::ranges::find_if(all, [](element* e) { return e->prefers_focus(); });
 				bool better = first != all.end();
 				if (!better) first = all.begin();

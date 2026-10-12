@@ -100,6 +100,44 @@ namespace one::desktop::runtime {
 	};
 	desktop::view table(page& p, table_spec spec);
 
+	// A form for a command: each field asked for as its kind is, and a button that
+	// sends them, with what's given besides, like the project an issue is made in. An
+	// update starts from a view's document, and follows it until something's typed.
+	// With `button`, it's a button that opens the form in place, which is how a screen
+	// offers to make something. `after` is where to go once it's done.
+	struct form_field {
+		std::string name;
+		std::string label = "";
+		// text, email, date, number, markdown, boolean, list, choice (one of
+		// `choices`), pick (one of a list on the screen's) or choices (several)
+		std::string type = "text";
+		std::string hint = "";
+		std::vector<desktop::option> choices = {};
+		std::string start = "";  // what a new one starts as
+		bool required = false;   // a choice that's always one of them
+	};
+	struct form_spec {
+		std::string command;
+		std::vector<form_field> fields = {};
+		bool button = false;
+		std::optional<state<view_state>> from = std::nullopt;
+		std::string id = "";
+		std::map<std::string, std::string> given = {};
+		std::string submit = "";  // what its button says, rather than the command's name
+		std::string opener = "";  // what the button opening it says
+		bool when = true;
+		bool allowed = true;
+		std::string after = "";
+	};
+	desktop::view form(page& p, form_spec spec);
+
+	// The choices a list on the screen offers, like a project's roles by their
+	// titles; for people, each by their name, once, and chosen as who they are.
+	std::vector<desktop::option> list_choices(const state<view_state>& from, const std::string& list, const std::string& shown, const std::string& person = "");
+
+	// A readable label, as the web makes one: created_at is "Created at".
+	std::string label(std::string_view name);
+
 	// A document's fields, each beside its label.
 	desktop::view details(page& p, state<view_state> from, std::vector<column> fields);
 

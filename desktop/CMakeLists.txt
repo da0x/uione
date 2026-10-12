@@ -60,6 +60,7 @@ set_source_files_properties(src/renderer.cpp PROPERTIES OBJECT_DEPENDS "${shader
 
 add_library(one_desktop
 	src/app.cpp
+	src/choices.cpp
 	src/clipboard.cpp
 	src/editing.cpp
 	src/field.cpp
@@ -90,6 +91,7 @@ if(ONE_DESKTOP_RUNTIME)
 	add_library(one_desktop_runtime
 		runtime/src/client_source.cpp
 		runtime/src/components.cpp
+		runtime/src/forms.cpp
 		runtime/src/memory_source.cpp
 		runtime/src/runtime.cpp)
 	add_library(one::desktop::runtime ALIAS one_desktop_runtime)
@@ -119,6 +121,10 @@ target_compile_definitions(tests PRIVATE ONE_DESKTOP_TESTS="${CMAKE_CURRENT_SOUR
 target_compile_options(tests PRIVATE -Wall -Wextra -Werror)
 
 if(ONE_DESKTOP_RUNTIME)
+	add_executable(runtime_tracker runtime/examples/tracker.cpp)
+	target_link_libraries(runtime_tracker PRIVATE one_desktop_runtime)
+	target_compile_options(runtime_tracker PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
+
 	add_executable(runtime_tests runtime/tests/tests.cpp)
 	target_link_libraries(runtime_tests PRIVATE one_desktop_runtime PkgConfig::VULKAN)
 	target_include_directories(runtime_tests PRIVATE src tests ${CMAKE_CURRENT_BINARY_DIR}/protocols)

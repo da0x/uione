@@ -115,6 +115,7 @@ namespace one::desktop {
 
 		bool focused = false;
 		bool focused_by_default = false;  // given focus because nothing better took keys yet
+		bool carried = false;             // took over from an element of the view before, rather than new
 		bool hovered = false;
 
 		// Brings an area of this element into view, through any scroll above it.
@@ -185,8 +186,10 @@ namespace one::desktop {
 		std::string key;
 		view shown;
 	};
-	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open = {});
+	// `start` is the row chosen when it's first shown, rather than the first.
+	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open = {}, std::string start = "");
 	template <std::ranges::input_range R, class Key, class Show>
+		requires std::invocable<Key&, std::ranges::range_reference_t<const R>> && std::invocable<Show&, std::ranges::range_reference_t<const R>>
 	view list(const R& items, Key key_of, Show show, std::function<void(const std::string&)> on_open = {}) {
 		std::vector<list_row> rows;
 		for (const auto& item : items) rows.push_back({std::string(std::invoke(key_of, item)), view(std::invoke(show, item))});
@@ -210,6 +213,19 @@ namespace one::desktop {
 		std::function<void()> on_submit = {};
 	};
 	view field(state<std::string> value, field_options options = {});
+
+	// A box ticked or not, with what it says, flipped with a click, Space or Enter.
+	view toggle(state<bool> on, std::string label);
+
+	// One of several choices, shown as the one chosen; opened with a click, Space or
+	// Enter, its choices are a list under it, chosen from as a list is, and Esc
+	// closes it without choosing. Whether it's open is kept in `open`, so it stays
+	// open as the view is built again.
+	struct option {
+		std::string value;
+		std::string label;
+	};
+	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder = "Choose…");
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs
 	view divider();
