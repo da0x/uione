@@ -68,7 +68,7 @@ namespace one::desktop::runtime {
 	std::string glyph_of(const std::string& icon) {
 		static const std::map<std::string, std::string> glyphs{{"add", "+"},      {"edit", "✎"},   {"follow", "☆"}, {"following", "★"}, {"settings", "⚙"},
 		                                                       {"workflow", "⇄"}, {"delete", "✕"}, {"copy", "⧉"},   {"search", "⌕"},    {"back", "‹"},
-		                                                       {"link", "↗"},     {"table", "▤"},  {"board", "▥"},  {"done", "✓"}};
+		                                                       {"link", "↗"},     {"table", "▤"},  {"board", "▥"},  {"done", "✓"},       {"archive", "⊟"}};
 		auto found = glyphs.find(icon);
 		return found == glyphs.end() ? "" : found->second;
 	}

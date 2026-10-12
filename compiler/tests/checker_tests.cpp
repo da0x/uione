@@ -1416,7 +1416,7 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
               .empty());
     CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Settings\" icon settings\n}\n}\n").empty());
     CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message ==
-          "there's no icon flow; there are add, edit, follow, following, settings and workflow");
+          "there's no icon flow; there are add, archive, delete, edit, follow, following, settings and workflow");
 }
 
 TEST_CASE("a section is drawn in one of the library's colors") {
