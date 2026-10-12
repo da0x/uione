@@ -201,6 +201,36 @@ namespace one::desktop::runtime {
 	};
 	std::optional<color> tint_of(const value& row, const std::optional<tint_spec>& tint);
 
+	// Cards above a list for another list's records, like a board's milestones, each
+	// with how many rows are in it: picking one keeps the rows whose field is it.
+	struct track_spec {
+		std::string field;
+		state<view_state> view;
+		std::string list;
+		std::string shown = "title";
+		std::vector<column> columns = {};
+	};
+	struct tracked {
+		desktop::view shown;
+		std::string picked;  // the record's id, or empty for all
+		bool keeps(const value& row, const std::string& field) const { return picked.empty() || field_of(row, field).as_string() == picked; }
+	};
+	tracked track(page& p, const std::string& key, const std::optional<track_spec>& spec, const std::vector<value>& rows, const std::string& noun);
+
+	// Rows put in order by a number, Alt with Up or Down moving the one chosen
+	// past its neighbor, which runs the command with the number between its new
+	// neighbors', as dragging does on the web; it stays where it's put until the view
+	// says so too.
+	struct reorder_spec {
+		std::string command;
+		std::string field;
+		bool allowed = true;
+	};
+	// The rows in order, with where they've just been put.
+	std::vector<value> ordered(page& p, const std::string& key, const std::optional<reorder_spec>& spec, std::vector<value> rows);
+	// Moves a row up (-1) or down (+1) among `around`, the rows it's shown with.
+	bool move_row(page& p, const std::string& key, const reorder_spec& spec, const std::vector<value>& around, const std::string& id, int by);
+
 	// A list's rows as cards in columns, like a project's issues in its stages: a
 	// column for each of the over list's things, in its order, each card in the one
 	// its field names. With a move, m on a card offers the columns a step from its own
@@ -232,6 +262,8 @@ namespace one::desktop::runtime {
 		std::optional<board_move> move = std::nullopt;
 		std::vector<std::string> search = {};
 		std::optional<tint_spec> tint = std::nullopt;
+		std::optional<track_spec> track = std::nullopt;
+		std::optional<reorder_spec> reorder = std::nullopt;
 	};
 	desktop::view board(page& p, board_spec spec);
 
@@ -265,6 +297,8 @@ namespace one::desktop::runtime {
 		bool hide_empty = false;
 		std::vector<std::pair<std::string, std::string>> only = {};  // the rows it keeps, like due<= +2w
 		std::optional<tint_spec> tint = std::nullopt;
+		std::optional<track_spec> track = std::nullopt;
+		std::optional<reorder_spec> reorder = std::nullopt;
 		std::string empty = "Nothing here yet.";
 	};
 	desktop::view table(page& p, table_spec spec);

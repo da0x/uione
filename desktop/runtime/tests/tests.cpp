@@ -835,6 +835,64 @@ TEST("a front page: a hero, links within the app and out of it, a badge beside t
 	matches_golden("pages", {1000, 420}, [&] { return nav.show(); });
 }
 
+TEST("a board's cards are put in order with Alt and the arrows, and kept to a milestone picked above it") {
+	memory_source data;
+	auto card = [](std::string id, int n, double position, std::string milestone) {
+		return value(fields{{"id", id}, {"number", n}, {"title", "Issue " + std::to_string(n)}, {"stage", "s1"}, {"position", position}, {"milestone", milestone}});
+	};
+	data.set("projects::board_page", "atlas-main",
+	         value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}})}},
+	                      {"milestones", list{value(fields{{"id", "atlas-beta"}, {"title", "Beta"}, {"due", "Oct 30"}}), value(fields{{"id", "atlas-one"}, {"title", "1.0"}})}},
+	                      {"issues", list{card("atlas-1", 1, 1, "atlas-beta"), card("atlas-2", 2, 2, "atlas-one"), card("atlas-3", 3, 3, "atlas-beta")}}}));
+	bool refuse = false;
+	data.on("projects::issue::update", [&](const value& f, memory_source&) -> answer {
+		if (refuse) return std::unexpected(std::string("no"));
+		return f["id"].as_string();
+	});
+	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+		                     auto board_page = p.view("projects::board_page", "atlas-main");
+		                     return items(board(p, {.view = board_page,
+		                                            .list = "issues",
+		                                            .by = "stage",
+		                                            .over = board_page,
+		                                            .over_list = "stages",
+		                                            .columns = {{"title", "Title"}, {"number", "#"}},
+		                                            .track = track_spec{"milestone", board_page, "milestones", "title", {{"due", "Due"}}},
+		                                            .reorder = reorder_spec{"projects::issue::update", "position"}}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	auto& p = nav.current();
+	auto root = built(nav);
+	one::desktop::key_event down{.symbol = one::desktop::keys::down, .text = "", .alt = true};
+	auto* column = list_holding(*root, "atlas-1");
+	CHECK(pressed(column, down));  // #1, the first, goes below #2
+	CHECK(data.runs().size() == 1);
+	CHECK(data.runs().back().fields["id"].as_string() == "atlas-1");
+	CHECK(data.runs().back().fields["position"].as_double() == 2.5);  // between #2's 2 and #3's 3
+	auto order = [&] {
+		std::vector<std::string> ids;
+		auto r = built(nav);
+		auto* l = list_holding(*r, "atlas-2");
+		if (l)
+			for (auto& c : l->children) ids.push_back(c->key);
+		return ids;
+	};
+	CHECK((order() == std::vector<std::string>{"atlas-2", "atlas-1", "atlas-3"}));  // at once, before the view says so
+	refuse = true;
+	root = built(nav);
+	pressed(list_holding(*root, "atlas-3"), one::desktop::key_event{.symbol = one::desktop::keys::up, .text = "", .alt = true});
+	CHECK((order() == std::vector<std::string>{"atlas-2", "atlas-1", "atlas-3"}));  // turned down, so back where it was
+	// A milestone picked keeps its cards alone.
+	p.kept<std::string>("board:issues:track").set("atlas-beta");
+	root = built(nav);
+	CHECK(list_holding(*root, "atlas-2") == nullptr);
+	CHECK(list_holding(*root, "atlas-3") != nullptr);
+	matches_golden("board-track", {1000, 520}, [&] { return nav.show(); });
+}
+
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
 	return check::run();

@@ -129,6 +129,9 @@ namespace one::desktop::runtime {
 		}
 		if (rows.empty() && spec.hide_empty) return {};
 		sorted(rows, spec.sort);
+		rows = ordered(p, key, spec.reorder, std::move(rows));
+		auto tracking = track(p, key, spec.track, rows, spec.list.empty() ? std::string("rows") : spec.list);
+		if (spec.track) std::erase_if(rows, [&](const value& row) { return !tracking.keeps(row, spec.track->field); });
 		// What's typed, over the fields it searches, as they're shown.
 		std::string wanted = lower(query.get());
 		if (!wanted.empty()) {
@@ -137,6 +140,7 @@ namespace one::desktop::runtime {
 			});
 		}
 		std::vector<desktop::view> parts;
+		if (tracking.shown.get()) parts.push_back(std::move(tracking.shown));
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		std::vector<desktop::view> tools;
 		if (!spec.search.empty()) tools.push_back(desktop::field(query, {.placeholder = "Search"}).width(280));
@@ -222,7 +226,17 @@ namespace one::desktop::runtime {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 			};
 		}
-		parts.push_back(desktop::list(std::move(shown), std::move(opening)));
+		desktop::list_options options{.on_open = std::move(opening)};
+		// Put in order while nothing typed hides some of them.
+		if (spec.reorder && spec.reorder->allowed && wanted.empty()) {
+			std::vector<value> around(rows.begin() + static_cast<std::ptrdiff_t>(first), rows.begin() + static_cast<std::ptrdiff_t>(last));
+			options.on_row_key = [&p, key, reorder = *spec.reorder, around](const std::string& id, const key_event& e) {
+				if (!e.alt || (!e.is(keys::up) && !e.is(keys::down))) return false;
+				move_row(p, key, reorder, around, id, e.is(keys::up) ? -1 : 1);
+				return true;
+			};
+		}
+		parts.push_back(desktop::list(std::move(shown), std::move(options)));
 		if (spec.page > 0 && total > static_cast<std::size_t>(spec.page)) {
 			std::vector<desktop::view> paging;
 			if (first > 0) paging.push_back(desktop::button("Previous", [at] { at.set(at.peek() - 1); }));

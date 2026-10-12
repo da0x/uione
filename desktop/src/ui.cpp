@@ -428,6 +428,7 @@ namespace one::desktop {
 			}
 
 			bool handle_key(const key_event& e) override {
+				if (e.alt || e.control || e.super) return false;  // for what the list is given to do with them, like moving a row
 				if (keys_.empty()) return false;
 				std::size_t at = index_of(chosen_), last = keys_.size() - 1;
 				std::size_t to = at;

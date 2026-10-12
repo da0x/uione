@@ -55,7 +55,8 @@ namespace one::desktop::runtime {
 		auto moved = p.kept<std::map<std::string, std::string>>(key + ":moved");
 		auto moving = p.kept<std::string>(key + ":moving");  // the card whose steps are offered
 		auto query = p.kept<std::string>(key + ":search");
-		const auto& all = rows_of(v, spec.list);
+		auto all = ordered(p, key, spec.reorder, rows_of(v, spec.list));
+		auto tracking = track(p, key, spec.track, all, spec.list);
 		// A move the view now shows is settled.
 		if (!moved.peek().empty()) {
 			auto settled = moved.peek();
@@ -85,6 +86,7 @@ namespace one::desktop::runtime {
 		std::string wanted = lower(query.get());
 		auto kept = [&](const value& card) {
 			if (!p.keeps(card)) return false;
+			if (spec.track && !tracking.keeps(card, spec.track->field)) return false;
 			if (wanted.empty()) return true;
 			return std::ranges::any_of(spec.search, [&](const std::string& f) { return lower(show(field_of(card, f))).find(wanted) != std::string::npos; });
 		};
@@ -98,6 +100,7 @@ namespace one::desktop::runtime {
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
 
 		std::vector<desktop::view> parts;
+		if (tracking.shown.get()) parts.push_back(std::move(tracking.shown));
 		p.wide();  // a board takes the window's width
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		if (!spec.search.empty()) parts.push_back(desktop::row(desktop::field(query, {.placeholder = "Find cards"}).width(320)));
@@ -137,8 +140,10 @@ namespace one::desktop::runtime {
 		for (const auto& thing : things) {
 			std::string id = thing["id"].as_string();
 			std::vector<desktop::list_row> cards;
+			std::vector<value> in_column;
 			for (const auto& card : all) {
 				if (where(card) != id || !kept(card)) continue;
+				in_column.push_back(card);
 				std::vector<desktop::view> details;
 				std::vector<desktop::view> people;
 				for (std::size_t c = 1; c < spec.columns.size(); ++c) {
@@ -181,11 +186,20 @@ namespace one::desktop::runtime {
 						if (auto found = by_id.find(card); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 					};
 				}
-				if (spec.move) options.on_row_key = [moving](const std::string& card, const key_event& e) {
-					if (!e.is('m')) return false;
-					moving.set(card);
-					return true;
-				};
+				bool arranging = spec.reorder && spec.reorder->allowed && wanted.empty();
+				if (spec.move || arranging) {
+					options.on_row_key = [&p, key, moving, has_move = spec.move.has_value(), reorder = spec.reorder, arranging, in_column](const std::string& card, const key_event& e) {
+						if (has_move && e.is('m')) {
+							moving.set(card);
+							return true;
+						}
+						if (arranging && e.alt && (e.is(keys::up) || e.is(keys::down))) {
+							move_row(p, key, *reorder, in_column, card, e.is(keys::up) ? -1 : 1);
+							return true;
+						}
+						return false;
+					};
+				}
 				lane.push_back(desktop::list(std::move(cards), std::move(options)));
 			}
 			lanes.push_back(desktop::column(std::move(lane)).spacing(8).width(290).padding(12).background({.fill = t.sunken, .radius = t.corners}));
