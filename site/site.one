@@ -17,6 +17,7 @@ project uione {
 	ui         radix
 	icon       "assets/icon.svg"
 	serve      "public"
+	target     web desktop terminal
 }
 
 footer {

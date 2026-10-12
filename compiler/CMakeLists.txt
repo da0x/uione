@@ -81,6 +81,7 @@ if(ONE_TESTS)
         tests/names_tests.cpp
         tests/checker_tests.cpp
         tests/web_tests.cpp
+        tests/native_tests.cpp
         tests/api_tests.cpp
         tests/infrastructure_tests.cpp
         tests/cpp_tests.cpp

@@ -67,6 +67,11 @@ namespace one::screens {
 		}
 	}
 
+	std::string this_year() {
+		auto today = std::chrono::year_month_day(std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()));
+		return std::to_string(static_cast<int>(today.year()));
+	}
+
 	std::string said(const std::vector<part>& parts) {
 		std::string out;
 		for (const auto& p : parts) out += p.from ? show(field_of(p.from->get().data, p.field)) : p.text;

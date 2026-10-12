@@ -12,6 +12,7 @@
 #include "generators/api.hpp"
 #include "generators/cpp.hpp"
 #include "generators/infrastructure.hpp"
+#include "generators/native.hpp"
 #include "generators/indexes.hpp"
 #include "generators/roles.hpp"
 #include "generators/rules.hpp"
@@ -47,6 +48,9 @@ namespace one::generators {
         };
         // Each app the project's targets name, from its screens.
         if (language::listed(targets, "web")) under("web", generate_web(files, project_dir, out_dir + "/web"));
+        for (const char* native : {"desktop", "terminal"}) {
+            if (language::listed(targets, native)) under(native, generate_native(files, project_dir, native));
+        }
         under("api", api.files);
         under("", {rules_file(project_dir), indexes_file(files), generate_cpp(files, project_dir)});
         auto deploy = generate_infrastructure(files, project_dir, out_dir);

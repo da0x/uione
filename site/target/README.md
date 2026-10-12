@@ -25,6 +25,16 @@ change to what gets generated is reviewed as a diff of the generated code.
 `src/pages/*.generated.ts` and `index.html` are generated too but aren't kept here. They
 change whenever a page does, so they're tested for their shape instead.
 
+## desktop and terminal
+
+`desktop/` and `terminal/` are exactly what the native generator writes for the
+site's `target web desktop terminal`, held by golden tests in
+`compiler/tests/native_tests.cpp`. Each `.one` file's screens are one C++ file,
+`src/screens/<file>.cpp`, the same for both apps: only `src/app.hpp`, naming the
+runtime, `src/main.cpp`, opening a window or a terminal, and `CMakeLists.txt` differ.
+`src/site.cpp` is the header's badges and the footer. `src/pages/*.hpp`, the Markdown
+pages, are generated too but aren't kept here, as `web/` keeps none of its pages.
+
 ## api and firestore.rules
 
 `api/` and `firestore.rules` are exactly what the backend and rules generators write,

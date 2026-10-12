@@ -5,6 +5,7 @@
 // commands, cards and details, each from what one::screens works out of it.
 
 #include "one/desktop/runtime/components.hpp"
+#include "one/desktop/runtime/markdown.hpp"
 
 #include <spawn.h>
 #include <sys/wait.h>
@@ -72,9 +73,17 @@ namespace one::desktop::runtime {
 		return found == glyphs.end() ? "" : found->second;
 	}
 
-	desktop::view items(std::vector<desktop::view> all) { return desktop::column(std::move(all)).spacing(14); }
+	desktop::view items(std::vector<desktop::view> all) {
+		std::erase_if(all, [](const desktop::view& v) { return !v.get(); });
+		return desktop::column(std::move(all)).spacing(14);
+	}
 
-	desktop::view text(std::vector<part> parts) { return desktop::text(said(parts), current_theme().body()); }
+	// Words with a link written in them, like [Daher](https://…), are Markdown.
+	desktop::view text(std::vector<part> parts) {
+		std::string words = said(parts);
+		if (words.find("](") != std::string::npos) return markdown_view(words);
+		return desktop::text(std::move(words), current_theme().body());
+	}
 
 	desktop::view subtitle(page& p, std::vector<part> parts) {
 		p.under_title(desktop::text(said(parts), current_theme().quiet()));

@@ -66,8 +66,21 @@ namespace one::desktop::runtime {
 	}
 	desktop::view heading(page& p, desktop::view beside);
 	desktop::view layout(std::string name, std::vector<region> regions);
+	template <class... R>
+		requires(std::same_as<std::decay_t<R>, region> && ...)
+	desktop::view layout(std::string name, R&&... each) {
+		std::vector<region> all;
+		(all.push_back(std::forward<R>(each)), ...);
+		return layout(std::move(name), std::move(all));
+	}
 	desktop::view menu(page& p, std::vector<menu_link> links, desktop::view beside);
 	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, std::vector<desktop::view> ways);
+	template <std::convertible_to<desktop::view>... V>
+	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return switched(p, std::move(id), std::move(label), std::move(options), std::move(all));
+	}
 	desktop::view steps(page& p, steps_spec spec);
 
 	desktop::view form(page& p, form_spec spec);

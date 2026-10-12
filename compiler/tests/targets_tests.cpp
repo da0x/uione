@@ -22,7 +22,7 @@ using namespace one;
 
 namespace {
 
-    const std::string home = "namespace shop {\n\tscreen \"Home\" / {\n\t\ttext \"Hello\"\n\t\tsection \"More\" color violet {\n\t\t\ttext \"Inside\"\n\t\t}\n\t}\n}\n";
+    const std::string home = "namespace shop {\n\tscreen \"Home\" / {\n\t\ttext \"Hello\"\n\t\tsection \"More\" color violet {\n\t\t\ttext \"Inside\"\n\t\t}\n\t\tcomponent banner\n\t}\n}\n";
 
     std::string project_with(const std::string& targets) {
         return "import one\nproject shop {\n\tone  \"0.9.8\"\n" + (targets.empty() ? std::string() : "\ttarget  " + targets + "\n") + "}\n" + home;
@@ -34,7 +34,10 @@ namespace {
         files.push_back(language::parse("main.one", source, out));
         language::check(files, out);
         std::vector<std::string> said;
-        for (const auto& d : out) said.push_back(std::to_string(d.where.line) + ": " + d.message);
+        // The screen's component, drawn by React alone, has no file beside it here.
+        for (const auto& d : out) {
+            if (!d.message.ends_with("which isn't there")) said.push_back(std::to_string(d.where.line) + ": " + d.message);
+        }
         return said;
     }
 
@@ -70,9 +73,7 @@ TEST_CASE("each element a target doesn't draw is one error for it, saying what i
     auto said = messages(project_with("web desktop"));
     CAPTURE(said);
     CHECK(said == std::vector<std::string>{
-                      "8: text isn't drawn by the desktop app yet; take desktop out of target, or build with --target web",
-                      "9: a section and a section's color aren't drawn by the desktop app yet; take desktop out of target, or build with --target web",
-                      "10: text isn't drawn by the desktop app yet; take desktop out of target, or build with --target web",
+                      "12: a component isn't drawn by the desktop app yet; take desktop out of target, or build with --target web",
                   });
     auto wrong = messages(project_with("web dektop"));
     REQUIRE(wrong.size() == 1);
@@ -105,6 +106,8 @@ TEST_CASE("one build --target builds fewer of a project's targets, never others"
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
     platform::write_file((dir / "main.one").string(), project_with("web desktop"));
+    std::filesystem::create_directories(dir / "components");
+    platform::write_file((dir / "components" / "banner.tsx").string(), "export default function Banner() { return null; }\n");
     auto all = driver::build(dir.string(), (dir / "build").string());
     CHECK(all.refusal == "nothing was built, because the project has errors");
     auto web = driver::build(dir.string(), (dir / "build").string(), "", std::vector<std::string>{"web"});

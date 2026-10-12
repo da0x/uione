@@ -1,0 +1,24 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Generated from mission.one by one. Do not edit.
+
+#include "../app.hpp"
+
+namespace app {
+
+	// Each of mission.one's screens, added to the site.
+	void mission_screens(site& s) {
+		s.screens.push_back({"Mission", "/mission", "Mission", [](page&) {
+			return items(
+				hero("An application should be as short as what it does.", text({words("Today one feature is spread over a dozen files: a form, its types, its API route, its validation twice, its database rules, the query behind each screen and the code that keeps that screen fresh. They repeat each other, and they drift apart.")}), text({words("uione's mission is to let a person say a feature once, plainly, and have everything else follow from it, correct and readable.")})),
+				section({"Said once"}, text({words("A feature's data, rules, commands, views, permissions and screens live in one short file. Nothing is said twice, so nothing can disagree with itself.")})),
+				section({"One architecture"}, text({words("Every uione app works the same way: commands are the only writes, every write is an event, views are built from events, and every screen is live. A feature never has to say how, and a reader never has to guess.")})),
+				section({"Code you can read and keep"}, text({words("What the compiler writes is short, plain React, Go and Pulumi, built with the tools you already use. It belongs to whoever generated it. Anything it would repeat lives in a library instead.")})),
+				section({"Open, and yours"}, text({words("uione is free software under the AGPL, the compiler and the libraries apps are built on alike. Your app runs in your own Google Cloud project, and you can leave with all of it.")})),
+				section({"For everyone"}, text({words("Writing software shouldn't need a team to keep a dozen files in step. The studio puts the whole language in a browser, with nothing to install, so anyone who can describe what they want can build it.")}))
+			);
+		}});
+	}
+
+}  // namespace app

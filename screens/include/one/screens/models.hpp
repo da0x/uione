@@ -44,6 +44,18 @@ namespace one::screens {
 	// field's, the first the most urgent, spread over 1 to 5; 3, plain, for one without.
 	int tone_of(const value& row, const std::optional<tint_spec>& tint);
 
+	// What a screen's conditions read, as `one build` writes them: a button's when,
+	// like issue_page.held_by != me, is ready(issue_page) && !same(at(issue_page,
+	// "held_by"), me(p)). Values compare as the web compares them: the same value of
+	// the same kind; a list holding one; and times and numbers in order, nothing
+	// before everything.
+	bool ready(const state<view_state>& v);
+	const value& at(const state<view_state>& v, const std::string& field);
+	bool same(const value& a, const value& b);
+	bool has(const value& list, const value& item);
+	int compared(const value& a, const value& b);
+	inline value me(const page_base& p) { return p.me().empty() ? value() : value(p.me()); }
+
 	// Around a page
 
 	// The pages above this one, each by its address, filled, and what it's called.

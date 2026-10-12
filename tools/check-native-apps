@@ -1,0 +1,31 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Compiles the desktop and terminal apps one build writes, against this checkout's
+# libraries, with warnings as errors: the site's, which names both targets, and the
+# tracker example's, built from a copy given a project block that names them. Needs
+# what desktop/ and terminal/ are built with, and a g++ with C++26.
+
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+one=${ONE:-$here/compiler/build/one}
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+"$one" build "$here/site" --out "$work/site" >/dev/null
+mkdir -p "$work/tracker-source"
+cp "$here"/examples/tracker/*.one "$work/tracker-source/"
+{ printf 'import one\n\nproject tracker {\n\ttarget web desktop terminal\n\tsignin google\n}\n\n'; cat "$here/examples/tracker/main.one"; } > "$work/tracker-source/main.one"
+"$one" build "$work/tracker-source" --out "$work/tracker" >/dev/null
+
+# The libraries are compiled once for each target, the second app's from the cache.
+launcher=""
+command -v ccache >/dev/null && launcher=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+for app in site tracker; do
+	for target in desktop terminal; do
+		UIONE="$here" cmake -S "$work/$app/$target" -B "$work/$app/$target/out" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher >/dev/null
+		cmake --build "$work/$app/$target/out" --parallel >/dev/null
+		echo "ok: $app's $target app compiles"
+	done
+done

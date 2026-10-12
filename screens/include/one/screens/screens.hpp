@@ -50,6 +50,8 @@ namespace one::screens {
 	// The parts as they read now, each live one from its view; reading them makes
 	// whatever's being built a reader of those views.
 	std::string said(const std::vector<part>& parts);
+	// The year it is where the app is read, as a footer says it.
+	std::string this_year();
 	// A row's or a document's field, by its name as the view stores it, like
 	// stage.title, or through its maps.
 	const value& field_of(const value& document, const std::string& path);

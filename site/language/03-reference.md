@@ -254,7 +254,12 @@ compiler, so a screen using one a target doesn't draw is an error, on its line, 
 that target: "a board's move … along isn't drawn by the terminal app yet; take
 terminal out of target, or build with --target web". `one build --target web`
 builds fewer of the targets for one run, never others. The desktop and terminal apps
-are being made now: until their parts are, naming them is an error for every screen.
+draw every element but `component`, a React component written by hand, which is the
+web's alone, and draw a landing design as a plain screen. Each is a CMake project of
+C++26: `cmake -S build/desktop -B build/desktop/out` and `cmake --build
+build/desktop/out` build it with g++ against uione's libraries in `UIONE`, a checkout
+of uione. It reads its views live from the project's `domain`, or `ONE_SERVER`, and
+signs in through the browser the first time, keeping the sign-in for the next.
 
 `theme papercolor` gives the site a [theme](#define-theme): its colors, light and
 dark, its fonts, its corners and its depth. It's uione's own `harbor` unless it

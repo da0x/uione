@@ -35,7 +35,10 @@ Treat every file as published, whatever the repository's visibility today.
   `compiler/build/one build site` generates the site into `site/build`: the web app
   in `web/` (a Yarn workspace, so it has to exist before `yarn install`), the Go
   backend in `api/`, `firestore.rules`, and what it takes to deploy (see
-  `infrastructure/`). Anything the `one` library can't do yet stops the build with
+  `infrastructure/`), and, for the site's `target web desktop terminal`, the desktop
+  and terminal apps in `desktop/` and `terminal/`, written by
+  `compiler/generators/native.hpp` on `one::screens` and held to
+  `site/target/desktop` and `site/target/terminal`. Anything the `one` library can't do yet stops the build with
   "not supported yet" and the line it's on; every project in the repository builds.
   `node tools/smoke-web.mjs` renders every page of the web app in Node, and
   `yarn workspace uione-rules-test test` tests the rules against the emulator.

@@ -173,6 +173,13 @@ jobs:
           cmake --build terminal/build --parallel
           terminal/build/runtime_tests
 
+      - name: Compile the desktop and terminal apps one build writes
+        run: |
+          pacman -S --noconfirm --needed ccache
+          cmake -S compiler -B compiler/build
+          cmake --build compiler/build --target one --parallel
+          tools/check-native-apps
+
       - name: Build Markdown and md, and test its layout
         run: |
           cmake -S markdown -B markdown/build

@@ -98,7 +98,12 @@ namespace one::terminal::runtime {
 		return terminal::column(std::move(all)).spacing(1);
 	}
 
-	terminal::view text(std::vector<part> parts) { return terminal::text(said(parts)); }
+	// Words with a link written in them, like [Daher](https://…), are Markdown.
+	terminal::view text(std::vector<part> parts) {
+		std::string words = said(parts);
+		if (words.find("](") != std::string::npos) return markdown_view(words);
+		return terminal::text(std::move(words));
+	}
 
 	terminal::view subtitle(page& p, std::vector<part> parts) {
 		p.under_title(quiet(said(parts)));

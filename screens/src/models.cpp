@@ -291,6 +291,26 @@ namespace one::screens {
 		return static_cast<int>(std::lround(1 + static_cast<double>(at - tint->order.begin()) * 4 / static_cast<double>(tint->order.size() - 1)));
 	}
 
+	bool ready(const state<view_state>& v) { return v.get().status == status::ready; }
+
+	const value& at(const state<view_state>& v, const std::string& field) { return field_of(v.get().data, field); }
+
+	bool same(const value& a, const value& b) {
+		// A number is a number, whether it came as a whole one or not.
+		if (number_of(a) && number_of(b)) return *number_of(a) == *number_of(b);
+		return ember::to_json(a) == ember::to_json(b);
+	}
+
+	bool has(const value& list, const value& item) { return std::ranges::any_of(list.as_array(), [&](const value& held) { return same(held, item); }); }
+
+	int compared(const value& a, const value& b) {
+		if (a.is_null() || b.is_null()) return a.is_null() == b.is_null() ? 0 : a.is_null() ? -1 : 1;
+		if (number_of(a) && number_of(b)) return *number_of(a) < *number_of(b) ? -1 : *number_of(a) > *number_of(b) ? 1 : 0;
+		if (a.is_time() && b.is_time()) return a.as_time() < b.as_time() ? -1 : a.as_time() > b.as_time() ? 1 : 0;
+		std::string x = show(a), y = show(b);
+		return x < y ? -1 : x > y ? 1 : 0;
+	}
+
 	// Around a page
 
 	std::vector<crumb_link> crumb_links(page_base& p, const std::vector<crumb>& trail) {
