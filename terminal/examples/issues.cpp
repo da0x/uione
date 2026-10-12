@@ -77,7 +77,7 @@ int main() {
 	terminal::app app({.name = "issues"});
 	auto first = std::make_unique<issue_list>();
 	auto* list = first.get();
-	app.status = [](const terminal::screen&) { return terminal::row{{"● live", terminal::colored(terminal::color::green)}}; };
+	app.status = [](const terminal::screen&) { return terminal::line{{"● live", terminal::colored(terminal::color::green)}}; };
 	std::jthread elsewhere([&](std::stop_token stopping) {
 		std::mt19937 random(7);
 		for (int round = 1; !stopping.stop_requested(); ++round) {

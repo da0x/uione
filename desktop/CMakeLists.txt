@@ -62,7 +62,7 @@ add_library(one_desktop
 	src/app.cpp
 	src/choices.cpp
 	src/clipboard.cpp
-	src/editing.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp
 	src/field.cpp
 	src/gpu.cpp
 	src/offscreen.cpp

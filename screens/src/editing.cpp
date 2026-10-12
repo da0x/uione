@@ -1,11 +1,11 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-#include "one/desktop/editing.hpp"
+#include "one/screens/editing.hpp"
 
 #include <algorithm>
 
-namespace one::desktop {
+namespace one::screens {
 
 	namespace {
 
@@ -204,4 +204,4 @@ namespace one::desktop {
 		return at;
 	}
 
-}  // namespace one::desktop
+}  // namespace one::screens

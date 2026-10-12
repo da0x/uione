@@ -93,10 +93,17 @@ Treat every file as published, whatever the repository's visibility today.
   through `one::client`, as `@uione/react`'s are on the web, tested on its in-memory
   source by `desktop/build/runtime_tests` against `desktop/runtime/tests/golden`. It
   began as libloom, whose history it keeps.
-- `terminal/` is `one::terminal`, the toolkit terminal apps are built on: screens in
-  a trail, lists and documents of styled rows, a top bar, and a loop other threads
-  post to, drawn with ncurses. `cmake -S terminal -B terminal/build && cmake --build
-  terminal/build`, then `terminal/build/issues` for its example.
+- `terminal/` is `one::terminal`, the toolkit terminal apps are built on, drawn with
+  ncurses: views laid out in cells, built again when a `state` they read changes,
+  with focus, keys, lists, fields, pickers and boxes, as `desktop/` has them in a
+  window (`ui.hpp`), and the older screens in a trail (`terminal.hpp`).
+  `terminal/runtime/` is `one::terminal::runtime`, what the terminal apps `one build`
+  writes run on: `one::screens`' components drawn in cells, the same screens a
+  desktop app's are. `cmake -S terminal -B terminal/build && cmake --build
+  terminal/build`, then `terminal/build/runtime_tests`, which draws screens in cells
+  and compares them as text with `terminal/runtime/tests/golden`
+  (`ONE_TERMINAL_GOLDEN=write` draws them again), and `terminal/build/runtime_tracker`
+  for a tracker on memory.
 - `client/` is `one::client`, how the desktop and terminal apps uione writes reach
   their app, as `@uione/react/firebase` does for the web: sign-in (the browser, a
   kept refresh token, or a service's key), views read live by name through libember,

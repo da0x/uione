@@ -1,0 +1,30 @@
+ neotrac
+────────────────────────────────────────────────────────────────────────────────
+
+  Main
+
+  To do 2
+  ▸ ▌ Copy an issue whole                 #12 [ui]          Maya Garcia
+      Draw boards natively                #14
+
+  Doing 1
+  › ▌ Search by label                     #9 [search]       Ade Bello
+
+  Done 0
+    Nothing here
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ tab moves   enter opens   q quits

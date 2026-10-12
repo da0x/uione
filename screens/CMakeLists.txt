@@ -3,7 +3,9 @@
 
 # one::screens: what a native app's screens are and do, whatever draws them, shared
 # by one::desktop::runtime and one::terminal::runtime. Its views are read through
-# one::client, from uione's client/ beside it.
+# one::client, from uione's client/ beside it. Its headers state.hpp and
+# editing.hpp, with src/editing.cpp, are what the toolkits build their views with,
+# and each compiles them itself, needing nothing else of it.
 
 cmake_minimum_required(VERSION 3.28)
 project(one_screens VERSION 0.9.8 LANGUAGES CXX)

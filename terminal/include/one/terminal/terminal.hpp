@@ -38,21 +38,22 @@ namespace one::terminal {
 		std::string text;
 		style look;
 	};
-	using row = std::vector<run>;
+	// A row's runs of text.
+	using line = std::vector<run>;
 
-	inline row plain(std::string text, style look = {}) { return {run{std::move(text), look}}; }
+	inline line plain(std::string text, style look = {}) { return {run{std::move(text), look}}; }
 	inline style bold() { return {.bold = true}; }
 	inline style dim() { return {.dim = true}; }
 	inline style colored(color c, bool strong = false) { return {.bold = strong, .foreground = c}; }
 
 	// How many columns text takes, wide characters two.
 	int display_width(std::string_view text);
-	int display_width(const row& r);
+	int display_width(const line& r);
 
 	// Drawing: text at a row and column in no more than `width` columns (to the edge
 	// when it's -1), each returning the columns it took.
 	int put(int y, int x, std::string_view text, style look = {}, int width = -1);
-	int put_row(int y, int x, const row& r, int width = -1);
+	int put_row(int y, int x, const line& r, int width = -1);
 	void fill(int y, int x, int width, style look);  // a bar of spaces
 	std::string rule(int width);                      // ───, as wide as asked
 	int columns();
@@ -83,7 +84,7 @@ namespace one::terminal {
 
 	// A line on a list screen: what it shows, and the screen Enter opens from it.
 	struct choice {
-		row shown;
+		line shown;
 		std::function<std::unique_ptr<screen>()> opens;
 		bool heading = false;  // drawn flush left, as a section's title is
 	};
@@ -110,7 +111,7 @@ namespace one::terminal {
 		std::unique_ptr<screen> key(int pressed) override;
 
 	protected:
-		std::vector<row> rows;
+		std::vector<line> rows;
 		int scrolled = 0;
 		int shown_height = 1;
 	};
@@ -154,7 +155,7 @@ namespace one::terminal {
 
 		// The top bar's right side, like ● live and who's signed in, made each time
 		// it's drawn.
-		std::function<row(const screen& shown)> status;
+		std::function<line(const screen& shown)> status;
 
 	private:
 		void draw_frame();

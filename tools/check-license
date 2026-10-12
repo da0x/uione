@@ -50,6 +50,8 @@ marker() {
 		# /* ... */, each line starting with " *".
 		*.css|*.ebnf) echo ' *' ;;
 		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile) echo '#' ;;
+		# What a terminal shows, as a test holds it, byte for byte, like a golden image.
+		*.txt) case "$1" in */tests/golden/*) echo exempt ;; esac ;;
 		*.*) ;;
 		*) content "$1" | head -1 | grep -q '^#!' && echo '#' ;;
 	esac

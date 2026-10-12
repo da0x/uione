@@ -167,10 +167,11 @@ jobs:
           cmake --build screens/build --parallel
           screens/build/tests
 
-      - name: Build the terminal toolkit
+      - name: Build and test the terminal toolkit and the runtime terminal apps run on
         run: |
           cmake -S terminal -B terminal/build
           cmake --build terminal/build --parallel
+          terminal/build/runtime_tests
 
       - name: Build Markdown and md, and test its layout
         run: |

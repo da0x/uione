@@ -1,0 +1,40 @@
+ tracker   Projects                                                 Maya Garcia
+────────────────────────────────────────────────────────────────────────────────
+
+  Projects
+
+  Atlas                                                            [ Archive ]
+
+  Kept at github.com/example/atlas
+
+  Visibility       public
+  Owner            Maya Garcia
+
+  Issues
+
+    #       Title                               Status
+  ▸ 12      Copy an issue whole                 open                 [ Close ]
+    9       Search by label                     closed
+
+  ┌─ Open issue ─────────────────────────────────────────────────────────────┐
+  │ Title                                                                    │
+  │                                                                          │
+  │                                                                          │
+  │ Description                                                              │
+  │                                                                          │
+  │                                                                          │
+  │                                                                          │
+  │                                                                          │
+  │                                                                          │
+  │ [ Open issue ]                                                           │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+
+
+
+
+
+
+
+
+ tab moves   enter opens   esc back   q quits
