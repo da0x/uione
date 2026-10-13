@@ -11,7 +11,7 @@
 # writes are built on in ~/.local/share/uione/<version>. Nothing else is changed: no
 # profile is edited, and nothing runs as root.
 #
-#   UIONE_VERSION=0.11.0   a particular release, rather than the latest
+#   UIONE_VERSION=0.11.1   a particular release, rather than the latest
 #   UIONE_INSTALL=dir     where to put one, rather than ~/.local/bin
 #   UIONE_LIBRARIES=dir   where to put the libraries, rather than ~/.local/share/uione
 #   UIONE_DOWNLOAD=url    where the release's files are, for trying a release first
