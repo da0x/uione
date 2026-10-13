@@ -14,7 +14,7 @@ namespace app {
 
 	// What the app was built from, which a footer can show: the uione release, and the
 	// commit and repository its build found.
-	inline const std::string build_version = "0.10.3";
+	inline const std::string build_version = "0.11.0";
 	inline const std::string build_commit = UIONE_COMMIT;
 	inline const std::string build_repository = UIONE_REPOSITORY;
 
