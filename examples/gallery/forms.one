@@ -1,0 +1,61 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Forms and fields: a form asking for a field of every kind, and the lists its
+// pickers pick from. A text box, an email box, a date, a number, a slider, Markdown,
+// a checkbox, a list separated by commas, a choice from a list that opens, radio
+// buttons, one picked from a list, several ticked, a file and files.
+
+namespace gallery at / {
+
+	screen "{room_page.name}" /rooms/:room {
+		room::update "Edit room" icon edit form "Save" {
+			name  summary  visibility
+		}
+		subtitle "A form asking for a field of every kind, open, so each control is seen at once."
+		form piece::create "Hang it" {
+			title
+			description
+			contact
+			made "Made on"
+			width
+			light {
+				hint "How brightly it's lit, from dark to full"
+			}
+			framed
+			labels
+			condition
+			size
+			milestone "Shown at"
+			assignees
+			photo
+			sketches
+		}
+		text "A piece is shown at one of these milestones, picked from this list."
+		table room_page.milestones {
+			title "Milestone"
+			due "Opens"
+		}
+		milestone::create "New milestone" form "Add" {
+			title  due "Opens"  description
+		}
+		text "It's looked after by the room's people, ticked from this list."
+		table room_page.members {
+			person "Name"
+			role.title "Role"
+			delete "Remove" when person != me
+		}
+		confirm member::delete "Take this role away from them?"
+		member::create "Add someone" form "Add" {
+			person  role
+		}
+		text "What each role allows is ticked from every command there is."
+		table room_page.roles {
+			title "Role"
+		}
+		role::create "New role" form "Create role" {
+			name  title  may "Allows"
+		}
+	}
+
+} // namespace gallery

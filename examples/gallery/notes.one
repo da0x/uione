@@ -1,0 +1,13 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Markdown pages from files: every file in notes/ is a page, named by its file
+// without the number, so notes/01-gallery.md is /notes/gallery.
+
+namespace notes {
+
+	screen notes /:page {
+		markdown "notes/*.md"
+	}
+
+} // namespace notes

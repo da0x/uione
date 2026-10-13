@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <array>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,86 +35,109 @@ namespace one::language {
     struct drawn_by {
         std::string_view name;  // like board.move
         std::string_view said;  // like "a board's move … along", in an error
-        bool web, desktop, terminal;
+        std::string_view by;    // the targets drawing it, like "web desktop terminal"
     };
+
+    // Every target draws it: a new target, like ios, draws nothing until it's added to
+    // each, so the gallery, which uses everything, says all it lacks.
+    inline constexpr std::string_view everywhere = "web desktop terminal";
 
     // Every element of a screen, and each of their settings, as each target draws it.
-    // The web draws everything; the desktop and the terminal draw all but a component,
-    // a React component written by hand.
     inline constexpr std::array support{
-        drawn_by{"text", "text", true, true, true},
-        drawn_by{"text.when", "a text's when", true, true, true},
-        drawn_by{"code", "code", true, true, true},
-        drawn_by{"markdown", "markdown", true, true, true},
-        drawn_by{"markdown.pages", "markdown pages from files", true, true, true},
-        drawn_by{"subtitle", "a subtitle", true, true, true},
-        drawn_by{"link", "a link", true, true, true},
-        drawn_by{"link.icon", "a link's icon", true, true, true},
-        drawn_by{"link.built", "a link to what the site was built from", true, true, true},
-        drawn_by{"hero", "a hero", true, true, true},
-        drawn_by{"section", "a section", true, true, true},
-        drawn_by{"section.color", "a section's color", true, true, true},
-        drawn_by{"heading", "a heading", true, true, true},
-        drawn_by{"menu", "a menu", true, true, true},
-        drawn_by{"region", "a layout's region", true, true, true},
-        drawn_by{"table", "a table", true, true, true},
-        drawn_by{"table.link", "a table's link", true, true, true},
-        drawn_by{"table.tabs", "a table's tabs, by … over", true, true, true},
-        drawn_by{"table.by", "a table split by a choice", true, true, true},
-        drawn_by{"table.search", "a table's search", true, true, true},
-        drawn_by{"table.sort", "a table's sort", true, true, true},
-        drawn_by{"table.page", "a table's pages", true, true, true},
-        drawn_by{"table.reorder", "reordering a table", true, true, true},
-        drawn_by{"table.hide", "a table's hide when empty", true, true, true},
-        drawn_by{"table.only", "a table's only", true, true, true},
-        drawn_by{"table.color", "a table's color", true, true, true},
-        drawn_by{"table.tint", "a table's tint by", true, true, true},
-        drawn_by{"table.track", "a table's track", true, true, true},
-        drawn_by{"board", "a board", true, true, true},
-        drawn_by{"board.link", "a board's link", true, true, true},
-        drawn_by{"board.move", "a board's move … along", true, true, true},
-        drawn_by{"board.search", "a board's search", true, true, true},
-        drawn_by{"board.tint", "a board's tint by", true, true, true},
-        drawn_by{"board.track", "a board's track", true, true, true},
-        drawn_by{"board.reorder", "reordering a board", true, true, true},
-        drawn_by{"cards", "cards", true, true, true},
-        drawn_by{"cards.link", "cards' link", true, true, true},
-        drawn_by{"cards.tally", "cards' tally", true, true, true},
-        drawn_by{"cards.filter", "cards' filter", true, true, true},
-        drawn_by{"details", "details", true, true, true},
-        drawn_by{"details.tint", "details' tint by", true, true, true},
-        drawn_by{"form", "a form", true, true, true},
-        drawn_by{"confirm", "a confirm", true, true, true},
-        drawn_by{"button", "a command's button", true, true, true},
-        drawn_by{"button.when", "a button's when", true, true, true},
-        drawn_by{"button.icon", "a button's icon", true, true, true},
-        drawn_by{"button.along", "a command along a view's steps", true, true, true},
-        drawn_by{"component", "a component", true, false, false},
-        drawn_by{"thread", "a thread", true, true, true},
-        drawn_by{"timeline", "a timeline", true, true, true},
-        drawn_by{"timeline.link", "a timeline's link", true, true, true},
-        drawn_by{"timeline.new", "a timeline's new when", true, true, true},
-        drawn_by{"timeline.open", "a timeline's on open", true, true, true},
-        drawn_by{"copy", "copy", true, true, true},
-        drawn_by{"grid", "a grid", true, true, true},
-        drawn_by{"diagram", "a diagram", true, true, true},
-        drawn_by{"find", "find", true, true, true},
-        drawn_by{"landing", "a landing design", true, true, true},
-        drawn_by{"layout", "a screen's layout", true, true, true},
-        drawn_by{"under", "a screen's under", true, true, true},
-        drawn_by{"header.badge", "the header's badge", true, true, true},
-        drawn_by{"header.path", "a header for a path", true, true, true},
-        drawn_by{"footer", "the footer", true, true, true},
+        drawn_by{"text", "text", everywhere},
+        drawn_by{"text.when", "a text's when", everywhere},
+        drawn_by{"code", "code", everywhere},
+        drawn_by{"markdown", "markdown", everywhere},
+        drawn_by{"markdown.pages", "markdown pages from files", everywhere},
+        drawn_by{"subtitle", "a subtitle", everywhere},
+        drawn_by{"link", "a link", everywhere},
+        drawn_by{"link.icon", "a link's icon", everywhere},
+        drawn_by{"link.built", "a link to what the site was built from", everywhere},
+        drawn_by{"hero", "a hero", everywhere},
+        drawn_by{"section", "a section", everywhere},
+        drawn_by{"section.color", "a section's color", everywhere},
+        drawn_by{"heading", "a heading", everywhere},
+        drawn_by{"menu", "a menu", everywhere},
+        drawn_by{"region", "a layout's region", everywhere},
+        drawn_by{"table", "a table", everywhere},
+        drawn_by{"table.link", "a table's link", everywhere},
+        drawn_by{"table.tabs", "a table's tabs, by … over", everywhere},
+        drawn_by{"table.by", "a table split by a choice", everywhere},
+        drawn_by{"table.search", "a table's search", everywhere},
+        drawn_by{"table.sort", "a table's sort", everywhere},
+        drawn_by{"table.page", "a table's pages", everywhere},
+        drawn_by{"table.reorder", "reordering a table", everywhere},
+        drawn_by{"table.hide", "a table's hide when empty", everywhere},
+        drawn_by{"table.only", "a table's only", everywhere},
+        drawn_by{"table.color", "a table's color", everywhere},
+        drawn_by{"table.tint", "a table's tint by", everywhere},
+        drawn_by{"table.track", "a table's track", everywhere},
+        drawn_by{"board", "a board", everywhere},
+        drawn_by{"board.link", "a board's link", everywhere},
+        drawn_by{"board.move", "a board's move … along", everywhere},
+        drawn_by{"board.search", "a board's search", everywhere},
+        drawn_by{"board.tint", "a board's tint by", everywhere},
+        drawn_by{"board.track", "a board's track", everywhere},
+        drawn_by{"board.reorder", "reordering a board", everywhere},
+        drawn_by{"cards", "cards", everywhere},
+        drawn_by{"cards.link", "cards' link", everywhere},
+        drawn_by{"cards.tally", "cards' tally", everywhere},
+        drawn_by{"cards.filter", "cards' filter", everywhere},
+        drawn_by{"details", "details", everywhere},
+        drawn_by{"details.tint", "details' tint by", everywhere},
+        drawn_by{"form", "a form", everywhere},
+        drawn_by{"confirm", "a confirm", everywhere},
+        drawn_by{"button", "a command's button", everywhere},
+        drawn_by{"button.when", "a button's when", everywhere},
+        drawn_by{"button.icon", "a button's icon", everywhere},
+        drawn_by{"button.along", "a command along a view's steps", everywhere},
+        drawn_by{"component", "a component", everywhere},
+        drawn_by{"thread", "a thread", everywhere},
+        drawn_by{"timeline", "a timeline", everywhere},
+        drawn_by{"timeline.link", "a timeline's link", everywhere},
+        drawn_by{"timeline.new", "a timeline's new when", everywhere},
+        drawn_by{"timeline.open", "a timeline's on open", everywhere},
+        drawn_by{"copy", "copy", everywhere},
+        drawn_by{"themes", "themes", everywhere},
+        drawn_by{"grid", "a grid", everywhere},
+        drawn_by{"diagram", "a diagram", everywhere},
+        drawn_by{"find", "find", everywhere},
+        drawn_by{"landing", "a landing design", everywhere},
+        drawn_by{"layout", "a screen's layout", everywhere},
+        drawn_by{"under", "a screen's under", everywhere},
+        drawn_by{"header.badge", "the header's badge", everywhere},
+        drawn_by{"header.path", "a header for a path", everywhere},
+        drawn_by{"footer", "the footer", everywhere},
+        // How a form asks for each field, by its kind.
+        drawn_by{"field.text", "a text box", everywhere},
+        drawn_by{"field.email", "an email box", everywhere},
+        drawn_by{"field.date", "a date box", everywhere},
+        drawn_by{"field.number", "a number box", everywhere},
+        drawn_by{"field.slider", "a slider", everywhere},
+        drawn_by{"field.markdown", "a box to write Markdown in", everywhere},
+        drawn_by{"field.boolean", "a checkbox", everywhere},
+        drawn_by{"field.list", "a list written separated by commas", everywhere},
+        drawn_by{"field.choice", "a choice from a list that opens", everywhere},
+        drawn_by{"field.radio", "radio buttons", everywhere},
+        drawn_by{"field.pick", "picking one of a list", everywhere},
+        drawn_by{"field.choices", "ticking several", everywhere},
+        drawn_by{"field.file", "a file to attach", everywhere},
+        drawn_by{"field.files", "files to attach", everywhere},
     };
 
-    inline const drawn_by* support_of(std::string_view name) {
-        for (const auto& s : support)
+    inline const drawn_by* support_of(std::string_view name, std::span<const drawn_by> table = support) {
+        for (const auto& s : table)
             if (s.name == name) return &s;
         return nullptr;
     }
 
     inline bool draws(const drawn_by& s, std::string_view target) {
-        return target == "web" ? s.web : target == "desktop" ? s.desktop : target == "terminal" ? s.terminal : false;
+        for (std::size_t at = 0; at < s.by.size();) {
+            std::size_t end = std::min(s.by.find(' ', at), s.by.size());
+            if (s.by.substr(at, end - at) == target) return true;
+            at = end + 1;
+        }
+        return false;
     }
 
     // What a project builds: its targets, or the web.
@@ -137,6 +161,15 @@ namespace one::language {
     inline std::optional<std::vector<std::string>>& building_targets() {
         thread_local std::optional<std::vector<std::string>> asked;
         return asked;
+    }
+
+    // The targets being checked and built now: the project's, or fewer with --target.
+    inline std::vector<std::string> targets_built(const std::vector<file>& files) {
+        std::vector<std::string> targets = targets_of(files);
+        if (const auto& asked = building_targets()) {
+            std::erase_if(targets, [&](const std::string& t) { return !listed(*asked, t); });
+        }
+        return targets;
     }
 
     namespace targets_detail {
@@ -207,6 +240,13 @@ namespace one::language {
                         if (n.tint) use("details.tint");
                     } else if constexpr (std::is_same_v<T, form_item>) {
                         use("form");
+                        for (const auto& f : n.fields) {
+                            if (f.kind.empty()) continue;
+                            // The names it's looked up by live as long as the table.
+                            for (const auto& s : support) {
+                                if (s.name.substr(0, 6) == "field." && s.name.substr(6) == f.kind) out.push_back({s.name, f.where});
+                            }
+                        }
                     } else if constexpr (std::is_same_v<T, confirm_item>) {
                         use("confirm");
                     } else if constexpr (std::is_same_v<T, button_item>) {
@@ -222,6 +262,8 @@ namespace one::language {
                         if (n.link) use("timeline.link");
                         if (n.fresh) use("timeline.new");
                         if (n.opened) use("timeline.open");
+                    } else if constexpr (std::is_same_v<T, themes_item>) {
+                        use("themes");
                     } else if constexpr (std::is_same_v<T, copy_item>) {
                         use("copy");
                     } else if constexpr (std::is_same_v<T, grid_item>) {
@@ -260,13 +302,11 @@ namespace one::language {
 
     // Every screen element is drawn by every target the project is built for, or it's
     // an error saying which, where, and what to do.
-    inline void check_targets(const std::vector<file>& files, diagnostics& out) {
-        std::vector<std::string> targets = targets_of(files);
+    // `table` is what each target draws: the support table, or another for a test.
+    inline void check_targets(const std::vector<file>& files, diagnostics& out, std::span<const drawn_by> table = support) {
+        std::vector<std::string> targets = targets_built(files);
         // One that isn't a target is the settings' error, said once, there.
         std::erase_if(targets, [](const std::string& t) { return !listed(all_targets, t); });
-        if (const auto& asked = building_targets()) {
-            std::erase_if(targets, [&](const std::string& t) { return !listed(*asked, t); });
-        }
         for (const auto& f : files) {
             std::vector<targets_detail::used> said;
             targets_detail::declarations(f.declarations, said);
@@ -278,7 +318,7 @@ namespace one::language {
                 auto lacking_in = [&](std::string_view target) {
                     std::vector<std::string_view> lacking;
                     for (std::size_t i = at; i < end; ++i) {
-                        const drawn_by* s = support_of(said[i].name);
+                        const drawn_by* s = support_of(said[i].name, table);
                         if (s && !draws(*s, target)) lacking.push_back(s->said);
                     }
                     return lacking;

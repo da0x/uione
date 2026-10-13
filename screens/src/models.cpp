@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <format>
+#include <random>
 #include <set>
 
 namespace one::screens {
@@ -116,10 +118,17 @@ namespace one::screens {
 			return out;
 		}
 
-		// What a form sends for a field: a yes or no as true or false, a list or several
-		// choices as the list of them, and anything else as it's written.
+		// What a form sends for a field: a yes or no as true or false, a number as one, a
+		// list or several choices as the list of them, and anything else as it's written.
 		value as_input(const std::string& written, const std::string& type) {
 			if (type == "boolean") return value(written == "true");
+			// A number as a number, and nothing for an empty box.
+			if (type == "number" || type == "slider") {
+				char* end = nullptr;
+				double n = std::strtod(written.c_str(), &end);
+				if (written.empty()) return value();
+				return end == written.c_str() + written.size() ? value(n) : value(written);
+			}
 			if (type != "list" && type != "choices") return value(written);
 			std::vector<value> items;
 			for (auto& item : split(written)) items.emplace_back(item);
@@ -1008,5 +1017,43 @@ namespace one::screens {
 		}
 		return out;
 	}
+
+	namespace tried_themes {
+
+		namespace {
+			std::function<void(const std::optional<palette::theme>&)>& applying() {
+				static std::function<void(const std::optional<palette::theme>&)> apply;
+				return apply;
+			}
+			void tried(std::optional<palette::theme> made) {
+				theme().set(made);
+				if (applying()) applying()(made);
+			}
+		}  // namespace
+
+		state<std::optional<palette::theme>> theme() {
+			static state<std::optional<palette::theme>> kept;
+			return kept;
+		}
+		state<std::string> scheme() {
+			static state<std::string> kept = [] {
+				std::random_device device;
+				return state<std::string>(std::string(palette::schemes[device() % palette::schemes.size()]));
+			}();
+			return kept;
+		}
+		void make_new() {
+			std::random_device device;
+			tried(palette::generate(std::uniform_int_distribution<std::uint32_t>(1, 99999)(device), scheme().peek()));
+		}
+		void pick(const std::string& chosen) {
+			scheme().set(chosen);
+			if (auto now = theme().peek()) tried(palette::generate(now->seed, chosen));
+			else make_new();
+		}
+		void put_back() { tried(std::nullopt); }
+		void on_tried(std::function<void(const std::optional<palette::theme>&)> apply) { applying() = std::move(apply); }
+
+	}  // namespace tried_themes
 
 }  // namespace one::screens

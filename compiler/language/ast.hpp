@@ -293,6 +293,13 @@ namespace one::language {
         bool key = false;
         std::optional<std::string> per;       // serial per book: counted within each book
         std::optional<std::string> after;
+        // volume  number  from 0 to 100  by 5: the numbers it may hold, each as written,
+        // drawn as a slider.
+        struct number_range {
+            std::string from, to, by = "1";
+            location where;
+        };
+        std::optional<number_range> range;
         expression_ptr initial;               // = on_shelf
         std::optional<std::string> label;     // number  serial  "#": what every screen calls it, unless one says its own
     };
@@ -619,6 +626,9 @@ namespace one::language {
         expression_ptr value;             // = suggest_code(start_date)
         std::optional<std::string> hint;
         std::optional<std::string> label; // body "Comment": what the field is called, rather than its name
+        // How it's asked for, once the project is checked: text, email, date, number,
+        // slider, markdown, boolean, list, choice, radio, pick, choices, file or files.
+        mutable std::string kind;
     };
 
     struct form_item {
@@ -693,16 +703,19 @@ namespace one::language {
         std::vector<cards_filter> filters;
     };
 
-    // component workbench: a hand-written React component, components/workbench.tsx
-    // beside the .one file, drawn where the item is.
+    // component workbench: a hand-written component, beside the .one file, drawn where
+    // the item is: components/workbench.tsx, a React component, on the web, and
+    // components/workbench.cpp, a function of the page giving a view, in the desktop
+    // and terminal apps.
     struct component_item {
         std::string name;
     };
 
-    // The file a component is written in, beside the .one file that draws it.
-    inline std::string component_file(const std::string& one_file, const std::string& name) {
+    // The file a component is written in, beside the .one file that draws it: .tsx for
+    // the web, .cpp for the desktop and the terminal.
+    inline std::string component_file(const std::string& one_file, const std::string& name, const std::string& extension = ".tsx") {
         auto folder = std::filesystem::path(one_file).parent_path();
-        return (folder / "components" / (name + ".tsx")).string();
+        return (folder / "components" / (name + extension)).string();
     }
 
     // thread issue_page.comments: a list of what people wrote, each with who wrote it
@@ -735,6 +748,10 @@ namespace one::language {
         std::optional<std::string> label;
     };
 
+    // themes: themes made at random from a palette, tried on the whole app at once,
+    // each written out as a project says it, to copy.
+    struct themes_item {};
+
     // details issue_page { status "Status"  implementer "Implemented by" }: a view's
     // values, each beside what it is, the ones with nothing in them left out.
     struct details_item {
@@ -765,7 +782,7 @@ namespace one::language {
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, details_item, grid_item, board_item, cards_item,
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item,
                      find_item>
             node;
     };

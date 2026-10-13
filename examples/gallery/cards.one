@@ -1,0 +1,33 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Cards and finding: a room's milestones as cards, each counting its pieces by stage,
+// with filters that open it picked; a box that finds pieces as it's typed in; and a
+// milestone's own page.
+
+namespace gallery at / {
+
+	screen "Cards and finding" /rooms/:room/cards {
+		find "Find a piece" {
+			room_page.pieces "Pieces" link /rooms/:room/pieces/:piece by number title labels
+			room_page.milestones "Milestones" link /rooms/:room/milestones/:milestone by title
+		}
+		cards room_page.milestones link /rooms/:room/milestones/:milestone {
+			title
+			due "Opens"
+			tally room_page.pieces by milestone and stage
+			filter "Looked after by me" assignees == me  color blue
+			filter "Damaged" condition == condition::damaged  color red
+			filter "Changed this week" updated_at > 7 days ago  color green
+		}
+	}
+
+	screen "{milestone_page.title}" /rooms/:room/milestones/:milestone {
+		under /rooms/:room/cards "Cards and finding"
+		subtitle "{milestone_page.description}"
+		milestone::update "Edit milestone" icon edit form "Save" {
+			title  due "Opens"  description
+		}
+	}
+
+} // namespace gallery

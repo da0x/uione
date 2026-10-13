@@ -42,6 +42,59 @@ namespace one::desktop::runtime {
 		});
 	}
 
+	desktop::theme drawn_in(const palette::theme& tried, desktop::theme own) {
+		auto color = [&](std::string_view role) { return desktop::color::hex(static_cast<std::uint32_t>(std::stoul(tried[role].light.substr(1), nullptr, 16))); };
+		own.page = color("page");
+		own.surface = color("surface");
+		own.sunken = color("sunken");
+		own.ink = color("ink");
+		own.muted = color("muted");
+		own.line = color("line");
+		own.accent = color("accent");
+		own.danger = color("danger");
+		own.success = color("success");
+		own.warning = color("warning");
+		return own;
+	}
+
+	desktop::view themes(page& p) {
+		const auto& t = current_theme();
+		auto tried = screens::tried_themes::theme().get();
+		std::vector<desktop::option> schemes;
+		for (auto s : palette::schemes) schemes.push_back({std::string(s), palette::scheme_title(s)});
+		std::vector<desktop::view> top;
+		top.push_back(desktop::radio_buttons(screens::tried_themes::scheme(), schemes, [](const std::string& s) { screens::tried_themes::pick(s); }));
+		top.push_back(desktop::button("New theme", [] { screens::tried_themes::make_new(); }, true));
+		if (tried) {
+			top.push_back(desktop::button("Back to the app's theme", [] { screens::tried_themes::put_back(); }));
+			top.push_back(desktop::text("Seed " + std::to_string(tried->seed), t.quiet()));
+		}
+		std::vector<desktop::view> parts;
+		parts.push_back(desktop::flow(std::move(top)).spacing(12));
+		if (!tried) return desktop::column(std::move(parts)).spacing(16);
+		// Each role, its light color over its dark one.
+		std::vector<desktop::view> swatches;
+		for (std::size_t i = 0; i < palette::roles.size(); ++i) {
+			auto fill = [](const std::string& hex) { return desktop::color::hex(static_cast<std::uint32_t>(std::stoul(hex.substr(1), nullptr, 16))); };
+			auto half = [&](const std::string& hex) { return desktop::spacer().height(26).background({.fill = fill(hex)}); };
+			auto both = desktop::column(half(tried->colors[i].light), half(tried->colors[i].dark))
+			                .width(64)
+			                .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 6.f)});
+			swatches.push_back(desktop::column(std::move(both), desktop::text(std::string(palette::roles[i]), t.quiet())).spacing(4));
+		}
+		parts.push_back(desktop::flow(std::move(swatches)).spacing(8));
+		std::string said = palette::written(*tried);
+		auto copied = p.kept<std::string>("themes:copied", "");
+		parts.push_back(code("one", said));
+		parts.push_back(desktop::row(desktop::button(copied.get() == said ? "Copied" : "Copy",
+		                                             [said, copied] {
+			                                             desktop::copy_text(said);
+			                                             copied.set(said);
+		                                             }),
+		                             desktop::spacer()));
+		return desktop::column(std::move(parts)).spacing(16);
+	}
+
 	namespace {
 
 		// What's open between two, and the forms and buttons for it.

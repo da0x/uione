@@ -11,6 +11,9 @@
 #include <algorithm>
 #include <chrono>
 #include <climits>
+#include <cmath>
+#include <cstdlib>
+#include <format>
 #include <map>
 #include <set>
 #include <typeinfo>
@@ -852,6 +855,108 @@ namespace one::terminal {
 			std::string label_;
 		};
 
+		class radio_element : public element {
+		public:
+			radio_element(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick)
+			    : chosen_(std::move(chosen)), options_(std::move(options)), on_pick_(std::move(on_pick)) {}
+			bool focusable() const override { return true; }
+			extent measure_content(int) override {
+				int width = 0;
+				for (std::size_t i = 0; i < options_.size(); ++i) width += (i ? 2 : 0) + 4 + display_width(options_[i].label);
+				return {width, 1};
+			}
+			void paint_content(canvas& c) override {
+				area a = inner();
+				int x = a.x;
+				std::string now = chosen_.peek();
+				for (std::size_t i = 0; i < options_.size(); ++i) {
+					if (i) x += 2;
+					bool picked = options_[i].value == now;
+					bool here = focused && (picked || (now.empty() && i == 0));
+					c.put(a.y, x, picked ? "(•) " : "( ) ", {.bold = here, .reverse = here});
+					c.put(a.y, x + 4, options_[i].label, {.bold = picked}, a.right() - x - 4);
+					x += 4 + display_width(options_[i].label);
+				}
+			}
+			bool handle_key(const key_press& e) override {
+				if (options_.empty()) return false;
+				int at = -1;
+				for (std::size_t i = 0; i < options_.size(); ++i) {
+					if (options_[i].value == chosen_.peek()) at = static_cast<int>(i);
+				}
+				int count = static_cast<int>(options_.size());
+				if (e.is(keys::right) || e.is('l')) pick(options_[at < 0 ? 0 : (at + 1) % count].value);
+				else if (e.is(keys::left) || e.is('h')) pick(options_[at <= 0 ? count - 1 : at - 1].value);
+				else if ((e.is(' ') || e.is(keys::newline) || e.is(keys::enter)) && at < 0) pick(options_[0].value);
+				else return false;
+				return true;
+			}
+
+		private:
+			void pick(const std::string& value) {
+				chosen_.set(value);
+				if (on_pick_) on_pick_(value);
+			}
+			state<std::string> chosen_;
+			std::vector<option> options_;
+			std::function<void(const std::string&)> on_pick_;
+		};
+
+		// A number as it's written: whole when it is, and otherwise to as many places as its step has.
+		std::string written(double n, double by) {
+			int places = 0;
+			while (places < 6 && std::abs(by * std::pow(10, places) - std::round(by * std::pow(10, places))) > 1e-9) ++places;
+			std::string out = std::format("{:.{}f}", n, places);
+			return out == "-0" ? "0" : out;
+		}
+
+		class slider_element : public element {
+		public:
+			slider_element(state<std::string> value, number_range range) : value_(std::move(value)), range_(range) {}
+			bool focusable() const override { return true; }
+			extent measure_content(int width) override { return {std::min(width, 24 + 1 + widest()), 1}; }
+			void paint_content(canvas& c) override {
+				area a = inner();
+				int bar = std::max(3, a.width - 1 - widest());
+				double along = range_.to > range_.from ? (now() - range_.from) / (range_.to - range_.from) : 0;
+				int knob = static_cast<int>(std::lround(along * (bar - 1)));
+				for (int i = 0; i < bar; ++i) {
+					if (i == knob) c.put(a.y, a.x + i, "●", {.bold = focused, .reverse = focused});
+					else c.put(a.y, a.x + i, i < knob ? "━" : "─", {.dim = i > knob});
+				}
+				std::string shown = written(now(), range_.by);
+				c.put(a.y, a.x + bar + 1 + widest() - display_width(shown), shown, {.bold = focused});
+			}
+			bool handle_key(const key_press& e) override {
+				double steps = std::round((range_.to - range_.from) / range_.by), tenth = std::max(1.0, std::round(steps / 10));
+				if (e.is(keys::right) || e.is('l')) set(now() + range_.by);
+				else if (e.is(keys::left) || e.is('h')) set(now() - range_.by);
+				else if (e.is(keys::page_up)) set(now() + tenth * range_.by);
+				else if (e.is(keys::page_down)) set(now() - tenth * range_.by);
+				else if (e.is(keys::home)) set(range_.from);
+				else if (e.is(keys::end)) set(range_.to);
+				else return false;
+				return true;
+			}
+
+		private:
+			int widest() const { return std::max(display_width(written(range_.from, range_.by)), display_width(written(range_.to, range_.by))); }
+			double now() const {
+				const std::string& text = value_.peek();
+				char* end = nullptr;
+				double n = std::strtod(text.c_str(), &end);
+				if (text.empty() || end == text.c_str()) return range_.from;
+				return std::clamp(n, range_.from, range_.to);
+			}
+			void set(double n) {
+				double steps = std::round((std::clamp(n, range_.from, range_.to) - range_.from) / range_.by);
+				std::string text = written(std::min(range_.to, range_.from + steps * range_.by), range_.by);
+				if (text != value_.peek()) value_.set(text);
+			}
+			state<std::string> value_;
+			number_range range_;
+		};
+
 		class chosen_element : public element {
 		public:
 			chosen_element(std::string shown, bool placeholder, state<bool> open) : shown_(std::move(shown)), placeholder_(placeholder), open_(std::move(open)) {}
@@ -1034,6 +1139,10 @@ namespace one::terminal {
 	view spacer() { return std::move(made<element>()).grow(1); }
 	view field(state<std::string> value, field_options options) { return made<field_element>(std::move(value), std::move(options)); }
 	view toggle(state<bool> on, std::string label) { return made<toggle_element>(std::move(on), std::move(label)); }
+	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick) {
+		return made<radio_element>(std::move(chosen), std::move(options), std::move(on_pick));
+	}
+	view slider(state<std::string> value, number_range range) { return made<slider_element>(std::move(value), range); }
 
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder) {
 		std::string now = chosen.peek();

@@ -263,6 +263,16 @@ namespace one::terminal {
 		std::string label;
 	};
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder = "Choose…");
+	// One of a few choices on a line, (•) before the one chosen: the arrows move it,
+	// and on_pick is told the one picked.
+	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick = {});
+	// A number from one to another in its steps, as a bar with a knob and the number
+	// after it: the arrows move it a step, Page Up and Page Down a tenth of the way, and
+	// Home and End to either end. It's kept as it's written; empty is the least.
+	struct number_range {
+		double from = 0, to = 100, by = 1;
+	};
+	view slider(state<std::string> value, number_range range);
 
 	// The app: a view built and drawn when a state it read changes or a key's
 	// pressed, keys given to what has focus, and work handed in from other threads.

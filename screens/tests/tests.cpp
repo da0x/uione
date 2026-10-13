@@ -6,12 +6,15 @@
 // live, its commands run, asked about first and turned down, and what it keeps.
 // What's drawn is held by each toolkit's own tests.
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 
 #include "check.hpp"
 #include "one/screens/models.hpp"
+#include "one/screens/palette.hpp"
 
 namespace {
 
@@ -176,6 +179,43 @@ TEST("a form's files are uploaded as it's sent and added to what's attached, and
 	CHECK(data.runs().size() == 1);
 	CHECK(form.error() == "~/no such file for uione.png isn't a file");
 	std::filesystem::remove(shot);
+}
+
+// The themes some seeds make, as palettes.txt holds them for @uione/react's palette.ts
+// too: a seed, a scheme, then each role's light and dark, a line each. With
+// ONE_PALETTE_GOLDEN=write it's written from what's made now.
+TEST("a seed and a scheme make one theme, written as palettes.txt says, wherever it's made") {
+	std::string made;
+	for (std::uint32_t seed : {1u, 2u, 3u, 7u, 42u, 1000u, 48213u, 99991u, 4294967295u}) {
+		for (auto scheme : palette::schemes) {
+			auto t = palette::generate(seed, scheme);
+			made += std::to_string(seed) + " " + std::string(scheme);
+			for (const auto& c : t.colors) made += " " + c.light + " " + c.dark;
+			made += "\n";
+		}
+	}
+	auto file = std::filesystem::path(__FILE__).parent_path() / "golden" / "palettes.txt";
+	if (std::getenv("ONE_PALETTE_GOLDEN")) std::ofstream(file) << made;
+	std::ifstream in(file);
+	std::string kept((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	CHECK(kept == made);
+}
+
+TEST("a theme from a palette is written as a project says one, to paste in") {
+	auto t = palette::generate(48213, "triadic");
+	std::string said = palette::written(t);
+	CHECK(said.starts_with("define theme triadic_48213 \"Triadic 48213\" {\n\tpage     #"));
+	CHECK(said.find("\twarning  #") != std::string::npos);
+	CHECK(said.ends_with("}\n"));
+	CHECK(palette::scheme_title("split_complementary") == "Split complementary");
+	// Danger stays red and warning amber, whatever the palette's hue.
+	for (std::uint32_t seed = 1; seed < 60; ++seed) {
+		auto made = palette::generate(seed, "complementary");
+		auto [r, g, b] = colors::rgb(made["danger"].light);
+		CHECK(r > g && r > b);
+		auto [wr, wg, wb] = colors::rgb(made["warning"].dark);
+		CHECK(wr >= wb && wg >= wb);
+	}
 }
 
 int main() {

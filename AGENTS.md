@@ -47,7 +47,9 @@ Treat every file as published, whatever the repository's visibility today.
   of C++. Every generator writes through `code::stream`, which records the `.one`
   line each output line came from, and a test holds every generated line in the
   repository to having one, or to being marked as the same in every project.
-  `tools/develop` runs the whole site locally against the emulators, to try by hand,
+  `tools/develop` runs the whole site locally against the emulators, to try by hand;
+  `tools/gallery` runs `examples/gallery`, every control on every target, the same
+  way, its web and desktop apps, or `tools/gallery terminal` in the terminal too;
   and `node tools/end-to-end.mjs` runs it end to end with no browser: the generated
   backend, the generated rules, and the Firebase data source, checking that views
   update live and that the rules keep each person's views to themselves. It follows

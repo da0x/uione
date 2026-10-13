@@ -101,13 +101,18 @@ namespace one::screens {
 	struct form_field {
 		std::string name;
 		std::string label = "";
-		// text, email, date, number, markdown, boolean, list, choice (one of
-		// `choices`), pick (one of a list on the screen's) or choices (several)
+		// text, email, date, number, slider (a number in `range`), markdown, boolean,
+		// list, choice (one of `choices`, a few of them radio buttons), pick (one of a
+		// list on the screen's), choices (several), file or files
 		std::string type = "text";
 		std::string hint = "";
 		std::vector<option> choices = {};
 		std::string start = "";  // what a new one starts as
 		bool required = false;   // a choice that's always one of them
+		struct number_range {
+			double from = 0, to = 0, by = 1;
+		};
+		number_range range = {};  // a slider's
 	};
 	struct form_spec {
 		std::string command;

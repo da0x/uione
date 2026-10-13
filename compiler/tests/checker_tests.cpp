@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include <one/screens/palette.hpp>
+
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
@@ -1337,6 +1339,19 @@ TEST_CASE("a theme gives each role a color, light and dark, and its text reads o
     // A project's theme is one that's declared.
     CHECK(only_error(start + "project p {\n\ttheme  solarized\n}\n").message.starts_with("there's no theme solarized"));
     CHECK(check_source(start + "project p {\n\ttheme  papercolor\n}\n").empty());
+}
+
+TEST_CASE("a theme made at random from a palette is one a project can say as it is") {
+    for (std::uint32_t seed = 1; seed <= 120; ++seed) {
+        for (auto scheme : one::screens::palette::schemes) {
+            auto t = one::screens::palette::generate(seed * 7919, scheme);
+            std::string source = "import one\n" + one::screens::palette::written(t) + "project p {\n\ttheme  " + one::screens::palette::name_of(t) + "\n}\n";
+            auto said = check_source(source);
+            CAPTURE(source);
+            CHECK(said.empty());
+            if (!said.empty()) return;
+        }
+    }
 }
 
 TEST_CASE("a site's corners and color are its theme's, which they were settings for a while") {

@@ -1,0 +1,31 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Words and links: a heading's links, a subtitle, text, text shown only while it
+// holds, Markdown, a file shown as code, sections in colors, links of every kind, and
+// a component written by hand, in React for the web and C++ for the others.
+
+namespace gallery at / {
+
+	screen "Words and links" /rooms/:room/words {
+		heading {
+			link /rooms/:room "Edit the room" icon edit
+			link /rooms/:room/workflow "Workflow" icon workflow
+		}
+		subtitle "What a page says in words, and where it links to."
+		text "This is {room_page.name}, one of the gallery's rooms."
+		text "It's private: only its people can read it." when room_page.visibility == visibility::private
+		markdown "{room_page.summary}"
+		section "A file, highlighted" color violet {
+			text "The C++ a desktop app is built from starts like this."
+			code "samples/hello.cpp"
+		}
+		section "Links" color amber {
+			link /rooms/:room/tables "To another page of this room"
+			link namespace notes "To another namespace"
+			link "https://uione.io" "To another site"
+		}
+		component welcome_note
+	}
+
+} // namespace gallery

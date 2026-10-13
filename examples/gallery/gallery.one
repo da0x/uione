@@ -1,0 +1,32 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The gallery: every screen element, setting and kind of form field uione knows, on
+// the web, the desktop and the terminal. It's a small gallery of its own: pieces
+// hung in rooms, moving through stages, opening at milestones. Each screen of a room
+// shows one family of controls, and the menu down the side opens each of them.
+//
+// It's the test of parity between the targets: one built for all three uses
+// everything compiler/language/targets.hpp lists, and what a target can't draw yet
+// is in gaps, a line each.
+
+import one
+
+project gallery {
+	one     "0.10.3"
+	ui      radix
+	signin  google github
+	target  web desktop terminal
+}
+
+// What's new to whoever is reading, beside the site's name on every page.
+header {
+	badge news.unread
+}
+
+// The foot of every page: the year, and the uione release and commit it was built from.
+footer {
+	text "The uione gallery, {year}."
+	link build.release "uione {build.version}"
+	link build.source "{build.commit}"
+}

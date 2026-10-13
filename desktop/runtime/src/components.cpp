@@ -113,7 +113,10 @@ namespace one::desktop::runtime {
 
 	desktop::view code(std::string, std::string source) {
 		const auto& t = current_theme();
-		return desktop::text(without_license(std::move(source)), t.code()).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
+		// A tab as four spaces, as the web shows code.
+		std::string shown;
+		for (char c : without_license(std::move(source))) shown += c == '\t' ? std::string("    ") : std::string(1, c);
+		return desktop::text(std::move(shown), t.code()).padding(edges(12, 16)).background({.fill = t.sunken, .radius = std::min(t.corners, 8.f)});
 	}
 
 	// The part of the page a link last brought into view, and how many times one has.

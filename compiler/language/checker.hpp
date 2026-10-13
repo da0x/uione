@@ -84,6 +84,7 @@ namespace one::language {
         explicit checker(diagnostics& out, meanings* meant = nullptr) : out_(out), meant_(meant) {}
 
         void check(const std::vector<file>& files) {
+            targets_ = targets_built(files);
             // uione's own library comes first, so what it declares, like the settings a
             // project may say, is there for every file.
             const file& own = library_file();
@@ -171,6 +172,7 @@ namespace one::language {
         diagnostics& out_;
         meanings* meant_ = nullptr;
         std::string path_;
+        std::vector<std::string> targets_;  // the apps being built, which say what files a component needs
         std::map<std::string, scope> scopes_;  // by namespace, "" is the top level
         std::map<std::string, origin> routes_;
         std::map<const entity_declaration*, entity_declaration> changes_;  // what each history holds
@@ -1238,6 +1240,7 @@ namespace one::language {
                 if (f.initial && is_serial(f)) {
                     error(f.initial->where, f.name + " is counted, so it doesn't start with a value");
                 }
+                if (f.range) verify_range(f);
                 if (f.after && !find_field(e, *f.after)) {
                     error(f.where, "'after " + *f.after + "' names a field entity " + e.name + " doesn't have");
                 }
@@ -1354,6 +1357,28 @@ namespace one::language {
 
         // serial per book counts within each book, so book has to be a field that
         // points at one, and every entity has to have one to be counted in.
+        // volume  number  from 0 to 100  by 5: a number, from less to more, landing on
+        // its last value in its steps, and starting within it.
+        void verify_range(const field& f) {
+            const auto& r = *f.range;
+            if (!f.type || f.type->text() != "number" || f.list) {
+                error(r.where, f.name + " is from one number to another, so it's a number, like " + f.name + "  number  from " + r.from + " to " + r.to);
+                return;
+            }
+            double from = std::stod(r.from), to = std::stod(r.to), by = std::stod(r.by);
+            if (!(from < to)) {
+                error(r.where, f.name + " goes from less to more, like from " + r.to + " to " + r.from);
+            } else if (!(by > 0)) {
+                error(r.where, f.name + "'s step is more than nothing, like by 1");
+            } else if (double steps = (to - from) / by; std::abs(steps - std::round(steps)) > 1e-9) {
+                error(r.where, "from " + r.from + " in steps of " + r.by + " doesn't land on " + r.to + "; make the steps divide " + f.name + "'s range");
+            }
+            if (auto* n = f.initial ? std::get_if<literal_expression>(&f.initial->node) : nullptr; n && n->type == literal_expression::kind::number) {
+                double start = std::stod(n->value);
+                if (start < from || start > to) error(f.initial->where, f.name + " starts within its range, from " + r.from + " to " + r.to);
+            }
+        }
+
         void verify_serial(const std::string& ns, const entity_declaration& e, const field& f) {
             const field* parent = find_field(e, *f.per);
             if (!parent || !pointed(ns, *parent)) {
@@ -2913,8 +2938,12 @@ namespace one::language {
                             error(f.where, "a field is labeled, so everyone, a screen reader too, knows what it asks for: " + f.name +
                                                " \"...\", or no label for one from its name");
                         }
-                        if (inputs.contains(f.name)) continue;
+                        if (auto input = inputs.find(f.name); input != inputs.end()) {
+                            f.kind = asked_as(ns, input->second);
+                            continue;
+                        }
                         const field* asked = entity ? find_field(*entity, f.name) : nullptr;
+                        if (asked) f.kind = asked_as(ns, *asked);
                         if (entity && !asked) {
                             error(f.where, "the form asks for " + f.name + ", which isn't a field of entity " +
                                                entity->name);
@@ -2944,10 +2973,15 @@ namespace one::language {
                     if (button->along) verify_along(ns, *button, route);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);
-                    std::string file = component_file(path_, component->name);
-                    if (!platform::read_file(file)) {
+                    // Its file for each kind of app built: React on the web, C++ in the others.
+                    bool web = one::language::listed(targets_, "web"), native = one::language::listed(targets_, "desktop") || one::language::listed(targets_, "terminal");
+                    if (web && !platform::read_file(component_file(path_, component->name))) {
                         error(item.where, "component " + component->name + " is drawn by components/" + component->name +
                                               ".tsx beside this file, which isn't there");
+                    }
+                    if (native && !platform::read_file(component_file(path_, component->name, ".cpp"))) {
+                        error(item.where, "component " + component->name + " is drawn in the desktop and terminal apps by components/" + component->name +
+                                              ".cpp beside this file, which isn't there");
                     }
                 }
             }
@@ -3390,6 +3424,21 @@ namespace one::language {
             std::vector<std::string> names{"id", "created_at", "created_by", "updated_at", "updated_by"};
             for (const auto& f : e.fields) names.push_back(f.name);
             return names;
+        }
+
+        // How a form asks for a field, as each target draws it: a few choices as radio
+        // buttons, more as a list that opens, a number in a range as a slider, another
+        // entity picked from a list, several ticked.
+        std::string asked_as(const std::string& ns, const field& f) const {
+            if (!f.choices.empty()) return f.choices.size() <= 3 ? "radio" : "choice";
+            if (!f.type) return "text";
+            std::string t = f.type->text();
+            if (t == "file") return f.list ? "files" : "file";
+            if (f.list) return t == "permission" || pointed(ns, f) || t == "user" ? "choices" : "list";
+            if (pointed(ns, f) || t == "user") return "pick";
+            if (t == "number" && f.range) return "slider";
+            if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") return t;
+            return "text";
         }
 
         const entity_declaration* pointed(const std::string& ns, const field& f) const {

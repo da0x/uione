@@ -1,0 +1,58 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Timelines and threads: what's new to whoever is reading, marked until they leave
+// the page; every change in a room; and a piece's own page, in two columns, with its
+// history, its comments, its details and the buttons that move it on.
+
+namespace gallery at / {
+
+	screen "Timelines" /rooms/:room/timeline {
+		timeline news.changes "What's new" link /rooms/:room/pieces/:piece {
+			new when created_at > news.seen
+			on open dispatch reader::create
+		}
+		timeline room_page.timeline "Every change in this room" link /rooms/:room/pieces/:piece
+	}
+
+	screen "#{piece_page.number} {piece_page.title}" /rooms/:room/pieces/:piece {
+		under /rooms/:room/boards "Boards"
+		layout two_columns
+		heading {
+			piece::update "Edit piece" icon edit form "Save" {
+				title  description  contact  made  width  light  framed  labels  condition  size
+				photo  sketches
+			}
+			piece::delete "Delete piece" icon delete
+		}
+		main {
+			markdown "{piece_page.description}"
+			timeline piece_page.history
+			thread piece_page.comments
+			form comment::create "Comment" {
+				body "Comment"
+			}
+		}
+		side {
+			piece::move along piece_page.steps
+			piece::claim "Take it" icon follow when piece_page.held_by != me
+			piece::release "Let it go" when piece_page.held_by == me
+			text "Held by {piece_page.held_by.name} until {piece_page.held_until}." when piece_page.held_by != none
+			details piece_page {
+				tint by condition
+				stage.title "Stage"
+				condition "Condition"
+				size "Size"
+				milestone.title "Shown at"
+				assignees.name "Looked after by"
+				labels "Labels"
+				framed "Framed"
+				photo "Photo"
+				sketches "Sketches"
+			}
+			copy piece_page "Copy piece"
+			confirm piece::delete "Delete this piece and its comments?"
+		}
+	}
+
+} // namespace gallery

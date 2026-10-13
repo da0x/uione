@@ -18,7 +18,7 @@ using namespace one::language;
 
 TEST_CASE("every example and the site check without errors") {
     std::string root = UIONE_ROOT;
-    for (const char* project : {"/examples/library", "/examples/tasks", "/examples/tracker", "/site"}) {
+    for (const char* project : {"/examples/gallery", "/examples/library", "/examples/tasks", "/examples/tracker", "/site"}) {
         CAPTURE(project);
         auto paths = one::platform::find_one_files({root + project});
         REQUIRE_FALSE(paths.empty());

@@ -5,6 +5,9 @@
 // replaces, placed in the window, and given the keyboard and the pointer.
 
 #include <algorithm>
+#include <optional>
+#include <typeinfo>
+#include <vector>
 
 #include "app_internal.hpp"
 #include "ui_internal.hpp"
@@ -22,6 +25,30 @@ namespace one::desktop {
 			}
 			~in_window() { detail::theme_in_use() = nullptr; }
 		};
+
+		// Where an element is under the root: which child it is at each level.
+		std::optional<std::vector<std::size_t>> path_of(const element* root, const element* e) {
+			std::vector<std::size_t> path;
+			for (; e && e != root && e->parent; e = e->parent) {
+				const auto& siblings = e->parent->children;
+				auto at = std::ranges::find_if(siblings, [e](const auto& child) { return child.get() == e; });
+				if (at == siblings.end()) return std::nullopt;
+				path.push_back(static_cast<std::size_t>(at - siblings.begin()));
+			}
+			if (!e || e != root) return std::nullopt;
+			std::ranges::reverse(path);
+			return path;
+		}
+
+		// The element at that place in a view built again, when it's the same kind.
+		element* at_path(element* root, const std::vector<std::size_t>& path, const std::type_info& kind) {
+			element* e = root;
+			for (std::size_t i : path) {
+				if (!e || i >= e->children.size()) return nullptr;
+				e = e->children[i].get();
+			}
+			return e && typeid(*e) == kind ? e : nullptr;
+		}
 
 		template <class F>
 		void each_element(element& e, F&& visit) {
@@ -104,9 +131,14 @@ namespace one::desktop {
 				built = w.build().take();
 			}
 			w.reading = std::move(reader);
+			// What's being dragged, like a slider's knob, goes on being dragged as what it
+			// changes builds the view again.
+			auto dragged = path_of(w.root.get(), w.dragging);
+			const std::type_info* dragged_kind = w.dragging ? &typeid(*w.dragging) : nullptr;
 			if (built && w.root) detail::reconcile(*built, *w.root);
 			w.root = std::move(built);
 			w.pressed = w.dragging = nullptr;
+			if (dragged && dragged_kind) w.pressed = w.dragging = at_path(w.root.get(), *dragged, *dragged_kind);
 			w.needs_building = false;
 			w.needs_placing = true;
 			// Something to type into from the start: what asks for it, or a list, or the

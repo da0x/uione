@@ -422,9 +422,10 @@ export interface FilesProps {
 export interface FieldProps {
   name: string;
   label: string;
-  type: string; // text, markdown, email, date, number, boolean (true or false), list (written separated by commas), choice, pick (one of a list's records, however many), file, or files
+  type: string; // text, markdown, email, date, number, slider (a number in range), boolean (true or false), list (written separated by commas), choice, pick (one of a list's records, however many), file, or files
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   required?: boolean; // a choice that's always one of them, offering no empty one
+  range?: [number, number, number]; // for a slider: from, to, and the step between
   value: string;
   hint?: string;
   onChange: (value: string) => void;
@@ -493,6 +494,21 @@ export interface ConsentProps {
   onAnswer: (agreed: boolean) => void;
 }
 
+// Themes made at random from a palette: the scheme picked, the theme tried on the
+// whole app, if one is, each of its colors, and the theme as a project says it.
+export interface ThemesProps {
+  scheme: string;
+  schemes: [string, string][]; // each scheme, and how it's called
+  onScheme: (scheme: string) => void;
+  seed: number | undefined; // the theme tried, or none while the app's own is drawn
+  colors: [string, string, string][]; // each role, its light color and its dark one
+  written: string; // define theme …, to paste into a .one file
+  copied: boolean;
+  onNew: () => void;
+  onReset: () => void;
+  onCopy: () => void;
+}
+
 export interface ComponentSet {
   Page: ComponentType<PageProps>;
   Account: ComponentType<AccountProps>;
@@ -525,6 +541,7 @@ export interface ComponentSet {
   Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;
   Live: ComponentType<LiveProps>;
+  Themes: ComponentType<ThemesProps>;
   Markdown: ComponentType<MarkdownProps>;
   Picture: ComponentType<PictureProps>;
   Consent: ComponentType<ConsentProps>;

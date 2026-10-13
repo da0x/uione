@@ -96,6 +96,12 @@ namespace one::desktop::runtime {
 	desktop::view find(page& p, std::string label, std::vector<find_source> sources);
 	desktop::view copy(page& p, state<view_state> from, std::string label, std::vector<copied_field> fields, std::vector<copied_list> lists,
 	                   std::map<std::string, std::vector<screens::option>> choices = {});
+	// Themes made at random from a palette, tried on the whole window, each written
+	// as a project says it, to copy.
+	desktop::view themes(page& p);
+	// A theme from a palette, as the desktop draws with it: its light colors, on what
+	// the app's own theme says besides.
+	desktop::theme drawn_in(const palette::theme& tried, desktop::theme own);
 	desktop::view grid(page& p, between_spec spec);
 	desktop::view diagram(page& p, between_spec spec);
 	desktop::view thread(page& p, thread_spec spec);

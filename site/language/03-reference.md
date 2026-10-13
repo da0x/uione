@@ -253,9 +253,15 @@ Each target draws the screen elements its toolkit has a part for, and says so in
 compiler, so a screen using one a target doesn't draw is an error, on its line, for
 that target: "a board's move … along isn't drawn by the terminal app yet; take
 terminal out of target, or build with --target web". `one build --target web`
-builds fewer of the targets for one run, never others. The desktop and terminal apps
+builds fewer of the targets for one run, never others. How a form asks for each
+field is part of it too: a text box, a slider, radio buttons, a checkbox, a file to
+attach, each a kind every target draws or is an error. The desktop and terminal apps
 draw every element but `component`, a React component written by hand, which is the
-web's alone, and draw a landing design as a plain screen. Each is a CMake project of
+web's alone, and draw a landing design as a plain screen. uione's own gallery,
+`examples/gallery`, uses every element and every kind of field, built for every
+target, so it's where each is seen side by side; what a target can't draw yet is in
+its `gaps`, which its test holds to what's so, and a new target starts with all of it
+there. Each is a CMake project of
 C++26: `cmake -S build/desktop -B build/desktop/out` and `cmake --build
 build/desktop/out` build it with g++ against uione's libraries in `UIONE`, a checkout
 of uione. It reads its views live from the project's `domain`, or `ONE_SERVER`, and
@@ -502,14 +508,14 @@ What a field can hold, written after its name: `title  text  required`.
 | `email` | an email address, checked as one and compared without case | an email box |
 | `slug` | a name like `my-app`: lowercase letters and digits joined by single dashes, lowered as it's saved | a text box |
 | `date` | a moment, to the second | a date |
-| `number` | a number, whole or not | a number box |
+| `number` | a number, whole or not; `from 0 to 100  by 5` keeps it within a range, in steps | a number box, or a slider for a number with a range |
 | `serial` | a whole number counted up as each entity is made, 1, 2, 3, and never typed; `serial per project` counts within each project | a number |
 | `boolean` | true or false | a checkbox |
 | `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
 | `file` | a file someone uploaded, kept in the app's bucket, by its path, whose last part is its name; `list of file` holds several (see [Files](#files)) | a box to choose a file, uploaded as it's chosen; where it's shown, a link that opens it, and a small picture of an image |
 | `list of permission` | the commands a project's role allows, like `issue::create` | a box to tick for each command |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
-| `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | a choice of cards or a list |
+| `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | radio buttons for three or fewer, otherwise a list that opens |
 
 A field's type can also be another entity, holding its id (`book`), or a `format`.
 
@@ -563,6 +569,10 @@ What a field must be, written after its type: `shelfmark  shelfmark  required  u
 - `key`: it names the entity, so its id is made from its key fields, like a book's
   shelfmark, or a project's owner and slug.
 - `after lent_at`: a date that has to come after another field's.
+- `from 0 to 100  by 5`: a number that has to be within the range, in steps of
+  `by`, 1 unless it says, counted from `from`. A form asks for it with a slider,
+  and a new one starts at `from` unless it says, like `= 50`. The backend refuses
+  one outside it: "Volume is from 0 to 100", "Volume goes in steps of 5 from 0".
 - `= value`: what it starts as, like `= now`, `= me` or `= status::open`.
 - `= board.project`: worked out when it's made, from what another of its fields
   points at, like a step's project from its board's, read in the same transaction,
@@ -1633,6 +1643,16 @@ issue::verify "Verify" when {
 - A field can say what it means under it: `takes_reports "Public reports" { hint
   "Anyone may report a problem, signed in or not" }`.
 - `confirm` asks before a command runs.
+- `themes` tries themes made at random from a palette on the whole app at once:
+  pick a scheme, complementary, analogous, triadic, split complementary or
+  monochrome, and press New theme. Every role comes from the palette, light and
+  dark, and danger, warning and success stay red, amber and green, leaning to its
+  hue, each reading on what it sits on as a theme has to. It shows the theme's
+  colors and the theme as a project says it, with Copy, to paste into a `.one`
+  file and name in the project block. The web draws the app in it at once, the
+  desktop its window, and the terminal sets its own colors to it, put back as the
+  app quits. A seed is the same theme in every app, and `one theme --seed 48213
+  --scheme triadic` writes it too; `one theme` alone picks both at random.
 - `component opening_hours` draws a hand-written React component: the default
   export of `components/opening_hours.tsx`, beside the `.one` file. It's for
   anything the language doesn't say. It reads views and runs commands with

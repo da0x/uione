@@ -127,7 +127,10 @@ namespace one::terminal::runtime {
 		while (at <= all.size()) {
 			std::size_t end = all.find('\n', at);
 			if (end == std::string::npos) end = all.size();
-			rows.push_back({{"│ ", dim()}, {all.substr(at, end - at), {.foreground = color::cyan}}});
+			// A tab as four spaces, since a terminal's cell holds one.
+			std::string text;
+			for (char c : all.substr(at, end - at)) text += c == '\t' ? std::string("    ") : std::string(1, c);
+			rows.push_back({{"│ ", dim()}, {std::move(text), {.foreground = color::cyan}}});
 			at = end + 1;
 		}
 		return terminal::text_rows(std::move(rows));
@@ -216,7 +219,8 @@ namespace one::terminal::runtime {
 			if (entry.here) across.push_back(terminal::text(entry.label, {.bold = true, .underline = true}));
 			else across.push_back(terminal::link(entry.label, [&p, to = entry.address] { p.open(to); }, {}));
 		}
-		return terminal::column(terminal::row(std::move(across)).spacing(3), std::move(beside)).spacing(1);
+		// Going on to the next line where there are more than fit, as a narrow terminal needs.
+		return terminal::column(terminal::flow(std::move(across)).spacing(3), std::move(beside)).spacing(1);
 	}
 
 	terminal::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, std::vector<terminal::view> ways) {
@@ -255,6 +259,10 @@ namespace one::terminal::runtime {
 			if (f.type != "boolean") field_parts.push_back(terminal::text(shown, {.bold = true}));
 			if (f.type == "boolean") {
 				field_parts.push_back(terminal::toggle(model.ticked(f, "true"), shown));
+			} else if (form_model::few(f)) {
+				field_parts.push_back(terminal::radio_buttons(model.written(f), drawn_options(f.choices)));
+			} else if (f.type == "slider") {
+				field_parts.push_back(terminal::slider(model.written(f), {.from = f.range.from, .to = f.range.to, .by = f.range.by}));
 			} else if (f.type == "choice" || f.type == "pick") {
 				field_parts.push_back(terminal::picker(model.written(f), drawn_options(model.choices_of(f)), model.picking(f), "Choose " + lowered_first(shown) + "…"));
 			} else if (f.type == "file" || f.type == "files") {
@@ -560,6 +568,57 @@ namespace one::terminal::runtime {
 			copy_to_terminal(markdown_of(p.title(), from.peek().data, fields, lists, choices));
 			copied.set(true);
 		});
+	}
+
+	void draw_terminal_in(const std::optional<palette::theme>& tried) {
+		// Operating system commands, each ended by ST: OSC 4 sets a color of the
+		// terminal's sixteen, 10 and 11 its text and background, and 104, 110 and 111
+		// put them back.
+		std::string said;
+		if (!tried) {
+			said = "\033]104\033\\\033]110\033\\\033]111\033\\";
+		} else {
+			const auto& t = *tried;
+			said += "\033]10;" + t["ink"].dark + "\033\\\033]11;" + t["page"].dark + "\033\\";
+			for (auto [slot, role] : {std::pair{1, "danger"}, {2, "success"}, {3, "warning"}, {4, "accent"}, {8, "muted"}}) {
+				said += "\033]4;" + std::to_string(slot) + ";" + t[role].dark + "\033\\";
+			}
+		}
+		(void)!write(STDOUT_FILENO, said.data(), said.size());
+	}
+
+	terminal::view themes(page& p) {
+		auto tried = screens::tried_themes::theme().get();
+		std::vector<terminal::option> schemes;
+		for (auto s : palette::schemes) schemes.push_back({std::string(s), palette::scheme_title(s)});
+		std::vector<terminal::view> parts;
+		parts.push_back(terminal::radio_buttons(screens::tried_themes::scheme(), schemes, [](const std::string& s) { screens::tried_themes::pick(s); }));
+		std::vector<terminal::view> buttons;
+		buttons.push_back(terminal::button("New theme", [] { screens::tried_themes::make_new(); }, true));
+		if (tried) {
+			buttons.push_back(terminal::button("Back to the app's theme", [] { screens::tried_themes::put_back(); }));
+			buttons.push_back(quiet("Seed " + std::to_string(tried->seed)));
+		}
+		parts.push_back(terminal::row(std::move(buttons)).spacing(2));
+		if (!tried) return terminal::column(std::move(parts)).spacing(1);
+		// Each role in the color the terminal now draws it with, where it has one.
+		static const std::map<std::string_view, color> drawn{{"danger", color::red}, {"success", color::green}, {"warning", color::yellow}, {"accent", color::blue}, {"muted", color::bright_black}};
+		std::vector<terminal::view> roles;
+		for (std::size_t i = 0; i < palette::roles.size(); ++i) {
+			auto found = drawn.find(palette::roles[i]);
+			roles.push_back(terminal::row(terminal::text("██", {.foreground = found == drawn.end() ? color::none : found->second}).width(2),
+			                              terminal::text(std::string(palette::roles[i])).width(9), quiet(tried->colors[i].light + "  dark " + tried->colors[i].dark))
+			                    .spacing(1));
+		}
+		parts.push_back(terminal::column(std::move(roles)));
+		std::string said = palette::written(*tried);
+		auto copied = p.kept<std::string>("themes:copied", "");
+		parts.push_back(code("one", said));
+		parts.push_back(terminal::button(copied.get() == said ? "Copied" : "Copy", [said, copied] {
+			copy_to_terminal(said);
+			copied.set(said);
+		}));
+		return terminal::column(std::move(parts)).spacing(1);
 	}
 
 	namespace {

@@ -396,7 +396,11 @@ namespace one::generators {
         }
 
         std::optional<std::string> initial_value(const language::field& f) {
-            if (!f.initial) return std::string{};
+            // A number with a range starts at its least, unless it says.
+            if (!f.initial) return f.range ? "default=" + f.range->from : std::string{};
+            if (auto* n = std::get_if<language::literal_expression>(&f.initial->node); n && n->type == language::literal_expression::kind::number) {
+                return "default=" + n->value;
+            }
             auto* name = std::get_if<language::name_expression>(&f.initial->node);
             if (name) {
                 if (auto c = language::choice_of(name->name, f)) return "default=" + *c;  // status::open
@@ -479,6 +483,7 @@ namespace one::generators {
                     if (f.type && f.type->text() == "slug") rules.push_back("slug");
                     if (f.type && f.type->text() == "file") rules.push_back("file");
                     if (f.after) rules.push_back("after=" + *f.after);
+                    if (f.range) rules.push_back("range=" + f.range->from + ":" + f.range->to + ":" + f.range->by);
                     if (f.type && f.type->parts.size() == 1 && entity(pkg, f.type->parts[0])) {
                         rules.push_back("refers=" + web_detail::join(ns, f.type->parts[0]));
                         // entity comment history of issue: its issue keeps its changes.

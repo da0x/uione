@@ -5,6 +5,7 @@ package one
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -84,6 +85,10 @@ type field struct {
 	email    bool
 	slug     bool // a name like my-app: lowercase letters and digits, joined by single dashes
 	after    string
+	ranged   bool // a number from least to most, in steps of step
+	least    float64
+	most     float64
+	step     float64
 	choices  []string
 	initial  string // the value a new entity starts with; "me" and "now" are special
 	from     string // the field a new entity's value is made from when it's given none, like a stage's name from its title
@@ -152,6 +157,14 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.slug, fd.lower = true, true
 			case "after":
 				fd.after = value
+			case "range":
+				parts := strings.Split(value, ":")
+				if len(parts) == 3 {
+					fd.ranged = true
+					fd.least, _ = strconv.ParseFloat(parts[0], 64)
+					fd.most, _ = strconv.ParseFloat(parts[1], 64)
+					fd.step, _ = strconv.ParseFloat(parts[2], 64)
+				}
 			case "choices":
 				fd.choices = strings.Split(value, "|")
 			case "default":
@@ -300,6 +313,20 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 				}
 				target.SetString(text)
 			case reflect.Float64:
+				// A form sends a number as it's written, and nothing for an empty box.
+				if text, ok := raw.(string); ok {
+					if strings.TrimSpace(text) == "" {
+						continue
+					}
+					parsed, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+					if err != nil {
+						return invalid("%s should be a number", label(f.name))
+					}
+					raw = parsed
+				}
+				if raw == nil {
+					continue
+				}
 				number, ok := raw.(float64)
 				if !ok {
 					return invalid("%s should be a number", label(f.name))
@@ -348,11 +375,12 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 }
 
 // start fills in what a new entity starts with: "me" is the person creating it,
-// "now" is the time, and anything else is a literal value, like a first choice.
+// "now" is the time, and anything else is a literal value, like a first choice. A
+// number in given, what the command was sent, keeps its value, even 0.
 //
 // It returns the field a key was made from, like a stage's title, when one was: an
 // entity whose key was made that way, and is taken, isn't the same one made again.
-func (s *schema) start(v reflect.Value, me, username string, now time.Time) (madeFrom string) {
+func (s *schema) start(v reflect.Value, me, username string, now time.Time, given map[string]any) (madeFrom string) {
 	for _, f := range s.fields {
 		if f.from != "" {
 			target := v.FieldByIndex(f.index)
@@ -370,6 +398,10 @@ func (s *schema) start(v reflect.Value, me, username string, now time.Time) (mad
 		}
 		target := v.FieldByIndex(f.index)
 		if !target.IsZero() && f.initial != "me" && f.initial != "me.username" {
+			continue
+		}
+		// A number given as 0 is 0, not one never given.
+		if _, ok := given[f.name]; ok && target.Kind() == reflect.Float64 {
 			continue
 		}
 		// A list starts as its values, unless they're held within something, which
@@ -393,6 +425,10 @@ func (s *schema) start(v reflect.Value, me, username string, now time.Time) (mad
 			target.SetBool(true)
 		case target.Kind() == reflect.String:
 			target.SetString(f.initial)
+		case target.Kind() == reflect.Float64:
+			if n, err := strconv.ParseFloat(f.initial, 64); err == nil {
+				target.SetFloat(n)
+			}
 		}
 	}
 	return madeFrom
@@ -434,6 +470,15 @@ func (s *schema) validate(v reflect.Value) error {
 		if len(f.choices) > 0 && value.Kind() == reflect.String && value.String() != "" && !contains(f.choices, value.String()) {
 			return invalid("%s has to be one of %s", label(f.name), strings.Join(f.choices, ", "))
 		}
+		if f.ranged && value.Kind() == reflect.Float64 {
+			n := value.Float()
+			if n < f.least || n > f.most {
+				return invalid("%s is from %s to %s", label(f.name), formatNumber(f.least), formatNumber(f.most))
+			}
+			if steps := (n - f.least) / f.step; math.Abs(steps-math.Round(steps)) > 1e-9 {
+				return invalid("%s goes in steps of %s from %s", label(f.name), formatNumber(f.step), formatNumber(f.least))
+			}
+		}
 		if f.after != "" {
 			other := s.field(f.after)
 			if other != nil && f.typ == reflect.TypeOf(time.Time{}) && other.typ == f.typ {
@@ -445,6 +490,11 @@ func (s *schema) validate(v reflect.Value) error {
 		}
 	}
 	return nil
+}
+
+// formatNumber writes a number as it's written in a .one file: 5, 0.5.
+func formatNumber(n float64) string {
+	return strconv.FormatFloat(n, 'f', -1, 64)
 }
 
 func looksLikeEmail(text string) bool {

@@ -9,6 +9,8 @@
 
 #include <format>
 
+#include "one/desktop/runtime/components.hpp"
+
 namespace one::desktop::runtime {
 
 	desktop::view page_view(navigator& nav, page& p) {
@@ -94,6 +96,10 @@ namespace one::desktop::runtime {
 		auto& window = app.open({.title = s.name, .id = s.id, .size = {1200, 800}});
 		window.look(s.look);
 		window.background = s.look.page;
+		// A theme tried from a palette draws the whole window, and the app's own again after.
+		screens::tried_themes::on_tried([&window, own = s.look](const std::optional<palette::theme>& tried) {
+			window.look(tried ? drawn_in(*tried, own) : own);
+		});
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
 		window.show([&] {

@@ -302,7 +302,7 @@ TEST("an update form follows what's stored until it's typed in, and sends the id
 	CHECK(name.peek() == "Atlas at last");  // following again, once sent
 }
 
-TEST("a form's fields: text, several lines, a choice, a list's pick, a box, several boxes and a hint, with what turned it down") {
+TEST("a form's fields: text, several lines, a few choices as radio buttons, a slider, a list's pick, a box, several boxes and a hint, with what turned it down") {
 	memory_source data;
 	data.on("tracker::issue::create", [](const value&, memory_source&) -> answer { return std::unexpected(std::string("the board is closed")); });
 	data.set("tracker::project_page", "atlas", value(fields{{"members", list{value(fields{{"person", "maya"}, {"person.name", "Maya Garcia"}})}}}));
@@ -314,6 +314,7 @@ TEST("a form's fields: text, several lines, a choice, a list's pick, a box, seve
 		                                           .fields = {{.name = "title", .hint = "What it is, in a few words"},
 		                                                      {.name = "body", .label = "Description", .type = "markdown"},
 		                                                      {.name = "priority", .type = "choice", .choices = {{"high", "High"}, {"normal", "Normal"}}, .start = "normal", .required = true},
+		                                                      {.name = "effort", .type = "slider", .start = "40", .range = {0, 100, 5}},
 		                                                      {.name = "assignee", .type = "pick", .choices = list_choices(project, "members", "person.name", "person")},
 		                                                      {.name = "urgent", .type = "boolean"},
 		                                                      {.name = "platforms", .type = "choices", .choices = {{"linux", "Linux"}, {"windows", "Windows"}}}}}));

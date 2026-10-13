@@ -1,0 +1,50 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// The front page, drawn as a landing design: a hero, what the gallery shows, and its
+// rooms. Then the menu every room's pages share, a header for their path.
+
+namespace gallery at / {
+
+	screen "Gallery" / landing grid {
+		hero "Every control uione draws, on every target." {
+			text "Each room of the gallery shows one family of controls: forms, tables,"
+				"boards, cards, words, timelines and grids. The same screens are drawn on"
+				"the web, on the desktop and in the terminal."
+			link #rooms "Open a room"
+			link namespace notes "Read the notes"
+		}
+		section "One definition, three apps" {
+			text "The screens are written once. Each target draws them with its own toolkit."
+		}
+		section "Nothing left out" {
+			text "The gallery uses every element and setting a screen can say, so a target"
+				"that can't draw one is plain to see."
+		}
+		section "Rooms" #rooms {
+			table rooms link /rooms/:room {
+				search name slug
+				name "Room"
+				slug "Address"
+			}
+			form room::create "Make a room" {
+				slug  name  summary  visibility
+			}
+		}
+	}
+
+	// The pages of a room, a menu down the side of each: one family of controls a page.
+	header /rooms/:room {
+		menu {
+			link /rooms/:room "Forms and fields"
+			link /rooms/:room/tables "Tables"
+			link /rooms/:room/boards "Boards"
+			link /rooms/:room/cards "Cards and finding"
+			link /rooms/:room/words "Words and links"
+			link /rooms/:room/timeline "Timelines"
+			link /rooms/:room/workflow "Grids and diagrams"
+			link /rooms/:room/themes "Themes"
+		}
+	}
+
+} // namespace gallery

@@ -1,0 +1,24 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Boards: a room's pieces as cards in a column for each stage, moved along the
+// room's steps, found, tinted by condition, picked by milestone, and dragged into
+// order within a column.
+
+namespace gallery at / {
+
+	screen "Boards" /rooms/:room/boards {
+		board room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece {
+			move piece::move along room_page.steps
+			search title labels
+			reorder position
+			tint by condition
+			track milestone over room_page.milestones {
+				due "Opens"
+			}
+			title
+			number  labels  assignees
+		}
+	}
+
+} // namespace gallery

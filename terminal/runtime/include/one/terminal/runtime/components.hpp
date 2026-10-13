@@ -79,6 +79,14 @@ namespace one::terminal::runtime {
 	terminal::view cards(page& p, cards_spec spec);
 	terminal::view filter_note(page& p);
 	terminal::view find(page& p, std::string label, std::vector<find_source> sources);
+	// Themes made at random from a palette, tried on the whole terminal, each written
+	// as a project says it, to copy.
+	terminal::view themes(page& p);
+	// Draws the terminal in a theme from a palette, its dark colors, by setting the
+	// terminal's own: the text and what's behind it, and red, green, yellow, blue and
+	// grey as danger, success, warning, the accent and quieter text. Nothing puts them
+	// back to the terminal's.
+	void draw_terminal_in(const std::optional<palette::theme>& tried);
 	terminal::view copy(page& p, state<view_state> from, std::string label, std::vector<copied_field> fields, std::vector<copied_list> lists,
 	                    std::map<std::string, std::vector<screens::option>> choices = {});
 	terminal::view grid(page& p, between_spec spec);

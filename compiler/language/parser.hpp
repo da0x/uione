@@ -451,8 +451,18 @@ namespace one::language {
             return format;
         }
 
+        // A number as written, with a minus before it when there is one.
+        std::string signed_number(const std::string& expected) {
+            std::string sign;
+            if (at(token_kind::minus)) {
+                advance();
+                sign = "-";
+            }
+            return sign + expect(token_kind::number, expected).text;
+        }
+
         static bool is_field_rule(std::string_view word) {
-            return word == "required" || word == "unique" || word == "key" || word == "after";
+            return word == "required" || word == "unique" || word == "key" || word == "after" || word == "from";
         }
 
         entity_declaration parse_entity() {
@@ -592,9 +602,23 @@ namespace one::language {
                 } else if (rule.text == "after") {
                     advance();
                     f.after = expect(token_kind::identifier, "the field it has to come after").text;
+                } else if (rule.text == "from") {
+                    // from 0 to 100  by 5: what a number may be, and the steps between.
+                    advance();
+                    field::number_range range;
+                    range.where = rule.where;
+                    range.from = signed_number("the least it may be, like from 0 to 100");
+                    if (!at_word("to")) fail(peek().where, "expected 'to' and the most it may be, like from 0 to 100");
+                    advance();
+                    range.to = signed_number("the most it may be, like from 0 to 100");
+                    if (at_word("by")) {
+                        advance();
+                        range.by = expect(token_kind::number, "the step between its values, like by 5").text;
+                    }
+                    f.range = std::move(range);
                 } else {
                     fail(rule.where, "'" + rule.text + "' isn't a field rule; expected required, "
-                                     "unique, key or after");
+                                     "unique, key, after or from");
                 }
             }
             // number  serial  key  "#": what screens call it.
@@ -1715,6 +1739,11 @@ namespace one::language {
                 expect(token_kind::right_brace, "'}'");
                 end_line();
                 return {where, std::move(find)};
+            }
+            if (at_word("themes") && peek(1).kind != token_kind::scope) {
+                advance();
+                end_line();
+                return {where, themes_item{}};
             }
             if (at_word("copy") && peek(1).kind != token_kind::scope) {
                 advance();

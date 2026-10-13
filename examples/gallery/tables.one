@@ -1,0 +1,40 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Tables: a room's pieces in tabs by stage, under its milestones as a track, found,
+// paged, dragged into order and tinted by condition; split by size and sorted; and
+// its milestones opening soon, left out while there are none.
+
+namespace gallery at / {
+
+	screen "Tables" /rooms/:room/tables {
+		table room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece {
+			track milestone over room_page.milestones {
+				due "Opens"
+			}
+			search title labels stage.title
+			reorder position
+			page 25
+			tint by condition
+			number
+			title
+			labels
+			assignees
+		}
+		table room_page.pieces by size link /rooms/:room/pieces/:piece {
+			sort by number descending
+			color teal
+			number
+			title
+			size
+			framed "Framed"
+		}
+		table room_page.milestones link /rooms/:room/milestones/:milestone {
+			only due <= 2 weeks from now
+			hide when empty
+			title "Opening soon"
+			due "Opens"
+		}
+	}
+
+} // namespace gallery

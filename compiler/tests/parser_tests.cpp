@@ -275,7 +275,7 @@ TEST_CASE("errors say what was expected and where") {
     REQUIRE(out.size() == 1);
     CHECK(out[0].where.line == 2);
     CHECK(out[0].where.column == 13);
-    CHECK(out[0].message == "'requird' isn't a field rule; expected required, unique, key or after");
+    CHECK(out[0].message == "'requird' isn't a field rule; expected required, unique, key, after or from");
 }
 
 TEST_CASE("a word that doesn't start a declaration") {

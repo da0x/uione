@@ -104,7 +104,7 @@ func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 			return err
 		}
 	}
-	madeFrom := s.start(v, c.me, username, c.now)
+	madeFrom := s.start(v, c.me, username, c.now, nil)
 	if err := c.derive(s, v); err != nil {
 		return err
 	}
@@ -873,7 +873,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := s.decode(c.input, v); err != nil {
 				return err
 			}
-			madeFrom := s.start(v, c.me, username, now)
+			madeFrom := s.start(v, c.me, username, now, c.input)
 			if err := body.derive(s, v); err != nil {
 				return err
 			}

@@ -1,0 +1,14 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Themes: one made at random from a palette draws every page of the app at once,
+// so each control can be seen in it, and is written out to copy into a project.
+
+namespace gallery at / {
+
+	screen "Themes" /rooms/:room/themes {
+		subtitle "Pick a scheme and make a theme. Danger, warning and success keep their meaning in every one."
+		themes
+	}
+
+} // namespace gallery

@@ -1003,6 +1003,10 @@ namespace one::generators {
                     this->details(out, parts, ns, *details);
                 } else if (auto* copy = std::get_if<language::copy_item>(&item.node)) {
                     this->copy(out, parts, ns, *copy, screen);
+                } else if (std::holds_alternative<language::themes_item>(item.node)) {
+                    // Themes from a palette, tried on the whole app.
+                    parts.components.insert("Themes");
+                    out.line("<Themes />");
                 } else if (auto* thread = std::get_if<language::thread_item>(&item.node)) {
                     parts.components.insert("Thread");
                     out.line("<Thread view={" + view_variable(parts, full_view(ns, thread->view.text())) + "} list=" + web_detail::js_string(thread->list) + " />");
@@ -1893,6 +1897,9 @@ namespace one::generators {
                     choices = ", choices: " + choice_options(*f.options);
                     if (f.start) choices += ", start: " + web_detail::js_string(*f.start);
                     if (f.required) choices += ", required: true";
+                } else if (f.range) {
+                    choices = ", range: [" + f.range->from + ", " + f.range->to + ", " + f.range->by + "]";
+                    if (f.start) choices += ", start: " + web_detail::js_string(*f.start);
                 }
                 std::string spec = f.type == "text" && !f.hint && !f.label
                     ? web_detail::js_string(f.name)

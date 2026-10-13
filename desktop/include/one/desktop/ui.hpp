@@ -245,6 +245,20 @@ namespace one::desktop {
 		std::string label;
 	};
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder = "Choose…");
+
+	// One of a few choices, side by side, each with a round button before what it
+	// says: picked with a click, or with the arrows, Space or Enter once it has the
+	// keyboard, which it takes as one; on_pick is told the one picked.
+	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick = {});
+
+	// A number from one to another in its steps: a knob along a bar, with the number
+	// after it. Dragged or clicked along, moved a step with the arrows, a tenth of the
+	// way with Page Up and Page Down, and to either end with Home and End. It's kept
+	// as it's written, like a field's text; empty is the least.
+	struct number_range {
+		double from = 0, to = 100, by = 1;
+	};
+	view slider(state<std::string> value, number_range range);
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs
 	view divider();

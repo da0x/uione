@@ -185,9 +185,11 @@ namespace one::generators::screens {
     struct form_field {
         std::string name;
         std::optional<std::string> label, hint;
-        // text, email, date, number, markdown, boolean, list, file, files, choice,
-        // pick (one of a listing) or choices (several, from a listing or `options`).
+        // text, email, date, number, slider (a number from one to another), markdown,
+        // boolean, list, file, files, choice, pick (one of a listing) or choices
+        // (several, from a listing or `options`).
         std::string type = "text";
+        std::optional<language::field::number_range> range;  // a slider's, as written
         // Its choices: those it's given, each a value and how it's shown, or a listing's.
         std::optional<std::vector<std::pair<std::string, std::string>>> options;
         std::optional<listing> from;
@@ -787,6 +789,14 @@ namespace one::generators::screens {
                     if (declared.name == f.name && declared.type && declared.type->parts.size() == 1) {
                         const auto& t = declared.type->parts[0];
                         if (t == "email" || t == "date" || t == "number" || t == "markdown" || t == "boolean") field.type = t;
+                        // A number from one to another is slid along, starting where it starts.
+                        if (t == "number" && declared.range && !declared.list) {
+                            field.type = "slider";
+                            field.range = declared.range;
+                            field.start = declared.range->from;
+                            auto* n = declared.initial ? std::get_if<language::literal_expression>(&declared.initial->node) : nullptr;
+                            if (n && n->type == language::literal_expression::kind::number) field.start = n->value;
+                        }
                         if (declared.list) field.type = "list";
                         // A file is chosen and uploaded, or several.
                         if (t == "file") field.type = declared.list ? "files" : "file";

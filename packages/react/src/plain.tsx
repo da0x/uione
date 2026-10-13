@@ -772,4 +772,41 @@ export const plain: ComponentSet = {
         <span style={hidden}>not available right now</span>
       </span>
     ),
+
+  Themes: ({ scheme, schemes, onScheme, seed, colors, written, copied, onNew, onReset, onCopy }) => (
+    <section>
+      <label>
+        Scheme{" "}
+        <select value={scheme} onChange={(event) => onScheme(event.target.value)}>
+          {schemes.map(([value, shown]) => (
+            <option key={value} value={value}>
+              {shown}
+            </option>
+          ))}
+        </select>
+      </label>{" "}
+      <button type="button" onClick={onNew}>
+        New theme
+      </button>
+      {seed !== undefined && (
+        <>
+          {" "}
+          <button type="button" onClick={onReset}>
+            Back to the app's theme
+          </button>
+          <ul>
+            {colors.map(([role, light, dark]) => (
+              <li key={role}>
+                {role} {light} {dark}
+              </li>
+            ))}
+          </ul>
+          <pre>{written}</pre>
+          <button type="button" onClick={onCopy}>
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </>
+      )}
+    </section>
+  ),
 };

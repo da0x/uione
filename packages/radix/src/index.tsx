@@ -1569,6 +1569,25 @@ export const radix: ComponentSet = {
                   );
                 })}
               </div>
+            ) : field.type === "slider" && field.range ? (
+              // A number from one to another, slid along, with where it is after it.
+              <div className="flex max-w-sm items-center gap-3">
+                <input
+                  id={`${id}-${field.name}`}
+                  name={field.name}
+                  type="range"
+                  min={field.range[0]}
+                  max={field.range[1]}
+                  step={field.range[2]}
+                  value={field.value === "" ? field.range[0] : field.value}
+                  onChange={(event) => field.onChange(event.target.value)}
+                  aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                  className="h-10 min-w-0 flex-1 cursor-pointer rounded-control accent-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden"
+                />
+                <output htmlFor={`${id}-${field.name}`} className="min-w-[3ch] text-right text-sm font-medium tabular-nums text-ink">
+                  {field.value === "" ? field.range[0] : field.value}
+                </output>
+              </div>
             ) : field.choices ? (
               <select
                 id={`${id}-${field.name}`}
@@ -1871,6 +1890,60 @@ export const radix: ComponentSet = {
       referrerPolicy="no-referrer"
       className="one-person inline-block size-6 rounded-full border border-line object-cover"
     />
+  ),
+
+  // The scheme as a row of choices, a new theme beside it, then each role's colors,
+  // light over dark, and the theme as a project says it, to copy.
+  Themes: ({ scheme, schemes, onScheme, seed, colors, written, copied, onNew, onReset, onCopy }) => (
+    <section className="flex flex-col gap-5" aria-label="Themes">
+      <div className="flex flex-wrap items-center gap-3">
+        <div role="radiogroup" aria-label="Scheme" className="inline-flex flex-wrap rounded-control border border-line bg-sunken p-0.5">
+          {schemes.map(([value, shown]) => (
+            <label
+              key={value}
+              className={`cursor-pointer rounded-control px-3 py-1.5 text-sm font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent ${
+                value === scheme ? "bg-surface text-ink shadow-panel" : "text-muted hover:text-ink"
+              }`}
+            >
+              <input type="radio" name="uione-theme-scheme" value={value} checked={value === scheme} onChange={() => onScheme(value)} className="sr-only" />
+              {shown}
+            </label>
+          ))}
+        </div>
+        <button type="button" onClick={onNew} className={`${pressable} ${button.primary}`}>
+          New theme
+        </button>
+        {seed !== undefined && (
+          <button type="button" onClick={onReset} className={`${pressable} ${button.secondary}`}>
+            Back to the app's theme
+          </button>
+        )}
+        {seed !== undefined && <span className="font-mono text-sm text-muted tabular-nums">Seed {seed}</span>}
+      </div>
+      {seed !== undefined && (
+        <>
+          <ul className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+            {colors.map(([role, light, dark]) => (
+              <li key={role} className="flex flex-col gap-1.5">
+                <span className="flex h-14 flex-col overflow-hidden rounded-control border border-line" title={`${role}: ${light}, dark ${dark}`}>
+                  <span className="flex-1" style={{ background: light }} />
+                  <span className="flex-1" style={{ background: dark }} />
+                </span>
+                <span className="text-xs text-muted">{role}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="relative rounded-box border border-line bg-sunken">
+            <pre className="overflow-x-auto p-4 pr-24 font-mono text-sm leading-relaxed text-ink" tabIndex={0}>
+              {written}
+            </pre>
+            <button type="button" onClick={onCopy} className={`absolute top-3 right-3 ${pressable} ${button.secondary}`}>
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   ),
 
   Live: ({ status, value }) =>

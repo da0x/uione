@@ -49,7 +49,7 @@ marker() {
 		# CSS and the EBNF grammar have only block comments: the header sits inside
 		# /* ... */, each line starting with " *".
 		*.css|*.ebnf) echo ' *' ;;
-		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile) echo '#' ;;
+		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile|gaps) echo '#' ;;
 		# What a terminal shows, as a test holds it, byte for byte, like a golden image.
 		*.txt) case "$1" in */tests/golden/*) echo exempt ;; esac ;;
 		*.*) ;;

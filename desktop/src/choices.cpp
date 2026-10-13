@@ -1,9 +1,13 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Choosing: a box ticked or not, and one of several choices picked from a list that
-// opens under it.
+// Choosing: a box ticked or not, one of several choices picked from a list that
+// opens under it, one of a few with round buttons, and a number along a slider.
 
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <format>
 #include <set>
 
 #include "one/desktop/ui.hpp"
@@ -67,6 +71,201 @@ namespace one::desktop {
 			double scale_ = 0;
 		};
 
+		// One of a few choices, side by side: one place for the keyboard, the arrows
+		// moving what's chosen.
+		class radio_element : public element {
+		public:
+			radio_element(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick)
+			    : chosen_(std::move(chosen)), options_(std::move(options)), on_pick_(std::move(on_pick)) { padding = edges(4, 2); }
+
+			bool focusable() const override { return true; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+
+			extent measure_content(float) override {
+				float width = 0, height = dot;
+				for (std::size_t i = 0; i < options_.size(); ++i) {
+					const auto& laid = laid_out(i);
+					width += (i ? gap : 0) + dot + 8 + laid.width();
+					height = std::max(height, laid.height());
+				}
+				return {width, height};
+			}
+			void paint_content(canvas& c) override {
+				const theme& t = current_theme();
+				rect area = inner();
+				float x = area.x;
+				std::string now = chosen_.peek();
+				starts_.clear();
+				for (std::size_t i = 0; i < options_.size(); ++i) {
+					if (i) x += gap;
+					starts_.push_back(x);
+					bool picked = options_[i].value == now;
+					rect circle{x, area.y + (area.height - dot) / 2, dot, dot};
+					c.box(circle, {.fill = t.surface, .border = picked ? t.accent : (hovered ? t.muted : t.line), .border_width = 1.5f, .radius = dot / 2});
+					if (picked) c.box(circle.inset(4), {.fill = t.accent, .radius = dot / 2 - 4});
+					if (focused && !focused_by_default && (picked || (now.empty() && i == 0))) {
+						c.box(circle.inset(-3), {.border = t.accent, .border_width = 1.5f, .radius = dot / 2 + 3});
+					}
+					const auto& laid = laid_out(i);
+					c.text(laid, {x + dot + 8, area.y + (area.height - laid.height()) / 2});
+					x += dot + 8 + laid.width();
+				}
+			}
+			bool handle_key(const key_event& e) override {
+				if (options_.empty()) return false;
+				int at = picked_at();
+				if (e.is(keys::right) || e.is(keys::down)) {
+					pick(options_[at < 0 ? 0 : (at + 1) % options_.size()].value);
+				} else if (e.is(keys::left) || e.is(keys::up)) {
+					pick(options_[at <= 0 ? options_.size() - 1 : at - 1].value);
+				} else if ((e.is(keys::space) || e.is(keys::enter) || e.is(keys::keypad_enter)) && at < 0) {
+					pick(options_[0].value);
+				} else {
+					return false;
+				}
+				return true;
+			}
+			bool click(point p) override {
+				for (std::size_t i = starts_.size(); i-- > 0;) {
+					if (p.x >= starts_[i]) {
+						pick(options_[i].value);
+						return true;
+					}
+				}
+				return false;
+			}
+
+		private:
+			static constexpr float dot = 16, gap = 20;
+			int picked_at() const {
+				std::string now = chosen_.peek();
+				for (std::size_t i = 0; i < options_.size(); ++i) {
+					if (options_[i].value == now) return static_cast<int>(i);
+				}
+				return -1;
+			}
+			const text_layout& laid_out(std::size_t i) {
+				double scale = detail::layout_scale();
+				if (laid_.size() != options_.size() || scale != scale_) {
+					laid_.clear();
+					for (const auto& o : options_) laid_.push_back(lay_out({o.label, current_theme().body()}, 0, scale));
+					scale_ = scale;
+				}
+				return laid_[i];
+			}
+			void pick(const std::string& value) {
+				chosen_.set(value);
+				if (on_pick_) on_pick_(value);
+			}
+			state<std::string> chosen_;
+			std::vector<option> options_;
+			std::function<void(const std::string&)> on_pick_;
+			std::vector<text_layout> laid_;
+			std::vector<float> starts_;  // where each choice was drawn, for a click
+			double scale_ = 0;
+		};
+
+		// A number as it's written: whole when it is, and otherwise to as many places as its step has.
+		std::string written(double n, double by) {
+			int places = 0;
+			while (places < 6 && std::abs(by * std::pow(10, places) - std::round(by * std::pow(10, places))) > 1e-9) ++places;
+			std::string out = std::format("{:.{}f}", n, places);
+			return out == "-0" ? "0" : out;
+		}
+
+		class slider_element : public element {
+		public:
+			slider_element(state<std::string> value, number_range range) : value_(std::move(value)), range_(range) { padding = edges(4, 2); }
+
+			bool focusable() const override { return true; }
+			one::desktop::cursor cursor() const override { return cursor::pointer; }
+
+			extent measure_content(float width) override {
+				const auto& laid = number_laid();
+				return {std::max(160.f, std::min(width, 320.f)), std::max(knob, laid.height())};
+			}
+			void paint_content(canvas& c) override {
+				const theme& t = current_theme();
+				rect area = inner();
+				const auto& laid = number_laid();
+				rect track = track_of(area);
+				float along = range_.to > range_.from ? static_cast<float>((now() - range_.from) / (range_.to - range_.from)) : 0;
+				float x = track.x + along * track.width;
+				c.box(track, {.fill = t.sunken, .radius = 2});
+				c.box({track.x, track.y, x - track.x, track.height}, {.fill = t.accent, .radius = 2});
+				rect handle{x - knob / 2, area.y + (area.height - knob) / 2, knob, knob};
+				c.box(handle, {.fill = t.surface, .border = t.accent, .border_width = 2, .radius = knob / 2});
+				if (focused && !focused_by_default) c.box(handle.inset(-3), {.border = t.accent, .border_width = 1.5f, .radius = knob / 2 + 3});
+				c.text(laid, {area.right() - laid.width(), area.y + (area.height - laid.height()) / 2});
+			}
+			bool handle_key(const key_event& e) override {
+				double steps = std::round((range_.to - range_.from) / range_.by), tenth = std::max(1.0, std::round(steps / 10));
+				if (e.is(keys::right) || e.is(keys::up)) set(now() + range_.by);
+				else if (e.is(keys::left) || e.is(keys::down)) set(now() - range_.by);
+				else if (e.is(keys::page_up)) set(now() + tenth * range_.by);
+				else if (e.is(keys::page_down)) set(now() - tenth * range_.by);
+				else if (e.is(keys::home)) set(range_.from);
+				else if (e.is(keys::end)) set(range_.to);
+				else return false;
+				return true;
+			}
+			bool press(point at, int) override {
+				drag(at);
+				return true;
+			}
+			void drag(point at) override {
+				rect track = track_of(inner());
+				if (track.width <= 0) return;
+				float along = std::clamp((at.x - track.x) / track.width, 0.f, 1.f);
+				set(range_.from + along * (range_.to - range_.from));
+			}
+
+		private:
+			static constexpr float knob = 18;
+			// The bar the knob goes along, in what it was given, the number after it.
+			rect track_of(const rect& area) { return {area.x + knob / 2, area.y + (area.height - 4) / 2, std::max(0.f, area.width - widest() - 12 - knob), 4}; }
+			// What it holds, or its least while that's not a number in its range.
+			double now() const {
+				const std::string& text = value_.peek();
+				char* end = nullptr;
+				double n = std::strtod(text.c_str(), &end);
+				if (text.empty() || end == text.c_str()) return range_.from;
+				return std::clamp(n, range_.from, range_.to);
+			}
+			// To the nearest step, within the range.
+			void set(double n) {
+				double steps = std::round((std::clamp(n, range_.from, range_.to) - range_.from) / range_.by);
+				std::string text = written(std::min(range_.to, range_.from + steps * range_.by), range_.by);
+				if (text != value_.peek()) value_.set(text);
+			}
+			// As wide as the widest number it shows, so the bar doesn't move as it changes.
+			float widest() {
+				double scale = detail::layout_scale();
+				if (widest_ <= 0 || scale != widest_scale_) {
+					widest_ = 0;
+					for (double end : {range_.from, range_.to}) widest_ = std::max(widest_, lay_out({written(end, range_.by), current_theme().body()}, 0, scale).width());
+					widest_scale_ = scale;
+				}
+				return widest_;
+			}
+			const text_layout& number_laid() {
+				double scale = detail::layout_scale();
+				std::string shown = written(now(), range_.by);
+				if (!laid_ || scale != scale_ || shown != shown_) {
+					laid_ = lay_out({shown, current_theme().body()}, 0, scale);
+					scale_ = scale;
+					shown_ = shown;
+				}
+				return *laid_;
+			}
+			state<std::string> value_;
+			number_range range_;
+			std::optional<text_layout> laid_;
+			std::string shown_;
+			double scale_ = 0, widest_scale_ = 0;
+			float widest_ = 0;
+		};
+
 		// What a picker shows while it's closed: the choice, in a box like a field's.
 		class chosen_element : public element {
 		public:
@@ -125,6 +324,12 @@ namespace one::desktop {
 	}  // namespace
 
 	view toggle(state<bool> on, std::string label) { return view(std::make_unique<toggle_element>(std::move(on), std::move(label))); }
+
+	view radio_buttons(state<std::string> chosen, std::vector<option> options, std::function<void(const std::string&)> on_pick) {
+		return view(std::make_unique<radio_element>(std::move(chosen), std::move(options), std::move(on_pick)));
+	}
+
+	view slider(state<std::string> value, number_range range) { return view(std::make_unique<slider_element>(std::move(value), range)); }
 
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder) {
 		std::string now = chosen.peek();

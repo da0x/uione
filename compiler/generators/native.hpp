@@ -95,6 +95,7 @@ namespace one::generators {
                 out.push_back(file("src/screens/" + stem + ".cpp", screen_file(f, found, stem)));
             }
             for (const auto& pages : pages_) out.push_back(file("src/pages/" + pages.name + ".hpp", pages_file(pages)));
+            for (auto& component : component_files()) out.push_back(std::move(component));
             out.push_back(file("src/site.cpp", site_file()));
             out.push_back(file("src/app.hpp", app_hpp(stems)));
             out.push_back(file("src/main.cpp", main_cpp(stems)));
@@ -119,6 +120,9 @@ namespace one::generators {
             std::vector<std::pair<std::string, std::string>> views;  // variable, full view name
             std::set<std::string> params;                           // entities, like project
         };
+        // The components the screens draw, each with its file: components/name.cpp beside
+        // the .one file drawing it.
+        std::map<std::string, std::string> components_;
         std::string screen_path_, route_, under_, title_;
         int item_line_ = 0;
 
@@ -311,6 +315,7 @@ namespace one::generators {
                 else if (f.options) one += ", .choices = " + options_of(*f.options);
                 if (f.start) one += ", .start = " + str(*f.start);
                 if (f.required) one += ", .required = true";
+                if (f.range) one += ", .range = {" + f.range->from + ", " + f.range->to + ", " + f.range->by + "}";
                 out += (out.empty() ? "" : ", ") + one + "}";
             }
             return "{" + out + "}";
@@ -1004,6 +1009,12 @@ namespace one::generators {
                     code = details(parts, ns, *d);
                 } else if (auto* c = std::get_if<language::copy_item>(&item.node)) {
                     code = copy(parts, ns, *c, screen);
+                } else if (std::holds_alternative<language::themes_item>(item.node)) {
+                    code = "themes(p)";
+                } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
+                    // A hand-written function of the page, giving a view.
+                    components_.emplace(component->name, language::component_file(screen_path_, component->name, ".cpp"));
+                    code = native_detail::identifier(component->name) + "(p)";
                 } else if (auto* t = std::get_if<language::thread_item>(&item.node)) {
                     code = "thread(p, {.view = " + view_variable(parts, screens::full_view(ns, t->view.text())) + ", .list = " + str(t->list) + ", .body = markdown_view})";
                 } else if (auto* f = std::get_if<language::find_item>(&item.node)) {
@@ -1331,6 +1342,11 @@ namespace one::generators {
             out.line("// The badges beside the app's name, and its footer.");
             out.line("void site_parts(site& s);");
             for (const auto& stem : stems) out.line("void " + native_detail::identifier(stem + "_screens") + "(site& s);");
+            if (!components_.empty()) {
+                out.line();
+                out.line("// The components the screens draw, written by hand in components/.");
+                for (const auto& [name, path] : components_) out.line("view " + native_detail::identifier(name) + "(page& p);");
+            }
             out.line();
             out.close("}  // namespace app");
             return out;
@@ -1448,6 +1464,39 @@ namespace one::generators {
             return out;
         }
 
+        // The components' files, copied into the app as they are: the project's own code.
+        // What they share comes along too: every other .cpp and .hpp in their folder and
+        // the folders inside it.
+        std::vector<output_file> component_files() {
+            std::vector<output_file> out;
+            std::set<std::filesystem::path> folders;
+            for (const auto& [name, path] : components_) folders.insert(std::filesystem::path(path).parent_path());
+            for (const auto& folder : folders) {
+                std::error_code error;
+                std::vector<std::filesystem::path> found;
+                for (auto it = std::filesystem::recursive_directory_iterator(folder, error); !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error)) {
+                    if (it->is_directory() && (it->path().filename() == "node_modules" || it->path().filename().string().starts_with("."))) {
+                        it.disable_recursion_pending();
+                        continue;
+                    }
+                    auto extension = it->path().extension().string();
+                    if (it->is_regular_file() && (extension == ".cpp" || extension == ".hpp")) found.push_back(it->path());
+                }
+                std::sort(found.begin(), found.end());
+                for (const auto& path : found) {
+                    auto content = platform::read_file(path.string());
+                    if (!content) continue;
+                    std::string relative = std::filesystem::relative(path, folder).generic_string();
+                    if (path.extension() == ".cpp") component_sources_.push_back(relative);
+                    output_file f{"src/components/" + relative, *content, false, {}};
+                    f.sources.assign(static_cast<std::size_t>(std::count(content->begin(), content->end(), '\n')), code::source{});
+                    out.push_back(std::move(f));
+                }
+            }
+            return out;
+        }
+        std::vector<std::string> component_sources_;  // each .cpp copied, inside src/components
+
         stream cmake_lists(const std::vector<std::string>& stems) const {
             stream out("\t");
             auto from = out.from(project_path_, project_ ? project_->where.line : 0);
@@ -1474,6 +1523,7 @@ namespace one::generators {
             std::string sources = "src/main.cpp";
             sources += " src/site.cpp";
             for (const auto& stem : stems) sources += " src/screens/" + stem + ".cpp";
+            for (const auto& component : component_sources_) sources += " src/components/" + component;
             out.line("add_executable(" + name + " " + sources + ")");
             out.line("target_link_libraries(" + name + " PRIVATE one_" + target_ + "_runtime)");
             out.line("target_compile_options(" + name + " PRIVATE -Wno-free-nonheap-object)");

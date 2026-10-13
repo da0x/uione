@@ -39,7 +39,7 @@ add_library(md4c STATIC
 target_include_directories(md4c SYSTEM PUBLIC ${md4c_SOURCE_DIR}/src)
 
 add_executable(one main.cpp)
-target_include_directories(one PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(one PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
 target_link_libraries(one PRIVATE one_warnings md4c)
 
 # For the browser: the same compiler, called from JavaScript through wasm.cpp, with
@@ -47,7 +47,7 @@ target_link_libraries(one PRIVATE one_warnings md4c)
 # tools/wasm/build.
 if(EMSCRIPTEN)
     add_executable(one_wasm wasm.cpp)
-    target_include_directories(one_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(one_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
     target_link_libraries(one_wasm PRIVATE one_warnings md4c)
     set_target_properties(one_wasm PROPERTIES OUTPUT_NAME one SUFFIX .mjs)
     # The parser stops at a mistake by throwing, so exceptions have to work, and
@@ -94,7 +94,7 @@ if(ONE_TESTS)
         tests/define_tests.cpp
         tests/targets_tests.cpp
         tests/screens_tests.cpp)
-    target_include_directories(one_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(one_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
     target_include_directories(one_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR})
     target_compile_definitions(one_tests PRIVATE UIONE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
     target_link_libraries(one_tests PRIVATE one_warnings md4c)

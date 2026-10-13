@@ -48,7 +48,7 @@ jobs:
           node tools/wasm/test.mjs
 
       - name: Every project in the repository checks without errors
-        run: compiler/build/one check examples/library examples/tasks examples/tracker site
+        run: compiler/build/one check examples/gallery examples/library examples/tasks examples/tracker site
 
       - uses: actions/setup-go@v7
         with:
@@ -82,7 +82,8 @@ jobs:
           compiler/build/one build examples/tasks
           compiler/build/one build examples/library
           compiler/build/one build examples/tracker
-          for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api; do
+          compiler/build/one build examples/gallery
+          for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api examples/gallery/build/api; do
             (cd "$api" && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
           done
 

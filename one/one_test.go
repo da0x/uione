@@ -67,6 +67,13 @@ type Note struct {
 	Code string `firestore:"code" one:"unique"`
 }
 
+// A number from one to another, in steps, as a form's slider sets it.
+type Setting struct {
+	one.Record
+	Volume float64 `firestore:"volume" one:"range=0:100:5,default=0"`
+	Rating float64 `firestore:"rating" one:"range=1:5:1,default=1"`
+}
+
 type Task struct {
 	one.Record
 	Title string `firestore:"title" one:"required"`
@@ -100,6 +107,9 @@ var modules = []one.Item{
 	one.Module("notes",
 		one.Command[Note]("note::create"),
 		one.Role("writer", "note:create"),
+	),
+	one.Module("sound",
+		one.Command[Setting]("setting::create").Allow(one.SignedIn),
 	),
 	one.Module("tasks",
 		one.Command[Task]("task::create").Allow(one.SignedIn),
@@ -255,6 +265,19 @@ func TestMistakesAreExplainedTheWayTheFormShowsThem(t *testing.T) {
 	h.expect("waitlist/signup/create", "", map[string]any{"email": "not an address"}, 400, "Email isn't an email address")
 	h.expect("waitlist/signup/create", "", map[string]any{"email": 5}, 400, "Email should be text")
 	h.expect("waitlist/nothing/create", "", map[string]any{}, 404, "there's no command waitlist::nothing::create")
+}
+
+func TestANumberWithARangeIsWithinItInItsSteps(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("alice@example.com")
+	h.expect("sound/setting/create", token, map[string]any{"volume": 120}, 400, "Volume is from 0 to 100")
+	h.expect("sound/setting/create", token, map[string]any{"volume": 7}, 400, "Volume goes in steps of 5 from 0")
+	h.expect("sound/setting/create", token, map[string]any{"rating": 0}, 400, "Rating is from 1 to 5")
+	// A form sends what its slider is at, as it's written; what isn't sent starts at its least.
+	id := h.mustRun("sound/setting/create", token, map[string]any{"volume": "45"})
+	if stored := h.stored("sound_setting", id); stored["volume"] != 45.0 || stored["rating"] != 1.0 {
+		t.Fatalf("want volume 45 and rating 1, got %v", stored)
+	}
 }
 
 func TestSigningInIsNeededWhereItShouldBe(t *testing.T) {

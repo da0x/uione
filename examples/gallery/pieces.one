@@ -1,0 +1,280 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// What the gallery holds: rooms, the pieces hung in them, the stages a piece moves
+// through and the steps between them, the milestones a room opens at, and comments
+// on each piece. A piece keeps every change, which its timeline shows. Each room has
+// its own curators and restorers.
+
+namespace gallery at / {
+
+	entity room {
+		readers member
+		public when visibility == visibility::public
+		slug        text  required  unique  key
+		name        text  required
+		summary     markdown
+		visibility  enum  public | private = visibility::public
+		// The stage a new piece starts in.
+		start       stage
+	}
+
+	// A stage of a room's pieces, in its place among the others.
+	entity stage {
+		room       room  required  key
+		name       text  required  key = slug(title)
+		title      text  required
+		position   number
+		worked_by  list of role
+	}
+
+	// From one stage to another, for the roles it names.
+	entity step {
+		room   room   required  key
+		from   stage  required  key
+		to     stage  required  key
+		roles  list of role
+	}
+
+	// When a room opens a show, and what it needs hung by then.
+	entity milestone {
+		room         room      required  key
+		name         text      required  key = slug(title)
+		title        text      required
+		due          date
+		description  markdown
+	}
+
+	// How a piece has kept, the worst first: a piece is tinted by it, red for damaged.
+	enum condition {
+		damaged  "Damaged"
+		worn     "Worn"
+		fair     "Fair"
+		good     "Good"
+		mint     "Mint"
+	}
+
+	// A piece, with a field of every kind a form asks for.
+	entity piece history {
+		room         room          required  key
+		number       serial        per room  key  "#"
+		title        text          required
+		description  markdown
+		contact      email         "Lent by"
+		made         date
+		width        number        "Width in centimetres"
+		light        number        from 0 to 100  by 5  "Light"
+		framed       boolean       = false
+		labels       list of text
+		condition    condition     required = condition::good
+		size         enum          small | medium | large = size::medium
+		stage        stage
+		milestone    milestone
+		assignees    list of user  "Looked after by"
+		photo        file
+		sketches     list of file
+		position     number
+	}
+
+	entity comment history of piece {
+		piece   piece     required
+		body    markdown  required
+		author  user      = me
+	}
+
+	// When a person last looked at what's new, so what came after is marked new.
+	entity reader {
+		person   user  key  = me
+		seen_at  date
+	}
+
+	define workflow piece by stage {
+		worked by worked_by
+		steps step
+		lease 30 minutes
+	}
+
+	// Runs the room: its pieces, its stages and who works in it.
+	define role curator "Curator" in room {
+		room::update
+		member::create
+		member::delete
+		role::create
+		role::update
+		stage::create
+		stage::update
+		step::create
+		step::update
+		step::delete
+		milestone::create
+		milestone::update
+		piece::create
+		piece::update
+		piece::delete
+		piece::claim
+		piece::renew
+		piece::release
+		piece::move
+		comment::create
+	}
+
+	// Mends what's damaged, and moves it on when it's done.
+	define role restorer "Restorer" in room {
+		piece::update
+		piece::claim
+		piece::renew
+		piece::release
+		piece::move
+		comment::create
+	}
+
+	// Whoever makes a room curates it, and it starts with three stages: a piece
+	// arrives, is hung, and is put away, and goes back any of those ways.
+	command room::create {
+		by anyone signed in
+		dispatch member::create {
+			room = id  person = me  role = role::curator
+		}
+		dispatch stage::create {
+			room = id  name = "arrived"  title = "Arrived"  position = 1
+		}
+		dispatch stage::create {
+			room = id  name = "hung"  title = "Hung"  position = 2
+		}
+		dispatch stage::create {
+			room = id  name = "stored"  title = "Stored"  position = 3
+		}
+		dispatch step::create { room = id  from = stage::arrived  to = stage::hung  roles = [role::curator] }
+		dispatch step::create { room = id  from = stage::hung  to = stage::stored  roles = [role::curator] }
+		dispatch step::create { room = id  from = stage::stored  to = stage::hung  roles = [role::curator, role::restorer] }
+		start = stage::arrived
+	}
+
+	command room::update
+	command member::create
+
+	command member::delete {
+		require person != me  "you can't remove yourself from a room"
+	}
+
+	command role::create
+	command role::update
+
+	command stage::create {
+		if position == none {
+			position = 1000
+		}
+	}
+
+	command stage::update
+	command step::create
+	command step::update
+	command step::delete
+	command milestone::create
+	command milestone::update
+
+	// A new piece starts in its room's first stage, and last in its order.
+	command piece::create {
+		stage = room.start
+		position = number
+	}
+
+	command piece::update
+
+	command piece::delete {
+		each comment where piece == id {
+			dispatch comment::delete
+		}
+	}
+
+	command comment::create
+	command comment::delete
+
+	command reader::create {
+		by anyone signed in
+		require person == me  "you can only say when you looked yourself"
+		seen_at = now
+	}
+
+	// No person deletes a comment by itself; it goes with its piece.
+	define service gallery "Gallery" {
+		comment::delete
+	}
+
+	// Every public room, newest first.
+	view rooms public {
+		each room where visibility == visibility::public {
+			order by created_at descending
+			slug  name
+		}
+	}
+
+	view room_page per room {
+		name  summary  visibility
+		pieces = each piece in room {
+			order by position
+			number  title  labels  stage  stage.title  condition  size  made  light  framed
+			milestone  position  updated_at  assignees  assignees.name  assignees.picture
+		}
+		milestones = each milestone in room {
+			order by due
+			name  title  due
+		}
+		stages = each stage in room {
+			order by position
+			name  title  position  worked_by  worked_by.title
+		}
+		steps = each step in room {
+			order by from.position  to.position
+			from  to  from.title  from.position  to.title  to.position  roles  roles.title
+		}
+		members = each member in room {
+			order by role
+			person  person.picture  person.name  role.title
+		}
+		roles = each role in room {
+			order by name
+			name  title  may
+		}
+		timeline = each change in piece in room {
+			order by created_at descending
+			limit 50
+			piece  piece.number  piece.title  field  before  after  action  created_by.name  created_at
+		}
+	}
+
+	view piece_page per piece {
+		number  title  description  contact  made  width  light  framed  labels  condition  size
+		stage  stage.title  milestone  milestone.title  assignees  assignees.name  photo  sketches
+		held_by  held_by.name  held_until
+		steps = each step where room == piece.room {
+			from  to  from.title  to.title  roles
+		}
+		comments = each comment in piece {
+			order by created_at
+			author.picture  author.name  body  created_at
+		}
+		history = each change in piece {
+			order by created_at
+			field  before  after  action  created_by.name  created_at
+		}
+	}
+
+	view milestone_page per milestone {
+		title  due  description
+	}
+
+	// What's new to a person: each change to the pieces they look after, newest first,
+	// leaving out their own.
+	view news per user {
+		changes = each change in piece where assignees has me && created_by != me {
+			order by created_at descending
+			limit 30
+			room  piece  piece.number  piece.title
+			field  before  after  action  created_by.name  created_at
+		}
+		seen = first(reader where person == me).seen_at
+		unread = count(changes where created_at > seen)
+	}
+
+} // namespace gallery

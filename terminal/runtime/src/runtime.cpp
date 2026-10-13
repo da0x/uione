@@ -9,6 +9,8 @@
 
 #include <format>
 
+#include "one/terminal/runtime/components.hpp"
+
 namespace one::terminal::runtime {
 
 	terminal::view page_view(navigator& nav, page& p) {
@@ -78,10 +80,15 @@ namespace one::terminal::runtime {
 	int run(const site& s, terminal::view_app& app, screens::source& from, const std::string& address) {
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
-		return app.run([&] { return drawn(nav); }, [&](const key_press& e) {
+		// A theme tried from a palette draws the whole terminal, whose own colors are
+		// put back as the app ends.
+		screens::tried_themes::on_tried(draw_terminal_in);
+		int ended = app.run([&] { return drawn(nav); }, [&](const key_press& e) {
 			if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 			return false;
 		});
+		if (screens::tried_themes::theme().peek()) draw_terminal_in(std::nullopt);
+		return ended;
 	}
 
 }  // namespace one::terminal::runtime

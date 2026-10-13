@@ -14,6 +14,7 @@ import type { FieldProps, Filtered, Hue, LinkProps } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
+import { generate, on, randomSeed, roles, schemeTitle, schemes, written, type PaletteTheme, type Scheme } from "./palette.js";
 
 export function Hero({ title, children }: { title: string; children: ReactNode }) {
   const ui = useUI();
@@ -661,6 +662,84 @@ export function Copy({
     <ui.Button kind="secondary" onClick={() => void navigator.clipboard.writeText(markdownOf(title, view.data, fields, lists, choices)).then(() => setCopied(true))}>
       {copied ? "Copied" : says}
     </ui.Button>
+  );
+}
+
+// A theme tried on the whole app: its colors in place of the site's, light and dark,
+// as the site's own stylesheet sets them, in a stylesheet after it.
+const triedId = "uione-tried-theme";
+
+function triedStyle(theme: PaletteTheme): string {
+  const mode = (dark: boolean) =>
+    roles
+      .flatMap((role) => {
+        const color = dark ? theme.colors[role].dark : theme.colors[role].light;
+        return [`--std-${role}: ${color};`, `--more-${role}: ${color};`];
+      })
+      .concat(
+        ["std", "more"].map((set) => {
+          const pair = dark ? "dark" : "light";
+          return `--${set}-accent-ink: ${on(theme.colors.accent[pair], theme.colors.page[pair])};`;
+        }),
+      )
+      .join(" ");
+  return (
+    `:root { ${mode(false)} }\n` +
+    `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${mode(true)} } }\n` +
+    `:root[data-theme="dark"] { ${mode(true)} }\n`
+  );
+}
+
+// The theme tried now, kept for as long as the page is open, whichever screen is on it.
+let tried: PaletteTheme | undefined;
+let triedScheme: Scheme = schemes[Math.floor(Math.random() * schemes.length)];
+
+function tryTheme(theme: PaletteTheme | undefined) {
+  tried = theme;
+  document.getElementById(triedId)?.remove();
+  if (!theme) return;
+  const style = document.createElement("style");
+  style.id = triedId;
+  style.textContent = triedStyle(theme);
+  document.head.appendChild(style);
+}
+
+// Themes made at random from a palette, each tried on the whole app at once, and
+// written as a project says it, to copy into a .one file.
+export function Themes() {
+  const ui = useUI();
+  const [theme, setTheme] = useState(tried);
+  const [scheme, setScheme] = useState(triedScheme);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const use = (made: PaletteTheme | undefined) => {
+    tryTheme(made);
+    setTheme(made);
+    setCopied(false);
+  };
+  return (
+    <ui.Themes
+      scheme={scheme}
+      schemes={schemes.map((s) => [s, schemeTitle(s)])}
+      onScheme={(chosen) => {
+        triedScheme = chosen as Scheme;
+        setScheme(triedScheme);
+        use(generate(theme?.seed ?? randomSeed(), triedScheme));
+      }}
+      seed={theme?.seed}
+      colors={theme ? roles.map((role) => [role, theme.colors[role].light, theme.colors[role].dark]) : []}
+      written={theme ? written(theme) : ""}
+      copied={copied}
+      onNew={() => use(generate(randomSeed(), scheme))}
+      onReset={() => use(undefined)}
+      onCopy={() => {
+        if (theme) void navigator.clipboard.writeText(written(theme)).then(() => setCopied(true));
+      }}
+    />
   );
 }
 
@@ -1784,6 +1863,7 @@ export interface FieldSpec {
   choices?: [string, string][]; // for a choice: each one, and how it's shown
   start?: string; // what a new one starts as, like the field's starting choice
   required?: boolean; // a choice that's always one of them, like a priority
+  range?: [number, number, number]; // for a slider: from, to, and the step between
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
@@ -1799,11 +1879,13 @@ function asField(value: unknown, type?: string): string {
   return value === null || value === undefined ? "" : String(value);
 }
 
-// What a form sends for a field: a yes or no as true or false, files as the list of
-// their paths, and a list, written separated by commas, or several choices ticked,
-// as the list of what's between them.
+// What a form sends for a field: a yes or no as true or false, a number as one,
+// files as the list of their paths, and a list, written separated by commas, or
+// several choices ticked, as the list of what's between them.
 function asInput(value: string, type: string | undefined): unknown {
   if (type === "boolean") return value === "true";
+  // A number as one, and nothing for an empty box.
+  if (type === "number" || type === "slider") return value.trim() === "" ? undefined : Number.isNaN(Number(value)) ? value : Number(value);
   if (type === "files") return value.split("\n").filter((path) => path !== "");
   if (type !== "list" && type !== "choices") return value;
   return value
@@ -1930,6 +2012,7 @@ export function Form({
           type: f.type ?? "text",
           choices: f.choices,
           required: f.required,
+          range: f.range,
           value: values[f.name] ?? "",
           hint: f.hint,
           onChange: (value) => {

@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "one/screens/palette.hpp"
 #include "one/screens/specs.hpp"
 
 namespace one::screens {
@@ -124,6 +125,9 @@ namespace one::screens {
 		state<bool> picking(const form_field& f) const;
 		// The choices a choice field offers, None first unless it's required.
 		std::vector<option> choices_of(const form_field& f) const;
+		// Whether a choice is a few, drawn as radio buttons rather than a list that
+		// opens, as the web draws them: one of three or fewer, each always one of them.
+		static bool few(const form_field& f) { return f.type == "choice" && f.choices.size() <= 3; }
 		std::string error() const { return page_.error(spec_.command); }
 		bool busy() const { return page_.running(spec_.command); }
 		void send() const;
@@ -281,5 +285,21 @@ namespace one::screens {
 	table_model table_of(page_base& p, const basic_table_spec<View>& spec) {
 		return table_rows(p, spec.view, spec.list, spec.only, spec.hide_empty, spec.sort, spec.reorder, spec.track, spec.search, spec.choices, spec.by, spec.page);
 	}
+
+	// Themes made at random from a palette, tried on the whole app: one for every page,
+	// since a theme is the app's. Each toolkit draws the app in the one tried, told by
+	// on_tried, and in its own again when there's none.
+	namespace tried_themes {
+		state<std::optional<palette::theme>> theme();
+		state<std::string> scheme();
+		// A theme from a new seed, in the scheme picked.
+		void make_new();
+		// The scheme picked, the theme tried made again in it.
+		void pick(const std::string& scheme);
+		// The app's own theme again.
+		void put_back();
+		// What draws the app in a theme, or in its own for none.
+		void on_tried(std::function<void(const std::optional<palette::theme>&)> apply);
+	}  // namespace tried_themes
 
 }  // namespace one::screens

@@ -1,0 +1,38 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Grids and diagrams: a room's stages, dragged into order, and the steps between
+// them, drawn as arrows and as a grid, each changed by the same forms.
+
+namespace gallery at / {
+
+	screen "Grids and diagrams" /rooms/:room/workflow {
+		diagram room_page.steps by from and to over room_page.stages {
+			roles.title
+		}
+		table room_page.stages {
+			reorder position
+			title "Stage"
+			worked_by.title "Worked by"
+			update "Change"
+			stage::create "New stage"
+		}
+		form stage::update "Save" {
+			title "Called"  worked_by "Worked by"
+		}
+		form stage::create "Add" {
+			title "Called"  worked_by "Worked by"
+		}
+		grid room_page.steps by from and to over room_page.stages {
+			roles.title
+		}
+		form step::create "Allow" {
+			roles "Taken by"
+		}
+		form step::update "Save" {
+			roles "Taken by"
+		}
+		confirm step::delete "Remove this step? Pieces can't go this way any more."
+	}
+
+} // namespace gallery

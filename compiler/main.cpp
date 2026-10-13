@@ -11,16 +11,21 @@
 //   one upgrade <project>                bring a project to this compiler: apply the
 //                                        fixes its mistakes come with, and record this
 //                                        version in its project block
+//   one theme [--seed <n>] [--scheme <s>] write a theme made at random from a palette,
+//                                        to paste into a .one file
 //
 // A project whose block names another compiler, one "0.4.0", is handed to that
 // version (toolchain.hpp).
 
 #include <filesystem>
 #include <iostream>
+#include <random>
 #include <string>
 #include <string_view>
 #include <optional>
 #include <vector>
+
+#include <one/screens/palette.hpp>
 
 #include "driver.hpp"
 #include "toolchain.hpp"
@@ -35,8 +40,36 @@ namespace {
                      "       one build <project> [--out <folder>] [--for <environment>] [--target <target>[,<target>...]]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
+                     "       one theme [--seed <number>] [--scheme complementary|analogous|triadic|split_complementary|monochrome]\n"
                      "       one --version\n";
         return 2;
+    }
+
+    // A theme from a palette, the seed and the scheme picked at random unless they're
+    // given; the same seed and scheme are the same theme in every app's themes.
+    int theme(const std::vector<std::string>& args) {
+        std::random_device device;
+        std::uint32_t seed = std::uniform_int_distribution<std::uint32_t>(1, 99999)(device);
+        std::string scheme(one::screens::palette::schemes[device() % one::screens::palette::schemes.size()]);
+        for (std::size_t i = 1; i < args.size(); i += 2) {
+            if (i + 1 >= args.size()) return usage();
+            if (args[i] == "--seed") {
+                try {
+                    std::size_t used = 0;
+                    unsigned long n = std::stoul(args[i + 1], &used);
+                    if (used != args[i + 1].size() || n > 4294967295ul) return usage();
+                    seed = static_cast<std::uint32_t>(n);
+                } catch (const std::exception&) {
+                    return usage();
+                }
+            } else if (args[i] == "--scheme" && std::ranges::find(one::screens::palette::schemes, args[i + 1]) != one::screens::palette::schemes.end()) {
+                scheme = args[i + 1];
+            } else {
+                return usage();
+            }
+        }
+        std::cout << one::screens::palette::written(one::screens::palette::generate(seed, scheme));
+        return 0;
     }
 
     void report(const one::language::diagnostics& problems) {
@@ -138,6 +171,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (args.size() == 2 && args[0] == "upgrade") return upgrade(args[1]);
+    if (!args.empty() && args[0] == "theme") return theme(args);
 
     // A project for another compiler is handed to it, before anything is read.
     std::vector<std::string> roots;

@@ -32,7 +32,8 @@ namespace one::desktop::runtime {
 			std::string opens = model.opens();
 			// A button with an icon is a quiet one, as on the web, beside the page's main ones.
 			if (std::string g = glyph_of(spec.icon); !g.empty()) opens = g + " " + opens;
-			return desktop::button(opens, [model] { model.set_open(true); }, spec.icon.empty());
+			// As wide as it says, as on the web, not across the page.
+			return desktop::row(desktop::button(opens, [model] { model.set_open(true); }, spec.icon.empty()), desktop::spacer());
 		}
 		std::vector<desktop::view> parts;
 		for (const auto& f : model.fields()) {
@@ -41,6 +42,10 @@ namespace one::desktop::runtime {
 			if (f.type != "boolean") field_parts.push_back(desktop::text(shown, label_style()));
 			if (f.type == "boolean") {
 				field_parts.push_back(desktop::toggle(model.ticked(f, "true"), shown));
+			} else if (form_model::few(f)) {
+				field_parts.push_back(desktop::radio_buttons(model.written(f), drawn_options(f.choices)));
+			} else if (f.type == "slider") {
+				field_parts.push_back(desktop::slider(model.written(f), {.from = f.range.from, .to = f.range.to, .by = f.range.by}));
 			} else if (f.type == "choice" || f.type == "pick") {
 				std::string lower = shown;
 				if (!lower.empty() && lower[0] >= 'A' && lower[0] <= 'Z') lower[0] = static_cast<char>(lower[0] - 'A' + 'a');
