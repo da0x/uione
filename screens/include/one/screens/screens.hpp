@@ -178,7 +178,9 @@ namespace one::screens {
 		struct listened {
 			state<view_state> current;
 			listening keeping;
+			std::shared_ptr<std::string> moved = std::make_shared<std::string>();  // where what it reads went, until it's read there
 		};
+		void follow(listened& l, const std::string& name, const std::string& subject);
 		std::map<std::string, std::unique_ptr<listened>> views_;
 		std::vector<part> title_;
 		bool wide_ = false;

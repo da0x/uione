@@ -1238,6 +1238,32 @@ func (a *App) called(ctx context.Context, target *schema, value any, read map[st
 }
 
 func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[string]any, error) {
+	// The page of something that moved, as a renamed stage does, says only where it
+	// went, to the same readers, so a link to it still opens it.
+	if v.per != nil {
+		per := a.reg.schemas[v.per]
+		to, err := a.movedTo(ctx, per, subject)
+		if err != nil {
+			return nil, err
+		}
+		if to != "" {
+			data := map[string]any{"moved": to}
+			if v.scope != nil || len(v.people) > 0 {
+				fields, err := a.stored(ctx, per, to)
+				if err != nil {
+					return nil, err
+				}
+				subjectOfScope := subject
+				if v.scope == per {
+					subjectOfScope = to
+				}
+				if err := a.access(ctx, v, subjectOfScope, fields, data); err != nil {
+					return nil, err
+				}
+			}
+			return data, nil
+		}
+	}
 	data := map[string]any{}
 	// What the entity it's for holds, read once, for lists picked by its fields and
 	// for what the view copies from it.

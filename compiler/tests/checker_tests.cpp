@@ -786,6 +786,19 @@ TEST_CASE("a create form asks for a key, and an update form can't") {
     CHECK(check_source(start + "screen \"Shelf\" /shelf {\n\tform book::create {\n\t\tshelfmark  title\n\t}\n}\n").empty());
     auto e = only_error(start + "screen \"Book\" /books/:book {\n\tform book::update {\n\t\tshelfmark  title\n\t}\n}\n");
     CHECK(e.message == "shelfmark is part of what names it, its key, so it can't be changed");
+
+    // A key made from a field follows it, and an update form may name it outright.
+    const std::string named = "entity shelf {\n\tname  text  required  key = slug(title)\n\ttitle  text  required\n}\n"
+                              "command shelf::update\ncommand shelf::move {\n\tchanges title\n}\n"
+                              "view shelf_page per shelf {\n\tname\n\ttitle\n}\n";
+    CHECK(check_source(named + "screen \"Shelf\" /shelves/:shelf {\n\tform shelf::update {\n\t\tname  title\n\t}\n}\n").empty());
+    e = only_error(named + "screen \"Shelf\" /shelves/:shelf {\n\tform shelf::move {\n\t\tname\n\t}\n}\n");
+    CHECK(e.message == "name is part of what names it, its key, so it can't be changed");
+    // A role keeps the name it's made with, as defined roles are found by theirs.
+    std::string role = named;
+    for (auto at = role.find("shelf"); at != std::string::npos; at = role.find("shelf", at + 4)) role.replace(at, 5, "role");
+    e = only_error(role + "screen \"Role\" /roles/:role {\n\tform role::update {\n\t\tname  title\n\t}\n}\n");
+    CHECK(e.message == "name is part of what names it, its key, so it can't be changed");
 }
 
 TEST_CASE("a view's lists have names of their own, and a table names the one it shows") {

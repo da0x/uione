@@ -13,6 +13,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import { partsOf } from "./keys.js";
 
 export type ViewStatus = "loading" | "live" | "stale" | "denied";
 
@@ -150,22 +151,65 @@ function remember(source: DataSource, key: string, state: ViewState) {
 
 // The live state of a view. `subject` picks one document of a view that has one per
 // entity or per person, like a member's loans.
+//
+// The document of something that moved, as a board does when it's renamed, says
+// only where it went: the view follows it there, and the address changes as the
+// name did, so an old link opens the board under its new name.
 export function useView(view: string, subject?: string): ViewState {
   const source = useSource();
+  const [moved, setMoved] = useState<{ from: string; to: string }>();
+  const followed = subject !== undefined && moved?.from === subject ? moved.to : subject;
   // The state remembers which view it's for, so the render right after switching,
   // say from one member's loans to another's, never shows the old one's rows.
   const reader = source.auth?.person()?.uid ?? "";
-  const key = `${reader}:${view}:${subject ?? ""}`;
+  const key = `${reader}:${view}:${followed ?? ""}`;
   const start = () => memoryOf(source).get(key) ?? loading;
   const [state, setState] = useState<{ key: string; view: ViewState }>(() => ({ key, view: start() }));
   useEffect(() => {
     setState({ key, view: start() });
-    return source.subscribe(view, subject, (next) => {
+    return source.subscribe(view, followed, (next) => {
+      const to = next.data?.moved;
+      if (typeof to === "string" && to !== "" && subject !== undefined && followed !== undefined) {
+        readdress(followed, to);
+        setMoved({ from: subject, to });
+        return;
+      }
       remember(source, key, next);
       setState({ key, view: next });
     });
-  }, [source, view, subject, key]);
+  }, [source, view, subject, followed, key]);
   return state.key === key ? state.view : start();
+}
+
+// The page's address with what named something that moved changed to what names it
+// now: /da0x/boards/sprint becomes /da0x/boards/sprint_2 once the board is renamed.
+// An id is made of parts, some of which are the address's own parts; those that
+// changed are swapped where they are.
+export function readdress(from: string, to: string): void {
+  if (typeof window === "undefined") return;
+  const { pathname, search, hash } = window.location;
+  const segments = pathname.split("/");
+  const decoded = segments.map((segment) => {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  });
+  for (let count = segments.length; count >= 1; count--) {
+    const before = partsOf(from, count);
+    const after = partsOf(to, count);
+    if (!before || !after) continue;
+    const swaps = before.map((part, i) => [part, after[i]!] as const).filter(([was, is]) => was !== is);
+    if (swaps.length === 0 || !swaps.every(([was]) => decoded.includes(was))) continue;
+    const next = decoded.map((segment, i) => {
+      const swap = swaps.find(([was]) => was === segment);
+      return swap ? encodeURIComponent(swap[1]) : segments[i];
+    });
+    window.history.replaceState(window.history.state, "", next.join("/") + search + hash);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    return;
+  }
 }
 
 export interface AuthState {

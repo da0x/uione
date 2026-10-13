@@ -374,11 +374,27 @@ namespace one::screens {
 		auto found = views_.find(at);
 		if (found == views_.end()) {
 			auto made = std::make_unique<listened>();
-			state<view_state> current = made->current;
-			made->keeping = source_.listen(name, subject, [current](const view_state& v) { current.set(v); });
+			follow(*made, name, subject);
 			found = views_.emplace(at, std::move(made)).first;
+		} else if (!found->second->moved->empty()) {
+			// What it read moved, as a board does when it's renamed: it's read where it
+			// went, here as it's built, never from inside what told it.
+			follow(*found->second, name, std::exchange(*found->second->moved, ""));
 		}
 		return found->second->current;
+	}
+
+	// Listens to a view's document for a subject; one that says where its subject
+	// moved is followed there the next time the page reads it.
+	void page_base::follow(listened& l, const std::string& name, const std::string& subject) {
+		l.keeping = source_.listen(name, subject, [current = l.current, moved = l.moved](const view_state& v) {
+			if (const value* to = v.data.find("moved"); to && to->is_string() && !to->text.empty()) {
+				*moved = to->text;
+				current.set(view_state{});  // loading, until it's read where it went
+				return;
+			}
+			current.set(v);
+		});
 	}
 
 	void page_base::open(const std::string& address) { opener_(address); }

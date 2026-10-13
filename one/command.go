@@ -342,6 +342,11 @@ func (c *Ctx) save() ([]event, error) {
 		if err := c.tx.Set(m.ref, after); err != nil {
 			return nil, err
 		}
+		if m.before == nil {
+			if err := c.tx.Delete(c.app.store.Collection("moved").Doc(movedID(m.schema.collection, m.ref.ID))); err != nil {
+				return nil, err
+			}
+		}
 		kept, err := c.app.keep(c.Context, c.tx, m.schema, m.ref.ID, m.before, after, c.command, c.me, c.now)
 		if err != nil {
 			return nil, err
@@ -843,7 +848,8 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	collection := a.store.Collection(s.collection)
 	var id string
 	var before, after map[string]any
-	var pointed []event // changes to entities the command points at
+	var pointed []event  // changes to entities the command points at
+	var movedFrom string // the id it had, when a key made from a field moved it
 
 	// Creating is checked before anything is read, unless only a role within an
 	// entity, such as a project, could allow it: then it's checked once what's sent
@@ -862,7 +868,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		entity := new(E)
 		v := reflect.ValueOf(entity).Elem()
 		record := P(entity).record()
-		before, after = nil, nil
+		before, after, movedFrom = nil, nil, ""
 		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given, service: c.service}
 		body.entity = &owned{s, v}
 		pointed = nil
@@ -958,6 +964,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 			pointed = append(changed, kept...)
 			saved = entity
+			// Made under an id something moved from, it's no longer the address of that.
+			if err := tx.Delete(a.store.Collection("moved").Doc(movedID(s.collection, ref.ID))); err != nil {
+				return err
+			}
 			return tx.Set(ref, after)
 		}
 
@@ -1018,7 +1028,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if action == "update" || fields != nil {
 			input := map[string]any{}
 			for name, value := range c.input {
-				if name == "id" || s.isKey(name) {
+				// A key made from another field may be given by an update, as a stage's
+				// name may: it's named again, and moves. Other keys stay as they are.
+				if name == "id" || (s.isKey(name) && !(action == "update" && s.field(name).from != "" && !a.namedOnce(s))) {
 					continue
 				}
 				if fields != nil && !c.system && !contains(fields, name) && s.field(name) != nil {
@@ -1042,6 +1054,11 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if err := a.serviceChanged(body, s, action, id, v); err != nil {
 			return err
 		}
+		var named map[string]any // what an update says a key made from a field is
+		if action == "update" {
+			named = c.input
+		}
+		follows := !a.namedOnce(s) && s.keyFollows(v, before, named)
 		if err := s.validate(v); err != nil {
 			return err
 		}
@@ -1051,6 +1068,14 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		if err := a.unique(tx, s, v, id); err != nil {
 			return err
+		}
+		// A key made from a field that changed moves it, and what points at it.
+		var moves *move
+		if to, ok := s.id(v); ok && follows && to != id {
+			if moves, err = a.moved(body, s, ref, v, before, to); err != nil {
+				return err
+			}
+			movedFrom, id, record.ID = id, to, to
 		}
 		record.UpdatedAt, record.UpdatedBy = now, c.me
 		after = s.data(v)
@@ -1065,20 +1090,34 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		pointed = append(changed, kept...)
 		saved = entity
+		if moves != nil {
+			if err := moves.save(body, moves.all[ref.Path]); err != nil {
+				return err
+			}
+			pointed = append(pointed, moves.events...)
+			if err := tx.Delete(ref); err != nil {
+				return err
+			}
+			return tx.Set(collection.Doc(id), after)
+		}
 		return tx.Set(ref, after)
 	})
 	if err != nil {
 		return "", err
 	}
 
-	a.publish(c.ctx, append([]event{{
+	events := []event{{
 		Type:    s.name + ".updated",
 		Entity:  s.entity,
 		ID:      id,
 		Version: now.UnixNano(),
 		Before:  before,
 		After:   after,
-	}}, pointed...)...)
+	}}
+	if movedFrom != "" {
+		events = append(events, event{Type: s.name + ".updated", Entity: s.entity, ID: movedFrom, Version: now.UnixNano(), Before: before})
+	}
+	a.publish(c.ctx, append(events, pointed...)...)
 	for _, then := range afterwards {
 		then(&System{app: a, ctx: c.ctx}, saved)
 	}

@@ -80,6 +80,20 @@ TEST("an address opens the screen most particular to it, a part named outright b
 	CHECK(!nav.back());
 }
 
+TEST("a page reads what moved where it went, as a board renamed is, all the way along") {
+	auto s = tracker();
+	memory_source data;
+	data.set("tracker::issue_page", "atlas-sprint", value(fields{{"moved", "atlas-sprint_2"}}));
+	data.set("tracker::issue_page", "atlas-sprint_2", value(fields{{"moved", "atlas-third"}}));
+	data.set("tracker::issue_page", "atlas-third", value(fields{{"title", "Third"}}));
+	navigator nav(s, data);
+	CHECK(nav.open("/atlas/12"));
+	auto read = [&] { return nav.current().view("tracker::issue_page", "atlas-sprint").peek(); };
+	for (int i = 0; i < 3 && read().status != status::ready; ++i) {}
+	CHECK(read().status == status::ready);
+	CHECK(read().data["title"].as_string() == "Third");
+}
+
 TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
 	value due;
 	due.type = value::kind::time;

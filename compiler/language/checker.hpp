@@ -1393,6 +1393,13 @@ namespace one::language {
         // is ever changed afterwards.
         static bool is_serial(const field& f) { return f.type && f.type->text() == "serial"; }
         static bool fixed_once_made(const field& f) { return f.key || is_serial(f); }
+        // A key made from another field, like a stage's name = slug(title): it follows
+        // that field, and an update may name it outright.
+        static bool named_from(const field& f) {
+            auto* call = f.key && f.initial ? std::get_if<call_expression>(&f.initial->node) : nullptr;
+            auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+            return callee && callee->name.text() == "slug";
+        }
 
         static std::string why_fixed(const field& f) {
             if (is_serial(f)) return f.name + " is counted when it's made, so it can't be set";
@@ -2925,6 +2932,7 @@ namespace one::language {
                     for (const auto& command : form->commands) verify_command_use(ns, command);
                     const entity_declaration* entity = find_command(ns, form->commands.front());
                     bool creates = form->commands.front().parts.back() == "create";
+                    bool updates = form->commands.front().parts.back() == "update";
                     // What the command is sent besides its entity's fields, a form asks for too.
                     std::map<std::string, field, std::less<>> inputs;
                     if (auto here = scopes_.find(ns); here != scopes_.end()) {
@@ -2947,8 +2955,10 @@ namespace one::language {
                         if (entity && !asked) {
                             error(f.where, "the form asks for " + f.name + ", which isn't a field of entity " +
                                                entity->name);
-                        } else if (asked && fixed_once_made(*asked) && !(creates && asked->key && !is_serial(*asked))) {
-                            // A create form asks for a key, which names what it makes.
+                        } else if (asked && fixed_once_made(*asked) && !(creates && asked->key && !is_serial(*asked)) && !(updates && named_from(*asked) && entity->name != "role" && entity->name != "service")) {
+                            // A create form asks for a key, which names what it makes, and
+                            // an update form for one made from a field, which renames it;
+                            // but roles and services keep the names they're made with.
                             error(f.where, why_fixed(*asked));
                         }
                         if (f.value) names_in(*f.value);

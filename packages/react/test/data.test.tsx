@@ -34,6 +34,7 @@ import {
 } from "../src/index.js";
 import type { DataSource, MemorySource, Person, ViewState } from "../src/index.js";
 import { plain } from "../src/plain.js";
+import { readdress } from "../src/data.js";
 
 function renderScreen(source: MemorySource, body: () => ReactNode) {
   const only = defineScreen({ title: "Test", route: "/" }, body);
@@ -1134,5 +1135,36 @@ describe("a site's foot", () => {
   it("isn't there when the site has no footer", () => {
     render(<App name="app" screens={[only]} ui={plain} data={memorySource()} location="/" build={{ version: "0.7.1" }} />);
     expect(screen.queryByRole("contentinfo")).toBeNull();
+  });
+});
+
+describe("something that moved", () => {
+  function Board() {
+    const board = useView("tracker::board_page", "da0x-sprint");
+    return <Text>{board.status === "live" ? String(board.data?.title) : "…"}</Text>;
+  }
+
+  it("is followed to where it went", () => {
+    const source = memorySource({
+      views: {
+        "tracker::board_page:da0x-sprint": { moved: "da0x-sprint_2" },
+        "tracker::board_page:da0x-sprint_2": { moved: "da0x-third" },
+        "tracker::board_page:da0x-third": { title: "Third" },
+      },
+    });
+    renderScreen(source, () => <Board />);
+    expect(screen.getByText("Third")).toBeTruthy();
+  });
+
+  it("changes the address where its name was", () => {
+    window.history.replaceState(null, "", "/da0x/boards/sprint/closed?page=2");
+    readdress("da0x-sprint", "da0x-sprint_2");
+    expect(window.location.pathname + window.location.search).toBe("/da0x/boards/sprint_2/closed?page=2");
+    // A name of more than one part, of which the address shows one.
+    window.history.replaceState(null, "", "/da0x/roles/review");
+    readdress("da0x-in%2Dreview", "da0x-reviewing");
+    expect(window.location.pathname).toBe("/da0x/roles/review");
+    readdress("da0x-review", "da0x-reviewing");
+    expect(window.location.pathname).toBe("/da0x/roles/reviewing");
   });
 });

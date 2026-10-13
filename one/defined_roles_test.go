@@ -22,7 +22,7 @@ type Crew struct {
 type Rank struct {
 	one.Record
 	Crew  string   `firestore:"crew" one:"required,key,refers=crew::crew"`
-	Name  string   `firestore:"name" one:"required,key"`
+	Name  string   `firestore:"name" one:"required,key,from=title"`
 	Title string   `firestore:"title" one:"required"`
 	May   []string `firestore:"may"`
 }
@@ -114,6 +114,14 @@ func TestWhatARoleAllowsIsWhatItsRecordSaysNow(t *testing.T) {
 
 	// The captain lets deckhands change jobs too, and it holds at once.
 	h.mustRun("crew/rank/update", captain, map[string]any{"id": one.Key("skiff", "deckhand"), "may": []any{"job::create", "job::update"}})
+	// A rank keeps its name when its title changes, as the ranks every crew starts
+	// with are found by theirs.
+	if id := h.mustRun("crew/rank/update", captain, map[string]any{"id": one.Key("skiff", "deckhand"), "title": "Sailor", "name": "sailor"}); id != one.Key("skiff", "deckhand") {
+		t.Fatalf("the retitled rank moved to %s", id)
+	}
+	if name := h.stored("crew_rank", one.Key("skiff", "deckhand"))["name"]; name != "deckhand" {
+		t.Fatalf("the rank's name became %v", name)
+	}
 	h.mustRun("crew/job/update", token, map[string]any{"id": job, "title": "coil every rope"})
 
 	// A deckhand can't give themselves more.

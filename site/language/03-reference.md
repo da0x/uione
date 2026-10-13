@@ -470,9 +470,23 @@ entity loan {
   nobody can make something in another's name.
 - `name  text  required  key = slug(title)` makes a name from another field when
   none is given: a stage titled In review is named `in_review`, so a form asks only
-  for the title. The name is made once, so a rename changes only the title, and a
-  second stage whose title makes the same name is refused rather than taken for the
-  first.
+  for the title. A second stage whose title makes the same name is refused rather
+  than taken for the first.
+- The name follows the field it's made from. Renaming the stage to Reviewing names
+  it `reviewing`, and an update form may ask for the name itself, to name it
+  something else. Either way it moves to the id its new name makes, and in the same
+  step:
+  - everything pointing at it points at the new id, like its issues and a board's
+    start;
+  - what's named by it moves too, as a stage's steps do. Renaming a board moves its
+    stages and their steps;
+  - its history goes with it, and the changes that name it say its new title;
+  - counters kept per it, like a board's issue numbers, go on from where they were.
+
+  Its old title is free for another stage, and its old address still opens it: its
+  page leads to the new one, in the web, desktop and terminal apps, and the web
+  app's address changes to the new name. Roles and services keep the names they're
+  made with: a role is found by its name, and a service is who it is by its own.
 - `entity invitation invites member { ... }` makes an invitation to become a
   member, by email. When someone opens the app signed in with that email, a member
   is made from the invitation's fields of the same names, like its project and
