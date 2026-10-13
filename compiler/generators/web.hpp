@@ -1233,11 +1233,30 @@ namespace one::generators {
                 }
             }
             parts.shown_in_path = true;
+            // Stages written in the code are its columns, and its workflow's steps the
+            // moves, given as views that are always there.
+            bool written = board.over.parts.empty();
+            auto stages = written && entity ? model_.stages_written(ns, *entity, board.by) : screens::model::written_stages{};
+            std::string over;
+            if (written) {
+                std::string listed, steps;
+                for (const auto& [id, title] : stages.stages) {
+                    listed += (listed.empty() ? "" : ", ") + std::string("{ id: ") + web_detail::js_string(id) + ", title: " + web_detail::js_string(title) + " }";
+                }
+                over = "{ status: \"live\", data: { stages: [" + listed + "] } }";
+            } else {
+                over = view_variable(parts, full_view(ns, board.over.text()));
+            }
             std::string line = "<Board view={" + view_variable(parts, full_view(ns, board.view.text())) + "} list=" + web_detail::js_string(*board.list) +
-                               " by=" + web_detail::js_string(board.by) + " over={" + view_variable(parts, full_view(ns, board.over.text())) +
-                               "} overList=" + web_detail::js_string(board.over_list);
-            for (const auto& column : listed_columns(ns, board.over.text(), board.over_list)) {
+                               " by=" + web_detail::js_string(board.by) + " over={" + over + "} overList=" + web_detail::js_string(written ? "stages" : board.over_list);
+            if (written) line += " shown=\"title\"";
+            for (const auto& column : written ? std::vector<std::string>{} : listed_columns(ns, board.over.text(), board.over_list)) {
                 if (column == "title") line += " shown=\"title\"";
+            }
+            if (!stages.notify.empty()) {
+                std::string notify;
+                for (const auto& stage : stages.notify) notify += (notify.empty() ? "" : ", ") + web_detail::js_string(stage);
+                line += " notify={[" + notify + "]}";
             }
             line += " columns={{ " + columns + " }}";
             line += tint_on(ns, board.view, board.list, board.tint);
@@ -1268,7 +1287,14 @@ namespace one::generators {
             std::string tools = toolbar(parts, ns, board.columns, screen);
             if (tools.empty() && beside) tools = toolbar(parts, ns, beside->columns, screen);
             line += tools;
-            if (board.move) {
+            if (board.move && !board.move->along) {
+                std::string steps;
+                for (const auto& [from, to] : stages.steps) {
+                    steps += (steps.empty() ? "" : ", ") + std::string("{ from: ") + web_detail::js_string(from) + ", to: " + web_detail::js_string(to) + " }";
+                }
+                line += " move={{ command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: { status: \"live\", data: { steps: [" + steps +
+                        "] } }, list: \"steps\" }}";
+            } else if (board.move) {
                 std::string move = "command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: " +
                                    view_variable(parts, full_view(ns, board.move->along->text())) + ", list: " + web_detail::js_string(board.move->along_list);
                 for (const auto& [name, value] : held_by(parts, ns, *board.move)) move += ", " + name + ": " + value;

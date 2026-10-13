@@ -472,7 +472,9 @@ namespace one::terminal::runtime {
 		if (!model.error.empty()) parts.push_back(terminal::text(model.error, colored(color::red)));
 		for (const auto& column : model.columns) {
 			std::vector<terminal::view> lane;
-			lane.push_back(terminal::row(terminal::text(column.title, {.bold = true}), quiet(std::to_string(column.cards.size()))).spacing(1));
+			// A column that chimes when a card arrives says so beside its count.
+			if (column.notify) lane.push_back(terminal::row(terminal::text(column.title, {.bold = true}), quiet(std::to_string(column.cards.size())), quiet("♪")).spacing(1));
+			else lane.push_back(terminal::row(terminal::text(column.title, {.bold = true}), quiet(std::to_string(column.cards.size()))).spacing(1));
 			if (column.cards.empty()) {
 				lane.push_back(quiet("  Nothing here"));
 			} else {

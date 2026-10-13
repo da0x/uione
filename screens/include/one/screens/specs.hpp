@@ -191,6 +191,7 @@ namespace one::screens {
 		std::optional<tint_spec> tint = std::nullopt;
 		std::optional<track_spec> track = std::nullopt;
 		std::optional<reorder_spec> reorder = std::nullopt;
+		std::vector<std::string> notify = {};  // the columns that chime when a card arrives
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row

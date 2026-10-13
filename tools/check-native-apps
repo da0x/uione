@@ -20,11 +20,12 @@ cp "$here"/examples/tracker/*.one "$work/tracker-source/"
 { printf 'import one\n\nproject tracker {\n\ttarget web desktop terminal\n\tsignin google\n}\n\n'; cat "$here/examples/tracker/main.one"; } > "$work/tracker-source/main.one"
 "$one" build "$work/tracker-source" --out "$work/tracker" >/dev/null
 "$one" build "$here/examples/gallery" --out "$work/gallery" >/dev/null
+"$one" build "$here/examples/print_shop" --out "$work/print_shop" >/dev/null
 
 # The libraries are compiled once for each target, the other apps' from the cache.
 launcher=""
 command -v ccache >/dev/null && launcher=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-for app in site tracker gallery; do
+for app in site tracker gallery print_shop; do
 	for target in desktop terminal; do
 		UIONE="$here" cmake -S "$work/$app/$target" -B "$work/$app/$target/out" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher >/dev/null
 		# Built again where the compiler itself crashed, as g++ now and then does, but

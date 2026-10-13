@@ -280,6 +280,7 @@ export interface BoardColumn {
   id: string;
   title: string;
   cards: BoardCard[];
+  notify?: boolean; // it chimes when a card arrives, and shows a bell
 }
 
 export interface BoardCard {

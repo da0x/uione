@@ -1101,7 +1101,15 @@ export const radix: ComponentSet = {
               }`}
             >
               <h3 className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1.5 text-[0.8rem] font-medium text-muted">
-                {column.title}
+                <span className="inline-flex items-center gap-1.5">
+                  {column.title}
+                  {column.notify && (
+                    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" role="img" aria-label="Chimes when a card arrives">
+                      <title>Chimes when a card arrives</title>
+                      <path d="M4 11V7a4 4 0 0 1 8 0v4l1.25 1.5H2.75L4 11zM6.5 14a1.5 1.5 0 0 0 3 0" />
+                    </svg>
+                  )}
+                </span>
                 <span className="rounded-full bg-surface px-1.5 text-xs tabular-nums">{column.cards.length}</span>
               </h3>
               <ul className="flex min-h-16 flex-col gap-2 px-2 pb-2">

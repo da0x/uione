@@ -1310,7 +1310,7 @@ define workflow order by stage {
   command, and a require's message says a field of the entity, or `waiting(...)`,
   in braces.
 - `etched  notify chime` tells whoever has the board open when one arrives in that
-  stage: its column has a bell, and the desktop and terminal apps chime, with
+  stage: its column has a bell, ♪ in the desktop and terminal apps, which chime, with
   [chime](https://github.com/da0x/chime) when it's installed or the terminal's bell
   when it isn't; the web plays a tone. A chime is the only way so far; `email` and
   `text` are words kept for later.
@@ -1587,6 +1587,11 @@ form step::update "Save" {
   rows as cards in columns, a column for each stage in its order, with how many
   cards it has, and each issue in the column its `stage` names. Its block says what
   a card shows, its title first, and `link` opens a card's page as a table's does.
+- A board of stages written in the code, like `board shop_page.orders by stage`,
+  says no `over`: its columns are the field's choices, in their order, each shown
+  as its enum says. `move order::move` with no `along` goes along the steps its
+  workflow writes, those out of the stages no agent works, since an agent moves on
+  what it works itself. A stage that says `notify chime` has a bell on its column.
 - `move issue::move along project_page.steps` in its block lets a card be dragged,
   or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one
   of the person's roles; while it's dragged, the columns it can't go to are dimmed.

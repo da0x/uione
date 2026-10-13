@@ -202,6 +202,7 @@ namespace one::screens {
 		std::string id, title;
 		std::vector<board_card> cards;
 		std::vector<value> rows;  // the cards' rows, for putting them in order
+		bool notify = false;      // it chimes when a card arrives, and shows a bell
 	};
 	struct board_offer {
 		std::string card, title;
@@ -218,6 +219,9 @@ namespace one::screens {
 		bool arranging = false;
 	};
 	board_model board_of(page_base& p, const board_spec& spec);
+	// Tells whoever has the app open: chime --message, when chime is installed, or the
+	// terminal's bell.
+	void chime(const std::string& message);
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 

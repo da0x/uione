@@ -91,6 +91,33 @@ TEST_CASE("each agent is a program of its own, whose rules lead back to the line
     CHECK(std::ranges::any_of(generated.files, [](const auto& f) { return f.path == "agents/press/CMakeLists.txt"; }));
 }
 
+TEST_CASE("a board over stages written in the code has them as its columns, its workflow's steps a person takes, and chimes where it says") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    for (const auto& path : platform::find_one_files({root + "/examples/print_shop"})) files.push_back(language::parse(path, *platform::read_file(path), out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_project(files, root + "/examples/print_shop", root + "/examples/print_shop/build", language::targets_of(files));
+    REQUIRE(generated.errors.empty());
+    auto content = [&](const std::string& path) {
+        auto found = std::ranges::find_if(generated.files, [&](const auto& f) { return f.path == path; });
+        REQUIRE(found != generated.files.end());
+        return found->content;
+    };
+    auto web = content("web/src/screens/main.tsx");
+    CAPTURE(web);
+    CHECK(web.find(R"(over={{ status: "live", data: { stages: [{ id: "to_do", title: "To do" }, { id: "etching", title: "Etching" }, { id: "etched", title: "Etched" }, )"
+                   R"({ id: "failed", title: "Failed" }] } }} overList="stages" shown="title" notify={["failed"]})") != std::string::npos);
+    // Etching is the press's to move on, so a person's steps are only into it and back from Failed.
+    CHECK(web.find(R"(steps: { status: "live", data: { steps: [{ from: "to_do", to: "etching" }, { from: "failed", to: "to_do" }] } }, list: "steps")") != std::string::npos);
+    for (const char* target : {"desktop", "terminal"}) {
+        auto native = content(std::string(target) + "/src/screens/main.cpp");
+        CAPTURE(native);
+        CHECK(native.find(R"(.over = state<view_state>(view_state{status::ready, ember::parse_json("{\"stages\":[{\"id\":\"to_do\",\"title\":\"To do\"},)") != std::string::npos);
+        CHECK(native.find(R"(.notify = {"printed"})") != std::string::npos);
+    }
+}
+
 TEST_CASE("a command's lines lead to the Go they became") {
     auto generated = generate("/examples/library");
     const generators::output_file* go = nullptr;

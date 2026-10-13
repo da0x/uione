@@ -1460,6 +1460,7 @@ export function Board({
   tint,
   track,
   reorder,
+  notify = [],
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1483,11 +1484,13 @@ export function Board({
   // Cards dragged into order within their column, which runs the command with a
   // number for the field between its new neighbors', as a table's rows are.
   reorder?: { command: string; field: string; allowed?: boolean };
+  notify?: string[]; // the columns that chime when a card arrives
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const runner = useConfirmedRunner();
+  useArrivals(view, list, by, notify);
   // Where each card moved is until the view says so too.
   const [moved, setMoved] = useState<Record<string, string>>({});
   // What's typed, kept in the address under the list's name, the same as its table's.
@@ -1572,6 +1575,7 @@ export function Board({
         columns={things.map((thing) => ({
           id: thing.id,
           title: show(thing[shown]) || thing.id,
+          notify: notify.includes(thing.id),
           cards: cards
             .filter((card) => where(card) === thing.id)
             .map((card) => ({
@@ -1592,6 +1596,49 @@ export function Board({
       />
     </>
   );
+}
+
+// A short tone when a card arrives in a column that notifies, once it's arrived; the
+// cards there when the board first shows don't sound.
+function useArrivals(view: ViewState, list: string, by: string, notify: string[]) {
+  const seen = useRef<Map<string, string> | undefined>(undefined);
+  useEffect(() => {
+    if (notify.length === 0 || view.status !== "live") return;
+    const now = new Map(rowsOf(view.data?.[list]).filter((card) => notify.includes(String(card[by]))).map((card) => [card.id, String(card[by])]));
+    const before = seen.current;
+    seen.current = now;
+    if (!before) return;
+    for (const [id, at] of now) {
+      if (before.get(id) !== at) {
+        tone();
+        return;
+      }
+    }
+  }, [view, list, by, notify.join(" ")]);
+}
+
+// Two notes, rising, quietly, through the page's audio.
+function tone() {
+  try {
+    const AudioContext = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
+    if (!AudioContext) return;
+    const audio = new AudioContext();
+    [660, 880].forEach((pitch, at) => {
+      const note = audio.createOscillator();
+      const loudness = audio.createGain();
+      note.frequency.value = pitch;
+      const start = audio.currentTime + at * 0.12;
+      loudness.gain.setValueAtTime(0.0001, start);
+      loudness.gain.exponentialRampToValueAtTime(0.08, start + 0.02);
+      loudness.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+      note.connect(loudness).connect(audio.destination);
+      note.start(start);
+      note.stop(start + 0.32);
+    });
+    setTimeout(() => void audio.close(), 800);
+  } catch {
+    // No sound where the page can't make one.
+  }
 }
 
 // One of a few ways to show the same list, like a table and a board, as the person

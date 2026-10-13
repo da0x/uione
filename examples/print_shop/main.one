@@ -8,7 +8,8 @@
 import one
 
 project print_shop {
-	one  "0.11.1"
+	one     "0.11.1"
+	target  web desktop terminal
 }
 
 namespace shop {
@@ -108,6 +109,37 @@ namespace shop {
 		printed  notify chime
 		done at printed
 		depends on plates
+	}
+
+	// A shop's work: its plates and its orders, each on a board of its own.
+	view shop_page per shop {
+		readers member
+		title
+		plates = each plate in shop {
+			name  stage
+		}
+		orders = each order in shop {
+			title  stage
+		}
+	}
+
+	screen "Shops" / {
+		text "Open a shop at its address, like /harbor."
+	}
+
+	screen "{shop_page.title}" /:shop {
+		section "Plates" {
+			board shop_page.plates by stage {
+				name
+				move plate::move
+			}
+		}
+		section "Orders" {
+			board shop_page.orders by stage {
+				title
+				move order::move
+			}
+		}
 	}
 
 	define agent press for press_operator {

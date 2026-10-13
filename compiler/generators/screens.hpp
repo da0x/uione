@@ -240,6 +240,8 @@ namespace one::generators::screens {
         settings project;
         std::map<std::string, std::map<std::string, const language::entity_declaration*>> entities;
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views;
+        std::map<std::string, std::map<std::string, const language::define_workflow_declaration*>> workflows;  // by namespace and entity
+        std::set<std::string> agent_stages;  // namespace::entity::stage of each stage an agent works
         std::map<std::string, std::set<std::string>> commands;  // namespace to entity::command
         std::map<std::string, const language::command_declaration*> command_nodes;  // by full name
         std::set<std::string> open;  // commands anyone may run, signed in or not, in full
@@ -248,6 +250,38 @@ namespace one::generators::screens {
         std::map<std::string, std::string> prefixes;  // where a namespace's screens are, when it says
         std::vector<found_screen> every_screen;
         std::vector<std::pair<std::string, const language::header_declaration*>> path_headers;  // header /:project { … }, by namespace
+
+        // A board's columns when its stages are written in the code, as a field's
+        // choices, in their order: each stage and how it's shown; the steps between them
+        // a person takes, those out of the stages no agent works, since an agent moves
+        // on what it works by itself; and the stages that notify when a card arrives.
+        struct written_stages {
+            std::vector<std::pair<std::string, std::string>> stages;
+            std::vector<std::pair<std::string, std::string>> steps;
+            std::vector<std::string> notify;
+        };
+        written_stages stages_written(const std::string& ns, const language::entity_declaration& card, const std::string& by) const {
+            written_stages out;
+            const language::field* along = nullptr;
+            for (const auto& f : card.fields) {
+                if (f.name == by) along = &f;
+            }
+            if (!along) return out;
+            for (std::size_t i = 0; i < along->choices.size(); ++i) {
+                const std::string& choice = along->choices[i];
+                out.stages.emplace_back(choice, i < along->choice_labels.size() && !along->choice_labels[i].empty() ? along->choice_labels[i] : label(choice));
+            }
+            auto scope = workflows.find(ns);
+            auto found = scope == workflows.end() ? nullptr : scope->second.contains(card.name) ? scope->second.at(card.name) : nullptr;
+            if (!found) return out;
+            for (const auto& step : found->moves) {
+                if (!agent_stages.contains(join(ns, card.name + "::" + step.from))) out.steps.emplace_back(step.from, step.to);
+            }
+            for (const auto& notice : found->notices) {
+                if (std::ranges::contains(notice.ways, std::string("chime"))) out.notify.push_back(notice.stage);
+            }
+            return out;
+        }
 
         // A file's screens, in order.
         std::vector<found_screen> screens_in(const language::file& f) const {
@@ -903,6 +937,10 @@ namespace one::generators::screens {
                             project.icon_source = {indexing_, s.where.line};
                         }
                     }
+                } else if (auto* w = std::get_if<language::define_workflow_declaration>(&d.node)) {
+                    workflows[ns][w->entity] = w;
+                } else if (auto* a = std::get_if<language::define_agent_declaration>(&d.node)) {
+                    for (const auto& rule : a->rules) agent_stages.insert(join(ns, rule.entity + "::" + rule.stage));
                 } else if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
                     entities[ns][e->name] = e;
                 } else if (auto* v = std::get_if<language::view_declaration>(&d.node)) {

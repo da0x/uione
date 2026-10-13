@@ -2534,6 +2534,7 @@ namespace one::language {
             if (changed.size() != 1) {
                 error(button.command.where, button.command.text() + " goes along steps, so it changes one field, the one they go between, like changes stage");
             }
+            if (!button.along) return;  // the steps its workflow writes
             const view_declaration* view = find(ns, *button.along, &scope::views);
             if (!view) {
                 error(button.along->where, "there's no view " + button.along->text() + " for its steps " + in_namespace(ns));
@@ -3110,15 +3111,26 @@ namespace one::language {
 
         void verify_board(const std::string& ns, const board_item& board, const std::string& route) {
             const view_each* cards = named_list(ns, board.view, *board.list, route);
-            const view_each* columns = named_list(ns, board.over, board.over_list, route);
-            if (!cards || !columns) return;
+            // Without over, its columns are the choices of the field naming a card's column.
+            bool written_stages = board.over.parts.empty();
+            const view_each* columns = written_stages ? nullptr : named_list(ns, board.over, board.over_list, route);
+            if (!cards || (!columns && !written_stages)) return;
             if (board.track) verify_track(ns, *board.track, *cards, route);
             const entity_declaration* card = listed_entity(ns, *cards);
-            const entity_declaration* column = listed_entity(ns, *columns);
-            if (!card || !column) return;
+            const entity_declaration* column = columns ? listed_entity(ns, *columns) : nullptr;
+            if (!card || (!column && !written_stages)) return;
             const field* by = find_field(*card, board.by);
             if (!by) {
                 error(board.by_where, "entity " + card->name + " has no field " + board.by + nearest(board.by, field_names(*card)));
+            } else if (written_stages) {
+                if (by->choices.empty()) {
+                    error(board.by_where, card->name + "." + board.by + " isn't a choice, so say the list of the board's columns, like over project_page.stages");
+                } else if (!in_rows(*cards, board.by)) {
+                    error(board.by_where, "view " + board.view.text() + " has no " + board.by + " in its " + *board.list + "; add it to the list's block");
+                }
+                if (board.move && board.move->along) error(board.move->along->where, "the board's columns are " + board.by + "'s choices, so its cards go along the steps the workflow writes; take out along");
+            } else if (board.move && !board.move->along) {
+                error(board.move->command.where, "the board's columns are " + board.over.text() + "." + board.over_list + ", so say the steps a card goes along, like along project_page.steps");
             } else if (pointed(ns, *by) != column) {
                 error(board.by_where, card->name + "." + board.by + " is a card's column, so it points at a " + column->name + ", what " + board.over.text() + "." +
                                           board.over_list + " lists");
@@ -3127,7 +3139,7 @@ namespace one::language {
             }
             verify_tint(ns, *cards, board.view.text(), board.tint, board.tint_where);
             if (board.reorder) verify_reorder(ns, *cards, *board.reorder, board.reorder_where, "board", "cards");
-            if (!in_rows(*columns, "title") && !in_rows(*columns, "name")) {
+            if (columns && !in_rows(*columns, "title") && !in_rows(*columns, "name")) {
                 error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
             }
             if (std::none_of(board.columns.begin(), board.columns.end(), [](const table_column& c) {

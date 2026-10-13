@@ -1587,11 +1587,13 @@ namespace one::language {
                 advance();
                 board.by_where = peek().where;
                 board.by = expect(token_kind::identifier, "the field naming each card's column, like stage").text;
-                if (!at_word("over")) fail_expecting("over and the list of its columns, like over project_page.stages");
-                advance();
-                board.over = parse_qualified_name("the view whose list its columns are, like project_page");
-                expect(token_kind::dot, "'.' and the view's list, like project_page.stages");
-                board.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
+                // Without over, its columns are the stages written in the code, the field's choices.
+                if (at_word("over")) {
+                    advance();
+                    board.over = parse_qualified_name("the view whose list its columns are, like project_page");
+                    expect(token_kind::dot, "'.' and the view's list, like project_page.stages");
+                    board.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
+                }
                 if (at_word("link")) {
                     advance();
                     board.link_where = peek().where;
@@ -1605,11 +1607,13 @@ namespace one::language {
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
                             button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
-                            if (!at_word("along")) fail_expecting("along and the view's list of steps, like along project_page.steps");
-                            advance();
-                            move.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
-                            expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
-                            move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
+                            // Without along, it goes along the steps its workflow writes.
+                            if (at_word("along")) {
+                                advance();
+                                move.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
+                                expect(token_kind::dot, "'.' and the view's list of steps, like project_page.steps");
+                                move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
+                            }
                             board.move = std::move(move);
                             end_line();
                             continue;

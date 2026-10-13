@@ -1614,3 +1614,25 @@ TEST_CASE("a landing page is drawn in one of uione's designs") {
     both.replace(both.find("landing grid {\n"), 14, "landing grid {\n\tlayout two_columns\n");
     CHECK(only_error(both).message == "a landing page is laid out by its design, so it says no layout");
 }
+
+TEST_CASE("a board's columns are the stages written in the code when it says no over, and its cards go along the workflow's steps") {
+    auto source = [](const std::string& field, const std::string& board) {
+        return "namespace yard {\nentity plate {\n\tname  text\n\t" + field + "\n}\ncommand plate::move {\n\tby anyone signed in\n\tchanges stage\n}\n"
+               "view yard_page {\n\tplates = each plate {\n\t\tname  stage\n\t}\n\tsteps = each plate {\n\t\tname\n\t}\n}\n"
+               "screen \"Plates\" /plates {\n\t" + board + "\n}\n}\n";
+    };
+    auto said = [](const diagnostics& out) {
+        std::vector<std::string> messages;
+        for (const auto& d : out) messages.push_back(d.message);
+        return messages;
+    };
+    auto fine = said(check_source(source("stage  enum  to_do | etching | etched", "board yard_page.plates by stage {\n\t\tname\n\t\tmove plate::move\n\t}")));
+    CAPTURE(fine);
+    CHECK(fine.empty());
+    auto plain = said(check_source(source("stage  text", "board yard_page.plates by stage {\n\t\tname\n\t}")));
+    CAPTURE(plain);
+    CHECK(std::ranges::contains(plain, std::string("plate.stage isn't a choice, so say the list of the board's columns, like over project_page.stages")));
+    auto along = said(check_source(source("stage  enum  to_do | etching | etched", "board yard_page.plates by stage {\n\t\tname\n\t\tmove plate::move along yard_page.steps\n\t}")));
+    CAPTURE(along);
+    CHECK(std::ranges::contains(along, std::string("the board's columns are stage's choices, so its cards go along the steps the workflow writes; take out along")));
+}

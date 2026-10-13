@@ -6,6 +6,11 @@
 
 #include "one/screens/models.hpp"
 
+#include <fcntl.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <one/client/client.hpp>
 
 #include <algorithm>
@@ -14,6 +19,9 @@
 #include <format>
 #include <random>
 #include <set>
+#include <thread>
+
+extern char** environ;
 
 namespace one::screens {
 
@@ -824,10 +832,61 @@ namespace one::screens {
 				if (!spec.link.empty()) shown.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
 				column.cards.push_back(std::move(shown));
 			}
+			column.notify = std::ranges::contains(spec.notify, column.id);
 			out.columns.push_back(std::move(column));
+		}
+		// A card that arrives in a column that notifies chimes, once; those there when
+		// the board's first drawn don't.
+		if (!spec.notify.empty()) {
+			auto seen = p.kept<std::optional<std::map<std::string, std::set<std::string>>>>(out.key + ":seen");
+			std::map<std::string, std::set<std::string>> now;
+			for (const auto& column : out.columns) {
+				if (!column.notify) continue;
+				for (const auto& card : column.cards) now[column.id].insert(card.id);
+			}
+			if (seen.peek() && *seen.peek() != now) {
+				const auto& before = *seen.peek();
+				for (const auto& column : out.columns) {
+					auto was = before.find(column.id);
+					for (const auto& card : column.cards) {
+						if (column.notify && (was == before.end() || !was->second.contains(card.id))) chime(card.title + ": " + column.title);
+					}
+				}
+			}
+			if (!seen.peek() || *seen.peek() != now) seen.set(now);
 		}
 		if (spec.move) out.error = p.error(spec.move->command);
 		return out;
+	}
+
+	void chime(const std::string& message) {
+		std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
+		bool installed = false;
+		for (std::size_t at = 0; at <= path.size();) {
+			std::size_t end = path.find(':', at);
+			std::string folder = path.substr(at, end == std::string::npos ? std::string::npos : end - at);
+			if (!folder.empty() && ::access((folder + "/chime").c_str(), X_OK) == 0) installed = true;
+			if (end == std::string::npos) break;
+			at = end + 1;
+		}
+		if (!installed) {
+			// The terminal's bell, where there's a terminal to ring.
+			if (::isatty(STDOUT_FILENO)) (void)!::write(STDOUT_FILENO, "\a", 1);
+			return;
+		}
+		std::string said = message;
+		char program[] = "chime", flag[] = "--message";
+		char* arguments[] = {program, flag, said.data(), nullptr};
+		posix_spawn_file_actions_t quiet;
+		posix_spawn_file_actions_init(&quiet);
+		posix_spawn_file_actions_addopen(&quiet, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+		posix_spawn_file_actions_addopen(&quiet, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+		pid_t child = 0;
+		if (::posix_spawnp(&child, "chime", &quiet, nullptr, arguments, environ) == 0) {
+			// Reaped by a thread of its own, so it's never left a zombie.
+			std::thread([child] { ::waitpid(child, nullptr, 0); }).detach();
+		}
+		posix_spawn_file_actions_destroy(&quiet);
 	}
 
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to) {

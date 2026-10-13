@@ -555,17 +555,40 @@ namespace one::generators {
                     if (f.name == shown.key && f.list && f.type && f.type->text() == "text") labels += (labels.empty() ? "" : ", ") + str(shown.key);
                 }
             }
-            std::string over = view_variable(parts, screens::full_view(ns, b.over.text()));
+            // Stages written in the code are its columns, and its workflow's steps the
+            // moves, given as views that are always there.
+            bool written = b.over.parts.empty();
+            auto stages = written && entity ? model_.stages_written(ns, *entity, b.by) : screens::model::written_stages{};
+            auto fixed = [&](const std::string& json) { return "state<view_state>(view_state{status::ready, ember::parse_json(" + str(json) + ")})"; };
+            auto quoted = [](const std::string& text) {
+                std::string out = "\"";
+                for (char c : text) out += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
+                return out + "\"";
+            };
+            std::string over;
+            if (written) {
+                std::string listed;
+                for (const auto& [id, title] : stages.stages) listed += (listed.empty() ? "" : ",") + std::string("{\"id\":") + quoted(id) + ",\"title\":" + quoted(title) + "}";
+                over = fixed("{\"stages\":[" + listed + "]}");
+            } else {
+                over = view_variable(parts, screens::full_view(ns, b.over.text()));
+            }
             std::string out = "board(p, {.view = " + view_variable(parts, screens::full_view(ns, b.view.text())) + ", .list = " + str(*b.list) + ", .by = " + str(b.by) +
-                              ", .over = " + over + ", .over_list = " + str(b.over_list);
-            for (const auto& column : model_.listed_columns(ns, b.over.text(), b.over_list)) {
+                              ", .over = " + over + ", .over_list = " + str(written ? "stages" : b.over_list);
+            if (written) out += ", .shown = \"title\"";
+            for (const auto& column : written ? std::vector<std::string>{} : model_.listed_columns(ns, b.over.text(), b.over_list)) {
                 if (column == "title") out += ", .shown = \"title\"";
             }
             out += ", .columns = {" + columns + "}";
             if (b.link) out += ", " + link_settings(ns, *b.link);
             if (!people.empty()) out += ", .people = {" + people + "}";
             if (!labels.empty()) out += ", .labels = {" + labels + "}";
-            if (b.move) {
+            if (b.move && !b.move->along) {
+                std::string steps;
+                for (const auto& [from, to] : stages.steps) steps += (steps.empty() ? "" : ",") + std::string("{\"from\":") + quoted(from) + ",\"to\":" + quoted(to) + "}";
+                out += ", .move = board_move{.command = " + str(screens::full_command(ns, b.move->command)) + ", .steps = " + fixed("{\"steps\":[" + steps + "]}") +
+                       ", .list = \"steps\"}";
+            } else if (b.move) {
                 std::string move = "board_move{.command = " + str(screens::full_command(ns, b.move->command)) + ", .steps = " +
                                    view_variable(parts, screens::full_view(ns, b.move->along->text())) + ", .list = " + str(b.move->along_list);
                 auto holders = model_.held_by(ns, route_, *b.move);
@@ -582,6 +605,7 @@ namespace one::generators {
             const language::track_setting* track = b.track ? &*b.track : beside && beside->track ? &*beside->track : nullptr;
             if (std::string t = track_of(parts, ns, track); !t.empty()) out += ", .track = " + t;
             if (std::string reorder = reorder_of(parts, ns, b.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;
+            if (!stages.notify.empty()) out += ", .notify = " + native_detail::strings(stages.notify);
             (void)screen;
             return out + "})";
         }

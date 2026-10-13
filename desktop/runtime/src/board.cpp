@@ -69,7 +69,13 @@ namespace one::desktop::runtime {
 				                                    .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)})});
 			}
 			std::vector<desktop::view> lane;
-			lane.push_back(desktop::row(desktop::text(column.title, t.strong()), desktop::text(std::to_string(column.cards.size()), t.quiet())).spacing(8));
+			// A column that chimes when a card arrives says so beside its count.
+			if (column.notify) {
+				lane.push_back(desktop::row(desktop::text(column.title, t.strong()), desktop::text(std::to_string(column.cards.size()), t.quiet()), desktop::text("♪", t.quiet()))
+				                   .spacing(8));
+			} else {
+				lane.push_back(desktop::row(desktop::text(column.title, t.strong()), desktop::text(std::to_string(column.cards.size()), t.quiet())).spacing(8));
+			}
 			if (cards_shown.empty()) {
 				lane.push_back(desktop::text("Nothing here", t.quiet()).padding(edges(4, 8)));
 			} else {
