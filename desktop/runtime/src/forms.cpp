@@ -32,8 +32,9 @@ namespace one::desktop::runtime {
 			std::string opens = model.opens();
 			// A button with an icon is a quiet one, as on the web, beside the page's main ones.
 			if (std::string g = glyph_of(spec.icon); !g.empty()) opens = g + " " + opens;
-			// As wide as it says, as on the web, not across the page.
-			return desktop::row(desktop::button(opens, [model] { model.set_open(true); }, spec.icon.empty()), desktop::spacer());
+			// As wide as it says, as on the web, not across the page, and no wider among
+			// the buttons beside a title, so they stay on one line beside it.
+			return desktop::column(desktop::button(opens, [model] { model.set_open(true); }, spec.icon.empty())).align(align::start);
 		}
 		std::vector<desktop::view> parts;
 		for (const auto& f : model.fields()) {

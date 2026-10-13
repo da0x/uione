@@ -325,7 +325,8 @@ namespace one::language {
                 };
                 std::string drawing;
                 for (const auto& t : targets) {
-                    if (lacking_in(t).empty()) drawing += (drawing.empty() ? "" : " ") + t;
+                    // Between commas, as --target takes them.
+                    if (lacking_in(t).empty()) drawing += (drawing.empty() ? "" : ",") + t;
                 }
                 for (const auto& t : targets) {
                     auto lacking = lacking_in(t);

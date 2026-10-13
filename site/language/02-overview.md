@@ -8,6 +8,7 @@ and deploy with the tools you already use:
 | Output | What it is | Built with |
 |---|---|---|
 | `web/` | a React app on `@uione/react`, unstyled, drawn by a component set such as `@uione/radix` | `yarn build` |
+| `desktop/`, `terminal/` | the same screens as a desktop app and a terminal app, when the project's [targets](/language/targets) name them | CMake and g++ |
 | `api/` | a Go service on the `one` library | `go build` |
 | `infrastructure/` | a Pulumi program for the cloud project | `pulumi up` |
 | `firestore.rules` | who may read which view | deployed by `infrastructure/` |

@@ -573,7 +573,9 @@ namespace {
 			                     p.title({words("#"), live(issue, "number"), words(" "), live(issue, "title")});
 			                     confirm(p, "projects::issue::close", "Close this issue?");
 			                     heading(p, actions(command(p, {.command = "projects::issue::follow", .label = "Follow", .id = p.param("issue"), .when = !issue->data["followed"].as_bool()}),
-			                                        command(p, {.command = "projects::issue::close", .label = "Close", .id = p.param("issue")})));
+			                                        command(p, {.command = "projects::issue::close", .label = "Close", .id = p.param("issue")}),
+			                                        form(p, {.command = "projects::issue::update", .fields = {{.name = "title"}}, .button = true, .id = p.param("issue"), .submit = "Save", .opener = "Edit issue", .icon = "edit"}),
+			                                        link(p, "Workflow", "/:project/workflow", "workflow")));
 			                     std::vector<region> regions;
 			                     regions.push_back({"main", items(text({live(issue, "body")}))});
 			                     regions.push_back({"side", items(details(p, issue, {{"stage.title", "Stage"}, {"priority", "Priority"}}),
@@ -645,7 +647,7 @@ TEST("a command is asked about first when the screen says so, runs on yes and no
 	CHECK(buttons.size() == before - 1);  // no move for a reporter's role
 }
 
-TEST("an issue in two columns, its buttons beside its title, the steps it can take, and a question asked") {
+TEST("an issue in two columns, its buttons beside its title, a form's and a link's among them, the steps it can take, and a question asked") {
 	memory_source data;
 	fill_issue(data, "atlas-maintainer");
 	auto s = with_issue();

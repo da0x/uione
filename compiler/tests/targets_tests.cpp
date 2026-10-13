@@ -88,6 +88,13 @@ TEST_CASE("each element a target doesn't draw is one error for it, saying what i
     CHECK(said == std::vector<std::string>{
                       "9: a section's color isn't drawn by the desktop app yet; take desktop out of target, or build with --target web",
                   });
+    // The targets that do draw it are said as --target takes them, between commas.
+    language::diagnostics three;
+    files.clear();
+    files.push_back(language::parse("main.one", project_with("web desktop terminal"), three));
+    language::check_targets(files, three, table);
+    REQUIRE(three.size() == 1);
+    CHECK(three[0].message == "a section's color isn't drawn by the desktop app yet; take desktop out of target, or build with --target web,terminal");
     CHECK(messages(project_with("web desktop terminal")).empty());
     auto wrong = messages(project_with("web dektop"));
     REQUIRE(wrong.size() == 1);

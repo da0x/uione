@@ -171,7 +171,11 @@ namespace one::generators {
             if (!served_.empty()) {
                 for (const auto& name : platform::files_under(served_)) {
                     output_file f{"public/" + name, platform::read_file(served_ + "/" + name).value_or(""), false, {}};
-                    f.sources.assign(static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n')), served_source_);
+                    // Every line is the served folder's, the last too when no newline ends it,
+                    // as none ends an image.
+                    std::size_t lines = static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n'));
+                    if (!f.content.empty() && f.content.back() != '\n') ++lines;
+                    f.sources.assign(lines, served_source_);
                     out.push_back(std::move(f));
                 }
             }

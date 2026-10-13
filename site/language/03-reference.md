@@ -252,25 +252,27 @@ screens in `build/desktop` and `build/terminal`. With none named, it's the web a
 Each target draws the screen elements its toolkit has a part for, and says so in the
 compiler, so a screen using one a target doesn't draw is an error, on its line, for
 that target: "a board's move … along isn't drawn by the terminal app yet; take
-terminal out of target, or build with --target web". `one build --target web`
+terminal out of target, or build with --target web,desktop". `one build --target web`
 builds fewer of the targets for one run, never others. How a form asks for each
 field is part of it too: a text box, a slider, radio buttons, a checkbox, a file to
 attach, each a kind every target draws or is an error. The desktop and terminal apps
-draw every element but `component`, a React component written by hand, which is the
-web's alone, and draw a landing design as a plain screen. uione's own gallery,
+draw every element, a `component` from its `.cpp` file, and a landing design as a
+plain screen. uione's own gallery,
 `examples/gallery`, uses every element and every kind of field, built for every
 target, so it's where each is seen side by side; what a target can't draw yet is in
 its `gaps`, which its test holds to what's so, and a new target starts with all of it
 there. Each is a CMake project of
 C++26: `cmake -S build/desktop -B build/desktop/out` and `cmake --build
-build/desktop/out` build it with g++ against uione's libraries in `UIONE`, a checkout
-of uione. It reads its views live from the project's `domain`, or `ONE_SERVER`, and
+build/desktop/out` build it with g++ against uione's libraries, installed with the
+compiler, or a checkout of uione named by `UIONE`. It reads its views live from the
+project's `domain`, or `ONE_SERVER`, and
 signs in through the browser the first time, keeping the sign-in for the next. The
 terminal app is drawn as btop draws itself: sections and forms are panels with round
 corners, titled in their border, and while it runs the terminal's own colors are the
 theme's dark ones, its page behind everything and its accent, danger, warning and
 success for what they mean, put back as it quits; with `NO_COLOR` set it keeps the
-terminal's.
+terminal's. [Targets](/language/targets) shows one screen in all three, and how to
+build and run each.
 
 `theme papercolor` gives the site a [theme](#define-theme): its colors, light and
 dark, its fonts, its corners and its depth. It's uione's own `harbor` unless it
@@ -1678,7 +1680,11 @@ issue::verify "Verify" when {
   `@uione/react`'s hooks, like any screen, and the npm packages it needs go in
   `components/package.json`, whose dependencies are added to the app. The other
   `.ts`, `.tsx` and `.css` files in `components/` come along too, so components
-  can share a module, like `import { useHistory } from "./commits"`.
+  can share a module, like `import { useHistory } from "./commits"`. A project
+  with a desktop or terminal target draws it there from
+  `components/opening_hours.cpp`: a function of the page giving a view, written
+  with the parts the generated screens are, and the other `.cpp` and `.hpp` files
+  in `components/` come along too.
 - `hero`, `section`, `text`, `link`, `code` and `markdown` are for pages that are
   mostly words. `#name` is a place on the page, and `{...}` in a string shows a
   live value.

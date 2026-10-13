@@ -42,6 +42,8 @@ namespace {
             if (!text.empty() && (n >= f.sources.size() || !f.sources[n])) {
                 found.push_back(f.path + ":" + std::to_string(n + 1) + ": " + text);
             }
+            // A last line without a newline, as an image's is, ends it.
+            if (end == std::string::npos) break;
             at = end + 1;
             ++n;
         }

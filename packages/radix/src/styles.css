@@ -374,6 +374,14 @@
     background: none;
     padding: 0;
   }
+  /* A picture is as wide as the text at most, framed as a panel is. */
+  .one-prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-box);
+  }
   /* A table wider than a phone scrolls inside itself, rather than widening the page. */
   .one-prose table {
     display: block;
