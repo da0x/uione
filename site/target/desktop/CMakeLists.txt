@@ -11,7 +11,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # uione's libraries: a checkout of uione named by UIONE, or the release installed with
 # the compiler, in ~/.local/share/uione/0.11.0.
-set(UIONE "$ENV{UIONE}" CACHE PATH "a checkout of uione, or its release's libraries")
+# UIONE in the environment wins over what an earlier configure cached.
+set(UIONE "" CACHE PATH "a checkout of uione, or its release's libraries")
+if(DEFINED ENV{UIONE} AND NOT "$ENV{UIONE}" STREQUAL "")
+	set(UIONE "$ENV{UIONE}")
+endif()
 if(NOT UIONE)
 	set(UIONE "$ENV{HOME}/.local/share/uione/0.11.0")
 endif()

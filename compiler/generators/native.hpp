@@ -1528,7 +1528,11 @@ namespace one::generators {
             out.line();
             out.line("# uione's libraries: a checkout of uione named by UIONE, or the release installed with");
             out.line("# the compiler, in ~/.local/share/uione/" + std::string(version) + ".");
-            out.line("set(UIONE \"$ENV{UIONE}\" CACHE PATH \"a checkout of uione, or its release's libraries\")");
+            out.line("# UIONE in the environment wins over what an earlier configure cached.");
+            out.line("set(UIONE \"\" CACHE PATH \"a checkout of uione, or its release's libraries\")");
+            out.open("if(DEFINED ENV{UIONE} AND NOT \"$ENV{UIONE}\" STREQUAL \"\")");
+            out.line("set(UIONE \"$ENV{UIONE}\")");
+            out.close("endif()");
             out.open("if(NOT UIONE)");
             out.line("set(UIONE \"$ENV{HOME}/.local/share/uione/" + std::string(version) + "\")");
             out.close("endif()");
