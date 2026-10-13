@@ -105,6 +105,11 @@ namespace one::client {
 		// changed, or refused with what the app said.
 		std::string run(std::string_view command, const ember::value& fields);
 
+		// Uploads a file on this machine for a file field, as the web does: the app says
+		// where it goes and may refuse it, like one too large. The path the field then
+		// holds, or refused.
+		std::string upload(const std::string& local);
+
 		const options& settings() const { return options_; }
 
 	private:
@@ -127,6 +132,9 @@ namespace one::client {
 	};
 	std::filesystem::path kept_at(const std::string& app);
 	std::optional<kept> read_kept(const std::string& app, std::string& problem);
+
+	// What kind of file a name says it is, like image/png, by its extension.
+	std::string type_of(const std::string& name);
 	void keep(const std::string& app, const kept& sign_in);
 
 }  // namespace one::client

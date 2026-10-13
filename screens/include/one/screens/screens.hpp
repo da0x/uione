@@ -129,6 +129,8 @@ namespace one::screens {
 		// running() says so, and what turned it down is its error() and, unless what
 		// ran it says so itself, as a form does, the page's problem().
 		void run(const std::string& command, const value& fields, std::function<void(const answer&)> after = {}, bool says_why_itself = false);
+		// The same, once the files given for its file fields are uploaded.
+		void run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself);
 		bool running(const std::string& command) const;
 		// A question asked before a command runs from this page, like "Remove this
 		// person?", answered on the page itself; and the one being asked, if any.
@@ -138,6 +140,7 @@ namespace one::screens {
 			value fields;
 			std::function<void(const answer&)> after;
 			bool says_why_itself = false;
+			attached_files files = {};
 		};
 		state<std::optional<asking>> asked() { return asked_; }
 		void answer_asked(bool yes);

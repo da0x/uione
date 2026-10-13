@@ -268,6 +268,8 @@ namespace one::screens {
 		std::string field, label, value;
 		int tone = 3;
 	};
+	// Files said by their names, the last part of where each is kept.
+	std::string file_names(const value& held);
 	std::vector<detail_line> details_of(const view_state& v, const std::vector<column>& fields, const std::map<std::string, std::vector<option>>& choices,
 	                                    const std::optional<tint_spec>& tint);
 

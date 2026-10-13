@@ -103,6 +103,19 @@ namespace one::screens {
 			return out;
 		}
 
+		// Each line written, as files are, one a line.
+		std::vector<std::string> split_lines(const std::string& written) {
+			std::vector<std::string> out;
+			std::size_t at = 0;
+			while (at <= written.size()) {
+				std::size_t end = written.find('\n', at);
+				if (end == std::string::npos) end = written.size();
+				out.push_back(written.substr(at, end - at));
+				at = end + 1;
+			}
+			return out;
+		}
+
 		// What a form sends for a field: a yes or no as true or false, a list or several
 		// choices as the list of them, and anything else as it's written.
 		value as_input(const std::string& written, const std::string& type) {
@@ -452,6 +465,11 @@ namespace one::screens {
 		if (spec_.from->get().status != status::ready || touched.peek()) return;
 		const value& stored = spec_.from->get().data;
 		for (const auto& f : spec_.fields) {
+			// What's attached is shown by the page; the field is for files to add.
+			if (f.type == "file" || f.type == "files") {
+				given(f).set(current(f));
+				continue;
+			}
 			std::string now = as_field(stored[f.name]);
 			if (f.type == "boolean") now = now == "true" ? "true" : "false";
 			if (written(f).peek() != now) written(f).set(now);
@@ -471,9 +489,24 @@ namespace one::screens {
 	void form_model::send() const {
 		if (page_.running(spec_.command)) return;
 		std::map<std::string, value> fields;
+		attached_files files;
 		for (const auto& f : spec_.fields) {
-			// Files aren't uploaded from here yet, so what's attached isn't sent, and stays.
-			if (f.type == "file" || f.type == "files") continue;
+			// Files are written as where they are on this machine, one a line, and
+			// uploaded as it's sent; a list keeps what it had and adds them. A field with
+			// none written isn't sent, so what's attached stays.
+			if (f.type == "file" || f.type == "files") {
+				std::vector<std::string> written;
+				for (const auto& line : split_lines(current(f))) {
+					if (!local_path(line).empty()) written.push_back(line);
+				}
+				if (written.empty()) continue;
+				files[f.name] = written;
+				if (f.type == "files") {
+					value had = spec_.from && spec_.from->get().status == status::ready ? spec_.from->get().data[f.name] : value();
+					fields[f.name] = had.is_array() ? had : value(std::vector<value>{});
+				}
+				continue;
+			}
 			fields[f.name] = as_input(current(f), f.type);
 		}
 		for (const auto& [name, given] : spec_.given) fields[name] = value(given);
@@ -481,8 +514,10 @@ namespace one::screens {
 		bool updating = spec_.from.has_value();
 		// What's needed once it's done is copied, as the page may be built again by then.
 		std::vector<std::pair<state<std::string>, std::string>> emptied, sent;
+		std::vector<state<std::string>> uploaded;  // files sent, emptied whatever the form
 		std::vector<state<bool>> unticked;
 		for (const auto& f : spec_.fields) {
+			if (f.type == "file" || f.type == "files") uploaded.push_back(written(f));
 			emptied.emplace_back(written(f), f.start);
 			// What an update sent is what it was given, so it follows the view again.
 			sent.emplace_back(page_.kept<std::string>(key_ + ":" + f.name + ":given", f.start), current(f));
@@ -496,8 +531,9 @@ namespace one::screens {
 		auto on_done = spec_.on_done;
 		std::map<std::string, std::string> params = page_.params();
 		page_base* here = &page_;
-		page_.run(spec_.command, value(std::move(fields)), [=](const answer& a) {
+		page_.run(spec_.command, value(std::move(fields)), std::move(files), [=](const answer& a) {
 			if (!a) return;
+			for (const auto& s : uploaded) s.set("");
 			if (updating) {
 				for (const auto& [given, now] : sent) given.set(now);
 				touched.set(false);
@@ -947,6 +983,17 @@ namespace one::screens {
 			out.entries.push_back(std::move(e));
 		}
 		if (!spec.title.empty()) out.title = fresh > 0 ? std::format("{} ({} new)", spec.title, fresh) : spec.title;
+		return out;
+	}
+
+	std::string file_names(const value& held) {
+		std::vector<value> each = held.is_array() ? held.as_array() : std::vector<value>{held};
+		std::string out;
+		for (const auto& path : each) {
+			if (!path.is_string() || path.as_string().empty()) continue;
+			std::string name = path.as_string().substr(path.as_string().find_last_of('/') + 1);
+			out += (out.empty() ? "" : ", ") + name;
+		}
 		return out;
 	}
 

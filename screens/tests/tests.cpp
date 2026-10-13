@@ -6,6 +6,8 @@
 // live, its commands run, asked about first and turned down, and what it keeps.
 // What's drawn is held by each toolkit's own tests.
 
+#include <filesystem>
+#include <fstream>
 #include <map>
 
 #include "check.hpp"
@@ -143,6 +145,37 @@ TEST("a page reads its views live, runs commands, asks first when it's told to, 
 	CHECK(p.kept<int>("count", 4).peek() == 4);
 	p.kept<int>("count").set(5);
 	CHECK(p.kept<int>("count").peek() == 5);
+}
+
+TEST("a form's files are uploaded as it's sent and added to what's attached, and one that isn't there turns it down") {
+	memory_source data;
+	data.on("tracker::issue::attach", [](const value&, memory_source&) -> answer { return "atlas-12"; });
+	data.set("tracker::issue_page", "atlas-12", value(fields{{"attachments", list{"files/old.log"}}}));
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	auto& p = nav.current();
+	auto shot = std::filesystem::temp_directory_path() / "uione screens shot.png";
+	std::ofstream(shot) << "png";
+	form_spec spec{.command = "tracker::issue::attach", .fields = {{.name = "attachments", .type = "files"}}, .from = p.view("tracker::issue_page", "atlas-12"), .id = "atlas-12"};
+	form_model form(p, spec);
+	// As a file manager copies it, its spaces written as %20.
+	std::string address = "file://" + shot.string();
+	for (std::size_t at; (at = address.find(' ')) != std::string::npos;) address.replace(at, 1, "%20");
+	form.written(spec.fields[0]).set(address + "\n");
+	form.send();
+	CHECK(data.uploads() == std::vector<std::string>{shot.string()});
+	CHECK(!data.runs().empty());
+	if (!data.runs().empty()) {
+		const auto& sent = data.runs().back().fields["attachments"].as_array();
+		CHECK(sent.size() == 2 && sent[0].as_string() == "files/old.log" && sent[1].as_string() == "uploads/uione screens shot.png");
+	}
+	CHECK(form.written(spec.fields[0]).peek().empty());  // sent, so not sent again
+	form.written(spec.fields[0]).set("~/no such file for uione.png");
+	form.send();
+	CHECK(data.runs().size() == 1);
+	CHECK(form.error() == "~/no such file for uione.png isn't a file");
+	std::filesystem::remove(shot);
 }
 
 int main() {

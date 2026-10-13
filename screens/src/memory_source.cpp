@@ -3,6 +3,8 @@
 
 #include "one/screens/source.hpp"
 
+#include <filesystem>
+
 namespace one::screens {
 
 	void memory_source::set(const std::string& view, const std::string& subject, value data) {
@@ -41,6 +43,24 @@ namespace one::screens {
 		runs_.push_back({command_name, fields});
 		auto found = commands_.find(command_name);
 		answered(found == commands_.end() ? answer(std::string()) : found->second(fields, *this));
+	}
+
+	void memory_source::run(const std::string& command_name, const value& fields, const attached_files& files, std::function<void(const answer&)> answered) {
+		value sent = fields;
+		for (const auto& [field, written] : files) {
+			std::vector<std::string> uploaded;
+			for (const auto& w : written) {
+				std::string at = local_path(w);
+				if (!std::filesystem::is_regular_file(at)) {
+					answered(std::unexpected(w + " isn't a file"));
+					return;
+				}
+				uploads_.push_back(at);
+				uploaded.push_back("uploads/" + std::filesystem::path(at).filename().string());
+			}
+			sent = with_uploaded(std::move(sent), field, uploaded);
+		}
+		run(command_name, sent, std::move(answered));
 	}
 
 }  // namespace one::screens

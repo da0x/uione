@@ -203,7 +203,8 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,
-	                      std::optional<tint_spec> tint, std::vector<std::string> labels) {
+	                      std::optional<tint_spec> tint, std::vector<std::string> labels,
+	                       std::vector<std::string> files) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
@@ -221,6 +222,8 @@ namespace one::desktop::runtime {
 					words_shown.push_back(desktop::text(screens::show(word), look).padding(edges(1, 7)).background({.fill = t.sunken, .radius = 9}));
 				}
 				value_parts.push_back(desktop::flow(std::move(words_shown)).spacing(4).grow());
+			} else if (std::ranges::contains(files, line.field)) {
+				value_parts.push_back(desktop::text(file_names(field_of(v.data, line.field)), t.body()).grow());
 			} else {
 				value_parts.push_back(desktop::text(line.value, t.body()).grow());
 			}

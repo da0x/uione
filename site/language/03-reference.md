@@ -529,7 +529,10 @@ entity order {
   how far it's come, and the form is sent once every file has arrived. The bytes
   go straight to the app's bucket, never through the backend: the backend gives
   whoever is signed in somewhere to upload one file, for ten minutes, at
-  `POST /api/files`. A file holds at most 5 GB.
+  `POST /api/files`. A file holds at most 5 GB. In the desktop and terminal apps,
+  the box is where the file is on that machine, typed or pasted from a file
+  manager, `~/` for home and one a line for several; they're uploaded as the form
+  is sent, and a list keeps what it held and adds them.
 - **Attaching:** a command that puts the file's path in a field attaches it to
   that record, in the command's transaction. It has to be an upload of the person
   running the command, and not attached to anything else; otherwise the command

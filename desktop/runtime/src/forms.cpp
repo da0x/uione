@@ -46,8 +46,12 @@ namespace one::desktop::runtime {
 				if (!lower.empty() && lower[0] >= 'A' && lower[0] <= 'Z') lower[0] = static_cast<char>(lower[0] - 'A' + 'a');
 				field_parts.push_back(desktop::picker(model.written(f), drawn_options(model.choices_of(f)), model.picking(f), "Choose " + lower + "…"));
 			} else if (f.type == "file" || f.type == "files") {
-				// Uploading isn't drawn in a window yet: what's attached stays as it is.
-				field_parts.push_back(desktop::text("Files are attached on the web", t.quiet()));
+				// Where the files are on this machine, typed or pasted from a file manager,
+				// uploaded as the form is sent.
+				bool several = f.type == "files";
+				field_parts.push_back(desktop::field(model.written(f), {.placeholder = several ? "Files to attach, one a line, like ~/screenshot.png" : "A file to attach, like ~/screenshot.png",
+				                                                        .multiline = several,
+				                                                        .lines = several ? 2 : 1}));
 			} else if (f.type == "choices") {
 				std::vector<desktop::view> each;
 				for (const auto& o : f.choices) each.push_back(desktop::toggle(model.ticked(f, o.value), o.label));

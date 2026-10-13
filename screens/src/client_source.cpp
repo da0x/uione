@@ -3,6 +3,9 @@
 
 #include "one/screens/client_source.hpp"
 
+#include <filesystem>
+#include <stdexcept>
+
 namespace one::screens {
 
 	client_source::client_source(one::client::session& session, std::function<void(std::function<void()>)> deliver)
@@ -56,6 +59,36 @@ namespace one::screens {
 				answer got;
 				try {
 					got = session_.run(command, fields);
+				} catch (const std::exception& e) {
+					got = std::unexpected(std::string(e.what()));
+				}
+				deliver_([answered, got] { answered(got); });
+			});
+		}
+		waiting_.notify_one();
+	}
+
+	void client_source::run(const std::string& command, const value& fields, const attached_files& files, std::function<void(const answer&)> answered) {
+		if (files.empty()) {
+			run(command, fields, std::move(answered));
+			return;
+		}
+		{
+			std::lock_guard hold(lock_);
+			sending_.push_back([this, command, fields, files, answered = std::move(answered)] {
+				answer got;
+				try {
+					value sent = fields;
+					for (const auto& [field, written] : files) {
+						std::vector<std::string> uploaded;
+						for (const auto& w : written) {
+							std::string at = local_path(w);
+							if (!std::filesystem::is_regular_file(at)) throw std::runtime_error(w + " isn't a file");
+							uploaded.push_back(session_.upload(at));
+						}
+						sent = with_uploaded(std::move(sent), field, uploaded);
+					}
+					got = session_.run(command, sent);
 				} catch (const std::exception& e) {
 					got = std::unexpected(std::string(e.what()));
 				}

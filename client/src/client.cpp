@@ -5,6 +5,7 @@
 
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <map>
@@ -139,6 +140,36 @@ namespace one::client {
 			from = next + 2;
 		}
 		return text(ember::parse_json(post(route, ember::to_json(fields.is_map() ? fields : ember::value::map())))["id"]);
+	}
+
+	std::string session::upload(const std::string& local) {
+		std::ifstream in(local, std::ios::binary | std::ios::ate);
+		if (!in) throw refused(0, local + " can't be read");
+		std::string body(static_cast<std::size_t>(in.tellg()), '\0');
+		in.seekg(0);
+		in.read(body.data(), static_cast<std::streamsize>(body.size()));
+		std::string name = std::filesystem::path(local).filename().string();
+		ember::value asked(std::map<std::string, ember::value>{{"name", name}, {"type", type_of(name)}, {"size", static_cast<double>(body.size())}});
+		auto given = ember::parse_json(post("/api/files", ember::to_json(asked)));
+		std::vector<std::pair<std::string, std::string>> headers;
+		for (const auto& [header, value] : given["headers"].as_map()) headers.emplace_back(header, text(value));
+		std::string to = text(given["url"]);
+		auto answer = text(given["method"]) == "PUT" ? ember::https_put(to, headers, body) : ember::https_post(to, headers, body);
+		if (answer.status >= 300) throw refused(answer.status, name + " didn't upload");
+		return text(given["path"]);
+	}
+
+	std::string type_of(const std::string& name) {
+		static const std::map<std::string, std::string> types{
+		    {".png", "image/png"},        {".jpg", "image/jpeg"},      {".jpeg", "image/jpeg"},      {".gif", "image/gif"},   {".webp", "image/webp"},
+		    {".svg", "image/svg+xml"},    {".pdf", "application/pdf"}, {".txt", "text/plain"},       {".log", "text/plain"},  {".md", "text/markdown"},
+		    {".json", "application/json"}, {".csv", "text/csv"},       {".zip", "application/zip"},  {".mp4", "video/mp4"},   {".webm", "video/webm"},
+		    {".mov", "video/quicktime"},  {".mp3", "audio/mpeg"},      {".wav", "audio/wav"},        {".html", "text/html"},  {".tar", "application/x-tar"},
+		    {".gz", "application/gzip"}};
+		std::string extension = std::filesystem::path(name).extension().string();
+		std::ranges::transform(extension, extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		auto found = types.find(extension);
+		return found == types.end() ? "application/octet-stream" : found->second;
 	}
 
 	// Finds the app's Firebase project and key, from what Firebase Hosting serves at

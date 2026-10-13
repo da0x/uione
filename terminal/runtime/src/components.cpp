@@ -258,8 +258,11 @@ namespace one::terminal::runtime {
 			} else if (f.type == "choice" || f.type == "pick") {
 				field_parts.push_back(terminal::picker(model.written(f), drawn_options(model.choices_of(f)), model.picking(f), "Choose " + lowered_first(shown) + "…"));
 			} else if (f.type == "file" || f.type == "files") {
-				// Uploading isn't drawn in a terminal yet: what's attached stays as it is.
-				field_parts.push_back(quiet("Files are attached on the web"));
+				// Where the files are on this machine, uploaded as the form is sent.
+				bool several = f.type == "files";
+				field_parts.push_back(terminal::field(model.written(f), {.placeholder = several ? "Files to attach, one a line, like ~/screenshot.png" : "A file to attach, like ~/screenshot.png",
+				                                                         .multiline = several,
+				                                                         .lines = several ? 2 : 1}));
 			} else if (f.type == "choices") {
 				std::vector<terminal::view> each;
 				for (const auto& o : f.choices) each.push_back(terminal::toggle(model.ticked(f, o.value), o.label));
@@ -692,13 +695,15 @@ namespace one::terminal::runtime {
 	}
 
 	terminal::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,
-	                       std::optional<tint_spec> tint, std::vector<std::string> labels) {
+	                       std::optional<tint_spec> tint, std::vector<std::string> labels,
+	                       std::vector<std::string> files) {
 		const view_state& v = *from;
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		std::vector<terminal::view> shown;
 		for (const auto& d : details_of(v, fields, choices, tint)) {
 			auto c = tone(d.tone);
 			std::string said = d.value;
+			if (std::ranges::contains(files, d.field)) said = file_names(field_of(v.data, d.field));
 			if (std::ranges::contains(labels, d.field)) {
 				// Labels as the table says them, each in brackets.
 				said.clear();

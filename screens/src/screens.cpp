@@ -6,6 +6,8 @@
 #include <one/client/client.hpp>
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <chrono>
 #include <cstring>
 #include <format>
@@ -386,13 +388,17 @@ namespace one::screens {
 		asked_.set(std::nullopt);
 		if (!yes || !was) return;
 		std::string question = std::exchange(questions_[was->command], "");  // asked once
-		run(was->command, was->fields, was->after, was->says_why_itself);
+		run(was->command, was->fields, was->files, was->after, was->says_why_itself);
 		questions_[was->command] = question;
 	}
 
 	void page_base::run(const std::string& command, const value& fields, std::function<void(const answer&)> after, bool says_why_itself) {
+		run(command, fields, attached_files{}, std::move(after), says_why_itself);
+	}
+
+	void page_base::run(const std::string& command, const value& fields, attached_files files, std::function<void(const answer&)> after, bool says_why_itself) {
 		if (auto q = questions_.find(command); q != questions_.end() && !q->second.empty()) {
-			asked_.set(asking{command, q->second, fields, std::move(after), says_why_itself});
+			asked_.set(asking{command, q->second, fields, std::move(after), says_why_itself, std::move(files)});
 			return;
 		}
 		// Told through states, which outlive the page if it's left before the answer.
@@ -402,7 +408,7 @@ namespace one::screens {
 		running.change([&](auto& now) { ++now[command]; });
 		problem.set("");
 		clear(command);
-		source_.run(command, fields, [running, problem, errors, command, says_why_itself, after = std::move(after)](const answer& a) {
+		source_.run(command, fields, files, [running, problem, errors, command, says_why_itself, after = std::move(after)](const answer& a) {
 			running.change([&](auto& now) {
 				if (--now[command] <= 0) now.erase(command);
 			});
@@ -470,6 +476,59 @@ namespace one::screens {
 			found = views_.emplace(at, std::pair{current, source_.listen(name, subject, [current](const view_state& v) { current.set(v); })}).first;
 		}
 		return found->second.first;
+	}
+
+	// Files
+
+	void source::run(const std::string& command, const value& fields, const attached_files& files, std::function<void(const answer&)> answered) {
+		if (files.empty()) {
+			run(command, fields, std::move(answered));
+			return;
+		}
+		answered(std::unexpected(std::string("files can't be attached from here")));
+	}
+
+	std::string local_path(std::string written) {
+		auto trimmed = [](std::string s) {
+			while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
+			std::size_t start = 0;
+			while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
+			return s.substr(start);
+		};
+		written = trimmed(std::move(written));
+		// Quoted, as a shell or a file manager may copy it.
+		if (written.size() >= 2 && (written.front() == '\'' || written.front() == '"') && written.back() == written.front()) written = written.substr(1, written.size() - 2);
+		if (written.starts_with("file://")) {
+			std::string decoded;
+			for (std::size_t i = 7; i < written.size(); ++i) {
+				if (written[i] == '%' && i + 2 < written.size() && std::isxdigit(static_cast<unsigned char>(written[i + 1])) && std::isxdigit(static_cast<unsigned char>(written[i + 2]))) {
+					decoded += static_cast<char>(std::stoi(written.substr(i + 1, 2), nullptr, 16));
+					i += 2;
+				} else {
+					decoded += written[i];
+				}
+			}
+			// file://host/path, the host most often left out, as file:///path.
+			written = decoded.starts_with("/") ? decoded : decoded.substr(std::min(decoded.find('/'), decoded.size()));
+		}
+		if (written == "~" || written.starts_with("~/")) {
+			const char* home = std::getenv("HOME");
+			written = std::string(home ? home : "") + written.substr(1);
+		}
+		return written;
+	}
+
+	value with_uploaded(value fields, const std::string& field, const std::vector<std::string>& uploaded) {
+		if (uploaded.empty()) return fields;
+		std::map<std::string, value> all = fields.as_map();
+		if (auto had = all.find(field); had != all.end() && had->second.is_array()) {
+			std::vector<value> now = had->second.as_array();
+			for (const auto& path : uploaded) now.push_back(value(path));
+			had->second = value(std::move(now));
+		} else {
+			all[field] = value(uploaded.front());
+		}
+		return value(std::move(all));
 	}
 
 }  // namespace one::screens

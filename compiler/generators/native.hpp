@@ -594,7 +594,7 @@ namespace one::generators {
                 }
             }
             std::string fields;
-            std::vector<std::string> choices, labels;
+            std::vector<std::string> choices, labels, files;
             std::string tint;
             for (const auto& f : d.fields) {
                 std::string key = screens::text_of(*f.value);
@@ -612,8 +612,10 @@ namespace one::generators {
                     for (const auto& field : entity->fields) {
                         if (field.name != member->member) continue;
                         if (!field.choices.empty()) choices.push_back(choices_entry(key, field));
-                        // A list of words is labels, each drawn on its own.
+                        // A list of words is labels, each drawn on its own; a file, or a list of
+                        // them, is said by its name.
                         if (field.list && field.type && field.type->text() == "text") labels.push_back(key);
+                        if (field.type && field.type->text() == "file") files.push_back(key);
                     }
                 }
             }
@@ -629,10 +631,11 @@ namespace one::generators {
             std::string c;
             for (const auto& one : choices) c += (c.empty() ? "" : ", ") + one;
             std::string out = "details(p, " + view_variable(parts, full) + ", {" + fields + "}";
-            if (!c.empty() || !tint.empty() || !labels.empty()) out += ", {" + c + "}";
+            if (!c.empty() || !tint.empty() || !labels.empty() || !files.empty()) out += ", {" + c + "}";
             if (!tint.empty()) out += ", " + tint;
-            else if (!labels.empty()) out += ", std::nullopt";
-            if (!labels.empty()) out += ", " + native_detail::strings(labels);
+            else if (!labels.empty() || !files.empty()) out += ", std::nullopt";
+            if (!labels.empty() || !files.empty()) out += ", " + native_detail::strings(labels);
+            if (!files.empty()) out += ", " + native_detail::strings(files);
             return out + ")";
         }
 

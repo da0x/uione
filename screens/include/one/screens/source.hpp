@@ -62,6 +62,15 @@ namespace one::screens {
 		std::function<void()> stop_;
 	};
 
+	// Files on this machine for a command's file fields, by field, as written in a
+	// form: paths, ~/ for home, or file:// addresses as a file manager copies them.
+	using attached_files = std::map<std::string, std::vector<std::string>>;
+	// Where a file written that way is.
+	std::string local_path(std::string written);
+	// A command's fields with a field holding where its files went: a list gets them
+	// added to what it held, a single file is replaced by the first.
+	value with_uploaded(value fields, const std::string& field, const std::vector<std::string>& uploaded);
+
 	class source {
 	public:
 		virtual ~source() = default;
@@ -69,6 +78,9 @@ namespace one::screens {
 		virtual listening listen(const std::string& view, const std::string& subject, std::function<void(const view_state&)> told) = 0;
 		// Runs a command, like projects::issue::move, telling what it answered.
 		virtual void run(const std::string& command, const value& fields, std::function<void(const answer&)> answered) = 0;
+		// Runs a command once the files given are uploaded, each field then holding where
+		// its files went; a source that can't upload turns down any it's given.
+		virtual void run(const std::string& command, const value& fields, const attached_files& files, std::function<void(const answer&)> answered);
 		// Who's reading, when someone's signed in.
 		virtual std::optional<person> reader() const { return std::nullopt; }
 	};
@@ -89,9 +101,14 @@ namespace one::screens {
 			value fields;
 		};
 		const std::vector<ran>& runs() const { return runs_; }
+		// The files uploaded, by where they were on this machine.
+		const std::vector<std::string>& uploads() const { return uploads_; }
 
 		listening listen(const std::string& view, const std::string& subject, std::function<void(const view_state&)> told) override;
+		using source::run;
 		void run(const std::string& command_name, const value& fields, std::function<void(const answer&)> answered) override;
+		// Each file "uploaded" to uploads/ and its name, as long as it's there.
+		void run(const std::string& command_name, const value& fields, const attached_files& files, std::function<void(const answer&)> answered) override;
 		std::optional<person> reader() const override { return reader_; }
 
 	private:
@@ -104,6 +121,7 @@ namespace one::screens {
 		int next_ = 0;
 		std::map<std::string, command> commands_;
 		std::vector<ran> runs_;
+		std::vector<std::string> uploads_;
 		std::optional<person> reader_;
 	};
 
