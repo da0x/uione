@@ -110,6 +110,83 @@ func TestAChangeOfMembersRebuildsOnlyThatClubsPages(t *testing.T) {
 	}
 }
 
+type shelf struct {
+	Record
+	Title string `firestore:"title"`
+}
+
+type note struct {
+	Record
+	Shelf string `firestore:"shelf" one:"refers=narrow::shelf"`
+	Title string `firestore:"title"`
+}
+
+type remark struct {
+	Record
+	Note   string `firestore:"note" one:"refers=narrow::note"`
+	Author string `firestore:"author" one:"refers=user"`
+}
+
+// A change to what pages only show, like the title of the shelf a note is on or the
+// name of who wrote a remark on it, rebuilds the pages showing it, not every note's;
+// and someone who's just signed up is shown by none yet.
+func TestAChangeToWhatPagesShowRebuildsOnlyThosePages(t *testing.T) {
+	if os.Getenv("FIRESTORE_EMULATOR_HOST") == "" {
+		os.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
+	}
+	ctx := context.Background()
+	a, err := New(ctx, Module("narrow",
+		Command[shelf]("shelf::update").Allow(SignedIn),
+		Command[note]("note::update").Allow(SignedIn),
+		Command[remark]("remark::create").Allow(SignedIn),
+		View("note_page").Per(Entity[note]()).Copy("shelf.title", "shelf.title").
+			List("remarks", Where[remark]("note", Subject)).Fields("author.name"),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	page := a.reg.views[0]
+	put := func(kind reflect.Type, id string, data map[string]any) {
+		if _, err := a.store.Collection(a.reg.schemas[kind].collection).Doc(id).Set(ctx, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(reflect.TypeFor[shelf](), "front", map[string]any{"title": "Front"})
+	put(reflect.TypeFor[shelf](), "back", map[string]any{"title": "Back"})
+	put(reflect.TypeFor[note](), "milk", map[string]any{"shelf": "front", "title": "Milk"})
+	put(reflect.TypeFor[note](), "eggs", map[string]any{"shelf": "back", "title": "Eggs"})
+	put(reflect.TypeFor[remark](), "milk-1", map[string]any{"note": "milk", "author": "ada-narrow"})
+	put(reflect.TypeFor[remark](), "eggs-1", map[string]any{"note": "eggs", "author": "bo-narrow"})
+	for _, id := range []string{"milk", "eggs"} {
+		if _, err := a.write(ctx, page, id, map[string]any{"title": id}, 1, "start"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		ev   event
+		want []string
+		why  string
+	}{
+		{event{Entity: "narrow::shelf", ID: "front", Before: map[string]any{"title": "Front"}, After: map[string]any{"title": "Fridge door"}}, []string{"milk"},
+			"renaming the front shelf rebuilds the page of the note on it"},
+		{event{Entity: "user", ID: "ada-narrow", Before: map[string]any{"name": "Ada"}, After: map[string]any{"name": "Ada L."}}, []string{"milk"},
+			"renaming Ada rebuilds the page of the note she remarked on"},
+		{event{Entity: "user", ID: "cy-narrow", After: map[string]any{"name": "Cy"}}, nil,
+			"someone signing up rebuilds no note's page"},
+	}
+	for _, c := range cases {
+		subjects, err := page.subjects(ctx, a, c.ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(subjects, c.want) {
+			t.Errorf("%s: rebuilds %v", c.why, subjects)
+		}
+	}
+}
+
 func TestAMentionIsAHashAndANumberStandingAlone(t *testing.T) {
 	cases := map[string][]float64{
 		"Fix #12":                  {12},

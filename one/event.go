@@ -77,4 +77,4 @@ func (a *App) publish(ctx context.Context, events ...event) {
 }
 
 // How many pages are rebuilt at the same time after a command.
-const rebuildsAtOnce = 8
+const rebuildsAtOnce = 32

@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -657,6 +658,7 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	}
 	// A change to what the documents copy a value through, like a project whose
 	// issues' pages show its lifecycle, changes every one that points at it.
+	copied := false
 	if v.per != nil {
 		per := a.reg.schemas[v.per]
 		for _, c := range v.copies {
@@ -667,7 +669,12 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 			if f := per.field(through); f == nil || a.reg.entity(f.refers) == nil || a.reg.entity(f.refers).entity != ev.Entity {
 				continue
 			}
-			refs, err := a.store.Collection(per.collection).Where(through, "==", ev.ID).Documents(ctx).GetAll()
+			copied = true
+			op := "=="
+			if f := per.field(through); f.typ != nil && f.typ.Kind() == reflect.Slice {
+				op = "array-contains" // through each in a list, like an issue's assignees
+			}
+			refs, err := a.store.Collection(per.collection).Where(through, op, ev.ID).Documents(ctx).GetAll()
 			if err != nil {
 				return nil, err
 			}
@@ -700,9 +707,15 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	picked := []Query{}
 	for _, l := range v.lists {
 		picked = append(picked, l.query)
+		for _, val := range l.values {
+			picked = append(picked, val.query)
+		}
 	}
 	for _, f := range v.firsts {
 		picked = append(picked, f.query)
+	}
+	for _, c := range v.counts {
+		picked = append(picked, c.query)
 	}
 	for _, q := range picked {
 		for _, way := range q.ways() {
@@ -788,6 +801,20 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	if listed && !everywhere {
 		return subjects, nil
 	}
+	// What the documents only show of, through what they copy or what their rows point
+	// at, like the board an issue's page names or the people its comments are by:
+	// the documents that copy it, found above, and those whose rows show it. What's
+	// just been made isn't shown by any row yet.
+	scoped := v.scope != nil && (ev.Entity == v.scope.entity || (v.readers != nil && a.reg.schemas[v.readers].entity == ev.Entity))
+	if !listed && !scoped {
+		shown, narrowed, err := v.shownIn(ctx, a, ev, ev.Before == nil, add)
+		if err != nil {
+			return nil, err
+		}
+		if (copied || shown) && narrowed {
+			return subjects, nil
+		}
+	}
 	// A change to who belongs to a project, or to the project itself, changes the
 	// documents held within it.
 	if v.scope != nil {
@@ -828,6 +855,90 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 		add(key)
 	}
 	return subjects, nil
+}
+
+// shownIn adds the documents whose rows show something of what changed, through a
+// field pointing at it, like a comment's author.name, or as what a change's field was
+// or became, like the board an issue moved from. shown says whether any row shows it
+// at all; narrowed, whether each document holding such a row could be found, by the
+// field its list picks rows with. Rows of what's just been made are left alone, as
+// none can point at it yet.
+func (v *ViewSpec) shownIn(ctx context.Context, a *App, ev event, made bool, add func(string)) (shown, narrowed bool, err error) {
+	narrowed = true
+	for _, l := range v.lists {
+		for _, way := range l.query.ways() {
+			each := a.reg.schemas[way.typ]
+			// The field tying each row to its document, like a comment's issue.
+			mine := ""
+			for _, c := range way.conditions {
+				if c.value == Subject && !c.except && !c.has && !c.gate && !strings.Contains(c.field, ".") {
+					mine = c.field
+				}
+			}
+			type look struct {
+				field, op string
+				value     any
+				also      [2]string // a second condition, field and value, or none
+			}
+			var looks []look
+			for _, name := range l.fields {
+				through, _, hop := strings.Cut(name, ".")
+				if !hop {
+					continue
+				}
+				f := each.through(through)
+				if f == nil || a.reg.entity(f.refers) == nil || a.reg.entity(f.refers).entity != ev.Entity {
+					continue
+				}
+				op := "=="
+				if f.typ != nil && f.typ.Kind() == reflect.Slice {
+					op = "array-contains"
+				}
+				looks = append(looks, look{field: through, op: op, value: ev.ID})
+			}
+			if owner := a.reg.historyOf(each); owner != nil {
+				for _, f := range owner.fields {
+					if a.reg.entity(f.refers) == nil || a.reg.entity(f.refers).entity != ev.Entity {
+						continue
+					}
+					op := "=="
+					if f.typ != nil && f.typ.Kind() == reflect.Slice {
+						op = "array-contains"
+					}
+					for _, side := range []string{"before", "after"} {
+						looks = append(looks, look{field: side, op: op, value: ev.ID, also: [2]string{"field", f.name}})
+					}
+				}
+			}
+			if len(looks) == 0 {
+				continue
+			}
+			shown = true
+			if made {
+				continue
+			}
+			if mine == "" {
+				narrowed = false
+				continue
+			}
+			for _, lk := range looks {
+				q := a.store.Collection(each.collection).Where(lk.field, lk.op, lk.value)
+				if lk.also[0] != "" {
+					q = q.Where(lk.also[0], "==", lk.also[1])
+				}
+				docs, err := q.Documents(ctx).GetAll()
+				if err != nil {
+					return false, false, err
+				}
+				for _, doc := range docs {
+					if key, _ := doc.Data()[mine].(string); key != "" {
+						add(key)
+					}
+				}
+			}
+		}
+	}
+	return shown, narrowed, nil
 }
 
 // addAll adds each key a stored value names: one, or everyone in a list, like an
@@ -1128,7 +1239,8 @@ func (a *App) called(ctx context.Context, target *schema, value any, read map[st
 
 func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[string]any, error) {
 	data := map[string]any{}
-	// What the entity it's for holds, for lists picked by its fields.
+	// What the entity it's for holds, read once, for lists picked by its fields and
+	// for what the view copies from it.
 	picksByItsFields := false
 	for _, q := range v.queries() {
 		for _, c := range q.conditions {
@@ -1136,90 +1248,121 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 			picksByItsFields = picksByItsFields || ok
 		}
 	}
-	if picksByItsFields && v.per != nil {
-		fields, err := a.stored(ctx, a.reg.schemas[v.per], subject)
-		if err != nil {
+	var fields map[string]any
+	if v.per != nil && (picksByItsFields || len(v.copies) > 0 || v.scope != nil || len(v.people) > 0) {
+		var err error
+		if fields, err = a.stored(ctx, a.reg.schemas[v.per], subject); err != nil {
 			return nil, err
 		}
-		ctx = context.WithValue(ctx, subjectFields{}, fields)
+		if picksByItsFields {
+			ctx = context.WithValue(ctx, subjectFields{}, fields)
+		}
+	}
+	// Everything else a page holds is read at once, each part on its own, as each
+	// is a round trip to the store: what it copies through what the entity points at,
+	// its counts, firsts and lists. The page waits for the slowest, not for all of
+	// them one after another.
+	var (
+		mu     sync.Mutex
+		wg     sync.WaitGroup
+		failed error
+	)
+	set := func(name string, value any, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil {
+			if failed == nil {
+				failed = err
+			}
+			return
+		}
+		data[name] = value
+	}
+	run := func(work func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			work()
+		}()
 	}
 	if len(v.copies) > 0 || v.scope != nil || len(v.people) > 0 {
-		// The entity the view is for. Once it's gone, its fields read as none.
-		fields, err := a.stored(ctx, a.reg.schemas[v.per], subject)
-		if err != nil {
-			return nil, err
-		}
 		for _, c := range v.copies {
 			through, field, hop := strings.Cut(c.field, ".")
 			if !hop {
-				data[c.name] = fields[c.field]
+				set(c.name, fields[c.field], nil)
 				continue
 			}
 			// Through each in a list it holds, like the names of an issue's assignees.
 			if ids, ok := fields[through].([]any); ok {
 				target := a.reg.entity(a.reg.schemas[v.per].field(through).refers)
-				values := []any{}
-				for _, item := range ids {
-					id, _ := item.(string)
-					if id == "" || target == nil {
-						continue
+				run(func() {
+					values := []any{}
+					for _, item := range ids {
+						id, _ := item.(string)
+						if id == "" || target == nil {
+							continue
+						}
+						held, err := a.stored(ctx, target, id)
+						if err != nil {
+							set(c.name, nil, err)
+							return
+						}
+						values = append(values, held[field])
 					}
-					held, err := a.stored(ctx, target, id)
-					if err != nil {
-						return nil, err
-					}
-					values = append(values, held[field])
-				}
-				data[c.name] = values
+					set(c.name, values, nil)
+				})
 				continue
 			}
 			// Through what the entity points at, like its project's lifecycle.
 			id, _ := fields[through].(string)
 			if id == "" {
-				data[c.name] = nil
+				set(c.name, nil, nil)
 				continue
 			}
-			held, err := a.stored(ctx, a.reg.entity(a.reg.schemas[v.per].field(through).refers), id)
-			if err != nil {
-				return nil, err
-			}
-			data[c.name] = held[field]
-		}
-		if v.scope != nil || len(v.people) > 0 {
-			if err := a.access(ctx, v, subject, fields, data); err != nil {
-				return nil, err
-			}
+			target := a.reg.entity(a.reg.schemas[v.per].field(through).refers)
+			run(func() {
+				held, err := a.stored(ctx, target, id)
+				set(c.name, held[field], err)
+			})
 		}
 	}
 	for _, name := range v.secrets {
-		data[name] = GitHubSecret(subject)
+		set(name, GitHubSecret(subject), nil)
 	}
 	for _, c := range v.counts {
-		n, err := a.count(ctx, c.query, subject)
-		if err != nil {
-			return nil, err
-		}
-		data[c.name] = n
+		run(func() {
+			n, err := a.count(ctx, c.query, subject)
+			set(c.name, n, err)
+		})
 	}
 	for _, f := range v.firsts {
-		found, err := a.find(ctx, f.query, subject, "")
-		if err != nil {
-			return nil, err
-		}
-		data[f.name] = nil
-		if len(found) > 0 {
+		run(func() {
+			found, err := a.find(ctx, f.query, subject, "")
+			if err != nil || len(found) == 0 {
+				set(f.name, nil, err)
+				return
+			}
 			sort.SliceStable(found, func(i, j int) bool {
 				return compare(found[i].Data()["created_at"], found[j].Data()["created_at"]) < 0
 			})
-			data[f.name] = found[0].Data()[f.field]
-		}
+			set(f.name, found[0].Data()[f.field], nil)
+		})
 	}
 	for _, l := range v.lists {
-		rows, err := a.rows(ctx, l, subject)
-		if err != nil {
+		run(func() {
+			rows, err := a.rows(ctx, l, subject)
+			set(l.name, rows, err)
+		})
+	}
+	wg.Wait()
+	if failed != nil {
+		return nil, failed
+	}
+	// Who may read it is worked out from what it copied, once that's all in.
+	if v.scope != nil || len(v.people) > 0 {
+		if err := a.access(ctx, v, subject, fields, data); err != nil {
 			return nil, err
 		}
-		data[l.name] = rows
 	}
 	for _, t := range v.tallies {
 		rows, _ := data[t.list].([]any)
@@ -1292,6 +1435,9 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 	}
 	each := a.reg.schemas[l.query.typ]
 	pointed := map[string]map[string]any{} // what each reference points at, read once
+	if err := a.prefetch(ctx, each, l, docs, pointed); err != nil {
+		return nil, err
+	}
 	rows := make([]any, 0, len(docs))
 	for _, doc := range docs {
 		row := map[string]any{"id": doc.Ref.ID}
@@ -1428,6 +1574,69 @@ func (a *App) readable(ctx context.Context, l *list, subject string, docs []*fir
 // readersRead holds, while a list's rows are checked, the readers already found
 // for each place, so a project's members are read once however many rows are in it.
 type readersRead struct{}
+
+// prefetch reads, in one call to the store for each kind, everything a list's rows
+// point at and show something of, like each comment's author for author.name, or what
+// a change's field pointed at before and after: the rows then find it all read,
+// rather than each waiting on a read of its own.
+func (a *App) prefetch(ctx context.Context, each *schema, l *list, docs []*firestore.DocumentSnapshot, pointed map[string]map[string]any) error {
+	wanted := map[*schema]map[string]bool{}
+	want := func(target *schema, value any) {
+		if target == nil {
+			return
+		}
+		ids := []any{value}
+		if many, ok := value.([]any); ok {
+			ids = many
+		}
+		for _, item := range ids {
+			if id, _ := item.(string); id != "" {
+				if wanted[target] == nil {
+					wanted[target] = map[string]bool{}
+				}
+				wanted[target][id] = true
+			}
+		}
+	}
+	owner := a.reg.historyOf(each)
+	for _, doc := range docs {
+		for _, name := range l.fields {
+			if through, _, ok := strings.Cut(name, "."); ok {
+				want(a.reg.entity(each.through(through).refers), doc.Data()[through])
+			}
+		}
+		if owner != nil {
+			if f := owner.field(fmt.Sprint(doc.Data()["field"])); f != nil && f.refers != "" {
+				for _, side := range []string{"before", "after"} {
+					want(a.reg.entity(f.refers), doc.Data()[side])
+				}
+			}
+		}
+	}
+	for target, ids := range wanted {
+		var refs []*firestore.DocumentRef
+		for id := range ids {
+			if _, read := pointed[target.collection+"/"+id]; !read {
+				refs = append(refs, a.store.Collection(target.collection).Doc(id))
+			}
+		}
+		if len(refs) == 0 {
+			continue
+		}
+		snaps, err := a.store.GetAll(ctx, refs)
+		if err != nil {
+			return err
+		}
+		for _, snap := range snaps {
+			fields := map[string]any{}
+			if snap.Exists() {
+				fields = snap.Data()
+			}
+			pointed[target.collection+"/"+snap.Ref.ID] = fields
+		}
+	}
+	return nil
+}
 
 func (a *App) stored(ctx context.Context, s *schema, id string) (map[string]any, error) {
 	if id == "" {
