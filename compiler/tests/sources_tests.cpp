@@ -53,7 +53,7 @@ namespace {
 } // namespace
 
 TEST_CASE("every generated line knows where it came from") {
-    for (const char* project : {"/site", "/examples/tasks", "/examples/library", "/examples/tracker"}) {
+    for (const char* project : {"/site", "/examples/tasks", "/examples/library", "/examples/tracker", "/examples/print_shop"}) {
         auto generated = generate(project);
         REQUIRE(generated.errors.empty());
         for (const auto& f : generated.files) {
@@ -61,6 +61,34 @@ TEST_CASE("every generated line knows where it came from") {
             for (const auto& gap : gaps(f)) FAIL_CHECK(gap);
         }
     }
+}
+
+TEST_CASE("each agent is a program of its own, whose rules lead back to the lines saying them") {
+    auto generated = generate("/examples/print_shop");
+    REQUIRE(generated.errors.empty());
+    auto found = std::ranges::find_if(generated.files, [](const auto& f) { return f.path == "agents/press/main.cpp"; });
+    REQUIRE(found != generated.files.end());
+    const auto& main = found->content;
+    CAPTURE(main);
+    CHECK(main.find(R"(press.rules.push_back({.queue = "shop::plate_work", .entity = "shop::plate", .along = "stage", .stage = "etching", )"
+                    R"(.program = "tools/etch {plate.name}", .then = "etched", .otherwise = "failed", .lease_minutes = 1});)") != std::string::npos);
+    CHECK(main.find(R"(.then = "printed", .otherwise = "failed", .lease_minutes = 10});)") != std::string::npos);
+    CHECK(main.find("return one::client::work(app, loop, press);") != std::string::npos);
+    // The line of the order's rule is the .one line saying it.
+    auto source = *platform::read_file(root + "/examples/print_shop/main.one");
+    int said = 0, at = 0;
+    for (std::size_t i = 0, line = 1; i < source.size(); ++i) {
+        if (source.compare(i, 22, "on order in printing  ") == 0) said = static_cast<int>(line);
+        if (source[i] == '\n') ++line;
+    }
+    for (std::size_t i = 0, line = 0; i < main.size(); ++i) {
+        if (main.compare(i, 40, R"(press.rules.push_back({.queue = "shop::o)") == 0) at = static_cast<int>(line);
+        if (main[i] == '\n') ++line;
+    }
+    REQUIRE(said > 0);
+    REQUIRE(found->sources[static_cast<std::size_t>(at)]);
+    CHECK(found->sources[static_cast<std::size_t>(at)]->line == said);
+    CHECK(std::ranges::any_of(generated.files, [](const auto& f) { return f.path == "agents/press/CMakeLists.txt"; }));
 }
 
 TEST_CASE("a command's lines lead to the Go they became") {

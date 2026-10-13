@@ -1,0 +1,12 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Etches a plate: a moment's work, or a while when it's called Slow, and a failure
+# when it's called Cracked.
+case "$1" in
+	Cracked) echo "the plate cracked" >&2; exit 1 ;;
+	Slow) sleep 30 ;;
+	*) sleep 1 ;;
+esac
+echo "etched $1"

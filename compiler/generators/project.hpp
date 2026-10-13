@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "generators/agent.hpp"
 #include "generators/api.hpp"
 #include "generators/cpp.hpp"
 #include "generators/infrastructure.hpp"
@@ -52,6 +53,7 @@ namespace one::generators {
             if (language::listed(targets, native)) under(native, generate_native(files, project_dir, native));
         }
         under("api", api.files);
+        under("", generate_agents(files));
         under("", {rules_file(project_dir), indexes_file(files), generate_cpp(files, project_dir)});
         auto deploy = generate_infrastructure(files, project_dir, out_dir);
         out.note = deploy.skipped;

@@ -83,7 +83,8 @@ jobs:
           compiler/build/one build examples/library
           compiler/build/one build examples/tracker
           compiler/build/one build examples/gallery
-          for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api examples/gallery/build/api; do
+          compiler/build/one build examples/print_shop
+          for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api examples/gallery/build/api examples/print_shop/build/api; do
             (cd "$api" && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
           done
 
@@ -140,6 +141,9 @@ jobs:
 
       - name: Run the site end to end against the emulators
         run: node tools/end-to-end.mjs
+
+      - name: Run the print shop's agent end to end against the emulators
+        run: CXX=g++-14 ONE_CLIENT_TLS=openssl node tools/agent-end-to-end.mjs
 
   # The desktop and terminal toolkits and Markdown, on Arch, whose g++ has the C++26
   # they're written in. The desktop's tests draw offscreen with Mesa's software Vulkan, as

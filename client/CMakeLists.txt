@@ -16,7 +16,7 @@ set(ONE_CLIENT_TLS botan CACHE STRING "botan or openssl")
 
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
-add_library(one_client src/client.cpp)
+add_library(one_client src/client.cpp src/agent.cpp)
 add_library(one::client ALIAS one_client)
 target_include_directories(one_client PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 if(ONE_CLIENT_TLS STREQUAL "openssl")

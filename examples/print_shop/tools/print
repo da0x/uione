@@ -1,0 +1,7 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Prints an order from its plates, given as JSON on the input.
+sleep 1
+echo "printed $1"

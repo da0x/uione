@@ -1,0 +1,117 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A print shop whose work moves on two boards: plates are etched, and orders are
+// printed from them. An order waits on its plates, and the press, an agent, does
+// the etching and the printing by itself once a foreman moves a card to it.
+
+import one
+
+project print_shop {
+	one  "0.11.1"
+}
+
+namespace shop {
+
+	entity shop {
+		slug   slug  required  unique  key
+		title  text  required
+	}
+
+	// Runs the shop: makes its plates and orders, and starts their work.
+	define role foreman "Foreman" in shop {
+		member::create
+		service::create
+		service::key
+		service::revoke
+		plate::create
+		plate::move
+		order::create
+		order::move
+	}
+
+	// The press: takes what's moved to it, and moves it on when it's done.
+	define role press_operator "Press operator" in shop for services {
+		plate::claim
+		plate::renew
+		plate::release
+		plate::move
+		order::claim
+		order::renew
+		order::release
+		order::move
+	}
+
+	command shop::create {
+		by anyone signed in
+		dispatch member::create {
+			shop = id  person = me  role = role::foreman
+		}
+	}
+
+	command member::create
+	command service::create
+	command service::key
+	command service::revoke
+
+	enum plate_stage {
+		to_do    "To do"
+		etching  "Etching"
+		etched   "Etched"
+		failed   "Failed"
+	}
+
+	enum order_stage {
+		to_do     "To do"
+		printing  "Printing"
+		printed   "Printed"
+		failed    "Failed"
+	}
+
+	entity plate {
+		shop   shop  required
+		name   text  required
+		stage  plate_stage = plate_stage::to_do
+	}
+
+	entity order {
+		shop    shop  required
+		title   text  required
+		plates  list of plate
+		stage   order_stage = order_stage::to_do
+	}
+
+	command plate::create
+	command order::create
+
+	define workflow plate by stage {
+		to_do    worked by foreman
+		etching  worked by press_operator
+		failed   worked by foreman
+		to_do -> etching
+		etching -> etched
+		etching -> failed
+		failed -> to_do
+		failed   notify chime
+		done at etched
+		lease 1 minute
+	}
+
+	define workflow order by stage {
+		to_do     worked by foreman
+		printing  worked by press_operator
+		failed    worked by foreman
+		to_do -> printing
+		printing -> printed
+		printing -> failed
+		failed -> to_do
+		printed  notify chime
+		done at printed
+		depends on plates
+	}
+
+	define agent press for press_operator {
+		on plate in etching    run "tools/etch {plate.name}"    then etched   else failed
+		on order in printing   run "tools/print {order.title}"  then printed  else failed
+	}
+}
