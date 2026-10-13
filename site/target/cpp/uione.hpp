@@ -367,6 +367,10 @@ namespace uione {
 
 	} // namespace studio
 
+	namespace themes {
+
+	} // namespace themes
+
 	namespace waitlist {
 
 		struct signup {

@@ -52,7 +52,7 @@ TEST_CASE("the site's desktop and terminal apps are generated exactly as their t
     for (const char* target : {"desktop", "terminal"}) {
         auto files = generate("/site", target);
         for (const char* path : {"CMakeLists.txt", "src/app.hpp", "src/main.cpp", "src/site.cpp", "src/screens/home.cpp", "src/screens/language.cpp",
-                                 "src/screens/releases.cpp", "src/screens/mission.cpp", "src/screens/install.cpp", "src/screens/about.cpp"}) {
+                                 "src/screens/releases.cpp", "src/screens/mission.cpp", "src/screens/install.cpp", "src/screens/about.cpp", "src/screens/themes.cpp"}) {
             CAPTURE(target);
             CAPTURE(path);
             auto expected = platform::read_file(root + "/site/target/" + target + "/" + path);

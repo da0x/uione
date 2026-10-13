@@ -68,7 +68,7 @@ native() {
 
 if wants web; then
 	# The web app reads @uione/react and @uione/radix from this checkout, as built now.
-	yarn install --silent
+	yarn install --silent --pure-lockfile
 	yarn workspace @uione/react build >/dev/null
 	yarn workspace @uione/radix build >/dev/null
 	ln -sfn "$root/node_modules" "$work/build/web/node_modules"

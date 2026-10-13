@@ -60,5 +60,6 @@ int main(int count, char** given) {
 	app::language_screens(s);
 	app::mission_screens(s);
 	app::releases_screens(s);
+	app::themes_screens(s);
 	return app::run(s, window_app, source, count > 1 ? given[1] : "/");
 }

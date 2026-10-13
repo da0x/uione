@@ -5,7 +5,7 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, cloneElement, isValidElement, useContext, useEffect, useRef, useState } from "react";
+import { Children, cloneElement, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
@@ -690,52 +690,67 @@ function triedStyle(theme: PaletteTheme): string {
   );
 }
 
-// The theme tried now, kept for as long as the page is open, whichever screen is on it.
+// The theme tried now, kept for as long as the page is open, whichever screen is on
+// it, and told to whatever shows it, like a page saving it or applying it elsewhere.
 let tried: PaletteTheme | undefined;
 let triedScheme: Scheme = schemes[Math.floor(Math.random() * schemes.length)];
+const triedReaders = new Set<() => void>();
 
 function tryTheme(theme: PaletteTheme | undefined) {
   tried = theme;
+  if (theme) triedScheme = theme.scheme;
   document.getElementById(triedId)?.remove();
-  if (!theme) return;
-  const style = document.createElement("style");
-  style.id = triedId;
-  style.textContent = triedStyle(theme);
-  document.head.appendChild(style);
+  if (theme) {
+    const style = document.createElement("style");
+    style.id = triedId;
+    style.textContent = triedStyle(theme);
+    document.head.appendChild(style);
+  }
+  for (const told of triedReaders) told();
+}
+
+// The theme tried on the app now, if one is, and a way to try another, or none to go
+// back to the app's own: for a page beside Themes, like one keeping themes someone
+// liked.
+export function useTriedTheme(): [PaletteTheme | undefined, (theme: PaletteTheme | undefined) => void] {
+  const theme = useSyncExternalStore(
+    (told) => {
+      triedReaders.add(told);
+      return () => triedReaders.delete(told);
+    },
+    () => tried,
+    () => undefined,
+  );
+  return [theme, tryTheme];
 }
 
 // Themes made at random from a palette, each tried on the whole app at once, and
 // written as a project says it, to copy into a .one file.
 export function Themes() {
   const ui = useUI();
-  const [theme, setTheme] = useState(tried);
-  const [scheme, setScheme] = useState(triedScheme);
+  const [theme] = useTriedTheme();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(timer);
   }, [copied]);
-  const use = (made: PaletteTheme | undefined) => {
-    tryTheme(made);
-    setTheme(made);
-    setCopied(false);
-  };
+  useEffect(() => setCopied(false), [theme]);
+  const scheme = theme?.scheme ?? triedScheme;
   return (
     <ui.Themes
       scheme={scheme}
       schemes={schemes.map((s) => [s, schemeTitle(s)])}
       onScheme={(chosen) => {
         triedScheme = chosen as Scheme;
-        setScheme(triedScheme);
-        use(generate(theme?.seed ?? randomSeed(), triedScheme));
+        tryTheme(generate(theme?.seed ?? randomSeed(), triedScheme));
       }}
       seed={theme?.seed}
       colors={theme ? roles.map((role) => [role, theme.colors[role].light, theme.colors[role].dark]) : []}
       written={theme ? written(theme) : ""}
       copied={copied}
-      onNew={() => use(generate(randomSeed(), scheme))}
-      onReset={() => use(undefined)}
+      onNew={() => tryTheme(generate(randomSeed(), scheme))}
+      onReset={() => tryTheme(undefined)}
       onCopy={() => {
         if (theme) void navigator.clipboard.writeText(written(theme)).then(() => setCopied(true));
       }}

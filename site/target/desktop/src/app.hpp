@@ -27,5 +27,6 @@ namespace app {
 	void language_screens(site& s);
 	void mission_screens(site& s);
 	void releases_screens(site& s);
+	void themes_screens(site& s);
 
 }  // namespace app

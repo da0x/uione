@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { generate, roles, schemes, written, type Scheme } from "../src/palette.js";
+import { generate, named, roles, schemes, written, type Scheme } from "../src/palette.js";
 
 // The themes some seeds make, as one::screens makes them in C++: a seed is the same
 // theme in every app.
@@ -25,5 +25,12 @@ describe("a theme from a palette", () => {
     expect(said.startsWith('define theme triadic_48213 "Triadic 48213" {\n\tpage     #')).toBe(true);
     expect(said.endsWith("}\n")).toBe(true);
     expect(schemes).toContain("split_complementary");
+  });
+
+  it("is made again from its name, as a page keeping it or applying it names it", () => {
+    expect(named("split_complementary_77")).toEqual(generate(77, "split_complementary"));
+    expect(named("triadic")).toBeUndefined();
+    expect(named("plaid_12")).toBeUndefined();
+    expect(named("triadic_1.5")).toBeUndefined();
   });
 });

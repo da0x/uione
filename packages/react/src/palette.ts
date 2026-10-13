@@ -209,5 +209,15 @@ export function written(theme: PaletteTheme): string {
   return out + "}\n";
 }
 
+// The seed and scheme of a theme by its name, like triadic_48213, or undefined for a
+// name no palette makes.
+export function named(name: string): PaletteTheme | undefined {
+  const cut = name.lastIndexOf("_");
+  const scheme = name.slice(0, cut) as Scheme;
+  const seed = Number(name.slice(cut + 1));
+  if (cut < 0 || !schemes.includes(scheme) || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) return undefined;
+  return generate(seed, scheme);
+}
+
 // A seed picked at random, as one theme picks one.
 export const randomSeed = () => 1 + Math.floor(Math.random() * 99999);
