@@ -17,9 +17,12 @@ namespace one::terminal::runtime {
 
 	using namespace one::screens;
 
-	// How a terminal app looks: its accent, among the 16 colors every terminal has.
+	// How a terminal app looks: its accent, among the 16 colors every terminal has, and
+	// its theme's colors, which the terminal's own are set to while it runs, as btop
+	// draws in its theme, where the terminal can be told them and NO_COLOR isn't set.
 	struct look {
 		terminal::color accent = terminal::color::blue;
+		std::optional<palette::theme> colors = std::nullopt;
 	};
 
 	using page = screens::basic_page<terminal::view>;

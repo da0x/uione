@@ -39,6 +39,20 @@ int main(int count, char** given) {
 	                              .auth_host = setting("ONE_AUTH_HOST", "")}, &deliver);
 	one::screens::client_source source(session, deliver.to);
 	app::site s{.name = "uione", .id = "org.uione.uione"};
+	{
+		one::screens::palette::theme t;
+		t["page"] = {"#f7f8fa", "#0a101c"};
+		t["surface"] = {"#ffffff", "#111a2b"};
+		t["sunken"] = {"#eef1f5", "#0d1524"};
+		t["ink"] = {"#0e1726", "#e6ebf3"};
+		t["muted"] = {"#5b6577", "#94a0b4"};
+		t["line"] = {"#dde2ea", "#1f2a3d"};
+		t["accent"] = {"#2457d6", "#7ea6ff"};
+		t["danger"] = {"#c2312d", "#ff7b72"};
+		t["success"] = {"#1a7f37", "#3fb950"};
+		t["warning"] = {"#9a6700", "#d29922"};
+		s.look.colors = t;
+	}
 	app::site_parts(s);
 	app::about_screens(s);
 	app::home_screens(s);

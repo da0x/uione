@@ -136,13 +136,14 @@ namespace one::terminal::runtime {
 		return terminal::text_rows(std::move(rows));
 	}
 
+	// A panel titled in its border, as btop draws its parts, in the section's color.
 	terminal::view section(section_title title, std::vector<terminal::view> inside) {
 		std::vector<terminal::view> parts;
-		parts.push_back(terminal::text(std::move(title.title), {.bold = true, .foreground = title.color.empty() ? color::none : named(title.color)}));
 		for (auto& v : inside) {
 			if (v.get()) parts.push_back(std::move(v));
 		}
-		return terminal::column(std::move(parts)).spacing(1);
+		color tint = title.color.empty() ? color::none : named(title.color);
+		return terminal::column(std::move(parts)).spacing(1).padding(0, 1).boxed(std::move(title.title), tint);
 	}
 
 	// The part of the page a link last brought into view, and how many times one has.

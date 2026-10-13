@@ -265,7 +265,12 @@ there. Each is a CMake project of
 C++26: `cmake -S build/desktop -B build/desktop/out` and `cmake --build
 build/desktop/out` build it with g++ against uione's libraries in `UIONE`, a checkout
 of uione. It reads its views live from the project's `domain`, or `ONE_SERVER`, and
-signs in through the browser the first time, keeping the sign-in for the next.
+signs in through the browser the first time, keeping the sign-in for the next. The
+terminal app is drawn as btop draws itself: sections and forms are panels with round
+corners, titled in their border, and while it runs the terminal's own colors are the
+theme's dark ones, its page behind everything and its accent, danger, warning and
+success for what they mean, put back as it quits; with `NO_COLOR` set it keeps the
+terminal's.
 
 `theme papercolor` gives the site a [theme](#define-theme): its colors, light and
 dark, its fonts, its corners and its depth. It's uione's own `harbor` unless it

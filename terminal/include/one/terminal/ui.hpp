@@ -122,6 +122,7 @@ namespace one::terminal {
 		bool wants_focus = false;
 		bool boxed = false;  // a line drawn around it, inside its padding
 		std::string box_title;
+		color box_color = color::none;  // its title's, the accent's unless it says
 		std::function<bool(const key_press&)> on_key;
 
 		std::vector<std::unique_ptr<element>> children;
@@ -181,10 +182,12 @@ namespace one::terminal {
 		view&& on_key(std::function<bool(const key_press&)> f) && { element_->on_key = std::move(f); return std::move(*this); }
 		view&& autofocus() && { element_->wants_focus = true; return std::move(*this); }
 		view&& brought_to_top() && { element_->to_top = true; return std::move(*this); }
-		// A line drawn around it, with a title in its top edge.
-		view&& boxed(std::string title = "") && {
+		// A panel, as btop draws one: a line with round corners around it, and a title in
+		// its top edge, in a color of its own or the accent.
+		view&& boxed(std::string title = "", color title_color = color::none) && {
 			element_->boxed = true;
 			element_->box_title = std::move(title);
+			element_->box_color = title_color;
 			return std::move(*this);
 		}
 

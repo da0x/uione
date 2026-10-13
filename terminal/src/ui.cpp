@@ -149,16 +149,19 @@ namespace one::terminal {
 		if (boxed && frame.width >= 2 && frame.height >= 2) {
 			int left = frame.x, top = frame.y;
 			int w = frame.width, h = frame.height;
-			style edge_style = focused ? style{.bold = true, .foreground = color::blue} : style{.dim = true};
+			// Quiet grey, the theme's muted, or the accent while it has the keyboard.
+			style edge_style = focused ? style{.bold = true, .foreground = color::blue} : style{.foreground = color::bright_black};
 			std::string across;
 			for (int i = 0; i < w - 2; ++i) across += "─";
-			c.put(top, left, "┌" + across + "┐", edge_style);
-			c.put(top + h - 1, left, "└" + across + "┘", edge_style);
+			c.put(top, left, "╭" + across + "╮", edge_style);
+			c.put(top + h - 1, left, "╰" + across + "╯", edge_style);
 			for (int y = top + 1; y < top + h - 1; ++y) {
 				c.put(y, left, "│", edge_style);
 				c.put(y, left + w - 1, "│", edge_style);
 			}
-			if (!box_title.empty()) c.put(top, left + 2, " " + box_title + " ", {.bold = true}, w - 4);
+			if (!box_title.empty()) {
+				c.put(top, left + 2, " " + box_title + " ", {.bold = true, .foreground = box_color == color::none ? color::blue : box_color}, w - 4);
+			}
 		}
 		paint_content(c);
 	}

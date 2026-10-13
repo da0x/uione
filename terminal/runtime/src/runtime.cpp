@@ -7,6 +7,7 @@
 
 #include "one/terminal/runtime/runtime.hpp"
 
+#include <cstdlib>
 #include <format>
 
 #include "one/terminal/runtime/components.hpp"
@@ -80,14 +81,19 @@ namespace one::terminal::runtime {
 	int run(const site& s, terminal::view_app& app, screens::source& from, const std::string& address) {
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
-		// A theme tried from a palette draws the whole terminal, whose own colors are
-		// put back as the app ends.
-		screens::tried_themes::on_tried(draw_terminal_in);
+		// The app's theme, or one tried from a palette, draws the whole terminal, whose
+		// own colors are put back as the app ends.
+		bool colored = !std::getenv("NO_COLOR");
+		auto draw = [own = s.look.colors, colored](const std::optional<palette::theme>& tried) {
+			if (colored) draw_terminal_in(tried ? tried : own);
+		};
+		if (s.look.colors) draw(std::nullopt);
+		screens::tried_themes::on_tried(draw);
 		int ended = app.run([&] { return drawn(nav); }, [&](const key_press& e) {
 			if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 			return false;
 		});
-		if (screens::tried_themes::theme().peek()) draw_terminal_in(std::nullopt);
+		if (colored && (s.look.colors || screens::tried_themes::theme().peek())) draw_terminal_in(std::nullopt);
 		return ended;
 	}
 

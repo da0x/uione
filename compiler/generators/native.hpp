@@ -27,6 +27,8 @@
 #include <string_view>
 #include <vector>
 
+#include <one/screens/palette.hpp>
+
 #include "code/stream.hpp"
 #include "generators/markdown.hpp"
 #include "generators/screens.hpp"
@@ -1455,6 +1457,18 @@ namespace one::generators {
                 out.open("{");
                 for (const auto& line : theme_of()) out.line(line);
                 out.line("s.look = t;");
+                out.close("}");
+            } else {
+                // The theme's colors, which the terminal's are set to while it runs.
+                out.open("{");
+                out.line("one::screens::palette::theme t;");
+                auto look = theme::resolve(files_, model_.project.theme.empty() ? "harbor" : model_.project.theme).value_or(theme::look{});
+                for (auto role : one::screens::palette::roles) {
+                    if (auto found = look.colors.find(std::string(role)); found != look.colors.end()) {
+                        out.line("t[" + str(std::string(role)) + "] = {" + str(found->second.first) + ", " + str(found->second.second) + "};");
+                    }
+                }
+                out.line("s.look.colors = t;");
                 out.close("}");
             }
             out.line("app::site_parts(s);");
