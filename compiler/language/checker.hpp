@@ -662,6 +662,7 @@ namespace one::language {
 
         // What's wrong with a workflow is said as it's lowered (lower.hpp).
         void verify(const std::string&, location, const define_workflow_declaration&) {}
+        void verify(const std::string&, location, const define_agent_declaration&) {}
 
         // define service github "GitHub" in project { mention::create }: each is a
         // command, and with in, one on what's in a project, as a role's are.
@@ -1521,10 +1522,27 @@ namespace one::language {
             resolve(in, *b->right, f);
         }
 
+        // What a require's message says in braces, like "waiting on {waiting(plates)}":
+        // a field of the command's entity, or waiting(...) of a list of them.
+        void said_in(location where, const std::string& message, const entity_declaration* entity) {
+            for (std::size_t open = message.find('{'); open != std::string::npos; open = message.find('{', open + 1)) {
+                std::size_t close = message.find('}', open);
+                std::string inside = close == std::string::npos ? "" : message.substr(open + 1, close - open - 1);
+                std::string named = inside.starts_with("waiting(") && inside.ends_with(")") ? inside.substr(8, inside.size() - 9) : inside;
+                const field* f = entity && !named.empty() ? field_or_id(*entity, named) : nullptr;
+                if (!f || (named != inside && !f->list)) {
+                    error(where, "a message says in braces a field of " + (entity ? entity->name : std::string("the command's entity")) +
+                                     ", or waiting(...) of a list of them, like \"waiting on {waiting(plates)}\"");
+                    return;
+                }
+            }
+        }
+
         void statements(const std::string& ns, const std::vector<statement>& body, const entity_declaration* entity, const context& in) {
             for (const auto& s : body) {
                 if (auto* r = std::get_if<require_statement>(&s.node)) {
                     resolve(in, *r->condition);
+                    said_in(s.where, r->message, entity);
                 } else if (auto* p = std::get_if<permission_statement>(&s.node); p && !p->by && p->permission.parts.size() == 1 &&
                                                                                    (p->permission.parts[0] == "anyone" || p->permission.parts[0] == "signed_in" ||
                                                                                     p->permission.parts[0] == "authenticated" || p->permission.parts[0] == "owner")) {
@@ -3841,6 +3859,15 @@ namespace one::language {
                 where_of(in, *w);
                 return nullptr;
             }
+            // waiting(plates): those of a list that aren't done yet, by their workflow's
+            // done at, in a command's require.
+            if (name == "waiting") {
+                if (!arguments(1)) return nullptr;
+                if (!in.command) error(call.callee->where, "waiting goes in a command, like require waiting(plates) == none  \"waiting on {waiting(plates)}\"");
+                const field* listed = resolve(in, *call.arguments[0]);
+                if (listed && !listed->list) error(call.arguments[0]->where, "waiting takes a list of what's waited on, like waiting(plates)");
+                return nullptr;
+            }
             // was issue.stage: what a field of the command's entity held before it.
             if (name == "was") {
                 if (!arguments(1)) return nullptr;
@@ -3901,7 +3928,7 @@ namespace one::language {
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "exists", "was", "held", "starts_with", "drop", "github_secret"};
+            std::vector<std::string> known{"count", "first", "exists", "waiting", "was", "held", "starts_with", "drop", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;

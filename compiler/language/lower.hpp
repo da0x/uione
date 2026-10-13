@@ -13,10 +13,12 @@
 //                                    are kept in, and the roles it starts with
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <map>
 #include <memory>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <variant>
 #include <string>
@@ -398,6 +400,8 @@ namespace one::language {
                 std::string ns;
             };
             std::vector<found> workflows;
+            std::vector<std::tuple<const define_agent_declaration*, const std::string*, std::string>> agents;  // each, its file and namespace
+            std::set<std::string> for_services;  // namespace::role of the roles services may hold
             std::map<std::string, entity_declaration*> entities;  // by namespace::name
             std::map<std::string, std::string> scopes;           // a namespace's roles are in this, like project
             std::map<std::string, std::vector<std::string>> roles;  // a namespace's defined roles, by name
@@ -418,6 +422,9 @@ namespace one::language {
                     } else if (auto* r = std::get_if<define_role_declaration>(&d.node)) {
                         scopes.emplace(ns, r->in);
                         roles[ns].push_back(r->name);
+                        if (r->services) for_services.insert(full(ns, r->name));
+                    } else if (auto* agent = std::get_if<define_agent_declaration>(&d.node)) {
+                        agents.emplace_back(agent, &path, ns);
                     } else if (auto* en = std::get_if<enum_declaration>(&d.node)) {
                         enums[full(ns, en->name)] = en;
                     } else if (auto* c = std::get_if<command_declaration>(&d.node)) {
@@ -475,7 +482,7 @@ namespace one::language {
 
             // A claim, given who may make it, and a move, given the steps it may take:
             // the commands every workflow has, and the lease they keep.
-            static std::string commanded(const define_workflow_declaration& w, const std::string& claim, const std::string& move) {
+            static std::string commanded(const define_workflow_declaration& w, const std::string& claim, const std::string& move, const std::string& waits = "") {
                 const std::string& e = w.entity;
                 std::string text = "entity lease {\n\theld_by  user\n\theld_until  date\n}\n";
                 text += "command " + e + "::claim {\n\trequire \"this " + w.by + " isn't worked by a role you hold\" {\n\t\t" + claim +
@@ -483,7 +490,7 @@ namespace one::language {
                 text += "command " + e + "::renew {\n\trequire held_by == me  \"you don't hold it\"\n\theld_until = " + lease(w) + "\n}\n";
                 text += "command " + e + "::release {\n\trequire held_by == me  \"you don't hold it\"\n\theld_by = none\n\theld_until = none\n}\n";
                 text += "command " + e + "::move {\n\tchanges " + w.by + "\n\trequire \"your role doesn't move " + a(e) +
-                        " from there to there\" {\n\t\t" + move + "\n\t}\n\trequire " + free +
+                        " from there to there\" {\n\t\t" + move + "\n\t}\n" + waits + "\trequire " + free +
                         "  \"someone else holds it\"\n\theld_by = none\n\theld_until = none\n}\n";
                 return text;
             }
@@ -548,6 +555,47 @@ namespace one::language {
             //     view order_work per role {
             //         items = each order where shop == role.shop && (stage == stage::proofing && role.name == "proofreader" || ...) { … }
             //     }
+            // How someone is told a record arrived in a stage: the chime, on the machine
+            // of whoever has its board open. Email and text are words for later, sent by
+            // the backend once they're made.
+            static constexpr std::array<std::string_view, 1> notices{"chime"};
+            static constexpr std::array<std::string_view, 2> later{"email", "text"};
+            template <typename Wrong>
+            static void notified(const std::string& way, location where, Wrong& wrong) {
+                if (std::find(notices.begin(), notices.end(), way) != notices.end()) return;
+                if (std::find(later.begin(), later.end(), way) != later.end()) {
+                    wrong(where, "notify " + way + " isn't sent yet; a stage notifies with a chime, like failed notify chime");
+                } else {
+                    wrong(where, way + " isn't a way to notify; a stage notifies with a chime, like failed notify chime");
+                }
+            }
+
+            // depends on packages: a list on the entity of records whose own workflow
+            // says where their work is done. The field, or nothing when it isn't one.
+            template <typename Wrong>
+            std::optional<std::string> depended(const define_workflow_declaration& w, const entity_declaration& moving, const std::string& ns, Wrong& wrong) {
+                const field* listed = field_named(moving, w.depends_on);
+                const std::string kind = listed && listed->type ? listed->type->text() : "";
+                if (!listed || !listed->list || !entities.contains(full(ns, kind))) {
+                    wrong(w.depends_on_where, w.entity + " depends on a list of what it waits on, and " + w.depends_on +
+                                                  " isn't one of its fields that is, like " + w.depends_on + "  list of " + w.entity);
+                    return std::nullopt;
+                }
+                for (const auto& other : workflows) {
+                    if (full(other.ns, other.workflow->entity) != full(ns, kind)) continue;
+                    if (other.workflow->done_at.empty()) {
+                        wrong(w.depends_on_where, w.entity + " waits on " + a(kind) + " until it's done, so " + kind +
+                                                      "'s workflow says which stage that is, like done at " +
+                                                      (other.workflow->moves.empty() ? std::string("shipped") : other.workflow->moves.back().to));
+                        return std::nullopt;
+                    }
+                    return w.depends_on;
+                }
+                wrong(w.depends_on_where, w.entity + " waits on " + a(kind) + " until it's done, and " + kind + " has no workflow saying where that is: define workflow " +
+                                              kind + " by stage { … done at a stage }");
+                return std::nullopt;
+            }
+
             void written(define_workflow_declaration& w, entity_declaration& moving, const std::vector<std::string>& choices,
                          std::vector<declaration>* declarations, const std::string& path, const std::string& ns, const say_error& error,
                          made_list& made_here) {
@@ -609,6 +657,19 @@ namespace one::language {
                     }
                 }
                 if (w.moves.empty()) wrong(w.where, "say the steps between its stages, one a line, like " + choices.front() + " -> " + choices.back());
+                if (!w.done_at.empty()) stage_known(w.done_at, w.done_at_where);
+                for (const auto& notice : w.notices) {
+                    stage_known(notice.stage, notice.where);
+                    for (std::size_t i = 0; i < notice.ways.size(); ++i) notified(notice.ways[i], notice.way_where[i], wrong);
+                }
+                std::string waits;
+                if (!w.depends_on.empty()) {
+                    if (auto field = depended(w, moving, ns, wrong)) {
+                        // It leaves its first stage only once everything it lists is done.
+                        waits = "\trequire waiting(" + *field + ") == none || was " + w.entity + "." + by + " != " + by + "::" + choices.front() +
+                                "  \"waiting on {waiting(" + *field + ")}\"\n";
+                    }
+                }
                 std::string in = fine ? claimable(w, moving, ns, error) : "";
                 if (in.empty()) return;
 
@@ -634,7 +695,7 @@ namespace one::language {
                     const auto& roles_taking = step.by.empty() ? worked[step.from]->roles : step.by;
                     move += (move.empty() ? "" : " || ") + std::string("was ") + stage(step.from) + " && " + stage(step.to) + " && held(" + role_list(roles_taking) + ")";
                 }
-                std::string text = commanded(w, claim, move);
+                std::string text = commanded(w, claim, move, waits);
                 // What's worked, with every field of each, and who holds it.
                 std::string rows;
                 for (const auto& f : moving.fields) rows += "  " + f.name;
@@ -642,6 +703,80 @@ namespace one::language {
                 text += "view " + w.entity + "_work per role {\n\treaders member\n\titems = each " + w.entity + " where " + in + " == role." + in +
                         " && (" + work + ") {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
                 said(w, moving, text, declarations, path, made_here);
+            }
+
+            // What an agent works: stages of workflows written in the code that its role,
+            // one for services, works, each moved on by a step the workflow has.
+            void agent_works(const define_agent_declaration& agent, const std::string& path, const std::string& ns) {
+                auto error = [&](location where, std::string message) { out.push_back({path, where, std::move(message)}); };
+                const auto& defined = roles[ns];
+                if (std::find(defined.begin(), defined.end(), agent.role) == defined.end()) {
+                    error(agent.role_where, "there's no role " + agent.role + ": an agent works as a role for services, like define role " + agent.role +
+                                                " \"…\" in project for services { ... }");
+                    return;
+                }
+                if (!for_services.contains(full(ns, agent.role))) {
+                    error(agent.role_where, agent.role + " is a role for people; an agent works as a role for services, like define role " + agent.role +
+                                                " \"…\" in project for services { ... }");
+                    return;
+                }
+                if (agent.rules.empty()) error(agent.where, "say what the agent does in each stage it works, like on order in printing run \"press\" then printed");
+                std::set<std::pair<std::string, std::string>> said;
+                for (const auto& rule : agent.rules) {
+                    const define_workflow_declaration* flow = nullptr;
+                    for (const auto& w : workflows) {
+                        if (w.ns == ns && w.workflow->entity == rule.entity) flow = w.workflow;
+                    }
+                    if (!flow) {
+                        error(rule.where, "an agent works what moves by a workflow, and there's no workflow for " + rule.entity +
+                                              ": define workflow " + rule.entity + " by stage { … }");
+                        continue;
+                    }
+                    if (!said.insert({rule.entity, rule.stage}).second) {
+                        error(rule.stage_where, "what the agent does with " + a(rule.entity) + " in " + rule.stage + " is said twice");
+                        continue;
+                    }
+                    // The roles that work a stage: its own, and those of the steps that leave it.
+                    bool works = false;
+                    std::set<std::string> stages, steps;
+                    for (const auto& stage : flow->stages) {
+                        stages.insert(stage.name);
+                        if (stage.name == rule.stage && std::find(stage.roles.begin(), stage.roles.end(), agent.role) != stage.roles.end()) works = true;
+                    }
+                    for (const auto& step : flow->moves) {
+                        stages.insert(step.from);
+                        stages.insert(step.to);
+                        if (step.from != rule.stage) continue;
+                        steps.insert(step.to);
+                        if (std::find(step.by.begin(), step.by.end(), agent.role) != step.by.end()) works = true;
+                    }
+                    if (!stages.contains(rule.stage)) {
+                        error(rule.stage_where, rule.stage + " isn't a stage of " + a(rule.entity) + "'s workflow");
+                        continue;
+                    }
+                    if (!works) {
+                        error(rule.stage_where, agent.role + " doesn't work " + rule.stage + "; say so in the workflow, like " + rule.stage + "  worked by " + agent.role);
+                    }
+                    auto step_to = [&](const std::string& to, location where, const char* when) {
+                        if (steps.contains(to)) return;
+                        error(where, "there's no step " + rule.stage + " -> " + to + " for " + a(rule.entity) + " to take " + when +
+                                         "; add it to the workflow, or say a stage a step reaches");
+                    };
+                    step_to(rule.then, rule.then_where, "when the program succeeds");
+                    if (!rule.otherwise.empty()) step_to(rule.otherwise, rule.otherwise_where, "when it fails");
+                    // {order.title} or {title}: a field of what it works.
+                    const entity_declaration* worked = entities.contains(full(ns, rule.entity)) ? entities[full(ns, rule.entity)] : nullptr;
+                    for (std::size_t open = rule.program.find('{'); worked && open != std::string::npos; open = rule.program.find('{', open + 1)) {
+                        std::size_t close = rule.program.find('}', open);
+                        std::string inside = close == std::string::npos ? "" : rule.program.substr(open + 1, close - open - 1);
+                        if (inside.starts_with(rule.entity + ".")) inside = inside.substr(rule.entity.size() + 1);
+                        if (inside != "id" && !field_named(*worked, inside)) {
+                            error(rule.program_where, "the program says in braces a field of " + a(rule.entity) + ", like {" + rule.entity + ".id}, and " +
+                                                          (inside.empty() ? std::string("{}") : inside) + " isn't one");
+                            break;
+                        }
+                    }
+                }
             }
 
             void define() {
@@ -674,6 +809,11 @@ namespace one::language {
                         location at = !w->stages.empty() ? w->stages.front().where : w->moves.front().from_where;
                         error(at, "the stages of " + a(w->entity) + " are " + stage->name + " records, so who works each and the steps between them "
                                   "are records too: worked by and steps say where they're kept");
+                        continue;
+                    }
+                    if (!w->depends_on.empty() || !w->done_at.empty() || !w->notices.empty()) {
+                        error(!w->depends_on.empty() ? w->depends_on_where : !w->done_at.empty() ? w->done_at_where : w->notices.front().where,
+                              "done at, depends on and notify go with stages written in the code, like enum stage { … }, not kept as " + stage->name + " records");
                         continue;
                     }
                     if (w->worked_by.empty()) {
@@ -737,6 +877,7 @@ namespace one::language {
                         made_here.emplace_back(declarations, std::move(d));
                     }
                 }
+                for (const auto& [agent, path, ns] : agents) agent_works(*agent, *path, ns);
                 // Added once every workflow is said, so no entity found above has moved.
                 for (auto& [declarations, d] : made_here) declarations->push_back(std::move(d));
             }
@@ -863,7 +1004,7 @@ namespace one::language {
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);
         roles.define(files);
-        lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}};
+        lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}, {}, {}};
         for (auto& f : files) workflows.find(f.declarations, "", f.path);
         workflows.define();
         lowering::lowerer l{nullptr, out, {}};

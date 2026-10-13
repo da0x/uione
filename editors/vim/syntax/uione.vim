@@ -37,7 +37,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks, never the entity a command is on: board in board::create
 " is a name.
-syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|themes\|details\|layout\|landing\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|minute\|minutes\|hour\|hours\|day\|days\|week\|weeks\|new\|open\|badge\|find\|only\|tint\|track\|color\|match\|other\|services\|worked\|steps\|lease\)\>\%(\s*::\)\@!"
+syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|themes\|details\|layout\|landing\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|minute\|minutes\|hour\|hours\|day\|days\|week\|weeks\|new\|open\|badge\|find\|only\|tint\|track\|color\|match\|other\|services\|worked\|steps\|lease\|notify\|depends\|done\|run\|then\)\>\%(\s*::\)\@!"
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+in\>"
@@ -68,7 +68,7 @@ syn match   uioneBuiltin   "\%(\<by\s\+\)\@<=\%(\<anyone\>\%(\s\+\<signed\>\s\+\
 syn match   uioneType      +\%(^\s*define\s\+\%(role\|service\)\s\+\h\w*\s\+"[^"]*"\s\+in\s\+\)\@<=\h\w*+
 " define role maintainer "Maintainer" in project: a role each project starts with;
 " define service github "GitHub" in project, a system that runs commands.
-syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\%(role\|service\|theme\|workflow\)\>" nextgroup=uioneName skipwhite
+syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\%(role\|service\|theme\|workflow\|agent\)\>" nextgroup=uioneName skipwhite
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("

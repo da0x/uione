@@ -77,6 +77,7 @@ Each declaration starts a line with the word for what it declares, then its name
 | [`role`](#role) | permissions a person can be given |
 | [`define role`](#define-role) | a role each project starts with, kept as records its people edit |
 | [`define workflow`](#define-workflow) | the rules an entity moves by: its stages, who works each, and the steps between them |
+| [`define agent`](#define-agent) | a program that works stages by itself: takes what arrives, runs, and moves it on |
 | [`define theme`](#define-theme) | how a site looks: its colors, light and dark, fonts, corners and depth |
 | [`define service`](#define-service) | a system that runs commands, like GitHub, and the commands it may run |
 | [`function`](#function) | a value worked out from others |
@@ -137,7 +138,8 @@ The language's own words, inside what a declaration says:
   `descending`, `limit`,
   `readers`, `public when`;
 - in a role: `per`, `from`, and in a define role, `in` and `for services`; in a picker, `from`;
-- in a define workflow: `by`, `worked by`, `steps`, `lease`, and `->` between two stages;
+- in a define workflow: `by`, `worked by`, `steps`, `lease`, `notify`, `done at`, `depends on`, and `->` between two stages;
+- in a define agent: `for`, and `on … in … run … then … else`;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
@@ -1241,6 +1243,117 @@ command order::move {
   - a choice nobody works and no step reaches;
   - no steps at all;
   - `worked by` or `steps` with stages written in the code.
+
+### One flow waiting on another
+
+Each kind of work can have a flow of its own, with its own stages, and still wait
+on another's. Here a shop etches the plates an order is printed from, and an order
+doesn't go to the press until its plates are etched:
+
+```one
+enum plate_stage {
+	to_do    "To do"
+	etching  "Etching"
+	etched   "Etched"
+}
+
+enum order_stage {
+	to_do     "To do"
+	printing  "Printing"
+	printed   "Printed"
+}
+
+entity plate {
+	shop   shop  required
+	name   text  required
+	stage  plate_stage = plate_stage::to_do
+}
+
+entity order {
+	shop    shop  required
+	title   text  required
+	plates  list of plate
+	stage   order_stage = order_stage::to_do
+}
+
+define workflow plate by stage {
+	to_do    worked by foreman
+	etching  worked by etcher
+	to_do -> etching
+	etching -> etched
+	etched  notify chime
+	done at etched
+}
+
+define workflow order by stage {
+	to_do     worked by foreman
+	printing  worked by press_operator
+	to_do -> printing
+	printing -> printed
+	done at printed
+	depends on plates
+}
+```
+
+- `done at etched` says where a flow's work is finished.
+- `depends on plates` names a list of what an order waits on, of its own entity or
+  another whose workflow says where it's done. An order leaves its first stage only
+  once every plate it lists is etched; until then the move is refused, naming them:
+  "waiting on Cover, Back". Moving on from later stages, or back, doesn't wait. It
+  adds this to `order::move`, as a project could write it:
+
+```one
+	require waiting(plates) == none || was order.stage != stage::to_do  "waiting on {waiting(plates)}"
+```
+
+- `waiting(plates)` is the plates not done yet, by their name or title, read in the
+  command, and a require's message says a field of the entity, or `waiting(...)`,
+  in braces.
+- `etched  notify chime` tells whoever has the board open when one arrives in that
+  stage: its column has a bell, and the desktop and terminal apps chime, with
+  [chime](https://github.com/da0x/chime) when it's installed or the terminal's bell
+  when it isn't; the web plays a tone. A chime is the only way so far; `email` and
+  `text` are words kept for later.
+- These are mistakes: `done at` or `notify` with a stage it doesn't have, `depends
+  on` a field that isn't a list, or a list of what has no workflow saying `done
+  at`, and any of the three with stages kept as records.
+
+## define agent
+
+A program that works stages by itself, as a role for services: when a record
+arrives in a stage it works, whether a person moved it there or a step did, it
+takes it, runs a program, and moves it on. A person drags an order to Printing,
+and the press does the rest:
+
+```one
+define role press_operator "Press operator" in shop for services {
+	order::claim
+	order::renew
+	order::release
+	order::move
+}
+
+define agent press for press_operator {
+	on order in printing  run "tools/print {order.id}"  then printed  else to_do
+}
+```
+
+- `on order in printing` is a stage of a [workflow](#define-workflow) the role
+  works. `run` is the program, from the project's folder, with a field of what it
+  works in braces, like `{order.id}` or `{order.title}`. It's given the record as
+  JSON on its input, and a folder of its own to work in.
+- When the program succeeds, the record moves to `then`; when it fails, to `else`,
+  or back to whoever may take it when there's no `else`. Each is a step of the
+  workflow out of that stage. A stage after it that the agent works too is taken
+  at once, so one drag can start several stages' work.
+- Its lease is renewed while the program runs, so a record isn't taken from it
+  midway, and one it stops working, like a machine that sleeps, is let go when its
+  lease runs out, for another to take.
+- `one build` writes it as a program in `build/agents/press`, which signs in with
+  a key of the role's service, `ONE_KEY`, against the server the apps use. These
+  are mistakes: a role that isn't for services, a stage the role doesn't work, a
+  `then` or `else` that isn't a step out of the stage, a field in braces the
+  entity doesn't have, and a stage said twice.
 
 ## define theme
 

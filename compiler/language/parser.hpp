@@ -327,6 +327,11 @@ namespace one::language {
                 advance();
                 return {where, parse_define_workflow()};
             }
+            if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "agent") {
+                advance();
+                advance();
+                return {where, parse_define_agent()};
+            }
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
             if (word == "picker") return {where, parse_picker()};
@@ -345,7 +350,7 @@ namespace one::language {
             }
             if (word == "fn") fail(where, "functions are declared with the whole word: function, not fn");
             fail(where, "'" + word + "' doesn't start a declaration; expected project, namespace, "
-                        "format, enum, entity, command, view, define role, define service, define theme, define workflow, function, screen, picker, webhook, backend, header, footer or once");
+                        "format, enum, entity, command, view, define role, define service, define theme, define workflow, define agent, function, screen, picker, webhook, backend, header, footer or once");
         }
 
         project_declaration parse_project() {
@@ -940,9 +945,53 @@ namespace one::language {
             }
         }
 
+        // define agent press for press_operator {
+        //     on order in printing  run "press {order.id}"  then printed  else proofing
+        // }
+        define_agent_declaration parse_define_agent() {
+            define_agent_declaration agent;
+            agent.where = peek().where;
+            agent.name = expect(token_kind::identifier, "the agent's name, like define agent press for press_operator").text;
+            if (!at_word("for")) fail_expecting("'for' and the role it works as, like define agent press for press_operator");
+            advance();
+            agent.role_where = peek().where;
+            agent.role = expect(token_kind::identifier, "the role for services it works as, like press_operator").text;
+            expect(token_kind::left_brace, "'{' and what it does in each stage, one a line, like on order in printing run \"press\" then printed");
+            while (in_block()) {
+                if (!at_word("on")) fail_expecting("what it does in a stage, like on order in printing run \"press\" then printed");
+                advance();
+                agent_rule rule;
+                rule.where = peek().where;
+                rule.entity = expect(token_kind::identifier, "what it works, like on order in printing").text;
+                if (!at_word("in")) fail_expecting("'in' and the stage, like on order in printing");
+                advance();
+                rule.stage_where = peek().where;
+                rule.stage = expect(token_kind::identifier, "the stage it works, like on order in printing").text;
+                if (!at_word("run")) fail_expecting("'run' and the program it runs, like run \"press {order.id}\"");
+                advance();
+                rule.program_where = peek().where;
+                rule.program = expect(token_kind::string, "the program it runs, in quotes, like run \"press {order.id}\"").text;
+                if (!at_word("then")) fail_expecting("'then' and where it goes when the program succeeds, like then printed");
+                advance();
+                rule.then_where = peek().where;
+                rule.then = expect(token_kind::identifier, "the stage it goes to when the program succeeds, like then printed").text;
+                if (at_word("else")) {
+                    advance();
+                    rule.otherwise_where = peek().where;
+                    rule.otherwise = expect(token_kind::identifier, "the stage it goes to when the program fails, like else proofing").text;
+                }
+                agent.rules.push_back(std::move(rule));
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return agent;
+        }
+
         // define workflow issue by stage { worked by worked_by  steps step  lease 10 minutes },
         // or, with stages written in the code, define workflow order by stage {
-        // proofing worked by proofreader  proofing -> press  lease 30 minutes }
+        // proofing worked by proofreader  proofing -> press  lease 30 minutes }; either
+        // may say done at shipped, and depends on plates.
         define_workflow_declaration parse_define_workflow() {
             define_workflow_declaration w;
             w.where = peek().where;
@@ -967,6 +1016,19 @@ namespace one::language {
                         parse_workflow_roles(step.by, step.by_where);
                     }
                     w.moves.push_back(std::move(step));
+                } else if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::identifier && peek(1).text == "notify") {
+                    // shipped notify chime
+                    workflow_notice notice;
+                    notice.where = peek().where;
+                    notice.stage = advance().text;
+                    advance();
+                    for (;;) {
+                        notice.way_where.push_back(peek().where);
+                        notice.ways.push_back(expect(token_kind::identifier, "how someone is told, like shipped notify chime").text);
+                        if (peek().kind != token_kind::comma) break;
+                        advance();
+                    }
+                    w.notices.push_back(std::move(notice));
                 } else if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::identifier && peek(1).text == "worked" &&
                            !(peek().text == "worked" && peek(1).text == "by")) {
                     // proofing worked by proofreader
@@ -988,6 +1050,18 @@ namespace one::language {
                     advance();
                     w.steps_where = peek().where;
                     w.steps = expect(token_kind::identifier, "the entity of its steps, like step").text;
+                } else if (at_word("done") && peek(1).kind == token_kind::identifier && peek(1).text == "at") {
+                    // done at shipped
+                    advance();
+                    advance();
+                    w.done_at_where = peek().where;
+                    w.done_at = expect(token_kind::identifier, "the stage where its work is finished, like done at shipped").text;
+                } else if (at_word("depends") && peek(1).kind == token_kind::identifier && peek(1).text == "on") {
+                    // depends on packages
+                    advance();
+                    advance();
+                    w.depends_on_where = peek().where;
+                    w.depends_on = expect(token_kind::identifier, "the field listing what it waits on, like depends on packages").text;
                 } else if (at_word("lease")) {
                     advance();
                     w.lease_where = peek().where;
@@ -999,7 +1073,7 @@ namespace one::language {
                     else if (unit.text != "minute" && unit.text != "minutes") fail(unit.where, "a lease lasts minutes or hours, like lease 10 minutes");
                     w.lease_minutes = minutes;
                 } else {
-                    fail_expecting("a stage and who works it, a step, worked by, steps or lease, one a line");
+                    fail_expecting("a stage and who works it, a step, worked by, steps, notify, done at, depends on or lease, one a line");
                 }
                 end_line();
             }

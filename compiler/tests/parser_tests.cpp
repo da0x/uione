@@ -739,7 +739,25 @@ TEST_CASE("a workflow says who works its stages, its steps, and how long a claim
     CHECK(out[0].message == "a lease lasts minutes or hours, like lease 10 minutes");
     out = parse_errors("define workflow issue by stage {\n\tstarts at backlog\n}\n");
     REQUIRE(!out.empty());
-    CHECK(out[0].message == "expected a stage and who works it, a step, worked by, steps or lease, one a line, found 'starts'");
+    CHECK(out[0].message == "expected a stage and who works it, a step, worked by, steps, notify, done at, depends on or lease, one a line, found 'starts'");
+}
+
+TEST_CASE("an agent says, for each stage it works, the program it runs and where what it works goes next") {
+    auto f = parse_ok("define agent press for press_operator {\n\ton order in printing  run \"tools/print {order.id}\"  then printed  else failed\n"
+                      "\ton plate in etching  run \"tools/etch\"  then etched\n}\n");
+    const auto& agent = std::get<define_agent_declaration>(f.declarations[0].node);
+    CHECK(agent.name == "press");
+    CHECK(agent.role == "press_operator");
+    REQUIRE(agent.rules.size() == 2);
+    CHECK(agent.rules[0].entity == "order");
+    CHECK(agent.rules[0].stage == "printing");
+    CHECK(agent.rules[0].program == "tools/print {order.id}");
+    CHECK(agent.rules[0].then == "printed");
+    CHECK(agent.rules[0].otherwise == "failed");
+    CHECK(agent.rules[1].otherwise.empty());
+    auto out = parse_errors("define agent press for press_operator {\n\ton order in printing  run \"print\"\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "expected 'then' and where it goes when the program succeeds, like then printed, found the end of the line");
 }
 
 TEST_CASE("a workflow's stages can be written in it: who works each, and the steps between them") {
@@ -762,6 +780,17 @@ TEST_CASE("a workflow's stages can be written in it: who works each, and the ste
     const auto& named = std::get<define_workflow_declaration>(worked.declarations[0].node);
     REQUIRE(named.stages.size() == 1);
     CHECK(named.stages[0].name == "worked");
+    // Where its work is done, and what it waits on before it starts.
+    auto ordered = parse_ok("define workflow order by stage {\n\tproofing -> press\n\tdone at shipped\n\tdepends on plates\n}\n");
+    const auto& waiting = std::get<define_workflow_declaration>(ordered.declarations[0].node);
+    CHECK(waiting.done_at == "shipped");
+    CHECK(waiting.depends_on == "plates");
+    // How someone's told when one arrives in a stage.
+    auto told = parse_ok("define workflow order by stage {\n\tproofing -> press\n\tshipped  notify chime\n}\n");
+    const auto& notices = std::get<define_workflow_declaration>(told.declarations[0].node).notices;
+    REQUIRE(notices.size() == 1);
+    CHECK(notices[0].stage == "shipped");
+    CHECK(notices[0].ways == std::vector<std::string>{"chime"});
     auto out = parse_errors("define workflow order by stage {\n\tproofing - press\n}\n");
     REQUIRE(!out.empty());
     CHECK(out[0].message == "expected '->' between two stages, like proofing -> press, found 'press'");

@@ -127,6 +127,7 @@ namespace one::generators {
             std::vector<std::pair<std::string, std::string>> backends;  // each name, and the file it's written in
             std::vector<std::pair<const language::once_declaration*, language::location>> onces;
             std::vector<std::pair<const language::define_service_declaration*, language::location>> services;
+            std::vector<const language::define_workflow_declaration*> workflows;
         };
 
         const std::vector<language::file>& files_;
@@ -145,6 +146,7 @@ namespace one::generators {
         std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
         int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
         std::map<std::string, std::string> held_named_;  // held([role::shipper]) asked so far, by the roles it asks of
+        int waits_ = 0;  // how many waiting(...) a command has asked, each its own answer
         bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
 
         code::source at(const void* declaration) const {
@@ -221,6 +223,8 @@ namespace one::generators {
                     pkg.defined.emplace_back(rs, d.where);
                 } else if (auto* sv = std::get_if<language::define_service_declaration>(&d.node)) {
                     pkg.services.emplace_back(sv, d.where);
+                } else if (auto* w = std::get_if<language::define_workflow_declaration>(&d.node)) {
+                    pkg.workflows.push_back(w);
                 } else if (auto* fmt = std::get_if<language::format_declaration>(&d.node)) {
                     pkg.formats.push_back(fmt);
                 } else if (auto* function = std::get_if<language::function_declaration>(&d.node)) {
@@ -910,6 +914,7 @@ namespace one::generators {
             pointed_.clear();
             existing_.clear();
             helds_ = 0;
+            waits_ = 0;
             held_named_.clear();
             for (const auto* s : body) find_pointed(e, *s);
             // What the body reads through a reference is read first, in the command's
@@ -1089,7 +1094,7 @@ namespace one::generators {
                 auto failing = negate(e, *r->condition, me);
                 if (!failing) return;
                 out.open("if " + *failing + " {");
-                out.line("return c.Fail(" + api_detail::go_string(r->message) + ")");
+                out.line("return c.Fail(" + message(e, *r, me) + ")");
                 out.close("}");
             } else if (auto* a = std::get_if<language::assign_statement>(&s.node)) {
                 auto target = resolve(e, *a->target, me);
@@ -1446,6 +1451,10 @@ namespace one::generators {
                 if (f->list) return "len(" + value + ") " + op + " 0";
                 return value + " " + op + " " + zero(*f);
             }
+            // waiting(plates) == none: whether nothing it waits on is left.
+            if (auto asked = existing_.find(b.left.get()); right && right->name.text() == "none" && asked != existing_.end() && asked->second.starts_with("waiting")) {
+                return "len(" + asked->second + ") " + op + " 0";
+            }
             auto l = expression(e, *b.left, me, nullptr);
             // was stage == stage::press: the choice as it's stored, which Was gives.
             if (auto* call = std::get_if<language::call_expression>(&b.left->node); call && !f && call->arguments.size() == 1) {
@@ -1478,6 +1487,7 @@ namespace one::generators {
             auto* call = std::get_if<language::call_expression>(&x.node);
             auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
             if (callee && callee->name.text() == "held") return held_before(out, e, x, *call, me);
+            if (callee && callee->name.text() == "waiting") return waiting_before(out, e, x, *call, me);
             if (!callee || callee->name.text() != "exists") return true;
             auto* w = std::get_if<language::where_expression>(&call->arguments[0]->node);
             auto* source = w ? std::get_if<language::name_expression>(&w->source->node) : nullptr;
@@ -1529,6 +1539,80 @@ namespace one::generators {
             out.close("}");
             existing_[&x] = name;
             return true;
+        }
+
+        // waiting(plates): the names of those a list points at that aren't at their
+        // workflow's done at stage yet, each read in the command's transaction.
+        bool waiting_before(stream& out, const language::entity_declaration& e, const language::expression& x, const language::call_expression& call, const std::string& me) {
+            const std::string listed = call.arguments.size() == 1 ? web_detail::text_of(*call.arguments[0]) : "";
+            const language::field* list = field(e, listed.starts_with(e.name + ".") ? listed.substr(e.name.size() + 1) : listed);
+            const language::entity_declaration* waited = list && list->list && list->type && pkg_ ? entity(*pkg_, list->type->text()) : nullptr;
+            const language::define_workflow_declaration* flow = nullptr;
+            for (const auto* w : pkg_ ? pkg_->workflows : std::vector<const language::define_workflow_declaration*>{}) {
+                if (waited && w->entity == waited->name && !w->done_at.empty()) flow = w;
+            }
+            const language::field* stage = flow ? field(*waited, flow->by) : nullptr;
+            if (!stage) {
+                unsupported(path_, x.where, "waiting of anything but a list of the command's entity, of records whose workflow says done at");
+                return false;
+            }
+            const language::field* named = field(*waited, "name");
+            if (!named) named = field(*waited, "title");
+            std::string answer = "waiting" + (waits_ ? std::to_string(waits_ + 1) : std::string());
+            ++waits_;
+            std::string each = waited->name.substr(0, 1) == me ? "x" : waited->name.substr(0, 1);
+            out.line("var " + answer + " []string");
+            out.open("for _, id := range " + me + "." + api_detail::go_name(list->name) + " {");
+            out.line(each + ", err := one.Read[" + api_detail::go_name(waited->name) + "](c, id)");
+            out.open("if err != nil {");
+            out.line("return err");
+            out.close("}");
+            out.open("if " + each + "." + api_detail::go_name(stage->name) + " != " + choice(*stage, flow->done_at) + " {");
+            out.line(answer + " = append(" + answer + ", " + (named ? each + "." + api_detail::go_name(named->name) : each + ".ID") + ")");
+            out.close("}");
+            out.close("}");
+            existing_[&x] = answer;
+            return true;
+        }
+
+        // A require's message, with what it says in braces filled in: "waiting on
+        // {waiting(plates)}" names the plates, and "{title}" the entity's title.
+        std::string message(const language::entity_declaration& e, const language::require_statement& r, const std::string& me) {
+            std::string said, text;
+            auto flush = [&] {
+                if (!text.empty()) said += (said.empty() ? "" : " + ") + api_detail::go_string(text);
+                text.clear();
+            };
+            for (std::size_t at = 0; at < r.message.size();) {
+                std::size_t open = r.message.find('{', at);
+                std::size_t close = open == std::string::npos ? std::string::npos : r.message.find('}', open);
+                if (close == std::string::npos) {
+                    text += r.message.substr(at);
+                    break;
+                }
+                text += r.message.substr(at, open - at);
+                std::string inside = r.message.substr(open + 1, close - open - 1);
+                std::string value;
+                for (const auto& [asked, answer] : existing_) {
+                    auto* call = std::get_if<language::call_expression>(&asked->node);
+                    auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+                    if (callee && callee->name.text() == "waiting" && call->arguments.size() == 1 && "waiting(" + web_detail::text_of(*call->arguments[0]) + ")" == inside) {
+                        value = "one.Listed(" + answer + ")";
+                    }
+                }
+                if (value.empty()) {
+                    if (const auto* f = field(e, inside)) value = f->list ? "one.Listed(" + me + "." + api_detail::go_name(f->name) + ")" : "one.Said(" + me + "." + api_detail::go_name(f->name) + ")";
+                }
+                if (value.empty()) {
+                    text += r.message.substr(open, close - open + 1);
+                } else {
+                    flush();
+                    said += (said.empty() ? "" : " + ") + value;
+                }
+                at = close + 1;
+            }
+            flush();
+            return said.empty() ? "\"\"" : said;
         }
 
         // held(stage.worked_by): whether the person holds one of the roles listed on

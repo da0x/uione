@@ -1081,6 +1081,160 @@ TEST_CASE("a workflow's stages written in it are each worked or reached, by role
                "stage is a choice, so the steps between its stages are said here, like proofing -> shipped; worked by and steps are for stages kept as records"));
 }
 
+TEST_CASE("one flow depends on another: an order waits on its plates, by name, until each is done, and a stage can chime") {
+    const std::string flows = R"(namespace shop {
+entity shop {
+	slug  slug  required  unique  key
+}
+define role press_operator "Press operator" in shop {
+	plate::claim
+	plate::renew
+	plate::release
+	plate::move
+	order::claim
+	order::renew
+	order::release
+	order::move
+}
+command shop::create {
+	by anyone signed in
+}
+enum plate_stage {
+	to_do    "To do"
+	etching  "Etching"
+	etched   "Etched"
+}
+enum order_stage {
+	to_do     "To do"
+	printing  "Printing"
+	printed   "Printed"
+}
+entity plate {
+	shop   shop  required
+	name   text  required
+	stage  plate_stage = plate_stage::to_do
+}
+entity order {
+	shop    shop  required
+	title   text
+	plates  list of plate
+	stage   order_stage = order_stage::to_do
+}
+define workflow plate by stage {
+	to_do    worked by press_operator
+	etching  worked by press_operator
+	to_do -> etching
+	etching -> etched
+	done at etched
+}
+)";
+    auto compiled = [&](const std::string& order_flow) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", flows + order_flow + "}\n", out));
+        language::check(files, out);
+        return std::pair{std::move(files), std::move(out)};
+    };
+    auto [files, out] = compiled("define workflow order by stage {\n\tto_do  worked by press_operator\n\tprinting  worked by press_operator\n"
+                                 "\tto_do -> printing\n\tprinting -> printed\n\tdone at printed\n\tdepends on plates\n}\n");
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+    REQUIRE(found != generated.files.end());
+    const auto& go = found->content;
+    CAPTURE(go);
+    // Each plate is read in the move's transaction, and those not etched yet are named.
+    CHECK(go.find("for _, id := range o.Plates {\n\t\t\tp, err := one.Read[Plate](c, id)") != std::string::npos);
+    CHECK(go.find("if p.Stage != PlateStageEtched {\n\t\t\t\twaiting = append(waiting, p.Name)") != std::string::npos);
+    // Only leaving its first stage waits; a move further on, or back, doesn't.
+    CHECK(go.find("if !(len(waiting) == 0 || c.Was(\"stage\") != string(OrderStageToDo)) {\n\t\t\treturn c.Fail(\"waiting on \" + one.Listed(waiting))") !=
+          std::string::npos);
+
+    auto messages = [&](const std::string& order_flow) {
+        std::vector<std::string> said;
+        for (const auto& d : compiled(order_flow).second) said.push_back(d.message);
+        return said;
+    };
+    auto says = [](const std::vector<std::string>& said, const std::string& message) {
+        CAPTURE(said);
+        return std::find(said.begin(), said.end(), message) != said.end();
+    };
+    const std::string steps = "\tto_do  worked by press_operator\n\tprinting  worked by press_operator\n\tto_do -> printing\n\tprinting -> printed\n";
+    CHECK(says(messages("define workflow order by stage {\n" + steps + "\tdepends on title\n}\n"),
+               "order depends on a list of what it waits on, and title isn't one of its fields that is, like title  list of order"));
+    CHECK(says(messages("define workflow order by stage {\n" + steps + "\tdone at shipped\n}\n"),
+               "shipped isn't a stage of an order: its stages are to_do, printing or printed"));
+    // What it waits on says where its own work is done.
+    language::diagnostics plain;
+    std::vector<language::file> unfinished;
+    std::string without = flows;
+    without.replace(without.find("\tdone at etched\n"), std::string("\tdone at etched\n").size(), "");
+    unfinished.push_back(language::parse("main.one", without + "define workflow order by stage {\n" + steps + "\tdepends on plates\n}\n}\n", plain));
+    language::check(unfinished, plain);
+    std::vector<std::string> unfinished_said;
+    for (const auto& d : plain) unfinished_said.push_back(d.message);
+    CHECK(says(unfinished_said, "order waits on a plate until it's done, so plate's workflow says which stage that is, like done at etched"));
+    // A stage notifies with a chime; email and text are for later.
+    CHECK(messages("define workflow order by stage {\n" + steps + "\tprinted  notify chime\n}\n").empty());
+    CHECK(says(messages("define workflow order by stage {\n" + steps + "\tprinted  notify email\n}\n"),
+               "notify email isn't sent yet; a stage notifies with a chime, like failed notify chime"));
+    CHECK(says(messages("define workflow order by stage {\n" + steps + "\tprinted  notify bell\n}\n"),
+               "bell isn't a way to notify; a stage notifies with a chime, like failed notify chime"));
+    CHECK(says(messages("define workflow order by stage {\n" + steps + "\tprnted  notify chime\n}\n"),
+               "prnted isn't a stage of an order: its stages are to_do, printing or printed"));
+    // A message names a field, or waiting(...) of a list, in braces, and nothing else.
+    CHECK(says(messages("command order::hold {\n\trequire title != none  \"waiting on {waiting(title)}\"\n}\n"),
+               "a message says in braces a field of order, or waiting(...) of a list of them, like \"waiting on {waiting(plates)}\""));
+}
+
+TEST_CASE("an agent works the stages its role for services works, moving each along a step the workflow has") {
+    auto messages = [](const std::string& agent, const std::string& services = " for services") {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", "namespace shop {\nentity shop {\n\tslug  slug  required  unique  key\n}\n"
+                                                    "define role manager \"Manager\" in shop {\n\torder::move\n\tservice::create\n\tservice::key\n\tservice::revoke\n}\n"
+                                                    "define role press_operator \"Press operator\" in shop" + services +
+                                                    " {\n\torder::claim\n\torder::renew\n\torder::release\n\torder::move\n}\n"
+                                                    "command shop::create {\n\tby anyone signed in\n}\n"
+                                                    "command service::create\ncommand service::key\ncommand service::revoke\n"
+                                                    "enum stage {\n\tto_do  \"To do\"\n\tprinting  \"Printing\"\n\tprinted  \"Printed\"\n\tfailed  \"Failed\"\n}\n"
+                                                    "entity order {\n\tshop  shop  required\n\ttitle  text  required\n\tstage  stage = stage::to_do\n}\n"
+                                                    "define workflow order by stage {\n\tto_do  worked by manager\n\tprinting  worked by press_operator\n"
+                                                    "\tto_do -> printing\n\tprinting -> printed\n\tprinting -> failed\n\tfailed  worked by manager\n\tfailed -> to_do\n}\n" +
+                                                    agent + "}\n", out));
+        language::check(files, out);
+        std::vector<std::string> said;
+        for (const auto& d : out) said.push_back(d.message);
+        return said;
+    };
+    auto says = [](const std::vector<std::string>& said, const std::string& message) {
+        CAPTURE(said);
+        return std::find(said.begin(), said.end(), message) != said.end();
+    };
+    auto agent = [](const std::string& rules) { return "define agent press for press_operator {\n" + rules + "}\n"; };
+    auto fine = messages(agent("\ton order in printing  run \"tools/print {order.title} {id}\"  then printed  else failed\n"));
+    CAPTURE(fine);
+    CHECK(fine.empty());
+    CHECK(says(messages(agent("\ton order in printing  run \"print\"  then printed\n"), ""),
+               "press_operator is a role for people; an agent works as a role for services, like define role press_operator \"…\" in project for services { ... }"));
+    CHECK(says(messages("define agent press for pressman {\n\ton order in printing  run \"print\"  then printed\n}\n"),
+               "there's no role pressman: an agent works as a role for services, like define role pressman \"…\" in project for services { ... }"));
+    CHECK(says(messages(agent("\ton order in to_do  run \"print\"  then printing\n")),
+               "press_operator doesn't work to_do; say so in the workflow, like to_do  worked by press_operator"));
+    CHECK(says(messages(agent("\ton order in printing  run \"print\"  then to_do\n")),
+               "there's no step printing -> to_do for an order to take when the program succeeds; add it to the workflow, or say a stage a step reaches"));
+    CHECK(says(messages(agent("\ton order in printing  run \"print\"  then printed  else to_do\n")),
+               "there's no step printing -> to_do for an order to take when it fails; add it to the workflow, or say a stage a step reaches"));
+    CHECK(says(messages(agent("\ton order in pressing  run \"print\"  then printed\n")), "pressing isn't a stage of an order's workflow"));
+    CHECK(says(messages(agent("\ton plate in printing  run \"print\"  then printed\n")),
+               "an agent works what moves by a workflow, and there's no workflow for plate: define workflow plate by stage { … }"));
+    CHECK(says(messages(agent("\ton order in printing  run \"print {order.titel}\"  then printed\n")),
+               "the program says in braces a field of an order, like {order.id}, and titel isn't one"));
+    CHECK(says(messages(agent("\ton order in printing  run \"a\"  then printed\n\ton order in printing  run \"b\"  then printed\n")),
+               "what the agent does with an order in printing is said twice"));
+}
+
 TEST_CASE("held takes a project's roles by name, the ones every project starts with") {
     language::diagnostics out;
     std::vector<language::file> files;

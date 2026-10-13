@@ -494,6 +494,40 @@ namespace one::language {
     //         proofing  worked by proofreader
     //         proofing -> press
     //     }
+    // shipped notify chime: how someone is told when one arrives in a stage. Only the
+    // chime is made; email and text are words kept for later.
+    struct workflow_notice {
+        std::string stage;
+        location where;
+        std::vector<std::string> ways;
+        std::vector<location> way_where;
+    };
+
+    // on order in printing  run "press {order.id}"  then printed  else proofing: when
+    // one arrives in the stage, the agent takes it, runs the program, and moves it on.
+    struct agent_rule {
+        std::string entity;
+        location where;
+        std::string stage;
+        location stage_where;
+        std::string program;  // with {field} parts filled in from what it works
+        location program_where;
+        std::string then;
+        location then_where;
+        std::string otherwise;  // else: where a failure goes; none releases it instead
+        location otherwise_where;
+    };
+
+    // define agent press for press_operator { on … }: a program that works the stages
+    // a role for services works, by itself.
+    struct define_agent_declaration {
+        std::string name;
+        location where;
+        std::string role;
+        location role_where;
+        std::vector<agent_rule> rules;
+    };
+
     struct define_workflow_declaration {
         std::string entity;  // issue
         location where;
@@ -507,6 +541,11 @@ namespace one::language {
         location lease_where;
         std::vector<workflow_stage> stages;  // proofing worked by proofreader
         std::vector<workflow_step> moves;    // proofing -> press
+        std::vector<workflow_notice> notices;  // shipped notify chime
+        std::string done_at;  // shipped: the stage where its work is finished
+        location done_at_where;
+        std::string depends_on;  // packages: a list of what must be done before it leaves its first stage
+        location depends_on_where;
     };
 
     struct function_declaration {
@@ -906,7 +945,7 @@ namespace one::language {
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
-                     define_service_declaration, theme_declaration, define_workflow_declaration>
+                     define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration>
             node;
     };
 

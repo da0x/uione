@@ -44,7 +44,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme | define_workflow
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme | define_workflow | define_agent
                  | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
@@ -173,13 +173,23 @@ define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{"
  * stages: the stage's field listing the roles that work it, the entity of steps
  * between them, and how long a claim lasts. Along a field of choices, its stages
  * are written in it instead: the roles that work each, and the steps between
- * them, taken by who works the first unless a step names its own. */
+ * them, taken by who works the first unless a step names its own; how arrivals
+ * in a stage are told, where its work is done, and the list of what it waits on
+ * before it leaves its first stage. */
 define_workflow ::= "define" "workflow" NAME "by" NAME "{" NEWLINE? workflow_line* "}" END
 workflow_line  ::= ( "worked" "by" NAME
                    | "steps" NAME
                    | NAME "worked" "by" NAME ("," NAME)*
                    | NAME "-" ">" NAME ("by" NAME ("," NAME)*)?
+                   | NAME "notify" NAME ("," NAME)*
+                   | "done" "at" NAME
+                   | "depends" "on" NAME
                    | "lease" WHOLE ("minute" | "minutes" | "hour" | "hours") ) END
+/* define agent: a program working, as a role for services, the stages it names:
+ * what it runs when a record arrives there, and where the record goes when the
+ * program succeeds and when it fails. */
+define_agent   ::= "define" "agent" NAME "for" NAME "{" NEWLINE? agent_line* "}" END
+agent_line     ::= "on" NAME "in" NAME "run" STRING "then" NAME ("else" NAME)? END
 /* define theme: how a site looks, as a color for each role, light and dark, its
  * fonts, corners and depth; from another, it changes only what it says. */
 define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END
