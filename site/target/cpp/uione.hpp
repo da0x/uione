@@ -304,6 +304,10 @@ namespace uione {
 
 	} // namespace language
 
+	namespace license {
+
+	} // namespace license
+
 	namespace mission {
 
 	} // namespace mission

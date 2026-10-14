@@ -24,4 +24,5 @@ footer {
 	text "© {year} [Daher Alfawares](https://www.linkedin.com/in/daheralfawares)"
 	link build.release "uione {build.version}"
 	link build.source "{build.commit}"
+	link namespace license "AGPL-3.0-only"
 }

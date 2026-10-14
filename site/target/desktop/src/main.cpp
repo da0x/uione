@@ -74,6 +74,7 @@ int main(int count, char** given) {
 	app::home_screens(s);
 	app::install_screens(s);
 	app::language_screens(s);
+	app::license_screens(s);
 	app::mission_screens(s);
 	app::releases_screens(s);
 	app::themes_screens(s);

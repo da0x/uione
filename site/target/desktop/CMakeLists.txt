@@ -21,7 +21,7 @@ if(NOT UIONE)
 endif()
 add_subdirectory(${UIONE}/desktop ${CMAKE_BINARY_DIR}/uione-desktop EXCLUDE_FROM_ALL)
 
-add_executable(uione src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
+add_executable(uione src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/license.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
 target_link_libraries(uione PRIVATE one_desktop_runtime)
 target_compile_options(uione PRIVATE -Wno-free-nonheap-object)
 

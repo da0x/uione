@@ -42,6 +42,7 @@ const pages = {
   "/language/reference": ["Tab width", "Reference", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
   "/releases": ["0.14.3", "A milestone where any card failed"],
   "/mission": ["An application should be as short as what it does."],
+  "/license": ["is free software, under the GNU AGPL, version 3 only.", "AGPL-3.0-only"],
   "/about": ["About uione", "https://www.linkedin.com/in/daheralfawares"],
 };
 
