@@ -1056,19 +1056,20 @@ export const radix: ComponentSet = {
   // A pipeline, as the classic deploy screen drew one: a heading for each lane, and in
   // it a row for each card, its title first, then its stages in order, each a chip:
   // done with a tick, the one it's at in its status's color, the one it failed in red,
-  // those to come faint. What its holder last said is at the row's end.
+  // those to come faint. What its holder last said is at the row's end. Dense, a card
+  // a line, so a whole release fits on one screen.
   Pipeline: ({ status, lanes }) => (
-    <div className="flex flex-col gap-6" aria-busy={status === "loading"}>
+    <div className="flex flex-col gap-3" aria-busy={status === "loading"}>
       {lanes.length === 0 && status === "live" && <p className="text-sm text-muted">Nothing here yet.</p>}
       {lanes.map((lane) => (
-        <section key={lane.title} aria-label={lane.title} className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-ink">
+        <section key={lane.title} aria-label={lane.title} className="flex flex-col gap-1">
+          <h3 className="text-xs font-semibold text-ink">
             {lane.title} <span className="font-normal text-muted tabular-nums">{lane.rows.length}</span>
           </h3>
           <div className="divide-y divide-line overflow-hidden rounded-box border border-line bg-surface">
             {lane.rows.map((row) => (
-              <div key={row.id} className="flex flex-col gap-2 px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
-                <div className="flex min-w-0 flex-col lg:w-64 lg:shrink-0">
+              <div key={row.id} className="flex flex-col gap-1 px-3 py-1.5 text-sm lg:flex-row lg:items-center lg:gap-3">
+                <div className="flex min-w-0 items-baseline gap-2 lg:w-72 lg:shrink-0">
                   {row.link ? (
                     <a {...row.link} className="truncate font-medium text-ink hover:text-accent hover:underline">
                       {row.title}
@@ -1076,15 +1077,15 @@ export const radix: ComponentSet = {
                   ) : (
                     <span className="truncate font-medium text-ink">{row.title}</span>
                   )}
-                  {row.details.length > 0 && <span className="truncate text-xs text-muted">{row.details.map((d, i) => <Fragment key={i}>{i > 0 && " · "}{d}</Fragment>)}</span>}
+                  {row.details.length > 0 && <span className="shrink-0 text-xs text-muted">{row.details.map((d, i) => <Fragment key={i}>{i > 0 && " · "}{d}</Fragment>)}</span>}
                 </div>
-                <ol className="flex flex-wrap items-center gap-1 text-xs" aria-label={`Stages of ${typeof row.title === "string" ? row.title : "this card"}`}>
+                <ol className="flex flex-wrap items-center gap-0.5 text-[11px] leading-4" aria-label={`Stages of ${typeof row.title === "string" ? row.title : "this card"}`}>
                   {row.steps.map((step, i) => (
                     <li key={step.id} className="flex items-center gap-1">
-                      {i > 0 && <span aria-hidden className={`h-px w-3 ${step.at === "later" ? "bg-line" : "bg-muted/50"}`} />}
+                      {i > 0 && <span aria-hidden className={`h-px w-2 ${step.at === "later" ? "bg-line" : "bg-muted/50"}`} />}
                       <span
                         aria-current={step.at === "now" ? "step" : undefined}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                        className={`inline-flex items-center gap-1 rounded-full border px-1.5 ${
                           step.at === "done"
                             ? "border-success/30 bg-success/10 text-success"
                             : step.at === "failed"
@@ -1104,7 +1105,7 @@ export const radix: ComponentSet = {
                     </li>
                   ))}
                 </ol>
-                {row.note && <p className="text-xs text-muted lg:ml-auto lg:max-w-xs lg:truncate">{row.note}</p>}
+                {row.note && <p className="truncate text-xs text-muted lg:ml-auto lg:max-w-sm" title={row.note}>{row.note}</p>}
               </div>
             ))}
           </div>
