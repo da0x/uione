@@ -35,10 +35,10 @@ type Alcove struct {
 
 type Volume struct {
 	one.Record
-	Hall  string `firestore:"hall" one:"required,refers=hall::hall"`
+	Hall   string `firestore:"hall" one:"required,refers=hall::hall"`
 	Alcove string `firestore:"alcove" one:"required,refers=hall::alcove"`
-	Title string `firestore:"title" one:"required"`
-	Cover string `firestore:"cover" one:"file"`
+	Title  string `firestore:"title" one:"required"`
+	Cover  string `firestore:"cover" one:"file"`
 }
 
 // A note on a volume, with a scan, and no page of its own.

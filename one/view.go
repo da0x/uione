@@ -205,10 +205,10 @@ type ViewSpec struct {
 	tallies []tally // how many of a list's rows pass, like the changes since a person looked
 	lists   []*list
 	copies  []copied
-	secrets []string     // values holding the document's project's GitHub webhook secret
-	readers reflect.Type // the entity whose people may read each document, like member
-	people  []string     // fields of the document's entity naming people who may read it, like author
-	opens   []condition  // when a document is public: each a field of its entity, or of what it points at, like project.visibility, all holding
+	secrets []string           // values holding the document's project's GitHub webhook secret
+	readers reflect.Type       // the entity whose people may read each document, like member
+	people  []string           // fields of the document's entity naming people who may read it, like author
+	opens   []condition        // when a document is public: each a field of its entity, or of what it points at, like project.visibility, all holding
 	openers map[string]*schema // the entities those reach through, whose changes rebuild the documents that name them
 
 	scope *schema // what each document is held within, like a project, once it's known
