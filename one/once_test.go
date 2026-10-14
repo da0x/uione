@@ -5,9 +5,11 @@ package one_test
 
 import (
 	"context"
+
 	"sync/atomic"
 	"testing"
 
+	"cloud.google.com/go/firestore"
 	"github.com/da0x/uione/one"
 )
 
@@ -69,5 +71,36 @@ func TestEachDoesItsWorkToTheStoredEntitiesItNames(t *testing.T) {
 		if done, _ := snap.Data()["done"].(bool); done != want {
 			t.Errorf("task %s (%v) is done: %v, want %v", id, snap.Data()["title"], done, want)
 		}
+	}
+}
+
+// A case stored with a status there's no longer, shut where it's closed now, moved
+// off it by the update an Each dispatches to it: the case it was handed still says
+// shut, and isn't refused for it, since it isn't written again.
+var renameModule = one.Module("log", one.Once("shut is closed", one.Each[Case]("status", "shut", func(c *one.Ctx, k *Case) error {
+	return one.DispatchUpdate(c, k.ID, func(dispatched *Case) { dispatched.Status = "closed" }, nil, nil)
+})))
+
+func TestEachMovesAnEntityOffAChoiceThereIsNoLonger(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("ed@example.com")
+	h.mustRun("log/folder/create", token, map[string]any{"name": "shut"})
+	k := h.mustRun("log/case/create", token, map[string]any{"folder": "shut", "title": "Old door"})
+	ctx := context.Background()
+	stored := h.store.Collection("log_case").Doc(k)
+	if _, err := stored.Update(ctx, []firestore.Update{{Path: "status", Value: "shut"}}); err != nil {
+		t.Fatal(err)
+	}
+	app, err := one.New(ctx, append(modules, renameModule)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Close()
+	snap, err := stored.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := snap.Data()["status"]; got != "closed" {
+		t.Errorf("the case's status is %v, want closed", got)
 	}
 }

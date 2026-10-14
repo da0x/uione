@@ -85,16 +85,18 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 		if err := do(body, entity); err != nil {
 			return err
 		}
-		if err := schema.validate(v); err != nil {
-			return err
-		}
-		if err := a.unique(tx, schema, v, id); err != nil {
-			return err
-		}
 		// Something it only makes beside it, like a project's stages, leaves it as
-		// it was, and its history without a change.
+		// it was, and its history without a change. Nor is it checked then: what it
+		// dispatched to itself, like a stage::update moving it off a status there's no
+		// longer, was checked as that command, and what it was isn't written again.
 		changed := !reflect.DeepEqual(schema.data(v), was)
 		if changed {
+			if err := schema.validate(v); err != nil {
+				return err
+			}
+			if err := a.unique(tx, schema, v, id); err != nil {
+				return err
+			}
 			record.UpdatedAt, record.UpdatedBy = now, ""
 		}
 		after = schema.data(v)
@@ -174,6 +176,62 @@ func (a *App) fillChoices(ctx context.Context) error {
 			if _, err := done.Set(ctx, map[string]any{"name": name, "at": time.Now()}); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// clearWorking takes out of each history, once, the changes kept before how a
+// record is being worked was left out of it: who held it, till when, and what they
+// reported, kept each time an agent took it and let it go as it waited. Each goes
+// as deleted, so the timelines showing it drop it. That it's done is kept in
+// once/history without working <collection>.
+func (a *App) clearWorking(ctx context.Context) error {
+	for _, schema := range a.reg.schemas {
+		if schema.history == nil {
+			continue
+		}
+		var fields []any
+		for _, f := range schema.fields {
+			if working(f) {
+				fields = append(fields, f.name)
+			}
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		name := "history without working " + schema.history.collection
+		done := a.store.Collection("once").Doc(name)
+		if _, err := done.Get(ctx); err == nil {
+			continue
+		} else if status.Code(err) != codes.NotFound {
+			return err
+		}
+		docs, err := a.store.Collection(schema.history.collection).Where("field", "in", fields).Documents(ctx).GetAll()
+		if err != nil {
+			return err
+		}
+		h := schema.history
+		for start := 0; start < len(docs); start += 400 {
+			batch := docs[start:min(start+400, len(docs))]
+			var events []event
+			err := a.store.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+				events = nil
+				for _, doc := range batch {
+					if err := tx.Delete(doc.Ref); err != nil {
+						return err
+					}
+					events = append(events, event{Type: h.name + ".updated", Entity: h.entity, ID: doc.Ref.ID, Version: time.Now().UnixNano(), Before: doc.Data()})
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("one: %s: %w", name, err)
+			}
+			a.publish(ctx, events...)
+		}
+		if _, err := done.Set(ctx, map[string]any{"name": name, "at": time.Now(), "cleared": len(docs)}); err != nil {
+			return err
 		}
 	}
 	return nil
