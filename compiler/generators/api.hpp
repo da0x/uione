@@ -553,7 +553,10 @@ namespace one::generators {
                 const auto* e = entity(pkg, c->name.parts[0]);
                 if (!e) continue;
                 std::string var = api_detail::go_name(c->name.parts[1]);
-                if (actions[c->name.parts[1]] > 1) var = api_detail::go_name(e->name) + var;
+                // Named by its entity too when another has the action, or an entity
+                // is called the same, like a report and issue::report.
+                bool taken = std::any_of(pkg.entities.begin(), pkg.entities.end(), [&](const auto* other) { return api_detail::go_name(other->name) == var; });
+                if (actions[c->name.parts[1]] > 1 || taken) var = api_detail::go_name(e->name) + var;
                 members.push_back(var);
                 auto from_command = in(body, at(c), where.line);
                 path_ = at(c).path.empty() ? pkg.path : at(c).path;  // what's unsupported is said where it's written
@@ -921,8 +924,11 @@ namespace one::generators {
             // What the body reads through a reference is read first, in the command's
             // own transaction, so its changes are saved with the command's.
             for (const auto& [name, target] : pointed_) {
-                out.line(local_name(name) + ", err := one.Read[" + api_detail::go_name(target->name) + "](c, " + me + "." +
-                         api_detail::go_name(name) + ")");
+                // from.board is read from what from was read as.
+                std::size_t dot = name.find('.');
+                std::string id = dot == std::string::npos ? me + "." + api_detail::go_name(name)
+                                                          : local_name(name.substr(0, dot)) + "." + api_detail::go_name(name.substr(dot + 1));
+                out.line(local_name(name) + ", err := one.Read[" + api_detail::go_name(target->name) + "](c, " + id + ")");
                 out.open("if err != nil {");
                 out.line("return err");
                 out.close("}");
@@ -1002,7 +1008,8 @@ namespace one::generators {
         }
 
         // A Go local variable for a snake_case name: due_at becomes dueAt.
-        static std::string local_name(const std::string& snake) {
+        static std::string local_name(std::string snake) {
+            std::replace(snake.begin(), snake.end(), '.', '_');  // from.board is fromBoard
             std::string name = api_detail::go_name(snake);
             if (!name.empty()) name[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(name[0])));
             return name;
@@ -1024,6 +1031,21 @@ namespace one::generators {
         }
 
         void find_pointed(const language::entity_declaration& e, const language::expression& x) {
+            // from.board.visibility: what the entity points at, then what that points at,
+            // each read in turn.
+            if (auto* m = std::get_if<language::member_expression>(&x.node); m && std::holds_alternative<language::member_expression>(m->object->node) && !own(e, *m->object)) {
+                const auto& inner = std::get<language::member_expression>(m->object->node);
+                find_pointed(e, *m->object);
+                auto* object = std::get_if<language::name_expression>(&inner.object->node);
+                auto through = own(e, *inner.object);
+                const language::field* f = through ? field(e, *through) : object && object->name.parts.size() == 1 ? field(e, object->name.parts[0]) : nullptr;
+                const language::entity_declaration* first = f ? target_of(*f) : nullptr;
+                const language::field* g = first ? field(*first, inner.member) : nullptr;
+                const language::entity_declaration* second = g ? target_of(*g) : nullptr;
+                std::string key = f ? f->name + "." + inner.member : "";
+                if (second && std::none_of(pointed_.begin(), pointed_.end(), [&](const auto& p) { return p.first == key; })) pointed_.emplace_back(key, second);
+                return;
+            }
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);
                 auto through = own(e, *m->object);  // report.project.takes_reports
@@ -1071,6 +1093,19 @@ namespace one::generators {
             }
             if (auto name = own(e, x)) {  // report.title, the entity's own
                 if (const auto* f = field(e, *name)) return std::pair{me + "." + api_detail::go_name(f->name), f};
+            }
+            // from.board.visibility: through what from points at, read before the body.
+            if (auto* m = std::get_if<language::member_expression>(&x.node); m && std::holds_alternative<language::member_expression>(m->object->node) && !own(e, *m->object)) {
+                const auto& inner = std::get<language::member_expression>(m->object->node);
+                auto* object = std::get_if<language::name_expression>(&inner.object->node);
+                auto through = own(e, *inner.object);
+                std::string first = through ? *through : object && object->name.parts.size() == 1 ? object->name.parts[0] : "";
+                std::string key = first + "." + inner.member;
+                for (const auto& [name, target] : pointed_) {
+                    if (name != key) continue;
+                    if (const auto* f = field(*target, m->member)) return std::pair{local_name(name) + "." + api_detail::go_name(f->name), f};
+                }
+                return std::nullopt;
             }
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);

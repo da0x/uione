@@ -1436,6 +1436,27 @@ TEST_CASE("what a view can't do yet is said in the file the view is in") {
     CHECK(generated.errors[0].where.line == 3);
 }
 
+TEST_CASE("a command reads a field two records away, each read in its transaction in turn") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", "namespace tracker {\n"
+                                                "entity board {\n\tvisibility  enum  public | private = visibility::public\n}\n"
+                                                "entity issue {\n\tboard  board  required\n}\n"
+                                                "entity link {\n\tfrom  issue  required\n\tto  issue  required\n}\n"
+                                                "command link::create {\n\tby anyone signed in\n"
+                                                "\trequire from.board.visibility == to.board.visibility  \"link issues on boards alike\"\n}\n}\n", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    for (const auto& d : generated.errors) FAIL_CHECK(language::format(d));
+    std::string all;
+    for (const auto& f : generated.files) all += f.content;
+    CAPTURE(all);
+    CHECK(all.find("from, err := one.Read[Issue](c, l.From)") != std::string::npos);
+    CHECK(all.find("fromBoard, err := one.Read[Board](c, from.Board)") != std::string::npos);
+    CHECK(all.find("if fromBoard.Visibility != toBoard.Visibility {") != std::string::npos);
+}
+
 TEST_CASE("a command names its entity's fields plainly, or with the entity's name, alike") {
     auto backend = [](const std::string& condition) {
         language::diagnostics out;
