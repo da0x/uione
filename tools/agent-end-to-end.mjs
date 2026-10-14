@@ -184,6 +184,34 @@ try {
   const by = (press) => (press.said.match(/: running tools\/etch/g) ?? []).length;
   if (by(left) === 0 || by(right) === 0 || by(left) + by(right) !== 4) throw new Error(`both presses share the work, each plate once: left ${by(left)}, right ${by(right)}`);
   pass(`two presses share four plates between them, ${by(left)} and ${by(right)}`);
+
+  // A burst: many plates made and moved at once, worked by three presses on the
+  // same key, four at a time each. Every one is etched, once, and nothing's left
+  // held or saying it's working. BURST=n says how many; 100 unless said.
+  for (const r of running.splice(2)) r.kill();
+  const presses = ["a", "b", "c"].map((name) => agent(`burst-${name}`, pressKey, { ONE_AGENT_PARALLEL: "4" }));
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  const count = Number(process.env.BURST ?? 100);
+  const started = Date.now();
+  const burst = await Promise.all(Array.from({ length: count }, (_, i) => must(foreman, "plate::create", { shop, name: `Burst ${i + 1}` }).then((r) => r.id)));
+  await Promise.all(burst.map((id) => must(foreman, "plate::move", { id, stage: "etching" })));
+  const made = Date.now() - started;
+  await until(
+    async () => (await Promise.all(burst.map((id) => stored("shop_plate", id)))).every((p) => p.stage === "etched"),
+    `the presses etch all ${count} plates`,
+    count * 3000,
+  );
+  const took = Date.now() - started;
+  const runs = burst.length && presses.map((press) => (press.said.match(/Burst \d+ \([^)]*\) in etching: running/g) ?? []).length);
+  const each = new Map();
+  for (const press of presses) for (const m of press.said.matchAll(/(Burst \d+) \([^)]*\) in etching: running/g)) each.set(m[1], (each.get(m[1]) ?? 0) + 1);
+  const twice = [...each].filter(([, n]) => n > 1).map(([name]) => name);
+  if (twice.length) throw new Error(`each plate is etched once, but ${twice.join(", ")} ran more than once`);
+  if (each.size !== count) throw new Error(`every plate is etched by a press: ${each.size} of ${count}`);
+  const unfinished = (await Promise.all(burst.map((id) => stored("shop_plate", id)))).filter((p) => p.held_by || said(p).status);
+  if (unfinished.length) throw new Error(`nothing is left held or working: ${unfinished.length} are`);
+  const slowed = presses.reduce((n, press) => n + (press.said.match(/slow down|couldn't keep it just now|couldn't say how it's going/g) ?? []).length, 0);
+  pass(`a burst of ${count} plates, made and moved in ${(made / 1000).toFixed(1)}s, etched once each in ${(took / 1000).toFixed(1)}s by three presses (${runs.join(", ")}); asked to slow down ${slowed} times`);
   console.log("all passed");
 } catch (e) {
   console.error(`FAIL  ${e.message}`);

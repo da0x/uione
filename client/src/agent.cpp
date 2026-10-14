@@ -153,7 +153,22 @@ namespace one::client {
 		std::map<std::string, std::chrono::steady_clock::time_point> waiting;  // when it asks for each, as it spreads the work
 		std::mt19937 generator{std::random_device{}()};
 		std::uniform_int_distribution<int> chance(0, 300);
-		auto run = [&](const std::string& command, const std::map<std::string, ember::value>& fields) { app.run(command, ember::value(fields)); };
+		// A command, asked again when it wasn't answered rather than said no to, like
+		// a key asked to slow down: half a second, then twice as long each time, up to
+		// eight seconds, what arrives meanwhile still heard. A no is thrown at once.
+		auto transient = [](const refused& e) { return e.status == 0 || e.status == 429 || e.status >= 500; };
+		auto run = [&](const std::string& command, const std::map<std::string, ember::value>& fields) {
+			for (int attempt = 0;; ++attempt) {
+				try {
+					app.run(command, ember::value(fields));
+					return;
+				} catch (const refused& e) {
+					if (!transient(e) || attempt >= 10 || stopping) throw;
+					auto until = std::chrono::steady_clock::now() + std::min(std::chrono::milliseconds(500) * (1 << std::min(attempt, 4)), std::chrono::milliseconds(8000));
+					while (std::chrono::steady_clock::now() < until && !stopping) loop.run_one_for(std::chrono::milliseconds(50));
+				}
+			}
+		};
 		// What it says of what it holds, for a board to show: its status, since when,
 		// and which runner; a null takes one out.
 		auto report = [&](const agent_rule& rule, const std::string& id, std::map<std::string, ember::value> data) {
@@ -289,7 +304,14 @@ namespace one::client {
 						if (now < due->second) continue;
 					}
 					try {
-						run(rule.entity + "::claim", {{"id", id}});
+						try {
+							app.run(rule.entity + "::claim", ember::value(std::map<std::string, ember::value>{{"id", id}}));
+						} catch (const refused& e) {
+							// Not answered now: asked again in a while, not counted as taken.
+							if (!transient(e)) throw;
+							waiting[id] = now + std::chrono::milliseconds(1000 + chance(generator) * 5);
+							continue;
+						}
 						start(rule, record);
 					} catch (const refused& e) {
 						if (e.status == 0) {
