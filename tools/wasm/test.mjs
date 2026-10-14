@@ -45,7 +45,9 @@ if (one.ccall("one_version", "string", [], []) !== run(["--version"]).out.trim()
 
 for (const project of ["site", "examples/library", "examples/tasks", "examples/tracker"]) {
   const dir = join(root, project);
-  const out = join(dir, "build");
+  // Built somewhere of its own, so what the project's build/ holds stays as the
+  // rest of CI left it, like a backend's go.mod once tidied.
+  const out = join(scratch, project.replaceAll("/", "-"));
   const built = call("one_build", dir, out);
   if (built.refusal) {
     fail(`${project}: the browser's build refused: ${built.refusal}\n${built.problems.map((p) => p.text).join("\n")}`);
