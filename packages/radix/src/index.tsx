@@ -1105,7 +1105,11 @@ export const radix: ComponentSet = {
           )
         }
       />
-      <p className="text-xs text-muted">Drag a card to move it, or its corner to resize it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom.</p>
+      <p className="text-xs text-muted">
+        {regions?.length
+          ? "Drag a card to move it, into another column to move it there, or by its corner to resize it. Drag a column's edge to widen it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom."
+          : "Drag a card to move it, or its corner to resize it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom."}
+      </p>
     </div>
   ),
   Board: function RadixBoard({ status, columns, error, onMove, onArrange, search, tools, filtered, column, onColumn }) {
