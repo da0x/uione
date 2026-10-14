@@ -93,6 +93,8 @@ namespace one::desktop::runtime {
 		const auto& t = current_theme();
 		const view_state& v = *spec.view;
 		if (v.status == status::loading) return desktop::text("Loading…", t.quiet());
+		// A list that's hidden while empty is hidden too from whoever can't read it.
+		if (spec.hide_empty && v.status == status::failed) return {};
 		if (v.status == status::failed) {
 			auto s = t.body();
 			s.color = t.danger;

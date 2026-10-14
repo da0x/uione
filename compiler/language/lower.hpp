@@ -936,6 +936,11 @@ namespace one::language {
                 for (std::size_t i = 1; i < path.size(); ++i) out = member(std::move(out), path[i], where);
                 return member(std::move(out), n->name.parts[0], where);
             }
+            // project.visibility, through a field of the owner's own.
+            if (auto* m = std::get_if<member_expression>(&e.node)) {
+                auto object = rooted(*m->object, owner, path, where);
+                return object ? member(std::move(object), m->member, where) : nullptr;
+            }
             if (auto* l = std::get_if<literal_expression>(&e.node)) {
                 auto out = std::make_unique<expression>();
                 out->where = where;
@@ -1023,6 +1028,11 @@ namespace one::language {
                         if (every_public) {
                             for (const auto& [o, path_to] : owners) {
                                 auto one = rooted(*o->public_when, *o, path_to, d.where);
+                                if (!one) {
+                                    // Said so it can't be read through: never public.
+                                    public_when.reset();
+                                    break;
+                                }
                                 if (!public_when) {
                                     public_when = std::move(one);
                                 } else {

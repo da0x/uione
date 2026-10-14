@@ -1339,7 +1339,8 @@ export function Table({
   // What's refused to someone signed out, like their own projects, means nothing to
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
-  if (hideEmpty && view.status === "live" && own.length === 0) return null;
+  // Hidden while it's empty, and from whoever can't read it at all.
+  if (hideEmpty && (view.status === "denied" || (view.status === "live" && own.length === 0))) return null;
   // Put in order while the rows are in the list's own order and none is hidden by
   // what's typed. Within a tab or a page, a row's neighbors are still its neighbors in
   // the whole list, between which it goes.

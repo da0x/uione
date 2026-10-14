@@ -317,6 +317,8 @@ namespace one::terminal::runtime {
 
 	terminal::view table(page& p, table_spec spec) {
 		const view_state& v = *spec.view;
+		// A list that's hidden while empty is hidden too from whoever can't read it.
+		if (spec.hide_empty && v.status == status::failed) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		auto model = table_of(p, spec);
 		if (model.hidden) return {};
