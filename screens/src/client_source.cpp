@@ -3,7 +3,10 @@
 
 #include "one/screens/client_source.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
+#include <thread>
 #include <stdexcept>
 
 namespace one::screens {
@@ -50,6 +53,19 @@ namespace one::screens {
 		    },
 		    [told](const ember::error& e) { told(view_state{status::failed, value::map(), e.message}); }));
 		return listening([registration]() mutable { registration.reset(); });
+	}
+
+	listening client_source::ticking(std::function<void()> told) {
+		auto stopped = std::make_shared<std::atomic<bool>>(false);
+		std::thread([stopped, told, deliver = deliver_] {
+			while (!*stopped) {
+				std::this_thread::sleep_for(std::chrono::seconds(1));
+				if (!*stopped) deliver([stopped, told] {
+					if (!*stopped) told();
+				});
+			}
+		}).detach();
+		return listening([stopped] { *stopped = true; });
 	}
 
 	void client_source::run(const std::string& command, const value& fields, std::function<void(const answer&)> answered) {

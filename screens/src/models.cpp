@@ -19,6 +19,7 @@
 #include <format>
 #include <random>
 #include <set>
+#include <sstream>
 #include <thread>
 
 extern char** environ;
@@ -748,6 +749,8 @@ namespace one::screens {
 		return out;
 	}
 
+	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown);
+
 	board_model board_of(page_base& p, const board_spec& spec) {
 		board_model out;
 		out.key = "board:" + spec.list;
@@ -818,7 +821,7 @@ namespace one::screens {
 			for (const auto& card : all) {
 				if (where(card) != column.id || !keeps(card)) continue;
 				column.rows.push_back(card);
-				board_card shown{card["id"].as_string(), show(field_of(card, title)), {}, {}, {}, tone_of(card, spec.tint), ""};
+				board_card shown{card["id"].as_string(), show(field_of(card, title)), {}, {}, {}, tone_of(card, spec.tint), "", "", "", ""};
 				for (std::size_t c = 1; c < spec.columns.size(); ++c) {
 					const auto& f = spec.columns[c].field;
 					if (spec.people.contains(f)) {
@@ -830,6 +833,7 @@ namespace one::screens {
 					}
 				}
 				if (!spec.link.empty()) shown.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
+				status_of(p, card, spec.statuses.contains(column.id) ? spec.statuses.at(column.id) : "", shown);
 				column.cards.push_back(std::move(shown));
 			}
 			column.notify = std::ranges::contains(spec.notify, column.id);
@@ -887,6 +891,38 @@ namespace one::screens {
 			std::thread([child] { ::waitpid(child, nullptr, 0); }).detach();
 		}
 		posix_spawn_file_actions_destroy(&quiet);
+	}
+
+	std::string status_words(const std::string& status) {
+		static const std::map<std::string, std::string> words{
+		    {"inactive", "Not started"}, {"waiting", "Waiting"}, {"working", "Working"}, {"done", "Done"}, {"failed", "Failed"}};
+		auto found = words.find(status);
+		return found == words.end() ? "" : found->second;
+	}
+
+	std::string running_time(std::chrono::seconds took) {
+		auto s = std::max<long long>(0, took.count());
+		if (s < 60) return std::format("{}s", s);
+		if (s < 3600) return std::format("{}m", s / 60);
+		if (s < 86400) return s % 3600 / 60 ? std::format("{}h {}m", s / 3600, s % 3600 / 60) : std::format("{}h", s / 3600);
+		return s % 86400 / 3600 ? std::format("{}d {}h", s / 86400, s % 86400 / 3600) : std::format("{}d", s / 86400);
+	}
+
+	// A card's dot, running time and runner: what its holder reported in its data,
+	// else working while someone's lease on it holds, else its column's status.
+	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown) {
+		const value& data = card["data"];
+		std::string said = data.is_map() ? show(data["status"]) : "";
+		std::string holder = show(card["held_by"]);
+		const value& until = card["held_until"];
+		bool held = !holder.empty() && until.is_time() && until.as_time() > std::chrono::system_clock::now();
+		shown.status = !status_words(said).empty() ? said : held ? "working" : column_status;
+		if (!data.is_map()) return;
+		if (std::string runner = show(data["runner"]); !runner.empty()) shown.runner = "runner " + runner;
+		std::string since = show(data["since"]);
+		std::chrono::sys_seconds started;
+		std::istringstream in(since);
+		if (!since.empty() && (in >> std::chrono::parse("%FT%T", started))) shown.running = running_time(p.now() - started);
 	}
 
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to) {

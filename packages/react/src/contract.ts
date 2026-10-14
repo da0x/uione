@@ -291,6 +291,9 @@ export interface BoardCard {
   people?: { name: string; picture?: string }[]; // who's working it, shown apart from its details
   reaches: string[]; // the columns it may be moved to
   tone?: number; // how urgent it is, 1 the most, up to 5, as a table's row
+  // How it's going, as a dot, with its words for those who can't see it: inactive,
+  // waiting, working, done or failed.
+  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
 }
 
 // Where a page is among the pages above it, like Projects › neotrac › Product:

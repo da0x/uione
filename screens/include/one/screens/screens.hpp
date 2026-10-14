@@ -154,6 +154,10 @@ namespace one::screens {
 		// A title read from views, like "#{number} {title}", which it shows once they've arrived.
 		void title(std::vector<part> parts) { title_ = std::move(parts); }
 		std::string title() const;
+		// The time now, to the second, ticking while the page reads it: for running
+		// times, like how long an agent has been working on a card.
+		std::chrono::sys_seconds now();
+
 		// Drawn across the screen, as a board is, rather than at a page's reading width.
 		void wide() { wide_ = true; }
 		bool take_wide() { return std::exchange(wide_, false); }
@@ -169,6 +173,8 @@ namespace one::screens {
 
 	private:
 		screens::source& source_;
+		std::optional<state<std::chrono::sys_seconds>> clock_;
+		listening ticking_;
 		std::size_t screen_;
 		std::string screen_title_;
 		std::string address_;

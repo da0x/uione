@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <string>
 #include <utility>
@@ -197,7 +198,15 @@ namespace one::screens {
 		std::vector<std::string> labels, people;
 		int tone = 3;
 		std::string link;
+		// How it's going, as a dot: inactive, waiting, working, done or failed, or
+		// nothing; for how long, like 4m; and which runner is on it, like runner 2.
+		std::string status, running, runner;
 	};
+
+	// How a status is said in words, for a dot's title and for screen readers.
+	std::string status_words(const std::string& status);
+	// A running time: 35s, 4m, 1h 12m, 2d 3h.
+	std::string running_time(std::chrono::seconds took);
 	struct board_column {
 		std::string id, title;
 		std::vector<board_card> cards;

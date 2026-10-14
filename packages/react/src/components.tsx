@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { FieldProps, Filtered, Hue, LinkProps } from "./contract.js";
+import type { BoardCard, FieldProps, Filtered, Hue, LinkProps } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1461,6 +1461,7 @@ export function Board({
   track,
   reorder,
   notify = [],
+  statuses = {},
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1485,12 +1486,15 @@ export function Board({
   // number for the field between its new neighbors', as a table's rows are.
   reorder?: { command: string; field: string; allowed?: boolean };
   notify?: string[]; // the columns that chime when a card arrives
+  statuses?: Record<string, string>; // a column's status, the dot its cards show unless they say
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const runner = useConfirmedRunner();
   useArrivals(view, list, by, notify);
+  const cardRows = rowsOf(view.data?.[list]);
+  const now = useNow(cardRows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
   // Where each card moved is until the view says so too.
   const [moved, setMoved] = useState<Record<string, string>>({});
   // What's typed, kept in the address under the list's name, the same as its table's.
@@ -1587,15 +1591,53 @@ export function Board({
               details: rest
                 .filter((key) => people[key] === undefined)
                 .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, { choices, labels, pictures, people })))
-                .filter((detail) => detail !== ""),
+                .filter((detail) => detail !== "")
+                .concat(going(card, statuses[String(where(card))], now).extra),
               people: rest.filter((key) => people[key] !== undefined).flatMap((key) => peopleOf(card, key, people[key])),
               reaches: reaches(where(card)),
               tone: toneOf(card, tint),
+              status: going(card, statuses[String(where(card))], now).status,
             })),
         }))}
       />
     </>
   );
+}
+
+const statusWords: Record<string, string> = { inactive: "Not started", waiting: "Waiting", working: "Working", done: "Done", failed: "Failed" };
+
+// A running time: 35s, 4m, 1h 12m, 2d 3h.
+export function runningTime(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return s % 3600 >= 60 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 3600)}h`;
+  return s % 86400 >= 3600 ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : `${Math.floor(s / 86400)}d`;
+}
+
+// A card's dot, running time and runner: what its holder reported in its data, else
+// working while someone's lease on it holds, else its column's status.
+function going(card: Row, column: string | undefined, now: number): { status?: BoardCard["status"]; extra: string[] } {
+  const data = (card.data ?? {}) as Record<string, unknown>;
+  const said = typeof data.status === "string" && statusWords[data.status] ? data.status : undefined;
+  const until = card.held_until ? new Date(String(card.held_until)).getTime() : 0;
+  const held = Boolean(card.held_by) && until > now;
+  const is = said ?? (held ? "working" : column && statusWords[column] ? column : undefined);
+  const extra: string[] = [];
+  if (typeof data.runner === "string" && data.runner) extra.push(`runner ${data.runner}`);
+  if (typeof data.since === "string" && !Number.isNaN(Date.parse(data.since))) extra.push(runningTime((now - Date.parse(data.since)) / 1000));
+  return { status: is ? { is: is as NonNullable<BoardCard["status"]>["is"], words: statusWords[is]! } : undefined, extra };
+}
+
+// The time now, ticking each second while something shows a running time.
+function useNow(ticking: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [ticking]);
+  return now;
 }
 
 // A short tone when a card arrives in a column that notifies, once it's arrived; the

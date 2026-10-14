@@ -450,6 +450,15 @@ namespace one::screens {
 
 	std::string page_base::title() const { return title_.empty() ? screen_title_ : said(title_); }
 
+	std::chrono::sys_seconds page_base::now() {
+		auto second = [] { return std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()); };
+		if (!clock_) {
+			clock_ = state<std::chrono::sys_seconds>(second());
+			ticking_ = source_.ticking([clock = *clock_, second] { clock.set(second()); });
+		}
+		return clock_->get();
+	}
+
 	// navigator
 
 	navigator_base::navigator_base(std::vector<std::string> routes, screens::source& from) : source_(from), routes_(std::move(routes)) {}

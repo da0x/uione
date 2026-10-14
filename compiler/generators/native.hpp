@@ -606,6 +606,11 @@ namespace one::generators {
             if (std::string t = track_of(parts, ns, track); !t.empty()) out += ", .track = " + t;
             if (std::string reorder = reorder_of(parts, ns, b.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;
             if (!stages.notify.empty()) out += ", .notify = " + native_detail::strings(stages.notify);
+            if (!stages.statuses.empty()) {
+                std::string statuses;
+                for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + std::string("{") + str(stage) + ", " + str(status) + "}";
+                out += ", .statuses = {" + statuses + "}";
+            }
             (void)screen;
             return out + "})";
         }

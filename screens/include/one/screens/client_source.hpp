@@ -28,6 +28,7 @@ namespace one::screens {
 		~client_source() override;
 
 		listening listen(const std::string& view, const std::string& subject, std::function<void(const view_state&)> told) override;
+		listening ticking(std::function<void()> told) override;
 		using source::run;
 		void run(const std::string& command, const value& fields, std::function<void(const answer&)> answered) override;
 		void run(const std::string& command, const value& fields, const attached_files& files, std::function<void(const answer&)> answered) override;

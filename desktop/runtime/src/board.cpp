@@ -5,10 +5,26 @@
 // its reader's roles may take, and Alt with the arrows putting cards in order.
 
 #include <format>
+#include <optional>
 
 #include "one/desktop/runtime/components.hpp"
 
 namespace one::desktop::runtime {
+
+	namespace {
+
+		// A status's dot: gray not started, blue waiting, orange working, green done,
+		// red failed.
+		std::optional<color> status_color(const theme& t, const std::string& status) {
+			if (status == "inactive") return t.muted;
+			if (status == "waiting") return t.accent;
+			if (status == "working") return color::hex(0xd9730d);
+			if (status == "done") return t.success;
+			if (status == "failed") return t.danger;
+			return std::nullopt;
+		}
+
+	}  // namespace
 
 	desktop::view board(page& p, board_spec spec) {
 		const auto& t = current_theme();
@@ -55,8 +71,17 @@ namespace one::desktop::runtime {
 				}
 				std::vector<desktop::view> people;
 				for (const auto& name : card.people) people.push_back(desktop::avatar(name, 20));
+				// Who's on it and for how long, beside what it says of itself.
+				if (!card.runner.empty()) details.push_back(desktop::text(card.runner, t.quiet()));
+				if (!card.running.empty()) details.push_back(desktop::text(card.running, t.quiet()));
 				std::vector<desktop::view> inside;
-				inside.push_back(desktop::text(card.title, t.body()));
+				if (auto dot = status_color(t, card.status)) {
+					auto look = t.body();
+					look.color = *dot;
+					inside.push_back(desktop::row(desktop::text("●", look), desktop::text(card.title, t.body()).grow()).spacing(6));
+				} else {
+					inside.push_back(desktop::text(card.title, t.body()));
+				}
 				if (!details.empty()) inside.push_back(desktop::row(std::move(details)).spacing(6));
 				if (!people.empty()) inside.push_back(desktop::row(std::move(people)).spacing(4));
 				std::vector<desktop::view> shown;

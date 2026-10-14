@@ -25,6 +25,15 @@ import { ThemeToggle } from "./theme.js";
 import { Landing } from "./landing.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
+// A card's dot: gray not started, blue waiting, orange working, green done, red failed.
+const statusColors: Record<string, string> = {
+  inactive: "var(--color-muted)",
+  waiting: "var(--color-accent)",
+  working: "#d9730d",
+  done: "var(--color-success)",
+  failed: "var(--color-danger)",
+};
+
 // The box code sits in, on its own or inside a page of docs.
 // Whether the page is a phone's width, narrower than Tailwind's sm, as it changes.
 // Where it can't be told, as in tests, it isn't.
@@ -1165,6 +1174,16 @@ export const radix: ComponentSet = {
                     >
                       {/* How urgent it is, an edge down its left side. */}
                       {edged(card.tone) && <span data-edge="" aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ background: edged(card.tone) }} />}
+                      {/* How it's going, a dot before its title, said in words too. */}
+                      {card.status && (
+                        <span
+                          role="img"
+                          aria-label={card.status.words}
+                          title={card.status.words}
+                          className="mr-1.5 inline-block size-2 shrink-0 translate-y-[-1px] rounded-full align-middle"
+                          style={{ background: statusColors[card.status.is] }}
+                        />
+                      )}
                       {card.link ? (
                         <a {...card.link} draggable={false} className="leading-snug font-medium text-ink hover:text-accent hover:underline">
                           {card.title}

@@ -242,6 +242,7 @@ namespace one::generators::screens {
         std::map<std::string, std::map<std::string, const language::view_declaration*>> views;
         std::map<std::string, std::map<std::string, const language::define_workflow_declaration*>> workflows;  // by namespace and entity
         std::set<std::string> agent_stages;  // namespace::entity::stage of each stage an agent works
+        std::set<std::string> failure_stages;  // namespace::entity::stage where an agent sends what it fails
         std::map<std::string, std::set<std::string>> commands;  // namespace to entity::command
         std::map<std::string, const language::command_declaration*> command_nodes;  // by full name
         std::set<std::string> open;  // commands anyone may run, signed in or not, in full
@@ -259,6 +260,7 @@ namespace one::generators::screens {
             std::vector<std::pair<std::string, std::string>> stages;
             std::vector<std::pair<std::string, std::string>> steps;
             std::vector<std::string> notify;
+            std::vector<std::pair<std::string, std::string>> statuses;  // done where its work is done, failed where failures go
         };
         written_stages stages_written(const std::string& ns, const language::entity_declaration& card, const std::string& by) const {
             written_stages out;
@@ -279,6 +281,10 @@ namespace one::generators::screens {
             }
             for (const auto& notice : found->notices) {
                 if (std::ranges::contains(notice.ways, std::string("chime"))) out.notify.push_back(notice.stage);
+            }
+            for (const auto& [id, title] : out.stages) {
+                if (id == found->done_at) out.statuses.emplace_back(id, "done");
+                else if (failure_stages.contains(join(ns, card.name + "::" + id))) out.statuses.emplace_back(id, "failed");
             }
             return out;
         }
@@ -940,7 +946,10 @@ namespace one::generators::screens {
                 } else if (auto* w = std::get_if<language::define_workflow_declaration>(&d.node)) {
                     workflows[ns][w->entity] = w;
                 } else if (auto* a = std::get_if<language::define_agent_declaration>(&d.node)) {
-                    for (const auto& rule : a->rules) agent_stages.insert(join(ns, rule.entity + "::" + rule.stage));
+                    for (const auto& rule : a->rules) {
+                        agent_stages.insert(join(ns, rule.entity + "::" + rule.stage));
+                        if (!rule.otherwise.empty()) failure_stages.insert(join(ns, rule.entity + "::" + rule.otherwise));
+                    }
                 } else if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
                     entities[ns][e->name] = e;
                 } else if (auto* v = std::get_if<language::view_declaration>(&d.node)) {

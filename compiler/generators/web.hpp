@@ -1253,6 +1253,11 @@ namespace one::generators {
             for (const auto& column : written ? std::vector<std::string>{} : listed_columns(ns, board.over.text(), board.over_list)) {
                 if (column == "title") line += " shown=\"title\"";
             }
+            if (!stages.statuses.empty()) {
+                std::string statuses;
+                for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + stage + ": " + web_detail::js_string(status);
+                line += " statuses={{ " + statuses + " }}";
+            }
             if (!stages.notify.empty()) {
                 std::string notify;
                 for (const auto& stage : stages.notify) notify += (notify.empty() ? "" : ", ") + web_detail::js_string(stage);

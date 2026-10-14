@@ -107,14 +107,14 @@ TEST_CASE("a board over stages written in the code has them as its columns, its 
     auto web = content("web/src/screens/main.tsx");
     CAPTURE(web);
     CHECK(web.find(R"(over={{ status: "live", data: { stages: [{ id: "to_do", title: "To do" }, { id: "etching", title: "Etching" }, { id: "etched", title: "Etched" }, )"
-                   R"({ id: "failed", title: "Failed" }] } }} overList="stages" shown="title" notify={["failed"]})") != std::string::npos);
+                   R"({ id: "failed", title: "Failed" }] } }} overList="stages" shown="title" statuses={{ etched: "done", failed: "failed" }} notify={["failed"]})") != std::string::npos);
     // Etching is the press's to move on, so a person's steps are only into it and back from Failed.
     CHECK(web.find(R"(steps: { status: "live", data: { steps: [{ from: "to_do", to: "etching" }, { from: "failed", to: "to_do" }] } }, list: "steps")") != std::string::npos);
     for (const char* target : {"desktop", "terminal"}) {
         auto native = content(std::string(target) + "/src/screens/main.cpp");
         CAPTURE(native);
         CHECK(native.find(R"(.over = state<view_state>(view_state{status::ready, ember::parse_json("{\"stages\":[{\"id\":\"to_do\",\"title\":\"To do\"},)") != std::string::npos);
-        CHECK(native.find(R"(.notify = {"printed"})") != std::string::npos);
+        CHECK(native.find(R"(.notify = {"printed"}, .statuses = {{"printed", "done"}, {"failed", "failed"}})") != std::string::npos);
     }
 }
 

@@ -83,6 +83,9 @@ namespace one::screens {
 		virtual void run(const std::string& command, const value& fields, const attached_files& files, std::function<void(const answer&)> answered);
 		// Who's reading, when someone's signed in.
 		virtual std::optional<person> reader() const { return std::nullopt; }
+		// Told every second, on the loop, until it's stopped: for running times. A
+		// source with no loop, like one kept in memory, never ticks.
+		virtual listening ticking(std::function<void()>) { return {}; }
 	};
 
 	// Views and commands kept in memory: set a view and its listeners are told; a

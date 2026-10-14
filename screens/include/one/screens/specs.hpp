@@ -192,6 +192,7 @@ namespace one::screens {
 		std::optional<track_spec> track = std::nullopt;
 		std::optional<reorder_spec> reorder = std::nullopt;
 		std::vector<std::string> notify = {};  // the columns that chime when a card arrives
+		std::map<std::string, std::string> statuses = {};  // a column's status, the dot its cards show unless they say
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row
