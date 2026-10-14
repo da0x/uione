@@ -1130,7 +1130,9 @@ namespace one::generators {
                     code = command_of(parts, ns, *b);
                 }
                 if (code.empty()) continue;
-                if (item.when) code = condition(parts, ns, *item.when) + " ? " + code + " : view()";
+                // Drawn by a function of its own, as GCC sees a temporary in either arm of
+                // a ?: outliving the line when the arm's a call given a spec.
+                if (item.when) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
                 if (presses(item)) {
                     if (row.empty()) row_line = item.where.line;
                     row.push_back(code);

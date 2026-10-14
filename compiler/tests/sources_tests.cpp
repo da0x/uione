@@ -239,8 +239,8 @@ screen "{wall_page.title}" /walls/:wall {
     REQUIRE(drawn != native.end());
     CAPTURE(drawn->content);
     CHECK(drawn->content.find(R"(.place = "ideas::idea::place", .grid = 160, .origin_x = 40, .origin_y = 80, .by = "stage")") != std::string::npos);
-    CHECK(drawn->content.find(" ? canvas_board(p, {") != std::string::npos);
-    CHECK(drawn->content.find(": view()") != std::string::npos);
+    CHECK(drawn->content.find(") return canvas_board(p, {") != std::string::npos);
+    CHECK(drawn->content.find("; return view(); }()") != std::string::npos);
     // Without the fields it places by, or with one that isn't a number, it says so.
     std::string missing = source;
     missing.replace(missing.find("\t\ttitle  stage  kind  x  y  w  h\n"), std::string("\t\ttitle  stage  kind  x  y  w  h\n").size(), "\t\ttitle  stage  kind  x  y  w\n");
