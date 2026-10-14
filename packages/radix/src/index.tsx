@@ -942,15 +942,26 @@ export const radix: ComponentSet = {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
           <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
-            <h2 className="text-lg leading-snug font-semibold">
-              {card.link ? (
-                <a {...card.link} className="text-ink hover:text-accent hover:underline">
-                  {card.title}
-                </a>
-              ) : (
-                card.title
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg leading-snug font-semibold">
+                {card.link ? (
+                  <a {...card.link} className="text-ink hover:text-accent hover:underline">
+                    {card.title}
+                  </a>
+                ) : (
+                  card.title
+                )}
+              </h2>
+              {card.tags && card.tags.length > 0 && (
+                <div className="flex shrink-0 flex-wrap justify-end gap-1 pt-1">
+                  {card.tags.map((tag) => (
+                    <span key={tag} className="rounded-full border border-line bg-sunken px-2 py-0.5 text-xs font-medium text-muted">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               )}
-            </h2>
+            </div>
             {card.details.length > 0 && <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted">{card.details.map((detail, i) => <span key={i}>{detail}</span>)}</div>}
             {card.tally && (
               <div className="flex flex-col gap-1.5">

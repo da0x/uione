@@ -279,6 +279,7 @@ export interface Card {
   title: ReactNode;
   link?: LinkProps;
   details: ReactNode[];
+  tags?: string[]; // its choices shown beside its title, like Private
   tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by stage
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];

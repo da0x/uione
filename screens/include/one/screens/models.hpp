@@ -269,6 +269,7 @@ namespace one::screens {
 	struct card_model {
 		std::string id, title, address, tally;
 		std::vector<std::string> details;
+		std::vector<std::string> tags;  // its choices beside its title, like Private
 		std::vector<card_link> filters;
 	};
 	std::vector<card_model> cards_of(page_base& p, const cards_spec& spec);

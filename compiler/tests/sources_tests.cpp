@@ -120,6 +120,48 @@ TEST_CASE("a board over stages written in the code has them as its columns, its 
     }
 }
 
+TEST_CASE("cards tag each with its choices, and one that says hide when empty isn't there while it has none") {
+    const std::string source = R"(namespace yard {
+enum kind {
+	public
+	private
+}
+entity shed {
+	title  text  required
+	kind   kind  = kind::public
+}
+view yard_page {
+	sheds = each shed {
+		title  kind
+	}
+}
+screen "Yard" /yard {
+	cards yard_page.sheds {
+		hide when empty
+		title
+		kind
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Cards") != std::string::npos; });
+    REQUIRE(screen != web.end());
+    CAPTURE(screen->content);
+    CHECK(screen->content.find(" hideEmpty") != std::string::npos);
+    CHECK(screen->content.find("choices={{ kind: ") != std::string::npos);
+    auto native = generators::generate_native(files, root + "/examples/tasks", "desktop");
+    auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("cards(p, {") != std::string::npos; });
+    REQUIRE(drawn != native.end());
+    CAPTURE(drawn->content);
+    CHECK(drawn->content.find(R"(.choices = {{"kind", std::vector<one::screens::option>{{"public", "Public"}, {"private", "Private"}}}}, .hide_empty = true)") != std::string::npos);
+}
+
 TEST_CASE("a canvas places a list's cards by their fields, placed by a command and snapped to a grid, and a board shows instead while a field says so") {
     const std::string source = R"(namespace ideas {
 enum style {

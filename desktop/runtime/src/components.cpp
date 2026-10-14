@@ -178,6 +178,7 @@ namespace one::desktop::runtime {
 
 	desktop::view cards(page& p, cards_spec spec) {
 		const view_state& v = *spec.view;
+		if (spec.hide_empty && v.status == status::failed) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
 		std::vector<desktop::list_row> shown;
@@ -185,7 +186,15 @@ namespace one::desktop::runtime {
 		for (const auto& card : cards_of(p, spec)) {
 			opens[card.id] = card.address;
 			std::vector<desktop::view> inside;
-			inside.push_back(desktop::text(card.title, t.heading(18)));
+			if (card.tags.empty()) {
+				inside.push_back(desktop::text(card.title, t.heading(18)));
+			} else {
+				// Its tags beside its title, like Private.
+				std::vector<desktop::view> top;
+				top.push_back(desktop::text(card.title, t.heading(18)).grow());
+				for (const auto& tag : card.tags) top.push_back(desktop::text(tag, t.quiet()).padding(edges(1, 8)).background({.fill = t.sunken, .border = t.line, .border_width = 1, .radius = 9}));
+				inside.push_back(desktop::row(std::move(top)).spacing(6));
+			}
 			for (const auto& d : card.details) inside.push_back(quiet(d));
 			if (spec.tally) inside.push_back(quiet(card.tally));
 			if (!card.filters.empty()) {
@@ -199,7 +208,7 @@ namespace one::desktop::runtime {
 			}
 			shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
 		}
-		if (shown.empty()) return quiet("Nothing here yet.");
+		if (shown.empty()) return spec.hide_empty ? desktop::view() : quiet("Nothing here yet.");
 		return desktop::list(std::move(shown), [&p, opens](const std::string& id) {
 			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
 		});

@@ -282,6 +282,8 @@ namespace one::screens {
 		std::map<std::string, int> named = {};
 		std::optional<tally_spec> tally = std::nullopt;
 		std::vector<card_filter> filters = {};
+		std::map<std::string, std::vector<option>> choices = {};  // its choice columns, each a tag beside a card's title, as it's shown
+		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
 	};
 
 	// A box finding things across a page's lists, like a project's issues by number

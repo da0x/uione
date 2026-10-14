@@ -771,6 +771,7 @@ namespace one::language {
         std::string tally_list, tally_by, tally_and;
         location tally_where;
         std::vector<cards_filter> filters;
+        bool hide_empty = false;  // hide when empty: not there while it has no cards, or can't be read
     };
 
     // component workbench: a hand-written component, beside the .one file, drawn where

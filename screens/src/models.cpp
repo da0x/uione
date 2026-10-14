@@ -1046,7 +1046,15 @@ namespace one::screens {
 			card.address = spec.link.empty() ? "" : row_link(spec.link, row, p.params(), spec.keyed, spec.named);
 			card.title = show(field_of(row, title));
 			for (std::size_t c = 1; c < spec.columns.size(); ++c) {
-				if (std::string said_now = show(field_of(row, spec.columns[c].field)); !said_now.empty()) card.details.push_back(spec.columns[c].label + ": " + said_now);
+				std::string said_now = show(field_of(row, spec.columns[c].field));
+				if (said_now.empty()) continue;
+				// A choice is a tag beside its title, as its choices say it; the rest are details.
+				if (auto choices = spec.choices.find(spec.columns[c].field); choices != spec.choices.end()) {
+					auto found = std::ranges::find_if(choices->second, [&](const option& o) { return o.value == said_now; });
+					card.tags.push_back(found != choices->second.end() ? found->label : said_now);
+					continue;
+				}
+				card.details.push_back(spec.columns[c].label + ": " + said_now);
 			}
 			// What it holds, counted by what each is at, in order: 3 To do · 1 Done.
 			if (spec.tally) {

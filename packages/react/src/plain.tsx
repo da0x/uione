@@ -412,6 +412,7 @@ export const plain: ComponentSet = {
       {cards.map((card) => (
         <article key={card.id}>
           <h2>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</h2>
+          {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
           {card.details.map((detail, i) => (
             <p key={i}>{detail}</p>
           ))}

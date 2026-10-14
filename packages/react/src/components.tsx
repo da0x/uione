@@ -1915,6 +1915,7 @@ export function Cards({
   labels = [],
   tally,
   filters = [],
+  hideEmpty = false,
 }: {
   view: ViewState;
   list: string;
@@ -1928,12 +1929,15 @@ export function Cards({
   labels?: string[];
   tally?: Tally;
   filters?: { label: string; query: Record<string, string>; hue?: Hue }[];
+  hideEmpty?: boolean; // not there at all while it has no cards, or can't be read, like a project's private boards
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
+  const rows = rowsOf(view.data?.[list]);
+  if (hideEmpty && (view.status === "denied" || (view.status === "live" && rows.length === 0))) return null;
   const sum = (card: Row) => {
     if (!tally) return undefined;
     const mine = counted.filter((row) => row[tally.by] === card.id);
@@ -1949,13 +1953,18 @@ export function Cards({
   return (
     <ui.Cards
       status={view.status}
-      cards={rowsOf(view.data?.[list]).map((row) => {
+      cards={rows.map((row) => {
         const to = link ? rowLink(link, row, params, keyed, named) : undefined;
         return {
           id: row.id,
           title: title ? cellOf(ui, links, row, title, { choices, labels, pictures, people }) : row.id,
           link: to ? links(to) : undefined,
-          details: rest.map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people })).filter((detail) => detail !== ""),
+          // A choice is a tag beside its title, like Private; the rest are details.
+          details: rest
+            .filter((key) => !choices[key])
+            .map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people }))
+            .filter((detail) => detail !== ""),
+          tags: rest.filter((key) => choices[key] && row[key] != null && row[key] !== "").map((key) => choices[key][String(row[key])] ?? show(row[key])),
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],

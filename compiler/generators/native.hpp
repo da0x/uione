@@ -747,6 +747,15 @@ namespace one::generators {
                 }
                 out += ", .filters = {" + filters + "}";
             }
+            std::string choices;
+            for (const auto& column : c.columns) {
+                std::string key = screens::text_of(*column.value);
+                for (const auto& f : (entity ? entity->fields : no_fields_)) {
+                    if (f.name == key && !f.choices.empty()) choices += (choices.empty() ? "" : ", ") + choices_entry(key, f);
+                }
+            }
+            if (!choices.empty()) out += ", .choices = {" + choices + "}";
+            if (c.hide_empty) out += ", .hide_empty = true";
             return out + "})";
         }
 

@@ -575,13 +575,20 @@ namespace one::terminal::runtime {
 
 	terminal::view cards(page& p, cards_spec spec) {
 		const view_state& v = *spec.view;
+		if (spec.hide_empty && v.status == status::failed) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		std::vector<terminal::list_row> shown;
 		std::map<std::string, std::string> opens;
 		for (const auto& card : cards_of(p, spec)) {
 			opens[card.id] = card.address;
 			std::vector<terminal::view> inside;
-			inside.push_back(terminal::text(card.title, {.bold = true}));
+			if (card.tags.empty()) {
+				inside.push_back(terminal::text(card.title, {.bold = true}));
+			} else {
+				std::string tags;
+				for (const auto& tag : card.tags) tags += (tags.empty() ? "" : " ") + std::string("[") + tag + "]";
+				inside.push_back(terminal::row(terminal::text(card.title, {.bold = true}).grow(), quiet(tags)).spacing(2));
+			}
 			for (const auto& d : card.details) inside.push_back(quiet(d));
 			if (spec.tally) inside.push_back(quiet(card.tally));
 			if (!card.filters.empty()) {
@@ -593,7 +600,7 @@ namespace one::terminal::runtime {
 			}
 			shown.push_back({card.id, terminal::column(std::move(inside))});
 		}
-		if (shown.empty()) return quiet("Nothing here yet.");
+		if (shown.empty()) return spec.hide_empty ? terminal::view() : quiet("Nothing here yet.");
 		return terminal::list(std::move(shown), [&p, opens](const std::string& id) {
 			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
 		});

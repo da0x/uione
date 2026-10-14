@@ -1799,6 +1799,16 @@ namespace one::language {
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
+                        // hide when empty: not shown while it has no cards, or can't be read.
+                        if (at_word("hide") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                            advance();
+                            advance();
+                            if (!at_word("empty")) fail_expecting("empty, as in hide when empty");
+                            advance();
+                            cards.hide_empty = true;
+                            end_line();
+                            continue;
+                        }
                         // tally project_page.issues by board and stage
                         if (at_word("tally") && peek(1).kind == token_kind::identifier) {
                             advance();

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Cards and finding: a room's milestones as cards, each counting its pieces by stage,
-// with filters that open it picked; a box that finds pieces as it's typed in; and a
-// milestone's own page.
+// with filters that open it picked; its pieces as cards tagged with their choices; a
+// box that finds pieces as it's typed in; and a milestone's own page.
 
 namespace gallery at / {
 
@@ -19,6 +19,13 @@ namespace gallery at / {
 			filter "Looked after by me" assignees == me  color blue
 			filter "Damaged" condition == condition::damaged  color red
 			filter "Changed this week" updated_at > 7 days ago  color green
+		}
+		// Its pieces as cards too, each tagged with its condition and size, and not
+		// there at all while there are none.
+		cards room_page.pieces link /rooms/:room/pieces/:piece {
+			hide when empty
+			title
+			condition  size
 		}
 	}
 

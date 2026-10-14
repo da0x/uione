@@ -1662,6 +1662,7 @@ namespace one::generators {
             }
             std::string line = "<Cards view={" + view_variable(parts, full_view(ns, cards.view.text())) + "} list=" + web_detail::js_string(*cards.list) +
                                " columns={{ " + columns + " }}";
+            if (cards.hide_empty) line += " hideEmpty";
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
                 line += " link=" + web_detail::js_string(target);
