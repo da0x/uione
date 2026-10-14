@@ -274,6 +274,17 @@ export interface CanvasProps {
   error?: string;
   onPlace?: (card: string, x: number, y: number, width: number, height: number) => void; // absent when cards can't be moved
   onOpen?: (card: string) => void;
+  // Bands down it, like a board's columns: a card let go in another moves there, and
+  // the line between two is dragged to resize one, when onResize says so.
+  regions?: CanvasRegion[];
+  onResize?: (region: string, width: number) => void;
+}
+
+export interface CanvasRegion {
+  id: string;
+  title: string;
+  x: number;
+  width: number;
 }
 
 export interface CanvasCard {

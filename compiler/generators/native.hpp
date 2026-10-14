@@ -660,6 +660,9 @@ namespace one::generators {
                 if (!c.over.parts.empty()) out += ", .over = " + view_variable(parts, screens::full_view(ns, c.over.text())) + ", .over_list = " + str(c.over_list);
             }
             if (std::string tint = tint_of(ns, c.view, c.list, std::nullopt); !tint.empty()) out += ", .tint = " + tint;
+            if (!c.regions.empty()) out += ", .regions = " + str(c.regions);
+            if (c.move) out += ", .move = " + str(screens::full_command(ns, c.move->command));
+            if (c.resize) out += ", .resize = " + str(screens::full_command(ns, *c.resize));
             return out + "})";
         }
 

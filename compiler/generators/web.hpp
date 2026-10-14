@@ -1285,6 +1285,9 @@ namespace one::generators {
                 if (!c.over.parts.empty()) line += " over={" + view_variable(parts, full_view(ns, c.over.text())) + "} overList=" + web_detail::js_string(c.over_list);
             }
             line += tint_on(ns, c.view, c.list, std::nullopt);
+            if (!c.regions.empty()) line += " regions=" + web_detail::js_string(c.regions);
+            if (c.move) line += " move=" + web_detail::js_string(full_command(ns, c.move->command));
+            if (c.resize) line += " resize=" + web_detail::js_string(full_command(ns, *c.resize));
             if (c.link) {
                 std::string target = full_route(ns, *c.link);
                 line += " link=" + web_detail::js_string(target);

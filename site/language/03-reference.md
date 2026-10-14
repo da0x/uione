@@ -1702,7 +1702,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   yet is laid out in columns by `by`, its stage's place among `over`'s, a grid step
   apart, so a board's cards shown on a canvas start where the board shows them.
   `kind kind` names a field of choices saying how each card is drawn: `text` is
-  large and on its own, anything else a note. On the web it's drawn as SVG; in the
+  large and on its own, anything else a note. `regions by width` makes it a
+  whiteboard with columns: a band down it for each of `over`'s rows, side by side, as
+  wide as the row's field says, its title along its top; `move issue::move along
+  board_page.steps` moves a card let go in another band there, as a board's card is
+  moved; and `resize stage::update` saves a band made wider or narrower by dragging
+  the line after it, or with `<` and `>` in the terminal. On the web it's drawn as SVG; in the
   desktop app on a surface of its own; in the terminal as boxes, `n` choosing one,
   the arrows moving it a grid step and Shift resizing it.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows

@@ -352,7 +352,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?!(?:\\w+)\\s*::)(?:require|permission|clear|dispatch|readers|as|dark|ground|depth|flat|raised|corners|when|was|add|remove|to|has|of|in|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|themes|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|landing|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|minute|minutes|hour|hours|day|days|week|weeks|new|open|badge|find|only|tint|track|color|match|other|services|worked|steps|lease|notify|chime|status|depends|done|run|then|canvas|place|size|kind|pipeline|lanes|path)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?!(?:\\w+)\\s*::)(?:require|permission|clear|dispatch|readers|as|dark|ground|depth|flat|raised|corners|when|was|add|remove|to|has|of|in|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|themes|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|landing|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|minute|minutes|hour|hours|day|days|week|weeks|new|open|badge|find|only|tint|track|color|match|other|services|worked|steps|lease|notify|chime|status|depends|done|run|then|canvas|place|size|kind|pipeline|lanes|path|regions|resize)\\b",
           "name": "keyword.other.uione"
         },
         {

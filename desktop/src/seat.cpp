@@ -35,6 +35,7 @@ namespace one::desktop {
 			            : c == cursor::text     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT
 			            : c == cursor::grab     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB
 			            : c == cursor::grabbing ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING
+			            : c == cursor::resize_across ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE
 			                                    : WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
 			if (shape == s.shape) return;
 			s.shape = shape;

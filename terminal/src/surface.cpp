@@ -6,7 +6,8 @@
 // thing and p the one before; the arrows, or h j k l, move it a grid step, and with
 // Shift, or H J K L, resize it; it's told where it's gone at once. With nothing chosen
 // the arrows look around. + and - zoom, 0 back to its size; Enter opens what's
-// chosen, Escape lets go of it.
+// chosen, Escape lets go of it. Its regions are bands with their titles along the top,
+// < and > making the one the chosen thing is in narrower or wider.
 
 #include <algorithm>
 #include <cmath>
@@ -37,6 +38,13 @@ namespace one::terminal {
 
 			void paint_content(canvas& c) override {
 				auto clipped = c.clip(viewport_);
+				// The regions: a line after each, and its title along the top.
+				for (const auto& band : options.regions) {
+					int left = viewport_.x + static_cast<int>(std::floor((band.x - pan_x_) / units_across()));
+					int right = viewport_.x + static_cast<int>(std::floor((band.x + band.width - pan_x_) / units_across()));
+					c.put(viewport_.y, left + 1, band.title, {.bold = true, .dim = true}, std::max(0, right - left - 2));
+					for (int y = viewport_.y; y < viewport_.bottom(); ++y) c.put(y, right, "┊", {.foreground = color::bright_black});
+				}
 				for (std::size_t i = 0; i < items.size() && i < children.size(); ++i) {
 					area box = on_screen(i);
 					if (box.width < 2 || box.height < 2) continue;
@@ -95,6 +103,25 @@ namespace one::terminal {
 				}
 				if (e.is(keys::escape)) {
 					chosen_ = items.size();
+					return true;
+				}
+				// < and > make the region the chosen thing is in a grid step narrower or wider.
+				if ((e.is('<') || e.is('>')) && options.on_resize) {
+					double middle = items[chosen_].x + items[chosen_].width / 2;
+					for (auto& band : options.regions) {
+						if (middle < band.x || middle >= band.x + band.width) continue;
+						double step = options.grid > 0 ? options.grid : 40;
+						double before = band.width;
+						band.width = std::max(options.smallest * 3, band.width + (e.is('>') ? step : -step));
+						bool after = false;
+						for (auto& later : options.regions) {
+							if (after) later.x += band.width - before;
+							after = after || &later == &band;
+						}
+						options.on_resize(band.key, band.width);
+						place_content(viewport_);
+						return true;
+					}
 					return true;
 				}
 				if (dx == 0 && dy == 0) return false;

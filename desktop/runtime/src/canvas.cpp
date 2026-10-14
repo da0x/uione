@@ -52,6 +52,8 @@ namespace one::desktop::runtime {
 			                 .movable = model.placing});
 		}
 		desktop::surface_options options{.grid = static_cast<float>(model.grid), .origin_x = static_cast<float>(model.origin_x), .origin_y = static_cast<float>(model.origin_y)};
+		for (const auto& region : model.regions) options.regions.push_back({region.id, region.title, static_cast<float>(region.x), static_cast<float>(region.width)});
+		if (model.resizing) options.on_resize = [&p, spec](const std::string& region, float width) { resize_region(p, spec, region, width); };
 		if (model.placing) {
 			options.on_place = [&p, spec](const std::string& card, float x, float y, float w, float h) { place_card(p, spec, card, x, y, w, h); };
 		}
@@ -63,7 +65,8 @@ namespace one::desktop::runtime {
 		std::vector<desktop::view> parts;
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		parts.push_back(desktop::surface(std::move(items), std::move(options)));
-		parts.push_back(desktop::text("Drag a card to move it, or its corner to resize it; drag the space to look around, and + or − to zoom.", t.quiet()));
+		parts.push_back(desktop::text(model.regions.empty() ? "Drag a card to move it, or its corner to resize it; drag the space to look around, and + or − to zoom."
+		                                             : "Drag a card to move it, into another column to move it there, or its corner to resize it; drag a column's edge to widen it, the space to look around, and + or − to zoom.", t.quiet()));
 		return desktop::column(std::move(parts)).spacing(8);
 	}
 

@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { BoardCard, FieldProps, Filtered, Hue, LinkProps, PipelineRow } from "./contract.js";
+import type { BoardCard, CanvasRegion, FieldProps, Filtered, Hue, LinkProps, PipelineRow } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1728,6 +1728,9 @@ export function Canvas({
   over,
   overList,
   tint,
+  regions,
+  move,
+  resize,
 }: {
   view: ViewState;
   list: string;
@@ -1750,6 +1753,9 @@ export function Canvas({
   over?: ViewState;
   overList?: string; // its columns, in order, like stages
   tint?: Tint;
+  regions?: string; // over's field keeping each region's width, a band down the canvas for each
+  move?: string; // the command a card let go in another region is moved there by
+  resize?: string; // the command a region's new width is sent to
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1773,6 +1779,18 @@ export function Canvas({
   }, [view.data]);
   const order = by && over && overList ? rowsOf(over.data?.[overList]).map((row) => row.id) : [];
   const step = grid?.step || 160;
+  // The regions, over's rows side by side from the grid's start, each as wide as it says
+  // or as it's just been made.
+  const [resized, setResized] = useState<Record<string, number>>({});
+  const bands: CanvasRegion[] = [];
+  if (regions && over && overList) {
+    let at = grid?.x ?? 0;
+    for (const row of rowsOf(over.data?.[overList])) {
+      const width = resized[row.id] ?? ((typeof row[regions] === "number" && (row[regions] as number) > 0 ? (row[regions] as number) : 2 * step));
+      bands.push({ id: row.id, title: show(row.title ?? row.name) || row.id, x: at, width });
+      at += width;
+    }
+  }
   const down: Record<string, number> = {};
   const [title, ...rest] = Object.keys(columns);
   const cards = rows.filter(matches).map((card) => {
@@ -1790,9 +1808,16 @@ export function Canvas({
       if (cx !== undefined && cy !== undefined && (number(card[w]) ?? 0) > 0 && (number(card[h]) ?? 0) > 0) {
         box = { x: cx, y: cy, width, height };
       } else {
-        // Laid out: its column's place across, and its place in the column down.
+        // Laid out: its column's place across, and its place in the column down; in its
+        // region, when there are regions.
         if (!order.includes(column)) order.push(column);
-        box = { x: (grid?.x ?? 0) + order.indexOf(column) * step, y: (grid?.y ?? 0) + inColumn * step, width, height };
+        const band = bands.find((b) => b.id === column);
+        box = {
+          x: band ? band.x + Math.max(0, (band.width - width) / 2) : (grid?.x ?? 0) + order.indexOf(column) * step,
+          y: (grid?.y ?? 0) + inColumn * step,
+          width,
+          height,
+        };
       }
     }
     return {
@@ -1821,8 +1846,24 @@ export function Canvas({
               const card = rows.find((c) => c.id === id);
               if (!card) return;
               setPlaced((now) => ({ ...now, [id]: [px, py, pw, ph] }));
+              // Let go in another region, it moves there, as a board's card does.
+              const middle = px + pw / 2;
+              const into = bands.find((b) => middle >= b.x && middle < b.x + b.width);
+              if (move && by && into && card[by] !== into.id) void runner.run(move, { id, [by]: into.id }, card);
               void runner.run(place, { id, [x]: px, [y]: py, [w]: pw, [h]: ph }, card).then((done) => {
                 if (!done) setPlaced((now) => Object.fromEntries(Object.entries(now).filter(([other]) => other !== id)));
+              });
+            }
+          : undefined
+      }
+      regions={bands.length ? bands : undefined}
+      onResize={
+        resize && regions
+          ? (id, width) => {
+              setResized((now) => ({ ...now, [id]: width }));
+              const row = rowsOf(over?.data?.[overList ?? ""]).find((r) => r.id === id);
+              void runner.run(resize, { id, [regions]: width }, row).then((done) => {
+                if (!done) setResized(({ [id]: _, ...rest }) => rest);
               });
             }
           : undefined

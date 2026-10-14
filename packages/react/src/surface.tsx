@@ -21,11 +21,13 @@ export function Surface({
   grid,
   onPlace,
   onOpen,
+  regions = [],
+  onResize,
   card,
   height = 560,
   style,
   className,
-}: Pick<CanvasProps, "cards" | "grid" | "onPlace" | "onOpen"> & {
+}: Pick<CanvasProps, "cards" | "grid" | "onPlace" | "onOpen" | "regions" | "onResize"> & {
   className?: string; // a kit's own look, like its focus ring
   card: (card: CanvasCard, chosen: boolean) => ReactNode; // how a kit draws a card, filling its box
   height?: number;
@@ -40,6 +42,18 @@ export function Surface({
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ distance: number; zoom: number; middle: { x: number; y: number }; pan: { x: number; y: number } } | undefined>(undefined);
   const surface = useRef<SVGSVGElement>(null);
+  // A region being made wider or narrower: its id, where the drag began, and its width then.
+  const [widening, setWidening] = useState<{ id: string; start: number; from: number; width: number }>();
+  // The regions as they're drawn, one being dragged as wide as it's dragged, those after it along.
+  const bands: { id: string; title: string; x: number; width: number }[] = [];
+  {
+    let shift = 0;
+    for (const r of regions) {
+      const width = widening?.id === r.id ? widening.width : r.width;
+      bands.push({ ...r, x: r.x + shift, width });
+      shift += width - r.width;
+    }
+  }
 
   const snapped = (at: number, origin: number) => (grid && grid.step > 0 ? Math.round((at - origin) / grid.step) * grid.step + origin : at);
   const boxOf = (c: CanvasCard): Box => live[c.id] ?? { x: c.x, y: c.y, width: c.width, height: c.height };
@@ -59,6 +73,11 @@ export function Surface({
     setZoom(z);
   };
 
+  const grabSeparator = (event: PointerEvent<SVGElement>, id: string, width: number) => {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setWidening({ id, start: local(event).x, from: width, width });
+  };
   const down = (event: PointerEvent<SVGElement>, c?: CanvasCard) => {
     if (event.button !== 0 && event.pointerType === "mouse") return;
     touches.current.set(event.pointerId, local(event));
@@ -86,6 +105,10 @@ export function Surface({
     held.current = { from: { x: 0, y: 0, width: 0, height: 0 }, start: at, pan };
   };
   const moved = (event: PointerEvent<SVGElement>) => {
+    if (widening) {
+      setWidening({ ...widening, width: Math.max(smallest * 3, widening.from + (local(event).x - widening.start) / zoom) });
+      return;
+    }
     if (!touches.current.has(event.pointerId)) return;
     touches.current.set(event.pointerId, local(event));
     if (pinch.current && touches.current.size === 2) {
@@ -112,6 +135,12 @@ export function Surface({
     setLive((now) => ({ ...now, [h.card!]: box }));
   };
   const up = (event: PointerEvent<SVGElement>) => {
+    if (widening) {
+      const done = widening;
+      setWidening(undefined);
+      if (done.width !== done.from) onResize?.(done.id, Math.round(done.width));
+      return;
+    }
     touches.current.delete(event.pointerId);
     if (touches.current.size < 2) pinch.current = undefined;
     const h = held.current;
@@ -190,6 +219,33 @@ export function Surface({
           <rect width="100%" height="100%" fill={`url(#${pattern})`} />
         </>
       )}
+      {/* The regions: a band for each, faintly told apart, its title along its top, and
+          the line after it dragged to resize it. */}
+      {bands.map((band, i) => {
+        const left = pan.x + band.x * zoom;
+        const right = pan.x + (band.x + band.width) * zoom;
+        return (
+          <g key={band.id}>
+            {i % 2 === 1 && <rect x={left} y={0} width={right - left} height="100%" fill="var(--color-ink, #000)" opacity={0.025} />}
+            <text x={left + 10} y={22} fontSize={12} fontWeight={600} fill="var(--color-muted, #777)" style={{ userSelect: "none" }}>
+              {band.title}
+            </text>
+            <line x1={right} y1={0} x2={right} y2="100%" stroke="var(--color-line, #ccc)" strokeWidth={widening?.id === band.id ? 2 : 1} strokeDasharray={widening?.id === band.id ? undefined : "4 4"} />
+            {onResize && (
+              <rect
+                aria-label={`Resize ${band.title}`}
+                x={right - 5}
+                y={0}
+                width={10}
+                height="100%"
+                fill="transparent"
+                style={{ cursor: "col-resize" }}
+                onPointerDown={(e) => grabSeparator(e, band.id, band.width)}
+              />
+            )}
+          </g>
+        );
+      })}
       <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
         {cards.map((c) => {
           const box = boxOf(c);

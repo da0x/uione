@@ -746,6 +746,14 @@ namespace one::language {
         location kind_where;
         double grid = 0, origin_x = 0, origin_y = 0;  // grid 160 from 40 80: where a card snaps when let go
         location grid_where;
+        // regions by width: a band down the canvas for each of over's rows, as wide as
+        // its field says, and a card let go in another band moves there, by move; the
+        // line between two is dragged to make one wider, saved by resize.
+        std::string regions;
+        location regions_where;
+        std::optional<button_item> move;
+        std::optional<qualified_name> resize;
+        location resize_where;
         std::vector<table_column> columns;  // what a card shows, its title first
     };
 

@@ -1049,6 +1049,30 @@ namespace one::screens {
 		return std::round((at - origin) / grid) * grid + origin;
 	}
 
+	namespace {
+
+		// A canvas's regions: over's rows in order, each as wide as its field says, as
+		// it's being dragged, or two grid steps, side by side from the grid's start.
+		std::vector<canvas_region> regions_of(page_base& p, const canvas_spec& spec) {
+			std::vector<canvas_region> out;
+			if (spec.regions.empty() || !spec.over) return out;
+			auto resized = p.kept<std::map<std::string, double>>("canvas:" + spec.list + ":resized");
+			double step = spec.grid > 0 ? spec.grid : 160;
+			double x = spec.origin_x;
+			for (const auto& thing : rows_of(**spec.over, spec.over_list)) {
+				std::string id = thing["id"].as_string();
+				double width = number_of(field_of(thing, spec.regions)).value_or(0);
+				if (auto found = resized.get().find(id); found != resized.get().end()) width = found->second;
+				if (width <= 0) width = 2 * step;
+				std::string title = show(thing["title"]);
+				out.push_back({id, title.empty() ? show(thing["name"]) : title, x, width});
+				x += width;
+			}
+			return out;
+		}
+
+	}  // namespace
+
 	canvas_model canvas_of(page_base& p, const canvas_spec& spec) {
 		canvas_model out;
 		out.key = "canvas:" + spec.list;
@@ -1080,6 +1104,16 @@ namespace one::screens {
 		double step = spec.grid > 0 ? spec.grid : 160;
 		std::map<std::string, int> down;  // how many of each column's cards come before, placed or not, so placing one moves no other
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
+		out.regions = regions_of(p, spec);
+		out.resizing = !spec.resize.empty() && !out.regions.empty();
+		// A resize the view now shows is settled.
+		if (auto resized = p.kept<std::map<std::string, double>>(out.key + ":resized"); !resized.peek().empty() && spec.over) {
+			auto settled = resized.peek();
+			std::erase_if(settled, [&](const auto& r) {
+				return std::ranges::any_of(rows_of(**spec.over, spec.over_list), [&](const value& thing) { return thing["id"].as_string() == r.first && number_of(field_of(thing, spec.regions)) == r.second; });
+			});
+			if (settled.size() != resized.peek().size()) resized.set(settled);
+		}
 		for (const auto& row : rows) {
 			if (!p.keeps(row)) continue;
 			canvas_card card;
@@ -1114,6 +1148,10 @@ namespace one::screens {
 					at = columns.end() - 1;
 				}
 				card.x = spec.origin_x + static_cast<double>(at - columns.begin()) * step;
+				// In its region, when there are regions, a little in from its left.
+				for (const auto& region : out.regions) {
+					if (region.id == in) card.x = region.x + std::max(0.0, (region.width - card.w) / 2);
+				}
 				card.y = spec.origin_y + place_in_column * step;
 			}
 			out.cards.push_back(std::move(card));
@@ -1123,10 +1161,31 @@ namespace one::screens {
 
 	void place_card(page_base& p, const canvas_spec& spec, const std::string& card, double x, double y, double w, double h) {
 		if (spec.place.empty()) return;
+		// Let go in another region, it moves there, as a board's card does.
+		if (!spec.move.empty() && !spec.by.empty()) {
+			double middle = x + w / 2;
+			for (const auto& region : regions_of(p, spec)) {
+				if (middle < region.x || middle >= region.x + region.width) continue;
+				for (const auto& row : rows_of(*spec.view, spec.list)) {
+					if (row["id"].as_string() == card && field_of(row, spec.by).as_string() != region.id) {
+						p.run(spec.move, value(std::map<std::string, value>{{"id", card}, {spec.by, region.id}}), [](const answer&) {}, true);
+					}
+				}
+			}
+		}
 		auto placed = p.kept<std::map<std::string, std::array<double, 4>>>("canvas:" + spec.list + ":placed");
 		placed.change([&](auto& now) { now[card] = {x, y, w, h}; });
 		p.run(spec.place, value(std::map<std::string, value>{{"id", card}, {spec.x, x}, {spec.y, y}, {spec.w, w}, {spec.h, h}}), [placed, card](const answer& a) {
 			if (!a) placed.change([&](auto& now) { now.erase(card); });
+		}, true);
+	}
+
+	void resize_region(page_base& p, const canvas_spec& spec, const std::string& region, double width) {
+		if (spec.resize.empty() || spec.regions.empty()) return;
+		auto resized = p.kept<std::map<std::string, double>>("canvas:" + spec.list + ":resized");
+		resized.change([&](auto& now) { now[region] = width; });
+		p.run(spec.resize, value(std::map<std::string, value>{{"id", region}, {spec.regions, width}}), [resized, region](const answer& a) {
+			if (!a) resized.change([&](auto& now) { now.erase(region); });
 		}, true);
 	}
 

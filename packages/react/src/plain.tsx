@@ -472,7 +472,7 @@ export const plain: ComponentSet = {
       ))}
     </div>
   ),
-  Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize }) => (
     <div aria-busy={status === "loading"}>
       {error && <p role="alert">{error}</p>}
       <Surface
@@ -480,6 +480,8 @@ export const plain: ComponentSet = {
         grid={grid}
         onPlace={onPlace}
         onOpen={onOpen}
+        regions={regions}
+        onResize={onResize}
         card={(card) => (
           <div style={{ padding: 8, overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
             {card.status && <span title={card.status.words}>● </span>}

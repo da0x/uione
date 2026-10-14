@@ -255,8 +255,16 @@ namespace one::terminal {
 		view content;
 		bool movable = true;
 	};
+	// A band down a surface, like a board's column, its title along its top; < and >
+	// make the one the chosen thing is in narrower or wider.
+	struct surface_region {
+		std::string key, title;
+		double x = 0, width = 320;
+	};
 	struct surface_options {
 		std::function<void(const std::string& key, double x, double y, double width, double height)> on_place = {};
+		std::vector<surface_region> regions = {};
+		std::function<void(const std::string& key, double width)> on_resize = {};
 		std::function<void(const std::string& key)> on_open = {};
 		double grid = 0;
 		double smallest = 30;

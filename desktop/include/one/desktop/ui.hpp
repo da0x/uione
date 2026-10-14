@@ -51,7 +51,7 @@ namespace one::desktop {
 
 	enum class align { start, center, end, stretch };
 
-	enum class cursor { normal, pointer, text, grab, grabbing };
+	enum class cursor { normal, pointer, text, grab, grabbing, resize_across };
 
 	// What an element typed into tells an input method, the way a language like
 	// Japanese is typed: the text around the caret and where the caret is; and what
@@ -187,8 +187,16 @@ namespace one::desktop {
 		view content;
 		bool movable = true;
 	};
+	// A band down a surface, like a board's column: things let go in it belong to it, and
+	// the line after it is dragged to make it wider or narrower.
+	struct surface_region {
+		std::string key, title;
+		float x = 0, width = 320;
+	};
 	struct surface_options {
 		std::function<void(const std::string& key, float x, float y, float width, float height)> on_place = {};
+		std::vector<surface_region> regions = {};
+		std::function<void(const std::string& key, float width)> on_resize = {};
 		std::function<void(const std::string& key)> on_open = {};
 		float grid = 0, origin_x = 0, origin_y = 0;
 		float smallest = 30;  // a thing's least width and height

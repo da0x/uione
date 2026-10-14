@@ -1073,7 +1073,7 @@ export const radix: ComponentSet = {
   ),
   // A canvas: cards placed anywhere, on the shared SVG surface, each drawn as a
   // board's card is: its dot, its title, what else it shows; text large and bare.
-  Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize }) => (
     <div className="flex flex-col gap-2" aria-busy={status === "loading"}>
       {error && <p className="text-sm text-danger">{error}</p>}
       <Surface
@@ -1081,6 +1081,8 @@ export const radix: ComponentSet = {
         grid={grid}
         onPlace={onPlace}
         onOpen={onOpen}
+        regions={regions}
+        onResize={onResize}
         className="outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         style={{ borderRadius: "var(--radius-box, 10px)", background: "var(--color-sunken)", border: "1px solid var(--color-line)" }}
         card={(card) =>

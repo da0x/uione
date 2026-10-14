@@ -234,6 +234,12 @@ namespace one::screens {
 		std::optional<state<view_state>> over = std::nullopt;
 		std::string over_list = "";
 		std::optional<tint_spec> tint = std::nullopt;
+		// A band down it for each of over's rows, as wide as its `regions` field says, or
+		// two grid steps: a card let go in another band moves there by `move`, and the
+		// line between two is dragged to resize one, sent to `resize`.
+		std::string regions = "";
+		std::string move = "";
+		std::string resize = "";
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row

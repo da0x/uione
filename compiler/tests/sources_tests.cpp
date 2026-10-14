@@ -236,6 +236,7 @@ entity wall {
 entity stage {
 	wall   wall   required
 	title  text   required
+	width  number
 }
 entity idea {
 	wall   wall   required
@@ -250,13 +251,17 @@ entity idea {
 command idea::place {
 	changes x  y  w  h
 }
+command idea::move {
+	changes stage
+}
+command stage::update
 view wall_page per wall {
 	title  style
 	ideas = each idea in wall {
 		title  stage  kind  x  y  w  h
 	}
 	stages = each stage in wall {
-		title
+		title  width
 	}
 }
 screen "{wall_page.title}" /walls/:wall {
@@ -268,6 +273,9 @@ screen "{wall_page.title}" /walls/:wall {
 	}
 	canvas wall_page.ideas by stage over wall_page.stages when wall_page.style == style::canvas {
 		place idea::place
+		move idea::move
+		regions by width
+		resize stage::update
 		kind kind
 		grid 160 from 40 80
 		title
@@ -296,6 +304,7 @@ screen "{wall_page.title}" /walls/:wall {
     REQUIRE(drawn != native.end());
     CAPTURE(drawn->content);
     CHECK(drawn->content.find(R"(.place = "ideas::idea::place", .grid = 160, .origin_x = 40, .origin_y = 80, .by = "stage")") != std::string::npos);
+    CHECK(drawn->content.find(R"(.regions = "width", .move = "ideas::idea::move", .resize = "ideas::stage::update")") != std::string::npos);
     CHECK(drawn->content.find(") return canvas_board(p, {") != std::string::npos);
     CHECK(drawn->content.find("; return view(); }()") != std::string::npos);
     // Without the fields it places by, or with one that isn't a number, it says so.

@@ -41,6 +41,9 @@ namespace gallery at / {
 		}
 		canvas room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece when room_page.look == look::wall {
 			place piece::place
+			move piece::move
+			regions by width
+			resize stage::update
 			grid 160 from 40 80
 			title
 			number  condition

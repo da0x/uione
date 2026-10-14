@@ -260,6 +260,25 @@ namespace {
 		return s;
 	}
 
+	site with_whiteboard() {
+		site s{.name = "neotrac"};
+		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", "atlas-main");
+			                     return items(canvas_board(p, {.view = board_page,
+			                                                   .list = "issues",
+			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+			                                                   .place = "projects::issue::place",
+			                                                   .grid = 160,
+			                                                   .by = "stage",
+			                                                   .over = board_page,
+			                                                   .over_list = "stages",
+			                                                   .regions = "width",
+			                                                   .move = "projects::issue::move",
+			                                                   .resize = "projects::stage::update"}));
+		                     }});
+		return s;
+	}
+
 }  // namespace
 
 TEST("a board in a terminal: its columns one after another, and m moving a card along a step the reader may take") {
@@ -306,6 +325,25 @@ TEST("a pipeline in a terminal: a lane for each kind, each card's stages along i
 	nav.open("/atlas/boards/releases");
 	screen_at t(nav, 110, 30);
 	matches_golden("pipeline", t.text());
+}
+
+TEST("a whiteboard in a terminal: its stages as columns, a card moved across into the next moving there") {
+	memory_source data;
+	fill_board(data);
+	data.on("projects::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("projects::issue::move", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	auto s = with_whiteboard();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	screen_at t(nav, 110, 30);
+	matches_golden("whiteboard", t.text());
+	CHECK(t.press(key(terminal::keys::tab)));  // to the whiteboard
+	CHECK(t.press(letter('n')));               // #12, in To do
+	CHECK(t.press(key(terminal::keys::right)));
+	CHECK(t.press(key(terminal::keys::right)));  // two grid steps over: Doing
+	bool moved = false;
+	for (const auto& run : data.runs()) moved = moved || (run.command == "projects::issue::move" && run.fields["stage"].as_string() == "s2");
+	CHECK(moved);
 }
 
 int main() {

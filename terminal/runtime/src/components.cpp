@@ -517,6 +517,8 @@ namespace one::terminal::runtime {
 			items.push_back({.key = card.id, .x = card.x, .y = card.y, .width = card.w, .height = card.h, .content = terminal::column(std::move(inside)), .movable = model.placing});
 		}
 		terminal::surface_options options{.grid = model.grid};
+		for (const auto& region : model.regions) options.regions.push_back({region.id, region.title, region.x, region.width});
+		if (model.resizing) options.on_resize = [&p, spec](const std::string& region, double width) { resize_region(p, spec, region, width); };
 		if (model.placing) options.on_place = [&p, spec](const std::string& card, double x, double y, double w, double h) { place_card(p, spec, card, x, y, w, h); };
 		if (!spec.link.empty()) {
 			options.on_open = [&p, links](const std::string& card) {
@@ -526,7 +528,8 @@ namespace one::terminal::runtime {
 		std::vector<terminal::view> parts;
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		parts.push_back(terminal::surface(std::move(items), std::move(options)));
-		parts.push_back(quiet(model.placing ? "n chooses a card, the arrows move it and Shift resizes it; Enter opens it. + and − zoom."
+		parts.push_back(quiet(model.placing ? (model.regions.empty() ? "n chooses a card, the arrows move it and Shift resizes it; Enter opens it. + and − zoom."
+		                                                              : "n chooses a card, the arrows move it, into another column to move it there, and Shift resizes it; < and > narrow or widen its column. Enter opens it.")
 		                                    : "n chooses a card and Enter opens it; the arrows look around. + and − zoom."));
 		return terminal::column(std::move(parts)).spacing(1);
 	}

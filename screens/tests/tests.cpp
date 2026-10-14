@@ -164,6 +164,41 @@ TEST("a page reads its views live, runs commands, asks first when it's told to, 
 	CHECK(p.kept<int>("count").peek() == 5);
 }
 
+TEST("a whiteboard's regions are its stages side by side: a card let go in another moves there, and one is made wider") {
+	memory_source data;
+	data.on("tracker::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("tracker::issue::move", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("tracker::stage::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	auto& p = nav.current();
+	data.set("tracker::board_page", "atlas", value(fields{
+		{"issues", value(list{value(fields{{"id", "atlas-1"}, {"title", "Laid out"}, {"stage", "todo"}})})},
+		{"stages", value(list{value(fields{{"id", "todo"}, {"title", "To do"}, {"width", 400.0}}), value(fields{{"id", "done"}, {"title", "Done"}})})}}));
+	auto board = p.view("tracker::board_page", "atlas");
+	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
+	                 .by = "stage", .over = board, .over_list = "stages", .regions = "width", .move = "tracker::issue::move", .resize = "tracker::stage::update"};
+	auto c = canvas_of(p, spec);
+	CHECK(c.regions.size() == 2);
+	if (c.regions.size() != 2) return;
+	// To do as wide as it says; Done two grid steps, after it; the card in the middle of To do.
+	CHECK((c.regions[0].x == 40 && c.regions[0].width == 400 && c.regions[1].x == 440 && c.regions[1].width == 320));
+	CHECK(c.cards[0].x == 40 + (400 - 150) / 2.0);
+	CHECK(c.resizing);
+	// Let go in Done, it moves there, and is placed.
+	place_card(p, spec, "atlas-1", 500, 80, 150, 150);
+	bool moved = false;
+	for (const auto& run : data.runs()) moved = moved || (run.command == "tracker::issue::move" && run.fields["stage"].as_string() == "done");
+	CHECK(moved);
+	// To do made wider: shown so at once, Done after it.
+	resize_region(p, spec, "todo", 480);
+	auto wider = canvas_of(p, spec);
+	CHECK((wider.regions[0].width == 480 && wider.regions[1].x == 520));
+	CHECK(data.runs().back().command == "tracker::stage::update");
+	CHECK(data.runs().back().fields["width"].as_double() == 480);
+}
+
 TEST("a pipeline puts each card in its kind's lane, its kind's stages done up to where it is, and red where it failed") {
 	memory_source data;
 	auto s = tracker();

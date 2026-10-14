@@ -1801,6 +1801,37 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // regions by width: a band for each of over's rows, as wide as its field.
+                        if (at_word("regions") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            advance();
+                            advance();
+                            canvas.regions_where = peek().where;
+                            canvas.regions = expect(token_kind::identifier, "the field of its regions keeping how wide each is, like width").text;
+                            end_line();
+                            continue;
+                        }
+                        // move issue::move along board_page.steps: a card let go in another region moves there.
+                        if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
+                            if (at_word("along")) {
+                                advance();
+                                move.along = parse_qualified_name("the view whose list of steps it goes along, like board_page");
+                                expect(token_kind::dot, "'.' and the view's list of steps, like board_page.steps");
+                                move.along_list = expect(token_kind::identifier, "the view's list of steps, like steps").text;
+                            }
+                            canvas.move = std::move(move);
+                            end_line();
+                            continue;
+                        }
+                        // resize stage::update: the command a region's new width is sent to.
+                        if (at_word("resize") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            canvas.resize_where = peek().where;
+                            canvas.resize = parse_qualified_name("the command a region's width is sent to, like stage::update");
+                            end_line();
+                            continue;
+                        }
                         // kind kind: the field saying how each card's drawn.
                         if (at_word("kind") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::newline || peek(2).kind == token_kind::right_brace)) {
                             advance();

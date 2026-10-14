@@ -614,6 +614,64 @@ TEST("a pipeline: a lane for each kind, each card's stages along its row, done, 
 	matches_golden("pipeline", {1200, 560}, [&] { return drawn(nav); });
 }
 
+TEST("a whiteboard: its stages as columns, a card let go in the next moving there, and a column's edge dragged wider") {
+	memory_source data;
+	fill_board(data);
+	data.on("projects::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("projects::issue::move", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("projects::stage::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+		                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
+		                     return items(canvas_board(p, {.view = board_page,
+		                                                   .list = "issues",
+		                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+		                                                   .place = "projects::issue::place",
+		                                                   .grid = 160,
+		                                                   .origin_x = 20,
+		                                                   .origin_y = 40,
+		                                                   .by = "stage",
+		                                                   .over = board_page,
+		                                                   .over_list = "stages",
+		                                                   .regions = "width",
+		                                                   .move = "projects::issue::move",
+		                                                   .resize = "projects::stage::update"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	matches_golden("whiteboard", {1000, 600}, [&] { return drawn(nav); });
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> surface = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.focusable() && e.cursor() == one::desktop::cursor::grab && !e.children.empty()) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = surface(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = surface(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	// #12, in To do, dragged a column over, into Doing.
+	auto at = board->children[0]->frame;
+	one::desktop::point start{at.x + 20, at.y + 20};
+	CHECK(board->press(start, 1));
+	board->drag({start.x + 320, start.y});
+	board->release({start.x + 320, start.y}, board);
+	bool moved = false;
+	for (const auto& run : data.runs()) moved = moved || (run.command == "projects::issue::move" && run.fields["stage"].as_string() == "atlas-main-doing");
+	CHECK(moved);
+	// To do's edge, at 20 + 320 across the surface, dragged 80 wider.
+	auto inner = board->frame;
+	one::desktop::point edge{inner.x + 20 + 320, inner.y + 200};
+	CHECK(board->press(edge, 1));
+	CHECK(board->cursor() == one::desktop::cursor::resize_across);
+	board->drag({edge.x + 80, edge.y});
+	board->release({edge.x + 80, edge.y}, board);
+	CHECK(data.runs().back().command == "projects::stage::update");
+	CHECK(data.runs().back().fields["width"].as_double() == 400);
+}
+
 TEST("a canvas: its cards laid out by stage, one dragged is placed where it's let go, snapped to the grid") {
 	memory_source data;
 	fill_board(data);

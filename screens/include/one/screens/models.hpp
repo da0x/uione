@@ -270,10 +270,16 @@ namespace one::screens {
 		bool placed = false;  // whether its row says where it is, or it's laid out
 		std::string status, running, runner;
 	};
+	struct canvas_region {
+		std::string id, title;
+		double x = 0, width = 0;
+	};
 	struct canvas_model {
 		std::string key;
 		bool loading = false;
-		bool placing = false;  // whether its cards can be moved: it names a command for it
+		bool placing = false;   // whether its cards can be moved: it names a command for it
+		bool resizing = false;  // whether its regions can be made wider or narrower
+		std::vector<canvas_region> regions;
 		double grid = 0, origin_x = 0, origin_y = 0;
 		std::vector<canvas_card> cards;
 		std::string error;
@@ -284,6 +290,9 @@ namespace one::screens {
 	// Places a card: shown there at once, sent to the canvas's command, and back where
 	// it was if it's turned down.
 	void place_card(page_base& p, const canvas_spec& spec, const std::string& card, double x, double y, double w, double h);
+	// Makes a region as wide as it's dragged to: shown so at once, sent to the canvas's
+	// resize command, and back if it's turned down.
+	void resize_region(page_base& p, const canvas_spec& spec, const std::string& region, double width);
 
 	// Cards: each a row with what it shows, a tally of what it holds, and links
 	// opening it filtered.

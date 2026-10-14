@@ -3282,6 +3282,33 @@ namespace one::language {
                 if (!canvas.over.parts.empty()) named_list(ns, canvas.over, canvas.over_list, route);
             }
             if (canvas.grid < 0) error(canvas.grid_where, "a grid's step is more than nothing, like grid 160");
+            // Regions are over's rows, each as wide as its field says.
+            if (!canvas.regions.empty() || canvas.move || canvas.resize) {
+                const view_each* bands = canvas.over.parts.empty() ? nullptr : named_list(ns, canvas.over, canvas.over_list, route);
+                const entity_declaration* band = bands ? listed_entity(ns, *bands) : nullptr;
+                if (canvas.over.parts.empty()) {
+                    error(canvas.regions.empty() ? canvas.view.where : canvas.regions_where, "a canvas's regions are a list's rows, so say them, like by stage over board_page.stages");
+                } else if (band && !canvas.regions.empty()) {
+                    const field* width = find_field(*band, canvas.regions);
+                    if (!width) error(canvas.regions_where, "entity " + band->name + " has no field " + canvas.regions + ", where a region keeps how wide it is; add " + canvas.regions + " number to it");
+                    else if (!width->type || width->type->text() != "number" || width->list) error(canvas.regions_where, band->name + "." + canvas.regions + " keeps how wide a region is, so it's a number");
+                    else if (!in_rows(*bands, canvas.regions)) error(canvas.regions_where, "view " + canvas.over.text() + " has no " + canvas.regions + " in its " + canvas.over_list + "; add it to the list's block");
+                }
+                if (canvas.resize) {
+                    verify_command_use(ns, *canvas.resize);
+                    if (band && canvas.resize->parts.size() == 2 && canvas.resize->parts[0] != band->name) {
+                        error(canvas.resize_where, "a canvas's regions are " + band->name + "s, so they're resized by a command on " + band->name + ", like " + band->name + "::update");
+                    }
+                    if (canvas.regions.empty()) error(canvas.resize_where, "say the field a region keeps its width in, like regions by width, for resize to change");
+                }
+                if (canvas.move) {
+                    verify_command_use(ns, canvas.move->command);
+                    if (canvas.move->command.parts.size() == 2 && canvas.move->command.parts[0] != card->name) {
+                        error(canvas.move->command.where, "a canvas's cards are " + card->name + "s, so they're moved by a command on " + card->name + ", like " + card->name + "::move");
+                    }
+                    if (canvas.move->along) verify_along(ns, *canvas.move, route);
+                }
+            }
             if (canvas.place) {
                 verify_command_use(ns, *canvas.place);
                 if (canvas.place->parts.size() == 2 && canvas.place->parts[0] != card->name) {
