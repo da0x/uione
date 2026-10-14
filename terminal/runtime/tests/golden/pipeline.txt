@@ -1,0 +1,30 @@
+ neotrac
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Releases
+
+  Packages  2
+
+  ▸ @uione/compiler               ✓ To do › ✓ Publishing to npm › ✓ Waiting for npm › ✓ Published
+    @uione/react                  ✓ To do › ✓ Publishing to npm › ● Waiting for npm › ○ Published
+
+  Websites  1
+
+  › neotrac                       ✓ To do › ✓ Checking › ✗ Deploying › ○ Live
+        the deploy failed
+
+  Local apps  1
+
+  › neotrac desktop app           ● To do › ○ Building app › ○ Installed
+        waiting on neotrac
+
+
+
+
+
+
+
+
+
+
+ tab moves   enter opens   q quits

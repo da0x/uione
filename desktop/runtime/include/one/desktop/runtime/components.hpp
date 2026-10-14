@@ -90,6 +90,7 @@ namespace one::desktop::runtime {
 	desktop::view table(page& p, table_spec spec);
 	desktop::view board(page& p, board_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
+	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// What a list on the page is filtered by, with a button showing it all again;
 	// nothing when it isn't.

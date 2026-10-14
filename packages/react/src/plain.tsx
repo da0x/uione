@@ -454,6 +454,24 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Pipeline: ({ status, lanes }) => (
+    <div aria-busy={status === "loading"}>
+      {lanes.map((lane) => (
+        <section key={lane.title}>
+          <h3>{lane.title}</h3>
+          <ul>
+            {lane.rows.map((row) => (
+              <li key={row.id}>
+                {row.link ? <a {...row.link}>{row.title}</a> : row.title}:{" "}
+                {row.steps.map((step) => (step.at === "done" ? "✓ " : step.at === "failed" ? "✗ " : step.at === "now" ? "● " : "○ ") + step.title).join(" › ")}
+                {row.note && ` (${row.note})`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  ),
   Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (
     <div aria-busy={status === "loading"}>
       {error && <p role="alert">{error}</p>}

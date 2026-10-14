@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { BoardCard, FieldProps, Filtered, Hue, LinkProps } from "./contract.js";
+import type { BoardCard, FieldProps, Filtered, Hue, LinkProps, PipelineRow } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1614,6 +1614,93 @@ export function Board({
       />
     </>
   );
+}
+
+// A pipeline: a list's rows in a lane for each kind its lanes field says, each a row of
+// the stages its kind goes through, as their path field lists: those naming its kind,
+// and those naming none but where cards fail. Those before where it is are done; the
+// one it failed in, as its data's at says, is red.
+export function Pipeline({
+  view,
+  list,
+  by,
+  over,
+  overList,
+  shown = "title",
+  columns,
+  link,
+  keyed,
+  named,
+  lanes = "labels",
+  path = "kinds",
+  statusBy,
+}: {
+  view: ViewState;
+  list: string;
+  by: string;
+  over: ViewState;
+  overList: string;
+  shown?: string;
+  columns: Record<string, string>;
+  link?: string;
+  keyed?: string[];
+  named?: Record<string, number>;
+  lanes?: string;
+  path?: string;
+  statusBy?: string;
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const cards = rowsOf(view.data?.[list]);
+  const now = useNow(cards.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
+  const words = (field: unknown): string[] => (Array.isArray(field) ? field.map((w) => show(w)) : show(field) ? [show(field)] : []);
+  const stages = rowsOf(over.data?.[overList]).map((row) => ({
+    id: row.id,
+    title: show(row[shown]) || row.id,
+    status: statusBy ? show(row[statusBy]) : "",
+    kinds: words(row[path]),
+  }));
+  const kinds: string[] = [];
+  for (const stage of stages) for (const kind of stage.kinds) if (!kinds.includes(kind)) kinds.push(kind);
+  const pathOf = (kind: string) => stages.filter((stage) => stage.kinds.includes(kind) || (stage.kinds.length === 0 && stage.status !== "failed"));
+  const [title, ...rest] = Object.keys(columns);
+  const byLane = new Map<string, PipelineRow[]>();
+  for (const card of cards) {
+    const said = words(card[lanes]);
+    const lane = kinds.find((kind) => said.includes(kind)) ?? "";
+    const at = String(card[by] ?? "");
+    const here = stages.find((stage) => stage.id === at);
+    const data = (card.data ?? {}) as Record<string, unknown>;
+    const failed = here?.status === "failed";
+    const failedAt = failed ? show(data.at) : "";
+    const steps = pathOf(lane);
+    let index = steps.findIndex((stage) => stage.id === at || (failed && (stage.title === failedAt || stage.id === failedAt)));
+    if (index < 0) index = steps.length;
+    const row: PipelineRow = {
+      id: card.id,
+      title: title ? cellOf(ui, links, card, title, {}) : card.id,
+      link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
+      details: rest
+        .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, {})))
+        .filter((detail) => detail !== "")
+        .concat(going(card, here?.status, now).extra),
+      steps: steps
+        .map((stage, i) => ({
+          id: stage.id,
+          title: stage.title,
+          at: (i < index ? "done" : i === index ? (failed ? "failed" : stage.status === "done" ? "done" : "now") : "later") as PipelineRow["steps"][number]["at"],
+        }))
+        .concat(failed && index === steps.length && here ? [{ id: here.id, title: here.title, at: "failed" as const }] : []),
+      status: going(card, here?.status, now).status,
+      note: typeof data.note === "string" && data.note ? data.note : undefined,
+    };
+    byLane.set(lane, [...(byLane.get(lane) ?? []), row]);
+  }
+  const capital = (word: string) => (word ? word[0].toUpperCase() + word.slice(1) : "Others");
+  const shownLanes = [...kinds, ""].filter((kind) => byLane.has(kind)).map((kind) => ({ title: capital(kind), rows: byLane.get(kind)! }));
+  const status = view.status !== "live" ? view.status : over.status;
+  return <ui.Pipeline status={status} lanes={shownLanes} />;
 }
 
 // A canvas: a list's rows as cards placed anywhere, where their fields say, moved

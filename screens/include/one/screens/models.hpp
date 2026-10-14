@@ -235,6 +235,30 @@ namespace one::screens {
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 
+	// A pipeline: a lane for each kind, in the order their stages come, each a row for
+	// a card of that kind: the stages it goes through, each done, the one it's at now,
+	// one still to come, or the one it failed in.
+	struct pipeline_step {
+		std::string id, title;
+		std::string at;  // done, now, later or failed
+	};
+	struct pipeline_row {
+		std::string id, title, link;
+		std::vector<std::string> details;
+		std::vector<pipeline_step> steps;
+		std::string status, running, runner;  // its dot, as a board's card says it
+		std::string note;                     // what its holder last said, like waiting on the packages
+	};
+	struct pipeline_lane {
+		std::string title;
+		std::vector<pipeline_row> rows;
+	};
+	struct pipeline_model {
+		bool loading = false;
+		std::vector<pipeline_lane> lanes;
+	};
+	pipeline_model pipeline_of(page_base& p, const pipeline_spec& spec);
+
 	// A canvas: its cards, each where it's placed, in the canvas's own units; those not
 	// placed yet laid out in columns, a grid step apart, as their row's by field says.
 	struct canvas_card {

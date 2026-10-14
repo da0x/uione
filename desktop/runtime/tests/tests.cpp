@@ -421,6 +421,22 @@ namespace {
 		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", "atlas-contributor"}})}}}));
 	}
 
+	site with_pipeline() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Releases", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
+			                     return items(pipeline_board(p, {.view = board_page,
+			                                                     .list = "issues",
+			                                                     .by = "stage",
+			                                                     .over = board_page,
+			                                                     .over_list = "stages",
+			                                                     .columns = {{"title", "Title"}},
+			                                                     .status_by = "status"}));
+		                     }});
+		return s;
+	}
+
 	site with_canvas() {
 		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
@@ -571,6 +587,31 @@ TEST("a board's card moves along a step the person's roles may take, at once, an
 	CHECK(nav.current().error("projects::issue::move") == "that stage is full");
 	CHECK(!moved.peek().contains("atlas-14"));
 	CHECK(nav.current().problem().peek().empty());  // said on the board
+}
+
+TEST("a pipeline: a lane for each kind, each card's stages along its row, done, now, failed and to come") {
+	memory_source data;
+	auto stage = [](std::string id, std::string title, list kinds, std::string status) {
+		return value(fields{{"id", id}, {"title", title}, {"kinds", value(kinds)}, {"status", status}});
+	};
+	auto card = [](std::string id, std::string title, std::string stage, std::string kind, fields more = {}) {
+		fields f{{"id", id}, {"title", title}, {"stage", stage}, {"labels", value(list{value(kind)})}};
+		for (auto& [k, v] : more) f[k] = v;
+		return value(f);
+	};
+	data.set("projects::board_page", "atlas-releases",
+	         value(fields{{"stages", list{stage("to_do", "To do", {}, "inactive"), stage("npm", "Publishing to npm", {"packages"}, "working"),
+	                                     stage("served", "Waiting for npm", {"packages"}, "waiting"), stage("published", "Published", {"packages"}, "done"),
+	                                     stage("checking", "Checking", {"websites"}, "working"), stage("deploying", "Deploying", {"websites"}, "working"),
+	                                     stage("live", "Live", {"websites"}, "done"), stage("building", "Building app", {"local apps"}, "working"),
+	                                     stage("installed", "Installed", {"local apps"}, "done"), stage("failed", "Failed", {}, "failed")}},
+	                      {"issues", list{card("a-1", "@uione/compiler", "published", "packages"), card("a-2", "@uione/react", "served", "packages"),
+	                                      card("a-3", "neotrac", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
+	                                      card("a-4", "neotrac desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on neotrac"}})}})}}}));
+	auto s = with_pipeline();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/releases");
+	matches_golden("pipeline", {1200, 560}, [&] { return drawn(nav); });
 }
 
 TEST("a canvas: its cards laid out by stage, one dragged is placed where it's let go, snapped to the grid") {

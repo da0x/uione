@@ -120,6 +120,63 @@ TEST_CASE("a board over stages written in the code has them as its columns, its 
     }
 }
 
+TEST_CASE("a pipeline lanes cards by a field of theirs and lays each kind's stages along its row") {
+    const std::string source = R"(namespace yard {
+entity stage {
+	title   text  required
+	kinds   list of text
+	status  text
+}
+entity job {
+	title   text  required
+	stage   stage
+	labels  list of text
+}
+view yard_page {
+	jobs = each job {
+		title  stage  labels
+	}
+	stages = each stage {
+		title  kinds  status
+	}
+}
+screen "Yard" /yard {
+	pipeline yard_page.jobs by stage over yard_page.stages {
+		lanes by labels
+		path by kinds
+		status by status
+		title
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Pipeline") != std::string::npos; });
+    REQUIRE(screen != web.end());
+    CAPTURE(screen->content);
+    CHECK(screen->content.find(R"(lanes="labels" path="kinds" statusBy="status")") != std::string::npos);
+    auto native = generators::generate_native(files, root + "/examples/tasks", "terminal");
+    auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("pipeline_board(p, {") != std::string::npos; });
+    REQUIRE(drawn != native.end());
+    CAPTURE(drawn->content);
+    CHECK(drawn->content.find(R"(.lanes = "labels", .path = "kinds", .status_by = "status")") != std::string::npos);
+    // A path by a field that isn't a list says so.
+    std::string single = source;
+    single.replace(single.find("\tkinds   list of text\n"), std::string("\tkinds   list of text\n").size(), "\tkinds   text\n");
+    language::diagnostics wrong;
+    std::vector<language::file> again;
+    again.push_back(language::parse("main.one", single, wrong));
+    language::check(again, wrong);
+    std::string said;
+    for (const auto& d : wrong) said += language::format(d) + "\n";
+    CHECK(said.find("stage.kinds lists the kinds of card that go through a stage, so it's a list") != std::string::npos);
+}
+
 TEST_CASE("cards tag each with its choices, and one that says hide when empty isn't there while it has none") {
     const std::string source = R"(namespace yard {
 enum kind {

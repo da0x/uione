@@ -749,6 +749,30 @@ namespace one::language {
         std::vector<table_column> columns;  // what a card shows, its title first
     };
 
+    // pipeline board_page.issues by stage over board_page.stages { lanes by labels
+    // path by kinds  title }: a list's rows grouped in a lane for each kind a card says
+    // it is, each a row of the stages its kind goes through, in order: those before
+    // its own done, its own in its status's color, and the one it failed in, when it
+    // says so in its data's at, red. A stage goes on every kind's path when it names
+    // no kind, unless it's where cards fail.
+    struct pipeline_item {
+        qualified_name view;
+        std::optional<std::string> list;
+        std::string by;  // the field naming a card's stage, like stage
+        location by_where;
+        qualified_name over;
+        std::string over_list;
+        std::optional<std::string> link;
+        location link_where;
+        std::string lanes;  // lanes by labels: the card's field saying what it is
+        location lanes_where;
+        std::string path;  // path by kinds: the stage's field listing the kinds that go through it
+        location path_where;
+        std::string status_field;  // status by status: the stage's status, its cards' dot
+        location status_where;
+        std::vector<table_column> columns;  // what a row shows, its title first
+    };
+
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as
     // large cards, each with what its block shows, its title first; a tally of what
     // it holds, like its issues by stage; and filters, links that open it filtered.
@@ -854,7 +878,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item,
-                     find_item, canvas_item>
+                     find_item, canvas_item, pipeline_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

@@ -28,6 +28,9 @@ namespace gallery at / {
 		title      text  required
 		position   number
 		worked_by  list of role
+		// The kinds of piece that go through it, by their labels, as a pipeline lays them
+		// out; none, every kind.
+		kinds      list of text
 	}
 
 	// From one stage to another, for the roles it names.
@@ -236,7 +239,7 @@ namespace gallery at / {
 		}
 		stages = each stage in room {
 			order by position
-			name  title  position  worked_by  worked_by.title
+			name  title  position  worked_by  worked_by.title  kinds
 		}
 		steps = each step in room {
 			order by from.position  to.position

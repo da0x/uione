@@ -240,6 +240,30 @@ export interface BoardProps {
   onColumn?: (column: string) => void;
 }
 
+// A pipeline, like a release's: a lane for each kind of card, in the order their stages
+// come, and in it a row for each card, its kind's stages along it, each done, the one
+// it's at now, one still to come, or the one it failed in.
+export interface PipelineProps {
+  status: ViewStatus;
+  lanes: PipelineLane[];
+}
+
+export interface PipelineLane {
+  title: string;
+  rows: PipelineRow[];
+}
+
+export interface PipelineRow {
+  id: string;
+  title: ReactNode;
+  link?: LinkProps;
+  details: ReactNode[];
+  steps: { id: string; title: string; at: "done" | "now" | "later" | "failed" }[];
+  // How it's going where it is now, as a board's card's dot says it.
+  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
+  note?: string; // what its holder last said, like waiting on the packages
+}
+
 // Cards placed anywhere on a surface that pans and zooms, like an idea board: each
 // where it says, dragged to move it or by its corner to resize it, and placed once
 // let go, snapped to the grid when there's one. A double click opens a card.
@@ -555,6 +579,7 @@ export interface ComponentSet {
   Grid: ComponentType<GridProps>;
   Board: ComponentType<BoardProps>;
   Canvas: ComponentType<CanvasProps>;
+  Pipeline: ComponentType<PipelineProps>;
   Switch: ComponentType<SwitchProps>;
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;

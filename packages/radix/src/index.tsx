@@ -1012,6 +1012,65 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
+  // A pipeline, as the classic deploy screen drew one: a heading for each lane, and in
+  // it a row for each card, its title first, then its stages in order, each a chip:
+  // done with a tick, the one it's at in its status's color, the one it failed in red,
+  // those to come faint. What its holder last said is at the row's end.
+  Pipeline: ({ status, lanes }) => (
+    <div className="flex flex-col gap-6" aria-busy={status === "loading"}>
+      {lanes.length === 0 && status === "live" && <p className="text-sm text-muted">Nothing here yet.</p>}
+      {lanes.map((lane) => (
+        <section key={lane.title} aria-label={lane.title} className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-ink">
+            {lane.title} <span className="font-normal text-muted tabular-nums">{lane.rows.length}</span>
+          </h3>
+          <div className="divide-y divide-line overflow-hidden rounded-box border border-line bg-surface">
+            {lane.rows.map((row) => (
+              <div key={row.id} className="flex flex-col gap-2 px-4 py-3 lg:flex-row lg:items-center lg:gap-4">
+                <div className="flex min-w-0 flex-col lg:w-64 lg:shrink-0">
+                  {row.link ? (
+                    <a {...row.link} className="truncate font-medium text-ink hover:text-accent hover:underline">
+                      {row.title}
+                    </a>
+                  ) : (
+                    <span className="truncate font-medium text-ink">{row.title}</span>
+                  )}
+                  {row.details.length > 0 && <span className="truncate text-xs text-muted">{row.details.map((d, i) => <Fragment key={i}>{i > 0 && " · "}{d}</Fragment>)}</span>}
+                </div>
+                <ol className="flex flex-wrap items-center gap-1 text-xs" aria-label={`Stages of ${typeof row.title === "string" ? row.title : "this card"}`}>
+                  {row.steps.map((step, i) => (
+                    <li key={step.id} className="flex items-center gap-1">
+                      {i > 0 && <span aria-hidden className={`h-px w-3 ${step.at === "later" ? "bg-line" : "bg-muted/50"}`} />}
+                      <span
+                        aria-current={step.at === "now" ? "step" : undefined}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
+                          step.at === "done"
+                            ? "border-success/30 bg-success/10 text-success"
+                            : step.at === "failed"
+                              ? "border-danger/40 bg-danger/10 font-medium text-danger"
+                              : step.at === "now"
+                                ? "border-current font-medium"
+                                : "border-line text-muted/70"
+                        }`}
+                        style={step.at === "now" && row.status ? { color: statusColors[row.status.is] } : undefined}
+                        title={step.at === "now" && row.status ? row.status.words : undefined}
+                      >
+                        {step.at === "done" && <span aria-hidden>✓</span>}
+                        {step.at === "failed" && <span aria-hidden>✗</span>}
+                        {step.at === "now" && <span aria-hidden className="size-1.5 rounded-full bg-current" />}
+                        {step.title}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                {row.note && <p className="text-xs text-muted lg:ml-auto lg:max-w-xs lg:truncate">{row.note}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  ),
   // A canvas: cards placed anywhere, on the shared SVG surface, each drawn as a
   // board's card is: its dot, its title, what else it shows; text large and bare.
   Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (

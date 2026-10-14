@@ -207,6 +207,41 @@ namespace {
 		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", "atlas-contributor"}})}}}));
 	}
 
+	site with_pipeline() {
+		site s{.name = "neotrac"};
+		s.screens.push_back({"Releases", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", "atlas-releases");
+			                     return items(pipeline_board(p, {.view = board_page,
+			                                                     .list = "issues",
+			                                                     .by = "stage",
+			                                                     .over = board_page,
+			                                                     .over_list = "stages",
+			                                                     .columns = {{"title", "Title"}},
+			                                                     .status_by = "status"}));
+		                     }});
+		return s;
+	}
+
+	void fill_releases(memory_source& data) {
+		auto stage = [](std::string id, std::string title, list kinds, std::string status) {
+			return value(fields{{"id", id}, {"title", title}, {"kinds", value(kinds)}, {"status", status}});
+		};
+		auto card = [](std::string id, std::string title, std::string stage, std::string kind, fields more = {}) {
+			fields f{{"id", id}, {"title", title}, {"stage", stage}, {"labels", value(list{value(kind)})}};
+			for (auto& [k, v] : more) f[k] = v;
+			return value(f);
+		};
+		data.set("projects::board_page", "atlas-releases",
+		         value(fields{{"stages", list{stage("to_do", "To do", {}, "inactive"), stage("npm", "Publishing to npm", {"packages"}, "working"),
+		                                     stage("served", "Waiting for npm", {"packages"}, "waiting"), stage("published", "Published", {"packages"}, "done"),
+		                                     stage("checking", "Checking", {"websites"}, "working"), stage("deploying", "Deploying", {"websites"}, "working"),
+		                                     stage("live", "Live", {"websites"}, "done"), stage("building", "Building app", {"local apps"}, "working"),
+		                                     stage("installed", "Installed", {"local apps"}, "done"), stage("failed", "Failed", {}, "failed")}},
+		                      {"issues", list{card("a-1", "@uione/compiler", "published", "packages"), card("a-2", "@uione/react", "served", "packages"),
+		                                      card("a-3", "neotrac", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
+		                                      card("a-4", "neotrac desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on neotrac"}})}})}}}));
+	}
+
 	site with_canvas() {
 		site s{.name = "neotrac"};
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
@@ -261,6 +296,16 @@ TEST("a canvas in a terminal: its cards as boxes where they're laid out, n choos
 	CHECK(data.runs().back().fields["y"].as_double() == 320);
 	CHECK(data.runs().back().fields["x"].as_double() == 0);
 	matches_golden("canvas-placed", t.text());
+}
+
+TEST("a pipeline in a terminal: a lane for each kind, each card's stages along its row, the one it's at marked") {
+	memory_source data;
+	fill_releases(data);
+	auto s = with_pipeline();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/releases");
+	screen_at t(nav, 110, 30);
+	matches_golden("pipeline", t.text());
 }
 
 int main() {

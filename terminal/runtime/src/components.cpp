@@ -455,6 +455,45 @@ namespace one::terminal::runtime {
 		return terminal::text("●", colored(found->second));
 	}
 
+	// A pipeline in a terminal, as the classic deploy screen drew one: a heading for each
+	// lane, and a row for each card, its title, then its stages in order: ✓ done, ● the
+	// one it's at in its status's color, ✗ the one it failed in, ○ those to come.
+	terminal::view pipeline_board(page& p, pipeline_spec spec) {
+		auto model = pipeline_of(p, spec);
+		if (model.loading) return quiet("Loading…");
+		if (model.lanes.empty()) return quiet("Nothing here yet.");
+		static const std::map<std::string, color> colors{
+		    {"inactive", color::bright_black}, {"waiting", color::blue}, {"working", color::yellow}, {"done", color::green}, {"failed", color::red}};
+		std::vector<terminal::view> parts;
+		for (const auto& lane : model.lanes) {
+			parts.push_back(terminal::text(lane.title + "  " + std::to_string(lane.rows.size()), {.bold = true}));
+			std::vector<terminal::list_row> rows;
+			std::map<std::string, std::string> links;
+			for (const auto& row : lane.rows) {
+				links[row.id] = row.link;
+				terminal::line steps;
+				for (std::size_t i = 0; i < row.steps.size(); ++i) {
+					const auto& step = row.steps[i];
+					if (i > 0) steps.push_back({" › ", dim()});
+					if (step.at == "done") steps.push_back({"✓ " + step.title, colored(color::green)});
+					else if (step.at == "failed") steps.push_back({"✗ " + step.title, {.bold = true, .foreground = color::red}});
+					else if (step.at == "now") {
+						auto found = colors.find(row.status);
+						steps.push_back({"● " + step.title, {.bold = true, .foreground = found == colors.end() ? color::blue : found->second}});
+					} else steps.push_back({"○ " + step.title, dim()});
+				}
+				std::vector<terminal::view> inside;
+				inside.push_back(terminal::row(terminal::text(row.title).width(28), terminal::text(std::move(steps)).grow()).spacing(2));
+				if (!row.note.empty()) inside.push_back(quiet("    " + row.note));
+				rows.push_back({row.id, terminal::column(std::move(inside))});
+			}
+			parts.push_back(terminal::list(std::move(rows), [&p, links](const std::string& id) {
+				if (auto found = links.find(id); found != links.end() && !found->second.empty()) p.open(found->second);
+			}));
+		}
+		return terminal::column(std::move(parts)).spacing(1);
+	}
+
 	// A canvas in a terminal: its cards as boxes where they're placed, moved and resized
 	// a grid step at a time with the keys, and placed by the canvas's command at once.
 	terminal::view canvas_board(page& p, canvas_spec spec) {

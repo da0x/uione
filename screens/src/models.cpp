@@ -14,6 +14,7 @@
 #include <one/client/client.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <array>
 #include <cmath>
 #include <cstdlib>
@@ -949,6 +950,98 @@ namespace one::screens {
 		p.run(spec.move->command, value(std::map<std::string, value>{{"id", card}, {spec.by, to}}), [moved, card](const answer& a) {
 			if (!a) moved.change([&](auto& now) { now.erase(card); });
 		}, true);
+	}
+
+	pipeline_model pipeline_of(page_base& p, const pipeline_spec& spec) {
+		pipeline_model out;
+		const view_state& v = *spec.view;
+		const view_state& over = *spec.over;
+		if (v.status == status::loading || over.status == status::loading) {
+			out.loading = true;
+			return out;
+		}
+		auto words_of = [](const value& field) {
+			std::vector<std::string> said;
+			if (field.is_array()) {
+				for (const auto& w : field.as_array()) said.push_back(show(w));
+			} else if (std::string one = show(field); !one.empty()) {
+				said.push_back(one);
+			}
+			return said;
+		};
+		struct stage_seen {
+			std::string id, title, status;
+			std::vector<std::string> kinds;
+		};
+		std::vector<stage_seen> stages;
+		for (const auto& thing : rows_of(over, spec.over_list)) {
+			stages.push_back({thing["id"].as_string(), show(field_of(thing, spec.shown)), spec.status_by.empty() ? "" : show(field_of(thing, spec.status_by)),
+			                  words_of(field_of(thing, spec.path))});
+		}
+		// The lanes, in the order their kinds first come along the stages.
+		std::vector<std::string> kinds;
+		for (const auto& stage : stages) {
+			for (const auto& kind : stage.kinds) {
+				if (!std::ranges::contains(kinds, kind)) kinds.push_back(kind);
+			}
+		}
+		// A kind's path: its own stages, and those naming no kind but where cards fail.
+		auto path_of = [&](const std::string& kind) {
+			std::vector<const stage_seen*> path;
+			for (const auto& stage : stages) {
+				if (std::ranges::contains(stage.kinds, kind) || (stage.kinds.empty() && stage.status != "failed")) path.push_back(&stage);
+			}
+			return path;
+		};
+		std::map<std::string, pipeline_lane> lanes;
+		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
+		for (const auto& card : rows_of(v, spec.list)) {
+			if (!p.keeps(card)) continue;
+			auto said = words_of(field_of(card, spec.lanes));
+			auto kind = std::ranges::find_if(kinds, [&](const std::string& k) { return std::ranges::contains(said, k); });
+			std::string lane = kind == kinds.end() ? "" : *kind;
+			pipeline_row row{card["id"].as_string(), show(field_of(card, title)), "", {}, {}, "", "", "", ""};
+			for (std::size_t c = 1; c < spec.columns.size(); ++c) {
+				if (std::string said_now = show(field_of(card, spec.columns[c].field)); !said_now.empty()) row.details.push_back(numbered(spec.columns[c].field) ? "#" + said_now : said_now);
+			}
+			if (!spec.link.empty()) row.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
+			std::string at = field_of(card, spec.by).as_string();
+			const stage_seen* here = nullptr;
+			for (const auto& stage : stages) {
+				if (stage.id == at) here = &stage;
+			}
+			board_card dot;
+			status_of(p, card, here ? here->status : "", dot);
+			row.status = dot.status, row.running = dot.running, row.runner = dot.runner;
+			const value& data = card["data"];
+			if (data.is_map()) row.note = show(data["note"]);
+			// Where it is along its path, or where it failed, as its data says.
+			auto path = path_of(lane);
+			std::string failed_at = here && here->status == "failed" && data.is_map() ? show(data["at"]) : "";
+			std::size_t now = path.size();
+			bool failed = here && here->status == "failed";
+			for (std::size_t i = 0; i < path.size(); ++i) {
+				if (path[i]->id == at || (failed && (path[i]->title == failed_at || path[i]->id == failed_at))) now = i;
+			}
+			for (std::size_t i = 0; i < path.size(); ++i) {
+				std::string state = i < now ? "done" : i == now ? (failed ? "failed" : "now") : "later";
+				// An end it's reached is done, not still going.
+				if (i == now && !failed && path[i]->status == "done") state = "done";
+				row.steps.push_back({path[i]->id, path[i]->title, state});
+			}
+			if (failed && now == path.size()) row.steps.push_back({here->id, here->title, "failed"});
+			auto& shown = lanes[lane];
+			if (shown.title.empty()) {
+				shown.title = lane.empty() ? "Others" : lane;
+				shown.title[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(shown.title[0])));
+			}
+			shown.rows.push_back(std::move(row));
+		}
+		for (const auto& kind : kinds) {
+			if (auto found = lanes.find(kind); found != lanes.end()) out.lanes.push_back(std::move(found->second));
+		}
+		if (auto others = lanes.find(""); others != lanes.end()) out.lanes.push_back(std::move(others->second));
+		return out;
 	}
 
 	double snapped(double at, double origin, double grid) {

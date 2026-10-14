@@ -164,6 +164,41 @@ TEST("a page reads its views live, runs commands, asks first when it's told to, 
 	CHECK(p.kept<int>("count").peek() == 5);
 }
 
+TEST("a pipeline puts each card in its kind's lane, its kind's stages done up to where it is, and red where it failed") {
+	memory_source data;
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	auto& p = nav.current();
+	auto stage = [](std::string id, std::string title, list kinds, std::string status = "") {
+		return value(fields{{"id", id}, {"title", title}, {"kinds", value(kinds)}, {"status", status}});
+	};
+	data.set("tracker::board_page", "atlas", value(fields{
+		{"stages", value(list{stage("to_do", "To do", {}, "inactive"), stage("npm", "Publishing to npm", {"packages"}, "working"), stage("published", "Published", {"packages"}, "done"),
+		                      stage("checking", "Checking", {"websites"}, "working"), stage("live", "Live", {"websites"}, "done"), stage("failed", "Failed", {}, "failed")})},
+		{"issues", value(list{value(fields{{"id", "a-1"}, {"title", "compiler"}, {"stage", "npm"}, {"labels", value(list{"packages"})}}),
+		                      value(fields{{"id", "a-2"}, {"title", "neotrac"}, {"stage", "failed"}, {"labels", value(list{"websites"})}, {"data", value(fields{{"at", "Checking"}, {"note", "not pushed"}})}}),
+		                      value(fields{{"id", "a-3"}, {"title", "react"}, {"stage", "published"}, {"labels", value(list{"packages"})}})})}}));
+	auto board = p.view("tracker::board_page", "atlas");
+	auto m = pipeline_of(p, {.view = board, .list = "issues", .by = "stage", .over = board, .over_list = "stages", .columns = {{"title", "Title"}}, .status_by = "status"});
+	CHECK(m.lanes.size() == 2);
+	if (m.lanes.size() != 2) return;
+	CHECK(m.lanes[0].title == "Packages");
+	CHECK(m.lanes[1].title == "Websites");
+	// Its kind's stages and To do, never Failed: To do done, the one it's at now.
+	const auto& compiler = m.lanes[0].rows[0];
+	CHECK(compiler.steps.size() == 3);
+	CHECK((compiler.steps[0].at == "done" && compiler.steps[1].at == "now" && compiler.steps[2].at == "later"));
+	CHECK(compiler.status == "working");
+	// At its end, every stage done.
+	const auto& react = m.lanes[0].rows[1];
+	CHECK((react.steps[2].title == "Published" && react.steps[2].at == "done"));
+	// Failed in Checking, as it says: red there, To do done, Live to come.
+	const auto& site = m.lanes[1].rows[0];
+	CHECK((site.steps[0].at == "done" && site.steps[1].at == "failed" && site.steps[2].at == "later"));
+	CHECK(site.note == "not pushed");
+}
+
 TEST("a canvas places its cards where they say, lays out those that don't by column, and moves one at once, back if it's turned down") {
 	memory_source data;
 	data.on("tracker::issue::place", [](const value& f, memory_source&) -> answer {

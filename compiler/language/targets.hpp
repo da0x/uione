@@ -81,6 +81,7 @@ namespace one::language {
         drawn_by{"board.reorder", "reordering a board", everywhere},
         drawn_by{"canvas", "a canvas", everywhere},
         drawn_by{"canvas.place", "placing a canvas's cards", everywhere},
+        drawn_by{"pipeline", "a pipeline", everywhere},
         drawn_by{"cards", "cards", everywhere},
         drawn_by{"cards.link", "cards' link", everywhere},
         drawn_by{"cards.tally", "cards' tally", everywhere},
@@ -232,6 +233,8 @@ namespace one::language {
                         if (n.tint) use("board.tint");
                         if (n.track) use("board.track");
                         if (n.reorder) use("board.reorder");
+                    } else if constexpr (std::is_same_v<T, pipeline_item>) {
+                        use("pipeline");
                     } else if constexpr (std::is_same_v<T, canvas_item>) {
                         use("canvas");
                         if (n.place) use("canvas.place");

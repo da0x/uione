@@ -619,6 +619,26 @@ namespace one::generators {
             return out + "})";
         }
 
+        // A pipeline: its cards' rows by their stage, its stages, and the fields its lanes
+        // and each kind's path are by.
+        std::string pipeline(screen_parts& parts, const std::string& ns, const language::pipeline_item& c) {
+            const language::entity_declaration* entity = model_.listed(ns, c.view.text(), c.list);
+            std::string columns;
+            for (const auto& column : c.columns) {
+                auto shown = model_.shown_as(ns, c.view.text(), c.list, entity, screens::text_of(*column.value), column.label);
+                columns += (columns.empty() ? "" : ", ") + std::string("{") + str(shown.key) + ", " + str(shown.label) + "}";
+            }
+            std::string out = "pipeline_board(p, {.view = " + view_variable(parts, screens::full_view(ns, c.view.text())) + ", .list = " + str(*c.list) + ", .by = " + str(c.by) +
+                              ", .over = " + view_variable(parts, screens::full_view(ns, c.over.text())) + ", .over_list = " + str(c.over_list);
+            bool titled = false;
+            for (const auto& column : model_.listed_columns(ns, c.over.text(), c.over_list)) titled = titled || column == "title";
+            out += std::string(", .shown = ") + (titled ? "\"title\"" : "\"name\"") + ", .columns = {" + columns + "}";
+            if (c.link) out += ", " + link_settings(ns, *c.link);
+            out += ", .lanes = " + str(c.lanes) + ", .path = " + str(c.path);
+            if (!c.status_field.empty()) out += ", .status_by = " + str(c.status_field);
+            return out + "})";
+        }
+
         // A canvas: its cards' rows, where they're kept, the command placing them, and the
         // grid they snap to; by and over lay out those not placed yet.
         std::string canvas(screen_parts& parts, const std::string& ns, const language::canvas_item& c) {
@@ -1118,6 +1138,8 @@ namespace one::generators {
                     code = board(parts, ns, *b, screen);
                 } else if (auto* c = std::get_if<language::canvas_item>(&item.node)) {
                     code = canvas(parts, ns, *c);
+                } else if (auto* c = std::get_if<language::pipeline_item>(&item.node)) {
+                    code = pipeline(parts, ns, *c);
                 } else if (auto* f = std::get_if<language::form_item>(&item.node)) {
                     if (model_.on_rows(ns, screen, screens::full_command(ns, f->commands.front()))) continue;  // each row's button opens it
                     code = form(parts, ns, *f, screens::model::button_for(screen, f->commands.front()));

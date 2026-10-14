@@ -1690,6 +1690,58 @@ namespace one::language {
                 end_line();
                 return {where, std::move(board), std::move(shown_when)};
             }
+            if (at_word("pipeline") && peek(1).kind != token_kind::scope) {
+                advance();
+                pipeline_item pipeline;
+                pipeline.view = parse_qualified_name("the view whose list it shows, like board_page");
+                expect(token_kind::dot, "'.' and the view's list, like board_page.issues");
+                pipeline.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                if (!at_word("by")) fail_expecting("by and the field naming each card's stage, like by stage");
+                advance();
+                pipeline.by_where = peek().where;
+                pipeline.by = expect(token_kind::identifier, "the field naming each card's stage, like stage").text;
+                if (!at_word("over")) fail_expecting("over and the list of its stages, like over board_page.stages");
+                advance();
+                pipeline.over = parse_qualified_name("the view whose list its stages are, like board_page");
+                expect(token_kind::dot, "'.' and the view's list, like board_page.stages");
+                pipeline.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
+                if (at_word("link")) {
+                    advance();
+                    pipeline.link_where = peek().where;
+                    pipeline.link = expect(token_kind::route, "the screen each card opens, like /:project/:issue").text;
+                }
+                expression_ptr shown_when = shown_while();
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        // lanes by labels, path by kinds, status by status
+                        if ((at_word("lanes") || at_word("path") || at_word("status")) && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            std::string which = advance().text;
+                            advance();
+                            location where = peek().where;
+                            std::string field = expect(token_kind::identifier, which == "lanes" ? "the card's field saying what it is, like labels"
+                                                                              : which == "path" ? "the stage's field listing the kinds that go through it, like kinds"
+                                                                                                : "the stage's field that's its status, like status").text;
+                            if (which == "lanes") pipeline.lanes = field, pipeline.lanes_where = where;
+                            else if (which == "path") pipeline.path = field, pipeline.path_where = where;
+                            else pipeline.status_field = field, pipeline.status_where = where;
+                            end_line();
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            pipeline.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(pipeline), std::move(shown_when)};
+            }
             if (at_word("canvas") && peek(1).kind != token_kind::scope) {
                 advance();
                 canvas_item canvas;

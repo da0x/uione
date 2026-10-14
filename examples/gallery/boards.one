@@ -22,6 +22,17 @@ namespace gallery at / {
 		}
 	}
 
+	// A pipeline: each piece in a lane for its kind, as its labels say, along the stages
+	// its kind goes through.
+	screen "Pipeline" /rooms/:room/pipeline {
+		pipeline room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece {
+			lanes by labels
+			path by kinds
+			title
+			number  condition
+		}
+	}
+
 	screen "Wall" /rooms/:room/wall {
 		board room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece when room_page.look == look::board {
 			move piece::move along room_page.steps

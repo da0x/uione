@@ -1106,6 +1106,8 @@ namespace one::generators {
                     shown_while(out, parts, ns, item, [&] { this->board(out, parts, ns, *board, screen); });
                 } else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) {
                     shown_while(out, parts, ns, item, [&] { this->canvas(out, parts, ns, *canvas); });
+                } else if (auto* pipeline = std::get_if<language::pipeline_item>(&item.node)) {
+                    shown_while(out, parts, ns, item, [&] { this->pipeline(out, parts, ns, *pipeline); });
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
                     if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
@@ -1216,6 +1218,39 @@ namespace one::generators {
         // a move, dragged along the steps the person's roles may take.
         // Beside a table of the same list, it takes the table's toolbar and search when it
         // has none of its own.
+        // A pipeline: its cards' rows by their stage, its stages, and the fields its lanes
+        // and each kind's path are by.
+        void pipeline(stream& out, screen_parts& parts, const std::string& ns, const language::pipeline_item& c) {
+            parts.components.insert("Pipeline");
+            const language::entity_declaration* entity = listed(ns, c.view.text(), c.list);
+            std::string columns;
+            for (const auto& column : c.columns) {
+                auto column_shown = shown_as(ns, c.view.text(), c.list, entity, web_detail::text_of(*column.value), column.label);
+                const std::string& key = column_shown.key;
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(column_shown.label);
+            }
+            bool titled = false;
+            for (const auto& column : listed_columns(ns, c.over.text(), c.over_list)) titled = titled || column == "title";
+            std::string line = "<Pipeline view={" + view_variable(parts, full_view(ns, c.view.text())) + "} list=" + web_detail::js_string(*c.list) + " by=" + web_detail::js_string(c.by) +
+                               " over={" + view_variable(parts, full_view(ns, c.over.text())) + "} overList=" + web_detail::js_string(c.over_list) +
+                               " shown=" + (titled ? "\"title\"" : "\"name\"") + " columns={{ " + columns + " }} lanes=" + web_detail::js_string(c.lanes) +
+                               " path=" + web_detail::js_string(c.path);
+            if (!c.status_field.empty()) line += " statusBy=" + web_detail::js_string(c.status_field);
+            if (c.link) {
+                std::string target = full_route(ns, *c.link);
+                line += " link=" + web_detail::js_string(target);
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+                line += named_by(ns, target);
+            }
+            out.line(line + " />");
+        }
+
         // A canvas: its cards' rows, where they're kept, the command placing them, the
         // grid they snap to, and how those not placed yet are laid out.
         void canvas(stream& out, screen_parts& parts, const std::string& ns, const language::canvas_item& c) {
@@ -1552,6 +1587,7 @@ namespace one::generators {
                 else if (auto* cards = std::get_if<language::cards_item>(&item.node)) take(cards->view, cards->list);
                 else if (auto* board = std::get_if<language::board_item>(&item.node)) take(board->view, board->list);
                 else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) take(canvas->view, canvas->list);
+                else if (auto* pipeline = std::get_if<language::pipeline_item>(&item.node)) take(pipeline->view, pipeline->list);
                 else if (auto* block = std::get_if<language::content_block>(&item.node)) lists_on(block->items, view, out);
             }
         }

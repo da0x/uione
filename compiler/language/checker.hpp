@@ -2955,6 +2955,8 @@ namespace one::language {
                     verify_board(ns, *board, route);
                 } else if (auto* canvas = std::get_if<canvas_item>(&item.node)) {
                     verify_canvas(ns, *canvas, route);
+                } else if (auto* pipeline = std::get_if<pipeline_item>(&item.node)) {
+                    verify_pipeline(ns, *pipeline, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
                     verify_cards(ns, *cards, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
@@ -3193,6 +3195,57 @@ namespace one::language {
                     error(board.move->command.where, "a board's cards are " + card->name + "s, so they're moved by a command on " + card->name + ", like " + card->name + "::move");
                 }
                 verify_along(ns, *board.move, route);
+            }
+        }
+
+        // pipeline board_page.issues by stage over board_page.stages { lanes by labels
+        // path by kinds }: the cards point at the stages by their by field, hold the field
+        // their lanes are by, and the stages hold the field listing who goes through them.
+        void verify_pipeline(const std::string& ns, const pipeline_item& pipeline, const std::string& route) {
+            const view_each* cards = named_list(ns, pipeline.view, *pipeline.list, route);
+            const view_each* stages = named_list(ns, pipeline.over, pipeline.over_list, route);
+            if (!cards || !stages) return;
+            const entity_declaration* card = listed_entity(ns, *cards);
+            const entity_declaration* stage = listed_entity(ns, *stages);
+            if (!card || !stage) return;
+            const field* by = find_field(*card, pipeline.by);
+            if (!by) {
+                error(pipeline.by_where, "entity " + card->name + " has no field " + pipeline.by + nearest(pipeline.by, field_names(*card)));
+            } else if (pointed(ns, *by) != stage) {
+                error(pipeline.by_where, card->name + "." + pipeline.by + " is a card's stage, so it points at a " + stage->name + ", what " + pipeline.over.text() + "." +
+                                             pipeline.over_list + " lists");
+            } else if (!in_rows(*cards, pipeline.by)) {
+                error(pipeline.by_where, "view " + pipeline.view.text() + " has no " + pipeline.by + " in its " + *pipeline.list + "; add it to the list's block");
+            }
+            if (pipeline.lanes.empty()) {
+                error(pipeline.view.where, "say what a pipeline's lanes are by, the field saying what each card is, like lanes by labels");
+            } else if (!find_field(*card, pipeline.lanes)) {
+                error(pipeline.lanes_where, "entity " + card->name + " has no field " + pipeline.lanes + nearest(pipeline.lanes, field_names(*card)));
+            } else if (!in_rows(*cards, pipeline.lanes)) {
+                error(pipeline.lanes_where, "view " + pipeline.view.text() + " has no " + pipeline.lanes + " in its " + *pipeline.list + "; add it to the list's block");
+            }
+            if (pipeline.path.empty()) {
+                error(pipeline.view.where, "say which stages each kind goes through, the stage's field listing them, like path by kinds");
+            } else if (const field* path = find_field(*stage, pipeline.path); !path) {
+                error(pipeline.path_where, "entity " + stage->name + " has no field " + pipeline.path + nearest(pipeline.path, field_names(*stage)));
+            } else if (!path->list) {
+                error(pipeline.path_where, stage->name + "." + pipeline.path + " lists the kinds of card that go through a stage, so it's a list, like list of text");
+            } else if (!in_rows(*stages, pipeline.path)) {
+                error(pipeline.path_where, "view " + pipeline.over.text() + " has no " + pipeline.path + " in its " + pipeline.over_list + "; add it to the list's block");
+            }
+            if (!pipeline.status_field.empty() && !in_rows(*stages, pipeline.status_field)) {
+                error(pipeline.status_where, "view " + pipeline.over.text() + " has no " + pipeline.status_field + " in its " + pipeline.over_list + "; add it to the list's block");
+            }
+            if (!in_rows(*stages, "title") && !in_rows(*stages, "name")) {
+                error(pipeline.over.where, "a pipeline's stages are called by their title or name, so " + pipeline.over.text() + "." + pipeline.over_list + " needs one");
+            }
+            if (pipeline.columns.empty()) error(pipeline.view.where, "a pipeline's rows show something, its title first, like title");
+            for (const auto& shown : pipeline.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*cards, key)) error(shown.where, "view " + pipeline.view.text() + " has no " + key + " in its " + *pipeline.list + "; add it to the list's block");
+            }
+            if (pipeline.link && !routes_.contains(full_route(ns, *pipeline.link))) {
+                error(pipeline.link_where, "there's no screen at " + full_route(ns, *pipeline.link) + " for this pipeline's cards to open");
             }
         }
 

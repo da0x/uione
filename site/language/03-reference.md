@@ -1705,6 +1705,16 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   large and on its own, anything else a note. On the web it's drawn as SVG; in the
   desktop app on a surface of its own; in the terminal as boxes, `n` choosing one,
   the arrows moving it a grid step and Shift resizing it.
+- `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
+  as the classic deploy screen did: a lane for each kind of card, its kind said by
+  `lanes by labels`, in the order their stages come, and in it a row for each card,
+  the stages its kind goes through along it. `path by kinds` names the stages' list
+  of the kinds that go through them; a stage naming none is on every kind's path,
+  unless its status is `failed`. Stages before the one a card is at are done, ticked;
+  the one it's at is in its status's color, `status by status` naming the stages'
+  status; one at its end is done; and a card in a failed stage is red at the stage
+  its `data` says it failed at, `at`. What its holder last said, its data's `note`, is
+  at the row's end.
 - `when` after a list's view and link shows a table, board, cards or canvas only
   while it holds, so one screen shows the same cards as a board or a canvas as a
   field says, and switching keeps every card where it was in both.

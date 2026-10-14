@@ -198,6 +198,23 @@ namespace one::screens {
 		std::string notify_by = "", notify_has = "", status_by = "";
 	};
 
+	// A pipeline: a list's rows in a lane for each kind its `lanes` field says, each a
+	// row of the stages of `over` its kind goes through, as their `path` field lists.
+	struct pipeline_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;
+		state<view_state> over;
+		std::string over_list;
+		std::string shown = "title";       // what a stage is called
+		std::vector<column> columns = {};  // what a row shows, its title first
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::string lanes = "labels", path = "kinds";
+		std::string status_by = "";  // the stage's field that's its status
+	};
+
 	// A canvas: a list's rows as cards placed anywhere, each where its x, y, w and h
 	// say, moved and resized, and placed by `place` once let go, snapped to the grid
 	// when there's one. One not placed yet is laid out in columns by `by`, over the
