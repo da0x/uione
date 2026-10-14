@@ -549,7 +549,7 @@ func (a *App) keepOwn(tx *firestore.Transaction, s *schema, id string, before, a
 		entries = append(entries, entry("", nil, nil))
 	} else {
 		for _, f := range s.fields {
-			if !alike(before[f.name], after[f.name]) {
+			if !alike(before[f.name], after[f.name]) && !working(f) {
 				entries = append(entries, entry(f.name, before[f.name], after[f.name]))
 			}
 		}
@@ -567,18 +567,34 @@ func (a *App) keepOwn(tx *firestore.Transaction, s *schema, id string, before, a
 	return events, nil
 }
 
+// working says whether a field is how a workflow's record is being worked now: who
+// holds it, till when, and what they report of it. Its card shows it live, and a
+// record taken and let go as it waits isn't kept doing so in its history.
+func working(f field) bool {
+	return f.name == "held_by" || f.name == "held_until" || f.typ == reflect.TypeOf(Data{})
+}
+
 // alike says whether two stored values are the same, whichever form each is in:
 // a list as read or as written, a whole number as either kind, a time to the
 // nanosecond.
 func alike(x, y any) bool {
-	// Nothing, empty text and an empty list are the same, so a field that wasn't
-	// stored, written as empty, isn't a change.
+	// Nothing, empty text, an empty list and empty data are the same, so a field
+	// that wasn't stored, written as empty, isn't a change.
 	plain := func(v any) any {
 		switch value := v.(type) {
 		case string:
 			if value == "" {
 				return nil
 			}
+		case map[string]any:
+			if len(value) == 0 {
+				return nil
+			}
+		case Data:
+			if len(value) == 0 {
+				return nil
+			}
+			return map[string]any(value)
 		case []any:
 			if len(value) == 0 {
 				return nil

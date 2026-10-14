@@ -80,6 +80,14 @@ export function show(value: unknown, now = new Date()): string {
   }
   if (value instanceof Date) return value.toLocaleDateString(undefined, { dateStyle: "medium", ...(dateOnly(value) ? { timeZone: "UTC" } : {}) });
   if (Array.isArray(value)) return value.map((item) => show(item, now)).filter((item) => item !== "").join(", ");
+  // Named values, like a card's data, each by its name: status working, runner 2.
+  if (value !== null && typeof value === "object") {
+    return Object.entries(value)
+      .map(([name, item]) => [name, show(item, now)])
+      .filter(([, shown]) => shown !== "")
+      .map(([name, shown]) => `${name} ${shown}`)
+      .join(", ");
+  }
   return String(value ?? "");
 }
 

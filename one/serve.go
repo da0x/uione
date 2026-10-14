@@ -288,6 +288,10 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.seedEarlierRoles(ctx); err != nil {
 		return nil, err
 	}
+	// Histories keep no longer who held each record and what they reported of it.
+	if err := a.clearWorking(ctx); err != nil {
+		return nil, err
+	}
 	// A choice added with a default is given to what was stored without it, so what
 	// a deploy changes once, and the views, read it as that.
 	if err := a.fillChoices(ctx); err != nil {

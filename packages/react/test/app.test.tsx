@@ -125,6 +125,7 @@ describe("values from a view", () => {
     expect(show(new Date(2026, 9, 11, 19, 25), now)).toBe(new Date(2026, 9, 11, 19, 25).toLocaleTimeString(undefined, { timeStyle: "short" }));
     expect(show(new Date(2026, 9, 12, 19, 25), now)).toBe(new Date(2026, 9, 12, 19, 25).toLocaleDateString(undefined, { dateStyle: "medium" }));
     expect(show(12)).toBe("12");
+    expect(show({ status: "working", runner: 2, note: "" })).toBe("status working, runner 2");
     expect(show(undefined)).toBe("");
   });
 });
