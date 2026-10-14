@@ -815,7 +815,7 @@ export const plain: ComponentSet = {
   Markdown: ({ status, source }) =>
     status === "live" && source ? <div style={{ whiteSpace: "pre-wrap" }}>{source}</div> : <div aria-busy={status === "loading"} />,
 
-  Picture: ({ source }) => <img src={source} alt="" width={24} height={24} referrerPolicy="no-referrer" />,
+  Picture: ({ source, service }) => (service ? <span role="img" aria-label="A service" title="A service">🤖</span> : <img src={source} alt="" width={24} height={24} referrerPolicy="no-referrer" />),
 
   Live: ({ status, value }) =>
     status === "live" ? (

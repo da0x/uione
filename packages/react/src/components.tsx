@@ -1169,12 +1169,15 @@ function cellOf(
     const names = Array.isArray(value) ? value : [value];
     const seen = row[picture];
     const faces = Array.isArray(seen) ? seen : [seen];
+    // Beside the picture, whether each is a service, like person.service.
+    const said = row[picture.replace(/\.picture$/, ".service")];
+    const services = Array.isArray(said) ? said : [said];
     return names
-      .map((name, at) => [show(name), faces[at]] as const)
+      .map((name, at) => [show(name), faces[at], services[at] === true] as const)
       .filter(([name]) => name !== "")
-      .map(([name, face], at) => (
+      .map(([name, face, service], at) => (
         <span key={at} style={{ display: "inline-flex", alignItems: "center", gap: "0.4em", marginInlineEnd: "0.75em" }}>
-          {typeof face === "string" && face.startsWith("https://") ? <ui.Picture source={face} /> : null}
+          {service ? <ui.Picture source="" service /> : typeof face === "string" && face.startsWith("https://") ? <ui.Picture source={face} /> : null}
           {name}
         </span>
       ));

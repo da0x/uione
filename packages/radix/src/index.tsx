@@ -2062,15 +2062,25 @@ export const radix: ComponentSet = {
     );
   },
 
-  Picture: ({ source }) => (
-    <img
-      src={source}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      className="one-person inline-block size-6 rounded-full border border-line object-cover"
-    />
-  ),
+  Picture: ({ source, service }) =>
+    service ? (
+      // A service, like an agent: a robot in its circle, so it isn't taken for a person.
+      <span role="img" aria-label="A service" title="A service" className="one-person inline-flex size-6 items-center justify-center rounded-full border border-line bg-sunken text-muted">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="5" width="10" height="8" rx="2" />
+          <path d="M8 5V3M6 9h.01M10 9h.01M6.5 11h3M1.5 8.5v2M14.5 8.5v2" />
+          <circle cx="8" cy="2.5" r="0.75" />
+        </svg>
+      </span>
+    ) : (
+      <img
+        src={source}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="one-person inline-block size-6 rounded-full border border-line object-cover"
+      />
+    ),
 
   // The scheme as a row of choices, a new theme beside it, then each role's colors,
   // light over dark, and the theme as a project says it, to copy.

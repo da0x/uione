@@ -539,9 +539,11 @@ export interface DialogProps {
 }
 
 // A person's picture, small and round, beside their name. It's decorative: the
-// name says who it is.
+// name says who it is. A service, a program given a role like an agent, has a robot
+// in its circle instead.
 export interface PictureProps {
-  source: string; // an https address
+  source: string; // an https address, or nothing for a service
+  service?: boolean;
 }
 
 export interface MarkdownProps {
