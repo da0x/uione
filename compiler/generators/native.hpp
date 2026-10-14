@@ -1474,6 +1474,18 @@ namespace one::generators {
                 out.line("std::println(stderr, \"" + name + ": {}\", e.what());");
                 out.line("return 3;");
                 out.close("}");
+            } else {
+                // No one signs in to it, but a service may, with its key, as an agent's
+                // people do on a board they work.
+                out.open("if (std::string key = setting(\"ONE_KEY\", \"\"); !key.empty()) {");
+                out.open("try {");
+                out.line("session.sign_in_with_key(key);");
+                out.dedent();
+                out.open("} catch (const std::exception& e) {");
+                out.line("std::println(stderr, \"" + name + ": {}\", e.what());");
+                out.line("return 3;");
+                out.close("}");
+                out.close("}");
             }
             out.line("one::screens::client_source source(session, deliver.to);");
             out.line("app::site s{.name = " + str(title) + ", .id = " + str("org.uione." + name) + "};");

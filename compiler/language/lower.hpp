@@ -402,6 +402,7 @@ namespace one::language {
             std::vector<found> workflows;
             std::vector<std::tuple<const define_agent_declaration*, const std::string*, std::string>> agents;  // each, its file and namespace
             std::set<std::string> for_services;  // namespace::role of the roles services may hold
+            std::vector<std::pair<view_declaration*, std::string>> views;  // each, and its namespace
             std::map<std::string, entity_declaration*> entities;  // by namespace::name
             std::map<std::string, std::string> scopes;           // a namespace's roles are in this, like project
             std::map<std::string, std::vector<std::string>> roles;  // a namespace's defined roles, by name
@@ -425,6 +426,8 @@ namespace one::language {
                         if (r->services) for_services.insert(full(ns, r->name));
                     } else if (auto* agent = std::get_if<define_agent_declaration>(&d.node)) {
                         agents.emplace_back(agent, &path, ns);
+                    } else if (auto* v = std::get_if<view_declaration>(&d.node)) {
+                        views.emplace_back(v, ns);
                     } else if (auto* en = std::get_if<enum_declaration>(&d.node)) {
                         enums[full(ns, en->name)] = en;
                     } else if (auto* c = std::get_if<command_declaration>(&d.node)) {
@@ -705,6 +708,32 @@ namespace one::language {
                 said(w, moving, text, declarations, path, made_here);
             }
 
+            // Every list of what a workflow moves says who holds each and until when, so
+            // a board can show what's being worked on, as it happens, with nothing said.
+            void held_in_views() {
+                std::set<std::string> moving;
+                for (const auto& w : workflows) {
+                    if (said_in_full.contains(w.workflow)) moving.insert(full(w.ns, w.workflow->entity));
+                }
+                for (auto& [view, ns] : views) {
+                    for (auto& each : view->each) {
+                        auto* source = each.source ? std::get_if<name_expression>(&each.source->node) : nullptr;
+                        if (!source || each.changes || !moving.contains(full(ns, source->name.text()))) continue;
+                        for (const char* field : {"held_by", "held_until"}) {
+                            bool there = std::any_of(each.rows.begin(), each.rows.end(), [&](const view_value& row) {
+                                auto* named = row.value ? std::get_if<name_expression>(&row.value->node) : nullptr;
+                                return (row.name && *row.name == field) || (!row.name && named && named->name.text() == field);
+                            });
+                            if (there) continue;
+                            auto value = std::make_unique<expression>();
+                            value->where = each.where;
+                            value->node = name_expression{qualified_name{{field}, each.where}};
+                            each.rows.push_back(view_value{each.where, std::nullopt, std::move(value)});
+                        }
+                    }
+                }
+            }
+
             // What an agent works: stages of workflows written in the code that its role,
             // one for services, works, each moved on by a step the workflow has.
             void agent_works(const define_agent_declaration& agent, const std::string& path, const std::string& ns) {
@@ -878,6 +907,7 @@ namespace one::language {
                     }
                 }
                 for (const auto& [agent, path, ns] : agents) agent_works(*agent, *path, ns);
+                held_in_views();
                 // Added once every workflow is said, so no entity found above has moved.
                 for (auto& [declarations, d] : made_here) declarations->push_back(std::move(d));
             }
@@ -1004,7 +1034,7 @@ namespace one::language {
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);
         roles.define(files);
-        lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}, {}, {}};
+        lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
         for (auto& f : files) workflows.find(f.declarations, "", f.path);
         workflows.define();
         lowering::lowerer l{nullptr, out, {}};

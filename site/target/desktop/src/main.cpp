@@ -41,6 +41,14 @@ int main(int count, char** given) {
 	std::string server = setting("ONE_SERVER", "https://www.uione.io");
 	one::client::session session({.server = server, .project = setting("ONE_FIREBASE_PROJECT", ""), .firestore_host = setting("ONE_FIRESTORE_HOST", ""),
 	                              .auth_host = setting("ONE_AUTH_HOST", "")}, &deliver);
+	if (std::string key = setting("ONE_KEY", ""); !key.empty()) {
+		try {
+			session.sign_in_with_key(key);
+		} catch (const std::exception& e) {
+			std::println(stderr, "uione: {}", e.what());
+			return 3;
+		}
+	}
 	one::screens::client_source source(session, deliver.to);
 	app::site s{.name = "uione", .id = "org.uione.uione"};
 	{
