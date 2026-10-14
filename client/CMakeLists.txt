@@ -6,7 +6,7 @@
 # ONE_CLIENT_TLS is openssl.
 
 cmake_minimum_required(VERSION 3.28)
-project(one_client VERSION 0.14.0 LANGUAGES CXX)
+project(one_client VERSION 0.14.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
