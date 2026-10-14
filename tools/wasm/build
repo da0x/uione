@@ -6,13 +6,23 @@
 # version, into compiler/build-wasm: one.mjs, which loads one.wasm beside it.
 #
 #   tools/wasm/build
+#   ONE_WASM_CACHE=~/.cache/emscripten ONE_WASM_JOBS=8 tools/wasm/build
 
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 image=emscripten/emsdk:6.0.10@sha256:e077d54e2b8970575ebc4f185ac1de0b95c05f2b266134d4ba27449af7aebf65
 
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e EM_CACHE=/src/compiler/build-wasm/cache \
+# Emscripten's cache, the system libraries it builds once, is kept in ONE_WASM_CACHE
+# when it's given, so a fresh checkout doesn't build them again; ONE_WASM_JOBS says how
+# many files are compiled at once, all the machine's cores by default.
+cache=/src/compiler/build-wasm/cache
+mounts=""
+if [ -n "${ONE_WASM_CACHE:-}" ]; then
+	cache=/cache
+	mounts="-v $ONE_WASM_CACHE:/cache"
+fi
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e EM_CACHE=$cache -e JOBS="${ONE_WASM_JOBS:-}" $mounts \
 	-v "$root:/src" -w /src "$image" sh -c '
 		emcmake cmake -S compiler -B compiler/build-wasm -DONE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release >/dev/null &&
-		cmake --build compiler/build-wasm --target one_wasm --parallel'
+		cmake --build compiler/build-wasm --target one_wasm --parallel $JOBS'
 ls -l "$root/compiler/build-wasm/one.mjs" "$root/compiler/build-wasm/one.wasm"
