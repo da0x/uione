@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <format>
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
