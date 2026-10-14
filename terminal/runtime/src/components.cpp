@@ -224,9 +224,9 @@ namespace one::terminal::runtime {
 		return terminal::column(terminal::flow(std::move(across)).spacing(3), std::move(beside)).spacing(1);
 	}
 
-	terminal::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, std::vector<terminal::view> ways) {
-		auto chosen = p.kept<int>("switched:" + id, 0);
-		int now = std::clamp(chosen.get(), 0, static_cast<int>(ways.size()) - 1);
+	terminal::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, int start, std::vector<terminal::view> ways) {
+		auto chosen = p.kept<int>("switched:" + id, -1);  // the person's own pick, once they've made one
+		int now = std::clamp(chosen.get() >= 0 ? chosen.get() : std::max(start, 0), 0, static_cast<int>(ways.size()) - 1);
 		std::vector<terminal::view> buttons;
 		buttons.push_back(quiet(label_text));
 		for (std::size_t i = 0; i < options.size() && i < ways.size(); ++i) {

@@ -49,10 +49,10 @@ namespace one::desktop::runtime {
 		return desktop::row(desktop::column(std::move(side)).spacing(2).width(180), std::move(beside).grow()).spacing(24).align(align::start);
 	}
 
-	desktop::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, std::vector<desktop::view> ways) {
+	desktop::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, int start, std::vector<desktop::view> ways) {
 		const auto& t = current_theme();
-		auto chosen = p.kept<int>("switched:" + id, 0);
-		int now = std::clamp(chosen.get(), 0, static_cast<int>(ways.size()) - 1);
+		auto chosen = p.kept<int>("switched:" + id, -1);  // the person's own pick, once they've made one
+		int now = std::clamp(chosen.get() >= 0 ? chosen.get() : std::max(start, 0), 0, static_cast<int>(ways.size()) - 1);
 		std::vector<desktop::view> buttons;
 		buttons.push_back(desktop::text(label_text, t.quiet()));
 		for (std::size_t i = 0; i < options.size() && i < ways.size(); ++i) {

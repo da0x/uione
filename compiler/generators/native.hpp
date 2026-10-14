@@ -619,6 +619,19 @@ namespace one::generators {
             return out + "})";
         }
 
+        // A list a screen shows, a table, a board, a pipeline or a canvas: its view, its
+        // list, and what it's called in a switch between them.
+        struct shown {
+            std::string view, list, name;
+        };
+        static std::optional<shown> shown_list(const language::screen_item& item) {
+            if (auto* t = std::get_if<language::table_item>(&item.node); t && t->list) return shown{t->view.text(), *t->list, "Table"};
+            if (auto* b = std::get_if<language::board_item>(&item.node); b && b->list) return shown{b->view.text(), *b->list, "Board"};
+            if (auto* l = std::get_if<language::pipeline_item>(&item.node); l && l->list) return shown{l->view.text(), *l->list, "Pipeline"};
+            if (auto* c = std::get_if<language::canvas_item>(&item.node); c && c->list) return shown{c->view.text(), *c->list, "Whiteboard"};
+            return std::nullopt;
+        }
+
         // A pipeline: its cards' rows by their stage, its stages, and the fields its lanes
         // and each kind's path are by.
         std::string pipeline(screen_parts& parts, const std::string& ns, const language::pipeline_item& c) {
@@ -1062,7 +1075,42 @@ namespace one::generators {
                 const auto& item = list[at];
                 item_line_ = item.where.line;
                 std::string code;
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                // Lists of the same rows one after another, a table, a board, a pipeline or a
+                // whiteboard, are one, switched between: each person's own pick, or else the
+                // one whose when holds, like a board's style, or the first.
+                bool grouped = false;
+                if (auto here = shown_list(item)) {
+                    std::size_t last = at;
+                    while (last + 1 < end) {
+                        auto next = shown_list(list[last + 1]);
+                        if (!next || next->view != here->view || next->list != here->list) break;
+                        ++last;
+                    }
+                    if (last > at) {
+                        const language::table_item* beside = nullptr;
+                        for (std::size_t i = at; i <= last; ++i) {
+                            if (auto* t = std::get_if<language::table_item>(&list[i].node); t && !beside) beside = t;
+                        }
+                        std::string names, ways, start;
+                        for (std::size_t i = at; i <= last; ++i) {
+                            const auto& one = list[i];
+                            names += (names.empty() ? "" : ", ") + str(shown_list(one)->name);
+                            if (auto* t = std::get_if<language::table_item>(&one.node)) ways += ", " + table(parts, ns, *t, screen);
+                            else if (auto* b = std::get_if<language::board_item>(&one.node)) ways += ", " + board(parts, ns, *b, screen, beside);
+                            else if (auto* c = std::get_if<language::canvas_item>(&one.node)) ways += ", " + canvas(parts, ns, *c);
+                            else if (auto* l = std::get_if<language::pipeline_item>(&one.node)) ways += ", " + pipeline(parts, ns, *l);
+                            if (one.when) start += "(" + condition(parts, ns, *one.when) + ") ? " + std::to_string(i - at) + " : ";
+                        }
+                        std::string words = screens::label(here->list);
+                        if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
+                        code = "switched(p, " + str(screens::full_view(ns, here->view) + "." + here->list) + ", " + str("Show " + words + " as") + ", {" + names + "}, " +
+                               (start.empty() ? std::string("0") : start + "-1") + ways + ")";
+                        at = last;
+                        grouped = true;
+                    }
+                }
+                if (grouped) {
+                } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     using kind = language::content_block::kind;
                     if (block->type == kind::heading || block->type == kind::region) continue;  // drawn on the title's row, or by the layout
                     if (block->type == kind::menu) {
@@ -1120,19 +1168,7 @@ namespace one::generators {
                 } else if (auto* t = std::get_if<language::timeline_item>(&item.node)) {
                     code = timeline(parts, ns, *t);
                 } else if (auto* t = std::get_if<language::table_item>(&item.node)) {
-                    // A board of the same list right after it: the two are one, shown as the person picks.
-                    auto* b = at + 1 < list.size() ? std::get_if<language::board_item>(&list[at + 1].node) : nullptr;
-                    bool same_when = !item.when ? !list[at + 1].when : list[at + 1].when && condition(parts, ns, *item.when) == condition(parts, ns, *list[at + 1].when);
-                    if (b && b->view.text() == t->view.text() && b->list == t->list && same_when) {
-                        std::string listed = t->list ? *t->list : "rows";
-                        std::string words = screens::label(listed);
-                        if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
-                        code = "switched(p, " + str(screens::full_view(ns, t->view.text()) + "." + listed) + ", " + str("Show " + words + " as") + ", {\"Table\", \"Board\"}, " +
-                               table(parts, ns, *t, screen) + ", " + board(parts, ns, *b, screen, t) + ")";
-                        ++at;
-                    } else {
-                        code = table(parts, ns, *t, screen);
-                    }
+                    code = table(parts, ns, *t, screen);
                 } else if (auto* g = std::get_if<language::grid_item>(&item.node)) {
                     code = between(parts, ns, *g, screen);
                 } else if (auto* c = std::get_if<language::cards_item>(&item.node)) {
@@ -1157,7 +1193,7 @@ namespace one::generators {
                 if (code.empty()) continue;
                 // Drawn by a function of its own, as GCC sees a temporary in either arm of
                 // a ?: outliving the line when the arm's a call given a spec.
-                if (item.when) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
+                if (item.when && !grouped) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
                 if (presses(item)) {
                     if (row.empty()) row_line = item.where.line;
                     row.push_back(code);

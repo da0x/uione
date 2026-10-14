@@ -957,6 +957,46 @@ namespace one::generators {
                     out.close("</Actions>");
                     in_row = false;
                 }
+                // Lists of the same rows one after another, a table, a board, a pipeline or a
+                // whiteboard, are one, switched between: each person's own pick, or else the
+                // one whose when holds, like a board's style, or the first.
+                if (auto here = shown_list(item)) {
+                    std::size_t last = at;
+                    while (last + 1 < end) {
+                        auto next = shown_list(items[last + 1]);
+                        if (!next || next->view != here->view || next->list != here->list) break;
+                        ++last;
+                    }
+                    if (last > at) {
+                        parts.components.insert("Switched");
+                        const language::table_item* beside = nullptr;
+                        for (std::size_t i = at; i <= last; ++i) {
+                            if (auto* t = std::get_if<language::table_item>(&items[i].node); t && !beside) beside = t;
+                        }
+                        std::string names, icons, start;
+                        for (std::size_t i = at; i <= last; ++i) {
+                            auto one = shown_list(items[i]);
+                            names += (names.empty() ? "" : ", ") + web_detail::js_string(one->name);
+                            std::string icon = one->name == "Whiteboard" ? "whiteboard" : one->name == "Pipeline" ? "pipeline" : one->name == "Board" ? "board" : "table";
+                            icons += (icons.empty() ? "" : ", ") + web_detail::js_string(icon);
+                            if (items[i].when) start += "(" + condition(parts, ns, *items[i].when) + ") ? " + std::to_string(i - at) + " : ";
+                        }
+                        std::string words = web_detail::label(here->list);
+                        if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
+                        out.open("<Switched id=" + web_detail::js_string(full_view(ns, here->view) + "." + here->list) + " label=" + web_detail::js_string("Show " + words + " as") +
+                                 " options={[" + names + "]} icons={[" + icons + "]}" + (start.empty() ? "" : " start={" + start + "-1}") + ">");
+                        for (std::size_t i = at; i <= last; ++i) {
+                            const auto& one = items[i];
+                            if (auto* t = std::get_if<language::table_item>(&one.node)) this->table(out, parts, ns, *t, screen);
+                            else if (auto* b = std::get_if<language::board_item>(&one.node)) this->board(out, parts, ns, *b, screen, beside);
+                            else if (auto* c = std::get_if<language::canvas_item>(&one.node)) this->canvas(out, parts, ns, *c);
+                            else if (auto* l = std::get_if<language::pipeline_item>(&one.node)) this->pipeline(out, parts, ns, *l);
+                        }
+                        out.close("</Switched>");
+                        at = last;
+                        continue;
+                    }
+                }
                 if (!in_row && presses(item)) {
                     std::size_t run = 0;
                     for (std::size_t next = at; next < items.size() && (presses(items[next]) || passed(items[next])); ++next) run += presses(items[next]);
@@ -1077,26 +1117,6 @@ namespace one::generators {
                     }
                     out.line(line + " />");
                 } else if (auto* table = std::get_if<language::table_item>(&item.node)) {
-                    // A board of the same list right after it: the two are one, shown as
-                    // the person picks, a table or a board.
-                    auto* board = at + 1 < items.size() ? std::get_if<language::board_item>(&items[at + 1].node) : nullptr;
-                    // The two shown while the same condition holds stay one, shown while it holds.
-                    bool same_when = !item.when ? !items[at + 1].when : items[at + 1].when && condition(parts, ns, *item.when) == condition(parts, ns, *items[at + 1].when);
-                    if (board && board->view.text() == table->view.text() && board->list == table->list && same_when) {
-                        parts.components.insert("Switched");
-                        std::string list = table->list ? *table->list : "rows";
-                        std::string words = web_detail::label(list);
-                        if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
-                        shown_while(out, parts, ns, item, [&] {
-                            out.open("<Switched id=" + web_detail::js_string(full_view(ns, table->view.text()) + "." + list) + " label=" +
-                                     web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]} icons={[\"table\", \"board\"]}>");
-                            this->table(out, parts, ns, *table, screen);
-                            this->board(out, parts, ns, *board, screen, table);
-                            out.close("</Switched>");
-                        });
-                        ++at;
-                        continue;
-                    }
                     shown_while(out, parts, ns, item, [&] { this->table(out, parts, ns, *table, screen); });
                 } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
                     this->grid(out, parts, ns, *grid, screen);
@@ -1305,6 +1325,19 @@ namespace one::generators {
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             out.line(line + " />");
+        }
+
+        // A list a screen shows, a table, a board, a pipeline or a canvas: its view, its
+        // list, and what it's called in a switch between them.
+        struct shown {
+            std::string view, list, name;
+        };
+        static std::optional<shown> shown_list(const language::screen_item& item) {
+            if (auto* t = std::get_if<language::table_item>(&item.node); t && t->list) return shown{t->view.text(), *t->list, "Table"};
+            if (auto* b = std::get_if<language::board_item>(&item.node); b && b->list) return shown{b->view.text(), *b->list, "Board"};
+            if (auto* l = std::get_if<language::pipeline_item>(&item.node); l && l->list) return shown{l->view.text(), *l->list, "Pipeline"};
+            if (auto* c = std::get_if<language::canvas_item>(&item.node); c && c->list) return shown{c->view.text(), *c->list, "Whiteboard"};
+            return std::nullopt;
         }
 
         // An element drawn only while its when holds, like a board while its board's style is kanban.

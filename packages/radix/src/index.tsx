@@ -267,6 +267,24 @@ const buttonIcons: Record<string, ReactNode> = {
 // The pictures a switch draws for what it switches between: rows for a table, and
 // columns of cards for a board.
 const switchIcons: Record<string, ReactNode> = {
+  // A row of stages along a line, the classic deploy screen's.
+  pipeline: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <circle cx="3" cy="5" r="1.5" />
+      <circle cx="8" cy="5" r="1.5" />
+      <circle cx="13" cy="5" r="1.5" />
+      <path d="M4.5 5h2M9.5 5h2M2 11h12" />
+    </svg>
+  ),
+  // Notes placed anywhere, between a column's lines.
+  whiteboard: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+      <path d="M8 2.5v11" strokeDasharray="1.5 1.5" />
+      <rect x="3.5" y="4.5" width="3" height="3" rx="0.5" />
+      <rect x="9.5" y="8" width="3" height="3" rx="0.5" />
+    </svg>
+  ),
   table: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
       <rect x="2" y="2.5" width="12" height="11" rx="1.5" />

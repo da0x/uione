@@ -77,12 +77,14 @@ namespace one::desktop::runtime {
 		return layout(std::move(name), std::move(all));
 	}
 	desktop::view menu(page& p, std::vector<menu_link> links, desktop::view beside);
-	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, std::vector<desktop::view> ways);
+	// Ways of showing the same list, as the person picks: their own pick, kept for them,
+	// or else `start`, like the one a board's style says, or the first when it's -1.
+	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, std::vector<desktop::view> ways);
 	template <std::convertible_to<desktop::view>... V>
-	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, V&&... each) {
+	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, V&&... each) {
 		std::vector<desktop::view> all;
 		(all.push_back(desktop::view(std::forward<V>(each))), ...);
-		return switched(p, std::move(id), std::move(label), std::move(options), std::move(all));
+		return switched(p, std::move(id), std::move(label), std::move(options), start, std::move(all));
 	}
 	desktop::view steps(page& p, steps_spec spec);
 

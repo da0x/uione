@@ -346,6 +346,22 @@ TEST("a whiteboard in a terminal: its stages as columns, a card moved across int
 	CHECK(moved);
 }
 
+TEST("a switch opens on the view it's told to start on, until the person picks another") {
+	memory_source data;
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+		                     return items(switched(p, "projects::board_page.issues", "Show issues as", {"Table", "Board", "Pipeline"}, 2, terminal::text("the table"),
+		                                           terminal::text("the board"), terminal::text("the pipeline")));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	screen_at t(nav, 80, 12);
+	CHECK(t.text().find("the pipeline") != std::string::npos);
+	nav.current().kept<int>("switched:projects::board_page.issues").set(0);
+	screen_at again(nav, 80, 12);
+	CHECK(again.text().find("the table") != std::string::npos);
+}
+
 int main() {
 	use_time_zone("UTC");
 	return check::run();

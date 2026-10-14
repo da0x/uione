@@ -64,12 +64,14 @@ namespace one::terminal::runtime {
 		return layout(std::move(name), std::move(all));
 	}
 	terminal::view menu(page& p, std::vector<menu_link> links, terminal::view beside);
-	terminal::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, std::vector<terminal::view> ways);
+	// Ways of showing the same list, as the person picks: their own pick, kept for them,
+	// or else `start`, like the one a board's style says, or the first when it's -1.
+	terminal::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, std::vector<terminal::view> ways);
 	template <std::convertible_to<terminal::view>... V>
-	terminal::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, V&&... each) {
+	terminal::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, V&&... each) {
 		std::vector<terminal::view> all;
 		(all.push_back(terminal::view(std::forward<V>(each))), ...);
-		return switched(p, std::move(id), std::move(label), std::move(options), std::move(all));
+		return switched(p, std::move(id), std::move(label), std::move(options), start, std::move(all));
 	}
 	terminal::view steps(page& p, steps_spec spec);
 

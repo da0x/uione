@@ -294,19 +294,18 @@ screen "{wall_page.title}" /walls/:wall {
     CAPTURE(screen->content);
     CHECK(screen->content.find(R"(place="ideas::idea::place" grid={{ step: 160, x: 40, y: 80 }} by="stage")") != std::string::npos);
     CHECK(screen->content.find(R"(kind="kind")") != std::string::npos);
-    // Each shown only while its condition holds; a table and a board shown while the
-    // same one holds are still one, switched between.
-    CHECK(screen->content.find(R"(=== "kanban")) && (<>)") != std::string::npos);
-    CHECK(screen->content.find("<Switched") != std::string::npos);
-    CHECK(screen->content.find(R"(=== "canvas")) && (<>)") != std::string::npos);
+    // The table, the board and the canvas of the same list are one switch, opening in
+    // the one whose when holds.
+    CHECK(screen->content.find(R"(options={["Table", "Board", "Whiteboard"]} icons={["table", "board", "whiteboard"]} start={)") != std::string::npos);
+    CHECK(screen->content.find(R"(=== "canvas"))) ? 2 : -1})") != std::string::npos);
     auto native = generators::generate_native(files, root + "/examples/tasks", "desktop");
     auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("canvas_board(p, {") != std::string::npos; });
     REQUIRE(drawn != native.end());
     CAPTURE(drawn->content);
     CHECK(drawn->content.find(R"(.place = "ideas::idea::place", .grid = 160, .origin_x = 40, .origin_y = 80, .by = "stage")") != std::string::npos);
     CHECK(drawn->content.find(R"(.regions = "width", .move = "ideas::idea::move", .resize = "ideas::stage::update")") != std::string::npos);
-    CHECK(drawn->content.find(") return canvas_board(p, {") != std::string::npos);
-    CHECK(drawn->content.find("; return view(); }()") != std::string::npos);
+    CHECK(drawn->content.find(R"(switched(p, "ideas::wall_page.ideas", "Show ideas as", {"Table", "Board", "Whiteboard"}, )") != std::string::npos);
+    CHECK(drawn->content.find("? 2 : -1, table(p, {") != std::string::npos);
     // Without the fields it places by, or with one that isn't a number, it says so.
     std::string missing = source;
     missing.replace(missing.find("\t\ttitle  stage  kind  x  y  w  h\n"), std::string("\t\ttitle  stage  kind  x  y  w  h\n").size(), "\t\ttitle  stage  kind  x  y  w\n");

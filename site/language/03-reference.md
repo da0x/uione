@@ -1720,22 +1720,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   status; one at its end is done; and a card in a failed stage is red at the stage
   its `data` says it failed at, `at`. What its holder last said, its data's `note`, is
   at the row's end.
-- `when` after a list's view and link shows a table, board, cards or canvas only
-  while it holds, so one screen shows the same cards as a board or a canvas as a
-  field says, and switching keeps every card where it was in both.
-
-```one
-board board_page.issues by stage over board_page.stages when board_page.style == style::kanban {
-	title
-}
-canvas board_page.issues by stage over board_page.stages when board_page.style == style::canvas {
-	place issue::place
-	grid 160 from 40 80
-	title
-	number
-}
-```
-
+- A table, a board, a pipeline and a canvas of the same list, one after another, are
+  one: a switch above them, Table, Board, Pipeline and Whiteboard, picks which is
+  shown, and the search box and buttons stay on its line whichever it is. Each
+  person's pick is kept for them. `when` on one of them says which it opens in until
+  they pick, like `when board_page.style == style::pipeline`; without one, the first.
+- `when` after any other list's view and link, like cards', shows it only while it
+  holds.
 - `diagram project_page.steps by from and to over project_page.stages { roles.title }`
   draws the same as a grid: each stage a box in a row, in order, and each step an
   arrow, forward above and back below, labelled with what its block shows. An arrow

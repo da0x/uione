@@ -1969,12 +1969,14 @@ export function Switched({
   label: says,
   options,
   icons = [],
+  start = -1,
   children,
 }: {
   id: string;
   label: string;
   options: string[];
   icons?: string[]; // drawn for each option instead of its name, like table and board
+  start?: number; // the one shown until the person picks, like the one a board's style says; the first when it's -1
   children: ReactNode;
 }) {
   const ui = useUI();
@@ -1983,11 +1985,13 @@ export function Switched({
   // the person's last pick is remembered too, and put in the address when they come
   // back without one.
   const named = (at: number) => (options[at] ?? "").toLowerCase();
-  const [inAddress, setInAddress] = usePathPart(options.map((_, at) => named(at)).slice(1));
+  const [inAddress, setInAddress] = usePathPart(options.map((_, at) => named(at)));
   const fromAddress = options.findIndex((_, at) => named(at) === inAddress);
-  const picked = fromAddress >= 0 ? fromAddress : 0;
+  // The person's pick, in the address, or else the one it starts on.
+  const opening = start >= 0 && start < options.length ? start : 0;
+  const picked = fromAddress >= 0 ? fromAddress : opening;
   const pick = (at: number) => {
-    setInAddress(at === 0 ? "" : named(at));
+    setInAddress(at === opening ? "" : named(at));
     try {
       localStorage.setItem(key, String(at));
     } catch {
@@ -1997,8 +2001,9 @@ export function Switched({
   useEffect(() => {
     if (inAddress) return;
     try {
-      const kept = Number(localStorage.getItem(key));
-      if (Number.isInteger(kept) && kept > 0 && kept < options.length) setInAddress(named(kept));
+      const said = localStorage.getItem(key);
+      const kept = said === null ? NaN : Number(said);
+      if (Number.isInteger(kept) && kept >= 0 && kept < options.length && kept !== opening) setInAddress(named(kept));
     } catch {
       // Nothing remembered.
     }
