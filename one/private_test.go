@@ -4,8 +4,10 @@
 package one_test
 
 import (
+	"context"
 	"testing"
 
+	"cloud.google.com/go/firestore"
 	"github.com/da0x/uione/one"
 )
 
@@ -134,5 +136,37 @@ func TestAPrivateVolumesFilesArentReadThroughItsPublicHall(t *testing.T) {
 		if code, _ := h.download("", path); code != 404 {
 			t.Errorf("someone signed out reads %s: %d", path, code)
 		}
+	}
+}
+
+func TestAChoiceAddedWithADefaultIsGivenToWhatWasStoredWithoutIt(t *testing.T) {
+	h := start(t)
+	_, token := h.signUp("ada@example.com")
+	h.mustRun("hall/hall/create", token, map[string]any{"slug": "south"})
+	ctx := context.Background()
+	// As a hall stored before halls had a visibility: without one, and its page
+	// public to no one.
+	hall := h.store.Collection("hall_hall").Doc("south")
+	if _, err := hall.Update(ctx, []firestore.Update{{Path: "visibility", Value: firestore.Delete}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.Collection("once").Doc("default hall_hall.visibility").Delete(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// The backend started again gives it the default, and its page opens.
+	again, err := one.New(ctx, modules...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	snap, err := hall.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := snap.Data()["visibility"]; got != "public" {
+		t.Fatalf("a hall stored without a visibility has %v", got)
+	}
+	if p := h.view("hall::hall_page:south"); p["public"] != true {
+		t.Fatalf("its page isn't public: %v", p)
 	}
 }

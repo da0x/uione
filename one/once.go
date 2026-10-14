@@ -121,6 +121,64 @@ func change[E any, P entityPointer[E]](s *System, id string, do func(*Ctx, *E) e
 	return nil
 }
 
+// fillChoices gives a choice with a default, added to an entity after some were
+// stored, to each stored without it, once: a board made before boards could be
+// private is public, as it always was, rather than neither, which no view or rule
+// would read as anything. Each is set in a transaction of its own and said to have
+// changed, so the views that show it are rebuilt; its history doesn't say so, since
+// nobody changed it. That it's done is kept in once/default <collection>.<field>.
+func (a *App) fillChoices(ctx context.Context) error {
+	for _, schema := range a.reg.schemas {
+		for _, f := range schema.fields {
+			if len(f.choices) == 0 || f.initial == "" || f.typ.Kind() != reflect.String {
+				continue
+			}
+			name := "default " + schema.collection + "." + f.name
+			done := a.store.Collection("once").Doc(name)
+			if _, err := done.Get(ctx); err == nil {
+				continue
+			} else if status.Code(err) != codes.NotFound {
+				return err
+			}
+			docs, err := a.store.Collection(schema.collection).Documents(ctx).GetAll()
+			if err != nil {
+				return err
+			}
+			for _, doc := range docs {
+				if said, ok := doc.Data()[f.name].(string); ok && said != "" {
+					continue
+				}
+				var events []event
+				err := a.store.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+					snap, err := tx.Get(doc.Ref)
+					if err != nil {
+						return err
+					}
+					before := snap.Data()
+					if said, ok := before[f.name].(string); ok && said != "" {
+						return nil
+					}
+					after := make(map[string]any, len(before)+1)
+					for k, v := range before {
+						after[k] = v
+					}
+					after[f.name] = f.initial
+					events = []event{{Type: schema.name + ".updated", Entity: schema.entity, ID: doc.Ref.ID, Version: time.Now().UnixNano(), Before: before, After: after}}
+					return tx.Set(doc.Ref, after)
+				})
+				if err != nil {
+					return fmt.Errorf("one: %s %s: %w", schema.name, doc.Ref.ID, err)
+				}
+				a.publish(ctx, events...)
+			}
+			if _, err := done.Set(ctx, map[string]any{"name": name, "at": time.Now()}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (o *OnceSpec) register(r *registry, _ string) { r.once = append(r.once, o) }
 
 func (a *App) doOnce(ctx context.Context) error {

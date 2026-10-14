@@ -288,6 +288,11 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.seedEarlierRoles(ctx); err != nil {
 		return nil, err
 	}
+	// A choice added with a default is given to what was stored without it, so what
+	// a deploy changes once, and the views, read it as that.
+	if err := a.fillChoices(ctx); err != nil {
+		return nil, err
+	}
 	// Then what a deploy changes once, before views are rebuilt, so they show it.
 	if err := a.doOnce(ctx); err != nil {
 		return nil, err
