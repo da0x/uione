@@ -5,6 +5,8 @@
 // its reader's roles may take, and Alt with the arrows putting cards in order.
 
 #include <format>
+#include <algorithm>
+#include <map>
 #include <optional>
 
 #include "one/desktop/runtime/components.hpp"
@@ -57,6 +59,10 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::row(desktop::column(std::move(offer)).spacing(8).padding(14).width(360).background({.fill = t.surface, .border = t.accent, .border_width = 1.5f, .radius = t.corners})));
 		}
 		std::vector<desktop::view> lanes;
+		std::map<std::string, std::vector<std::string>> reaching;  // where each card may go
+		for (const auto& column : model.columns) {
+			for (const auto& card : column.cards) reaching[card.id] = card.reaches;
+		}
 		for (const auto& column : model.columns) {
 			std::vector<desktop::list_row> cards_shown;
 			std::map<std::string, std::string> links;
@@ -88,10 +94,13 @@ namespace one::desktop::runtime {
 				auto tone = tone_color(card.tone);
 				if (tone) shown.push_back(desktop::edge(*tone));
 				shown.push_back(desktop::column(std::move(inside)).spacing(6).grow());
-				cards_shown.push_back({card.id, desktop::row(std::move(shown))
-				                                    .spacing(10)
-				                                    .padding(edges(10, 12, 10, tone ? 0.f : 12.f))
-				                                    .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)})});
+				auto drawn = desktop::row(std::move(shown))
+				                 .spacing(10)
+				                 .padding(edges(10, 12, 10, tone ? 0.f : 12.f))
+				                 .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
+				// A card with somewhere to go is dragged there.
+				if (spec.move && !card.reaches.empty()) drawn = desktop::drag_source(std::move(drawn), card.id);
+				cards_shown.push_back({card.id, std::move(drawn)});
 			}
 			std::vector<desktop::view> lane;
 			// A column that chimes when a card arrives says so beside its count.
@@ -126,7 +135,21 @@ namespace one::desktop::runtime {
 				}
 				lane.push_back(desktop::list(std::move(cards_shown), std::move(options)));
 			}
-			lanes.push_back(desktop::column(std::move(lane)).spacing(8).width(290).padding(12).background({.fill = t.sunken, .radius = t.corners}));
+			auto drawn = desktop::column(std::move(lane)).spacing(8).width(290).padding(12).background({.fill = t.sunken, .radius = t.corners});
+			// A card dropped on a column it may go to moves there; one it can't is dimmed.
+			if (spec.move) {
+				auto page = t.page;
+				page.alpha = 0.55f;
+				drawn = desktop::drop_target(
+				    std::move(drawn),
+				    [reaching, to = column.id](const std::string& card) {
+					    auto found = reaching.find(card);
+					    return found != reaching.end() && std::ranges::contains(found->second, to);
+				    },
+				    [&p, spec, to = column.id](const std::string& card) { move_card(p, spec, card, to); },
+				    {.border = t.accent, .border_width = 2, .radius = t.corners}, page);
+			}
+			lanes.push_back(std::move(drawn));
 		}
 		if (!model.error.empty()) {
 			auto s = t.body();

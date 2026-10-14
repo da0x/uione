@@ -51,7 +51,7 @@ namespace one::desktop {
 
 	enum class align { start, center, end, stretch };
 
-	enum class cursor { normal, pointer, text };
+	enum class cursor { normal, pointer, text, grab, grabbing };
 
 	// What an element typed into tells an input method, the way a language like
 	// Japanese is typed: the text around the caret and where the caret is; and what
@@ -103,6 +103,8 @@ namespace one::desktop {
 		// taken, the pointer's moves while it's held are told to drag.
 		virtual bool press(point, int) { return false; }
 		virtual void drag(point) {}
+		// The button let go after a press it took, with what's under the pointer then.
+		virtual void release(point, element*) {}
 		virtual bool wheel(point at, float dx, float dy);
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
@@ -160,6 +162,20 @@ namespace one::desktop {
 	private:
 		std::unique_ptr<element> element_;
 	};
+
+	// Dragging something to another place, like a card to a column: what's carried
+	// while a drag is on, and where the pointer is, for what it's carried over to show.
+	struct carried {
+		std::string payload;
+		point at;
+	};
+	const std::optional<carried>& carrying();
+	// What can be dragged: pressed and moved more than a few pixels, it's carried; a
+	// press that hardly moves stays a click on what's inside.
+	view drag_source(view content, std::string payload);
+	// Where it can be dropped: outlined while something it accepts is carried over it,
+	// dimmed while something it doesn't is carried at all; told what's dropped on it.
+	view drop_target(view content, std::function<bool(const std::string&)> accepts, std::function<void(const std::string&)> on_drop, box_style over, color dim);
 
 	// Text, wrapped to the width it's given.
 	view text(std::string words, std::optional<text_style> style = {});

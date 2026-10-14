@@ -249,7 +249,7 @@ namespace one::desktop {
 		bring_up_to_date(w);
 		in_window context(w);
 		element* pressed = std::exchange(w.pressed, nullptr);
-		w.dragging = nullptr;
+		if (element* dragged = std::exchange(w.dragging, nullptr); dragged && w.root) dragged->release(at, w.root->hit(at));
 		if (!pressed || !w.root) return;
 		// A click is a press and a release over the same thing.
 		for (element* e = pressed; e; e = e->parent) {

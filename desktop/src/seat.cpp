@@ -31,9 +31,11 @@ namespace one::desktop {
 
 		void set_cursor(seat& s, one::desktop::cursor c) {
 			if (!s.cursor) return;
-			int shape = c == cursor::pointer ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER
-			            : c == cursor::text  ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT
-			                                 : WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
+			int shape = c == cursor::pointer    ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_POINTER
+			            : c == cursor::text     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_TEXT
+			            : c == cursor::grab     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB
+			            : c == cursor::grabbing ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING
+			                                    : WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
 			if (shape == s.shape) return;
 			s.shape = shape;
 			wp_cursor_shape_device_v1_set_shape(s.cursor, s.pointer_serial, static_cast<std::uint32_t>(shape));

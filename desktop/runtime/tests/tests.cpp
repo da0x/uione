@@ -462,6 +462,55 @@ namespace {
 
 }  // namespace
 
+TEST("a board's card is dragged to a column a step leads to, and dropping it anywhere else moves nothing") {
+	memory_source data;
+	fill_board(data);
+	data.on("projects::issue::move", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	auto root = built(nav);
+	auto* to_do = list_holding(*root, "atlas-12");
+	auto* doing = list_holding(*root, "atlas-9");
+	CHECK(to_do != nullptr && doing != nullptr);
+	if (!to_do || !doing) return;
+	// What's dragged, inside its row: the one that shows a hand.
+	std::function<one::desktop::element*(one::desktop::element&)> grabbed = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.cursor() == one::desktop::cursor::grab) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = grabbed(*child)) return found;
+		}
+		return nullptr;
+	};
+	one::desktop::element* card = nullptr;
+	for (auto& row : to_do->children) {
+		if (row->key == "atlas-12") card = grabbed(*row);
+	}
+	CHECK(card != nullptr);
+	if (!card) return;
+	// Pressed and hardly moved, it's still a click; moved further, it's carried.
+	CHECK(card->press({10, 10}, 1));
+	card->drag({12, 11});
+	CHECK(!one::desktop::carrying());
+	card->drag({60, 40});
+	CHECK(one::desktop::carrying() && one::desktop::carrying()->payload == "atlas-12");
+	CHECK(card->cursor() == one::desktop::cursor::grabbing);
+	// Let go over its own column, which no step leads to: nothing moves.
+	auto runs = data.runs().size();
+	card->release({60, 40}, to_do);
+	CHECK(!one::desktop::carrying());
+	CHECK(data.runs().size() == runs);
+	// Carried to Doing, a step from To do for a contributor: it moves there.
+	card->click({60, 40});
+	card->press({10, 10}, 1);
+	card->drag({300, 40});
+	card->release({300, 40}, doing);
+	CHECK(data.runs().size() == runs + 1);
+	CHECK(data.runs().back().fields["stage"].as_string() == "atlas-main-doing");
+	// What was dragged isn't also a click on the card.
+	CHECK(card->click({300, 40}));
+}
+
 TEST("a board's card moves along a step the person's roles may take, at once, and back when it's turned down") {
 	memory_source data;
 	fill_board(data);

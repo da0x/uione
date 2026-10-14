@@ -201,6 +201,7 @@ namespace one::screens {
 		// How it's going, as a dot: inactive, waiting, working, done or failed, or
 		// nothing; for how long, like 4m; and which runner is on it, like runner 2.
 		std::string status, running, runner;
+		std::vector<std::string> reaches = {};  // the columns it may be moved to, for one of the reader's roles
 	};
 
 	// How a status is said in words, for a dot's title and for screen readers.

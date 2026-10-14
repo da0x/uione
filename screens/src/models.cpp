@@ -834,6 +834,7 @@ namespace one::screens {
 				}
 				if (!spec.link.empty()) shown.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
 				status_of(p, card, spec.statuses.contains(column.id) ? spec.statuses.at(column.id) : "", shown);
+				shown.reaches = reaches(column.id);
 				column.cards.push_back(std::move(shown));
 			}
 			column.notify = std::ranges::contains(spec.notify, column.id);
