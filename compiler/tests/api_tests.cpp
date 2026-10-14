@@ -187,6 +187,43 @@ view order_notes per order {
     CHECK(view("order_notes").find("Readers(one.Entity[Member]())") == std::string::npos);
 }
 
+TEST_CASE("a view within two that say who reads it is read as both say, public only while both are") {
+    auto generate = [](const std::string& board_reads) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", "namespace shop {\nentity member {\n\tproject  project  required  key\n\tperson  user  required  key\n}\n"
+                                                    "entity project {\n\treaders member\n\tpublic when visibility == visibility::public\n\tslug  slug  required  unique  key\n"
+                                                    "\tvisibility  enum  public | private = visibility::public\n}\n"
+                                                    "entity board {\n" + board_reads + "\tproject  project  required\n\tvisibility  enum  public | private = visibility::public\n}\n"
+                                                    "entity card {\n\tproject  project  required\n\tboard  board  required\n\ttitle  text\n}\n"
+                                                    "view card_page per card {\n\ttitle = card.title\n}\n"
+                                                    "view board_page per board {\n\treaders member\n\tpublic when {\n\t\tboard.visibility == visibility::public\n"
+                                                    "\t\tboard.project.visibility == visibility::public\n\t}\n}\n}\n", out));
+        language::check(files, out);
+        std::vector<std::string> said;
+        for (const auto& d : out) said.push_back(d.message);
+        auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+        auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "shop/shop.go"; });
+        std::string go = found == generated.files.end() ? "" : found->content;
+        return std::pair{said, go};
+    };
+    auto [said, go] = generate("\treaders member\n\tpublic when visibility == visibility::public\n");
+    CAPTURE(said);
+    CAPTURE(go);
+    auto view = [&](const std::string& name) {
+        std::size_t at = go.find("one.View(\"" + name + "\")");
+        return at == std::string::npos ? std::string() : go.substr(at, go.find('\n', at) - at);
+    };
+    // A card is within its project and its board: both conditions hold.
+    bool both = view("card_page").find(R"(.Readers(one.Entity[Member]()).PublicWhen("project.visibility", "public").PublicWhen("board.visibility", "public"))") !=
+                    std::string::npos ||
+                view("card_page").find(R"(.Readers(one.Entity[Member]()).PublicWhen("board.visibility", "public").PublicWhen("project.visibility", "public"))") !=
+                    std::string::npos;
+    CHECK(both);
+    // A view says several conditions, through more than one pointer.
+    CHECK(view("board_page").find(R"(.PublicWhen("visibility", "public").PublicWhen("project.visibility", "public"))") != std::string::npos);
+}
+
 TEST_CASE("a view per something takes its fields bare, and what they point at by their own names") {
     language::diagnostics out;
     std::vector<language::file> files;

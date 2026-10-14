@@ -912,7 +912,7 @@ TEST_CASE("a view per entity can say who reads each document: the people of its 
     e = only_error(start + "view page per issue {\n\tpublic when issue.project.visibilty == public\n}\n");
     CHECK(e.message == "entity project has no field visibilty; did you mean visibility?");
     e = only_error(start + "view page per project {\n\tpublic when true\n}\n");
-    CHECK(e.message == "public when compares a field with a value, like project.visibility == public");
+    CHECK(e.message == "public when compares a field with a value, like project.visibility == public, one a line");
     e = only_error(start + "view page per project {\n\treaders = project.slug\n}\n");
     CHECK(e.message == "readers says who may read a view's document, so it can't name a value");
 }

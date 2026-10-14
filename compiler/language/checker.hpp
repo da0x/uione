@@ -2050,10 +2050,23 @@ namespace one::language {
                 }
             }
             if (v.public_when) {
-                auto* b = std::get_if<binary_expression>(&v.public_when->node);
-                if (!b || b->op != token_kind::equal || !std::holds_alternative<member_expression>(b->left->node)) {
-                    error(v.public_when->where, "public when compares a field with a value, like " + subject->name + ".visibility == public");
-                    return;
+                // Each line, or each side of an &&, compares a field with a value; all hold.
+                std::vector<const expression*> each;
+                std::function<void(const expression&)> split = [&](const expression& e) {
+                    if (auto* both = std::get_if<binary_expression>(&e.node); both && both->op == token_kind::logical_and) {
+                        split(*both->left);
+                        split(*both->right);
+                    } else {
+                        each.push_back(&e);
+                    }
+                };
+                split(*v.public_when);
+                for (const auto* part : each) {
+                    auto* b = std::get_if<binary_expression>(&part->node);
+                    if (!b || b->op != token_kind::equal || !std::holds_alternative<member_expression>(b->left->node)) {
+                        error(part->where, "public when compares a field with a value, like " + subject->name + ".visibility == public, one a line");
+                        return;
+                    }
                 }
                 resolve(plain, *v.public_when);
             }

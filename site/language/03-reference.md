@@ -421,9 +421,12 @@ entity loan {
 - `readers member` and `public when visibility == visibility::public`, lines of an
   entity's own, say who may read the views of it and of what's within it: a view
   per project, or per an issue whose one field points at its project, reads as
-  the project says, with `visibility` read as `issue.project.visibility`. A view
-  that says its own readers says all of who may read it, and inherits nothing. A
-  field can't be called `readers`.
+  the project says, with `visibility` read as `issue.project.visibility`. One
+  within two that say who reads, like a card on a board in a project, is read as
+  both say: by the same readers, and public only while both are; two that name
+  different readers are a mistake until the view says its own. A view that says
+  its own readers says all of who may read it, and inherits nothing. A field
+  can't be called `readers`.
 - Every field has a type, so what it holds is never worked out from how it's used.
 - A field's type is one of the [built-in types](#built-in-types), a `format`
   declared in the file, or another entity (`book`), which stores its id and reads
@@ -569,8 +572,10 @@ entity order {
   says so, like "Proof is a file someone else uploaded".
 - **Reading:** whoever may read the record may read its files: anyone when a page
   of it is public, or its readers, like a project's members, people and services
-  alike. A record without a page of its own, like a comment, is read by whoever
-  reads the page of what it points at, its issue. `GET /api/files?path=…` gives
+  alike. A record with a page of its own is read only as that page says, never
+  through what it points at. A record without one, like a comment, is read by
+  whoever reads every page of what it points at, so a comment on a private
+  board's issue isn't read through its public project. `GET /api/files?path=…` gives
   somewhere to read it from, for ten minutes.
 - **Deleting:** a file taken out of its field, or whose record is deleted, is
   deleted too, once the command is done. An upload never attached is deleted a day
@@ -847,9 +852,12 @@ view book_page per book {
 - In a view per entity, `readers member` lets the people a member names read each
   document: everyone with a role in the project the entity is held within. `public
   when project.visibility == visibility::public` opens a document to everyone while the
-  condition holds; it compares one field of the entity, or of what it points at,
-  like `issue.project.visibility`, with a value. When people join a project, or it
-  turns private, only that project's documents are rebuilt.
+  condition holds; it compares a field of the entity, or of what it points at,
+  through as many pointers as it takes, like `issue.board.project.visibility`, with
+  a value. In a block, one a line, every one has to hold, so a private board in a
+  public project stays closed. When people join a project, or something a
+  condition reads through changes, like the board turning private, only the
+  documents that read through it are rebuilt.
 - Another `readers` line names people in a field of the view's entity:
   `readers report.author` lets whoever filed a report read it, even outside the
   project, and `readers report.watchers` lets each person a list of them names.

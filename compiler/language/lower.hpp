@@ -992,23 +992,49 @@ namespace one::language {
                     // field of that type points at.
                     const entity_declaration* owner = nullptr;
                     std::vector<std::string> through{*v->per};
+                    expression_ptr public_when;
                     if (per->second->readers || per->second->public_when) {
                         owner = per->second;
+                        if (owner->public_when) public_when = rooted(*owner->public_when, *owner, through, d.where);
                     } else {
+                        // Within two that say who reads, like a project and a board, it's
+                        // read as both say: by the same people, and public only while both are.
+                        std::vector<std::pair<const entity_declaration*, std::vector<std::string>>> owners;
                         for (const auto& f : per->second->fields) {
                             if (!f.type || f.list || f.type->parts.size() != 1) continue;
                             auto it = here.find(f.type->parts[0]);
                             if (it == here.end() || !(it->second->readers || it->second->public_when)) continue;
-                            if (owner) {
-                                owner = nullptr;  // two ways in, so it's for the view to say
+                            owners.push_back({it->second, {*v->per, f.name}});
+                        }
+                        if (owners.empty()) continue;
+                        bool every_public = true;
+                        for (const auto& [o, path_to] : owners) {
+                            if (o->readers != owners.front().first->readers) {
+                                out.push_back({path, d.where, "view " + v->name + " is of what's within both " + owners.front().first->name + " and " + o->name +
+                                                                  ", which say different readers; say who reads it, with readers and public when"});
+                                owners.clear();
                                 break;
                             }
-                            owner = it->second;
-                            through = {*v->per, f.name};
+                            every_public = every_public && o->public_when;
+                        }
+                        if (owners.empty()) continue;
+                        owner = owners.front().first;
+                        through = owners.front().second;
+                        if (every_public) {
+                            for (const auto& [o, path_to] : owners) {
+                                auto one = rooted(*o->public_when, *o, path_to, d.where);
+                                if (!public_when) {
+                                    public_when = std::move(one);
+                                } else {
+                                    auto both = std::make_unique<expression>();
+                                    both->where = d.where;
+                                    both->node = binary_expression{token_kind::logical_and, std::move(public_when), std::move(one)};
+                                    public_when = std::move(both);
+                                }
+                            }
                         }
                     }
                     if (!owner) continue;
-                    expression_ptr public_when = owner->public_when ? rooted(*owner->public_when, *owner, through, d.where) : nullptr;
                     bool says_readers = v->readers || !v->reader_people.empty();
                     if (!says_readers && !v->public_when) {
                         v->readers = owner->readers;

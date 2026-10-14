@@ -295,10 +295,20 @@ func (a *App) serveDownload(w http.ResponseWriter, r *http.Request) {
 	reply(w, http.StatusOK, map[string]any{"url": address, "name": name, "type": kept["type"], "size": kept["size"]})
 }
 
-// mayRead says whether someone may read a record, and so its files: when a view
-// per its kind, or per what it points at, like a comment's issue, has a page of it
-// that's public or names them among its readers.
+// mayRead says whether someone may read a record, and so its files. A record with a
+// page of its own, a view per its kind, is read as that page says: public, or naming
+// them among its readers. One with none, like a comment, is read only when every
+// page of what it points at says so, so a comment on a private issue isn't read
+// through the issue's public project.
 func (a *App) mayRead(ctx context.Context, me string, s *schema, id string, stored map[string]any) (bool, error) {
+	paged := func(per *schema) bool {
+		for _, v := range a.reg.views {
+			if v.per != nil && a.reg.schemas[v.per] == per {
+				return true
+			}
+		}
+		return false
+	}
 	check := func(per *schema, id string, fields map[string]any) (bool, error) {
 		for _, v := range a.reg.views {
 			if v.per == nil || a.reg.schemas[v.per] != per {
@@ -318,13 +328,14 @@ func (a *App) mayRead(ctx context.Context, me string, s *schema, id string, stor
 		}
 		return false, nil
 	}
-	if may, err := check(s, id, stored); may || err != nil {
-		return may, err
+	if paged(s) {
+		return check(s, id, stored)
 	}
+	checked := false
 	for _, f := range s.fields {
 		through := a.reg.entity(f.refers)
 		pointed, _ := stored[f.name].(string)
-		if through == nil || pointed == "" {
+		if through == nil || pointed == "" || !paged(through) {
 			continue
 		}
 		fields, err := a.stored(ctx, through, pointed)
@@ -334,11 +345,13 @@ func (a *App) mayRead(ctx context.Context, me string, s *schema, id string, stor
 		if len(fields) == 0 {
 			continue
 		}
-		if may, err := check(through, pointed, fields); may || err != nil {
-			return may, err
+		may, err := check(through, pointed, fields)
+		if !may || err != nil {
+			return false, err
 		}
+		checked = true
 	}
-	return false, nil
+	return checked, nil
 }
 
 // claim attaches the files a command puts in a record's fields, as part of its

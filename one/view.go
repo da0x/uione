@@ -208,7 +208,8 @@ type ViewSpec struct {
 	secrets []string     // values holding the document's project's GitHub webhook secret
 	readers reflect.Type // the entity whose people may read each document, like member
 	people  []string     // fields of the document's entity naming people who may read it, like author
-	open    *condition   // when a document is public, as a field of its entity, like project.visibility
+	opens   []condition  // when a document is public: each a field of its entity, or of what it points at, like project.visibility, all holding
+	openers map[string]*schema // the entities those reach through, whose changes rebuild the documents that name them
 
 	scope *schema // what each document is held within, like a project, once it's known
 
@@ -257,9 +258,11 @@ func (v *ViewSpec) ReadersFrom(field string) *ViewSpec {
 
 // PublicWhen opens a document to everyone while a field of its entity has a
 // value: PublicWhen("visibility", "public") on a page per project, or
-// PublicWhen("project.visibility", "public") on a page per issue.
+// PublicWhen("project.visibility", "public") on a page per issue, through as many
+// pointers as it says, like "board.project.visibility". Said more than once, every
+// one has to hold.
 func (v *ViewSpec) PublicWhen(field string, value any) *ViewSpec {
-	v.open = &condition{field: field, value: value}
+	v.opens = append(v.opens, condition{field: field, value: value})
 	return v
 }
 
@@ -397,7 +400,7 @@ func (v *ViewSpec) Value(name string, q Query, field string) *ViewSpec {
 
 // What every view document holds to say what it is and who may read it, so no
 // value or list of a view may have one of these names.
-var reserved = []string{"type", "public", "owner_uid", "subject", "readers", "within",
+var reserved = []string{"type", "public", "opened_by", "owner_uid", "subject", "readers", "within",
 	"required_permission", "source_version", "content_hash", "last_event_id", "projected_at"}
 
 func (v *ViewSpec) register(r *registry, ns string) {
@@ -437,7 +440,7 @@ func (v *ViewSpec) register(r *registry, ns string) {
 		v.reads[s.entity] = s
 	}
 	// Who reads a view with readers, or that's public when, is said by them alone.
-	if v.readers != nil || len(v.people) > 0 || v.open != nil {
+	if v.readers != nil || len(v.people) > 0 || len(v.opens) > 0 {
 		r.views = append(r.views, v)
 		return
 	}
@@ -542,7 +545,7 @@ func (v *ViewSpec) guard(r *registry) error {
 		}
 		l.guards = nil
 		for _, page := range r.views {
-			if page.per == nil || r.schemas[page.per] != target || (page.readers == nil && len(page.people) == 0 && page.open == nil) {
+			if page.per == nil || r.schemas[page.per] != target || (page.readers == nil && len(page.people) == 0 && len(page.opens) == 0) {
 				continue
 			}
 			if err := page.held(r); err != nil {
@@ -554,6 +557,9 @@ func (v *ViewSpec) guard(r *registry) error {
 				member := r.schemas[page.readers]
 				v.reads[member.entity] = member
 			}
+			for entity, s := range page.openers {
+				v.reads[entity] = s
+			}
 		}
 	}
 	return nil
@@ -564,7 +570,7 @@ func (v *ViewSpec) guard(r *registry) error {
 // condition reads through, like an issue's project. Changes to that, or to who
 // belongs to it, rebuild only the documents held within it.
 func (v *ViewSpec) held(r *registry) error {
-	if v.readers == nil && len(v.people) == 0 && v.open == nil {
+	if v.readers == nil && len(v.people) == 0 && len(v.opens) == 0 {
 		return nil
 	}
 	if v.per == nil {
@@ -591,17 +597,17 @@ func (v *ViewSpec) held(r *registry) error {
 			return fmt.Errorf("one: view %s is read by %s, which grants no role", v.full, r.schemas[v.readers].name)
 		}
 	}
-	if v.open != nil {
-		through, _, hop := strings.Cut(v.open.field, ".")
-		if hop {
-			f := per.field(through)
-			if f == nil || r.entity(f.refers) == nil {
-				return fmt.Errorf("one: view %s is public when %s, but %s doesn't point at another entity", v.full, v.open.field, through)
-			}
-			target := r.entity(f.refers)
-			v.reads[target.entity] = target
-			if v.scope == nil {
-				v.scope = target
+	v.openers = map[string]*schema{}
+	for _, open := range v.opens {
+		chain, _, err := r.chain(per, open.field)
+		if err != nil {
+			return fmt.Errorf("one: view %s is public when %s, but %v", v.full, open.field, err)
+		}
+		for i, hop := range chain {
+			v.reads[hop.target.entity] = hop.target
+			v.openers[hop.target.entity] = hop.target
+			if i == 0 && v.scope == nil {
+				v.scope = hop.target
 			}
 		}
 	}
@@ -801,6 +807,20 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 	if listed && !everywhere {
 		return subjects, nil
 	}
+	// A change to what a document's public condition reads through, like the board
+	// an issue is on, or that board's project, rebuilds the documents that name it.
+	opened := false
+	if _, ok := v.openers[ev.Entity]; ok {
+		docs, err := a.store.Collection("views").Where("type", "==", v.full).Where("opened_by", "array-contains", ev.Entity+":"+ev.ID).Documents(ctx).GetAll()
+		if err != nil {
+			return nil, err
+		}
+		for _, doc := range docs {
+			key, _ := doc.Data()["subject"].(string)
+			add(key)
+		}
+		opened = true
+	}
 	// What the documents only show of, through what they copy or what their rows point
 	// at, like the board an issue's page names or the people its comments are by:
 	// the documents that copy it, found above, and those whose rows show it. What's
@@ -845,6 +865,10 @@ func (v *ViewSpec) subjects(ctx context.Context, a *App, ev event) ([]string, er
 			}
 			return subjects, nil
 		}
+	}
+	// Found through what opens them, they're all there is to rebuild.
+	if opened {
+		return subjects, nil
 	}
 	docs, err := a.store.Collection("views").Where("type", "==", v.full).Documents(ctx).GetAll()
 	if err != nil {
@@ -1772,19 +1796,71 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 		data["readers"] = readers
 	}
 
-	if v.open != nil {
-		value := fields[v.open.field]
-		if through, field, hop := strings.Cut(v.open.field, "."); hop {
-			id, _ := fields[through].(string)
-			held, err := a.stored(ctx, a.reg.entity(per.field(through).refers), id)
+	if len(v.opens) > 0 {
+		// Public only while every condition holds, each read through what it points
+		// at; the records read are named, so a change to any of them rebuilds it.
+		public := true
+		var through []string
+		read := map[string]map[string]any{}
+		for _, open := range v.opens {
+			chain, field, err := a.reg.chain(per, open.field)
 			if err != nil {
 				return err
 			}
-			value = held[field]
+			at := fields
+			for _, hop := range chain {
+				id, _ := at[hop.field].(string)
+				if id == "" {
+					at = nil
+					break
+				}
+				name := hop.target.entity + ":" + id
+				if !contains(through, name) {
+					through = append(through, name)
+				}
+				held, ok := read[name]
+				if !ok {
+					held, err = a.stored(ctx, hop.target, id)
+					if err != nil {
+						return err
+					}
+					read[name] = held
+				}
+				at = held
+			}
+			if at == nil || !same(at[field], open.value) {
+				public = false
+			}
 		}
-		data["public"] = same(value, v.open.value)
+		data["public"] = public
+		sort.Strings(through)
+		data["opened_by"] = through
 	}
 	return nil
+}
+
+// A hop from one entity to another through a field pointing at it.
+type hop struct {
+	field  string
+	target *schema
+}
+
+// chain walks a dotted path from an entity, like board.project.visibility from an
+// issue: each pointer it goes through, and the field it ends on.
+func (r *registry) chain(from *schema, path string) ([]hop, string, error) {
+	parts := strings.Split(path, ".")
+	var hops []hop
+	at := from
+	for _, part := range parts[:len(parts)-1] {
+		f := at.field(part)
+		if f == nil || r.entity(f.refers) == nil {
+			return nil, "", fmt.Errorf("%s doesn't point at another entity", part)
+		}
+		next := r.entity(f.refers)
+		hops = append(hops, hop{field: part, target: next})
+		at = next
+	}
+	return hops, parts[len(parts)-1], nil
 }
 
 // compare orders two stored values of the same kind: false before true, earlier
@@ -1916,8 +1992,8 @@ func (v *ViewSpec) definition() string {
 	}
 	fmt.Fprintf(&out, "view %s public=%t per_user=%t per=%s readers=%s people=%q permission=%q secrets=%q\n",
 		v.full, v.public, v.perUser, typeName(v.per), typeName(v.readers), v.people, v.permission, v.secrets)
-	if v.open != nil {
-		fmt.Fprintf(&out, "open %s=%s,except=%t\n", v.open.field, val(v.open.value), v.open.except)
+	for _, open := range v.opens {
+		fmt.Fprintf(&out, "open %s=%s,except=%t\n", open.field, val(open.value), open.except)
 	}
 	for _, c := range v.counts {
 		fmt.Fprintf(&out, "count %s %s\n", c.name, query(c.query))
@@ -1946,8 +2022,9 @@ func (v *ViewSpec) definition() string {
 
 // composing changes whenever how views are put together changes in a way their
 // stored documents need rebuilding for, like building a new view per entity for the
-// entities already stored.
-const composing = "3"
+// entities already stored, or naming in each public-when document what it reads
+// through.
+const composing = "4"
 
 // rebuildChanged rebuilds the stored documents of every view whose definition
 // changed since the backend last started, as when a deploy adds a field to a view,

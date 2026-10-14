@@ -2284,23 +2284,36 @@ namespace one::generators {
             }
             if (v.public_when) {
                 // public when issue.project.visibility == public: the path below the
-                // view's own entity, and the value it's compared with.
-                auto* b = std::get_if<language::binary_expression>(&v.public_when->node);
-                std::string path = b ? web_detail::text_of(*b->left) : "";
-                std::string value;
-                if (b) {
-                    // The value is a choice, written with its enum: visibility::public.
-                    if (auto* n = std::get_if<language::name_expression>(&b->right->node); n && n->name.parts.size() <= 2) {
-                        value = api_detail::go_string(n->name.parts.back());
-                    } else if (auto* lit = std::get_if<language::literal_expression>(&b->right->node)) {
-                        value = lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
+                // view's own entity, through as many pointers as it says, and the value
+                // it's compared with; each of several, all holding.
+                std::vector<const language::expression*> each;
+                std::function<void(const language::expression&)> split = [&](const language::expression& e) {
+                    if (auto* both = std::get_if<language::binary_expression>(&e.node); both && both->op == language::token_kind::logical_and) {
+                        split(*both->left);
+                        split(*both->right);
+                    } else {
+                        each.push_back(&e);
                     }
+                };
+                split(*v.public_when);
+                for (const auto* part : each) {
+                    auto* b = std::get_if<language::binary_expression>(&part->node);
+                    std::string path = b ? web_detail::text_of(*b->left) : "";
+                    std::string value;
+                    if (b) {
+                        // The value is a choice, written with its enum: visibility::public.
+                        if (auto* n = std::get_if<language::name_expression>(&b->right->node); n && n->name.parts.size() <= 2) {
+                            value = api_detail::go_string(n->name.parts.back());
+                        } else if (auto* lit = std::get_if<language::literal_expression>(&b->right->node)) {
+                            value = lit->type == language::literal_expression::kind::string ? api_detail::go_string(lit->value) : lit->value;
+                        }
+                    }
+                    if (!path.starts_with(subject_ + ".") || value.empty()) {
+                        unsupported(path_, part->where, "public when anything but a field of the view's entity, or of what it points at, compared with a value");
+                        return false;
+                    }
+                    head += ".PublicWhen(" + api_detail::go_string(path.substr(subject_.size() + 1)) + ", " + value + ")";
                 }
-                if (!path.starts_with(subject_ + ".") || value.empty()) {
-                    unsupported(path_, v.public_when->where, "public when anything but a field of the view's entity, or of what it points at, compared with a value");
-                    return false;
-                }
-                head += ".PublicWhen(" + api_detail::go_string(path.substr(subject_.size() + 1)) + ", " + value + ")";
             }
             for (const auto& value : v.values) {
                 // A field of the entity the view is for: title = book.title.
