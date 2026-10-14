@@ -321,7 +321,7 @@ namespace one::driver {
         if (found.size() == errors_before) {
             std::vector<language::file> files;
             check_sources(read, found, &files);
-            // A project says which compiler it's for, one "0.14.2". The command line runs
+            // A project says which compiler it's for, one "0.14.3". The command line runs
             // that one in this one's place, so only one that can't, like the studio's,
             // or one run on purpose with UIONE_TOOLCHAIN=local, gets here with another:
             // the first says so, rather than checking it by rules it doesn't know.
