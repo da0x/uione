@@ -936,7 +936,7 @@ export const radix: ComponentSet = {
             }
           >
             <span className={"inline-flex items-center gap-2 text-lg leading-snug font-semibold " + (step.selected ? "text-accent" : "text-ink")}>
-              {step.status && <span role="img" aria-label={step.status.words} title={step.status.words} className="size-2.5 shrink-0 rounded-full" style={{ background: statusColors.success }} />}
+              {step.status && <span role="img" aria-label={step.status.words} title={step.status.words} className="size-2.5 shrink-0 rounded-full" style={{ background: statusColors[step.status.is] }} />}
               {step.title}
             </span>
             {step.details.length > 0 && (

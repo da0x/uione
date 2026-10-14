@@ -219,6 +219,83 @@ screen "Yard" /yard {
     CHECK(drawn->content.find(R"(.choices = {{"kind", std::vector<one::screens::option>{{"public", "Public"}, {"private", "Private"}}}}, .hide_empty = true)") != std::string::npos);
 }
 
+TEST_CASE("a switch between a table, a board and a whiteboard draws one track above it, which each keeps to") {
+    const std::string source = R"(namespace ideas {
+entity wall {
+	title  text  required
+}
+entity stage {
+	wall   wall  required
+	title  text  required
+}
+entity release {
+	wall   wall  required
+	title  text  required
+}
+entity idea {
+	wall     wall  required
+	title    text  required
+	stage    stage
+	release  release
+	x  number
+	y  number
+	w  number
+	h  number
+}
+command idea::place {
+	changes x  y  w  h
+}
+view wall_page per wall {
+	title
+	ideas = each idea in wall {
+		title  stage  release  x  y  w  h
+	}
+	stages = each stage in wall {
+		title
+	}
+	releases = each release in wall {
+		title
+	}
+}
+screen "{wall_page.title}" /walls/:wall {
+	table wall_page.ideas {
+		track release over wall_page.releases
+		title
+	}
+	board wall_page.ideas by stage over wall_page.stages {
+		title
+	}
+	canvas wall_page.ideas by stage over wall_page.stages {
+		place idea::place
+		title
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto native = generators::generate_native(files, root + "/examples/tasks", "desktop");
+    auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("switched(p, ") != std::string::npos; });
+    REQUIRE(drawn != native.end());
+    CAPTURE(drawn->content);
+    std::string shared = R"([&] { auto t = track_spec{"release", wall_page, "releases", "title", {}}; t.key = "switched:ideas::wall_page.ideas"; t.above = true;)";
+    // Drawn once above the switch, its dots from the board's stages.
+    CHECK(drawn->content.find("tracked(p, " + shared + R"( t.by = "stage"; t.over = wall_page; t.over_list = "stages"; return t; }(), wall_page, "ideas", switched(p, )") != std::string::npos);
+    // Each way it's shown keeps to its pick, the whiteboard too.
+    CHECK(drawn->content.find(".track = " + shared + " return t; }()") != std::string::npos);
+    CHECK(drawn->content.find(R"(.over_list = "stages", .track = )" + shared) != std::string::npos);
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Switched") != std::string::npos; });
+    REQUIRE(screen != web.end());
+    CAPTURE(screen->content);
+    CHECK(screen->content.find(R"(columns: {  }, above: true, by: "stage", over: wallPage, overList: "stages" }} view={wallPage} list="ideas">)") != std::string::npos);
+    CHECK(screen->content.find(R"(<Canvas )") != std::string::npos);
+    CHECK(screen->content.find(R"(overList="stages" track={{ field: "release", view: wallPage, list: "releases", shown: "title", columns: {  }, above: true }})") != std::string::npos);
+}
+
 TEST_CASE("a canvas places a list's cards by their fields, placed by a command and snapped to a grid, and a board shows instead while a field says so") {
     const std::string source = R"(namespace ideas {
 enum style {

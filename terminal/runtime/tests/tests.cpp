@@ -296,6 +296,108 @@ TEST("a board in a terminal: its columns one after another, and m moving a card 
 	CHECK(data.runs().back().fields["stage"].as_string() == "s2");
 }
 
+// A board whose Done chimes, kept to a milestone picked on its track: picking one, or
+// none, shows other cards in Done without chiming, and a card that does arrive there
+// chimes once, whatever's picked.
+TEST("a board chimes for a card that arrives, not for those a pick on its track shows") {
+	std::vector<std::string> heard;
+	chime_into([&](const std::string& message, bool) { heard.push_back(message); });
+	memory_source data;
+	auto issue = [](std::string id, std::string title, std::string stage, std::string milestone) {
+		return value(fields{{"id", id}, {"title", title}, {"stage", stage}, {"milestone", milestone}});
+	};
+	auto page_with = [&](std::string site_at) {
+		return value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}}), value(fields{{"id", "s3"}, {"title", "Done"}})}},
+		                    {"milestones", list{value(fields{{"id", "m13"}, {"title", "0.13.2"}}), value(fields{{"id", "m14"}, {"title", "0.14.0"}})}},
+		                    {"issues", list{issue("atlas-1", "compiler", "s3", "m13"), issue("atlas-2", "editor", "s3", "m13"), issue("atlas-3", "site", site_at, "m14")}}});
+	};
+	data.set("projects::board_page", "atlas-main", page_with("s1"));
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Board", "/:project/boards/:board", "", [](page& p) {
+		                     auto board_page = p.view("projects::board_page", "atlas-main");
+		                     return items(board(p, {.view = board_page, .list = "issues", .by = "stage", .over = board_page, .over_list = "stages",
+		                                            .columns = {{"title", "Title"}}, .track = track_spec{"milestone", board_page, "milestones"}, .notify = {"s3"}}));
+	                     }});
+	navigator nav(s, data);
+	screen_at t(nav, 80, 30);
+	nav.open("/atlas/boards/main");
+	t.text();
+	auto picked = nav.current().kept<std::string>("board:issues:track");
+	for (std::string milestone : {"m14", "m13", "", "m14"}) {
+		picked.set(milestone);
+		t.text();
+	}
+	CHECK(heard.empty());
+	data.set("projects::board_page", "atlas-main", page_with("s3"));
+	t.text();
+	CHECK(heard == std::vector<std::string>{"site: Done"});
+	chime_into({});
+}
+
+// A table and a board of the same issues, switched between, with one track of
+// milestones above the switch: drawn once, whichever is shown, its pick keeping both
+// to it; a milestone whose issues have all succeeded is green, and one where any
+// failed red.
+TEST("a switch's track is drawn once above it, the same whichever way the list is shown") {
+	memory_source data;
+	auto issue = [](std::string id, std::string title, std::string stage, std::string milestone) {
+		return value(fields{{"id", id}, {"title", title}, {"stage", stage}, {"milestone", milestone}});
+	};
+	auto stage = [](std::string id, std::string title, std::string status) { return value(fields{{"id", id}, {"title", title}, {"status", status}}); };
+	data.set("projects::board_page", "atlas-releases",
+	         value(fields{{"stages", list{stage("s1", "To do", "inactive"), stage("s3", "Published", "success"), stage("s9", "Failed", "failed")}},
+	                      {"milestones", list{value(fields{{"id", "m13"}, {"title", "0.13.2"}}), value(fields{{"id", "m14"}, {"title", "0.14.0"}}), value(fields{{"id", "m15"}, {"title", "0.14.1"}})}},
+	                      {"issues", list{issue("atlas-1", "compiler 0.13.2", "s3", "m13"), issue("atlas-2", "compiler 0.14.0", "s3", "m14"),
+	                                      issue("atlas-3", "neotrac 0.14.0", "s9", "m14"), issue("atlas-4", "compiler 0.14.1", "s1", "m15")}}}));
+	std::string id = "projects::board_page.issues";
+	auto shared = [&](state<view_state> v) {
+		auto t = track_spec{"milestone", v, "milestones"};
+		t.key = "switched:" + id, t.above = true;
+		return t;
+	};
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Releases", "/:project/boards/:board", "", [=](page& p) {
+		                     auto board_page = p.view("projects::board_page", "atlas-releases");
+		                     auto above = shared(board_page);
+		                     above.by = "stage", above.over = board_page, above.over_list = "stages", above.status_by = "status";
+		                     return items(tracked(p, above, board_page, "issues",
+		                                          switched(p, id, "Show issues as", {"Table", "Board"}, 0,
+		                                                   table(p, {.view = board_page, .list = "issues", .columns = {{"title", "Title"}}, .track = shared(board_page)}),
+		                                                   board(p, {.view = board_page, .list = "issues", .by = "stage", .over = board_page, .over_list = "stages",
+		                                                             .columns = {{"title", "Title"}}, .track = shared(board_page), .status_by = "status"}))));
+	                     }});
+	navigator nav(s, data);
+	screen_at t(nav, 100, 30);
+	nav.open("/atlas/boards/releases");
+	// The track's milestone, with its dot, once, and above the switch.
+	auto once_above = [](const std::string& drawn) {
+		auto first = drawn.find("● 0.14.0"), switch_at = drawn.find("Show issues as");
+		return first != std::string::npos && drawn.find("● 0.14.0", first + 1) == std::string::npos && first < switch_at;
+	};
+	CHECK(once_above(t.text()));
+	nav.current().kept<int>("switched:" + id).set(1);  // the board
+	std::string board_drawn = t.text();
+	CHECK(once_above(board_drawn));
+	CHECK(board_drawn.find("Published") != std::string::npos);
+	// Picked in the board's track, both keep to it.
+	nav.current().kept<std::string>("switched:" + id + ":track").set("m15");
+	CHECK(t.text().find("compiler 0.13.2") == std::string::npos);
+	nav.current().kept<int>("switched:" + id).set(0);
+	CHECK(t.text().find("compiler 0.13.2") == std::string::npos);
+	CHECK(t.text().find("compiler 0.14.1") != std::string::npos);
+	// Each milestone's dot.
+	auto above = shared(nav.current().view("projects::board_page", "atlas-releases"));
+	above.by = "stage", above.over = nav.current().view("projects::board_page", "atlas-releases"), above.over_list = "stages", above.status_by = "status";
+	auto model = track_of(nav.current(), "", above, rows_of(*nav.current().view("projects::board_page", "atlas-releases"), "issues"), "issues");
+	CHECK(model.has_value());
+	if (!model) return;
+	std::map<std::string, std::string> dots;
+	for (const auto& r : model->records) dots[r.title] = r.status;
+	CHECK(dots["0.13.2"] == "success");
+	CHECK(dots["0.14.0"] == "failed");
+	CHECK(dots["0.14.1"] == "");
+}
+
 TEST("a canvas in a terminal: its cards as boxes where they're laid out, n choosing one and each arrow placing it a grid step over") {
 	memory_source data;
 	fill_board(data);

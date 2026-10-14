@@ -443,6 +443,7 @@ export const plain: ComponentSet = {
         <span key={step.id}>
           {i > 0 && <span aria-hidden="true"> → </span>}
           <button type="button" aria-pressed={step.selected} onClick={step.onSelect}>
+            {step.status && <span role="img" aria-label={step.status.words}>● </span>}
             <strong>{step.title}</strong>
             {step.details.map((detail, at) => (
               <span key={at}> {detail}</span>

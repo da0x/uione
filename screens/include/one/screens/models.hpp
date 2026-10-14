@@ -9,6 +9,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -149,13 +150,14 @@ namespace one::screens {
 		std::vector<std::string> details;
 		long count = 0;
 		bool picked = false;
-		std::string status = "";  // success, once every row in it is at a success end
+		std::string status = "";  // success, once every row in it is at a success end; failed, once any row in it has failed
 	};
 	struct track_model {
 		std::string label;
 		std::vector<track_record> records;
 		std::string picked;
 		state<std::string> picking;
+		bool above = false;  // drawn above a switch, not by the way it's shown
 		bool keeps(const value& row, const std::string& field) const { return picked.empty() || field_of(row, field).as_string() == picked; }
 		void pick(const std::string& id) const { picking.set(picking.peek() == id ? "" : id); }
 	};
@@ -233,6 +235,8 @@ namespace one::screens {
 	// Tells whoever has the app open: chime --message, when chime is installed, or the
 	// terminal's bell.
 	void chime(const std::string& message, bool failed = false);  // failed: its error sound, as a card arriving where things fail
+	// Where chimes go instead, in a test, until it's given an empty one.
+	void chime_into(std::function<void(const std::string& message, bool failed)> heard);
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 

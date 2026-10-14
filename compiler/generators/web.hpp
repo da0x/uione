@@ -215,6 +215,8 @@ namespace one::generators {
         const std::set<std::string>& open_ = model_.open;
         const std::vector<std::string>& personal_ = model_.personal;
         const std::vector<language::field> nothing_;  // the fields of no entity
+        // In a switch: the track every way the list is shown keeps to.
+        const language::track_setting* group_track_ = nullptr;
         bool footer_ = false;  // whether the site has a footer, in src/footer.tsx
         std::string footer_layout_;  // bar or columns
         // A set of markdown pages, one per file, shown by a screen like /docs/:page.
@@ -973,6 +975,14 @@ namespace one::generators {
                         for (std::size_t i = at; i <= last; ++i) {
                             if (auto* t = std::get_if<language::table_item>(&items[i].node); t && !beside) beside = t;
                         }
+                        // One track for them all, the first that says one, drawn once above
+                        // the switch, its pick kept to whichever way it's shown.
+                        const language::track_setting* shared = nullptr;
+                        for (std::size_t i = at; i <= last && !shared; ++i) {
+                            if (auto* t = std::get_if<language::table_item>(&items[i].node); t && t->track) shared = &*t->track;
+                            if (auto* b = std::get_if<language::board_item>(&items[i].node); b && b->track) shared = &*b->track;
+                        }
+                        group_track_ = shared;
                         std::string names, icons, start;
                         for (std::size_t i = at; i <= last; ++i) {
                             auto one = shown_list(items[i]);
@@ -984,7 +994,11 @@ namespace one::generators {
                         std::string words = web_detail::label(here->list);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
                         out.open("<Switched id=" + web_detail::js_string(full_view(ns, here->view) + "." + here->list) + " label=" + web_detail::js_string("Show " + words + " as") +
-                                 " options={[" + names + "]} icons={[" + icons + "]}" + (start.empty() ? "" : " start={" + start + "-1}") + ">");
+                                 " options={[" + names + "]} icons={[" + icons + "]}" + (start.empty() ? "" : " start={" + start + "-1}") +
+                                 (shared ? track_on(parts, ns, shared, track_stages(parts, ns, items, at, last)) + " view={" + view_variable(parts, full_view(ns, here->view)) +
+                                               "} list=" + web_detail::js_string(here->list)
+                                         : "") +
+                                 ">");
                         for (std::size_t i = at; i <= last; ++i) {
                             const auto& one = items[i];
                             if (auto* t = std::get_if<language::table_item>(&one.node)) this->table(out, parts, ns, *t, screen);
@@ -993,6 +1007,7 @@ namespace one::generators {
                             else if (auto* l = std::get_if<language::pipeline_item>(&one.node)) this->pipeline(out, parts, ns, *l);
                         }
                         out.close("</Switched>");
+                        group_track_ = nullptr;
                         at = last;
                         continue;
                     }
@@ -1257,6 +1272,7 @@ namespace one::generators {
                                " path=" + web_detail::js_string(c.path);
             if (!c.status_field.empty()) line += " statusBy=" + web_detail::js_string(c.status_field);
             if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) line += " waitsOn=" + web_detail::js_string(waits);
+            if (group_track_) line += track_on(parts, ns, nullptr);
             if (c.link) {
                 std::string target = full_route(ns, *c.link);
                 line += " link=" + web_detail::js_string(target);
@@ -1309,6 +1325,7 @@ namespace one::generators {
             if (!c.regions.empty()) line += " regions=" + web_detail::js_string(c.regions);
             if (c.move) line += " move=" + web_detail::js_string(full_command(ns, c.move->command));
             if (c.resize) line += " resize=" + web_detail::js_string(full_command(ns, *c.resize));
+            if (group_track_) line += track_on(parts, ns, nullptr);
             if (c.link) {
                 std::string target = full_route(ns, *c.link);
                 line += " link=" + web_detail::js_string(target);
@@ -2022,7 +2039,10 @@ namespace one::generators {
         // track={{ field: "milestone", view: boardPage, list: "milestones", shown: "title",
         // columns: { due: "Due" } }}: a list's records as cards in a row, picking one
         // keeping the rows whose field is it, which is in the page's path.
-        std::string track_on(screen_parts& parts, const std::string& ns, const language::track_setting* setting) {
+        // In a switch, the switch's track, whichever way it's shown, drawn above it, with
+        // `more` said of it too, like its stages.
+        std::string track_on(screen_parts& parts, const std::string& ns, const language::track_setting* setting, const std::string& more = "") {
+            if (group_track_) setting = group_track_;
             if (!setting) return "";
             parts.shown_in_path = true;
             auto track = model_.track_of(ns, *setting);
@@ -2032,7 +2052,42 @@ namespace one::generators {
             }
             return " track={{ field: " + web_detail::js_string(track.field) + ", view: " + view_variable(parts, track.view) +
                    ", list: " + web_detail::js_string(track.list) + ", shown: " + web_detail::js_string(track.shown) + ", columns: { " + columns + " }" +
-                   (setting->hide_empty ? ", hideEmpty: true" : "") + " }}";
+                   (setting->hide_empty ? ", hideEmpty: true" : "") + (group_track_ ? ", above: true" : "") + more + " }}";
+        }
+
+        // What a switch's track works its dots out from: the stages of its board, or
+        // else of its pipeline, as more of the track's settings.
+        std::string track_stages(screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& items, std::size_t from, std::size_t to) {
+            for (std::size_t i = from; i <= to; ++i) {
+                if (auto* b = std::get_if<language::board_item>(&items[i].node)) {
+                    std::string out = ", by: " + web_detail::js_string(b->by);
+                    if (b->over.parts.empty()) {
+                        const language::entity_declaration* entity = listed(ns, b->view.text(), b->list);
+                        if (!entity) return "";
+                        auto stages = model_.stages_written(ns, *entity, b->by);
+                        std::string listed, statuses;
+                        for (const auto& [id, title] : stages.stages) {
+                            listed += (listed.empty() ? "" : ", ") + std::string("{ id: ") + web_detail::js_string(id) + ", title: " + web_detail::js_string(title) + " }";
+                        }
+                        for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + stage + ": " + web_detail::js_string(status);
+                        out += ", over: { status: \"live\", data: { stages: [" + listed + "] } }, overList: \"stages\"";
+                        if (!statuses.empty()) out += ", statuses: { " + statuses + " }";
+                    } else {
+                        out += ", over: " + view_variable(parts, full_view(ns, b->over.text())) + ", overList: " + web_detail::js_string(b->over_list);
+                        if (!b->status_field.empty()) out += ", statusBy: " + web_detail::js_string(b->status_field);
+                    }
+                    return out;
+                }
+            }
+            for (std::size_t i = from; i <= to; ++i) {
+                if (auto* l = std::get_if<language::pipeline_item>(&items[i].node)) {
+                    std::string out = ", by: " + web_detail::js_string(l->by) + ", over: " + view_variable(parts, full_view(ns, l->over.text())) +
+                                      ", overList: " + web_detail::js_string(l->over_list);
+                    if (!l->status_field.empty()) out += ", statusBy: " + web_detail::js_string(l->status_field);
+                    return out;
+                }
+            }
+            return "";
         }
 
         // tint={{ field: "priority", order: [...] }}: the field's choices, the first

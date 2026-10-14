@@ -147,6 +147,17 @@ namespace one::screens {
 		std::string shown = "title";
 		std::vector<column> columns = {};
 		bool hide_empty = false;  // a record none of the rows names isn't on it, unless it's picked
+		// In a switch, whose pick it is, shared by every way the list is shown, and that
+		// it's drawn once above the switch rather than by each.
+		std::string key = "";
+		bool above = false;
+		// What each record's dot is worked out from, as a board's cards' are: the rows'
+		// field naming their stage, the stages, and each stage's status, from a field of
+		// its own or as written.
+		std::string by = "";
+		std::optional<state<view_state>> over = std::nullopt;
+		std::string over_list = "", status_by = "";
+		std::map<std::string, std::string> statuses = {};
 	};
 
 	// Rows put in order by a number, Alt with Up or Down moving the one chosen
@@ -218,6 +229,7 @@ namespace one::screens {
 		std::string lanes = "labels", path = "kinds";
 		std::string status_by = "";  // the stage's field that's its status
 		std::string waits_on = "";   // the field listing what a card waits on, as a board's
+		std::optional<track_spec> track = std::nullopt;  // in a switch, the track above, whose pick keeps its rows
 	};
 
 	// A canvas: a list's rows as cards placed anywhere, each where its x, y, w and h
@@ -245,6 +257,7 @@ namespace one::screens {
 		std::string regions = "";
 		std::string move = "";
 		std::string resize = "";
+		std::optional<track_spec> track = std::nullopt;  // in a switch, the track above, whose pick keeps its rows
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row

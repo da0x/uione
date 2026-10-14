@@ -466,6 +466,58 @@ describe("a switch between a table and a board", () => {
   });
 });
 
+describe("a switch's track", () => {
+  it("is drawn once above the switch, whichever is shown, each milestone's dot from its issues' stages", () => {
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => undefined });
+    const source = memorySource({
+      views: {
+        "projects::board_page": {
+          stages: [
+            { id: "s1", title: "To do", status: "inactive" },
+            { id: "s3", title: "Published", status: "success" },
+            { id: "s9", title: "Failed", status: "failed" },
+          ],
+          milestones: [
+            { id: "m13", title: "0.13.2" },
+            { id: "m14", title: "0.14.0" },
+            { id: "m15", title: "0.14.1" },
+          ],
+          issues: [
+            { id: "i1", title: "compiler 0.13.2", stage: "s3", milestone: "m13" },
+            { id: "i2", title: "compiler 0.14.0", stage: "s3", milestone: "m14" },
+            { id: "i3", title: "neotrac 0.14.0", stage: "s9", milestone: "m14" },
+            { id: "i4", title: "compiler 0.14.1", stage: "s1", milestone: "m15" },
+          ],
+        },
+      },
+    });
+    renderScreen(source, () => {
+      const page = useView("projects::board_page");
+      const track = { field: "milestone", view: page, list: "milestones", shown: "title", columns: {}, above: true };
+      return (
+        <Switched id="projects::board_page.issues" label="Show issues as" options={["Table", "Board"]} track={{ ...track, by: "stage", over: page, overList: "stages", statusBy: "status" }} view={page} list="issues">
+          <Table view={page} list="issues" columns={{ title: "Title" }} track={track} />
+          <Board view={page} list="issues" by="stage" over={page} overList="stages" columns={{ title: "Title" }} track={track} statusBy="status" />
+        </Switched>
+      );
+    });
+    const once = () => {
+      const tracks = screen.getAllByRole("group", { name: "Milestone" });
+      expect(tracks.length).toBe(1);
+      // Above the switch.
+      const switcher = screen.getByRole("button", { name: "Table" });
+      expect(tracks[0]!.compareDocumentPosition(switcher) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    };
+    once();
+    expect(screen.getByRole("button", { name: /0\.13\.2/ }).querySelector("[aria-label=Succeeded]")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /0\.14\.0/ }).querySelector("[aria-label=Failed]")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /0\.14\.1/ }).querySelector("[role=img]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    once();
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("a table put in order", () => {
   it("moves a row with Alt and an arrow, giving it a place between its new neighbors", async () => {
     const source = memorySource({

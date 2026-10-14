@@ -305,10 +305,20 @@ namespace one::terminal::runtime {
 			std::string details;
 			for (const auto& d : record.details) details += (details.empty() ? "" : ", ") + d;
 			auto named = terminal::link(record.title, [model = *model, id = record.id] { model.pick(id); }, {.bold = true, .reverse = record.picked});
-			if (record.status == "success") named = terminal::row(terminal::text("●", colored(color::green)), std::move(named)).spacing(1);
+			// Its dot: green once every row in it has succeeded, red once any has failed.
+			if (record.status == "success" || record.status == "failed")
+				named = terminal::row(terminal::text("●", colored(record.status == "failed" ? color::red : color::green)), std::move(named)).spacing(1);
 			across.push_back(terminal::column(std::move(named), quiet(details)));
 		}
 		return terminal::column(quiet(model->label), terminal::row(std::move(across)).spacing(3));
+	}
+
+	terminal::view tracked(page& p, track_spec spec, state<view_state> view, std::string list, terminal::view below) {
+		const view_state& v = *view;
+		if (v.status != status::ready) return below;
+		auto shown = track(track_of(p, "", spec, rows_of(v, list), list));
+		if (!shown.get()) return below;
+		return terminal::column(std::move(shown), std::move(below)).spacing(1);
 	}
 
 	terminal::view filter_note(page& p) {
@@ -325,7 +335,8 @@ namespace one::terminal::runtime {
 		auto model = table_of(p, spec);
 		if (model.hidden) return {};
 		std::vector<terminal::view> parts;
-		if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
+		if (model.track && !model.track->above)
+			if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		std::vector<terminal::view> tools;
 		if (!spec.search.empty()) tools.push_back(terminal::field(model.query, {.placeholder = "Search"}).width(30));
@@ -542,7 +553,8 @@ namespace one::terminal::runtime {
 		auto model = board_of(p, spec);
 		if (model.loading) return quiet("Loading…");
 		std::vector<terminal::view> parts;
-		if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
+		if (model.track && !model.track->above)
+			if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		if (!spec.search.empty()) parts.push_back(terminal::field(model.query, {.placeholder = "Find cards"}).width(30));
 		if (model.offer) {

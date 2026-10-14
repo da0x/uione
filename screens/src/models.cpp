@@ -570,12 +570,23 @@ namespace one::screens {
 
 	// Lists
 
+	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown);
+
 	std::optional<track_model> track_of(page_base& p, const std::string& key, const std::optional<track_spec>& spec, const std::vector<value>& rows, const std::string& noun) {
 		if (!spec) return std::nullopt;
-		auto picking = p.kept<std::string>(key + ":track");
+		// A switch's track is one pick for every way it's shown.
+		auto picking = p.kept<std::string>((spec->key.empty() ? key : spec->key) + ":track");
 		const auto& records = rows_of(spec->view.get(), spec->list);
 		if (records.empty()) return std::nullopt;
-		track_model out{label(spec->field), {}, picking.get(), picking};
+		track_model out{label(spec->field), {}, picking.get(), picking, spec->above};
+		// Each stage's status, for each row's dot, as a board's card has it.
+		std::map<std::string, std::string> stage_status = spec->statuses;
+		bool staged = !spec->by.empty() && spec->over && (*spec->over)->status == status::ready;
+		if (staged && !spec->status_by.empty()) {
+			for (const auto& stage : rows_of(**spec->over, spec->over_list)) {
+				if (std::string said = show(field_of(stage, spec->status_by)); !said.empty()) stage_status[stage["id"].as_string()] = said;
+			}
+		}
 		for (const auto& record : records) {
 			std::string id = record["id"].as_string();
 			auto count = std::ranges::count_if(rows, [&](const value& row) { return field_of(row, spec->field).as_string() == id; });
@@ -588,6 +599,19 @@ namespace one::screens {
 			}
 			// One issue, two issues.
 			r.details.push_back(std::format("{} {}", count, count == 1 && noun.ends_with('s') ? noun.substr(0, noun.size() - 1) : noun));
+			// Failed once any row in it has, and succeeded once every row has.
+			if (staged && count > 0) {
+				bool all = true, any_failed = false;
+				for (const auto& row : rows) {
+					if (field_of(row, spec->field).as_string() != id) continue;
+					board_card dot;
+					std::string at = field_of(row, spec->by).as_string();
+					status_of(p, row, stage_status.contains(at) ? stage_status.at(at) : "", dot);
+					all = all && dot.status == "success";
+					any_failed = any_failed || dot.status == "failed";
+				}
+				r.status = any_failed ? "failed" : all ? "success" : "";
+			}
 			out.records.push_back(std::move(r));
 		}
 		return out;
@@ -754,8 +778,6 @@ namespace one::screens {
 		return out;
 	}
 
-	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown);
-
 	board_model board_of(page_base& p, const board_spec& spec) {
 		board_model out;
 		out.key = "board:" + spec.list;
@@ -769,9 +791,14 @@ namespace one::screens {
 		auto moved = p.kept<std::map<std::string, std::string>>(out.key + ":moved");
 		out.moving = p.kept<std::string>(out.key + ":moving");  // the card whose steps are offered
 		out.query = p.kept<std::string>(out.key + ":search");
-		const auto& all_rows = rows_of(v, spec.list);
 		auto all = ordered(p, out.key, spec.reorder, rows_of(v, spec.list));
-		out.track = track_of(p, out.key, spec.track, all, spec.list);
+		// The track's dots are worked out from the board's own stages, unless it's told others.
+		auto track = spec.track;
+		if (track && track->by.empty()) {
+			track->by = spec.by, track->over = spec.over, track->over_list = spec.over_list;
+			track->status_by = spec.status_by, track->statuses = spec.statuses;
+		}
+		out.track = track_of(p, out.key, track, all, spec.list);
 		// A move the view now shows is settled.
 		if (!moved.peek().empty()) {
 			auto settled = moved.peek();
@@ -877,40 +904,32 @@ namespace one::screens {
 			column.notify = std::ranges::contains(with.notify, column.id);
 			out.columns.push_back(std::move(column));
 		}
-		// A record of the track whose cards have all reached a success end has too.
-		if (out.track) {
-			std::map<std::string, std::string> status_of_card;
-			for (const auto& column : out.columns) {
-				for (const auto& card : column.cards) status_of_card[card.id] = card.status;
-			}
-			for (auto& record : out.track->records) {
-				bool any = false, all = true;
-				for (const auto& card : all_rows) {
-					if (field_of(card, spec.track->field).as_string() != record.id) continue;
-					any = true;
-					auto found = status_of_card.find(card["id"].as_string());
-					all = all && found != status_of_card.end() && found->second == "success";
-				}
-				if (any && all) record.status = "success";
-			}
-		}
 		// A card that arrives in a column that notifies chimes, once; those there when
-		// the board's first drawn don't.
+		// the board's first drawn don't. Every card counts, not only those a search or
+		// a pick on the track shows, so showing more of them chimes nothing.
 		if (!with.notify.empty()) {
 			auto seen = p.kept<std::optional<std::map<std::string, std::set<std::string>>>>(out.key + ":seen");
-			std::map<std::string, std::set<std::string>> now;
+			std::map<std::string, const board_column*> notifying;
 			for (const auto& column : out.columns) {
-				if (!column.notify) continue;
-				for (const auto& card : column.cards) now[column.id].insert(card.id);
+				if (column.notify) notifying[column.id] = &column;
+			}
+			std::map<std::string, std::set<std::string>> now;
+			std::map<std::string, std::string> title_of;
+			std::string title = spec.columns.empty() ? spec.shown : spec.columns.front().field;
+			for (const auto& card : all) {
+				std::string at = where(card);
+				if (!notifying.contains(at)) continue;
+				now[at].insert(card["id"].as_string());
+				title_of[card["id"].as_string()] = show(field_of(card, title));
 			}
 			if (seen.peek() && *seen.peek() != now) {
 				const auto& before = *seen.peek();
-				for (const auto& column : out.columns) {
-					auto was = before.find(column.id);
-					for (const auto& card : column.cards) {
-						// A card arriving where things fail chimes the error sound, not the one for done.
-						bool failing = with.statuses.contains(column.id) && with.statuses.at(column.id) == "failed";
-						if (column.notify && (was == before.end() || !was->second.contains(card.id))) chime(card.title + ": " + column.title, failing);
+				for (const auto& [at, cards] : now) {
+					auto was = before.find(at);
+					// A card arriving where things fail chimes the error sound, not the one for done.
+					bool failing = with.statuses.contains(at) && with.statuses.at(at) == "failed";
+					for (const auto& id : cards) {
+						if (was == before.end() || !was->second.contains(id)) chime(title_of[id] + ": " + notifying[at]->title, failing);
 					}
 				}
 			}
@@ -920,7 +939,20 @@ namespace one::screens {
 		return out;
 	}
 
+	namespace {
+		std::function<void(const std::string&, bool)>& heard_instead() {
+			static std::function<void(const std::string&, bool)> heard;
+			return heard;
+		}
+	}  // namespace
+
+	void chime_into(std::function<void(const std::string& message, bool failed)> heard) { heard_instead() = std::move(heard); }
+
 	void chime(const std::string& message, bool failed) {
+		if (heard_instead()) {
+			heard_instead()(message, failed);
+			return;
+		}
 		std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
 		bool installed = false;
 		for (std::size_t at = 0; at <= path.size();) {
@@ -1040,7 +1072,10 @@ namespace one::screens {
 		};
 		std::map<std::string, pipeline_lane> lanes;
 		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
-		for (const auto& card : rows_of(v, spec.list)) {
+		// In a switch, only what the track above it keeps.
+		auto cards = rows_of(v, spec.list);
+		if (auto kept_to = track_of(p, "pipeline:" + spec.list, spec.track, cards, spec.list)) std::erase_if(cards, [&](const value& row) { return !kept_to->keeps(row, spec.track->field); });
+		for (const auto& card : cards) {
 			if (!p.keeps(card)) continue;
 			auto said = words_of(field_of(card, spec.lanes));
 			auto kind = std::ranges::find_if(kinds, [&](const std::string& k) { return std::ranges::contains(said, k); });
@@ -1152,7 +1187,9 @@ namespace one::screens {
 		}
 		// Where each placed card is until the view says so too: x, y, w, h.
 		auto placed = p.kept<std::map<std::string, std::array<double, 4>>>(out.key + ":placed");
-		const auto& rows = rows_of(v, spec.list);
+		auto rows = rows_of(v, spec.list);
+		// In a switch, only what the track above it keeps.
+		if (auto kept_to = track_of(p, out.key, spec.track, rows, spec.list)) std::erase_if(rows, [&](const value& row) { return !kept_to->keeps(row, spec.track->field); });
 		if (!placed.peek().empty()) {
 			auto settled = placed.peek();
 			std::erase_if(settled, [&](const auto& m) {

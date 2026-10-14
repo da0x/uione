@@ -101,6 +101,9 @@ namespace one::terminal::runtime {
 	                       std::optional<tint_spec> tint = std::nullopt, std::vector<std::string> labels = {},
 	                       std::vector<std::string> files = {});
 	terminal::view track(const std::optional<track_model>& model);
+	// A switch's track, drawn once above it, with what's below it: the list's records
+	// as the track says, each with its dot, and the pick kept for every way it's shown.
+	terminal::view tracked(page& p, track_spec spec, state<view_state> view, std::string list, terminal::view below);
 
 	// Markdown, laid out by one::markdown for the width it's given.
 	terminal::view markdown_view(const std::string& source);

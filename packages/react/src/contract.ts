@@ -336,8 +336,9 @@ export interface TrackStep {
   noun: string; // what's counted, like issues
   selected: boolean;
   onSelect: () => void;
-  // Succeeded, as a green dot, once every row in it is at a success end.
-  status?: { is: "success"; words: string };
+  // Succeeded, as a green dot, once every row in it is at a success end; failed, as a
+  // red one, once any row in it has failed.
+  status?: { is: "success" | "failed"; words: string };
 }
 
 export interface BoardColumn {

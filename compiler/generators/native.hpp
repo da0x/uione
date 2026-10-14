@@ -116,6 +116,9 @@ namespace one::generators {
         const language::declaration* project_ = nullptr;
         std::string project_path_;
         const std::vector<language::field> no_fields_;
+        // In a switch: the track every way the list is shown keeps to, and whose pick it is.
+        const language::track_setting* group_track_ = nullptr;
+        std::string group_key_;
 
         // What a screen being written reads: its views, by variable, and the entities
         // its address names, which views per them are read for.
@@ -361,13 +364,55 @@ namespace one::generators {
             return "tint_spec{" + str(found->field) + ", " + native_detail::strings(found->order) + "}";
         }
 
-        std::string track_of(screen_parts& parts, const std::string& ns, const language::track_setting* setting) {
+        // A list's track; in a switch, the switch's, whichever way it's shown, its pick
+        // shared and drawn above it, with `more` said of it too, like its stages.
+        std::string track_of(screen_parts& parts, const std::string& ns, const language::track_setting* setting, const std::string& more = "") {
+            if (group_track_) setting = group_track_;
             if (!setting) return "";
             auto t = model_.track_of(ns, *setting);
             std::string columns;
             for (const auto& [key, label] : t.columns) columns += (columns.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label) + "}";
-            return "track_spec{" + str(t.field) + ", " + view_variable(parts, t.view) + ", " + str(t.list) + ", " + str(t.shown) + ", {" + columns + "}" +
-                   (setting->hide_empty ? ", true" : "") + "}";
+            std::string spec = "track_spec{" + str(t.field) + ", " + view_variable(parts, t.view) + ", " + str(t.list) + ", " + str(t.shown) + ", {" + columns + "}" +
+                               (setting->hide_empty ? ", true" : "") + "}";
+            if (!group_track_) return spec;
+            return "[&] { auto t = " + spec + "; t.key = " + str(group_key_) + "; t.above = true;" + more + " return t; }()";
+        }
+
+        // What a switch's track works its dots out from: the stages of its board, or
+        // else of its pipeline, as statements setting them on t.
+        std::string track_stages(screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& list, std::size_t from, std::size_t to) {
+            for (std::size_t i = from; i <= to; ++i) {
+                if (auto* b = std::get_if<language::board_item>(&list[i].node)) {
+                    std::string out = " t.by = " + str(b->by) + ";";
+                    if (b->over.parts.empty()) {
+                        const language::entity_declaration* entity = model_.listed(ns, b->view.text(), b->list);
+                        if (!entity) return "";
+                        auto stages = model_.stages_written(ns, *entity, b->by);
+                        std::string listed, statuses;
+                        auto quoted = [](const std::string& text) {
+                            std::string out = "\"";
+                            for (char c : text) out += c == '"' || c == '\\' ? std::string("\\") + c : std::string(1, c);
+                            return out + "\"";
+                        };
+                        for (const auto& [id, title] : stages.stages) listed += (listed.empty() ? "" : ",") + std::string("{\"id\":") + quoted(id) + ",\"title\":" + quoted(title) + "}";
+                        for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + std::string("{") + str(stage) + ", " + str(status) + "}";
+                        out += " t.over = state<view_state>(view_state{status::ready, ember::parse_json(" + str("{\"stages\":[" + listed + "]}") + ")}); t.over_list = \"stages\";";
+                        if (!statuses.empty()) out += " t.statuses = {" + statuses + "};";
+                    } else {
+                        out += " t.over = " + view_variable(parts, screens::full_view(ns, b->over.text())) + "; t.over_list = " + str(b->over_list) + ";";
+                        if (!b->status_field.empty()) out += " t.status_by = " + str(b->status_field) + ";";
+                    }
+                    return out;
+                }
+            }
+            for (std::size_t i = from; i <= to; ++i) {
+                if (auto* l = std::get_if<language::pipeline_item>(&list[i].node)) {
+                    std::string out = " t.by = " + str(l->by) + "; t.over = " + view_variable(parts, screens::full_view(ns, l->over.text())) + "; t.over_list = " + str(l->over_list) + ";";
+                    if (!l->status_field.empty()) out += " t.status_by = " + str(l->status_field) + ";";
+                    return out;
+                }
+            }
+            return "";
         }
 
         std::string reorder_of(screen_parts& parts, const std::string& ns, const std::optional<std::string>& field, const language::entity_declaration* entity) {
@@ -652,6 +697,7 @@ namespace one::generators {
             out += ", .lanes = " + str(c.lanes) + ", .path = " + str(c.path);
             if (!c.status_field.empty()) out += ", .status_by = " + str(c.status_field);
             if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) out += ", .waits_on = " + str(waits);
+            if (group_track_) out += ", .track = " + track_of(parts, ns, nullptr);
             return out + "})";
         }
 
@@ -679,6 +725,7 @@ namespace one::generators {
             if (!c.regions.empty()) out += ", .regions = " + str(c.regions);
             if (c.move) out += ", .move = " + str(screens::full_command(ns, c.move->command));
             if (c.resize) out += ", .resize = " + str(screens::full_command(ns, *c.resize));
+            if (group_track_) out += ", .track = " + track_of(parts, ns, nullptr);
             return out + "})";
         }
 
@@ -1094,6 +1141,15 @@ namespace one::generators {
                         for (std::size_t i = at; i <= last; ++i) {
                             if (auto* t = std::get_if<language::table_item>(&list[i].node); t && !beside) beside = t;
                         }
+                        // One track for them all, the first that says one, drawn once above
+                        // the switch, its pick kept to whichever way it's shown.
+                        const language::track_setting* shared = nullptr;
+                        for (std::size_t i = at; i <= last && !shared; ++i) {
+                            if (auto* t = std::get_if<language::table_item>(&list[i].node); t && t->track) shared = &*t->track;
+                            if (auto* b = std::get_if<language::board_item>(&list[i].node); b && b->track) shared = &*b->track;
+                        }
+                        std::string id = screens::full_view(ns, here->view) + "." + here->list;
+                        group_track_ = shared, group_key_ = "switched:" + id;
                         std::string names, ways, start;
                         for (std::size_t i = at; i <= last; ++i) {
                             const auto& one = list[i];
@@ -1106,8 +1162,13 @@ namespace one::generators {
                         }
                         std::string words = screens::label(here->list);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
-                        code = "switched(p, " + str(screens::full_view(ns, here->view) + "." + here->list) + ", " + str("Show " + words + " as") + ", {" + names + "}, " +
+                        code = "switched(p, " + str(id) + ", " + str("Show " + words + " as") + ", {" + names + "}, " +
                                (start.empty() ? std::string("0") : start + "-1") + ways + ")";
+                        if (shared) {
+                            std::string track = track_of(parts, ns, shared, track_stages(parts, ns, list, at, last));
+                            code = "tracked(p, " + track + ", " + view_variable(parts, screens::full_view(ns, here->view)) + ", " + str(here->list) + ", " + code + ")";
+                        }
+                        group_track_ = nullptr;
                         at = last;
                         grouped = true;
                     }

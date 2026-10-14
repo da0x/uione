@@ -1573,8 +1573,13 @@ screen "Book" /books/:book {
   next, like a project's milestones, sprints or versions as a timeline. Each card
   shows its title, what the block names, like its date, and how many rows it holds.
   Picking one keeps the rows whose `milestone` is it, and picking it again shows
-  them all. The one picked is in the path, `/milestone/beta`. A board beside the
-  table takes its track, and a board's own block can say `track` too.
+  them all. The one picked is in the path, `/milestone/beta`. A board's own block
+  can say `track` too.
+- A table, a board, a pipeline and a whiteboard of the same list, switched between,
+  have one track, the first any of them says: it's drawn once, above the switch,
+  the same whichever is shown, and each keeps to its pick. Each card has a dot when
+  its rows have one, as a board's stages give them: green once every row in it has
+  succeeded, red once any has failed.
 
 ```one
 table board_page.issues by stage over board_page.stages link /:project/:issue {

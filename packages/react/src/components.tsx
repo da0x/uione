@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { BoardCard, CanvasRegion, FieldProps, Filtered, Hue, LinkProps, PipelineRow } from "./contract.js";
+import type { BoardCard, CanvasRegion, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1206,6 +1206,17 @@ export interface TrackSpec {
   shown?: string; // what a card is called, like title
   columns: Record<string, string>; // what else a card shows, like { due: "Due" }
   hideEmpty?: boolean; // a record none of the rows names isn't on it, unless it's picked
+  // In a switch, drawn once above it rather than by each way the list is shown, which
+  // still keeps to its pick.
+  above?: boolean;
+  // What each record's dot is worked out from, as a board's cards' are: the rows' field
+  // naming their stage, the stages, and each stage's status, by a field of its own or
+  // as written.
+  by?: string;
+  over?: ViewState;
+  overList?: string;
+  statusBy?: string;
+  statuses?: Record<string, string>;
 }
 
 // The rows a track keeps, and the track itself, drawn above them. The record picked
@@ -1217,6 +1228,26 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
   const [part, setPart] = usePathNamed(track?.field ?? "track");
   if (!track) return { keeps: () => true, element: null };
   const records = rowsOf(track.view.data?.[track.list]);
+  // Each row's dot from the stages the track's told of, where the list's own isn't given.
+  if (!statusOfRow && track.by && track.over) {
+    const stageStatus: Record<string, string> = { ...(track.statuses ?? {}) };
+    if (track.statusBy) {
+      for (const stage of rowsOf(track.over.data?.[track.overList ?? ""])) {
+        if (stage[track.statusBy]) stageStatus[stage.id] = String(stage[track.statusBy]);
+      }
+    }
+    const by = track.by;
+    statusOfRow = (row) => going(row, stageStatus[String(row[by])], Date.now()).status?.is;
+  }
+  // Failed once any row in it has, and succeeded once every row has.
+  const statusOfRecord = (id: string): TrackStep["status"] => {
+    const inIt = rows.filter((row) => row[track.field] === id);
+    if (!statusOfRow || inIt.length === 0) return undefined;
+    const statuses = inIt.map((row) => statusOfRow!(row));
+    if (statuses.includes("failed")) return { is: "failed", words: "Failed" };
+    if (statuses.every((status) => status === "success")) return { is: "success", words: "Succeeded" };
+    return undefined;
+  };
   // A record is named in the path by what sets it apart, like beta of neotrac-beta.
   const ids = records.map((record) => record.id);
   const start = ids.length > 1 ? sharedStart(ids) : (ids[0] ?? "").slice(0, (ids[0] ?? "").lastIndexOf("-") + 1);
@@ -1224,7 +1255,7 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
   const keeps = (row: Row) => !picked || row[track.field] === picked;
   // Without rows of its own, a record is left out when the track says so, unless it's picked.
   const shownRecords = track.hideEmpty ? records.filter((record) => record.id === picked || rows.some((row) => row[track.field] === record.id)) : records;
-  const element = shownRecords.length > 0 && (
+  const element = !track.above && shownRecords.length > 0 && (
     <ui.Track
       label={label(track.field)}
       steps={shownRecords.map((record) => ({
@@ -1235,10 +1266,7 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
           .filter((detail) => detail !== ""),
         count: rows.filter((row) => row[track.field] === record.id).length,
         noun,
-        // Every row in it at a success end: it's succeeded too.
-        ...(statusOfRow && rows.some((row) => row[track.field] === record.id) && rows.filter((row) => row[track.field] === record.id).every((row) => statusOfRow(row) === "success")
-          ? { status: { is: "success" as const, words: "Succeeded" } }
-          : {}),
+        ...(statusOfRecord(record.id) ? { status: statusOfRecord(record.id) } : {}),
         selected: record.id === picked,
         onSelect: () => {
           setPart(record.id === picked ? "" : record.id.slice(start.length));
@@ -1663,6 +1691,7 @@ export function Pipeline({
   path = "kinds",
   statusBy,
   waitsOn,
+  track,
 }: {
   view: ViewState;
   list: string;
@@ -1678,11 +1707,14 @@ export function Pipeline({
   path?: string;
   statusBy?: string;
   waitsOn?: string; // the field listing what a card waits on: while any hasn't succeeded, it's waiting, saying on what
+  track?: TrackSpec; // in a switch, the track above, whose pick keeps its cards
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
-  const cards = rowsOf(view.data?.[list]);
+  const every = rowsOf(view.data?.[list]);
+  const kept = useTrack(track, every, list);
+  const cards = every.filter(kept.keeps);
   const now = useNow(cards.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
   const words = (field: unknown): string[] => (Array.isArray(field) ? field.map((w) => show(w)) : show(field) ? [show(field)] : []);
   const stages = rowsOf(over.data?.[overList]).map((row) => ({
@@ -1771,6 +1803,7 @@ export function Canvas({
   regions,
   move,
   resize,
+  track,
 }: {
   view: ViewState;
   list: string;
@@ -1796,13 +1829,16 @@ export function Canvas({
   regions?: string; // over's field keeping each region's width, a band down the canvas for each
   move?: string; // the command a card let go in another region is moved there by
   resize?: string; // the command a region's new width is sent to
+  track?: TrackSpec; // in a switch, the track above, whose pick keeps its cards
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const navigate = useNavigate();
   const runner = useConfirmedRunner();
-  const rows = rowsOf(view.data?.[list]);
+  const every = rowsOf(view.data?.[list]);
+  const kept = useTrack(track, every, list);
+  const rows = every.filter(kept.keeps);
   const now = useNow(rows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
   const { matches } = useFilter();
   // Where each placed card is until the view says so too.
@@ -2009,6 +2045,9 @@ export function Switched({
   options,
   icons = [],
   start = -1,
+  track,
+  view,
+  list = "rows",
   children,
 }: {
   id: string;
@@ -2016,9 +2055,15 @@ export function Switched({
   options: string[];
   icons?: string[]; // drawn for each option instead of its name, like table and board
   start?: number; // the one shown until the person picks, like the one a board's style says; the first when it's -1
+  // One track for every way the list is shown, drawn above the switch: its records'
+  // dots from the stages it's told of, and its pick in the address, which each keeps to.
+  track?: TrackSpec;
+  view?: ViewState;
+  list?: string;
   children: ReactNode;
 }) {
   const ui = useUI();
+  const tracked = useTrack(track && { ...track, above: false }, rowsOf(view?.data?.[list]), list);
   const key = `uione:switch:${id}`;
   // What's shown is in the address, like issues.view=board, so a link shows the same;
   // the person's last pick is remembered too, and put in the address when they come
@@ -2059,6 +2104,7 @@ export function Switched({
   if (!isValidElement<{ tools?: ReactNode }>(shown)) return shown ?? null;
   return (
     <ToolbarSlot.Provider value={slot}>
+      {tracked.element}
       <div className="uione-toolbar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
         <div ref={setSlot} style={{ display: "contents" }} />
         {switcher}

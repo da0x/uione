@@ -33,7 +33,8 @@ namespace one::desktop::runtime {
 		auto model = board_of(p, spec);
 		if (model.loading) return desktop::text("Loading…", t.quiet());
 		std::vector<desktop::view> parts;
-		if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
+		if (model.track && !model.track->above)
+			if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
 		p.wide();  // a board takes the window's width
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		if (!spec.search.empty()) parts.push_back(desktop::row(desktop::field(model.query, {.placeholder = "Find cards"}).width(320)));

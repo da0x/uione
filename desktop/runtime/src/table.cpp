@@ -77,9 +77,10 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> inside;
 			auto heading_style = t.strong();
 			if (record.picked) heading_style.color = t.accent;
-			if (record.status == "success") {
+			// Its dot: green once every row in it has succeeded, red once any has failed.
+			if (record.status == "success" || record.status == "failed") {
 				auto dot = t.body();
-				dot.color = t.success;
+				dot.color = record.status == "failed" ? t.danger : t.success;
 				inside.push_back(desktop::row(desktop::text("●", dot), desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style)).spacing(6));
 			} else {
 				inside.push_back(desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style));
@@ -93,6 +94,14 @@ namespace one::desktop::runtime {
 			                                       .border_width = record.picked ? 1.5f : 1, .radius = t.corners}));
 		}
 		return desktop::column(desktop::text(model->label, t.quiet()), desktop::scroll_across(desktop::row(std::move(cards_shown)).spacing(10).align(align::start))).spacing(6);
+	}
+
+	desktop::view tracked(page& p, track_spec spec, state<view_state> view, std::string list, desktop::view below) {
+		const view_state& v = *view;
+		if (v.status != status::ready) return below;
+		auto shown = track(track_of(p, "", spec, rows_of(v, list), list));
+		if (!shown.get()) return below;
+		return desktop::column(std::move(shown), std::move(below)).spacing(12);
 	}
 
 	desktop::view table(page& p, table_spec spec) {
@@ -109,7 +118,8 @@ namespace one::desktop::runtime {
 		auto model = table_of(p, spec);
 		if (model.hidden) return {};
 		std::vector<desktop::view> parts;
-		if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
+		if (model.track && !model.track->above)
+			if (auto shown = track(model.track); shown.get()) parts.push_back(std::move(shown));
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
 		std::vector<desktop::view> tools;
 		if (!spec.search.empty()) tools.push_back(desktop::field(model.query, {.placeholder = "Search"}).width(280));

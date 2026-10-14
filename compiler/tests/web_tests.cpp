@@ -1609,7 +1609,7 @@ TEST_CASE("a form deleting what its address names goes to the page it's under, o
     fs::remove_all(dir);
 }
 
-TEST_CASE("a track draws a list's records above a table, and a board beside it takes it too") {
+TEST_CASE("a track of a table and a board switched between is drawn once above the switch, both keeping to it") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-track";
     fs::remove_all(dir);
@@ -1632,9 +1632,12 @@ TEST_CASE("a track draws a list's records above a table, and a board beside it t
     auto files = generate_at(dir.string());
     const auto* screens = find(files, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
-    std::string track = R"( track={{ field: "release", view: desk, list: "releases", shown: "title", columns: { due: "Ships" } }})";
+    // Each keeps to it without drawing it; the switch draws it, its dots from the board's columns.
+    std::string track = R"( track={{ field: "release", view: desk, list: "releases", shown: "title", columns: { due: "Ships" }, above: true }})";
     CHECK(screens->content.find("<Table view={desk} list=\"tickets\" columns={{ title: \"Title\" }}" + track) != std::string::npos);
     CHECK(screens->content.find("columns={{ title: \"Title\" }}" + track + " />") != std::string::npos);
+    CHECK(screens->content.find(R"( track={{ field: "release", view: desk, list: "releases", shown: "title", columns: { due: "Ships" }, above: true, by: "column", over: desk, overList: "columns" }} view={desk} list="tickets">)") !=
+          std::string::npos);
     CHECK(screens->content.find("shown: true") != std::string::npos);
     fs::remove_all(dir);
 }

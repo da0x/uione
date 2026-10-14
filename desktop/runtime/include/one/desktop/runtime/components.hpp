@@ -116,5 +116,8 @@ namespace one::desktop::runtime {
 
 	// The cards above a list for another list's records, picking one keeping its rows.
 	desktop::view track(const std::optional<track_model>& model);
+	// A switch's track, drawn once above it, with what's below it: the list's records
+	// as the track says, each with its dot, and the pick kept for every way it's shown.
+	desktop::view tracked(page& p, track_spec spec, state<view_state> view, std::string list, desktop::view below);
 
 }  // namespace one::desktop::runtime
