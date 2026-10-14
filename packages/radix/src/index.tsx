@@ -917,8 +917,10 @@ export const radix: ComponentSet = {
   // timeline: an arrow from each to the next, each its title, what else it shows,
   // like its date, and how many rows it holds; the one picked stands out, pressed.
   // On a narrow page the row scrolls sideways rather than wrapping, to stay a line.
+  // A track, compact: each card its dot, its title and how many it holds on one line,
+  // what else it shows under them.
   Track: ({ label, steps }) => (
-    <div role="group" aria-label={label} className="-mx-1 flex items-stretch gap-1 overflow-x-auto px-1 pt-1 pb-3">
+    <div role="group" aria-label={label} className="-mx-1 flex min-w-0 items-stretch gap-1 overflow-x-auto px-1 py-1">
       {steps.map((step, i) => (
         <Fragment key={step.id}>
           {i > 0 && (
@@ -931,24 +933,26 @@ export const radix: ComponentSet = {
             aria-pressed={step.selected}
             onClick={step.onSelect}
             className={
-              "flex w-56 shrink-0 flex-col items-start gap-1 rounded-box border p-4 text-left shadow-panel transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden " +
+              "flex min-w-36 shrink-0 flex-col items-start gap-0.5 rounded-box border px-3 py-1.5 text-left shadow-panel transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden " +
               (step.selected ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent")
             }
           >
-            <span className={"inline-flex items-center gap-2 text-lg leading-snug font-semibold " + (step.selected ? "text-accent" : "text-ink")}>
-              {step.status && <span role="img" aria-label={step.status.words} title={step.status.words} className="size-2.5 shrink-0 rounded-full" style={{ background: statusColors[step.status.is] }} />}
-              {step.title}
+            <span className="inline-flex w-full items-baseline gap-2">
+              <span className={"inline-flex items-center gap-2 font-semibold " + (step.selected ? "text-accent" : "text-ink")}>
+                {step.status && <span role="img" aria-label={step.status.words} title={step.status.words} className="size-2 shrink-0 rounded-full" style={{ background: statusColors[step.status.is] }} />}
+                {step.title}
+              </span>
+              <span className="ml-auto pl-2 text-xs text-muted">
+                <span className="font-semibold text-ink tabular-nums">{step.count}</span> {step.count === 1 ? step.noun.replace(/s$/, "") : step.noun}
+              </span>
             </span>
             {step.details.length > 0 && (
-              <span className="flex flex-wrap gap-x-3 text-sm text-muted">
+              <span className="flex flex-wrap gap-x-3 text-xs text-muted">
                 {step.details.map((detail, at) => (
                   <span key={at}>{detail}</span>
                 ))}
               </span>
             )}
-            <span className="mt-auto text-sm text-muted">
-              <span className="font-semibold text-ink tabular-nums">{step.count}</span> {step.count === 1 ? step.noun.replace(/s$/, "") : step.noun}
-            </span>
           </button>
         </Fragment>
       ))}

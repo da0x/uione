@@ -2105,17 +2105,19 @@ export function Switched({
   const switcher = (
     <ui.Switch label={says} options={options.map((option, at) => ({ label: option, icon: icons[at], selected: at === picked, onSelect: () => pick(at) }))} />
   );
-  // It sits on a line of its own above what's shown, with what's shown's search box and
-  // buttons, which stay there whichever is shown.
+  // It sits above what's shown, on the track's line when there's room, with what's
+  // shown's search box and buttons, which stay there whichever is shown.
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const shown = Children.toArray(children)[picked];
   if (!isValidElement<{ tools?: ReactNode }>(shown)) return shown ?? null;
   return (
     <ToolbarSlot.Provider value={slot}>
-      {tracked.element}
-      <div className="uione-toolbar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
-        <div ref={setSlot} style={{ display: "contents" }} />
-        {switcher}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 1rem" }}>
+        {tracked.element && <div style={{ flex: "1 1 24rem", minWidth: 0 }}>{tracked.element}</div>}
+        <div className="uione-toolbar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem", marginLeft: "auto" }}>
+          <div ref={setSlot} style={{ display: "contents" }} />
+          {switcher}
+        </div>
       </div>
       {shown}
     </ToolbarSlot.Provider>
