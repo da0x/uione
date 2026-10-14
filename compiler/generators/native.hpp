@@ -1098,7 +1098,8 @@ namespace one::generators {
                 } else if (auto* t = std::get_if<language::table_item>(&item.node)) {
                     // A board of the same list right after it: the two are one, shown as the person picks.
                     auto* b = at + 1 < list.size() ? std::get_if<language::board_item>(&list[at + 1].node) : nullptr;
-                    if (b && b->view.text() == t->view.text() && b->list == t->list && !item.when && !list[at + 1].when) {
+                    bool same_when = !item.when ? !list[at + 1].when : list[at + 1].when && condition(parts, ns, *item.when) == condition(parts, ns, *list[at + 1].when);
+                    if (b && b->view.text() == t->view.text() && b->list == t->list && same_when) {
                         std::string listed = t->list ? *t->list : "rows";
                         std::string words = screens::label(listed);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));

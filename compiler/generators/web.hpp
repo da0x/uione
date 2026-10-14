@@ -1079,16 +1079,20 @@ namespace one::generators {
                     // A board of the same list right after it: the two are one, shown as
                     // the person picks, a table or a board.
                     auto* board = at + 1 < items.size() ? std::get_if<language::board_item>(&items[at + 1].node) : nullptr;
-                    if (board && board->view.text() == table->view.text() && board->list == table->list && !item.when && !items[at + 1].when) {
+                    // The two shown while the same condition holds stay one, shown while it holds.
+                    bool same_when = !item.when ? !items[at + 1].when : items[at + 1].when && condition(parts, ns, *item.when) == condition(parts, ns, *items[at + 1].when);
+                    if (board && board->view.text() == table->view.text() && board->list == table->list && same_when) {
                         parts.components.insert("Switched");
                         std::string list = table->list ? *table->list : "rows";
                         std::string words = web_detail::label(list);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
-                        out.open("<Switched id=" + web_detail::js_string(full_view(ns, table->view.text()) + "." + list) + " label=" +
-                                 web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]} icons={[\"table\", \"board\"]}>");
-                        this->table(out, parts, ns, *table, screen);
-                        this->board(out, parts, ns, *board, screen, table);
-                        out.close("</Switched>");
+                        shown_while(out, parts, ns, item, [&] {
+                            out.open("<Switched id=" + web_detail::js_string(full_view(ns, table->view.text()) + "." + list) + " label=" +
+                                     web_detail::js_string("Show " + words + " as") + " options={[\"Table\", \"Board\"]} icons={[\"table\", \"board\"]}>");
+                            this->table(out, parts, ns, *table, screen);
+                            this->board(out, parts, ns, *board, screen, table);
+                            out.close("</Switched>");
+                        });
                         ++at;
                         continue;
                     }

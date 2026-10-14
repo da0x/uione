@@ -203,6 +203,9 @@ view wall_page per wall {
 	}
 }
 screen "{wall_page.title}" /walls/:wall {
+	table wall_page.ideas by stage over wall_page.stages when wall_page.style == style::kanban {
+		title
+	}
 	board wall_page.ideas by stage over wall_page.stages when wall_page.style == style::kanban {
 		title
 	}
@@ -226,8 +229,10 @@ screen "{wall_page.title}" /walls/:wall {
     CAPTURE(screen->content);
     CHECK(screen->content.find(R"(place="ideas::idea::place" grid={{ step: 160, x: 40, y: 80 }} by="stage")") != std::string::npos);
     CHECK(screen->content.find(R"(kind="kind")") != std::string::npos);
-    // Each shown only while its condition holds.
+    // Each shown only while its condition holds; a table and a board shown while the
+    // same one holds are still one, switched between.
     CHECK(screen->content.find(R"(=== "kanban")) && (<>)") != std::string::npos);
+    CHECK(screen->content.find("<Switched") != std::string::npos);
     CHECK(screen->content.find(R"(=== "canvas")) && (<>)") != std::string::npos);
     auto native = generators::generate_native(files, root + "/examples/tasks", "desktop");
     auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("canvas_board(p, {") != std::string::npos; });
