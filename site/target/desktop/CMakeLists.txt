@@ -10,14 +10,14 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # uione's libraries: a checkout of uione named by UIONE, or the release installed with
-# the compiler, in ~/.local/share/uione/0.14.1.
+# the compiler, in ~/.local/share/uione/0.14.2.
 # UIONE in the environment wins over what an earlier configure cached.
 set(UIONE "" CACHE PATH "a checkout of uione, or its release's libraries")
 if(DEFINED ENV{UIONE} AND NOT "$ENV{UIONE}" STREQUAL "")
 	set(UIONE "$ENV{UIONE}")
 endif()
 if(NOT UIONE)
-	set(UIONE "$ENV{HOME}/.local/share/uione/0.14.1")
+	set(UIONE "$ENV{HOME}/.local/share/uione/0.14.2")
 endif()
 add_subdirectory(${UIONE}/desktop ${CMAKE_BINARY_DIR}/uione-desktop EXCLUDE_FROM_ALL)
 
