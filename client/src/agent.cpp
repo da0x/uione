@@ -116,6 +116,12 @@ namespace one::client {
 			logs = (state.empty() ? std::filesystem::path(setting("HOME")) / ".local" / "state" : std::filesystem::path(state)) / what.name;
 		}
 		std::filesystem::create_directories(logs);
+		// Which of the agents working these stages this is, shown on what it works.
+		std::string runner = setting("ONE_AGENT_ID");
+		if (runner.empty()) {
+			std::mt19937 seed{std::random_device{}()};
+			runner = std::to_string(std::uniform_int_distribution<int>(1, 999)(seed));
+		}
 		auto me = app.me();
 
 		// The latest of each queue the rules read, for the role the agent works as.
@@ -140,7 +146,7 @@ namespace one::client {
 		}
 		std::signal(SIGINT, [](int) { stopping = 1; });
 		std::signal(SIGTERM, [](int) { stopping = 1; });
-		std::println(stderr, "{} is working as {}; waiting for what arrives.", what.name, me.name);
+		std::println(stderr, "{} {} is working as {}; waiting for what arrives.", what.name, runner, me.name);
 
 		std::map<std::string, running> working;  // by record id
 		std::set<std::string> tried;  // taken by someone else as it was asked for; asked again once a queue changes
@@ -148,6 +154,16 @@ namespace one::client {
 		std::mt19937 generator{std::random_device{}()};
 		std::uniform_int_distribution<int> chance(0, 300);
 		auto run = [&](const std::string& command, const std::map<std::string, ember::value>& fields) { app.run(command, ember::value(fields)); };
+		// What it says of what it holds, for a board to show: its status, since when,
+		// and which runner; a null takes one out.
+		auto report = [&](const agent_rule& rule, const std::string& id, std::map<std::string, ember::value> data) {
+			try {
+				run(rule.entity + "::report", {{"id", id}, {"data", ember::value(std::move(data))}});
+			} catch (const refused& e) {
+				std::println(stderr, "{}: couldn't say how it's going: {}", id, e.what());
+			}
+		};
+		auto now_said = [] { return std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())); };
 
 		// Runs the stage's program on a record it holds, in a folder of its own.
 		auto start = [&](const agent_rule& rule, const ember::value& record) {
@@ -181,6 +197,7 @@ namespace one::client {
 			::close(input[1]);
 			std::println(stderr, "{} in {}: running {}", called(record), rule.stage, script);
 			working[id] = {&rule, record, child, root, log, std::chrono::steady_clock::now()};
+			report(rule, id, {{"status", "working"}, {"since", now_said()}, {"runner", runner}});
 		};
 
 		// Moves a record on once its program has ended: to then, to else, or lets it go.
@@ -189,11 +206,13 @@ namespace one::client {
 			const agent_rule& rule = *r.rule;
 			try {
 				if (fine) {
+					report(rule, id, {{"status", ember::value()}, {"since", ember::value()}, {"runner", ember::value()}});
 					run(rule.entity + "::move", {{"id", id}, {rule.along, rule.then}});
 					std::println(stderr, "{}: done, moved to {}", called(r.record), rule.then);
 				} else {
 					std::string why = WIFEXITED(status) ? "exited " + std::to_string(WEXITSTATUS(status)) : "was stopped";
 					std::println(stderr, "{}: {} {}, its log {}:\n{}", called(r.record), rule.program, why, r.log.string(), end_of(r.log));
+					report(rule, id, {{"status", "failed"}, {"since", now_said()}, {"runner", ember::value()}, {"note", rule.program + " " + why}});
 					if (!rule.otherwise.empty()) {
 						run(rule.entity + "::move", {{"id", id}, {rule.along, rule.otherwise}});
 						std::println(stderr, "{}: moved to {}", called(r.record), rule.otherwise);
@@ -289,6 +308,7 @@ namespace one::client {
 		for (auto& [id, r] : working) {
 			::kill(r.child, SIGTERM);
 			::waitpid(r.child, nullptr, 0);
+			report(*r.rule, id, {{"status", ember::value()}, {"since", ember::value()}, {"runner", ember::value()}});
 			try {
 				run(r.rule->entity + "::release", {{"id", id}});
 			} catch (const refused&) {

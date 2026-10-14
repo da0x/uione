@@ -466,17 +466,17 @@ namespace one::language {
                     error(w.where, w.entity + " is worked by a " + in + "'s roles, so it needs its " + in + ": " + in + "  " + in + "  required");
                     return "";
                 }
-                for (const char* own : {"held_by", "held_until"}) {
-                    if (const field* f = field_named(moving, own)) error(f->where, std::string("the workflow keeps who holds ") + a(w.entity) + " in " + own + "; take out this field");
+                for (const char* own : {"held_by", "held_until", "data"}) {
+                    if (const field* f = field_named(moving, own)) error(f->where, std::string("the workflow keeps who holds ") + a(w.entity) + ", and what they say of it, in " + own + "; take out this field");
                 }
                 bool taken = false;
-                for (const char* command : {"claim", "renew", "release", "move"}) {
+                for (const char* command : {"claim", "renew", "release", "report", "move"}) {
                     if (commands.contains(full(ns, w.entity + "::" + command))) {
                         error(w.where, "the workflow makes " + w.entity + "::" + command + "; take out the one declared");
                         taken = true;
                     }
                 }
-                if (taken || field_named(moving, "held_by") || field_named(moving, "held_until")) return "";
+                if (taken || field_named(moving, "held_by") || field_named(moving, "held_until") || field_named(moving, "data")) return "";
                 return in;
             }
 
@@ -487,14 +487,16 @@ namespace one::language {
             // the commands every workflow has, and the lease they keep.
             static std::string commanded(const define_workflow_declaration& w, const std::string& claim, const std::string& move, const std::string& waits = "") {
                 const std::string& e = w.entity;
-                std::string text = "entity lease {\n\theld_by  user\n\theld_until  date\n}\n";
+                std::string text = "entity lease {\n\theld_by  user\n\theld_until  date\n\tdata  data\n}\n";
                 text += "command " + e + "::claim {\n\trequire \"this " + w.by + " isn't worked by a role you hold\" {\n\t\t" + claim +
-                        "\n\t}\n\trequire " + free + "  \"someone else holds it\"\n\theld_by = me\n\theld_until = " + lease(w) + "\n}\n";
+                        "\n\t}\n\trequire held_by == none || held_until < now  \"it's taken already\"\n\theld_by = me\n\theld_until = " + lease(w) + "\n}\n";
                 text += "command " + e + "::renew {\n\trequire held_by == me  \"you don't hold it\"\n\theld_until = " + lease(w) + "\n}\n";
                 text += "command " + e + "::release {\n\trequire held_by == me  \"you don't hold it\"\n\theld_by = none\n\theld_until = none\n}\n";
+                // What whoever holds it says of it, like its status and since when.
+                text += "command " + e + "::report {\n\tchanges data\n\trequire held_by == me  \"you don't hold it\"\n}\n";
                 text += "command " + e + "::move {\n\tchanges " + w.by + "\n\trequire \"your role doesn't move " + a(e) +
                         " from there to there\" {\n\t\t" + move + "\n\t}\n" + waits + "\trequire " + free +
-                        "  \"someone else holds it\"\n\theld_by = none\n\theld_until = none\n}\n";
+                        "  \"someone else holds it\"\n\tif held_by != me {\n\t\tclear data\n\t}\n\theld_by = none\n\theld_until = none\n}\n";
                 return text;
             }
 
@@ -702,7 +704,7 @@ namespace one::language {
                 // What's worked, with every field of each, and who holds it.
                 std::string rows;
                 for (const auto& f : moving.fields) rows += "  " + f.name;
-                rows += "  held_by  held_by.name  held_until";
+                rows += "  held_by  held_by.name  held_until  data";
                 text += "view " + w.entity + "_work per role {\n\treaders member\n\titems = each " + w.entity + " where " + in + " == role." + in +
                         " && (" + work + ") {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
                 said(w, moving, text, declarations, path, made_here);
@@ -719,7 +721,7 @@ namespace one::language {
                     for (auto& each : view->each) {
                         auto* source = each.source ? std::get_if<name_expression>(&each.source->node) : nullptr;
                         if (!source || each.changes || !moving.contains(full(ns, source->name.text()))) continue;
-                        for (const char* field : {"held_by", "held_until"}) {
+                        for (const char* field : {"held_by", "held_until", "data"}) {
                             bool there = std::any_of(each.rows.begin(), each.rows.end(), [&](const view_value& row) {
                                 auto* named = row.value ? std::get_if<name_expression>(&row.value->node) : nullptr;
                                 return (row.name && *row.name == field) || (!row.name && named && named->name.text() == field);
@@ -886,7 +888,7 @@ namespace one::language {
                     std::string rows;
                     for (const auto& f : moving->fields) rows += "  " + f.name;
                     if (field_named(*stage, "title")) rows += "  " + w->by + ".title";
-                    rows += "  " + w->by + "." + w->worked_by + "  held_by  held_by.name  held_until";
+                    rows += "  " + w->by + "." + w->worked_by + "  held_by  held_by.name  held_until  data";
                     text += "view " + e + "_work per role {\n\treaders member\n\titems = each " + e + " where " + w->by + "." + w->worked_by +
                             " has role.id {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
                     said(*w, *moving, text, declarations, *path, made_here);
@@ -896,7 +898,7 @@ namespace one::language {
                 for (auto& [w, declarations, path, ns] : workflows) {
                     if (!entities.contains(full(ns, w->entity)) || said_in_full.contains(w)) continue;
                     std::string text;
-                    for (const char* command : {"claim", "renew", "release", "move"}) {
+                    for (const char* command : {"claim", "renew", "release", "report", "move"}) {
                         if (!commands.contains(full(ns, w->entity + "::" + command))) text += "command " + w->entity + "::" + command + "\n";
                     }
                     diagnostics ignored;
@@ -1029,7 +1031,36 @@ namespace one::language {
 
     } // namespace lowering
 
+    namespace lowering {
+
+        // A role that may claim what a workflow moves may report on it too, since
+        // reporting is only for whoever holds it: no project names report itself.
+        inline void reporting(std::vector<declaration>& declarations, std::set<std::string>& moved, std::vector<define_role_declaration*>& roles) {
+            for (auto& d : declarations) {
+                if (auto* n = std::get_if<namespace_declaration>(&d.node)) reporting(n->declarations, moved, roles);
+                else if (auto* w = std::get_if<define_workflow_declaration>(&d.node)) moved.insert(w->entity);
+                else if (auto* r = std::get_if<define_role_declaration>(&d.node)) roles.push_back(r);
+            }
+        }
+        inline void reporting(std::vector<file>& files) {
+            std::set<std::string> moved;
+            std::vector<define_role_declaration*> roles;
+            for (auto& f : files) reporting(f.declarations, moved, roles);
+            for (auto* r : roles) {
+                std::vector<qualified_name> added;
+                for (const auto& p : r->permissions) {
+                    if (p.parts.size() != 2 || p.parts[1] != "claim" || !moved.contains(p.parts[0])) continue;
+                    bool said = std::any_of(r->permissions.begin(), r->permissions.end(), [&](const qualified_name& q) { return q.parts.size() == 2 && q.parts[0] == p.parts[0] && q.parts[1] == "report"; });
+                    if (!said) added.push_back(qualified_name{{p.parts[0], "report"}, p.where});
+                }
+                r->permissions.insert(r->permissions.end(), added.begin(), added.end());
+            }
+        }
+
+    } // namespace lowering
+
     inline void lower(std::vector<file>& files, diagnostics& out) {
+        lowering::reporting(files);
         lowering::inherit_readers(files, out);
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);

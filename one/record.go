@@ -366,12 +366,76 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 					return invalid("%s can't be set this way", label(f.name))
 				}
 				target.Set(reflect.ValueOf(list))
+			case reflect.Map:
+				// Data, named values: what's sent is merged into what's there, and a
+				// value of null takes its name out.
+				sent, ok := raw.(map[string]any)
+				if !ok {
+					return invalid("%s should be named values", label(f.name))
+				}
+				if target.Type() != reflect.TypeOf(Data{}) {
+					return invalid("%s can't be set this way", label(f.name))
+				}
+				merged, err := mergeData(f.name, target.Interface().(Data), sent)
+				if err != nil {
+					return err
+				}
+				target.Set(reflect.ValueOf(merged))
 			default:
 				return invalid("%s can't be set this way", label(f.name))
 			}
 		}
 	}
 	return nil
+}
+
+// Data is a field of named values, each text, a number, or yes or no, like an
+// item's status and since: what a board shows of what's working on it.
+type Data map[string]any
+
+// What data holds is bounded, as a list is.
+const (
+	maxDataNames  = 64
+	maxDataLength = 16 * 1024
+)
+
+var dataName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
+
+// mergeData puts what's sent over what's there, a null taking its name out.
+func mergeData(field string, was Data, sent map[string]any) (Data, error) {
+	merged := Data{}
+	for name, value := range was {
+		merged[name] = value
+	}
+	for name, value := range sent {
+		if !dataName.MatchString(name) {
+			return nil, invalid("%s names are lowercase words, like status, and %q isn't one", label(field), name)
+		}
+		switch v := value.(type) {
+		case nil:
+			delete(merged, name)
+		case string:
+			if len(v) > maxListItemLength {
+				return nil, invalid("each of %s can be at most %d characters", strings.ToLower(label(field)), maxListItemLength)
+			}
+			merged[name] = v
+		case float64, bool:
+			merged[name] = v
+		default:
+			return nil, invalid("%s's %s should be text, a number, or yes or no", label(field), name)
+		}
+	}
+	if len(merged) > maxDataNames {
+		return nil, invalid("%s can hold at most %d names", label(field), maxDataNames)
+	}
+	size := 0
+	for name, value := range merged {
+		size += len(name) + len(fmt.Sprint(value))
+	}
+	if size > maxDataLength {
+		return nil, invalid("%s can hold at most %d characters", label(field), maxDataLength)
+	}
+	return merged, nil
 }
 
 // start fills in what a new entity starts with: "me" is the person creating it,

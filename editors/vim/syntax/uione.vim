@@ -93,7 +93,7 @@ syn match   uioneListType  "\<\%(text\|markdown\|email\|slug\|date\|number\|seri
 
 " A type only where a field line puts one: `startDate date required`. Elsewhere
 " these words are names (a field called email, a column called text).
-syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|file\|list\|enum\)\>"
+syn match uioneType "\%(^\s*\h\w*\s\+\)\@<=\%(text\|markdown\|email\|slug\|date\|number\|serial\|boolean\|user\|file\|data\|list\|enum\)\>"
 
 " A name given a value with =, like title = issue.title in a view or status =
 " status::closed in a command: the field it sets.

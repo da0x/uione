@@ -536,6 +536,7 @@ What a field can hold, written after its name: `title  text  required`.
 | `boolean` | true or false | a checkbox |
 | `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
 | `file` | a file someone uploaded, kept in the app's bucket, by its path, whose last part is its name; `list of file` holds several (see [Files](#files)) | a box to choose a file, uploaded as it's chosen; where it's shown, a link that opens it, and a small picture of an image |
+| `data` | named values, each text, a number, or yes or no, up to 64; what a command sends is merged in, and a null takes a name out | not asked for in forms; a workflow keeps what its holder reports in one, which a board shows as a dot and a running time |
 | `list of permission` | the commands a project's role allows, like `issue::create` | a box to tick for each command |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | radio buttons for three or fewer, otherwise a list that opens |
@@ -1121,18 +1122,20 @@ define workflow order by stage {
   records go `from` one stage `to` another for the `roles` they list. `lease` says
   how long a claim lasts, in minutes or hours, unless it's renewed; it's 10 minutes
   when it isn't said.
-- The workflow adds to the entity who holds it and until when, and the commands
-  that work it, said in full as a project could write them:
+- The workflow adds to the entity who holds it and until when, what its holder
+  says of it, and the commands that work it, said in full as a project could write
+  them:
 
 ```one
 	held_by     user
 	held_until  date
+	data        data
 
 command order::claim {
 	require "this stage isn't worked by a role you hold" {
 		held(stage.worked_by) || exists(step where from == order.stage && held(roles))
 	}
-	require held_by == none || held_by == me || held_until < now  "someone else holds it"
+	require held_by == none || held_until < now  "it's taken already"
 	held_by = me
 	held_until = 30 minutes from now
 }
@@ -1145,16 +1148,33 @@ command order::release {
 	held_by = none
 	held_until = none
 }
+command order::report {
+	changes data
+	require held_by == me  "you don't hold it"
+}
 command order::move {
 	changes stage
 	require "your role doesn't move an order from there to there" {
 		exists(step where from == was order.stage && to == order.stage && held(roles))
 	}
 	require held_by == none || held_by == me || held_until < now  "someone else holds it"
+	if held_by != me {
+		clear data
+	}
 	held_by = none
 	held_until = none
 }
 ```
+
+- A claim is taken only while no lease holds, even its own holder's: two programs
+  signed in with the same key never take the same order, and one that holds it
+  keeps it with `renew`.
+- `data` is named values, each text, a number, or yes or no, up to 64 of them:
+  what whoever holds it says of it with `report`, like `status`, `since` and
+  `runner`, which a board shows as a dot, a running time and who's on it. What's
+  reported is merged into what's there, and a null takes a name out. A move by its
+  holder keeps it; anyone else's move clears it, since it no longer says how it's
+  going. A role that may claim may report: no role names `report` itself.
 
 - Whoever may take a step out of a stage works it, so the roles a step lists may
   claim what's in the stage it leaves, as the stage's own roles may. A role's queue

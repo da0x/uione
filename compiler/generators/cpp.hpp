@@ -195,6 +195,7 @@ namespace one::generators {
             if (t == "number" || t == "serial") return cpp_detail::cpp_type{"double", "number"};
             if (t == "boolean") return cpp_detail::cpp_type{"bool", "flag"};
             if (t == "date") return cpp_detail::cpp_type{"time", "when"};
+            if (t == "data") return cpp_detail::cpp_type{"ember::value", "named"};
             if (t == "text" || t == "markdown" || t == "email" || t == "slug" || t == "user" || entity(at, t)) return cpp_detail::cpp_type{"std::string", "text"};
             return cpp_detail::cpp_type{"std::string", "text"};  // a format, like AAA-9999, is text
         }
@@ -277,6 +278,7 @@ namespace one::generators {
             out.line("inline double number(const ember::value& v) { return v.is_integer() ? double(v.as_integer()) : v.is_double() ? v.as_double() : 0; }");
             out.line("inline bool flag(const ember::value& v) { return v.is_bool() && v.as_bool(); }");
             out.line("inline time when(const ember::value& v) { return v.is_time() ? v.as_time() : time{}; }");
+            out.line("inline ember::value named(const ember::value& v) { return v; }");
             out.open("inline std::vector<std::string> texts(const ember::value& v) {");
             out.line("std::vector<std::string> out;");
             out.open("if (v.is_array()) {");
@@ -301,6 +303,18 @@ namespace one::generators {
             out.close("}");
             out.line("inline std::string json(double n) { char s[32]; std::snprintf(s, sizeof s, \"%.17g\", n); return s; }");
             out.line("inline std::string json(bool b) { return b ? \"true\" : \"false\"; }");
+            out.open("inline std::string json(const ember::value& v) {");
+            out.line("if (v.is_string()) return json(v.as_string());");
+            out.line("if (v.is_bool()) return json(v.as_bool());");
+            out.line("if (v.is_integer()) return json(double(v.as_integer()));");
+            out.line("if (v.is_double()) return json(v.as_double());");
+            out.open("if (v.is_map()) {");
+            out.line("std::string out;");
+            out.line("for (const auto& [name, item] : v.as_map()) out += (out.empty() ? \"\" : \",\") + json(name) + \":\" + json(item);");
+            out.line("return \"{\" + out + \"}\";");
+            out.close("}");
+            out.line("return \"null\";");
+            out.close("}");
             out.open("inline std::string json(const std::vector<std::string>& list) {");
             out.line("std::string out = \"[\";");
             out.line("for (std::size_t i = 0; i < list.size(); ++i) out += (i ? \",\" : \"\") + json(list[i]);");

@@ -391,6 +391,7 @@ namespace one::generators {
             if (t == "date") return go_type{"time.Time", true};
             if (t == "number" || t == "serial") return go_type{"float64"};
             if (t == "boolean") return go_type{"bool"};
+            if (t == "data") return go_type{"one.Data"};
             for (auto* fmt : pkg.formats) {
                 if (fmt->name == t) return go_type{"string"};
             }
@@ -1412,6 +1413,7 @@ namespace one::generators {
             if (f.type && (f.type->text() == "number" || f.type->text() == "serial")) return "0";
             if (f.type && f.type->text() == "boolean") return "false";
             if (f.type && f.type->text() == "date") return "time.Time{}";
+            if (f.type && f.type->text() == "data") return "one.Data{}";
             return "\"\"";
         }
 

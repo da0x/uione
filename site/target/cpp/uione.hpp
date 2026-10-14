@@ -50,6 +50,7 @@ namespace uione {
 		inline double number(const ember::value& v) { return v.is_integer() ? double(v.as_integer()) : v.is_double() ? v.as_double() : 0; }
 		inline bool flag(const ember::value& v) { return v.is_bool() && v.as_bool(); }
 		inline time when(const ember::value& v) { return v.is_time() ? v.as_time() : time{}; }
+		inline ember::value named(const ember::value& v) { return v; }
 		inline std::vector<std::string> texts(const ember::value& v) {
 			std::vector<std::string> out;
 			if (v.is_array()) {
@@ -74,6 +75,18 @@ namespace uione {
 		}
 		inline std::string json(double n) { char s[32]; std::snprintf(s, sizeof s, "%.17g", n); return s; }
 		inline std::string json(bool b) { return b ? "true" : "false"; }
+		inline std::string json(const ember::value& v) {
+			if (v.is_string()) return json(v.as_string());
+			if (v.is_bool()) return json(v.as_bool());
+			if (v.is_integer()) return json(double(v.as_integer()));
+			if (v.is_double()) return json(v.as_double());
+			if (v.is_map()) {
+				std::string out;
+				for (const auto& [name, item] : v.as_map()) out += (out.empty() ? "" : ",") + json(name) + ":" + json(item);
+				return "{" + out + "}";
+			}
+			return "null";
+		}
 		inline std::string json(const std::vector<std::string>& list) {
 			std::string out = "[";
 			for (std::size_t i = 0; i < list.size(); ++i) out += (i ? "," : "") + json(list[i]);

@@ -152,15 +152,23 @@ try {
 
   await must(foreman, "plate::move", { id: cracked, stage: "etching" });
   await until(async () => (await stored("shop_plate", cracked)).stage === "failed", "a failing etch sends the plate to Failed");
+  // What the press last said of it stays until someone moves it: it failed.
+  const said = (record) => Object.fromEntries(Object.entries(record.data?.mapValue?.fields ?? {}).map(([k, v]) => [k, v.stringValue ?? v.doubleValue ?? v.booleanValue]));
   if (!first.said.includes("the plate cracked")) throw new Error(`the press says why it failed: ${first.said}`);
+  if (said(await stored("shop_plate", cracked)).status !== "failed") throw new Error("a plate that failed says so");
   pass("a program that fails sends what it worked on to Failed, and the press says why");
 
   const slow = (await must(foreman, "plate::create", { shop, name: "Slow" })).id;
   await must(foreman, "plate::move", { id: slow, stage: "etching" });
   await until(async () => (await stored("shop_plate", slow)).held_by, "the press takes the slow plate");
+  await until(async () => said(await stored("shop_plate", slow)).status === "working", "the press says it's working on the slow plate");
+  const working = said(await stored("shop_plate", slow));
+  if (!working.runner || !/^\d{4}-\d\d-\d\dT/.test(working.since)) throw new Error(`the press says which runner and since when: ${JSON.stringify(working)}`);
+  pass(`the press says of what it holds: working, since ${working.since}, runner ${working.runner}`);
   first.kill("SIGKILL");
   agent("second", pressKey);
   await until(async () => (await stored("shop_plate", slow)).stage === "etched", "another press takes it once the lease runs out", 120000);
+  if (said(await stored("shop_plate", slow)).status) throw new Error("what's moved on says nothing of who worked it");
   pass("a press that stops lets go when its lease runs out, and another takes what it held");
 
   // Two presses, each working one plate at a time: four plates moved at once are
