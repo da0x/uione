@@ -739,7 +739,7 @@ TEST_CASE("a workflow says who works its stages, its steps, and how long a claim
     CHECK(out[0].message == "a lease lasts minutes or hours, like lease 10 minutes");
     out = parse_errors("define workflow issue by stage {\n\tstarts at backlog\n}\n");
     REQUIRE(!out.empty());
-    CHECK(out[0].message == "expected a stage and who works it, a step, worked by, steps, notify, done at, depends on or lease, one a line, found 'starts'");
+    CHECK(out[0].message == "expected a stage and who works it, a step, worked by, steps, notify, done at, depends on, while or lease, one a line, found 'starts'");
 }
 
 TEST_CASE("an agent says, for each stage it works, the program it runs and where what it works goes next") {

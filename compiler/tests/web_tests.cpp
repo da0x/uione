@@ -1676,3 +1676,35 @@ TEST_CASE("a landing page's hero and sections are drawn by its design") {
     CHECK(screens->content.find("</Section>\n    </Landing>") != std::string::npos);
     fs::remove_all(dir);
 }
+
+// A section said with when is there only while it holds, like a log while it has lines.
+TEST_CASE("a section with when is drawn only while it holds") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-section-when";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(entity note {
+	text  text  required
+}
+view desk public {
+	logged = count(notes)
+	notes = each note {
+		text
+	}
+}
+screen "Desk" /desk {
+	section "Log" when desk.logged > 0 {
+		table desk.notes {
+			text
+		}
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CAPTURE(screens->content);
+    CHECK(screens->content.find(R"({desk.status === "live" && (((desk.data?.["logged"] ?? null) > 0)) && (<>)") != std::string::npos);
+    CHECK(screens->content.find("<Section title=\"Log\">") != std::string::npos);
+}

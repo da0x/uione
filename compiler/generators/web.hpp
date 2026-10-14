@@ -1039,11 +1039,13 @@ namespace one::generators {
                     parts.components.insert(tag);
                     std::string id = block->anchor ? " id=" + web_detail::js_string(*block->anchor) : "";
                     if (!block->hue.empty()) id += " hue=" + web_detail::js_string(block->hue);
-                    out.open("<" + tag + " title=" + web_detail::js_string(block->title) + id + ">");
-                    ++in_block_;
-                    screen_items(out, parts, ns, block->items, screen);
-                    --in_block_;
-                    out.close("</" + tag + ">");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.open("<" + tag + " title=" + web_detail::js_string(block->title) + id + ">");
+                        ++in_block_;
+                        screen_items(out, parts, ns, block->items, screen);
+                        --in_block_;
+                        out.close("</" + tag + ">");
+                    });
                 } else if (auto* text = std::get_if<language::content_text>(&item.node)) {
                     content(out, parts, ns, *text);
                 } else if (auto* link = std::get_if<language::content_link>(&item.node)) {

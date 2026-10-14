@@ -1098,7 +1098,7 @@ namespace one::language {
                     else if (unit.text != "minute" && unit.text != "minutes") fail(unit.where, "a lease lasts minutes or hours, like lease 10 minutes");
                     w.lease_minutes = minutes;
                 } else {
-                    fail_expecting("a stage and who works it, a step, worked by, steps, notify, done at, depends on or lease, one a line");
+                    fail_expecting("a stage and who works it, a step, worked by, steps, notify, done at, depends on, while or lease, one a line");
                 }
                 end_line();
             }
@@ -1380,9 +1380,17 @@ namespace one::language {
                     block.hue_where = peek().where;
                     block.hue = expect(token_kind::identifier, "one of the library's hues, like color violet").text;
                 }
+                // section "Log" when issue_page.log != none: there only while it holds.
+                expression_ptr shown_when = nullptr;
+                if (at_word("when")) {
+                    advance();
+                    shown_when = parse_when();
+                }
                 block.items = parse_screen_block();
                 end_line();
-                return {where, std::move(block)};
+                screen_item item{where, std::move(block)};
+                item.when = std::move(shown_when);
+                return item;
             }
             // subtitle "{project_page.summary}": under the title, as running words.
             if (string_follows && at_word("subtitle")) {

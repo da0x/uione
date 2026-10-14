@@ -1696,6 +1696,8 @@ form step::update "Save" {
   `color violet` in its block, for its rows' links alone. The colors are the library's `hue`:
   `blue`, `teal`, `green`, `amber`, `red` and `violet`, each drawn in the
   component set's own shade of it, light and dark.
+- `section "Log" when issue_page.logged > 0 { ... }` is there only while its when
+  holds, heading and all, like an issue's log once it has lines.
 - A table's toolbar has a button for compact rows, which every table on the site
   follows once a reader picks it, in their browser.
 - A table or a board opened with a filter in its address, as a card's filter opens
