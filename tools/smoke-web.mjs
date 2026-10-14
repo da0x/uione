@@ -40,7 +40,7 @@ const pages = {
   "/language": ["Start", "Your first project"],
   "/language/overview": ["Overview", "One architecture"],
   "/language/reference": ["Tab width", "Reference", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
-  "/releases": ["0.11.1", "A key made from a field follows it."],
+  "/releases": ["0.12.0", "Flows that wait on each other."],
   "/mission": ["An application should be as short as what it does."],
   "/about": ["About uione", "https://www.linkedin.com/in/daheralfawares"],
 };
