@@ -205,6 +205,10 @@ try {
   const runs = burst.length && presses.map((press) => (press.said.match(/Burst \d+ \([^)]*\) in etching: running/g) ?? []).length);
   const each = new Map();
   for (const press of presses) for (const m of press.said.matchAll(/(Burst \d+) \([^)]*\) in etching: running/g)) each.set(m[1], (each.get(m[1]) ?? 0) + 1);
+  // A press that ended by itself, by a crash or a signal, would leave its plate to a
+  // lease running out, and another press to run it again.
+  const ended = presses.filter((press) => press.exitCode !== null || press.signalCode !== null);
+  if (ended.length) throw new Error(`every press keeps working through the burst: ${ended.map((p) => p.signalCode ?? `exit ${p.exitCode}`).join(", ")}`);
   const twice = [...each].filter(([, n]) => n > 1).map(([name]) => name);
   if (twice.length) throw new Error(`each plate is etched once, but ${twice.join(", ")} ran more than once`);
   if (each.size !== count) throw new Error(`every plate is etched by a press: ${each.size} of ${count}`);

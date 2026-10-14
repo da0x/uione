@@ -288,7 +288,10 @@ namespace one::client {
 			auto now = std::chrono::steady_clock::now();
 			std::set<std::string> eligible;
 			for (const auto& rule : what.rules) {
-				for (const auto& record : queues[rule.queue]) {
+				// A copy: a command asked again pumps the loop, and a queue heard meanwhile
+				// replaces the one read here.
+				const std::vector<ember::value> arrived = queues[rule.queue];
+				for (const auto& record : arrived) {
 					if (working.size() >= at_once) break;
 					std::string id = text(record["id"]);
 					if (id.empty() || working.contains(id) || tried.contains(id) || text(record[rule.along]) != rule.stage) continue;
