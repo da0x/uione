@@ -304,7 +304,9 @@ namespace one::terminal::runtime {
 		for (const auto& record : model->records) {
 			std::string details;
 			for (const auto& d : record.details) details += (details.empty() ? "" : ", ") + d;
-			across.push_back(terminal::column(terminal::link(record.title, [model = *model, id = record.id] { model.pick(id); }, {.bold = true, .reverse = record.picked}), quiet(details)));
+			auto named = terminal::link(record.title, [model = *model, id = record.id] { model.pick(id); }, {.bold = true, .reverse = record.picked});
+			if (record.status == "success") named = terminal::row(terminal::text("●", colored(color::green)), std::move(named)).spacing(1);
+			across.push_back(terminal::column(std::move(named), quiet(details)));
 		}
 		return terminal::column(quiet(model->label), terminal::row(std::move(across)).spacing(3));
 	}

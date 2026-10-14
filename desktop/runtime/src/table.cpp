@@ -77,7 +77,13 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> inside;
 			auto heading_style = t.strong();
 			if (record.picked) heading_style.color = t.accent;
-			inside.push_back(desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style));
+			if (record.status == "success") {
+				auto dot = t.body();
+				dot.color = t.success;
+				inside.push_back(desktop::row(desktop::text("●", dot), desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style)).spacing(6));
+			} else {
+				inside.push_back(desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style));
+			}
 			for (const auto& d : record.details) inside.push_back(desktop::text(d, t.quiet()));
 			cards_shown.push_back(desktop::column(std::move(inside))
 			                          .spacing(4)

@@ -149,6 +149,7 @@ namespace one::screens {
 		std::vector<std::string> details;
 		long count = 0;
 		bool picked = false;
+		std::string status = "";  // success, once every row in it is at a success end
 	};
 	struct track_model {
 		std::string label;

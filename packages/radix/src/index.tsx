@@ -935,7 +935,10 @@ export const radix: ComponentSet = {
               (step.selected ? "border-accent bg-accent-soft" : "border-line bg-surface hover:border-accent")
             }
           >
-            <span className={"text-lg leading-snug font-semibold " + (step.selected ? "text-accent" : "text-ink")}>{step.title}</span>
+            <span className={"inline-flex items-center gap-2 text-lg leading-snug font-semibold " + (step.selected ? "text-accent" : "text-ink")}>
+              {step.status && <span role="img" aria-label={step.status.words} title={step.status.words} className="size-2.5 shrink-0 rounded-full" style={{ background: statusColors.success }} />}
+              {step.title}
+            </span>
             {step.details.length > 0 && (
               <span className="flex flex-wrap gap-x-3 text-sm text-muted">
                 {step.details.map((detail, at) => (

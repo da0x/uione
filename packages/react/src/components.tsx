@@ -1208,7 +1208,7 @@ export interface TrackSpec {
 // The rows a track keeps, and the track itself, drawn above them. The record picked
 // is in the page's path by its field's name, like /milestone/beta, so a link shows
 // the same; picking it again shows every row.
-function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPick?: () => void) {
+function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPick?: () => void, statusOfRow?: (row: Row) => string | undefined) {
   const ui = useUI();
   const links = useLinks();
   const [part, setPart] = usePathNamed(track?.field ?? "track");
@@ -1232,6 +1232,10 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
           .filter((detail) => detail !== ""),
         count: rows.filter((row) => row[track.field] === record.id).length,
         noun,
+        // Every row in it at a success end: it's succeeded too.
+        ...(statusOfRow && rows.some((row) => row[track.field] === record.id) && rows.filter((row) => row[track.field] === record.id).every((row) => statusOfRow(row) === "success")
+          ? { status: { is: "success" as const, words: "Succeeded" } }
+          : {}),
         selected: record.id === picked,
         onSelect: () => {
           setPart(record.id === picked ? "" : record.id.slice(start.length));
@@ -1522,7 +1526,7 @@ export function Board({
   const { matches, filtered } = useFilter();
   const placing = usePlacing(rowsOf(view.data?.[list]), reorder?.field, view.data);
   const all = placing.ordered;
-  const tracked = useTrack(track, all, list);
+  const tracked = useTrack(track, all, list, undefined, (card) => going(card, statuses[String(moved[card.id] ?? card[by])], now).status?.is);
   const cards = all.filter(tracked.keeps).filter(matches).filter(
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );

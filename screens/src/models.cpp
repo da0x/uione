@@ -769,6 +769,7 @@ namespace one::screens {
 		auto moved = p.kept<std::map<std::string, std::string>>(out.key + ":moved");
 		out.moving = p.kept<std::string>(out.key + ":moving");  // the card whose steps are offered
 		out.query = p.kept<std::string>(out.key + ":search");
+		const auto& all_rows = rows_of(v, spec.list);
 		auto all = ordered(p, out.key, spec.reorder, rows_of(v, spec.list));
 		out.track = track_of(p, out.key, spec.track, all, spec.list);
 		// A move the view now shows is settled.
@@ -856,6 +857,23 @@ namespace one::screens {
 			}
 			column.notify = std::ranges::contains(with.notify, column.id);
 			out.columns.push_back(std::move(column));
+		}
+		// A record of the track whose cards have all reached a success end has too.
+		if (out.track) {
+			std::map<std::string, std::string> status_of_card;
+			for (const auto& column : out.columns) {
+				for (const auto& card : column.cards) status_of_card[card.id] = card.status;
+			}
+			for (auto& record : out.track->records) {
+				bool any = false, all = true;
+				for (const auto& card : all_rows) {
+					if (field_of(card, spec.track->field).as_string() != record.id) continue;
+					any = true;
+					auto found = status_of_card.find(card["id"].as_string());
+					all = all && found != status_of_card.end() && found->second == "success";
+				}
+				if (any && all) record.status = "success";
+			}
 		}
 		// A card that arrives in a column that notifies chimes, once; those there when
 		// the board's first drawn don't.
