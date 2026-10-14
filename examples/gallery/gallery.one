@@ -13,7 +13,7 @@
 import one
 
 project gallery {
-	one     "0.13.2"
+	one     "0.14.0"
 	ui      radix
 	signin  google github
 	target  web desktop terminal

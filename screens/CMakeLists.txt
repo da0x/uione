@@ -8,7 +8,7 @@
 # and each compiles them itself, needing nothing else of it.
 
 cmake_minimum_required(VERSION 3.28)
-project(one_screens VERSION 0.13.2 LANGUAGES CXX)
+project(one_screens VERSION 0.14.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
