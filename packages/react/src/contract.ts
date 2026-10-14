@@ -413,6 +413,15 @@ export interface GridCell {
   self?: boolean; // a thing and itself, where nothing goes
 }
 
+// A list's toolbar on a line of its own, above it: what it's filtered by, its search
+// box and its buttons, where a list shown as a table or a board, as one picks, keeps
+// them in one place whichever is shown.
+export interface ToolbarProps {
+  search?: TableSearch;
+  tools?: ReactNode;
+  filtered?: Filtered;
+}
+
 export interface TableSearch {
   value: string;
   label: string; // what it searches, like "Search title and labels"
@@ -591,6 +600,7 @@ export interface ComponentSet {
   Board: ComponentType<BoardProps>;
   Canvas: ComponentType<CanvasProps>;
   Pipeline: ComponentType<PipelineProps>;
+  Toolbar: ComponentType<ToolbarProps>;
   Switch: ComponentType<SwitchProps>;
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;

@@ -5,7 +5,8 @@
 // a command, asking before it does, or hiding a value that can't be trusted, and
 // then hands the drawing to the app's component set.
 
-import { Children, cloneElement, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
@@ -1360,29 +1361,32 @@ export function Table({
   };
   const asked = asking?.action.form;
   const says = asking ? (asking.action.label ?? label(action(asking.action.name))) : "";
+  // Inside a table switched with a board, its search box and buttons are on the
+  // switch's own line above, where they stay whichever is shown.
+  const slot = useContext(ToolbarSlot);
+  const searchBox = search.length
+    ? {
+        value: query,
+        label: searchLabel(search, columns),
+        onChange: (value: string) => {
+          setQuery(value);
+          setAt(1);
+        },
+      }
+    : undefined;
   return (
     <>
       {tracked.element}
+      {slot && createPortal(<ui.Toolbar search={searchBox} tools={tools} filtered={filtered} />, slot)}
       <ui.Table
         status={view.status}
         {...(hue ? { hue } : {})}
         tabs={tabs}
-        search={
-          search.length
-            ? {
-                value: query,
-                label: searchLabel(search, columns),
-                onChange: (value: string) => {
-                  setQuery(value);
-                  setAt(1);
-                },
-              }
-            : undefined
-        }
+        search={slot ? undefined : searchBox}
         pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
         reorder={arranged ? { label: "Move", onMove: move } : undefined}
-        tools={tools}
-        filtered={filtered}
+        tools={slot ? undefined : tools}
+        filtered={slot ? undefined : filtered}
         columns={Object.values(columns)}
         error={[...pressed.map((a) => a.name), ...(arranged ? [arranged.command] : [])].map((name) => runner.error(name)).find((e) => e !== undefined)}
         rows={rows.map((row) => ({
@@ -1504,7 +1508,7 @@ export function Board({
     : notifyWritten;
   const statuses: Record<string, string> = { ...statusesWritten };
   if (statusBy) for (const row of overRows) if (typeof row[statusBy] === "string" && statusWords[row[statusBy] as string]) statuses[row.id] = row[statusBy] as string;
-  useArrivals(view, list, by, notify);
+  useArrivals(view, list, by, notify, statuses);
   const cardRows = rowsOf(view.data?.[list]);
   const now = useNow(cardRows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
   // Where each card moved is until the view says so too.
@@ -1560,21 +1564,22 @@ export function Board({
       });
     }
   };
+  // Inside a board switched with a table, its search box and buttons are on the
+  // switch's own line above, where they stay whichever is shown.
+  const slot = useContext(ToolbarSlot);
+  const searchBox = search.length ? { value: query, label: searchLabel(search, columns), onChange: setQuery } : undefined;
   return (
     <>
       {tracked.element}
+      {slot && createPortal(<ui.Toolbar search={searchBox} tools={tools} filtered={filtered} />, slot)}
       <ui.Board
         status={status}
         error={(move ? runner.error(move.command) : undefined) ?? (arranged ? runner.error(arranged.command) : undefined)}
-        tools={tools}
-        filtered={filtered}
+        tools={slot ? undefined : tools}
+        filtered={slot ? undefined : filtered}
         column={column || undefined}
         onColumn={setColumn}
-        search={
-          search.length
-            ? { value: query, label: searchLabel(search, columns), onChange: setQuery }
-            : undefined
-        }
+        search={slot ? undefined : searchBox}
         onMove={
           move
             ? (id, to) => {
@@ -1914,7 +1919,7 @@ function useNow(ticking: boolean): number {
 
 // A short tone when a card arrives in a column that notifies, once it's arrived; the
 // cards there when the board first shows don't sound.
-function useArrivals(view: ViewState, list: string, by: string, notify: string[]) {
+function useArrivals(view: ViewState, list: string, by: string, notify: string[], statuses: Record<string, string> = {}) {
   const seen = useRef<Map<string, string> | undefined>(undefined);
   useEffect(() => {
     if (notify.length === 0 || view.status !== "live") return;
@@ -1924,20 +1929,22 @@ function useArrivals(view: ViewState, list: string, by: string, notify: string[]
     if (!before) return;
     for (const [id, at] of now) {
       if (before.get(id) !== at) {
-        tone();
+        // Where things fail, the falling tone; anywhere else, the rising one.
+        tone(statuses[at] === "failed");
         return;
       }
     }
   }, [view, list, by, notify.join(" ")]);
 }
 
-// Two notes, rising, quietly, through the page's audio.
-function tone() {
+// Two notes, quietly, through the page's audio: rising for something done, falling and
+// lower for something failed.
+function tone(failed = false) {
   try {
     const AudioContext = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
     if (!AudioContext) return;
     const audio = new AudioContext();
-    [660, 880].forEach((pitch, at) => {
+    (failed ? [440, 311] : [660, 880]).forEach((pitch, at) => {
       const note = audio.createOscillator();
       const loudness = audio.createGain();
       note.frequency.value = pitch;
@@ -2001,18 +2008,24 @@ export function Switched({
   const switcher = (
     <ui.Switch label={says} options={options.map((option, at) => ({ label: option, icon: icons[at], selected: at === picked, onSelect: () => pick(at) }))} />
   );
-  // It sits in the toolbar of what's shown, beside its own buttons.
+  // It sits on a line of its own above what's shown, with what's shown's search box and
+  // buttons, which stay there whichever is shown.
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const shown = Children.toArray(children)[picked];
   if (!isValidElement<{ tools?: ReactNode }>(shown)) return shown ?? null;
-  return cloneElement(shown, {
-    tools: (
-      <>
-        {shown.props.tools}
+  return (
+    <ToolbarSlot.Provider value={slot}>
+      <div className="uione-toolbar" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "0.5rem" }}>
+        <div ref={setSlot} style={{ display: "contents" }} />
         {switcher}
-      </>
-    ),
-  });
+      </div>
+      {shown}
+    </ToolbarSlot.Provider>
+  );
 }
+
+// Where a switched list's toolbar goes, above whichever is shown.
+const ToolbarSlot = createContext<HTMLElement | null>(null);
 
 // How a card sums up what it holds, like a board's issues: the list they're in, the
 // field naming the card, and the field they're split by, shown by its title and in

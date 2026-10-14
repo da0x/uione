@@ -1012,6 +1012,25 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
+  // A list's toolbar on its own line, above a table or board switched between: what
+  // it's filtered by, its search box and its buttons, in the same place for both.
+  Toolbar: ({ search, tools, filtered }) => (
+    <>
+      {filtered && <FilterChip {...filtered} />}
+      {search && (
+        <input
+          type="search"
+          value={search.value}
+          onChange={(event) => search.onChange(event.target.value)}
+          placeholder={`${search.label}…`}
+          aria-label={search.label}
+          className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:w-72"
+        />
+      )}
+      {tools}
+    </>
+  ),
+
   // A pipeline, as the classic deploy screen drew one: a heading for each lane, and in
   // it a row for each card, its title first, then its stages in order, each a chip:
   // done with a tick, the one it's at in its status's color, the one it failed in red,

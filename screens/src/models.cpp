@@ -869,7 +869,9 @@ namespace one::screens {
 				for (const auto& column : out.columns) {
 					auto was = before.find(column.id);
 					for (const auto& card : column.cards) {
-						if (column.notify && (was == before.end() || !was->second.contains(card.id))) chime(card.title + ": " + column.title);
+						// A card arriving where things fail chimes the error sound, not the one for done.
+						bool failing = with.statuses.contains(column.id) && with.statuses.at(column.id) == "failed";
+						if (column.notify && (was == before.end() || !was->second.contains(card.id))) chime(card.title + ": " + column.title, failing);
 					}
 				}
 			}
@@ -879,7 +881,7 @@ namespace one::screens {
 		return out;
 	}
 
-	void chime(const std::string& message) {
+	void chime(const std::string& message, bool failed) {
 		std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
 		bool installed = false;
 		for (std::size_t at = 0; at <= path.size();) {
@@ -890,13 +892,13 @@ namespace one::screens {
 			at = end + 1;
 		}
 		if (!installed) {
-			// The terminal's bell, where there's a terminal to ring.
-			if (::isatty(STDOUT_FILENO)) (void)!::write(STDOUT_FILENO, "\a", 1);
+			// The terminal's bell, where there's a terminal to ring: twice for a failure.
+			if (::isatty(STDOUT_FILENO)) (void)!::write(STDOUT_FILENO, failed ? "\a\a" : "\a", failed ? 2 : 1);
 			return;
 		}
 		std::string said = message;
-		char program[] = "chime", flag[] = "--message";
-		char* arguments[] = {program, flag, said.data(), nullptr};
+		char program[] = "chime", flag[] = "--message", error[] = "--error";
+		char* arguments[] = {program, flag, said.data(), failed ? error : nullptr, nullptr};
 		posix_spawn_file_actions_t quiet;
 		posix_spawn_file_actions_init(&quiet);
 		posix_spawn_file_actions_addopen(&quiet, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);

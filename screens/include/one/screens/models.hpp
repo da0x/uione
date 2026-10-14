@@ -231,7 +231,7 @@ namespace one::screens {
 	board_model board_of(page_base& p, const board_spec& spec);
 	// Tells whoever has the app open: chime --message, when chime is installed, or the
 	// terminal's bell.
-	void chime(const std::string& message);
+	void chime(const std::string& message, bool failed = false);  // failed: its error sound, as a card arriving where things fail
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 

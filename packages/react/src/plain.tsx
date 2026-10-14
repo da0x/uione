@@ -454,6 +454,17 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Toolbar: ({ search, tools, filtered }) => (
+    <>
+      {filtered && (
+        <p>
+          {filtered.label} <button type="button" onClick={filtered.onClear}>Show all</button>
+        </p>
+      )}
+      {search && <input type="search" value={search.value} onChange={(event) => search.onChange(event.target.value)} placeholder={`${search.label}…`} aria-label={search.label} />}
+      {tools}
+    </>
+  ),
   Pipeline: ({ status, lanes }) => (
     <div aria-busy={status === "loading"}>
       {lanes.map((lane) => (
