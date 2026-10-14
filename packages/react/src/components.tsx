@@ -14,7 +14,7 @@ import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } 
 import type { BoardCard, CanvasRegion, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
-import { action, dateOnly, label, shortAddress, show, useLinks, useUI } from "./ui.js";
+import { action, dateOnly, label, runningTime, shortAddress, show, useLinks, useUI } from "./ui.js";
 import { generate, on, randomSeed, roles, schemeTitle, schemes, written, type PaletteTheme, type Scheme } from "./palette.js";
 
 export function Hero({ title, children }: { title: string; children: ReactNode }) {
@@ -1964,14 +1964,7 @@ const statusWords: Record<string, string> = { inactive: "Not started", waiting: 
 // done is said success now; what was stored before reads as it.
 const statusOf = (status: string | undefined) => (status === "done" ? "success" : status);
 
-// A running time: 35s, 4m, 1h 12m, 2d 3h.
-export function runningTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return s % 3600 >= 60 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 3600)}h`;
-  return s % 86400 >= 3600 ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : `${Math.floor(s / 86400)}d`;
-}
+export { runningTime };
 
 // A card's dot, running time and runner: what its holder reported in its data, else
 // working while someone's lease on it holds, else its column's status.

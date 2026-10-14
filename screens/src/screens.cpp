@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #include "one/screens/screens.hpp"
+#include "one/screens/models.hpp"
 
 #include <one/client/client.hpp>
 
@@ -11,6 +12,8 @@
 #include <chrono>
 #include <cstring>
 #include <format>
+#include <sstream>
+#include <map>
 
 namespace one::screens {
 
@@ -34,8 +37,42 @@ namespace one::screens {
 
 	void use_time_zone(const std::string& name) { zone_named() = std::chrono::locate_zone(name); }
 
+	namespace {
+		// What a worker said of what it holds, its card's data, as a sentence: Failed at
+		// Publishing to npm, 2h 10m ago: step publish exited 1. Anything else it said
+		// follows, each by its name; data without a status, each by its name alone.
+		std::string said_of(const value& data) {
+			static const std::map<std::string, std::string> words{{"inactive", "Not started"}, {"waiting", "Waiting"}, {"working", "Working"},
+			                                                      {"success", "Succeeded"}, {"done", "Succeeded"}, {"failed", "Failed"}};
+			auto word = words.find(data["status"].as_string());
+			std::string out;
+			if (word != words.end()) {
+				out = word->second;
+				if (std::string at = data["at"].as_string(); !at.empty()) out += " at " + at;
+				const value& since = data["since"];
+				std::chrono::sys_seconds started{};
+				bool known = since.is_time();
+				if (known) started = std::chrono::floor<std::chrono::seconds>(since.as_time());
+				else if (since.is_string()) {
+					std::istringstream in(since.as_string());
+					known = static_cast<bool>(in >> std::chrono::parse("%FT%T", started));
+				}
+				if (known) out += ", " + running_time(std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()) - started) + " ago";
+			}
+			bool working = word != words.end();
+			for (const auto& [name, item] : data.as_map()) {
+				if (working && (name == "status" || name == "at" || name == "since" || name == "note")) continue;
+				std::string shown = show(item);
+				if (!shown.empty()) out += (out.empty() ? "" : ", ") + name + " " + shown;
+			}
+			if (std::string note = data["note"].as_string(); working && !note.empty()) out += ": " + note;
+			return out;
+		}
+	}  // namespace
+
 	std::string show(const value& v) {
 		switch (v.type) {
+			case value::kind::map: return said_of(v);
 			case value::kind::string:
 			case value::kind::reference: return v.text;
 			case value::kind::integer: return std::to_string(v.integer);

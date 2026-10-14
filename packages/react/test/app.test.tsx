@@ -125,7 +125,11 @@ describe("values from a view", () => {
     expect(show(new Date(2026, 9, 11, 19, 25), now)).toBe(new Date(2026, 9, 11, 19, 25).toLocaleTimeString(undefined, { timeStyle: "short" }));
     expect(show(new Date(2026, 9, 12, 19, 25), now)).toBe(new Date(2026, 9, 12, 19, 25).toLocaleDateString(undefined, { dateStyle: "medium" }));
     expect(show(12)).toBe("12");
-    expect(show({ status: "working", runner: 2, note: "" })).toBe("status working, runner 2");
+    // What a worker said, as a sentence, and anything else by its name.
+    expect(show({ status: "working", runner: 2, note: "" })).toBe("Working, runner 2");
+    expect(show({ status: "failed", at: "Publishing to npm", since: "2026-10-11T07:50:00Z", note: "step publish exited 1" }, new Date(Date.UTC(2026, 9, 11, 10, 0))))
+      .toBe("Failed at Publishing to npm, 2h 10m ago: step publish exited 1");
+    expect(show({ size: 3, colour: "red" })).toBe("size 3, colour red");
     expect(show(undefined)).toBe("");
   });
 });

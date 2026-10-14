@@ -104,6 +104,16 @@ TEST("a value reads as the web shows it: a date alone as that day, wherever it's
 	CHECK(show(value(3)) == "3");
 	CHECK(show(value(2.5)) == "2.5");
 	CHECK(show(value(std::vector<value>{"ui", "", "desktop"})) == "ui, desktop");
+	// What a worker said, as a sentence; other data by its names.
+	value said = value::map();
+	said.fields["status"] = value("waiting");
+	said.fields["at"] = value("Waiting for packages");
+	said.fields["runner"] = value("2");
+	said.fields["note"] = value("waiting on @uione/react");
+	CHECK(show(said) == "Waiting at Waiting for packages, runner 2: waiting on @uione/react");
+	value other = value::map();
+	other.fields["size"] = value(3);
+	CHECK(show(other) == "size 3");
 }
 
 TEST("a field with nothing in it is none, as a condition compares it") {

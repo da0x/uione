@@ -74,6 +74,36 @@ export function dateOnly(value: Date): boolean {
   return value.getUTCHours() === 0 && value.getUTCMinutes() === 0 && value.getUTCSeconds() === 0 && value.getUTCMilliseconds() === 0;
 }
 
+// A running time: 35s, 4m, 1h 12m, 2d 3h.
+export function runningTime(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return s % 3600 >= 60 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m` : `${Math.floor(s / 3600)}h`;
+  return s % 86400 >= 3600 ? `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h` : `${Math.floor(s / 86400)}d`;
+}
+
+// What a worker said of what it holds, its card's data, as a sentence: Failed at
+// Publishing to npm, 2h 10m ago: step publish exited 1. Anything else it said follows,
+// each by its name.
+const workWords: Record<string, string> = { inactive: "Not started", waiting: "Waiting", working: "Working", success: "Succeeded", done: "Succeeded", failed: "Failed" };
+function saidOfWork(data: Record<string, unknown>, now: Date): string | undefined {
+  const words = typeof data.status === "string" ? workWords[data.status] : undefined;
+  if (!words) return undefined;
+  let said = words;
+  if (typeof data.at === "string" && data.at) said += ` at ${data.at}`;
+  const since = data.since instanceof Date ? data.since.getTime() : typeof data.since === "string" ? Date.parse(data.since) : NaN;
+  if (!Number.isNaN(since)) said += `, ${runningTime((now.getTime() - since) / 1000)} ago`;
+  const rest = Object.entries(data)
+    .filter(([name]) => !["status", "at", "since", "note"].includes(name))
+    .map(([name, item]) => [name, show(item, now)])
+    .filter(([, shown]) => shown !== "")
+    .map(([name, shown]) => `${name} ${shown}`);
+  if (rest.length > 0) said += `, ${rest.join(", ")}`;
+  if (typeof data.note === "string" && data.note) said += `: ${data.note}`;
+  return said;
+}
+
 export function show(value: unknown, now = new Date()): string {
   if (value instanceof Date && !dateOnly(value) && value.toDateString() === now.toDateString()) {
     return value.toLocaleTimeString(undefined, { timeStyle: "short" });
@@ -82,6 +112,8 @@ export function show(value: unknown, now = new Date()): string {
   if (Array.isArray(value)) return value.map((item) => show(item, now)).filter((item) => item !== "").join(", ");
   // Named values, like a card's data, each by its name: status working, runner 2.
   if (value !== null && typeof value === "object") {
+    const work = saidOfWork(value as Record<string, unknown>, now);
+    if (work) return work;
     return Object.entries(value)
       .map(([name, item]) => [name, show(item, now)])
       .filter(([, shown]) => shown !== "")
