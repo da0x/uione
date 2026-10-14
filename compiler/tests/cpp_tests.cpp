@@ -120,6 +120,8 @@ TEST_CASE("an app's C++ client has its records, their ids, its commands and its 
     CHECK(has(h, "std::optional<std::string> into{};"));
     CHECK(has(h, "std::string job_move(const work::job_move& sent) {"));
     CHECK(has(h, "post(\"/api/work/job/move\", sent.json())"));
+    // And any by its name, its whole answer, for what it says besides the id.
+    CHECK(has(h, "ember::value said(const std::string& command, const std::string& body) {"));
     // A view, its list's columns typed through what they point at.
     CHECK(has(h, "struct crew_page {"));
     CHECK(has(h, "std::string slug{};"));

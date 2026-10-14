@@ -687,6 +687,14 @@ namespace one::generators {
                 out.close("}");
                 out.line();
             }
+            out.line("// A command by its name, like \"projects::service::key\", sent as JSON: its whole");
+            out.line("// answer, for what it says besides the id, like a service's new key.");
+            out.open("ember::value said(const std::string& command, const std::string& body) {");
+            out.line("std::string route = \"/api/\" + command;");
+            out.line("for (std::size_t at = route.find(\"::\"); at != std::string::npos; at = route.find(\"::\", at)) route.replace(at, 2, \"/\");");
+            out.line("return ember::parse_json(post(route, body));");
+            out.close("}");
+            out.line();
             for (auto& [ns, at] : namespaces_) {
                 if (ns.empty()) continue;
                 std::string space = cpp_detail::identifier(ns);

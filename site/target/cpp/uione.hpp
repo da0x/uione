@@ -520,6 +520,14 @@ namespace uione {
 			return out;
 		}
 
+		// A command by its name, like "projects::service::key", sent as JSON: its whole
+		// answer, for what it says besides the id, like a service's new key.
+		ember::value said(const std::string& command, const std::string& body) {
+			std::string route = "/api/" + command;
+			for (std::size_t at = route.find("::"); at != std::string::npos; at = route.find("::", at)) route.replace(at, 2, "/");
+			return ember::parse_json(post(route, body));
+		}
+
 		// project::create: the id of what it changed, or refused.
 		std::string project_create(const studio::project_create& sent) {
 			return detail::text(ember::parse_json(post("/api/studio/project/create", sent.json()))["id"]);
