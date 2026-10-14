@@ -449,7 +449,7 @@ namespace one::terminal::runtime {
 	// terminals have no orange), green done, red failed.
 	terminal::view status_dot(const std::string& status) {
 		static const std::map<std::string, color> colors{
-		    {"inactive", color::bright_black}, {"waiting", color::blue}, {"working", color::yellow}, {"done", color::green}, {"failed", color::red}};
+		    {"inactive", color::bright_black}, {"waiting", color::blue}, {"working", color::yellow}, {"success", color::green}, {"done", color::green}, {"failed", color::red}};
 		auto found = colors.find(status);
 		if (found == colors.end()) return terminal::text(" ");
 		return terminal::text("●", colored(found->second));
@@ -463,7 +463,7 @@ namespace one::terminal::runtime {
 		if (model.loading) return quiet("Loading…");
 		if (model.lanes.empty()) return quiet("Nothing here yet.");
 		static const std::map<std::string, color> colors{
-		    {"inactive", color::bright_black}, {"waiting", color::blue}, {"working", color::yellow}, {"done", color::green}, {"failed", color::red}};
+		    {"inactive", color::bright_black}, {"waiting", color::blue}, {"working", color::yellow}, {"success", color::green}, {"done", color::green}, {"failed", color::red}};
 		std::vector<terminal::view> parts;
 		for (const auto& lane : model.lanes) {
 			parts.push_back(terminal::text(lane.title + "  " + std::to_string(lane.rows.size()), {.bold = true}));

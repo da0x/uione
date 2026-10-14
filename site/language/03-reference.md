@@ -1624,7 +1624,7 @@ form step::update "Save" {
   give its cards' dot, since each board's stages are its people's to change:
   `chime when notify has chime` chimes for a column whose stage's `notify` list
   holds `chime`, and `status by status` takes a stage's `status`, one of
-  `inactive`, `waiting`, `working`, `done` and `failed`, as its cards' dot unless
+  `inactive`, `waiting`, `working`, `success` and `failed`, as its cards' dot unless
   a card's holder says otherwise.
 - `move issue::move along project_page.steps` in its block lets a card be dragged,
   or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one

@@ -19,7 +19,7 @@ namespace one::desktop::runtime {
 		if (model.lanes.empty()) return desktop::text("Nothing here yet.", t.quiet());
 		auto working = color::hex(0xd9730d);
 		auto status_color = [&](const std::string& status) {
-			return status == "waiting" ? t.accent : status == "working" ? working : status == "done" ? t.success : status == "failed" ? t.danger : t.muted;
+			return status == "waiting" ? t.accent : status == "working" ? working : status == "success" ? t.success : status == "failed" ? t.danger : t.muted;
 		};
 		std::vector<desktop::view> lanes;
 		for (const auto& lane : model.lanes) {

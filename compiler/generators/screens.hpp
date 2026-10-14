@@ -283,7 +283,7 @@ namespace one::generators::screens {
                 if (std::ranges::contains(notice.ways, std::string("chime"))) out.notify.push_back(notice.stage);
             }
             for (const auto& [id, title] : out.stages) {
-                if (id == found->done_at) out.statuses.emplace_back(id, "done");
+                if (id == found->done_at) out.statuses.emplace_back(id, "success");
                 else if (failure_stages.contains(join(ns, card.name + "::" + id))) out.statuses.emplace_back(id, "failed");
             }
             return out;

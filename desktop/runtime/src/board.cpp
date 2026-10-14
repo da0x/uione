@@ -21,7 +21,7 @@ namespace one::desktop::runtime {
 			if (status == "inactive") return t.muted;
 			if (status == "waiting") return t.accent;
 			if (status == "working") return color::hex(0xd9730d);
-			if (status == "done") return t.success;
+			if (status == "success" || status == "done") return t.success;
 			if (status == "failed") return t.danger;
 			return std::nullopt;
 		}

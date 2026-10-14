@@ -913,7 +913,7 @@ namespace one::screens {
 
 	std::string status_words(const std::string& status) {
 		static const std::map<std::string, std::string> words{
-		    {"inactive", "Not started"}, {"waiting", "Waiting"}, {"working", "Working"}, {"done", "Done"}, {"failed", "Failed"}};
+		    {"inactive", "Not started"}, {"waiting", "Waiting"}, {"working", "Working"}, {"success", "Succeeded"}, {"done", "Succeeded"}, {"failed", "Failed"}};
 		auto found = words.find(status);
 		return found == words.end() ? "" : found->second;
 	}
@@ -930,11 +930,13 @@ namespace one::screens {
 	// else working while someone's lease on it holds, else its column's status.
 	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown) {
 		const value& data = card["data"];
-		std::string said = data.is_map() ? show(data["status"]) : "";
+		// done is said success now; what was stored before reads as it.
+		auto named = [](std::string status) { return status == "done" ? std::string("success") : status; };
+		std::string said = named(data.is_map() ? show(data["status"]) : "");
 		std::string holder = show(card["held_by"]);
 		const value& until = card["held_until"];
 		bool held = !holder.empty() && until.is_time() && until.as_time() > std::chrono::system_clock::now();
-		shown.status = !status_words(said).empty() ? said : held ? "working" : column_status;
+		shown.status = !status_words(said).empty() ? said : held ? "working" : named(column_status);
 		if (!data.is_map()) return;
 		if (std::string runner = show(data["runner"]); !runner.empty()) shown.runner = "runner " + runner;
 		std::string since = show(data["since"]);
@@ -977,7 +979,9 @@ namespace one::screens {
 		};
 		std::vector<stage_seen> stages;
 		for (const auto& thing : rows_of(over, spec.over_list)) {
-			stages.push_back({thing["id"].as_string(), show(field_of(thing, spec.shown)), spec.status_by.empty() ? "" : show(field_of(thing, spec.status_by)),
+			std::string status = spec.status_by.empty() ? "" : show(field_of(thing, spec.status_by));
+			if (status == "done") status = "success";  // as it was said before
+			stages.push_back({thing["id"].as_string(), show(field_of(thing, spec.shown)), status,
 			                  words_of(field_of(thing, spec.path))});
 		}
 		// The lanes, in the order their kinds first come along the stages.
@@ -1028,7 +1032,7 @@ namespace one::screens {
 			for (std::size_t i = 0; i < path.size(); ++i) {
 				std::string state = i < now ? "done" : i == now ? (failed ? "failed" : "now") : "later";
 				// An end it's reached is done, not still going.
-				if (i == now && !failed && path[i]->status == "done") state = "done";
+				if (i == now && !failed && path[i]->status == "success") state = "done";
 				row.steps.push_back({path[i]->id, path[i]->title, state});
 			}
 			if (failed && now == path.size()) row.steps.push_back({here->id, here->title, "failed"});

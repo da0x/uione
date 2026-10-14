@@ -260,7 +260,7 @@ export interface PipelineRow {
   details: ReactNode[];
   steps: { id: string; title: string; at: "done" | "now" | "later" | "failed" }[];
   // How it's going where it is now, as a board's card's dot says it.
-  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
+  status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
   note?: string; // what its holder last said, like waiting on the packages
 }
 
@@ -294,7 +294,7 @@ export interface CanvasCard {
   link?: LinkProps;
   details: ReactNode[];
   tone?: number;
-  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
+  status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
   x: number;
   y: number;
   width: number;
@@ -355,7 +355,7 @@ export interface BoardCard {
   tone?: number; // how urgent it is, 1 the most, up to 5, as a table's row
   // How it's going, as a dot, with its words for those who can't see it: inactive,
   // waiting, working, done or failed.
-  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
+  status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
 }
 
 // Where a page is among the pages above it, like Projects › neotrac › Product:

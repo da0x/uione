@@ -1507,7 +1507,7 @@ export function Board({
     ? notifyWritten.concat(overRows.filter((row) => Array.isArray(row[notifyBy.field]) && (row[notifyBy.field] as unknown[]).includes(notifyBy.has)).map((row) => row.id))
     : notifyWritten;
   const statuses: Record<string, string> = { ...statusesWritten };
-  if (statusBy) for (const row of overRows) if (typeof row[statusBy] === "string" && statusWords[row[statusBy] as string]) statuses[row.id] = row[statusBy] as string;
+  if (statusBy) for (const row of overRows) if (typeof row[statusBy] === "string" && statusWords[statusOf(row[statusBy] as string)!]) statuses[row.id] = statusOf(row[statusBy] as string)!;
   useArrivals(view, list, by, notify, statuses);
   const cardRows = rowsOf(view.data?.[list]);
   const now = useNow(cardRows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
@@ -1663,7 +1663,7 @@ export function Pipeline({
   const stages = rowsOf(over.data?.[overList]).map((row) => ({
     id: row.id,
     title: show(row[shown]) || row.id,
-    status: statusBy ? show(row[statusBy]) : "",
+    status: statusOf(statusBy ? show(row[statusBy]) : "") ?? "",
     kinds: words(row[path]),
   }));
   const kinds: string[] = [];
@@ -1694,7 +1694,7 @@ export function Pipeline({
         .map((stage, i) => ({
           id: stage.id,
           title: stage.title,
-          at: (i < index ? "done" : i === index ? (failed ? "failed" : stage.status === "done" ? "done" : "now") : "later") as PipelineRow["steps"][number]["at"],
+          at: (i < index ? "done" : i === index ? (failed ? "failed" : stage.status === "success" ? "done" : "now") : "later") as PipelineRow["steps"][number]["at"],
         }))
         .concat(failed && index === steps.length && here ? [{ id: here.id, title: here.title, at: "failed" as const }] : []),
       status: going(card, here?.status, now).status,
@@ -1881,7 +1881,9 @@ export function Canvas({
   );
 }
 
-const statusWords: Record<string, string> = { inactive: "Not started", waiting: "Waiting", working: "Working", done: "Done", failed: "Failed" };
+const statusWords: Record<string, string> = { inactive: "Not started", waiting: "Waiting", working: "Working", success: "Succeeded", failed: "Failed" };
+// done is said success now; what was stored before reads as it.
+const statusOf = (status: string | undefined) => (status === "done" ? "success" : status);
 
 // A running time: 35s, 4m, 1h 12m, 2d 3h.
 export function runningTime(seconds: number): string {
@@ -1896,10 +1898,12 @@ export function runningTime(seconds: number): string {
 // working while someone's lease on it holds, else its column's status.
 function going(card: Row, column: string | undefined, now: number): { status?: BoardCard["status"]; extra: string[] } {
   const data = (card.data ?? {}) as Record<string, unknown>;
-  const said = typeof data.status === "string" && statusWords[data.status] ? data.status : undefined;
+  const stated = typeof data.status === "string" ? statusOf(data.status) : undefined;
+  const said = stated && statusWords[stated] ? stated : undefined;
   const until = card.held_until ? new Date(String(card.held_until)).getTime() : 0;
   const held = Boolean(card.held_by) && until > now;
-  const is = said ?? (held ? "working" : column && statusWords[column] ? column : undefined);
+  const columnIs = statusOf(column);
+  const is = said ?? (held ? "working" : columnIs && statusWords[columnIs] ? columnIs : undefined);
   const extra: string[] = [];
   if (typeof data.runner === "string" && data.runner) extra.push(`runner ${data.runner}`);
   if (typeof data.since === "string" && !Number.isNaN(Date.parse(data.since))) extra.push(runningTime((now - Date.parse(data.since)) / 1000));

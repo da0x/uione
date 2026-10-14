@@ -30,7 +30,7 @@ namespace one::desktop::runtime {
 				dot.color = card.status == "inactive" ? t.muted
 				            : card.status == "waiting" ? t.accent
 				            : card.status == "working" ? color::hex(0xd9730d)
-				            : card.status == "done"    ? t.success
+				            : card.status == "success" ? t.success
 				                                       : t.danger;
 				inside.push_back(desktop::row(desktop::text("●", dot), desktop::text(card.title, title).grow()).spacing(6));
 			}

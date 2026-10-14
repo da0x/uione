@@ -31,6 +31,7 @@ const statusColors: Record<string, string> = {
   inactive: "var(--color-muted)",
   waiting: "var(--color-accent)",
   working: "#d9730d",
+  success: "var(--color-success)",
   done: "var(--color-success)",
   failed: "var(--color-danger)",
 };
