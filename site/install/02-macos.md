@@ -13,7 +13,7 @@ The installer picks the build for your Mac, checks it against the release's
 checksums, and puts it in `~/.local/bin`, with the libraries the desktop and
 terminal apps it writes are built on in `~/.local/share/uione/<version>`. It
 changes nothing else: no profile is edited, and nothing runs as root. [Read it
-first](/install.sh) if you like, and set `UIONE_VERSION=0.12.0` for a particular
+first](/install.sh) if you like, and set `UIONE_VERSION=0.13.0` for a particular
 release or `UIONE_INSTALL` for another folder. On an Intel Mac, [build it from source](/install/source).
 
 Check it:
@@ -35,7 +35,7 @@ uione in [the studio](https://uione.io/signin), in your browser, with every line
 
 ```sh
 mkdir tasks && cd tasks
-curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.12.0/examples/tasks/main.one -o main.one
+curl -fsSL https://raw.githubusercontent.com/da0x/uione/v0.13.0/examples/tasks/main.one -o main.one
 one check .
 one build .
 ```
