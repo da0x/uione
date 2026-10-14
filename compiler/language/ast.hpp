@@ -716,6 +716,12 @@ namespace one::language {
         std::optional<track_setting> track;
         std::optional<std::string> reorder;  // reorder position: cards dragged into order in their column
         location reorder_where;
+        // chime when notify has chime: a column whose row's list holds the word chimes
+        // when a card arrives; status by status: its row's field is its cards' dot.
+        std::string chime_field, chime_word;
+        location chime_where;
+        std::string status_field;
+        location status_where;
     };
 
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as

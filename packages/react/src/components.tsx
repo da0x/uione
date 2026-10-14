@@ -1460,8 +1460,10 @@ export function Board({
   tint,
   track,
   reorder,
-  notify = [],
-  statuses = {},
+  notify: notifyWritten = [],
+  statuses: statusesWritten = {},
+  notifyBy,
+  statusBy,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1487,11 +1489,20 @@ export function Board({
   reorder?: { command: string; field: string; allowed?: boolean };
   notify?: string[]; // the columns that chime when a card arrives
   statuses?: Record<string, string>; // a column's status, the dot its cards show unless they say
+  notifyBy?: { field: string; has: string }; // columns kept as records: the field that lists how they notify
+  statusBy?: string; // and the field that's their status
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const runner = useConfirmedRunner();
+  // Columns kept as records say for themselves whether they chime and their status.
+  const overRows = rowsOf(over.data?.[overList]);
+  const notify = notifyBy
+    ? notifyWritten.concat(overRows.filter((row) => Array.isArray(row[notifyBy.field]) && (row[notifyBy.field] as unknown[]).includes(notifyBy.has)).map((row) => row.id))
+    : notifyWritten;
+  const statuses: Record<string, string> = { ...statusesWritten };
+  if (statusBy) for (const row of overRows) if (typeof row[statusBy] === "string" && statusWords[row[statusBy] as string]) statuses[row.id] = row[statusBy] as string;
   useArrivals(view, list, by, notify);
   const cardRows = rowsOf(view.data?.[list]);
   const now = useNow(cardRows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));

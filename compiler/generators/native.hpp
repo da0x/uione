@@ -606,6 +606,9 @@ namespace one::generators {
             if (std::string t = track_of(parts, ns, track); !t.empty()) out += ", .track = " + t;
             if (std::string reorder = reorder_of(parts, ns, b.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;
             if (!stages.notify.empty()) out += ", .notify = " + native_detail::strings(stages.notify);
+            // Columns kept as records say their chime and status in their own fields.
+            if (!b.chime_field.empty()) out += ", .notify_by = " + str(b.chime_field) + ", .notify_has = " + str(b.chime_word);
+            if (!b.status_field.empty()) out += ", .status_by = " + str(b.status_field);
             if (!stages.statuses.empty()) {
                 std::string statuses;
                 for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + std::string("{") + str(stage) + ", " + str(status) + "}";

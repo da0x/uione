@@ -1626,6 +1626,27 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // chime when notify has chime
+                        if (at_word("chime") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                            advance();
+                            advance();
+                            board.chime_where = peek().where;
+                            board.chime_field = expect(token_kind::identifier, "the field of its columns saying how they notify, like chime when notify has chime").text;
+                            if (!at_word("has")) fail_expecting("'has' and what the field holds, like chime when notify has chime");
+                            advance();
+                            board.chime_word = expect(token_kind::identifier, "what the field holds, like chime when notify has chime").text;
+                            end_line();
+                            continue;
+                        }
+                        // status by status
+                        if (at_word("status") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            advance();
+                            advance();
+                            board.status_where = peek().where;
+                            board.status_field = expect(token_kind::identifier, "the field of its columns saying their status, like status by status").text;
+                            end_line();
+                            continue;
+                        }
                         // tint by priority
                         if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
                             advance();

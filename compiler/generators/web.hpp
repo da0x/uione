@@ -1253,6 +1253,9 @@ namespace one::generators {
             for (const auto& column : written ? std::vector<std::string>{} : listed_columns(ns, board.over.text(), board.over_list)) {
                 if (column == "title") line += " shown=\"title\"";
             }
+            // Columns kept as records say their chime and status in their own fields.
+            if (!board.chime_field.empty()) line += " notifyBy={{ field: " + web_detail::js_string(board.chime_field) + ", has: " + web_detail::js_string(board.chime_word) + " }}";
+            if (!board.status_field.empty()) line += " statusBy=" + web_detail::js_string(board.status_field);
             if (!stages.statuses.empty()) {
                 std::string statuses;
                 for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + stage + ": " + web_detail::js_string(status);

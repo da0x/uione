@@ -1612,6 +1612,12 @@ form step::update "Save" {
   as its enum says. `move order::move` with no `along` goes along the steps its
   workflow writes, those out of the stages no agent works, since an agent moves on
   what it works itself. A stage that says `notify chime` has a bell on its column.
+- A board over stage records says which of their fields make a column chime and
+  give its cards' dot, since each board's stages are its people's to change:
+  `chime when notify has chime` chimes for a column whose stage's `notify` list
+  holds `chime`, and `status by status` takes a stage's `status`, one of
+  `inactive`, `waiting`, `working`, `done` and `failed`, as its cards' dot unless
+  a card's holder says otherwise.
 - `move issue::move along project_page.steps` in its block lets a card be dragged,
   or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one
   of the person's roles; while it's dragged, the columns it can't go to are dimmed.

@@ -193,6 +193,9 @@ namespace one::screens {
 		std::optional<reorder_spec> reorder = std::nullopt;
 		std::vector<std::string> notify = {};  // the columns that chime when a card arrives
 		std::map<std::string, std::string> statuses = {};  // a column's status, the dot its cards show unless they say
+		// Columns kept as records: the field of theirs that lists how they notify, and
+		// the word in it that chimes; and the field that's their status.
+		std::string notify_by = "", notify_has = "", status_by = "";
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row

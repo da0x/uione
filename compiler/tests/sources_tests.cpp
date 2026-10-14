@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/project.hpp"
+#include "generators/web.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
@@ -116,6 +117,58 @@ TEST_CASE("a board over stages written in the code has them as its columns, its 
         CHECK(native.find(R"(.over = state<view_state>(view_state{status::ready, ember::parse_json("{\"stages\":[{\"id\":\"to_do\",\"title\":\"To do\"},)") != std::string::npos);
         CHECK(native.find(R"(.notify = {"printed"}, .statuses = {{"printed", "done"}, {"failed", "failed"}})") != std::string::npos);
     }
+}
+
+TEST_CASE("a board over stage records chimes and shows a status where each stage's own fields say") {
+    const std::string source = R"(namespace yard {
+entity stage {
+	title   text  required
+	notify  list of text
+	status  text
+}
+entity job {
+	title  text  required
+	stage  stage
+}
+view yard_page {
+	jobs = each job {
+		title  stage
+	}
+	stages = each stage {
+		title  notify  status
+	}
+}
+screen "Yard" /yard {
+	board yard_page.jobs by stage over yard_page.stages {
+		chime when notify has chime
+		status by status
+		title
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Board") != std::string::npos; });
+    REQUIRE(screen != web.end());
+    CAPTURE(screen->content);
+    CHECK(screen->content.find(R"(notifyBy={{ field: "notify", has: "chime" }} statusBy="status")") != std::string::npos);
+    // A field its columns don't have is said to be missing.
+    std::string missing = source;
+    missing.replace(missing.find("\t\ttitle  notify  status\n"), std::string("\t\ttitle  notify  status\n").size(), "\t\ttitle\n");
+    language::diagnostics wrong;
+    std::vector<language::file> again;
+    again.push_back(language::parse("main.one", missing, wrong));
+    language::check(again, wrong);
+    std::vector<std::string> said;
+    for (const auto& d : wrong) said.push_back(d.message);
+    CAPTURE(said);
+    CHECK(std::ranges::contains(said, std::string("view yard_page has no notify in its stages; add it to the list's block")));
+    CHECK(std::ranges::contains(said, std::string("view yard_page has no status in its stages; add it to the list's block")));
 }
 
 TEST_CASE("a command's lines lead to the Go they became") {

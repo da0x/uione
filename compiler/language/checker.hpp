@@ -3139,6 +3139,15 @@ namespace one::language {
             }
             verify_tint(ns, *cards, board.view.text(), board.tint, board.tint_where);
             if (board.reorder) verify_reorder(ns, *cards, *board.reorder, board.reorder_where, "board", "cards");
+            // chime when notify has chime, and status by status: fields of its columns.
+            for (const auto& [field, where] : {std::pair{board.chime_field, board.chime_where}, std::pair{board.status_field, board.status_where}}) {
+                if (field.empty()) continue;
+                if (written_stages) {
+                    error(where, "the board's columns are " + board.by + "'s choices, so a column's chime and status are said in its workflow, like failed notify chime");
+                } else if (columns && !in_rows(*columns, field)) {
+                    error(where, "view " + board.over.text() + " has no " + field + " in its " + board.over_list + "; add it to the list's block");
+                }
+            }
             if (columns && !in_rows(*columns, "title") && !in_rows(*columns, "name")) {
                 error(board.over.where, "a board's columns are called by their title or name, so " + board.over.text() + "." + board.over_list + " needs one");
             }

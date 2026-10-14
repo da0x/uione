@@ -816,6 +816,18 @@ namespace one::screens {
 				out.offer = std::move(offer);
 			}
 		}
+		// Columns kept as records say for themselves whether they chime and their status.
+		board_spec own = spec;
+		for (const auto& thing : things) {
+			std::string id = thing["id"].as_string();
+			if (!spec.notify_by.empty() && std::ranges::any_of(field_of(thing, spec.notify_by).is_array() ? field_of(thing, spec.notify_by).as_array() : std::vector<value>{},
+			                                                    [&](const value& w) { return w.is_string() && w.as_string() == spec.notify_has; }))
+				own.notify.push_back(id);
+			if (!spec.status_by.empty()) {
+				if (std::string said = show(field_of(thing, spec.status_by)); !status_words(said).empty()) own.statuses[id] = said;
+			}
+		}
+		const board_spec& with = own;
 		for (const auto& thing : things) {
 			board_column column{thing["id"].as_string(), title_of(thing["id"].as_string()), {}, {}};
 			for (const auto& card : all) {
@@ -833,16 +845,16 @@ namespace one::screens {
 					}
 				}
 				if (!spec.link.empty()) shown.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
-				status_of(p, card, spec.statuses.contains(column.id) ? spec.statuses.at(column.id) : "", shown);
+				status_of(p, card, with.statuses.contains(column.id) ? with.statuses.at(column.id) : "", shown);
 				shown.reaches = reaches(column.id);
 				column.cards.push_back(std::move(shown));
 			}
-			column.notify = std::ranges::contains(spec.notify, column.id);
+			column.notify = std::ranges::contains(with.notify, column.id);
 			out.columns.push_back(std::move(column));
 		}
 		// A card that arrives in a column that notifies chimes, once; those there when
 		// the board's first drawn don't.
-		if (!spec.notify.empty()) {
+		if (!with.notify.empty()) {
 			auto seen = p.kept<std::optional<std::map<std::string, std::set<std::string>>>>(out.key + ":seen");
 			std::map<std::string, std::set<std::string>> now;
 			for (const auto& column : out.columns) {

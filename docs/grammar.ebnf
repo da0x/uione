@@ -242,7 +242,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_bl
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("{" NEWLINE? board_line* "}")? END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | column+) END
-board_line     ::= ("move" qualified ("along" qualified "." NAME)? | "tint" "by" NAME | "reorder" NAME | track | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
+board_line     ::= ("move" qualified ("along" qualified "." NAME)? | "chime" "when" NAME "has" NAME | "status" "by" NAME | "tint" "by" NAME | "reorder" NAME | track | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"
 column         ::= NAME ("." NAME)* STRING?
