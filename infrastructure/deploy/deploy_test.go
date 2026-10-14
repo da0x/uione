@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -353,5 +354,95 @@ func TestTheRepositoryIsItsGitHubPage(t *testing.T) {
 	t.Setenv("UIONE_REPOSITORY", "")
 	if got := repositoryOf(t.TempDir()); got != "" {
 		t.Errorf("outside git, the repository is %q", got)
+	}
+}
+
+// A backend that doesn't start on a copy of what's stored stops the deploy before
+// Pulumi changes anything, saying why.
+func TestABackendThatDoesntStartInRehearsalIsntDeployed(t *testing.T) {
+	w := &world{outputs: outputs}
+	tools := w.tools()
+	tools.Rehearse = func(_ context.Context, api, project string, _ io.Writer) error {
+		w.did = append(w.did, "rehearse "+filepath.Base(api)+" "+project)
+		return errors.New("the backend didn't start: once 2026-10-14: Status has to be one of ...")
+	}
+	var progress bytes.Buffer
+	_, err := Run(context.Background(), Options{Build: built(t), Stack: "production", Project: "ui-one", Progress: &progress}, tools)
+	if err == nil || !strings.Contains(err.Error(), "Status has to be one of") {
+		t.Fatalf("the deploy gave %v", err)
+	}
+	want := []string{"api: go mod tidy", "infrastructure: go mod tidy", "open infrastructure production", "preview", "rehearse api ui-one"}
+	if !reflect.DeepEqual(w.did, want) {
+		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
+	}
+	if got := lines(t, &progress); got[len(got)-1] != "rehearse failed" {
+		t.Errorf("progress ended %v", got)
+	}
+}
+
+// Where there's no rehearsing, like with no Docker, the deploy says so and goes on;
+// the project is the one the Pulumi program deploys to when none is given.
+func TestARehearsalThatCantBeDoneIsSaidAndTheDeployGoesOn(t *testing.T) {
+	dir := built(t)
+	if err := os.WriteFile(filepath.Join(dir, "infrastructure", "Pulumi.yaml"), []byte("name: x\nconfig:\n  gcp:project: ui-one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w := &world{outputs: outputs}
+	tools := w.tools()
+	tools.Rehearse = func(_ context.Context, _, project string, _ io.Writer) error {
+		w.did = append(w.did, "rehearse "+project)
+		return fmt.Errorf("%w: there's no Docker", ErrNoRehearsal)
+	}
+	var progress bytes.Buffer
+	if _, err := Run(context.Background(), Options{Build: dir, Stack: "production", Progress: &progress}, tools); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(w.did, "rehearse ui-one") || !slices.Contains(w.did, "up") {
+		t.Errorf("the deploy did %v", w.did)
+	}
+	if got := lines(t, &progress); !slices.Contains(got, "rehearse progress") || !slices.Contains(got, "rehearse finished") {
+		t.Errorf("progress was %v", got)
+	}
+}
+
+// Cloud Run turning the new backend down is explained by what its log says.
+func TestABackendCloudRunTurnsDownIsExplained(t *testing.T) {
+	w := &world{outputs: outputs, failAt: "up"}
+	tools := w.tools()
+	var told string
+	tools.Explain = func(_ context.Context, project, failure string) string {
+		told = project + ": " + failure
+		return "The backend's log says:\n  one: once: Status has to be one of ..."
+	}
+	_, err := Run(context.Background(), Options{Build: built(t), Stack: "production", Project: "ui-one"}, tools)
+	if err == nil || !strings.Contains(err.Error(), "up went wrong\nThe backend's log says:") {
+		t.Errorf("the deploy gave %v", err)
+	}
+	if told != "ui-one: up went wrong" {
+		t.Errorf("explain was told %q", told)
+	}
+}
+
+// What a revision's log says is the backend's own lines, oldest first, without
+// Cloud Run's lines about its probes and instances.
+func TestARevisionsLogIsReadForWhatTheBackendSaid(t *testing.T) {
+	bin := t.TempDir()
+	asked := filepath.Join(bin, "asked")
+	gcloud := "#!/bin/sh\necho \"$@\" > " + asked + "\n" +
+		"printf 'Default STARTUP TCP probe failed 1 time consecutively for container\\nContainer called exit(1).\\none: once stage success: Status has to be one of ...\\nStarting new instance. Reason: DEPLOYMENT_ROLLOUT\\none: starting\\n'\n"
+	if err := os.WriteFile(filepath.Join(bin, "gcloud"), []byte(gcloud), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
+	failure := "Error waiting for Updating Service ... Logs URL: https://console.cloud.google.com/logs/viewer?project=neo&resource=cloud_run_revision/service_name/api/revision_name/api-00046-7ld&advancedFilter=x"
+	got := explain(context.Background(), "neo", failure)
+	if want := "The backend's log says:\n  one: starting\n  one: once stage success: Status has to be one of ..."; got != want {
+		t.Errorf("explained as\n%s\nwant\n%s", got, want)
+	}
+	if data, _ := os.ReadFile(asked); !strings.Contains(string(data), `revision_name="api-00046-7ld"`) || !strings.Contains(string(data), "--project neo") {
+		t.Errorf("gcloud was asked %s", data)
+	}
+	if explain(context.Background(), "neo", "some other failure") != "" {
+		t.Errorf("a failure naming no revision was explained")
 	}
 }

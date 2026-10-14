@@ -20,10 +20,11 @@ import (
 )
 
 // Real are the tools a deploy uses outside a test: Pulumi's Automation API, the
-// commands on this machine, and Firebase Hosting with the Google sign-in that gcloud
-// set up (application default credentials).
+// commands on this machine, Firebase Hosting and Firestore with the Google sign-in
+// that gcloud set up (application default credentials), Docker for a rehearsal's
+// emulator, and gcloud for a failed revision's log.
 func Real() Tools {
-	return Tools{Program: automation, Run: command, Upload: upload, Records: domainRecords}
+	return Tools{Program: automation, Run: command, Upload: upload, Records: domainRecords, Rehearse: rehearse, Explain: explain}
 }
 
 type stack struct{ s auto.Stack }

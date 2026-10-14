@@ -54,11 +54,23 @@ type Tools struct {
 	Upload  func(ctx context.Context, project, web string, progress func(name, message string)) error
 	// Records asks Hosting what the domain still needs at its DNS host.
 	Records func(ctx context.Context, project, domain string) ([]string, error)
+	// Rehearse starts the new backend on a copy of what the project stores, before
+	// anything is built or changed, and says why it didn't start, if it didn't. It
+	// returns ErrNoRehearsal where it can't be done, like on a machine without
+	// Docker. May be nil.
+	Rehearse func(ctx context.Context, api, project string, log io.Writer) error
+	// Explain says why Cloud Run turned the new backend down, from its revision's
+	// log, given what the deploy failed with; "" when it can't tell. May be nil.
+	Explain func(ctx context.Context, project, failure string) string
 }
+
+// ErrNoRehearsal is what Rehearse returns where it can't be done: the deploy goes on
+// without it, and says so.
+var ErrNoRehearsal = errors.New("deploy: the backend can't be started here before it's deployed")
 
 // A Line is one line of progress.
 type Line struct {
-	Step    string    `json:"step"`   // tidy, preview, up, build, upload, done
+	Step    string    `json:"step"`   // tidy, preview, rehearse, up, build, upload, done
 	Status  string    `json:"status"` // started, finished, failed, refused, or progress
 	Message string    `json:"message,omitempty"`
 	At      time.Time `json:"at"`
@@ -122,15 +134,39 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 	}); err != nil {
 		return "", err
 	}
+	// The new backend, started on a copy of what's stored before anything is built:
+	// what it does when it starts, like a once moving records along, fails here in
+	// seconds, saying why, rather than after its image is built, in Cloud Run.
+	project := o.Project
+	if project == "" {
+		project = configuredProject(infrastructure)
+	}
+	if tools.Rehearse != nil && project != "" {
+		if err := step("rehearse", func() error {
+			err := tools.Rehearse(ctx, filepath.Join(o.Build, "api"), project, log)
+			if errors.Is(err, ErrNoRehearsal) {
+				say("rehearse", "progress", err.Error())
+				return nil
+			}
+			return err
+		}); err != nil {
+			return "", err
+		}
+	}
 	var outputs map[string]any
 	if err := step("up", func() error {
 		var err error
 		outputs, err = program.Up(ctx, log)
+		if err != nil && tools.Explain != nil && project != "" {
+			if why := tools.Explain(ctx, project, err.Error()); why != "" {
+				err = fmt.Errorf("%w\n%s", err, why)
+			}
+		}
 		return err
 	}); err != nil {
 		return "", err
 	}
-	project := text(outputs, "firebase_project_id")
+	project = text(outputs, "firebase_project_id")
 	if err := step("build", func() error {
 		env, err := settings(outputs)
 		if err != nil {
@@ -269,4 +305,19 @@ func webAddress(remote string) string {
 		return ""
 	}
 	return remote
+}
+
+// configuredProject is the Google Cloud project the Pulumi program deploys to, as its
+// Pulumi.yaml says, gcp:project; "" when it doesn't say.
+func configuredProject(infrastructure string) string {
+	data, err := os.ReadFile(filepath.Join(infrastructure, "Pulumi.yaml"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if value, found := strings.CutPrefix(strings.TrimSpace(line), "gcp:project:"); found {
+			return strings.Trim(strings.TrimSpace(value), `"'`)
+		}
+	}
+	return ""
 }

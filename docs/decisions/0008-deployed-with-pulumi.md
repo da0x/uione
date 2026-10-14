@@ -16,9 +16,19 @@ Everything a project runs on is declared in Pulumi. `one build` writes a Go prog
 into `build/infrastructure` that holds only the project's settings; the
 `infrastructure` library declares the resources. State lives in Pulumi Cloud.
 
-- The backend's image is built by Cloud Build under its own service account, from
-  a bucket the program declares, and tagged with a hash of its source so an
-  unchanged backend isn't rebuilt.
+- The backend is compiled where the deploy runs, for Cloud Run's Linux, with Go's
+  own caches, and Cloud Build puts only that binary in an image, under its own
+  service account, from a bucket the program declares. The image is tagged with a
+  hash of its source so an unchanged backend isn't rebuilt. (Until 0.14.2 Cloud
+  Build compiled it, downloading and compiling every module again each time: four
+  minutes, where this takes seconds.)
+- Before Pulumi changes anything, the deploy rehearses: it starts the new backend
+  on a Firestore emulator in Docker holding a copy of what the project stores,
+  views left out, so what it does as it starts, like a once moving records along,
+  fails there in seconds, saying why, rather than in Cloud Run after the image is
+  built. Where there's no Docker, it says so and goes on. If Cloud Run turns a
+  backend down anyway, the deploy reads the revision's log and says what the
+  backend said.
 - One deployer, `infrastructure/deploy`, does a whole deploy, for the command line
   and for uione's hosting service alike: Pulumi through its Automation API, the
   web app built with what Pulumi made, and an upload through Hosting's own API,
