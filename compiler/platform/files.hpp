@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -95,6 +96,17 @@ namespace one::platform {
         namespace fs = std::filesystem;
         std::string path = fs::relative(fs::weakly_canonical(to), fs::weakly_canonical(from)).generic_string();
         return path.starts_with("../") ? path : "./" + path;
+    }
+
+    // A uione checkout whose libraries a build uses instead of the released ones,
+    // UIONE_LIBRARIES=~/uione: its Go one and infrastructure modules, and its @uione
+    // packages as they're built there, so a project can be built and deployed with
+    // what isn't released yet, to try it before it is.
+    inline std::optional<std::string> libraries_from() {
+        const char* said = std::getenv("UIONE_LIBRARIES");
+        if (!said || !*said) return std::nullopt;
+        std::error_code ignored;
+        return std::filesystem::weakly_canonical(said, ignored).string();
     }
 
     inline std::string resolve(const std::string& base, const std::string& path) {

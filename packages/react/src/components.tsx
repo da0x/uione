@@ -1206,6 +1206,7 @@ export interface TrackSpec {
   shown?: string; // what a card is called, like title
   columns: Record<string, string>; // what else a card shows, like { due: "Due" }
   hideEmpty?: boolean; // a record none of the rows names isn't on it, unless it's picked
+  pickedLast?: boolean; // the last record is picked until another is, like the newest milestone; every row is milestone/every
   // In a switch, drawn once above it rather than by each way the list is shown, which
   // still keeps to its pick.
   above?: boolean;
@@ -1218,6 +1219,9 @@ export interface TrackSpec {
   statusBy?: string;
   statuses?: Record<string, string>;
 }
+
+// A track that picks its last until another is says it's showing every row so.
+const every = "every";
 
 // The rows a track keeps, and the track itself, drawn above them. The record picked
 // is in the page's path by its field's name, like /milestone/beta, so a link shows
@@ -1251,10 +1255,14 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
   // A record is named in the path by what sets it apart, like beta of neotrac-beta.
   const ids = records.map((record) => record.id);
   const start = ids.length > 1 ? sharedStart(ids) : (ids[0] ?? "").slice(0, (ids[0] ?? "").lastIndexOf("-") + 1);
-  const picked = part ? records.find((record) => record.id.slice(start.length) === part)?.id : undefined;
-  const keeps = (row: Row) => !picked || row[track.field] === picked;
+  const named = part && part !== every ? records.find((record) => record.id.slice(start.length) === part)?.id : undefined;
   // Without rows of its own, a record is left out when the track says so, unless it's picked.
-  const shownRecords = track.hideEmpty ? records.filter((record) => record.id === picked || rows.some((row) => row[track.field] === record.id)) : records;
+  const shownWith = (picked: string | undefined) =>
+    track.hideEmpty ? records.filter((record) => record.id === picked || rows.some((row) => row[track.field] === record.id)) : records;
+  // The last, until another is picked, or every row is.
+  const picked = named ?? (track.pickedLast && !part ? shownWith(undefined).at(-1)?.id : undefined);
+  const keeps = (row: Row) => !picked || row[track.field] === picked;
+  const shownRecords = shownWith(picked);
   const element = !track.above && shownRecords.length > 0 && (
     <ui.Track
       label={label(track.field)}
@@ -1269,7 +1277,7 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
         ...(statusOfRecord(record.id) ? { status: statusOfRecord(record.id) } : {}),
         selected: record.id === picked,
         onSelect: () => {
-          setPart(record.id === picked ? "" : record.id.slice(start.length));
+          setPart(record.id === picked ? (track.pickedLast ? every : "") : record.id.slice(start.length));
           onPick?.();
         },
       }))}

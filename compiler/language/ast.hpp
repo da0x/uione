@@ -614,6 +614,7 @@ namespace one::language {
         std::string over_list;
         std::vector<table_column> columns;  // what a card shows besides its title, like due
         bool hide_empty = false;            // hide when empty: a record no row names isn't on it
+        bool picked_last = false;           // picked last: the last record on it is picked until another is
     };
 
     struct table_item {

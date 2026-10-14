@@ -518,6 +518,38 @@ describe("a switch's track", () => {
   });
 });
 
+describe("a track that's picked last", () => {
+  it("keeps to the newest milestone with issues until another is picked, and picked again shows them all", () => {
+    const source = memorySource({
+      views: {
+        "projects::board_page": {
+          milestones: [
+            { id: "m13", title: "0.13.2" },
+            { id: "m14", title: "0.14.0" },
+            { id: "m99", title: "0.15.0" },
+          ],
+          issues: [
+            { id: "i1", title: "compiler 0.13.2", milestone: "m13" },
+            { id: "i2", title: "compiler 0.14.0", milestone: "m14" },
+          ],
+        },
+      },
+    });
+    renderScreen(source, () => {
+      const page = useView("projects::board_page");
+      return <Table view={page} list="issues" columns={{ title: "Title" }} track={{ field: "milestone", view: page, list: "milestones", shown: "title", columns: {}, hideEmpty: true, pickedLast: true }} />;
+    });
+    // 0.15.0 has no issues, so it's hidden, and 0.14.0 is the newest.
+    expect(screen.queryByText("compiler 0.13.2")).toBeNull();
+    expect(screen.getByText("compiler 0.14.0")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /0\.13\.2/ }));
+    expect(screen.queryByText("compiler 0.14.0")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /0\.13\.2/ }));
+    expect(screen.getByText("compiler 0.13.2")).toBeTruthy();
+    expect(screen.getByText("compiler 0.14.0")).toBeTruthy();
+  });
+});
+
 describe("a table put in order", () => {
   it("moves a row with Alt and an arrow, giving it a place between its new neighbors", async () => {
     const source = memorySource({

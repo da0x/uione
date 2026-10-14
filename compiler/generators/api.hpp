@@ -354,6 +354,11 @@ namespace one::generators {
             out.line("go 1.26");
             out.line();
             out.line("require github.com/da0x/uione/one v" + std::string(version));
+            if (auto libraries = platform::libraries_from(); libraries && fs::exists(fs::path(*libraries) / "one" / "go.mod")) {
+                out.line();
+                out.line("replace github.com/da0x/uione/one => " + platform::relative_import(out_dir_, (fs::path(*libraries) / "one").string()));
+                return out;
+            }
             for (fs::path dir = fs::weakly_canonical(project_dir_); !dir.empty(); dir = dir.parent_path()) {
                 if (fs::exists(dir / "one" / "go.mod")) {
                     out.line();

@@ -374,8 +374,10 @@ namespace one::generators {
             for (const auto& [key, label] : t.columns) columns += (columns.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label) + "}";
             std::string spec = "track_spec{" + str(t.field) + ", " + view_variable(parts, t.view) + ", " + str(t.list) + ", " + str(t.shown) + ", {" + columns + "}" +
                                (setting->hide_empty ? ", true" : "") + "}";
-            if (!group_track_) return spec;
-            return "[&] { auto t = " + spec + "; t.key = " + str(group_key_) + "; t.above = true;" + more + " return t; }()";
+            std::string sets = setting->picked_last ? " t.picked_last = true;" : "";
+            if (group_track_) sets += " t.key = " + str(group_key_) + "; t.above = true;" + more;
+            if (sets.empty()) return spec;
+            return "[&] { auto t = " + spec + ";" + sets + " return t; }()";
         }
 
         // What a switch's track works its dots out from: the stages of its board, or

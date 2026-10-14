@@ -158,8 +158,10 @@ namespace one::screens {
 		std::string picked;
 		state<std::string> picking;
 		bool above = false;  // drawn above a switch, not by the way it's shown
+		bool picked_last = false;  // the last is picked until another is, so none picked is said as every
 		bool keeps(const value& row, const std::string& field) const { return picked.empty() || field_of(row, field).as_string() == picked; }
-		void pick(const std::string& id) const { picking.set(picking.peek() == id ? "" : id); }
+		void pick(const std::string& id) const { picking.set(picked == id ? (picked_last ? std::string(every) : "") : id); }
+		static constexpr const char* every = "\x01every";
 	};
 	std::optional<track_model> track_of(page_base& p, const std::string& key, const std::optional<track_spec>& spec, const std::vector<value>& rows, const std::string& noun);
 

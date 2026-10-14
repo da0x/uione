@@ -158,6 +158,8 @@ namespace one::screens {
 		std::optional<state<view_state>> over = std::nullopt;
 		std::string over_list = "", status_by = "";
 		std::map<std::string, std::string> statuses = {};
+		// The last record is picked until another is, or none is, like the newest milestone.
+		bool picked_last = false;
 	};
 
 	// Rows put in order by a number, Alt with Up or Down moving the one chosen

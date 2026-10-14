@@ -1575,6 +1575,10 @@ screen "Book" /books/:book {
   Picking one keeps the rows whose `milestone` is it, and picking it again shows
   them all. The one picked is in the path, `/milestone/beta`. A board's own block
   can say `track` too.
+- `hide when empty` in a track's block leaves out a record no row names, unless
+  it's picked. `picked last` picks the last record on it, like the newest
+  milestone, until another is picked; picking it again shows every row, and the
+  path says so, `/milestone/every`.
 - A table, a board, a pipeline and a whiteboard of the same list, switched between,
   have one track, the first any of them says: it's drawn once, above the switch,
   the same whichever is shown, and each keeps to its pick. Each card has a dot when

@@ -327,6 +327,12 @@ TEST("a board chimes for a card that arrives, not for those a pick on its track 
 		picked.set(milestone);
 		t.text();
 	}
+	// Typed into its search and cleared, the cards it hid coming back.
+	auto searched = nav.current().kept<std::string>("board:issues:search");
+	for (std::string typed : {"s", "si", "site", "", "comp", ""}) {
+		searched.set(typed);
+		t.text();
+	}
 	CHECK(heard.empty());
 	data.set("projects::board_page", "atlas-main", page_with("s3"));
 	t.text();
@@ -396,6 +402,47 @@ TEST("a switch's track is drawn once above it, the same whichever way the list i
 	CHECK(dots["0.13.2"] == "success");
 	CHECK(dots["0.14.0"] == "failed");
 	CHECK(dots["0.14.1"] == "");
+}
+
+// A track that says picked last: the newest milestone is picked until another is;
+// picking that one again shows every milestone's cards, and picking none of them
+// again goes back to the newest.
+TEST("a track that's picked last keeps to its last record until another is picked") {
+	memory_source data;
+	auto issue = [](std::string id, std::string title, std::string milestone) {
+		return value(fields{{"id", id}, {"title", title}, {"stage", "s1"}, {"milestone", milestone}});
+	};
+	data.set("projects::board_page", "atlas-releases",
+	         value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}})}},
+	                      {"milestones", list{value(fields{{"id", "m13"}, {"title", "0.13.2"}}), value(fields{{"id", "m14"}, {"title", "0.14.0"}}), value(fields{{"id", "m99"}, {"title", "0.15.0"}})}},
+	                      {"issues", list{issue("atlas-1", "compiler 0.13.2", "m13"), issue("atlas-2", "compiler 0.14.0", "m14")}}}));
+	auto newest = [](state<view_state> v) {
+		auto t = track_spec{"milestone", v, "milestones", "title", {}, true};
+		t.picked_last = true;
+		return t;
+	};
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Releases", "/:project/boards/:board", "", [=](page& p) {
+		                     auto board_page = p.view("projects::board_page", "atlas-releases");
+		                     return items(table(p, {.view = board_page, .list = "issues", .columns = {{"title", "Title"}}, .track = newest(board_page)}));
+	                     }});
+	navigator nav(s, data);
+	screen_at t(nav, 100, 30);
+	nav.open("/atlas/boards/releases");
+	// The newest with cards, as 0.15.0 has none and is hidden while it's empty.
+	std::string drawn = t.text();
+	CHECK(drawn.find("compiler 0.14.0") != std::string::npos);
+	CHECK(drawn.find("compiler 0.13.2") == std::string::npos);
+	auto model = [&] { return track_of(nav.current(), "table:issues", newest(nav.current().view("projects::board_page", "atlas-releases")), rows_of(*nav.current().view("projects::board_page", "atlas-releases"), "issues"), "issues"); };
+	CHECK(model() && model()->picked == "m14");
+	if (!model()) return;
+	model()->pick("m13");
+	CHECK(t.text().find("compiler 0.14.0") == std::string::npos);
+	model()->pick("m14");
+	model()->pick("m14");  // picked again: every milestone's
+	drawn = t.text();
+	CHECK(drawn.find("compiler 0.14.0") != std::string::npos);
+	CHECK(drawn.find("compiler 0.13.2") != std::string::npos);
 }
 
 TEST("a canvas in a terminal: its cards as boxes where they're laid out, n choosing one and each arrow placing it a grid step over") {

@@ -219,7 +219,7 @@ screen "Yard" /yard {
     CHECK(drawn->content.find(R"(.choices = {{"kind", std::vector<one::screens::option>{{"public", "Public"}, {"private", "Private"}}}}, .hide_empty = true)") != std::string::npos);
 }
 
-TEST_CASE("a switch between a table, a board and a whiteboard draws one track above it, which each keeps to") {
+TEST_CASE("a switch between a table, a board and a whiteboard draws one track above it, which each keeps to, picked last as it says") {
     const std::string source = R"(namespace ideas {
 entity wall {
 	title  text  required
@@ -259,7 +259,9 @@ view wall_page per wall {
 }
 screen "{wall_page.title}" /walls/:wall {
 	table wall_page.ideas {
-		track release over wall_page.releases
+		track release over wall_page.releases {
+			picked last
+		}
 		title
 	}
 	board wall_page.ideas by stage over wall_page.stages {
@@ -281,7 +283,7 @@ screen "{wall_page.title}" /walls/:wall {
     auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("switched(p, ") != std::string::npos; });
     REQUIRE(drawn != native.end());
     CAPTURE(drawn->content);
-    std::string shared = R"([&] { auto t = track_spec{"release", wall_page, "releases", "title", {}}; t.key = "switched:ideas::wall_page.ideas"; t.above = true;)";
+    std::string shared = R"([&] { auto t = track_spec{"release", wall_page, "releases", "title", {}}; t.picked_last = true; t.key = "switched:ideas::wall_page.ideas"; t.above = true;)";
     // Drawn once above the switch, its dots from the board's stages.
     CHECK(drawn->content.find("tracked(p, " + shared + R"( t.by = "stage"; t.over = wall_page; t.over_list = "stages"; return t; }(), wall_page, "ideas", switched(p, )") != std::string::npos);
     // Each way it's shown keeps to its pick, the whiteboard too.
@@ -291,9 +293,9 @@ screen "{wall_page.title}" /walls/:wall {
     auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Switched") != std::string::npos; });
     REQUIRE(screen != web.end());
     CAPTURE(screen->content);
-    CHECK(screen->content.find(R"(columns: {  }, above: true, by: "stage", over: wallPage, overList: "stages" }} view={wallPage} list="ideas">)") != std::string::npos);
+    CHECK(screen->content.find(R"(columns: {  }, pickedLast: true, above: true, by: "stage", over: wallPage, overList: "stages" }} view={wallPage} list="ideas">)") != std::string::npos);
     CHECK(screen->content.find(R"(<Canvas )") != std::string::npos);
-    CHECK(screen->content.find(R"(overList="stages" track={{ field: "release", view: wallPage, list: "releases", shown: "title", columns: {  }, above: true }})") != std::string::npos);
+    CHECK(screen->content.find(R"(overList="stages" track={{ field: "release", view: wallPage, list: "releases", shown: "title", columns: {  }, pickedLast: true, above: true }})") != std::string::npos);
 }
 
 TEST_CASE("a canvas places a list's cards by their fields, placed by a command and snapped to a grid, and a board shows instead while a field says so") {

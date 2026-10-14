@@ -2650,6 +2650,15 @@ namespace one::language {
                         end_line();
                         continue;
                     }
+                    // picked last: the last record, like the newest milestone, is picked
+                    // until another is, or none is.
+                    if (at_word("picked") && peek(1).kind == token_kind::identifier && peek(1).text == "last") {
+                        advance();
+                        advance();
+                        track.picked_last = true;
+                        end_line();
+                        continue;
+                    }
                     while (!at_line_end()) {
                         table_column column;
                         column.where = peek().where;

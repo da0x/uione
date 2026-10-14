@@ -120,6 +120,8 @@ namespace one::generators {
         inline std::optional<std::string> nearby(const std::string& project_dir, const std::string& from, const std::string& name,
                                                  const std::string& marker = "go.mod") {
             namespace fs = std::filesystem;
+            if (auto libraries = platform::libraries_from(); libraries && fs::exists(fs::path(*libraries) / name / marker))
+                return platform::relative_import(from, (fs::path(*libraries) / name).string());
             for (fs::path dir = fs::weakly_canonical(project_dir); !dir.empty(); dir = dir.parent_path()) {
                 if (fs::exists(dir / name / marker)) return platform::relative_import(from, (dir / name).string());
                 if (dir == dir.parent_path()) break;

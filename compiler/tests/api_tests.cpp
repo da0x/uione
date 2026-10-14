@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/api.hpp"
+#include "generators/web.hpp"
 #include "generators/indexes.hpp"
 #include "generators/rules.hpp"
 #include "language/checker.hpp"
@@ -29,6 +30,15 @@ namespace {
         for (const auto& path : platform::find_one_files({root + project})) {
             files.push_back(language::parse(path, *platform::read_file(path), out));
         }
+        language::check(files, out);
+        for (const auto& d : out) FAIL_CHECK(language::format(d));
+        return files;
+    }
+
+    std::vector<language::file> read_at(const std::string& dir) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        for (const auto& path : platform::find_one_files({dir})) files.push_back(language::parse(path, *platform::read_file(path), out));
         language::check(files, out);
         for (const auto& d : out) FAIL_CHECK(language::format(d));
         return files;
@@ -1928,4 +1938,30 @@ command order::create
     REQUIRE(found != generated.files.end());
     CHECK(found->content.find("Proof    string   `firestore:\"proof\" one:\"file\"`") != std::string::npos);
     CHECK(found->content.find("Pictures []string `firestore:\"pictures\" one:\"file\"`") != std::string::npos);
+}
+
+// A project outside uione, built with UIONE_LIBRARIES naming a checkout of it, uses
+// that checkout's one module and @uione packages, to be tried before they're released.
+TEST_CASE("UIONE_LIBRARIES builds a project against a checkout's libraries rather than the released ones") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-libraries";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), "import one\nproject trial {\n}\nscreen \"Home\" / {\n\ttext \"hi\"\n}\n");
+    ::setenv("UIONE_LIBRARIES", root.c_str(), 1);
+    auto files = read_at(dir.string());
+    auto api_files = generators::generate_api(files, dir.string(), (dir / "build/api").string());
+    auto web_files = generators::generate_web(files, dir.string(), (dir / "build/web").string());
+    ::unsetenv("UIONE_LIBRARIES");
+    auto without = generators::generate_api(files, dir.string(), (dir / "build/api").string());
+    fs::remove_all(dir);
+    const auto* mod = find(api_files.files, "go.mod");
+    const auto* manifest = find(web_files, "package.json");
+    REQUIRE(mod != nullptr);
+    REQUIRE(manifest != nullptr);
+    CHECK(mod->content.find("replace github.com/da0x/uione/one => " + platform::relative_import((dir / "build/api").string(), root + "/one")) != std::string::npos);
+    CHECK(manifest->content.find("\"@uione/react\": \"file:" + fs::weakly_canonical(root).string() + "/packages/react\"") != std::string::npos);
+    const auto* released = find(without.files, "go.mod");
+    REQUIRE(released != nullptr);
+    CHECK(released->content.find("replace") == std::string::npos);
 }

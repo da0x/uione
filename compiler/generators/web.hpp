@@ -2052,7 +2052,7 @@ namespace one::generators {
             }
             return " track={{ field: " + web_detail::js_string(track.field) + ", view: " + view_variable(parts, track.view) +
                    ", list: " + web_detail::js_string(track.list) + ", shown: " + web_detail::js_string(track.shown) + ", columns: { " + columns + " }" +
-                   (setting->hide_empty ? ", hideEmpty: true" : "") + (group_track_ ? ", above: true" : "") + more + " }}";
+                   (setting->hide_empty ? ", hideEmpty: true" : "") + (setting->picked_last ? ", pickedLast: true" : "") + (group_track_ ? ", above: true" : "") + more + " }}";
         }
 
         // What a switch's track works its dots out from: the stages of its board, or
@@ -2232,6 +2232,12 @@ namespace one::generators {
             // package.json says, since they're released together: an editor checking
             // with an older compiler would call what's new a mistake.
             for (const auto& [package, wanted] : dependencies_) dependencies.emplace(package, package.starts_with("@uione/") ? std::string(version) : wanted);
+            // Or as they're built in a checkout of uione, to try what isn't released.
+            if (auto libraries = platform::libraries_from()) {
+                for (auto& [package, wanted] : dependencies) {
+                    if (package.starts_with("@uione/")) wanted = "file:" + (std::filesystem::path(*libraries) / "packages" / package.substr(7)).string();
+                }
+            }
             out.open("\"dependencies\": {");
             std::size_t n = 0;
             for (const auto& [package, wanted] : dependencies) {

@@ -578,7 +578,10 @@ namespace one::screens {
 		auto picking = p.kept<std::string>((spec->key.empty() ? key : spec->key) + ":track");
 		const auto& records = rows_of(spec->view.get(), spec->list);
 		if (records.empty()) return std::nullopt;
-		track_model out{label(spec->field), {}, picking.get(), picking, spec->above};
+		track_model out{label(spec->field), {}, picking.get(), picking, spec->above, spec->picked_last};
+		// Every row, once the last's been put down on purpose; the last, until any is picked.
+		bool every = out.picked == track_model::every;
+		if (every) out.picked.clear();
 		// Each stage's status, for each row's dot, as a board's card has it.
 		std::map<std::string, std::string> stage_status = spec->statuses;
 		bool staged = !spec->by.empty() && spec->over && (*spec->over)->status == status::ready;
@@ -613,6 +616,10 @@ namespace one::screens {
 				r.status = any_failed ? "failed" : all ? "success" : "";
 			}
 			out.records.push_back(std::move(r));
+		}
+		if (spec->picked_last && out.picked.empty() && !every && !out.records.empty()) {
+			out.picked = out.records.back().id;
+			out.records.back().picked = true;
 		}
 		return out;
 	}
