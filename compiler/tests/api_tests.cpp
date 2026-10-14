@@ -223,6 +223,56 @@ command job::update
     CHECK(found->content.find(R"(dispatched.WaitsOn = one.Add(dispatched.WaitsOn, t.To))") != std::string::npos);
 }
 
+// A closed job keeps its stage, to reopen where it was, and while closed it's in no
+// one's queue and can't be claimed.
+TEST_CASE("a workflow's while keeps what it works to what holds, in its queue and its claim") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace yard {
+entity project {
+	slug  text  required  key
+}
+entity stage {
+	project    project  required  key
+	name       text     required  key
+	worked_by  list of role
+}
+entity step {
+	project  project  required  key
+	from     stage    required  key
+	to       stage    required  key
+	roles    list of role
+}
+entity job {
+	project  project  required  key
+	number   serial   per project  key
+	stage    stage
+	closed   enum  done | dropped
+}
+define role hand "Hand" in project {
+	job::claim
+	job::renew
+	job::release
+	job::move
+}
+define workflow job by stage {
+	worked by worked_by
+	steps step
+	while closed == none
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "yard/yard.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find(R"(return c.Fail("it isn't worked now: only while closed == none"))") != std::string::npos);
+    CHECK(found->content.find(R"(Has("stage.worked_by", one.Subject).And("closed", nil))") != std::string::npos);
+}
+
 TEST_CASE("who may read is said once on an entity, and the views of what's within it read the same") {
     language::diagnostics out;
     std::vector<language::file> files;

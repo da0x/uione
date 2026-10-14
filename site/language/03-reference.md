@@ -1347,6 +1347,10 @@ define workflow order by stage {
   "waiting on …". A board, a pipeline and a whiteboard show it waiting, a blue dot
   and what it waits on, by themselves, with nothing set, until each has succeeded;
   then it's taken as anything else is.
+- `while closed == none` works a record only while that holds. One that doesn't is
+  in nobody's queue, and claiming it is refused: "it isn't worked now: only while
+  closed == none". A closed issue keeps its stage, so it reopens where it was, but
+  no one, and no agent, takes it in the meantime. Moving it isn't affected.
 - `etched  notify chime` tells whoever has the board open when one arrives in that
   stage: its column has a bell, ♪ in the desktop and terminal apps, which chime, with
   [chime](https://github.com/da0x/chime) when it's installed or the terminal's bell

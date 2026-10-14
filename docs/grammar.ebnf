@@ -184,6 +184,7 @@ workflow_line  ::= ( "worked" "by" NAME
                    | NAME "notify" NAME ("," NAME)*
                    | "done" "at" NAME
                    | "depends" "on" NAME
+                   | "while" expression
                    | "lease" WHOLE ("minute" | "minutes" | "hour" | "hours") ) END
 /* define agent: a program working, as a role for services, the stages it names:
  * what it runs when a record arrives there, and where the record goes when the

@@ -551,6 +551,10 @@ namespace one::language {
         location done_when_where;
         std::string depends_on;  // packages: a list of what must be done before it leaves its first stage
         location depends_on_where;
+        // while closed == none: a record is worked, in its queue and its claim, only while
+        // this holds; kept as written, since the workflow is said as code.
+        std::string worked_while;
+        location worked_while_where;
     };
 
     struct function_declaration {

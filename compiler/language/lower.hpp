@@ -480,6 +480,12 @@ namespace one::language {
                 return in;
             }
 
+            // while closed == none: what a claim requires, and what the queue keeps to.
+            static std::string worked_while(const define_workflow_declaration& w) {
+                return w.worked_while.empty() ? "" : "\trequire " + w.worked_while + "  \"it isn't worked now: only while " + w.worked_while + "\"\n";
+            }
+            static std::string kept_while(const define_workflow_declaration& w) { return w.worked_while.empty() ? "" : " && (" + w.worked_while + ")"; }
+
             static std::string lease(const define_workflow_declaration& w) { return std::to_string(w.lease_minutes) + " minutes from now"; }
             static constexpr const char* free = "held_by == none || held_by == me || held_until < now";
 
@@ -701,13 +707,13 @@ namespace one::language {
                     const auto& roles_taking = step.by.empty() ? worked[step.from]->roles : step.by;
                     move += (move.empty() ? "" : " || ") + std::string("was ") + stage(step.from) + " && " + stage(step.to) + " && held(" + role_list(roles_taking) + ")";
                 }
-                std::string text = commanded(w, claim, move, waits);
+                std::string text = commanded(w, claim, move, waits, worked_while(w));
                 // What's worked, with every field of each, and who holds it.
                 std::string rows;
                 for (const auto& f : moving.fields) rows += "  " + f.name;
                 rows += "  held_by  held_by.name  held_until  data";
                 text += "view " + w.entity + "_work per role {\n\treaders member\n\titems = each " + w.entity + " where " + in + " == role." + in +
-                        " && (" + work + ") {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
+                        " && (" + work + ")" + kept_while(w) + " {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
                 said(w, moving, text, declarations, path, made_here);
             }
 
@@ -892,14 +898,14 @@ namespace one::language {
                                                          " && held(roles))",
                                                  "exists(" + steps->name + " where from == was " + e + "." + w->by + " && to == " + e + "." + w->by +
                                                      " && held(roles))",
-                                                 waits, waits);
+                                                 waits, waits + worked_while(*w));
                     // What's worked, with every field of each, its stage, and who holds it.
                     std::string rows;
                     for (const auto& f : moving->fields) rows += "  " + f.name;
                     if (field_named(*stage, "title")) rows += "  " + w->by + ".title";
                     rows += "  " + w->by + "." + w->worked_by + "  held_by  held_by.name  held_until  data";
                     text += "view " + e + "_work per role {\n\treaders member\n\titems = each " + e + " where " + w->by + "." + w->worked_by +
-                            " has role.id {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
+                            " has role.id" + kept_while(*w) + " {\n\t\t" + rows.substr(2) + "\n\t}\n}\n";
                     said(*w, *moving, text, declarations, *path, made_here);
                 }
                 // A workflow that can't be said still has its commands, bare, so the roles

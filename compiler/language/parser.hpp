@@ -1074,6 +1074,13 @@ namespace one::language {
                         auto value = parse_qualified_name("the value saying it's finished, like status::success");
                         w.done_when_value = value.parts.back();
                     }
+                } else if (at_word("while")) {
+                    // while closed == none
+                    advance();
+                    w.worked_while_where = peek().where;
+                    std::size_t begin = peek().begin;
+                    parse_expression();
+                    w.worked_while = std::string(source_.substr(begin, tokens_[pos_ - 1].end - begin));
                 } else if (at_word("depends") && peek(1).kind == token_kind::identifier && peek(1).text == "on") {
                     // depends on packages
                     advance();
