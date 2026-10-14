@@ -16,6 +16,7 @@
 #include <fstream>
 #include <map>
 #include <print>
+#include <random>
 #include <set>
 
 extern char** environ;
@@ -116,7 +117,6 @@ namespace one::client {
 		}
 		std::filesystem::create_directories(logs);
 		auto me = app.me();
-		std::string uid = app.uid();
 
 		// The latest of each queue the rules read, for the role the agent works as.
 		std::map<std::string, std::vector<ember::value>> queues;
@@ -144,6 +144,9 @@ namespace one::client {
 
 		std::map<std::string, running> working;  // by record id
 		std::set<std::string> tried;  // taken by someone else as it was asked for; asked again once a queue changes
+		std::map<std::string, std::chrono::steady_clock::time_point> waiting;  // when it asks for each, as it spreads the work
+		std::mt19937 generator{std::random_device{}()};
+		std::uniform_int_distribution<int> chance(0, 300);
 		auto run = [&](const std::string& command, const std::map<std::string, ember::value>& fields) { app.run(command, ember::value(fields)); };
 
 		// Runs the stage's program on a record it holds, in a folder of its own.
@@ -244,7 +247,12 @@ namespace one::client {
 				++it;
 			}
 			if (changed) tried.clear(), changed = false;
-			// What's arrived in a stage it works, free or held past its lease, is taken.
+			// What's arrived in a stage it works, free or held past its lease, is taken,
+			// after a wait that grows with how busy this agent is, and a little chance:
+			// where several agents work the same stages, the least busy one usually asks
+			// first. The lease still decides; the wait only spreads the work.
+			auto now = std::chrono::steady_clock::now();
+			std::set<std::string> eligible;
 			for (const auto& rule : what.rules) {
 				for (const auto& record : queues[rule.queue]) {
 					if (working.size() >= at_once) break;
@@ -252,9 +260,17 @@ namespace one::client {
 					if (id.empty() || working.contains(id) || tried.contains(id) || text(record[rule.along]) != rule.stage) continue;
 					std::string holder = text(record["held_by"]);
 					bool lapsed = record["held_until"].is_time() && when(record["held_until"]) < std::chrono::system_clock::now();
-					if (!holder.empty() && holder != uid && !lapsed) continue;
+					// Held under this agent's own key but not run here is another agent's,
+					// started with the same key, until its lease runs out.
+					if (!holder.empty() && !lapsed) continue;
+					eligible.insert(id);
+					{
+						auto [due, fresh] = waiting.try_emplace(id, now);
+						if (fresh) due->second = now + std::chrono::milliseconds(working.size() * 1500 / at_once + chance(generator));
+						if (now < due->second) continue;
+					}
 					try {
-						if (holder != uid) run(rule.entity + "::claim", {{"id", id}});
+						run(rule.entity + "::claim", {{"id", id}});
 						start(rule, record);
 					} catch (const refused& e) {
 						if (e.status == 0) {
@@ -267,6 +283,7 @@ namespace one::client {
 					}
 				}
 			}
+			std::erase_if(waiting, [&](const auto& w) { return !eligible.contains(w.first); });
 		}
 		// Stopped: what's running is stopped too, and let go for another to take.
 		for (auto& [id, r] : working) {

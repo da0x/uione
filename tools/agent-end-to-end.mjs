@@ -80,7 +80,7 @@ async function stored(collection, id) {
   return Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.stringValue ?? v.timestampValue ?? v.nullValue ?? v]));
 }
 
-function agent(name, key) {
+function agent(name, key, extra = {}) {
   const child = spawn(join(work, "press-build/press"), [], {
     cwd: shopFolder,
     env: {
@@ -91,6 +91,7 @@ function agent(name, key) {
       ONE_FIRESTORE_HOST: emulators.firestore,
       ONE_AUTH_HOST: emulators.auth,
       XDG_STATE_HOME: join(work, name),
+      ...extra,
     },
     stdio: ["ignore", "inherit", "pipe"],
   });
@@ -161,6 +162,20 @@ try {
   agent("second", pressKey);
   await until(async () => (await stored("shop_plate", slow)).stage === "etched", "another press takes it once the lease runs out", 120000);
   pass("a press that stops lets go when its lease runs out, and another takes what it held");
+
+  // Two presses, each working one plate at a time: four plates moved at once are
+  // shared between them, each asking first when it's less busy.
+  for (const r of running.splice(2)) r.kill();
+  const left = agent("left", pressKey, { ONE_AGENT_PARALLEL: "1" });
+  const right = agent("right", pressKey, { ONE_AGENT_PARALLEL: "1" });
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  const batch = [];
+  for (const name of ["One", "Two", "Three", "Four"]) batch.push((await must(foreman, "plate::create", { shop, name })).id);
+  for (const id of batch) await must(foreman, "plate::move", { id, stage: "etching" });
+  await until(async () => (await Promise.all(batch.map((id) => stored("shop_plate", id)))).every((p) => p.stage === "etched"), "both presses etch the four plates", 60000);
+  const by = (press) => (press.said.match(/: running tools\/etch/g) ?? []).length;
+  if (by(left) === 0 || by(right) === 0 || by(left) + by(right) !== 4) throw new Error(`both presses share the work, each plate once: left ${by(left)}, right ${by(right)}`);
+  pass(`two presses share four plates between them, ${by(left)} and ${by(right)}`);
   console.log("all passed");
 } catch (e) {
   console.error(`FAIL  ${e.message}`);
