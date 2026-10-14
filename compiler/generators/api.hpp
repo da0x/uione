@@ -147,6 +147,9 @@ namespace one::generators {
         int helds_ = 0;  // how many held(...) a command has asked so far, to name each answer
         std::map<std::string, std::string> held_named_;  // held([role::shipper]) asked so far, by the roles it asks of
         int waits_ = 0;  // how many waiting(...) a command has asked, each its own answer
+        // In an each, the command's own entity and its Go name, for link.to inside it.
+        const language::entity_declaration* outer_entity_ = nullptr;
+        std::string outer_me_;
         bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
 
         code::source at(const void* declaration) const {
@@ -1277,7 +1280,14 @@ namespace one::generators {
                 out.open(visit + " := func(" + inner + " *" + api_detail::go_name(picked->name) + ") error {");
                 auto outer = pointed_;
                 pointed_.clear();
+                // The command's own record, named by its entity inside, like link.to.
+                auto was_entity = outer_entity_;
+                auto was_me = outer_me_;
+                outer_entity_ = &e;
+                outer_me_ = me;
                 for (const auto& inside : each->body) statement(out, *picked, inside, inner, uses_time);
+                outer_entity_ = was_entity;
+                outer_me_ = was_me;
                 pointed_ = outer;
                 out.line("return nil");
                 out.close("}");
@@ -1586,11 +1596,15 @@ namespace one::generators {
             const language::entity_declaration* waited = list && list->list && list->type && pkg_ ? entity(*pkg_, list->type->text()) : nullptr;
             const language::define_workflow_declaration* flow = nullptr;
             for (const auto* w : pkg_ ? pkg_->workflows : std::vector<const language::define_workflow_declaration*>{}) {
-                if (waited && w->entity == waited->name && !w->done_at.empty()) flow = w;
+                if (waited && w->entity == waited->name && (!w->done_at.empty() || !w->done_when.empty())) flow = w;
             }
             const language::field* stage = flow ? field(*waited, flow->by) : nullptr;
-            if (!stage) {
-                unsupported(path_, x.where, "waiting of anything but a list of the command's entity, of records whose workflow says done at");
+            // done when stage.status == status::success: through what it points at, its field.
+            const language::field* first = flow && !flow->done_when.empty() ? field(*waited, flow->done_when[0]) : nullptr;
+            const language::entity_declaration* through = first && flow->done_when.size() == 2 && first->type ? entity(*pkg_, first->type->text()) : nullptr;
+            const language::field* last = through ? field(*through, flow->done_when[1]) : flow && flow->done_when.size() == 1 ? first : nullptr;
+            if (!stage || (flow && !flow->done_when.empty() && !last)) {
+                unsupported(path_, x.where, "waiting of anything but a list of the command's entity, of records whose workflow says done at, or done when a field of theirs, or of what they point at, holds a value");
                 return false;
             }
             const language::field* named = field(*waited, "name");
@@ -1604,7 +1618,17 @@ namespace one::generators {
             out.open("if err != nil {");
             out.line("return err");
             out.close("}");
-            out.open("if " + each + "." + api_detail::go_name(stage->name) + " != " + choice(*stage, flow->done_at) + " {");
+            std::string undone;
+            if (flow->done_when.empty()) {
+                undone = each + "." + api_detail::go_name(stage->name) + " != " + choice(*stage, flow->done_at);
+            } else if (through) {
+                // Read through what it points at; one that can't be read isn't done.
+                out.line(each + "Through, throughErr := one.Read[" + api_detail::go_name(through->name) + "](c, " + each + "." + api_detail::go_name(first->name) + ")");
+                undone = "throughErr != nil || " + each + "Through." + api_detail::go_name(last->name) + " != " + api_detail::go_string(flow->done_when_value);
+            } else {
+                undone = each + "." + api_detail::go_name(last->name) + " != " + api_detail::go_string(flow->done_when_value);
+            }
+            out.open("if " + undone + " {");
             out.line(answer + " = append(" + answer + ", " + (named ? each + "." + api_detail::go_name(named->name) : each + ".ID") + ")");
             out.close("}");
             out.close("}");
@@ -1735,10 +1759,13 @@ namespace one::generators {
                     if (field(e, name)) return "c.Was(" + api_detail::go_string(name) + ")";
                 }
             }
-            // issue.stage: the command's own entity's field, named by the entity.
+            // issue.stage: the command's own entity's field, named by the entity; and in an
+            // each over others, link.to, the command's own record's, as it's named there.
             if (auto* m = std::get_if<language::member_expression>(&x.node)) {
                 auto* object = std::get_if<language::name_expression>(&m->object->node);
                 if (object && object->name.text() == e.name && field(e, m->member)) return me + "." + api_detail::go_name(m->member);
+                if (object && outer_entity_ && object->name.text() == outer_entity_->name && field(*outer_entity_, m->member))
+                    return outer_me_ + "." + api_detail::go_name(m->member);
             }
             if (auto* lit = std::get_if<language::literal_expression>(&x.node)) {
                 if (lit->type == language::literal_expression::kind::time) return counted(lit->value);

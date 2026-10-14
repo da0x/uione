@@ -852,6 +852,25 @@ namespace one::screens {
 				}
 				if (!spec.link.empty()) shown.link = row_link(spec.link, card, p.params(), spec.keyed, spec.named);
 				status_of(p, card, with.statuses.contains(column.id) ? with.statuses.at(column.id) : "", shown);
+				// What it waits on that hasn't succeeded keeps it waiting, saying on what.
+				if (!spec.waits_on.empty()) {
+					std::vector<std::string> undone;
+					const value& listed = field_of(card, spec.waits_on);
+					for (const auto& id : listed.is_array() ? listed.as_array() : std::vector<value>{}) {
+						for (const auto& other : all) {
+							if (other["id"].as_string() != id.as_string()) continue;
+							std::string at = where(other);
+							std::string status = with.statuses.contains(at) ? with.statuses.at(at) : "";
+							if (status != "success" && status != "done") undone.push_back(show(field_of(other, title)));
+						}
+					}
+					if (!undone.empty()) {
+						if (shown.status.empty() || shown.status == "inactive") shown.status = "waiting";
+						std::string names;
+						for (const auto& n : undone) names += (names.empty() ? "" : ", ") + n;
+						shown.details.push_back("waiting on " + names);
+					}
+				}
 				shown.reaches = reaches(column.id);
 				column.cards.push_back(std::move(shown));
 			}
@@ -1041,6 +1060,28 @@ namespace one::screens {
 			row.status = dot.status, row.running = dot.running, row.runner = dot.runner;
 			const value& data = card["data"];
 			if (data.is_map()) row.note = show(data["note"]);
+			// What it waits on that hasn't succeeded keeps it waiting, saying on what.
+			if (!spec.waits_on.empty()) {
+				std::vector<std::string> undone;
+				const value& listed = field_of(card, spec.waits_on);
+				for (const auto& id : listed.is_array() ? listed.as_array() : std::vector<value>{}) {
+					for (const auto& other : rows_of(v, spec.list)) {
+						if (other["id"].as_string() != id.as_string()) continue;
+						std::string at_other = field_of(other, spec.by).as_string();
+						std::string status;
+						for (const auto& stage : stages) {
+							if (stage.id == at_other) status = stage.status;
+						}
+						if (status != "success") undone.push_back(show(field_of(other, title)));
+					}
+				}
+				if (!undone.empty()) {
+					if (row.status.empty() || row.status == "inactive") row.status = "waiting";
+					std::string names;
+					for (const auto& n : undone) names += (names.empty() ? "" : ", ") + n;
+					row.note = "waiting on " + names;
+				}
+			}
 			// Where it is along its path, or where it failed, as its data says.
 			auto path = path_of(lane);
 			std::string failed_at = here && here->status == "failed" && data.is_map() ? show(data["at"]) : "";

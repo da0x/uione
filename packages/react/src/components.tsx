@@ -1476,6 +1476,7 @@ export function Board({
   statuses: statusesWritten = {},
   notifyBy,
   statusBy,
+  waitsOn,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1503,6 +1504,7 @@ export function Board({
   statuses?: Record<string, string>; // a column's status, the dot its cards show unless they say
   notifyBy?: { field: string; has: string }; // columns kept as records: the field that lists how they notify
   statusBy?: string; // and the field that's their status
+  waitsOn?: string; // the field listing what a card waits on: while any hasn't succeeded, it's waiting, saying on what
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1540,6 +1542,14 @@ export function Board({
   const mine = move ? rolesHeld(move.roles, move.within, move.place ?? "project", move.role ?? "role") : new Set<unknown>();
   const steps = move?.steps.status === "live" ? rowsOf(move.steps.data?.[move.list]) : [];
   const where = (card: Row) => moved[card.id] ?? card[by];
+  // What a card waits on that hasn't reached a success end, by title.
+  const waitingOn = (card: Row): string[] => {
+    const listed = waitsOn && Array.isArray(card[waitsOn]) ? (card[waitsOn] as unknown[]) : [];
+    return listed
+      .map((id) => cardRows.find((other) => other.id === id))
+      .filter((other): other is Row => Boolean(other) && statuses[String(where(other!))] !== "success")
+      .map((other) => show(other[title ?? "title"]) || other.id);
+  };
   const reaches = (at: unknown) =>
     steps
       .filter((step) => step.from === at && (!move?.held || (Array.isArray(step[move.held]) && (step[move.held] as unknown[]).some((r) => mine.has(r)))))
@@ -1616,11 +1626,14 @@ export function Board({
                 .filter((key) => people[key] === undefined)
                 .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, { choices, labels, pictures, people })))
                 .filter((detail) => detail !== "")
-                .concat(going(card, statuses[String(where(card))], now).extra),
+                .concat(going(card, statuses[String(where(card))], now).extra)
+                .concat(waitingOn(card).length ? [`waiting on ${waitingOn(card).join(", ")}`] : []),
               people: rest.filter((key) => people[key] !== undefined).flatMap((key) => peopleOf(card, key, people[key])),
               reaches: reaches(where(card)),
               tone: toneOf(card, tint),
-              status: going(card, statuses[String(where(card))], now).status,
+              status: waitingOn(card).length && (!going(card, statuses[String(where(card))], now).status || going(card, statuses[String(where(card))], now).status?.is === "inactive")
+                ? { is: "waiting" as const, words: `Waiting on ${waitingOn(card).join(", ")}` }
+                : going(card, statuses[String(where(card))], now).status,
             })),
         }))}
       />
@@ -1646,6 +1659,7 @@ export function Pipeline({
   lanes = "labels",
   path = "kinds",
   statusBy,
+  waitsOn,
 }: {
   view: ViewState;
   list: string;
@@ -1660,6 +1674,7 @@ export function Pipeline({
   lanes?: string;
   path?: string;
   statusBy?: string;
+  waitsOn?: string; // the field listing what a card waits on: while any hasn't succeeded, it's waiting, saying on what
 }) {
   const ui = useUI();
   const links = useLinks();
@@ -1707,6 +1722,16 @@ export function Pipeline({
       status: going(card, here?.status, now).status,
       note: typeof data.note === "string" && data.note ? data.note : undefined,
     };
+    // What it waits on that hasn't reached a success end keeps it waiting, saying on what.
+    const listed = waitsOn && Array.isArray(card[waitsOn]) ? (card[waitsOn] as unknown[]) : [];
+    const undone = listed
+      .map((id) => cards.find((other) => other.id === id))
+      .filter((other): other is Row => Boolean(other) && stages.find((stage) => stage.id === String(other![by]))?.status !== "success")
+      .map((other) => show(other[title ?? "title"]) || other.id);
+    if (undone.length) {
+      if (!row.status || row.status.is === "inactive") row.status = { is: "waiting", words: `Waiting on ${undone.join(", ")}` };
+      row.note = `waiting on ${undone.join(", ")}`;
+    }
     byLane.set(lane, [...(byLane.get(lane) ?? []), row]);
   }
   const capital = (word: string) => (word ? word[0].toUpperCase() + word.slice(1) : "Others");

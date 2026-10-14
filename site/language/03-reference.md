@@ -749,6 +749,9 @@ command stage::delete {
 }
 ```
 
+- Inside an `each`, plain names are the picked row's, and the command's own record
+  is named by its entity, like `link.to` in `each issue where id == from { dispatch
+  issue::update { add link.to to waits_on } }`.
 - `each other link where other.pair == id || other.id == pair` picks rows of the
   command's own kind. They're named `other`, and their fields `other.pair`, so a
   bare `pair` or `id` is always this one's and the two sides don't read the same.
@@ -1323,7 +1326,9 @@ define workflow order by stage {
 }
 ```
 
-- `done at etched` says where a flow's work is finished.
+- `done at etched` says where a flow's work is finished. With stages kept as
+  records, `done when stage.status == status::success` says it instead: a field of
+  the record, or of what it points at, holding a value.
 - `depends on plates` names a list of what an order waits on, of its own entity or
   another whose workflow says where it's done. An order leaves its first stage only
   once every plate it lists is etched; until then the move is refused, naming them:
@@ -1337,6 +1342,11 @@ define workflow order by stage {
 - `waiting(plates)` is the plates not done yet, by their name or title, read in the
   command, and a require's message says a field of the entity, or `waiting(...)`,
   in braces.
+- With stages kept as records, a record that depends on others can be neither taken
+  nor moved until each is done, as `done when` says: claim and move both say
+  "waiting on …". A board, a pipeline and a whiteboard show it waiting, a blue dot
+  and what it waits on, by themselves, with nothing set, until each has succeeded;
+  then it's taken as anything else is.
 - `etched  notify chime` tells whoever has the board open when one arrives in that
   stage: its column has a bell, ♪ in the desktop and terminal apps, which chime, with
   [chime](https://github.com/da0x/chime) when it's installed or the terminal's bell

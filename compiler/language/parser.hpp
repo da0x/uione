@@ -1056,6 +1056,24 @@ namespace one::language {
                     advance();
                     w.done_at_where = peek().where;
                     w.done_at = expect(token_kind::identifier, "the stage where its work is finished, like done at shipped").text;
+                } else if (at_word("done") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                    // done when stage.status == status::success
+                    advance();
+                    advance();
+                    w.done_when_where = peek().where;
+                    w.done_when.push_back(expect(token_kind::identifier, "the field saying its work is finished, like done when stage.status == status::success").text);
+                    while (at(token_kind::dot)) {
+                        advance();
+                        w.done_when.push_back(expect(token_kind::identifier, "a field, like status").text);
+                    }
+                    if (!at(token_kind::equal)) fail_expecting("== and the value saying it's finished, like == status::success");
+                    advance();
+                    if (at(token_kind::string)) {
+                        w.done_when_value = advance().text;
+                    } else {
+                        auto value = parse_qualified_name("the value saying it's finished, like status::success");
+                        w.done_when_value = value.parts.back();
+                    }
                 } else if (at_word("depends") && peek(1).kind == token_kind::identifier && peek(1).text == "on") {
                     // depends on packages
                     advance();

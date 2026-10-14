@@ -1256,6 +1256,7 @@ namespace one::generators {
                                " shown=" + (titled ? "\"title\"" : "\"name\"") + " columns={{ " + columns + " }} lanes=" + web_detail::js_string(c.lanes) +
                                " path=" + web_detail::js_string(c.path);
             if (!c.status_field.empty()) line += " statusBy=" + web_detail::js_string(c.status_field);
+            if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) line += " waitsOn=" + web_detail::js_string(waits);
             if (c.link) {
                 std::string target = full_route(ns, *c.link);
                 line += " link=" + web_detail::js_string(target);
@@ -1399,6 +1400,7 @@ namespace one::generators {
             // Columns kept as records say their chime and status in their own fields.
             if (!board.chime_field.empty()) line += " notifyBy={{ field: " + web_detail::js_string(board.chime_field) + ", has: " + web_detail::js_string(board.chime_word) + " }}";
             if (!board.status_field.empty()) line += " statusBy=" + web_detail::js_string(board.status_field);
+            if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) line += " waitsOn=" + web_detail::js_string(waits);
             if (!stages.statuses.empty()) {
                 std::string statuses;
                 for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + stage + ": " + web_detail::js_string(status);

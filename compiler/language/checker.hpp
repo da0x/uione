@@ -1664,6 +1664,8 @@ namespace one::language {
                         inner.entity = picked;
                         inner.update = true;
                         inner.picked = true;
+                        // The command's own record is named by its entity inside, like link.to.
+                        if (picked != entity) inner.row = entity;
                         statements(ns, each->body, picked, inner);
                     }
                 } else if (auto* gone = std::get_if<delete_statement>(&s.node)) {

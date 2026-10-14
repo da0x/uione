@@ -544,6 +544,11 @@ namespace one::language {
         std::vector<workflow_notice> notices;  // shipped notify chime
         std::string done_at;  // shipped: the stage where its work is finished
         location done_at_where;
+        // done when stage.status == status::success: for stages kept as records, a field of
+        // the record, or of what it points at, and the value saying its work is finished.
+        std::vector<std::string> done_when;  // like stage, status
+        std::string done_when_value;         // like success
+        location done_when_where;
         std::string depends_on;  // packages: a list of what must be done before it leaves its first stage
         location depends_on_where;
     };

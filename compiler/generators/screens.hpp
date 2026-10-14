@@ -262,6 +262,15 @@ namespace one::generators::screens {
             std::vector<std::string> notify;
             std::vector<std::pair<std::string, std::string>> statuses;  // done where its work is done, failed where failures go
         };
+        // The field listing what a card waits on, when its workflow depends on one, like
+        // waits_on; empty when it doesn't.
+        std::string waits_on(const std::string& ns, const language::entity_declaration* card) const {
+            if (!card) return "";
+            auto scope = workflows.find(ns);
+            if (scope == workflows.end() || !scope->second.contains(card->name)) return "";
+            return scope->second.at(card->name)->depends_on;
+        }
+
         written_stages stages_written(const std::string& ns, const language::entity_declaration& card, const std::string& by) const {
             written_stages out;
             const language::field* along = nullptr;

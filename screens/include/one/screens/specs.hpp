@@ -197,6 +197,9 @@ namespace one::screens {
 		// Columns kept as records: the field of theirs that lists how they notify, and
 		// the word in it that chimes; and the field that's their status.
 		std::string notify_by = "", notify_has = "", status_by = "";
+		// The field listing what a card waits on: while any isn't in a column whose status
+		// is success, it's waiting, saying on what.
+		std::string waits_on = "";
 	};
 
 	// A pipeline: a list's rows in a lane for each kind its `lanes` field says, each a
@@ -214,6 +217,7 @@ namespace one::screens {
 		std::map<std::string, int> named = {};
 		std::string lanes = "labels", path = "kinds";
 		std::string status_by = "";  // the stage's field that's its status
+		std::string waits_on = "";   // the field listing what a card waits on, as a board's
 	};
 
 	// A canvas: a list's rows as cards placed anywhere, each where its x, y, w and h

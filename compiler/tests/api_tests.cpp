@@ -140,6 +140,79 @@ command board::create {
     CHECK(found->content.find(R"(one:"refers=shop::role,default=clerk|printer,within=project")") != std::string::npos);
 }
 
+TEST_CASE("a workflow over stage records depends on others until each is at a stage done when says, and a link names its own record in an each") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace yard {
+enum status {
+	open
+	success
+}
+entity project {
+	slug  text  required  key
+}
+entity stage {
+	project    project  required  key
+	name       text     required  key
+	title      text     required
+	status     status   = status::open
+	worked_by  list of role
+}
+entity step {
+	project  project  required  key
+	from     stage    required  key
+	to       stage    required  key
+	roles    list of role
+}
+entity job {
+	project   project  required  key
+	number    serial   per project  key
+	title     text     required
+	stage     stage
+	waits_on  list of job
+}
+entity tie {
+	project  project  required
+	from     job      required
+	to       job      required
+}
+define role hand "Hand" in project {
+	job::update
+	job::claim
+	job::renew
+	job::release
+	job::move
+	tie::create
+}
+define workflow job by stage {
+	worked by worked_by
+	steps step
+	depends on waits_on
+	done when stage.status == status::success
+}
+command tie::create {
+	each job where id == from {
+		dispatch job::update { add tie.to to waits_on }
+	}
+}
+command job::update
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "yard/yard.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    // Neither taken nor moved while what it waits on isn't at a success stage.
+    CHECK(found->content.find(R"(xThrough, throughErr := one.Read[Stage](c, x.Stage))") != std::string::npos);
+    CHECK(found->content.find(R"(if throughErr != nil || xThrough.Status != "success" {)") != std::string::npos);
+    CHECK(found->content.find(R"(return c.Fail("waiting on " + one.Listed(waiting)))") != std::string::npos);
+    // tie.to, the tie's own, read from inside the each over jobs.
+    CHECK(found->content.find(R"(dispatched.WaitsOn = one.Add(dispatched.WaitsOn, t.To))") != std::string::npos);
+}
+
 TEST_CASE("who may read is said once on an entity, and the views of what's within it read the same") {
     language::diagnostics out;
     std::vector<language::file> files;

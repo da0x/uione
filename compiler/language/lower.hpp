@@ -485,11 +485,12 @@ namespace one::language {
 
             // A claim, given who may make it, and a move, given the steps it may take:
             // the commands every workflow has, and the lease they keep.
-            static std::string commanded(const define_workflow_declaration& w, const std::string& claim, const std::string& move, const std::string& waits = "") {
+            static std::string commanded(const define_workflow_declaration& w, const std::string& claim, const std::string& move, const std::string& waits = "",
+                                         const std::string& claim_waits = "") {
                 const std::string& e = w.entity;
                 std::string text = "entity lease {\n\theld_by  user\n\theld_until  date\n\tdata  data\n}\n";
                 text += "command " + e + "::claim {\n\trequire \"this " + w.by + " isn't worked by a role you hold\" {\n\t\t" + claim +
-                        "\n\t}\n\trequire held_by == none || held_until < now  \"it's taken already\"\n\theld_by = me\n\theld_until = " + lease(w) + "\n}\n";
+                        "\n\t}\n" + claim_waits + "\trequire held_by == none || held_until < now  \"it's taken already\"\n\theld_by = me\n\theld_until = " + lease(w) + "\n}\n";
                 text += "command " + e + "::renew {\n\trequire held_by == me  \"you don't hold it\"\n\theld_until = " + lease(w) + "\n}\n";
                 text += "command " + e + "::release {\n\trequire held_by == me  \"you don't hold it\"\n\theld_by = none\n\theld_until = none\n}\n";
                 // What whoever holds it says of it, like its status and since when.
@@ -588,7 +589,7 @@ namespace one::language {
                 }
                 for (const auto& other : workflows) {
                     if (full(other.ns, other.workflow->entity) != full(ns, kind)) continue;
-                    if (other.workflow->done_at.empty()) {
+                    if (other.workflow->done_at.empty() && other.workflow->done_when.empty()) {
                         wrong(w.depends_on_where, w.entity + " waits on " + a(kind) + " until it's done, so " + kind +
                                                       "'s workflow says which stage that is, like done at " +
                                                       (other.workflow->moves.empty() ? std::string("shipped") : other.workflow->moves.back().to));
@@ -842,9 +843,10 @@ namespace one::language {
                                   "are records too: worked by and steps say where they're kept");
                         continue;
                     }
-                    if (!w->depends_on.empty() || !w->done_at.empty() || !w->notices.empty()) {
-                        error(!w->depends_on.empty() ? w->depends_on_where : !w->done_at.empty() ? w->done_at_where : w->notices.front().where,
-                              "done at, depends on and notify go with stages written in the code, like enum stage { … }, not kept as " + stage->name + " records");
+                    if (!w->done_at.empty() || !w->notices.empty()) {
+                        error(!w->done_at.empty() ? w->done_at_where : w->notices.front().where,
+                              "done at and notify go with stages written in the code, like enum stage { … }; with " + stage->name +
+                                  " records, say done when, like done when stage.status == status::success, and notify in a field of theirs");
                         continue;
                     }
                     if (w->worked_by.empty()) {
@@ -879,11 +881,18 @@ namespace one::language {
                     if (!shaped || claimable(*w, *moving, ns, error).empty()) continue;
 
                     const std::string& e = w->entity;
+                    // What it waits on, undone, keeps it from being taken or moved, as a
+                    // dependency does, until each is done, as its done when says.
+                    std::string waits;
+                    if (!w->depends_on.empty()) {
+                        if (auto field = depended(*w, *moving, ns, error)) waits = "\trequire waiting(" + *field + ") == none  \"waiting on {waiting(" + *field + ")}\"\n";
+                    }
                     // Whoever may take a step out of a stage works it too, as its own roles do.
                     std::string text = commanded(*w, "held(" + w->by + "." + w->worked_by + ") || exists(" + steps->name + " where from == " + e + "." + w->by +
                                                          " && held(roles))",
                                                  "exists(" + steps->name + " where from == was " + e + "." + w->by + " && to == " + e + "." + w->by +
-                                                     " && held(roles))");
+                                                     " && held(roles))",
+                                                 waits, waits);
                     // What's worked, with every field of each, its stage, and who holds it.
                     std::string rows;
                     for (const auto& f : moving->fields) rows += "  " + f.name;

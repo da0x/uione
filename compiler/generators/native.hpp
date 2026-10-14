@@ -616,6 +616,7 @@ namespace one::generators {
                 for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + std::string("{") + str(stage) + ", " + str(status) + "}";
                 out += ", .statuses = {" + statuses + "}";
             }
+            if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) out += ", .waits_on = " + str(waits);
             (void)screen;
             return out + "})";
         }
@@ -650,6 +651,7 @@ namespace one::generators {
             if (c.link) out += ", " + link_settings(ns, *c.link);
             out += ", .lanes = " + str(c.lanes) + ", .path = " + str(c.path);
             if (!c.status_field.empty()) out += ", .status_by = " + str(c.status_field);
+            if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) out += ", .waits_on = " + str(waits);
             return out + "})";
         }
 
