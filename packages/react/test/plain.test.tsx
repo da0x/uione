@@ -464,6 +464,26 @@ describe("a switch between a table and a board", () => {
     expect(screen.getByText("the board")).toBeTruthy();
     vi.unstubAllGlobals();
   });
+  it("remembers it for each page, like each board, not once for all of them", () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) });
+    const board = defineScreen({ title: "Board", route: "/boards/:board", shown: true }, () => (
+      <Switched id="projects::board_page.issues" label="Show issues as" options={["Table", "Board"]}>
+        <Shown name="the table" />
+        <Shown name="the board" />
+      </Switched>
+    ));
+    const at = (location: string) => render(<App name="app" screens={[board]} ui={plain} data={memorySource()} location={location} />);
+    const first = at("/boards/releases");
+    fireEvent.click(screen.getByRole("button", { name: "Board" }));
+    first.unmount();
+    const other = at("/boards/features");
+    expect(screen.getByText("the table")).toBeTruthy();
+    other.unmount();
+    at("/boards/releases");
+    expect(screen.getByText("the board")).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("a switch's track", () => {

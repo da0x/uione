@@ -2072,7 +2072,9 @@ export function Switched({
 }) {
   const ui = useUI();
   const tracked = useTrack(track && { ...track, above: false }, rowsOf(view?.data?.[list]), list);
-  const key = `uione:switch:${id}`;
+  // Remembered for each page it's on, like each board, not once for them all.
+  const { base } = useContext(ShownPath);
+  const key = `uione:switch:${id}:${base}`;
   // What's shown is in the address, like issues.view=board, so a link shows the same;
   // the person's last pick is remembered too, and put in the address when they come
   // back without one.
