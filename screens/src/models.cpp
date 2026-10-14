@@ -14,6 +14,7 @@
 #include <one/client/client.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <format>
@@ -21,6 +22,7 @@
 #include <set>
 #include <sstream>
 #include <thread>
+#include <tuple>
 
 extern char** environ;
 
@@ -946,6 +948,92 @@ namespace one::screens {
 		moved.change([&](auto& now) { now[card] = to; });
 		p.run(spec.move->command, value(std::map<std::string, value>{{"id", card}, {spec.by, to}}), [moved, card](const answer& a) {
 			if (!a) moved.change([&](auto& now) { now.erase(card); });
+		}, true);
+	}
+
+	double snapped(double at, double origin, double grid) {
+		if (grid <= 0) return at;
+		return std::round((at - origin) / grid) * grid + origin;
+	}
+
+	canvas_model canvas_of(page_base& p, const canvas_spec& spec) {
+		canvas_model out;
+		out.key = "canvas:" + spec.list;
+		out.placing = !spec.place.empty();
+		out.grid = spec.grid, out.origin_x = spec.origin_x, out.origin_y = spec.origin_y;
+		const view_state& v = *spec.view;
+		if (v.status == status::loading || (spec.over && (*spec.over)->status == status::loading)) {
+			out.loading = true;
+			return out;
+		}
+		// Where each placed card is until the view says so too: x, y, w, h.
+		auto placed = p.kept<std::map<std::string, std::array<double, 4>>>(out.key + ":placed");
+		const auto& rows = rows_of(v, spec.list);
+		if (!placed.peek().empty()) {
+			auto settled = placed.peek();
+			std::erase_if(settled, [&](const auto& m) {
+				return std::ranges::any_of(rows, [&](const value& row) {
+					return row["id"].as_string() == m.first && number_of(field_of(row, spec.x)) == m.second[0] && number_of(field_of(row, spec.y)) == m.second[1];
+				});
+			});
+			if (settled.size() != placed.peek().size()) placed.set(settled);
+		}
+		// The columns the unplaced are laid out in: the over list's rows in order, or
+		// the by field's values as they come.
+		std::vector<std::string> columns;
+		if (spec.over) {
+			for (const auto& thing : rows_of(**spec.over, spec.over_list)) columns.push_back(thing["id"].as_string());
+		}
+		double step = spec.grid > 0 ? spec.grid : 160;
+		std::map<std::string, int> down;  // how many of each column's cards come before, placed or not, so placing one moves no other
+		std::string title = spec.columns.empty() ? "" : spec.columns.front().field;
+		for (const auto& row : rows) {
+			if (!p.keeps(row)) continue;
+			canvas_card card;
+			card.id = row["id"].as_string();
+			card.title = show(field_of(row, title));
+			if (!spec.kind.empty()) card.kind = show(field_of(row, spec.kind));
+			card.tone = tone_of(row, spec.tint);
+			for (std::size_t c = 1; c < spec.columns.size(); ++c) {
+				if (std::string said_now = show(field_of(row, spec.columns[c].field)); !said_now.empty()) card.details.push_back(numbered(spec.columns[c].field) ? "#" + said_now : said_now);
+			}
+			if (!spec.link.empty()) card.link = row_link(spec.link, row, p.params(), spec.keyed, spec.named);
+			board_card dot;
+			status_of(p, row, "", dot);
+			card.status = dot.status, card.running = dot.running, card.runner = dot.runner;
+			if (auto w = number_of(field_of(row, spec.w)); w && *w > 0) card.w = *w;
+			if (auto h = number_of(field_of(row, spec.h)); h && *h > 0) card.h = *h;
+			auto x = number_of(field_of(row, spec.x)), y = number_of(field_of(row, spec.y));
+			std::string in = spec.by.empty() ? "" : show(field_of(row, spec.by));
+			int place_in_column = down[in]++;
+			if (auto moved = placed.get().find(card.id); moved != placed.get().end()) {
+				std::tie(card.x, card.y, card.w, card.h) = std::tuple{moved->second[0], moved->second[1], moved->second[2], moved->second[3]};
+				card.placed = true;
+			} else if (x && y && number_of(field_of(row, spec.w)).value_or(0) > 0 && number_of(field_of(row, spec.h)).value_or(0) > 0) {
+				// Placed: with a size, which only a place gives, as a number never given reads 0.
+				card.x = *x, card.y = *y;
+				card.placed = true;
+			} else {
+				// Laid out: its column's place across, and the next free place down it.
+				auto at = std::ranges::find(columns, in);
+				if (at == columns.end()) {
+					columns.push_back(in);
+					at = columns.end() - 1;
+				}
+				card.x = spec.origin_x + static_cast<double>(at - columns.begin()) * step;
+				card.y = spec.origin_y + place_in_column * step;
+			}
+			out.cards.push_back(std::move(card));
+		}
+		return out;
+	}
+
+	void place_card(page_base& p, const canvas_spec& spec, const std::string& card, double x, double y, double w, double h) {
+		if (spec.place.empty()) return;
+		auto placed = p.kept<std::map<std::string, std::array<double, 4>>>("canvas:" + spec.list + ":placed");
+		placed.change([&](auto& now) { now[card] = {x, y, w, h}; });
+		p.run(spec.place, value(std::map<std::string, value>{{"id", card}, {spec.x, x}, {spec.y, y}, {spec.w, w}, {spec.h, h}}), [placed, card](const answer& a) {
+			if (!a) placed.change([&](auto& now) { now.erase(card); });
 		}, true);
 	}
 

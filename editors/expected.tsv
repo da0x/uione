@@ -259,3 +259,4 @@ editors/fixtures/stages.one	proofing  worked by proofreader	worked	keyword
 editors/fixtures/stages.one	proofing  worked by proofreader	by	keyword
 editors/fixtures/stages.one	proofing -> press	->	operator
 editors/fixtures/stages.one	press -> proofing  by foreman	by	keyword
+examples/gallery/boards.one	canvas room_page.pieces	canvas	keyword

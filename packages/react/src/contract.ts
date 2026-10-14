@@ -240,6 +240,32 @@ export interface BoardProps {
   onColumn?: (column: string) => void;
 }
 
+// Cards placed anywhere on a surface that pans and zooms, like an idea board: each
+// where it says, dragged to move it or by its corner to resize it, and placed once
+// let go, snapped to the grid when there's one. A double click opens a card.
+export interface CanvasProps {
+  status: ViewStatus;
+  cards: CanvasCard[];
+  grid?: { step: number; x: number; y: number }; // where a card snaps once let go
+  error?: string;
+  onPlace?: (card: string, x: number, y: number, width: number, height: number) => void; // absent when cards can't be moved
+  onOpen?: (card: string) => void;
+}
+
+export interface CanvasCard {
+  id: string;
+  title: ReactNode;
+  kind?: string; // how it's drawn, like note or text
+  link?: LinkProps;
+  details: ReactNode[];
+  tone?: number;
+  status?: { is: "inactive" | "waiting" | "working" | "done" | "failed"; words: string };
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 // Large cards, a third of a wide page each and the whole of a narrow one, like a
 // project's boards: each with its title, a summary of what's in it, and a few links
 // that open it filtered.
@@ -527,6 +553,7 @@ export interface ComponentSet {
   Table: ComponentType<TableProps>;
   Grid: ComponentType<GridProps>;
   Board: ComponentType<BoardProps>;
+  Canvas: ComponentType<CanvasProps>;
   Switch: ComponentType<SwitchProps>;
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;

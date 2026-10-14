@@ -1447,6 +1447,7 @@ namespace one::language {
                     table.link_where = peek().where;
                     table.link = expect(token_kind::route, "the screen each row opens, like /books/:book").text;
                 }
+                expression_ptr shown_when = shown_while();
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
@@ -1575,7 +1576,7 @@ namespace one::language {
                     expect(token_kind::right_brace, "'}'");
                 }
                 end_line();
-                return {where, std::move(table)};
+                return {where, std::move(table), std::move(shown_when)};
             }
             if (at_word("board") && peek(1).kind != token_kind::scope) {
                 advance();
@@ -1599,6 +1600,7 @@ namespace one::language {
                     board.link_where = peek().where;
                     board.link = expect(token_kind::route, "the screen each card opens, like /:project/issues/:issue").text;
                 }
+                expression_ptr shown_when = shown_while();
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
@@ -1686,7 +1688,101 @@ namespace one::language {
                     expect(token_kind::right_brace, "'}'");
                 }
                 end_line();
-                return {where, std::move(board)};
+                return {where, std::move(board), std::move(shown_when)};
+            }
+            if (at_word("canvas") && peek(1).kind != token_kind::scope) {
+                advance();
+                canvas_item canvas;
+                canvas.view = parse_qualified_name("the view whose list it shows, like board_page");
+                expect(token_kind::dot, "'.' and the view's list, like board_page.issues");
+                canvas.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                // by stage over board_page.stages: how the cards not placed yet are laid out.
+                if (at_word("by")) {
+                    advance();
+                    canvas.by_where = peek().where;
+                    canvas.by = expect(token_kind::identifier, "the field laying out the cards not placed yet, like stage").text;
+                    if (at_word("over")) {
+                        advance();
+                        canvas.over = parse_qualified_name("the view whose list its columns are, like board_page");
+                        expect(token_kind::dot, "'.' and the view's list, like board_page.stages");
+                        canvas.over_list = expect(token_kind::identifier, "the view's list, like stages").text;
+                    }
+                }
+                if (at_word("link")) {
+                    advance();
+                    canvas.link_where = peek().where;
+                    canvas.link = expect(token_kind::route, "the screen each card opens, like /:project/:issue").text;
+                }
+                expression_ptr shown_when = shown_while();
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    auto number = [&](const char* expected) { return std::stod(expect(token_kind::number, expected).text); };
+                    while (in_block()) {
+                        // place issue::place: the command a card's place is sent to.
+                        if (at_word("place") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            canvas.place_where = peek().where;
+                            canvas.place = parse_qualified_name("the command a card's place is sent to, like issue::place");
+                            end_line();
+                            continue;
+                        }
+                        // at x y  size w h: the fields a card's place is kept in.
+                        if (at_word("at") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier) {
+                            advance();
+                            canvas.at_where = peek().where;
+                            canvas.x = advance().text;
+                            canvas.y = advance().text;
+                            if (at_word("size")) {
+                                advance();
+                                canvas.size_where = peek().where;
+                                canvas.w = expect(token_kind::identifier, "the field keeping a card's width, like w").text;
+                                canvas.h = expect(token_kind::identifier, "the field keeping a card's height, like h").text;
+                            }
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("size") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier) {
+                            advance();
+                            canvas.size_where = peek().where;
+                            canvas.w = advance().text;
+                            canvas.h = advance().text;
+                            end_line();
+                            continue;
+                        }
+                        // kind kind: the field saying how each card's drawn.
+                        if (at_word("kind") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::newline || peek(2).kind == token_kind::right_brace)) {
+                            advance();
+                            canvas.kind_where = peek().where;
+                            canvas.kind = advance().text;
+                            end_line();
+                            continue;
+                        }
+                        // grid 160 from 40 80: a card snaps to it once let go.
+                        if (at_word("grid") && peek(1).kind == token_kind::number) {
+                            advance();
+                            canvas.grid_where = peek().where;
+                            canvas.grid = number("the grid's step, like 160");
+                            if (at_word("from")) {
+                                advance();
+                                canvas.origin_x = number("where the grid starts across, like 40");
+                                canvas.origin_y = number("and down, like 80");
+                            }
+                            end_line();
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            canvas.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(canvas), std::move(shown_when)};
             }
             if (at_word("cards") && peek(1).kind != token_kind::scope) {
                 advance();
@@ -1699,6 +1795,7 @@ namespace one::language {
                     cards.link_where = peek().where;
                     cards.link = expect(token_kind::route, "the screen each card opens, like /:project/boards/:board").text;
                 }
+                expression_ptr shown_when = shown_while();
                 if (at(token_kind::left_brace)) {
                     advance();
                     while (in_block()) {
@@ -1748,7 +1845,7 @@ namespace one::language {
                     expect(token_kind::right_brace, "'}'");
                 }
                 end_line();
-                return {where, std::move(cards)};
+                return {where, std::move(cards), std::move(shown_when)};
             }
             if ((at_word("grid") || at_word("diagram")) && peek(1).kind != token_kind::scope) {
                 grid_item grid;
@@ -2348,6 +2445,14 @@ namespace one::language {
         //         issue_page.status == status::implemented
         //         issue_page.implemented_by != me
         //     }
+        // when board_page.style == style::canvas, after a list's view and link: the
+        // condition it's shown while, its block after it.
+        expression_ptr shown_while() {
+            if (!at_word("when")) return nullptr;
+            advance();
+            return parse_expression();
+        }
+
         expression_ptr parse_when() {
             if (!at(token_kind::left_brace)) return parse_expression();
             location where = advance().where;

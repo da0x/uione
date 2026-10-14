@@ -198,6 +198,27 @@ namespace one::screens {
 		std::string notify_by = "", notify_has = "", status_by = "";
 	};
 
+	// A canvas: a list's rows as cards placed anywhere, each where its x, y, w and h
+	// say, moved and resized, and placed by `place` once let go, snapped to the grid
+	// when there's one. One not placed yet is laid out in columns by `by`, over the
+	// rows of `over`, as a board would show it.
+	struct canvas_spec {
+		state<view_state> view;
+		std::string list;
+		std::vector<column> columns = {};  // what a card shows, its title first
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::string x = "x", y = "y", w = "w", h = "h";
+		std::string kind = "";   // the field saying how each card's drawn, like note or text
+		std::string place = "";  // the command a card's place is sent to
+		double grid = 0, origin_x = 0, origin_y = 0;
+		std::string by = "";
+		std::optional<state<view_state>> over = std::nullopt;
+		std::string over_list = "";
+		std::optional<tint_spec> tint = std::nullopt;
+	};
+
 	// A view's rows, or one of its lists, a column each for the fields named: a row
 	// opens `link`, filled from it, and runs each action on it, as its id, or asks
 	// first with the action's form, opened under it and started from it.

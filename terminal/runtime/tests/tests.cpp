@@ -207,6 +207,24 @@ namespace {
 		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", "atlas-contributor"}})}}}));
 	}
 
+	site with_canvas() {
+		site s{.name = "neotrac"};
+		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", "atlas-main");
+			                     return items(canvas_board(p, {.view = board_page,
+			                                                   .list = "issues",
+			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+			                                                   .place = "projects::issue::place",
+			                                                   .grid = 160,
+			                                                   .origin_x = 0,
+			                                                   .origin_y = 0,
+			                                                   .by = "stage",
+			                                                   .over = board_page,
+			                                                   .over_list = "stages"}));
+		                     }});
+		return s;
+	}
+
 }  // namespace
 
 TEST("a board in a terminal: its columns one after another, and m moving a card along a step the reader may take") {
@@ -222,6 +240,27 @@ TEST("a board in a terminal: its columns one after another, and m moving a card 
 	matches_golden("board-moving", t.text());
 	CHECK(t.press(key(terminal::keys::newline)));  // the one step it may take: Doing
 	CHECK(data.runs().back().fields["stage"].as_string() == "s2");
+}
+
+TEST("a canvas in a terminal: its cards as boxes where they're laid out, n choosing one and each arrow placing it a grid step over") {
+	memory_source data;
+	fill_board(data);
+	data.on("projects::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	auto s = with_canvas();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	screen_at t(nav, 80, 30);
+	matches_golden("canvas", t.text());
+	CHECK(t.press(key(terminal::keys::tab)));  // to the canvas
+	CHECK(t.press(letter('n')));               // the first card, #12, in To do
+	CHECK(t.press(key(terminal::keys::down)));
+	CHECK(t.press(key(terminal::keys::down)));  // past #14, below it in To do
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "projects::issue::place");
+	CHECK(data.runs().back().fields["y"].as_double() == 320);
+	CHECK(data.runs().back().fields["x"].as_double() == 0);
+	matches_golden("canvas-placed", t.text());
 }
 
 int main() {

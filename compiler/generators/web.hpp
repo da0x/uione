@@ -1079,7 +1079,7 @@ namespace one::generators {
                     // A board of the same list right after it: the two are one, shown as
                     // the person picks, a table or a board.
                     auto* board = at + 1 < items.size() ? std::get_if<language::board_item>(&items[at + 1].node) : nullptr;
-                    if (board && board->view.text() == table->view.text() && board->list == table->list) {
+                    if (board && board->view.text() == table->view.text() && board->list == table->list && !item.when && !items[at + 1].when) {
                         parts.components.insert("Switched");
                         std::string list = table->list ? *table->list : "rows";
                         std::string words = web_detail::label(list);
@@ -1092,13 +1092,15 @@ namespace one::generators {
                         ++at;
                         continue;
                     }
-                    this->table(out, parts, ns, *table, screen);
+                    shown_while(out, parts, ns, item, [&] { this->table(out, parts, ns, *table, screen); });
                 } else if (auto* grid = std::get_if<language::grid_item>(&item.node)) {
                     this->grid(out, parts, ns, *grid, screen);
                 } else if (auto* cards = std::get_if<language::cards_item>(&item.node)) {
-                    this->cards(out, parts, ns, *cards);
+                    shown_while(out, parts, ns, item, [&] { this->cards(out, parts, ns, *cards); });
                 } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
-                    this->board(out, parts, ns, *board, screen);
+                    shown_while(out, parts, ns, item, [&] { this->board(out, parts, ns, *board, screen); });
+                } else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) {
+                    shown_while(out, parts, ns, item, [&] { this->canvas(out, parts, ns, *canvas); });
                 } else if (auto* form = std::get_if<language::form_item>(&item.node)) {
                     if (on_rows(ns, screen, full_command(ns, form->commands.front()))) continue;  // each row's button opens it
                     this->form(out, parts, ns, *form, button_for(screen, form->commands.front()));
@@ -1209,6 +1211,71 @@ namespace one::generators {
         // a move, dragged along the steps the person's roles may take.
         // Beside a table of the same list, it takes the table's toolbar and search when it
         // has none of its own.
+        // A canvas: its cards' rows, where they're kept, the command placing them, the
+        // grid they snap to, and how those not placed yet are laid out.
+        void canvas(stream& out, screen_parts& parts, const std::string& ns, const language::canvas_item& c) {
+            parts.components.insert("Canvas");
+            const language::entity_declaration* entity = listed(ns, c.view.text(), c.list);
+            std::string columns, pictures, people, labels, shown;
+            for (const auto& column : c.columns) {
+                std::string key = web_detail::text_of(*column.value);
+                auto column_shown = shown_as(ns, c.view.text(), c.list, entity, key, column.label);
+                if (column_shown.picture) people += (people.empty() ? "" : ", ") + web_detail::js_string(column_shown.key) + ": " + web_detail::js_string(*column_shown.picture);
+                key = column_shown.key;
+                columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(column_shown.label);
+                if (key.ends_with(".picture")) pictures += (pictures.empty() ? "" : ", ") + web_detail::js_string(key);
+                for (const auto& f : entity ? entity->fields : nothing_) {
+                    if (f.name != key) continue;
+                    if (f.list && f.type && f.type->text() == "text") labels += (labels.empty() ? "" : ", ") + web_detail::js_string(key);
+                    if (!f.choices.empty()) {
+                        shown += (shown.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": Object.fromEntries(" + choice_options(f) + ")";
+                    }
+                }
+            }
+            auto number = [](double n) { return std::format("{}", n); };
+            std::string line = "<Canvas view={" + view_variable(parts, full_view(ns, c.view.text())) + "} list=" + web_detail::js_string(*c.list) + " columns={{ " + columns + " }}";
+            for (const auto& [name, field] : {std::pair{"x", c.x}, std::pair{"y", c.y}, std::pair{"w", c.w}, std::pair{"h", c.h}}) {
+                if (field != name) line += std::string(" ") + name + "=" + web_detail::js_string(field);
+            }
+            if (!c.kind.empty()) line += " kind=" + web_detail::js_string(c.kind);
+            if (c.place) line += " place=" + web_detail::js_string(full_command(ns, *c.place));
+            if (c.grid > 0) line += " grid={{ step: " + number(c.grid) + ", x: " + number(c.origin_x) + ", y: " + number(c.origin_y) + " }}";
+            if (!c.by.empty()) {
+                line += " by=" + web_detail::js_string(c.by);
+                if (!c.over.parts.empty()) line += " over={" + view_variable(parts, full_view(ns, c.over.text())) + "} overList=" + web_detail::js_string(c.over_list);
+            }
+            line += tint_on(ns, c.view, c.list, std::nullopt);
+            if (c.link) {
+                std::string target = full_route(ns, *c.link);
+                line += " link=" + web_detail::js_string(target);
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+                line += named_by(ns, target);
+            }
+            if (!pictures.empty()) line += " pictures={[" + pictures + "]}";
+            if (!people.empty()) line += " people={{ " + people + " }}";
+            if (!shown.empty()) line += " choices={{ " + shown + " }}";
+            if (!labels.empty()) line += " labels={[" + labels + "]}";
+            out.line(line + " />");
+        }
+
+        // An element drawn only while its when holds, like a board while its board's style is kanban.
+        template <typename Draw>
+        void shown_while(stream& out, screen_parts& parts, const std::string& ns, const language::screen_item& item, Draw draw) {
+            if (!item.when) {
+                draw();
+                return;
+            }
+            out.open("{" + condition(parts, ns, *item.when) + " && (<>");
+            draw();
+            out.close("</>)}");
+        }
+
         void board(stream& out, screen_parts& parts, const std::string& ns, const language::board_item& board, const std::vector<language::screen_item>& screen,
                    const language::table_item* beside = nullptr) {
             parts.components.insert("Board");
@@ -1479,6 +1546,7 @@ namespace one::generators {
                 else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) take(timeline->view, timeline->list);
                 else if (auto* cards = std::get_if<language::cards_item>(&item.node)) take(cards->view, cards->list);
                 else if (auto* board = std::get_if<language::board_item>(&item.node)) take(board->view, board->list);
+                else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) take(canvas->view, canvas->list);
                 else if (auto* block = std::get_if<language::content_block>(&item.node)) lists_on(block->items, view, out);
             }
         }

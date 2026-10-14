@@ -17,6 +17,8 @@ namespace gallery at / {
 		visibility  enum  public | private = visibility::public
 		// The stage a new piece starts in.
 		start       stage
+		// Its pieces shown as a board, in columns, or on a wall, anywhere.
+		look        enum  board | wall = look::board
 	}
 
 	// A stage of a room's pieces, in its place among the others.
@@ -74,6 +76,11 @@ namespace gallery at / {
 		photo        file
 		sketches     list of file
 		position     number
+		// Where it hangs on the room's wall, and how big.
+		x            number
+		y            number
+		w            number
+		h            number
 	}
 
 	entity comment history of piece {
@@ -115,6 +122,7 @@ namespace gallery at / {
 		piece::renew
 		piece::release
 		piece::move
+		piece::place
 		comment::create
 	}
 
@@ -181,6 +189,11 @@ namespace gallery at / {
 
 	command piece::update
 
+	// A piece hung somewhere else on the wall, or made bigger.
+	command piece::place {
+		changes x  y  w  h
+	}
+
 	command piece::delete {
 		each comment where piece == id {
 			dispatch comment::delete
@@ -210,11 +223,12 @@ namespace gallery at / {
 	}
 
 	view room_page per room {
-		name  summary  visibility
+		name  summary  visibility  look
 		pieces = each piece in room {
 			order by position
 			number  title  labels  stage  stage.title  condition  size  made  light  framed
 			milestone  position  updated_at  assignees  assignees.name  assignees.picture
+			x  y  w  h
 		}
 		milestones = each milestone in room {
 			order by due

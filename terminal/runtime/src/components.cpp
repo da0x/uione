@@ -455,6 +455,43 @@ namespace one::terminal::runtime {
 		return terminal::text("●", colored(found->second));
 	}
 
+	// A canvas in a terminal: its cards as boxes where they're placed, moved and resized
+	// a grid step at a time with the keys, and placed by the canvas's command at once.
+	terminal::view canvas_board(page& p, canvas_spec spec) {
+		auto model = canvas_of(p, spec);
+		if (model.loading) return quiet("Loading…");
+		std::vector<terminal::surface_item> items;
+		std::map<std::string, std::string> links;
+		for (const auto& card : model.cards) {
+			links[card.id] = card.link;
+			std::vector<terminal::view> inside;
+			auto title = card.kind == "text" ? terminal::text(card.title, {.bold = true}) : terminal::text(card.title);
+			std::vector<terminal::view> top;
+			if (card.tone != 3) top.push_back(edge(card.tone));
+			if (!card.status.empty()) top.push_back(status_dot(card.status));
+			top.push_back(std::move(title).grow());
+			inside.push_back(terminal::row(std::move(top)).spacing(1));
+			if (card.kind != "text") {
+				for (const auto& d : card.details) inside.push_back(quiet(d));
+				if (!card.runner.empty() || !card.running.empty()) inside.push_back(quiet(card.runner + (card.runner.empty() ? "" : " ") + card.running));
+			}
+			items.push_back({.key = card.id, .x = card.x, .y = card.y, .width = card.w, .height = card.h, .content = terminal::column(std::move(inside)), .movable = model.placing});
+		}
+		terminal::surface_options options{.grid = model.grid};
+		if (model.placing) options.on_place = [&p, spec](const std::string& card, double x, double y, double w, double h) { place_card(p, spec, card, x, y, w, h); };
+		if (!spec.link.empty()) {
+			options.on_open = [&p, links](const std::string& card) {
+				if (auto found = links.find(card); found != links.end() && !found->second.empty()) p.open(found->second);
+			};
+		}
+		std::vector<terminal::view> parts;
+		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
+		parts.push_back(terminal::surface(std::move(items), std::move(options)));
+		parts.push_back(quiet(model.placing ? "n chooses a card, the arrows move it and Shift resizes it; Enter opens it. + and − zoom."
+		                                    : "n chooses a card and Enter opens it; the arrows look around. + and − zoom."));
+		return terminal::column(std::move(parts)).spacing(1);
+	}
+
 	// A board in a terminal: its columns one after another, each its cards, as there's
 	// no room for them side by side; m on a card offers where it may go.
 	terminal::view board(page& p, board_spec spec) {

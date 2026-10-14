@@ -421,6 +421,29 @@ namespace {
 		data.set("projects::member_roles", "", value(fields{{"rows", list{value(fields{{"project", "atlas"}, {"role", "atlas-contributor"}})}}}));
 	}
 
+	site with_canvas() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
+			                     return items(canvas_board(p, {.view = board_page,
+			                                                   .list = "issues",
+			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+			                                                   .link = "/:project/:issue",
+			                                                   .keyed = {"project"},
+			                                                   .place = "projects::issue::place",
+			                                                   .grid = 160,
+			                                                   .origin_x = 20,
+			                                                   .origin_y = 20,
+			                                                   .by = "stage",
+			                                                   .over = board_page,
+			                                                   .over_list = "stages",
+			                                                   .tint = tint_spec{"priority", {"critical", "high", "normal", "low", "trivial"}}}));
+		                     }});
+		s.screens.push_back({"Issue", "/:project/:issue", "", [](page& p) { return items(text({words(p.param("issue"))})); }});
+		return s;
+	}
+
 	site with_board() {
 		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
@@ -548,6 +571,40 @@ TEST("a board's card moves along a step the person's roles may take, at once, an
 	CHECK(nav.current().error("projects::issue::move") == "that stage is full");
 	CHECK(!moved.peek().contains("atlas-14"));
 	CHECK(nav.current().problem().peek().empty());  // said on the board
+}
+
+TEST("a canvas: its cards laid out by stage, one dragged is placed where it's let go, snapped to the grid") {
+	memory_source data;
+	fill_board(data);
+	data.on("projects::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	auto s = with_canvas();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	matches_golden("canvas", {1000, 600}, [&] { return drawn(nav); });
+	auto root = built(nav);
+	// The surface: what takes the keyboard and shows a hand.
+	std::function<one::desktop::element*(one::desktop::element&)> surface = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.focusable() && e.cursor() == one::desktop::cursor::grab && !e.children.empty()) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = surface(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* placed = surface(*root);
+	CHECK(placed != nullptr);
+	if (!placed || placed->children.empty()) return;
+	// The first card, #12, in To do: pressed inside it and dragged 150 across and 40 down.
+	auto at = placed->children[0]->frame;
+	one::desktop::point start{at.x + 20, at.y + 20};
+	CHECK(placed->press(start, 1));
+	placed->drag({start.x + 150, start.y + 40});
+	placed->release({start.x + 150, start.y + 40}, placed);
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "projects::issue::place");
+	CHECK(data.runs().back().fields["x"].as_double() == 180);  // 20 + 150, the grid's nearest: 180
+	CHECK(data.runs().back().fields["y"].as_double() == 20);   // 20 + 40, back to 20
+	CHECK(data.runs().back().fields["w"].as_double() == 150);
 }
 
 TEST("a board: its columns, cards tinted by priority with their labels and people, and a move offered") {

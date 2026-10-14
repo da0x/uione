@@ -76,6 +76,7 @@ namespace one::terminal::runtime {
 	terminal::view form(page& p, form_spec spec);
 	terminal::view table(page& p, table_spec spec);
 	terminal::view board(page& p, board_spec spec);
+	terminal::view canvas_board(page& p, canvas_spec spec);
 	terminal::view cards(page& p, cards_spec spec);
 	terminal::view filter_note(page& p);
 	terminal::view find(page& p, std::string label, std::vector<find_source> sources);

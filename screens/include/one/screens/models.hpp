@@ -235,6 +235,32 @@ namespace one::screens {
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 
+	// A canvas: its cards, each where it's placed, in the canvas's own units; those not
+	// placed yet laid out in columns, a grid step apart, as their row's by field says.
+	struct canvas_card {
+		std::string id, title, kind;
+		std::vector<std::string> details;
+		int tone = 3;
+		std::string link;
+		double x = 0, y = 0, w = 150, h = 150;
+		bool placed = false;  // whether its row says where it is, or it's laid out
+		std::string status, running, runner;
+	};
+	struct canvas_model {
+		std::string key;
+		bool loading = false;
+		bool placing = false;  // whether its cards can be moved: it names a command for it
+		double grid = 0, origin_x = 0, origin_y = 0;
+		std::vector<canvas_card> cards;
+		std::string error;
+	};
+	canvas_model canvas_of(page_base& p, const canvas_spec& spec);
+	// Where a point lands on the canvas's grid, or the point itself without one.
+	double snapped(double at, double origin, double grid);
+	// Places a card: shown there at once, sent to the canvas's command, and back where
+	// it was if it's turned down.
+	void place_card(page_base& p, const canvas_spec& spec, const std::string& card, double x, double y, double w, double h);
+
 	// Cards: each a row with what it shows, a tally of what it holds, and links
 	// opening it filtered.
 	struct card_link {

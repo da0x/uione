@@ -3,7 +3,8 @@
 
 // Boards: a room's pieces as cards in a column for each stage, moved along the
 // room's steps, found, tinted by condition, picked by milestone, and dragged into
-// order within a column.
+// order within a column. And a wall: the same pieces placed anywhere, dragged and
+// resized, shown instead of the board while the room says so.
 
 namespace gallery at / {
 
@@ -18,6 +19,20 @@ namespace gallery at / {
 			}
 			title
 			number  labels  assignees
+		}
+	}
+
+	screen "Wall" /rooms/:room/wall {
+		board room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece when room_page.look == look::board {
+			move piece::move along room_page.steps
+			title
+			number
+		}
+		canvas room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece when room_page.look == look::wall {
+			place piece::place
+			grid 160 from 40 80
+			title
+			number  condition
 		}
 	}
 

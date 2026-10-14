@@ -15,7 +15,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(CURSES REQUIRED IMPORTED_TARGET ncursesw)
 
-add_library(one_terminal src/terminal.cpp src/ui.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp)
+add_library(one_terminal src/terminal.cpp src/ui.cpp src/surface.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp)
 add_library(one::terminal ALIAS one_terminal)
 # Views are built from one::screens' states and fields edit as its editing does,
 # from uione's screens/ beside it.

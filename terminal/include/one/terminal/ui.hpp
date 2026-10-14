@@ -245,6 +245,26 @@ namespace one::terminal {
 	view list(std::vector<list_row> rows, list_options options = {});
 	view list(std::vector<list_row> rows, std::function<void(const std::string&)> on_open);
 
+	// A surface of things placed anywhere, in its own units, drawn as boxes in cells, a
+	// cell across units_across of them and a row down units_down. n chooses one; the
+	// arrows move it a grid step and with Shift resize it, and on_place is told where
+	// it's gone; with none chosen the arrows look around. Enter opens the one chosen.
+	struct surface_item {
+		std::string key;
+		double x = 0, y = 0, width = 150, height = 150;
+		view content;
+		bool movable = true;
+	};
+	struct surface_options {
+		std::function<void(const std::string& key, double x, double y, double width, double height)> on_place = {};
+		std::function<void(const std::string& key)> on_open = {};
+		double grid = 0;
+		double smallest = 30;
+		double units_across = 10, units_down = 20;  // a cell's width and height in the surface's units
+		int height = 20;                            // how many rows it's drawn in
+	};
+	view surface(std::vector<surface_item> items, surface_options options);
+
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
 	view link(std::string words, std::function<void()> go, style look = {});
 	view divider();

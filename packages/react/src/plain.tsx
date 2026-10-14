@@ -7,6 +7,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ComponentSet, DialogProps } from "./contract.js";
+import { Surface } from "./surface.js";
 
 // Read by screen readers, not shown.
 const hidden: CSSProperties = {
@@ -452,6 +453,26 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (
+    <div aria-busy={status === "loading"}>
+      {error && <p role="alert">{error}</p>}
+      <Surface
+        cards={cards}
+        grid={grid}
+        onPlace={onPlace}
+        onOpen={onOpen}
+        card={(card) => (
+          <div style={{ padding: 8, overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
+            {card.status && <span title={card.status.words}>● </span>}
+            {card.link ? <a {...card.link}>{card.title}</a> : <strong>{card.title}</strong>}
+            {card.details.map((d, i) => (
+              <div key={i}>{d}</div>
+            ))}
+          </div>
+        )}
+      />
+    </div>
+  ),
   Board: ({ status, columns, error, onMove, onArrange, search, tools, filtered }) => (
     <>
       {filtered && (

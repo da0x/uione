@@ -1687,6 +1687,36 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 }
 ```
 
+- `canvas board_page.issues by stage over board_page.stages link /:project/:issue`
+  shows a list's rows as cards placed anywhere on a surface, like an idea board:
+  each where its `x` and `y` say, as big as its `w` and `h`, numbers on its entity
+  in the view's list. `at left top  size width height` names other fields. A card
+  is dragged to move it, or by its lower right corner to resize it, and once let go
+  it's sent to the command `place idea::place` names, which changes those fields,
+  snapped to `grid 160 from 40 80` when there's one; it's shown there at once, and
+  back if the command turns it down. The surface pans and zooms. A card not placed
+  yet is laid out in columns by `by`, its stage's place among `over`'s, a grid step
+  apart, so a board's cards shown on a canvas start where the board shows them.
+  `kind kind` names a field of choices saying how each card is drawn: `text` is
+  large and on its own, anything else a note. On the web it's drawn as SVG; in the
+  desktop app on a surface of its own; in the terminal as boxes, `n` choosing one,
+  the arrows moving it a grid step and Shift resizing it.
+- `when` after a list's view and link shows a table, board, cards or canvas only
+  while it holds, so one screen shows the same cards as a board or a canvas as a
+  field says, and switching keeps every card where it was in both.
+
+```one
+board board_page.issues by stage over board_page.stages when board_page.style == style::kanban {
+	title
+}
+canvas board_page.issues by stage over board_page.stages when board_page.style == style::canvas {
+	place issue::place
+	grid 160 from 40 80
+	title
+	number
+}
+```
+
 - `diagram project_page.steps by from and to over project_page.stages { roles.title }`
   draws the same as a grid: each stage a box in a row, in order, and each step an
   arrow, forward above and back below, labelled with what its block shows. An arrow

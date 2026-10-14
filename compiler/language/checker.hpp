@@ -2783,6 +2783,7 @@ namespace one::language {
                 if (auto* bo = std::get_if<board_item>(&item.node)) {
                     for (const auto& c : bo->columns) icon(c.icon, c.icon_where);
                 }
+                if (item.when) verify_condition(ns, *item.when, route);
                 if (auto* block = std::get_if<content_block>(&item.node)) {
                     if (block->type == content_block::kind::menu) {
                         for (const auto& inside : block->items) {
@@ -2952,6 +2953,8 @@ namespace one::language {
                     verify_grid(ns, *grid, route);
                 } else if (auto* board = std::get_if<board_item>(&item.node)) {
                     verify_board(ns, *board, route);
+                } else if (auto* canvas = std::get_if<canvas_item>(&item.node)) {
+                    verify_canvas(ns, *canvas, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
                     verify_cards(ns, *cards, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
@@ -3190,6 +3193,55 @@ namespace one::language {
                     error(board.move->command.where, "a board's cards are " + card->name + "s, so they're moved by a command on " + card->name + ", like " + card->name + "::move");
                 }
                 verify_along(ns, *board.move, route);
+            }
+        }
+
+        // canvas board_page.issues link /:project/:issue { ... }: its cards' rows hold where
+        // they're placed, as numbers, and what they show; place names a command on the
+        // cards' entity that changes those fields; by and over lay out the unplaced.
+        void verify_canvas(const std::string& ns, const canvas_item& canvas, const std::string& route) {
+            const view_each* cards = named_list(ns, canvas.view, *canvas.list, route);
+            if (!cards) return;
+            const entity_declaration* card = listed_entity(ns, *cards);
+            if (!card) return;
+            for (const auto& [name, where] : {std::pair{canvas.x, canvas.at_where}, std::pair{canvas.y, canvas.at_where}, std::pair{canvas.w, canvas.size_where},
+                                              std::pair{canvas.h, canvas.size_where}}) {
+                // Where the fields were named, or the canvas itself when they weren't.
+                const location& at = where.line != 1 || where.column != 1 ? where : canvas.view.where;
+                const field* f = find_field(*card, name);
+                if (!f) {
+                    error(at, "entity " + card->name + " has no field " + name + ", where a canvas keeps a card's place; add " + name + " number to it, or say the fields, like at x y  size w h");
+                } else if (!f->type || f->type->text() != "number" || f->list) {
+                    error(at, card->name + "." + name + " keeps where a card is, so it's a number");
+                } else if (!in_rows(*cards, name)) {
+                    error(at, "view " + canvas.view.text() + " has no " + name + " in its " + *canvas.list + "; add it to the list's block");
+                }
+            }
+            if (!canvas.kind.empty()) {
+                const field* f = find_field(*card, canvas.kind);
+                if (!f) error(canvas.kind_where, "entity " + card->name + " has no field " + canvas.kind + nearest(canvas.kind, field_names(*card)));
+                else if (f->choices.empty()) error(canvas.kind_where, card->name + "." + canvas.kind + " says how a card's drawn, so it's a choice, like note or text");
+                else if (!in_rows(*cards, canvas.kind)) error(canvas.kind_where, "view " + canvas.view.text() + " has no " + canvas.kind + " in its " + *canvas.list + "; add it to the list's block");
+            }
+            if (!canvas.by.empty()) {
+                if (!find_field(*card, canvas.by)) error(canvas.by_where, "entity " + card->name + " has no field " + canvas.by + nearest(canvas.by, field_names(*card)));
+                else if (!in_rows(*cards, canvas.by)) error(canvas.by_where, "view " + canvas.view.text() + " has no " + canvas.by + " in its " + *canvas.list + "; add it to the list's block");
+                if (!canvas.over.parts.empty()) named_list(ns, canvas.over, canvas.over_list, route);
+            }
+            if (canvas.grid < 0) error(canvas.grid_where, "a grid's step is more than nothing, like grid 160");
+            if (canvas.place) {
+                verify_command_use(ns, *canvas.place);
+                if (canvas.place->parts.size() == 2 && canvas.place->parts[0] != card->name) {
+                    error(canvas.place_where, "a canvas's cards are " + card->name + "s, so they're placed by a command on " + card->name + ", like " + card->name + "::place");
+                }
+            }
+            if (canvas.columns.empty()) error(canvas.view.where, "a canvas's cards show something, its title first, like title");
+            for (const auto& shown : canvas.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*cards, key)) error(shown.where, "view " + canvas.view.text() + " has no " + key + " in its " + *canvas.list + "; add it to the list's block");
+            }
+            if (canvas.link && !routes_.contains(full_route(ns, *canvas.link))) {
+                error(canvas.link_where, "there's no screen at " + full_route(ns, *canvas.link) + " for this canvas's cards to open");
             }
         }
 

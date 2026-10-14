@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/project.hpp"
+#include "generators/native.hpp"
 #include "generators/web.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
@@ -117,6 +118,94 @@ TEST_CASE("a board over stages written in the code has them as its columns, its 
         CHECK(native.find(R"(.over = state<view_state>(view_state{status::ready, ember::parse_json("{\"stages\":[{\"id\":\"to_do\",\"title\":\"To do\"},)") != std::string::npos);
         CHECK(native.find(R"(.notify = {"printed"}, .statuses = {{"printed", "done"}, {"failed", "failed"}})") != std::string::npos);
     }
+}
+
+TEST_CASE("a canvas places a list's cards by their fields, placed by a command and snapped to a grid, and a board shows instead while a field says so") {
+    const std::string source = R"(namespace ideas {
+enum style {
+	kanban
+	canvas
+}
+enum kind {
+	note
+	text
+}
+entity wall {
+	title  text   required
+	style  style  = style::kanban
+}
+entity stage {
+	wall   wall   required
+	title  text   required
+}
+entity idea {
+	wall   wall   required
+	title  text   required
+	stage  stage
+	kind   kind   = kind::note
+	x  number
+	y  number
+	w  number
+	h  number
+}
+command idea::place {
+	changes x  y  w  h
+}
+view wall_page per wall {
+	title  style
+	ideas = each idea in wall {
+		title  stage  kind  x  y  w  h
+	}
+	stages = each stage in wall {
+		title
+	}
+}
+screen "{wall_page.title}" /walls/:wall {
+	board wall_page.ideas by stage over wall_page.stages when wall_page.style == style::kanban {
+		title
+	}
+	canvas wall_page.ideas by stage over wall_page.stages when wall_page.style == style::canvas {
+		place idea::place
+		kind kind
+		grid 160 from 40 80
+		title
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto screen = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Canvas") != std::string::npos; });
+    REQUIRE(screen != web.end());
+    CAPTURE(screen->content);
+    CHECK(screen->content.find(R"(place="ideas::idea::place" grid={{ step: 160, x: 40, y: 80 }} by="stage")") != std::string::npos);
+    CHECK(screen->content.find(R"(kind="kind")") != std::string::npos);
+    // Each shown only while its condition holds.
+    CHECK(screen->content.find(R"(=== "kanban")) && (<>)") != std::string::npos);
+    CHECK(screen->content.find(R"(=== "canvas")) && (<>)") != std::string::npos);
+    auto native = generators::generate_native(files, root + "/examples/tasks", "desktop");
+    auto drawn = std::ranges::find_if(native, [](const auto& f) { return f.content.find("canvas_board(p, {") != std::string::npos; });
+    REQUIRE(drawn != native.end());
+    CAPTURE(drawn->content);
+    CHECK(drawn->content.find(R"(.place = "ideas::idea::place", .grid = 160, .origin_x = 40, .origin_y = 80, .by = "stage")") != std::string::npos);
+    CHECK(drawn->content.find(" ? canvas_board(p, {") != std::string::npos);
+    CHECK(drawn->content.find(": view()") != std::string::npos);
+    // Without the fields it places by, or with one that isn't a number, it says so.
+    std::string missing = source;
+    missing.replace(missing.find("\t\ttitle  stage  kind  x  y  w  h\n"), std::string("\t\ttitle  stage  kind  x  y  w  h\n").size(), "\t\ttitle  stage  kind  x  y  w\n");
+    missing.replace(missing.find("\tx  number\n"), std::string("\tx  number\n").size(), "\tx  text\n");
+    language::diagnostics wrong;
+    std::vector<language::file> again;
+    again.push_back(language::parse("main.one", missing, wrong));
+    language::check(again, wrong);
+    std::string said;
+    for (const auto& d : wrong) said += language::format(d) + "\n";
+    CHECK(said.find("idea.x keeps where a card is, so it's a number") != std::string::npos);
+    CHECK(said.find("view wall_page has no h in its ideas; add it to the list's block") != std::string::npos);
 }
 
 TEST_CASE("a board over stage records chimes and shows a status where each stage's own fields say") {

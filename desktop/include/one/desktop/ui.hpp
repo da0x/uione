@@ -177,6 +177,25 @@ namespace one::desktop {
 	// dimmed while something it doesn't is carried at all; told what's dropped on it.
 	view drop_target(view content, std::function<bool(const std::string&)> accepts, std::function<void(const std::string&)> on_drop, box_style over, color dim);
 
+	// A surface of things placed anywhere, in its own units, panned and zoomed: a thing
+	// dragged moves, dragged by its lower right corner resizes, and on_place is told
+	// where it's gone once it's let go, snapped to the grid when there is one. A double
+	// click, or Enter on the one chosen, opens it.
+	struct surface_item {
+		std::string key;
+		float x = 0, y = 0, width = 150, height = 150;
+		view content;
+		bool movable = true;
+	};
+	struct surface_options {
+		std::function<void(const std::string& key, float x, float y, float width, float height)> on_place = {};
+		std::function<void(const std::string& key)> on_open = {};
+		float grid = 0, origin_x = 0, origin_y = 0;
+		float smallest = 30;  // a thing's least width and height
+		float height = 560;   // how tall the surface is drawn
+	};
+	view surface(std::vector<surface_item> items, surface_options options);
+
 	// Text, wrapped to the width it's given.
 	view text(std::string words, std::optional<text_style> style = {});
 	view text(std::vector<text_span> spans);

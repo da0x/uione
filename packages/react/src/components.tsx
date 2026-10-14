@@ -1616,6 +1616,138 @@ export function Board({
   );
 }
 
+// A canvas: a list's rows as cards placed anywhere, where their fields say, moved
+// and resized, and placed by a command once let go. A card not placed yet is laid out
+// in columns by its by field, a grid step apart, as a board would show it.
+export function Canvas({
+  view,
+  list,
+  columns,
+  link,
+  keyed,
+  named,
+  pictures = [],
+  people = {},
+  choices = {},
+  labels = [],
+  x = "x",
+  y = "y",
+  w = "w",
+  h = "h",
+  kind,
+  place,
+  grid,
+  by,
+  over,
+  overList,
+  tint,
+}: {
+  view: ViewState;
+  list: string;
+  columns: Record<string, string>; // what a card shows, its title first
+  link?: string;
+  keyed?: string[];
+  named?: Record<string, number>;
+  pictures?: string[];
+  people?: Record<string, string>;
+  choices?: Record<string, Record<string, string>>;
+  labels?: string[];
+  x?: string; // the fields a card's place is kept in
+  y?: string;
+  w?: string;
+  h?: string;
+  kind?: string; // the field saying how a card's drawn, like note or text
+  place?: string; // the command a card's place is sent to
+  grid?: { step: number; x: number; y: number };
+  by?: string; // the field the unplaced are laid out by, like stage
+  over?: ViewState;
+  overList?: string; // its columns, in order, like stages
+  tint?: Tint;
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const navigate = useNavigate();
+  const runner = useConfirmedRunner();
+  const rows = rowsOf(view.data?.[list]);
+  const now = useNow(rows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
+  const { matches } = useFilter();
+  // Where each placed card is until the view says so too.
+  const [placed, setPlaced] = useState<Record<string, [number, number, number, number]>>({});
+  const number = (v: unknown) => (typeof v === "number" ? v : undefined);
+  useEffect(() => {
+    setPlaced((now) => {
+      const kept = Object.entries(now).filter(([id, at]) => {
+        const row = rows.find((r) => r.id === id);
+        return !row || number(row[x]) !== at[0] || number(row[y]) !== at[1] || number(row[w]) !== at[2] || number(row[h]) !== at[3];
+      });
+      return kept.length === Object.keys(now).length ? now : Object.fromEntries(kept);
+    });
+  }, [view.data]);
+  const order = by && over && overList ? rowsOf(over.data?.[overList]).map((row) => row.id) : [];
+  const step = grid?.step || 160;
+  const down: Record<string, number> = {};
+  const [title, ...rest] = Object.keys(columns);
+  const cards = rows.filter(matches).map((card) => {
+    // Its place among its column's cards, placed or not, so placing one moves no other.
+    const column = by ? String(card[by] ?? "") : "";
+    const inColumn = (down[column] = (down[column] ?? -1) + 1);
+    const at = placed[card.id];
+    let box = at ? { x: at[0], y: at[1], width: at[2], height: at[3] } : undefined;
+    if (!box) {
+      const width = number(card[w]) || 150;
+      const height = number(card[h]) || 150;
+      const cx = number(card[x]);
+      const cy = number(card[y]);
+      // Placed: with a size, which only a place gives, as a number never given reads 0.
+      if (cx !== undefined && cy !== undefined && (number(card[w]) ?? 0) > 0 && (number(card[h]) ?? 0) > 0) {
+        box = { x: cx, y: cy, width, height };
+      } else {
+        // Laid out: its column's place across, and its place in the column down.
+        if (!order.includes(column)) order.push(column);
+        box = { x: (grid?.x ?? 0) + order.indexOf(column) * step, y: (grid?.y ?? 0) + inColumn * step, width, height };
+      }
+    }
+    return {
+      id: card.id,
+      title: title ? cellOf(ui, links, card, title, { choices, labels, pictures, people }) : card.id,
+      kind: kind ? String(card[kind] ?? "") : undefined,
+      link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
+      details: rest
+        .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, { choices, labels, pictures, people })))
+        .filter((detail) => detail !== "")
+        .concat(going(card, undefined, now).extra),
+      tone: toneOf(card, tint),
+      status: going(card, undefined, now).status,
+      ...box,
+    };
+  });
+  const loading = view.status !== "live" ? view.status : over && over.status !== "live" ? over.status : "live";
+  return (
+    <ui.Canvas
+      status={loading}
+      cards={cards}
+      grid={grid}
+      onPlace={
+        place
+          ? (id, px, py, pw, ph) => {
+              const card = rows.find((c) => c.id === id);
+              if (!card) return;
+              setPlaced((now) => ({ ...now, [id]: [px, py, pw, ph] }));
+              void runner.run(place, { id, [x]: px, [y]: py, [w]: pw, [h]: ph }, card).then((done) => {
+                if (!done) setPlaced((now) => Object.fromEntries(Object.entries(now).filter(([other]) => other !== id)));
+              });
+            }
+          : undefined
+      }
+      onOpen={link ? (id) => {
+        const card = rows.find((c) => c.id === id);
+        if (card) navigate(rowLink(link, card, params, keyed, named));
+      } : undefined}
+    />
+  );
+}
+
 const statusWords: Record<string, string> = { inactive: "Not started", waiting: "Waiting", working: "Working", done: "Done", failed: "Failed" };
 
 // A running time: 35s, 4m, 1h 12m, 2d 3h.

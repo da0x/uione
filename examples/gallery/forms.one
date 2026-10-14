@@ -11,6 +11,7 @@ namespace gallery at / {
 	screen "{room_page.name}" /rooms/:room {
 		room::update "Edit room" icon edit form "Save" {
 			name  summary  visibility
+			look "Show its pieces as"
 		}
 		subtitle "A form asking for a field of every kind, open, so each control is seen at once."
 		form piece::create "Hang it" {

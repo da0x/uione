@@ -618,6 +618,30 @@ namespace one::generators {
             return out + "})";
         }
 
+        // A canvas: its cards' rows, where they're kept, the command placing them, and the
+        // grid they snap to; by and over lay out those not placed yet.
+        std::string canvas(screen_parts& parts, const std::string& ns, const language::canvas_item& c) {
+            const language::entity_declaration* entity = model_.listed(ns, c.view.text(), c.list);
+            std::string columns;
+            for (const auto& column : c.columns) {
+                auto shown = model_.shown_as(ns, c.view.text(), c.list, entity, screens::text_of(*column.value), column.label);
+                columns += (columns.empty() ? "" : ", ") + std::string("{") + str(shown.key) + ", " + str(shown.label) + "}";
+            }
+            auto number = [](double n) { return std::format("{}", n); };
+            std::string out = "canvas_board(p, {.view = " + view_variable(parts, screens::full_view(ns, c.view.text())) + ", .list = " + str(*c.list) + ", .columns = {" + columns + "}";
+            if (c.link) out += ", " + link_settings(ns, *c.link);
+            out += ", .x = " + str(c.x) + ", .y = " + str(c.y) + ", .w = " + str(c.w) + ", .h = " + str(c.h);
+            if (!c.kind.empty()) out += ", .kind = " + str(c.kind);
+            if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
+            if (c.grid > 0) out += ", .grid = " + number(c.grid) + ", .origin_x = " + number(c.origin_x) + ", .origin_y = " + number(c.origin_y);
+            if (!c.by.empty()) {
+                out += ", .by = " + str(c.by);
+                if (!c.over.parts.empty()) out += ", .over = " + view_variable(parts, screens::full_view(ns, c.over.text())) + ", .over_list = " + str(c.over_list);
+            }
+            if (std::string tint = tint_of(ns, c.view, c.list, std::nullopt); !tint.empty()) out += ", .tint = " + tint;
+            return out + "})";
+        }
+
         std::string details(screen_parts& parts, const std::string& ns, const language::details_item& d) {
             std::string full = screens::full_view(ns, d.view.text());
             std::size_t split = full.rfind("::");
@@ -1065,7 +1089,7 @@ namespace one::generators {
                 } else if (auto* t = std::get_if<language::table_item>(&item.node)) {
                     // A board of the same list right after it: the two are one, shown as the person picks.
                     auto* b = at + 1 < list.size() ? std::get_if<language::board_item>(&list[at + 1].node) : nullptr;
-                    if (b && b->view.text() == t->view.text() && b->list == t->list) {
+                    if (b && b->view.text() == t->view.text() && b->list == t->list && !item.when && !list[at + 1].when) {
                         std::string listed = t->list ? *t->list : "rows";
                         std::string words = screens::label(listed);
                         if (!words.empty()) words[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(words[0])));
@@ -1081,6 +1105,8 @@ namespace one::generators {
                     code = cards(parts, ns, *c);
                 } else if (auto* b = std::get_if<language::board_item>(&item.node)) {
                     code = board(parts, ns, *b, screen);
+                } else if (auto* c = std::get_if<language::canvas_item>(&item.node)) {
+                    code = canvas(parts, ns, *c);
                 } else if (auto* f = std::get_if<language::form_item>(&item.node)) {
                     if (model_.on_rows(ns, screen, screens::full_command(ns, f->commands.front()))) continue;  // each row's button opens it
                     code = form(parts, ns, *f, screens::model::button_for(screen, f->commands.front()));
@@ -1093,6 +1119,7 @@ namespace one::generators {
                     code = command_of(parts, ns, *b);
                 }
                 if (code.empty()) continue;
+                if (item.when) code = condition(parts, ns, *item.when) + " ? " + code + " : view()";
                 if (presses(item)) {
                     if (row.empty()) row_line = item.where.line;
                     row.push_back(code);

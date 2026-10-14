@@ -164,6 +164,43 @@ TEST("a page reads its views live, runs commands, asks first when it's told to, 
 	CHECK(p.kept<int>("count").peek() == 5);
 }
 
+TEST("a canvas places its cards where they say, lays out those that don't by column, and moves one at once, back if it's turned down") {
+	memory_source data;
+	data.on("tracker::issue::place", [](const value& f, memory_source&) -> answer {
+		if (f["id"].as_string() == "atlas-3") return std::unexpected(std::string("you can't move that one"));
+		return f["id"].as_string();
+	});
+	auto s = tracker();
+	navigator nav(s, data);
+	nav.open("/projects/atlas");
+	auto& p = nav.current();
+	data.set("tracker::board_page", "atlas", value(fields{
+		{"issues", value(list{value(fields{{"id", "atlas-1"}, {"title", "Placed"}, {"stage", "todo"}, {"x", 400.0}, {"y", 240.0}, {"w", 310.0}, {"h", 42.0}}),
+		                      value(fields{{"id", "atlas-2"}, {"title", "Laid out"}, {"stage", "done"}}),
+		                      value(fields{{"id", "atlas-3"}, {"title", "Also todo"}, {"stage", "todo"}})})},
+		{"stages", value(list{value(fields{{"id", "todo"}}), value(fields{{"id", "done"}})})}}));
+	auto board = p.view("tracker::board_page", "atlas");
+	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
+	                 .by = "stage", .over = board, .over_list = "stages"};
+	auto c = canvas_of(p, spec);
+	CHECK(c.cards.size() == 3);
+	if (c.cards.size() != 3) return;
+	CHECK(c.placing);
+	CHECK((c.cards[0].placed && c.cards[0].x == 400 && c.cards[0].y == 240 && c.cards[0].w == 310 && c.cards[0].h == 42));
+	// Not placed: in its stage's column, a grid step across for each, and down as they come.
+	CHECK((!c.cards[1].placed && c.cards[1].x == 200 && c.cards[1].y == 80));
+	CHECK((c.cards[2].x == 40 && c.cards[2].y == 240 && c.cards[2].w == 150));  // second in its column, after the one placed
+	CHECK(snapped(130, 40, 160) == 200);
+	CHECK(snapped(130, 40, 0) == 130);
+	// Placed, it's there at once; turned down, it's back where it was.
+	place_card(p, spec, "atlas-2", 520, 400, 150, 150);
+	auto moved = canvas_of(p, spec);
+	CHECK((moved.cards[1].placed && moved.cards[1].x == 520 && moved.cards[1].y == 400));
+	place_card(p, spec, "atlas-3", 999, 999, 150, 150);
+	CHECK(canvas_of(p, spec).cards[2].y == 240);
+	CHECK(p.error("tracker::issue::place") == "you can't move that one");
+}
+
 TEST("a form's files are uploaded as it's sent and added to what's attached, and one that isn't there turns it down") {
 	memory_source data;
 	data.on("tracker::issue::attach", [](const value&, memory_source&) -> answer { return "atlas-12"; });

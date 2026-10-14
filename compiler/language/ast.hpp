@@ -724,6 +724,31 @@ namespace one::language {
         location status_where;
     };
 
+    // canvas board_page.issues by stage over board_page.stages link /:project/:issue { ... }:
+    // a list's rows as cards placed anywhere on a surface that pans and zooms, each
+    // where its fields say, dragged and resized, and placed by a command once let go.
+    // One not placed yet is laid out in columns, by the field named after by, like a
+    // board's, so a board's cards shown on a canvas start where a board would show them.
+    struct canvas_item {
+        qualified_name view;
+        std::optional<std::string> list;
+        std::string by;  // optional: the field laying out the cards not placed yet, like stage
+        location by_where;
+        qualified_name over;
+        std::string over_list;
+        std::optional<std::string> link;
+        location link_where;
+        std::optional<qualified_name> place;  // place issue::place: the command a card's x y w h are sent to
+        location place_where;
+        std::string x = "x", y = "y", w = "w", h = "h";  // at x y  size w h: the fields it's placed by
+        location at_where, size_where;
+        std::string kind;  // kind kind: the field saying how a card's drawn, like note or text
+        location kind_where;
+        double grid = 0, origin_x = 0, origin_y = 0;  // grid 160 from 40 80: where a card snaps when let go
+        location grid_where;
+        std::vector<table_column> columns;  // what a card shows, its title first
+    };
+
     // cards project_page.boards link /:project/boards/:board { ... }: a list's rows as
     // large cards, each with what its block shows, its title first; a tally of what
     // it holds, like its issues by stage; and filters, links that open it filtered.
@@ -828,8 +853,11 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item,
-                     find_item>
+                     find_item, canvas_item>
             node;
+        // board … when board_page.style == style::kanban: shown only while it holds, so
+        // one screen shows a list as a board or a canvas, as a field says.
+        expression_ptr when = nullptr;
     };
 
     struct screen_declaration {

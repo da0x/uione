@@ -6,7 +6,7 @@
 export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, usePageTitle, useSignIn, useSite, useTitle } from "./app.js";
 export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Badge } from "./app.js";
 
-export { Actions, Board, Cards, Code, Command, Copy, Details, Files, Find, Landing, useAddressState, toneOf, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Themes, Thread, Timeline, useTriedTheme, changed, done, holds, keptByTime, allows, isNone, listChoices, listHas, markdownOf, ordered, phrase } from "./components.js";
+export { Actions, Board, Canvas, Cards, Code, Command, Copy, Details, Files, Find, Landing, useAddressState, toneOf, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Themes, Thread, Timeline, useTriedTheme, changed, done, holds, keptByTime, allows, isNone, listChoices, listHas, markdownOf, ordered, phrase } from "./components.js";
 export type { BoardMove, CopiedField, Tally, CopiedList, DocPage, FieldSpec, GridCommand, RowAction } from "./components.js";
 
 export { fileName, useAuth, useCommand, useFiles, useRunner, useView } from "./data.js";
@@ -25,6 +25,7 @@ export type {
   ViewStatus,
 } from "./data.js";
 
+export { Surface } from "./surface.js";
 export { memorySource } from "./memory.js";
 export type { MemoryOptions, MemorySource } from "./memory.js";
 

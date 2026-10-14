@@ -16,6 +16,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
+import { Surface } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
 import { nameStyles, setCodeDisplay, tabWidths, useCodeDisplay } from "./display.js";
@@ -1000,6 +1001,41 @@ export const radix: ComponentSet = {
   // Columns side by side, scrolled across when there are many, each with its cards and
   // how many; a card dragged dims the columns it can't go to and marks the one it's
   // over. Alt+← and Alt+→ move a focused card to the nearest column it can go to.
+  // A canvas: cards placed anywhere, on the shared SVG surface, each drawn as a
+  // board's card is: its dot, its title, what else it shows; text large and bare.
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen }) => (
+    <div className="flex flex-col gap-2" aria-busy={status === "loading"}>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <Surface
+        cards={cards}
+        grid={grid}
+        onPlace={onPlace}
+        onOpen={onOpen}
+        className="outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        style={{ borderRadius: "var(--radius-box, 10px)", background: "var(--color-sunken)", border: "1px solid var(--color-line)" }}
+        card={(card) =>
+          card.kind === "text" ? (
+            <div className="h-full p-2 text-lg leading-snug font-medium text-ink">{card.title}</div>
+          ) : (
+            <div className={`flex h-full flex-col gap-1 overflow-hidden p-2.5 text-sm ${tones[card.tone ?? 3] ?? ""}`}>
+              <div className="flex items-start gap-1.5">
+                {card.status && <span role="img" aria-label={card.status.words} title={card.status.words} className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: statusColors[card.status.is] }} />}
+                {card.link ? (
+                  <a {...card.link} draggable={false} onPointerDown={(e) => e.stopPropagation()} className="leading-snug font-medium text-ink hover:text-accent hover:underline">
+                    {card.title}
+                  </a>
+                ) : (
+                  <span className="leading-snug font-medium text-ink">{card.title}</span>
+                )}
+              </div>
+              {card.details.length > 0 && <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted">{card.details.map((d, i) => <span key={i}>{d}</span>)}</div>}
+            </div>
+          )
+        }
+      />
+      <p className="text-xs text-muted">Drag a card to move it, or its corner to resize it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom.</p>
+    </div>
+  ),
   Board: function RadixBoard({ status, columns, error, onMove, onArrange, search, tools, filtered, column, onColumn }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();

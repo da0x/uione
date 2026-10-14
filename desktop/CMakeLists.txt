@@ -63,6 +63,7 @@ add_library(one_desktop
 	src/choices.cpp
 	src/clipboard.cpp
 	src/dragging.cpp
+	src/surface.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/../screens/src/editing.cpp
 	src/field.cpp
 	src/gpu.cpp
@@ -90,6 +91,7 @@ if(ONE_DESKTOP_RUNTIME)
 	add_library(one_desktop_runtime
 		runtime/src/between.cpp
 		runtime/src/board.cpp
+		runtime/src/canvas.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp
 		runtime/src/markdown.cpp

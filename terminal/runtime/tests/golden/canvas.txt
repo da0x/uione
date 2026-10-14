@@ -1,0 +1,30 @@
+ neotrac
+────────────────────────────────────────────────────────────────────────────────
+
+  Main
+
+  ╭─────────────╮ ╭─────────────╮
+  │Copy an issue│ │Search by    │
+  │whole        │ │label        │
+  │#12          │ │#9           │
+  │             │ │             │
+  │             │ │             │
+  ╰─────────────╯ ╰─────────────╯
+
+  ╭─────────────╮
+  │Draw boards  │
+  │natively     │
+  │#14          │
+  │             │
+  │             │
+  ╰─────────────╯
+
+
+
+
+
+
+  n chooses a card, the arrows move it and Shift resizes it; Enter opens it. +
+  and − zoom.
+
+ tab moves   enter opens   q quits
