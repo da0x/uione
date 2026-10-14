@@ -146,6 +146,7 @@ namespace one::screens {
 		std::string list;
 		std::string shown = "title";
 		std::vector<column> columns = {};
+		bool hide_empty = false;  // a record none of the rows names isn't on it, unless it's picked
 	};
 
 	// Rows put in order by a number, Alt with Up or Down moving the one chosen

@@ -1202,6 +1202,7 @@ export interface TrackSpec {
   list: string; // like milestones
   shown?: string; // what a card is called, like title
   columns: Record<string, string>; // what else a card shows, like { due: "Due" }
+  hideEmpty?: boolean; // a record none of the rows names isn't on it, unless it's picked
 }
 
 // The rows a track keeps, and the track itself, drawn above them. The record picked
@@ -1218,10 +1219,12 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
   const start = ids.length > 1 ? sharedStart(ids) : (ids[0] ?? "").slice(0, (ids[0] ?? "").lastIndexOf("-") + 1);
   const picked = part ? records.find((record) => record.id.slice(start.length) === part)?.id : undefined;
   const keeps = (row: Row) => !picked || row[track.field] === picked;
-  const element = records.length > 0 && (
+  // Without rows of its own, a record is left out when the track says so, unless it's picked.
+  const shownRecords = track.hideEmpty ? records.filter((record) => record.id === picked || rows.some((row) => row[track.field] === record.id)) : records;
+  const element = shownRecords.length > 0 && (
     <ui.Track
       label={label(track.field)}
-      steps={records.map((record) => ({
+      steps={shownRecords.map((record) => ({
         id: record.id,
         title: show(record[track.shown ?? "title"]) || record.id,
         details: Object.keys(track.columns)

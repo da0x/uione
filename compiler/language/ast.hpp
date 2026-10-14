@@ -608,6 +608,7 @@ namespace one::language {
         qualified_name over;
         std::string over_list;
         std::vector<table_column> columns;  // what a card shows besides its title, like due
+        bool hide_empty = false;            // hide when empty: a record no row names isn't on it
     };
 
     struct table_item {

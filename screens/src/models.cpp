@@ -579,6 +579,8 @@ namespace one::screens {
 		for (const auto& record : records) {
 			std::string id = record["id"].as_string();
 			auto count = std::ranges::count_if(rows, [&](const value& row) { return field_of(row, spec->field).as_string() == id; });
+			// Without rows of its own, it's left out when the track says so, unless it's picked.
+			if (spec->hide_empty && count == 0 && out.picked != id) continue;
 			std::string title = show(field_of(record, spec->shown));
 			track_record r{id, title.empty() ? id : title, {}, count, out.picked == id};
 			for (const auto& c : spec->columns) {

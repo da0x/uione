@@ -366,7 +366,8 @@ namespace one::generators {
             auto t = model_.track_of(ns, *setting);
             std::string columns;
             for (const auto& [key, label] : t.columns) columns += (columns.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label) + "}";
-            return "track_spec{" + str(t.field) + ", " + view_variable(parts, t.view) + ", " + str(t.list) + ", " + str(t.shown) + ", {" + columns + "}}";
+            return "track_spec{" + str(t.field) + ", " + view_variable(parts, t.view) + ", " + str(t.list) + ", " + str(t.shown) + ", {" + columns + "}" +
+                   (setting->hide_empty ? ", true" : "") + "}";
         }
 
         std::string reorder_of(screen_parts& parts, const std::string& ns, const std::optional<std::string>& field, const language::entity_declaration* entity) {

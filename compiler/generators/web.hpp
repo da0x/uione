@@ -2029,7 +2029,8 @@ namespace one::generators {
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(label);
             }
             return " track={{ field: " + web_detail::js_string(track.field) + ", view: " + view_variable(parts, track.view) +
-                   ", list: " + web_detail::js_string(track.list) + ", shown: " + web_detail::js_string(track.shown) + ", columns: { " + columns + " } }}";
+                   ", list: " + web_detail::js_string(track.list) + ", shown: " + web_detail::js_string(track.shown) + ", columns: { " + columns + " }" +
+                   (setting->hide_empty ? ", hideEmpty: true" : "") + " }}";
         }
 
         // tint={{ field: "priority", order: [...] }}: the field's choices, the first

@@ -1036,6 +1036,7 @@ export const radix: ComponentSet = {
   Toolbar: ({ search, tools, filtered }) => (
     <>
       {filtered && <FilterChip {...filtered} />}
+      {tools}
       {search && (
         <input
           type="search"
@@ -1046,7 +1047,6 @@ export const radix: ComponentSet = {
           className="w-full rounded-control border border-control-line bg-page px-2.5 py-1 text-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent sm:w-72"
         />
       )}
-      {tools}
     </>
   ),
 

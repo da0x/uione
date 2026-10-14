@@ -2622,6 +2622,16 @@ namespace one::language {
             if (at(token_kind::left_brace)) {
                 advance();
                 while (in_block()) {
+                    // hide when empty: a record none of the rows names is left out.
+                    if (at_word("hide") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                        advance();
+                        advance();
+                        if (!at_word("empty")) fail_expecting("empty, as in hide when empty");
+                        advance();
+                        track.hide_empty = true;
+                        end_line();
+                        continue;
+                    }
                     while (!at_line_end()) {
                         table_column column;
                         column.where = peek().where;
