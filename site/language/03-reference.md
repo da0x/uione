@@ -1662,6 +1662,10 @@ form step::update "Save" {
   card filtered; three at most. A filter can keep the rows whose time is after or
   before one counted from when it's opened: `filter "Changed this week" updated_at
   > 7 days ago`, or `due <= 2 weeks from now`, in minutes, hours, days or weeks.
+  A choice it shows, like a board's `visibility`, is a tag beside the card's title,
+  said as its choice is: Public, Private. `hide when empty` leaves the cards out while
+  there are none, or while the reader can't read them, like a project's private
+  boards to someone outside it.
 - A filter and a section can each have a color, so the parts of a page can be told
   apart at a glance: `filter "High priority" priority == priority::high color red`,
   `section "Wiki" color violet { ... }`. A section's heading, links and tables
