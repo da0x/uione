@@ -135,7 +135,6 @@ func backend(ctx *pulumi.Context, p Project, after pulumi.ResourceOption) (pulum
 		Triggers: pulumi.Array{pulumi.String(hash)},
 		Environment: pulumi.StringMap{
 			"API":     pulumi.String(api),
-			"ONE":     pulumi.String(one),
 			"IMAGE":   image,
 			"PROJECT": project,
 			"REGION":  pulumi.String(p.Region),
@@ -163,9 +162,11 @@ const unlessBuilt = `if [ "$(printf '%s\n' "${PULUMI_COMMAND_STDOUT:-}" | tail -
 fi
 `
 
-// The build puts the backend and the one library side by side, as the dockerfile
-// expects, and has Cloud Build turn them into an image. When the backend uses a
-// published one library rather than a folder, only the backend is staged.
+// The backend is compiled here, where Go keeps what it downloaded and compiled
+// before, for Cloud Run's Linux, with the one library from its folder when its
+// go.mod points at one; Cloud Build only puts the binary in an image beside nothing
+// else, which takes seconds rather than minutes of downloading and compiling the
+// backend's modules again on a fresh machine each time.
 //
 // A build account and its roles can take a minute to be seen everywhere after
 // they're first made, so a build refused for permission is tried again before
@@ -173,14 +174,16 @@ fi
 const buildScript = `set -eu
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-cp -RH "$API" "$stage/api"
-if [ -n "$ONE" ]; then
-  cp -RH "$ONE" "$stage/one"
-fi
+(cd "$API" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o "$stage/backend" .)
+cat > "$stage/dockerfile" <<DOCKERFILE
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY backend /backend
+ENTRYPOINT ["/backend"]
+DOCKERFILE
 cat > "$stage/cloudbuild.yaml" <<YAML
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: [build, --file, api/dockerfile, --tag, "$IMAGE", .]
+    args: [build, --tag, "$IMAGE", .]
 images: ["$IMAGE"]
 options:
   logging: CLOUD_LOGGING_ONLY

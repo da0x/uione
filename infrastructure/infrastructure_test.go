@@ -604,6 +604,9 @@ func TestAnUnchangedImageIsntBuiltAgainFromAnotherMachine(t *testing.T) {
 	}
 }
 
+// fakeGo stands in for go build: it writes what -o names.
+const fakeGo = "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && echo binary > \"$2\"; shift; done\n"
+
 // fakeBuild runs the build script with a gcloud that fails the way it's told to,
 // the given number of times, and reports how many times it ran and whether the
 // build succeeded.
@@ -615,14 +618,14 @@ func fakeBuild(t *testing.T, failure string, failures int) (int, bool) {
 	gcloud := "#!/bin/sh\necho x >> " + count + "\n" +
 		"if [ $(wc -l < " + count + ") -le " + strconv.Itoa(failures) + " ]; then echo '" + failure + "' >&2; exit 1; fi\n" +
 		"echo done\n"
-	for name, script := range map[string]string{"gcloud": gcloud, "sleep": "#!/bin/sh\n"} {
+	for name, script := range map[string]string{"gcloud": gcloud, "sleep": "#!/bin/sh\n", "go": fakeGo} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	command := exec.Command("sh", "-c", buildScript)
 	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"),
-		"API="+filepath.Join(dir, "build/api"), "ONE="+filepath.Join(dir, "one"), "IMAGE=registry/api:abc",
+		"API="+filepath.Join(dir, "build/api"), "IMAGE=registry/api:abc",
 		"PROJECT=ui-one", "REGION=us-east4", "UPLOADS=ui-one-uione-builds", "BUILDER=uione-build@ui-one.iam.gserviceaccount.com")
 	out, err := command.Output()
 	data, _ := os.ReadFile(count)
@@ -663,28 +666,43 @@ func TestTheLibraryIsFoundOnlyByItsExactModulePath(t *testing.T) {
 	}
 }
 
-func TestAPublishedLibraryIsntStaged(t *testing.T) {
+// The backend is compiled here, for Cloud Run's Linux, and Cloud Build is given only
+// its binary and a dockerfile that copies it: no source, and no library beside it.
+func TestOnlyTheBackendsBinaryIsSentToBeBuilt(t *testing.T) {
 	dir := build(t)
-	if err := os.WriteFile(filepath.Join(dir, "build/api/go.mod"), []byte("module uione.io/api\n\nrequire github.com/da0x/uione/one v0.1.0\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	m, err := declare(t, dir, settings)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := m.get(t, "command:local:Command::image")["environment"].ObjectValue()["ONE"].StringValue(); got != "" {
-		t.Errorf("the build stages the library from %s", got)
+	if _, staged := m.get(t, "command:local:Command::image")["environment"].ObjectValue()["ONE"]; staged {
+		t.Errorf("the build is still told where the library is, to stage it")
 	}
-	// The fake gcloud succeeds only if what it's given to build has no one/.
 	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "gcloud"), []byte("#!/bin/sh\n[ -d \"$3/api\" ] && [ ! -e \"$3/one\" ]\n"), 0o755); err != nil {
-		t.Fatal(err)
+	built := filepath.Join(bin, "built")
+	scripts := map[string]string{
+		// go build, as it's run: where, and for what.
+		"go": "#!/bin/sh\necho \"$(pwd) $GOOS $GOARCH $CGO_ENABLED\" > " + built + "\n" + strings.TrimPrefix(fakeGo, "#!/bin/sh\n"),
+		// gcloud builds submit <folder>: the binary and a dockerfile that copies it, nothing else.
+		"gcloud": "#!/bin/sh\n[ -f \"$3/backend\" ] && grep -q 'COPY backend /backend' \"$3/dockerfile\" && [ ! -e \"$3/api\" ] && [ ! -e \"$3/one\" ]\n",
 	}
+	for name, script := range scripts {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	api := filepath.Join(dir, "build/api")
 	command := exec.Command("sh", "-c", buildScript)
-	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "API="+filepath.Join(dir, "build/api"), "ONE=", "IMAGE=i",
+	command.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "API="+api, "IMAGE=i",
 		"PROJECT=ui-one", "REGION=us-east4", "UPLOADS=ui-one-uione-builds", "BUILDER=uione-build@ui-one.iam.gserviceaccount.com")
 	if out, err := command.CombinedOutput(); err != nil {
-		t.Errorf("a build without a library folder failed, or staged one: %v\n%s", err, out)
+		t.Fatalf("the build didn't send only the binary: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(built)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(data)), api+" linux amd64 0"; got != want {
+		t.Errorf("the backend was compiled as %q, want %q", got, want)
 	}
 }
 
