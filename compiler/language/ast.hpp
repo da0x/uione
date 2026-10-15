@@ -428,7 +428,7 @@ namespace one::language {
         std::string from;  // a theme this one starts from, changing what it says
         location from_where;
         std::vector<theme_color> colors;
-        std::optional<std::string> text, heading, code;  // fonts
+        std::optional<std::string> text, heading, code, document;  // fonts
         std::optional<theme_color> ground;              // the code editor's background
         std::optional<int> corners;
         location corners_where;
@@ -584,6 +584,7 @@ namespace one::language {
         std::string value;
         expression_ptr when;  // text "Implemented by {issue_page.implementer}" when issue_page.implementer != none
         bool subtitle = false;  // subtitle "{project_page.summary}": under the screen's title, as running words
+        bool document = false;  // markdown "license/*.md" as document: set as a printed document, in the theme's document font
     };
 
     struct content_link {

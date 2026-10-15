@@ -307,6 +307,67 @@
 
 /* Docs pages arrive as HTML, so they're styled by element rather than by class. */
 @layer components {
+  /* A page set as a printed document, like a license, over the prose styles below: a book face, its title, parts
+     and sections centered, the text justified, and a fleuron where it breaks. */
+  .one-prose.one-document {
+    font-family: var(--font-document, "Libre Caslon Text", Georgia, serif);
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    hyphens: auto;
+  }
+  .one-prose.one-document p,
+  .one-prose.one-document li {
+    text-align: justify;
+  }
+  .one-prose.one-document h1,
+  .one-prose.one-document h2,
+  .one-prose.one-document h3 {
+    font-family: inherit;
+    text-align: center;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .one-prose.one-document h1 {
+    font-size: 2.125rem;
+    font-weight: 400;
+    line-height: 1.2;
+    margin: 0 0 0.75rem;
+  }
+  /* What follows the title, like its version and date: under it, in italics. */
+  .one-prose.one-document h1 + p {
+    font-style: italic;
+    text-align: center;
+    color: var(--color-muted);
+    margin-bottom: 2rem;
+  }
+  .one-prose.one-document h2 {
+    font-size: 1.3rem;
+    font-weight: 400;
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.09em;
+    margin: 3rem 0 1rem;
+  }
+  .one-prose.one-document h3 {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    margin: 2.25rem 0 0.75rem;
+  }
+  .one-prose.one-document hr {
+    border: 0;
+    height: auto;
+    overflow: visible;
+    margin: 2.75rem 0;
+    text-align: center;
+    color: var(--color-muted);
+  }
+  .one-prose.one-document hr::after {
+    content: "❦";
+    font-size: 1.25rem;
+  }
+  .one-prose.one-document pre {
+    text-align: left;
+    hyphens: none;
+  }
   .one-prose {
     line-height: 1.7;
     overflow-wrap: break-word;
@@ -431,6 +492,7 @@
 :root[data-font="legible"] {
   --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-document: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Less motion: what moves on its own or slides, instantly instead. */

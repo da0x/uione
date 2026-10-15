@@ -1429,6 +1429,8 @@ project shop {
   changes only what it says. A theme that starts from none says every color.
 - `text`, `heading` and `code` are fonts, from Google Fonts unless they're the IBM
   Plex the component set brings. Headings are in the text's font unless it says.
+  `document` is the font of pages set as documents, Libre Caslon Text unless it
+  says, loaded only when a page is one; it's asked for in roman, italic and bold.
   `ground` is the background code sits on, light and dark, in place of a code
   theme's own.
 - `corners` is how round, in pixels, 0 for square; `depth` is `flat`, panels flat
@@ -1909,7 +1911,10 @@ issue::verify "Verify" when {
 - `code "examples/main.one"` shows a file, highlighted, and `markdown
   "docs/*.md"` makes a page of each file. Both are found beside the `.one` file
   that names them, as components are, so a folder of pages can sit in a folder
-  of its own.
+  of its own. `markdown "license/*.md" as document` sets them as a printed
+  document, like a license: a sheet in the theme's `document` font, its titles
+  and sections centered, its text justified, and `---` a fleuron. The terminal
+  centers its headings, in the terminal's own font.
 - `link` says where it goes first and its text after: `link #waitlist "Join the
   waitlist"`, `link /language/reference "Read the reference"`. `link namespace projects "See
   the projects"` opens a namespace's own screen, at `/projects`, and

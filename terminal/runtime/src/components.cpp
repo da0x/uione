@@ -914,10 +914,10 @@ namespace one::terminal::runtime {
 
 	}  // namespace
 
-	terminal::view markdown_view(const std::string& source) {
-		return terminal::text_laid([source](int width) {
+	terminal::view markdown_view(const std::string& source, bool document) {
+		return terminal::text_laid([source, document](int width) {
 			std::vector<terminal::line> out;
-			for (const auto& l : one::markdown::layout(source, {.width = std::max(10, width), .hyperlinks = false})) out.push_back(converted(l));
+			for (const auto& l : one::markdown::layout(source, {.width = std::max(10, width), .hyperlinks = false, .document = document})) out.push_back(converted(l));
 			return out;
 		});
 	}
@@ -930,7 +930,7 @@ namespace one::terminal::runtime {
 		return markdown_view(source);
 	}
 
-	terminal::view pages(page& p, std::string base, std::vector<written_page> all) {
+	terminal::view pages(page& p, std::string base, std::vector<written_page> all, bool document) {
 		if (all.empty()) return {};
 		std::string here = p.param("page");
 		const written_page* shown = &all.front();
@@ -938,13 +938,13 @@ namespace one::terminal::runtime {
 			if (w.name == here) shown = &w;
 		}
 		// One page is just the page, with no list of one above it.
-		if (all.size() == 1) return markdown_view(shown->source);
+		if (all.size() == 1) return markdown_view(shown->source, document);
 		std::vector<terminal::view> across;
 		for (const auto& w : all) {
 			if (&w == shown) across.push_back(terminal::text(w.title, {.bold = true, .underline = true}));
 			else across.push_back(terminal::link(w.title, [&p, to = base + "/" + w.name] { p.open(to); }, {}));
 		}
-		return terminal::column(terminal::row(std::move(across)).spacing(3), markdown_view(shown->source)).spacing(1);
+		return terminal::column(terminal::row(std::move(across)).spacing(3), markdown_view(shown->source, document)).spacing(1);
 	}
 
 }  // namespace one::terminal::runtime

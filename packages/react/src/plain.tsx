@@ -281,7 +281,7 @@ export const plain: ComponentSet = {
     </pre>
   ),
 
-  Pages: ({ pages, title, html }) => (
+  Pages: ({ pages, title, html, document }) => (
     <>
       {pages.length > 1 && (
         <nav aria-label="Pages">
@@ -295,7 +295,7 @@ export const plain: ComponentSet = {
       {html === undefined ? (
         <p>There's no page here.</p>
       ) : (
-        <article aria-label={title} dangerouslySetInnerHTML={{ __html: html }} />
+        <article aria-label={title} data-document={document || undefined} dangerouslySetInnerHTML={{ __html: html }} />
       )}
     </>
   ),

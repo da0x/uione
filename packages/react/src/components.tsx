@@ -124,7 +124,7 @@ export interface DocPage {
 
 // A set of pages, one per address under `base`, like /docs/language. With no page in
 // the address, the first one is shown.
-export function Pages({ base, pages }: { base: string; pages: DocPage[] }) {
+export function Pages({ base, pages, document: printed }: { base: string; pages: DocPage[]; document?: boolean }) {
   const ui = useUI();
   const link = useLinks();
   const { page } = useParams();
@@ -142,6 +142,7 @@ export function Pages({ base, pages }: { base: string; pages: DocPage[] }) {
       pages={pages.map((p) => ({ title: p.title, current: p === current, ...link(`${base}/${p.slug}`) }))}
       title={current?.title}
       html={current?.html}
+      document={printed}
     />
   );
 }

@@ -226,6 +226,7 @@ namespace one::generators {
             code::source source;  // the item that names them
         };
         std::vector<page_set> pages_;
+        bool documents_ = false;  // whether a page is set as a document, so its font is loaded
         std::string docs_base_;  // the address the screen being written keeps its pages under, like /docs
 
         // Where generated lines come from. Files every app has, like package.json, come
@@ -1537,7 +1538,8 @@ namespace one::generators {
                 parts.optional_page = true;
                 parts.imports.push_back("import pages from \"../pages/" + name + ".generated\";");
                 parts.components.insert("Pages");
-                out.line("<Pages base=" + web_detail::js_string(docs_base_) + " pages={pages} />");
+                if (text.document) documents_ = true;
+                out.line("<Pages base=" + web_detail::js_string(docs_base_) + " pages={pages}" + (text.document ? " document" : "") + " />");
             }
         }
 
@@ -2301,7 +2303,7 @@ namespace one::generators {
             out.line("<meta charset=\"utf-8\" />");
             out.line("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />");
             out.line("<title>" + web_detail::html_escape(title_.empty() ? name_ : title_) + "</title>");
-            if (std::string fonts = theme::fonts_link(site); !fonts.empty()) {
+            if (std::string fonts = theme::fonts_link(site, documents_); !fonts.empty()) {
                 out.line("<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />");
                 out.line("<link rel=\"stylesheet\" href=\"" + fonts + "\" />");
             }

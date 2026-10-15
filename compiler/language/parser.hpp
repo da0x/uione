@@ -1133,9 +1133,9 @@ namespace one::language {
                 const token& word = peek();
                 if (!at(token_kind::identifier)) fail_expecting("a color's role, a font, corners or depth");
                 advance();
-                if (word.text == "text" || word.text == "heading" || word.text == "code") {
+                if (word.text == "text" || word.text == "heading" || word.text == "code" || word.text == "document") {
                     std::string font = expect(token_kind::string, "a font, like \"IBM Plex Sans\"").text;
-                    (word.text == "text" ? theme.text : word.text == "heading" ? theme.heading : theme.code) = font;
+                    (word.text == "text" ? theme.text : word.text == "heading" ? theme.heading : word.text == "code" ? theme.code : theme.document) = font;
                     if (word.text == "code" && at_word("ground")) {
                         advance();
                         theme_color ground{"ground", word.where, "", "", {}, {}};
@@ -1409,6 +1409,13 @@ namespace one::language {
                           : word == "code"   ? content_text::kind::code
                                              : content_text::kind::markdown;
                 text.value = advance().text;
+                if (text.type == content_text::kind::markdown && at_word("as")) {
+                    advance();
+                    const token& look = expect(token_kind::identifier, "how it's set, like as document");
+                    if (look.text != "document") fail(look.where, "markdown pages are set as document, or as the site's other pages are, not as " + look.text);
+                    if (text.value.starts_with("{")) fail(look.where, "a page of its own is set as a document, like markdown \"license/*.md\" as document, not a view's field");
+                    text.document = true;
+                }
                 if (text.type == content_text::kind::text && at_word("when")) {
                     advance();
                     text.when = parse_when();

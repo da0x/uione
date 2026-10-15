@@ -106,8 +106,8 @@ namespace one::terminal::runtime {
 	terminal::view tracked(page& p, track_spec spec, state<view_state> view, std::string list, terminal::view below);
 
 	// Markdown, laid out by one::markdown for the width it's given.
-	terminal::view markdown_view(const std::string& source);
+	terminal::view markdown_view(const std::string& source, bool document = false);
 	terminal::view markdown(page& p, state<view_state> from, std::string field, std::string empty = "");
-	terminal::view pages(page& p, std::string base, std::vector<written_page> all);
+	terminal::view pages(page& p, std::string base, std::vector<written_page> all, bool document = false);
 
 }  // namespace one::terminal::runtime

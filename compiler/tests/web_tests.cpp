@@ -1740,3 +1740,41 @@ screen "Shelves" /shelves {
     CAPTURE(screens->content);
     CHECK(screens->content.find(R"(<Cards view={shelves} list="rows")") != std::string::npos);
 }
+
+// Pages set as a document, like a license, are drawn as one, and only then is the
+// theme's document font loaded.
+TEST_CASE("markdown pages set as a document") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-document";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "license");
+    platform::write_file((dir / "license" / "license.md").string(), "## Terms\n\nFree software.\n");
+    platform::write_file((dir / "main.one").string(), R"(namespace license {
+	screen "License" / {
+		markdown "license/*.md" as document
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    const auto* index = find(generated, "index.html");
+    const auto* theme = find(generated, "src/theme.css");
+    REQUIRE(screens != nullptr);
+    REQUIRE(index != nullptr);
+    CHECK(screens->content.find(R"(<Pages base="/license" pages={pages} document />)") != std::string::npos);
+    CHECK(index->content.find("family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400") != std::string::npos);
+    if (theme) CHECK(theme->content.find("--font-document: \"Libre Caslon Text\"") != std::string::npos);
+
+    // Without it, the font isn't asked for.
+    platform::write_file((dir / "main.one").string(), R"(namespace license {
+	screen "License" / {
+		markdown "license/*.md"
+	}
+}
+)");
+    auto plain = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* plain_index = find(plain, "index.html");
+    REQUIRE(plain_index != nullptr);
+    CHECK(plain_index->content.find("Caslon") == std::string::npos);
+}

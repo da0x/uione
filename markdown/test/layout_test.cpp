@@ -27,8 +27,8 @@ int main(int argc, char** argv) {
     // Fenced code never wraps, and the sample's longest code row is 49 columns
     // with its gutter, so narrower widths would overflow by design.
     for (int width : {50, 60, 80, 100, 120}) {
-        for (bool hyperlinks : {true, false}) {
-            one::markdown::options settings{.width = width, .hyperlinks = hyperlinks};
+        for (bool hyperlinks : {true, false}) for (bool document : {false, true}) {
+            one::markdown::options settings{.width = width, .hyperlinks = hyperlinks, .document = document};
             std::vector<one::markdown::line> rows = one::markdown::layout(source, settings);
             if (rows.empty()) {
                 std::cerr << "width " << width << ": no rows\n";
@@ -51,6 +51,18 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+        }
+    }
+
+    // A document's heading is centered, without its hashes: "Title" in 21 columns
+    // starts after 8 spaces.
+    {
+        auto rows = one::markdown::layout("# Title\n", {.width = 21, .document = true});
+        std::string shown = rows.empty() ? "" : one::markdown::ansi(rows[0], false);
+        ++checked;
+        if (shown != std::string(8, ' ') + "Title") {
+            std::cerr << "a document's heading isn't centered: '" << shown << "'\n";
+            ++failures;
         }
     }
 

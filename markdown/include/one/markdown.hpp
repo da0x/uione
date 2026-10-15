@@ -90,6 +90,8 @@ struct options {
     int width = 80;          // columns to wrap to
     bool hyperlinks = true;  // false: links can't be clicked, so write the URL
                              // after the link text, as "text (url)"
+    bool document = false;   // set as a printed document: headings centered without
+                             // their hashes, and a break a centered fleuron
 };
 
 // Parse `source` and lay it out into rows no wider than `settings.width`.
@@ -1744,6 +1746,20 @@ inline std::vector<line> render_blocks(const std::vector<block_node>& blocks,
 
 inline std::vector<line> render_heading(const block_node& block, int width,
                                         const options& settings) {
+    if (settings.document) {
+        style look{.bold = true, .foreground = heading_color(block.level)};
+        std::vector<run> spans;
+        flatten(block.inlines, look, settings, spans);
+        std::vector<line> rows = wrap(spans, std::max(1, width));
+        if (rows.empty()) rows.emplace_back();
+        std::vector<line> centered;
+        for (auto& row : rows) {
+            line out = single_run(std::string(std::max(0, (width - display_width(row)) / 2), ' '));
+            for (auto& r : row) out.push_back(std::move(r));
+            centered.push_back(std::move(out));
+        }
+        return centered;
+    }
     int prefix_width = block.level + 1;
     std::string hashes = std::string(block.level, '#') + " ";
 
@@ -1866,6 +1882,7 @@ inline std::vector<line> render_block(const block_node& block, int width,
         case block_kind::list:
             return render_list(block, width, settings);
         case block_kind::thematic_break:
+            if (settings.document) return {single_run(std::string(std::max(0, (width - 1) / 2), ' ') + "❦", style{.dim = true})};
             return {single_run(repeat("─", width), style{.dim = true})};
         case block_kind::table:
             return render_table_block(block, width, settings);

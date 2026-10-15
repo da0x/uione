@@ -576,7 +576,7 @@ namespace one::language {
             }
             if (t.corners && (*t.corners < 0 || *t.corners > 32)) error(t.corners_where, "corners are 0, square, to 32 pixels round");
             // A font's name goes into the page as it is, so it's only letters, digits and spaces.
-            for (const auto* font : {&t.text, &t.heading, &t.code}) {
+            for (const auto* font : {&t.text, &t.heading, &t.code, &t.document}) {
                 if (*font && (font->value().empty() || font->value().find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ") != std::string::npos)) {
                     error(t.where, "a font is named by its letters, digits and spaces, like \"IBM Plex Sans\", not \"" + font->value() + "\"");
                 }

@@ -577,7 +577,7 @@ export const radix: ComponentSet = {
     );
   },
 
-  Pages: function RadixPages({ pages, title, html }) {
+  Pages: function RadixPages({ pages, title, html, document }) {
     const display = useCodeDisplay();
     const body = useMemo(() => (html === undefined ? undefined : highlightCodeBlocks(html, box, display.names)), [html, display.names]);
     const hasCode = body?.includes("one-code") ?? false;
@@ -600,7 +600,7 @@ export const radix: ComponentSet = {
         {body === undefined ? (
           <p className="text-muted">There's no page here.</p>
         ) : (
-          <div className="min-w-0 max-w-3xl">
+          <div className={document ? "mx-auto w-full min-w-0 max-w-[46rem] rounded-box border border-line bg-surface px-5 py-10 shadow-panel sm:px-14 sm:py-14" : "min-w-0 max-w-3xl"}>
             {hasCode && (
               <div className="mb-6 rounded-box border border-line bg-surface shadow-panel">
                 <CodeToolbar display={display} />
@@ -608,7 +608,7 @@ export const radix: ComponentSet = {
             )}
             <article
               aria-label={title}
-              className="one-prose"
+              className={document ? "one-prose one-document" : "one-prose"}
               style={{ tabSize: display.tabWidth }}
               dangerouslySetInnerHTML={{ __html: body }}
             />

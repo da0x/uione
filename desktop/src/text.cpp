@@ -53,7 +53,16 @@ namespace one::desktop::fonts {
 		// A pattern asking for a style, to which fontconfig adds what it's configured to.
 		pattern asking(const text_style& style) {
 			pattern p = FcPatternCreate();
-			FcPatternAddString(p, FC_FAMILY, reinterpret_cast<const FcChar8*>(style.family.c_str()));
+			// Families in the order they're wanted, as CSS lists them: "Libre Caslon Text, serif".
+			std::string_view families = style.family;
+			while (!families.empty()) {
+				std::size_t comma = families.find(',');
+				std::string_view one = families.substr(0, comma);
+				while (!one.empty() && one.front() == ' ') one.remove_prefix(1);
+				while (!one.empty() && one.back() == ' ') one.remove_suffix(1);
+				if (!one.empty()) FcPatternAddString(p, FC_FAMILY, reinterpret_cast<const FcChar8*>(std::string(one).c_str()));
+				families = comma == std::string_view::npos ? std::string_view() : families.substr(comma + 1);
+			}
 			FcPatternAddInteger(p, FC_WEIGHT, FcWeightFromOpenType(style.weight));
 			FcPatternAddInteger(p, FC_SLANT, style.italic ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
 			FcPatternAddBool(p, FC_COLOR, FcFalse);

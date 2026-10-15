@@ -20,6 +20,6 @@ namespace one::desktop::runtime {
 
 	// A set of Markdown pages under one address, like /docs/:page: the page its
 	// address names, or the first, beside links to them all.
-	desktop::view pages(page& p, std::string base, std::vector<written_page> all);
+	desktop::view pages(page& p, std::string base, std::vector<written_page> all, bool document = false);
 
 }  // namespace one::desktop::runtime

@@ -65,6 +65,7 @@ int main(int count, char** given) {
 		t.warning = one::desktop::color::hex(0x9a6700);
 		t.text_family = "IBM Plex Sans";
 		t.code_family = "IBM Plex Mono";
+		t.document_family = "Libre Caslon Text, serif";
 		t.corners = 10;
 		t.raised = true;
 		s.look = t;

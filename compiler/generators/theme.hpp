@@ -27,6 +27,9 @@ namespace one::generators::theme {
     struct look {
         std::map<std::string, std::pair<std::string, std::string>> colors;  // role: light, dark
         std::string text = "IBM Plex Sans", heading, code = "IBM Plex Mono";
+        // What pages set as documents are in, like a license: Caslon, the face much of
+        // the eighteenth century's official printing was set in.
+        std::string document = "Libre Caslon Text";
         std::string ground, ground_dark;  // the code editor's, when the theme says
         int corners = 10;
         std::string depth = "raised";
@@ -56,6 +59,9 @@ namespace one::generators::theme {
             std::string quoted = "\"" + family + "\"";
             return mono ? quoted + ", ui-monospace, \"SFMono-Regular\", Menlo, monospace" : quoted + ", ui-sans-serif, system-ui, sans-serif";
         }
+
+        // A document's font, with a book face shown before it loads or without it.
+        inline std::string serif(const std::string& family) { return "\"" + family + "\", \"Iowan Old Style\", Georgia, \"Times New Roman\", serif"; }
 
         static constexpr const char* roles[] = {"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"};
 
@@ -172,6 +178,7 @@ namespace one::generators::theme {
             if (t.text) l.text = *t.text;
             if (t.heading) l.heading = *t.heading;
             if (t.code) l.code = *t.code;
+            if (t.document) l.document = *t.document;
             if (t.ground) l.ground = t.ground->light, l.ground_dark = t.ground->dark.empty() ? t.ground->light : t.ground->dark;
             if (t.corners) l.corners = *t.corners;
             if (t.depth) l.depth = *t.depth;
@@ -187,7 +194,7 @@ namespace one::generators::theme {
     inline std::string css(const look& l) {
         std::string shape = "  --radius-box: " + std::to_string(l.corners) + "px;\n  --radius-control: " + std::to_string(l.corners > 2 ? l.corners - 2 : l.corners) +
                             "px;\n  --font-sans: " + detail::stack(l.text, false) + ";\n  --font-heading: " +
-                            detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n";
+                            detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n  --font-document: " + detail::serif(l.document) + ";\n";
         // Each mode's sets: light; dark as the system is unless the reader picked; and
         // dark when they did.
         // Then the set drawn with: as the theme says, or with more contrast, when the
@@ -208,21 +215,26 @@ namespace one::generators::theme {
     inline std::string scoped_css(const look& l, const std::string& scope) {
         std::string shape = "  --radius-box: " + std::to_string(l.corners) + "px;\n  --radius-control: " + std::to_string(l.corners > 2 ? l.corners - 2 : l.corners) +
                             "px;\n  --font-sans: " + detail::stack(l.text, false) + ";\n  --font-heading: " +
-                            detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n";
+                            detail::stack(l.heading.empty() ? l.text : l.heading, false) + ";\n  --font-mono: " + detail::stack(l.code, true) + ";\n  --font-document: " + detail::serif(l.document) + ";\n";
         return scope + " {\n" + shape + detail::mode(l, false) + "}\n" + scope + "[data-theme=\"dark\"] {\n" + detail::mode(l, true) + "}\n" + scope + " {\n" +
                detail::chosen("std") + detail::worked_out() + "}\n" + scope + "[data-contrast=\"more\"] {\n" + detail::chosen("more") + "}\n";
     }
 
     // The fonts the component set doesn't bring, from Google Fonts; empty when it brings them all.
-    inline std::string fonts_link(const look& l) {
+    // A document's font only when a page is set as one, in its roman, italic and bold.
+    inline std::string fonts_link(const look& l, bool documents = false) {
         std::set<std::string> families{l.text, l.heading.empty() ? l.text : l.heading, l.code};
         std::string query;
-        for (const auto& f : families) {
-            if (f == "IBM Plex Sans" || f == "IBM Plex Mono") continue;
+        auto plus = [](const std::string& f) {
             std::string name;
             for (char c : f) name += c == ' ' ? '+' : c;
-            query += "&family=" + name + ":wght@400;500;600;700";
+            return name;
+        };
+        for (const auto& f : families) {
+            if (f == "IBM Plex Sans" || f == "IBM Plex Mono") continue;
+            query += "&family=" + plus(f) + ":wght@400;500;600;700";
         }
+        if (documents && !families.contains(l.document)) query += "&family=" + plus(l.document) + ":ital,wght@0,400;0,700;1,400";
         if (query.empty()) return "";
         return "https://fonts.googleapis.com/css2?" + query.substr(1) + "&display=swap";
     }

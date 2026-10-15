@@ -177,6 +177,9 @@ export interface PagesProps {
   // Trusted: HTML made when the app was built, from the app's own docs, so it can
   // be drawn as it is. Undefined when the address names no page.
   html: string | undefined;
+  // Set as a printed document, like a license: a sheet in the theme's document font,
+  // its titles centered.
+  document?: boolean;
 }
 
 export interface RowAction {

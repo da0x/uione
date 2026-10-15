@@ -26,6 +26,7 @@ namespace one::desktop {
 		color warning = color::hex(0x9a6700);
 		std::string text_family = "IBM Plex Sans";
 		std::string code_family = "IBM Plex Mono";
+		std::string document_family = "Libre Caslon Text, serif";  // pages set as documents, like a license
 		float corners = 10;
 		bool raised = true;  // panels cast a shadow, or sit flat
 		float text_size = 15;

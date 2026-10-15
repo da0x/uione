@@ -1094,7 +1094,7 @@ namespace one::generators {
             pages_.push_back({text.value, name, {screen_path_, item_line_}});
             page_includes_.insert(name);
             shows_pages_ = true;
-            return "pages(p, " + str(base) + ", " + name + "_pages)";
+            return "pages(p, " + str(base) + ", " + name + "_pages" + (text.document ? ", true" : "") + ")";
         }
 
         std::vector<written> items(screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& list, const std::vector<language::screen_item>& screen,
@@ -1564,6 +1564,7 @@ namespace one::generators {
             }
             out.push_back("t.text_family = " + str(look.text) + ";");
             out.push_back("t.code_family = " + str(look.code) + ";");
+            out.push_back("t.document_family = " + str(look.document + ", serif") + ";");
             out.push_back("t.corners = " + std::to_string(look.corners) + ";");
             out.push_back(std::string("t.raised = ") + (look.depth == "raised" ? "true" : "false") + ";");
             return out;

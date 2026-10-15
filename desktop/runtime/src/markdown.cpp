@@ -79,6 +79,16 @@ namespace one::desktop::runtime {
 
 		desktop::view block(const md::block_node& b);
 
+		// One view in a column, which can be centered in it.
+		desktop::view alone(desktop::view v) {
+			std::vector<desktop::view> one;
+			one.push_back(std::move(v));
+			return desktop::column(std::move(one));
+		}
+
+		// Whether what's being drawn is set as a document: its book face, its headings centered.
+		bool documented = false;
+
 		desktop::view blocks(const std::vector<md::block_node>& children, float spacing = 12) {
 			std::vector<desktop::view> shown;
 			for (const auto& child : children) shown.push_back(block(child));
@@ -91,9 +101,17 @@ namespace one::desktop::runtime {
 				case md::block_kind::document: return blocks(b.children);
 				case md::block_kind::heading: {
 					static constexpr float sizes[] = {24, 20, 17, 15, 15, 15};
-					return paragraph(b.inlines, t.heading(sizes[std::clamp(b.level, 1, 6) - 1]));
+					text_style look = t.heading(sizes[std::clamp(b.level, 1, 6) - 1]);
+					if (!documented) return paragraph(b.inlines, look);
+					look.family = t.document_family;
+					if (b.level <= 2) look.weight = 400;
+					return alone(paragraph(b.inlines, look)).align(align::center).padding(edges(b.level <= 2 ? 14 : 8, 0, 2, 0));
 				}
-				case md::block_kind::paragraph: return paragraph(b.inlines, t.body());
+				case md::block_kind::paragraph: {
+					text_style look = t.body();
+					if (documented) look.family = t.document_family;
+					return paragraph(b.inlines, look);
+				}
 				case md::block_kind::code_block: {
 					std::string code = b.literal;
 					while (!code.empty() && code.back() == '\n') code.pop_back();
@@ -114,7 +132,9 @@ namespace one::desktop::runtime {
 					return desktop::column(std::move(items)).spacing(4);
 				}
 				case md::block_kind::list_item: return blocks(b.children, 6);
-				case md::block_kind::thematic_break: return desktop::divider();
+				case md::block_kind::thematic_break:
+					if (documented) return alone(desktop::text("❦", t.quiet())).align(align::center).padding(edges(10, 0));
+					return desktop::divider();
 				case md::block_kind::table: {
 					std::vector<desktop::view> rows;
 					for (std::size_t r = 0; r < b.rows.size(); ++r) {
@@ -133,7 +153,15 @@ namespace one::desktop::runtime {
 
 	desktop::view markdown_view(const std::string& source) { return blocks(md::parse(source)); }
 
-	desktop::view pages(page& p, std::string base, std::vector<written_page> all) {
+	desktop::view document_view(const std::string& source) {
+		documented = true;
+		desktop::view drawn = markdown_view(source);
+		documented = false;
+		const auto& t = current_theme();
+		return alone(std::move(drawn)).padding(edges(36, 44)).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});
+	}
+
+	desktop::view pages(page& p, std::string base, std::vector<written_page> all, bool document) {
 		if (all.empty()) return {};
 		const auto& t = current_theme();
 		std::string here = p.param("page");
@@ -142,7 +170,8 @@ namespace one::desktop::runtime {
 			if (w.name == here) shown = &w;
 		}
 		// One page is just the page, with no list of one beside it.
-		if (all.size() == 1) return markdown_view(shown->source);
+		auto drawn = [&] { return document ? document_view(shown->source) : markdown_view(shown->source); };
+		if (all.size() == 1) return drawn();
 		std::vector<desktop::view> side;
 		for (const auto& w : all) {
 			if (&w == shown) {
@@ -153,7 +182,7 @@ namespace one::desktop::runtime {
 				side.push_back(desktop::link(w.title, [&p, to = base + "/" + w.name] { p.open(to); }, t.body()).padding(edges(5, 10)));
 			}
 		}
-		return desktop::row(desktop::column(std::move(side)).spacing(2).width(200), markdown_view(shown->source).grow()).spacing(28).align(align::start);
+		return desktop::row(desktop::column(std::move(side)).spacing(2).width(200), drawn().grow()).spacing(28).align(align::start);
 	}
 
 	desktop::view markdown(page&, state<view_state> from, std::string field, std::string empty) {
