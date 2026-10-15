@@ -1904,8 +1904,11 @@ namespace one::language {
                 advance();
                 cards_item cards;
                 cards.view = parse_qualified_name("the view whose list it shows, like project_page");
-                expect(token_kind::dot, "'.' and the view's list, like project_page.boards");
-                cards.list = expect(token_kind::identifier, "the view's list, like boards").text;
+                // A view of one list, like all, or one of a view's lists, like project_page.boards.
+                if (at(token_kind::dot)) {
+                    advance();
+                    cards.list = expect(token_kind::identifier, "the view's list, like boards").text;
+                }
                 if (at_word("link")) {
                     advance();
                     cards.link_where = peek().where;

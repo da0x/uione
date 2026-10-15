@@ -3046,9 +3046,10 @@ namespace one::language {
             }
             verify_shown(*view, view_name.text(), route, view_name.where);
             for (const auto& each : view->each) {
-                if (each.name && *each.name == list) return &each;
+                if (each.name ? *each.name == list : list.empty()) return &each;
             }
-            error(view_name.where, "view " + view_name.text() + " has no list called " + list);
+            error(view_name.where, list.empty() ? "view " + view_name.text() + " has no list of its own; name one of its lists, like " + view_name.text() + ".rows"
+                                                : "view " + view_name.text() + " has no list called " + list);
             return nullptr;
         }
 
@@ -3331,12 +3332,12 @@ namespace one::language {
         // what the cards show; a tally counts a list's rows by a field naming the card
         // and another; a filter is one of the cards' rows' fields and the value it holds.
         void verify_cards(const std::string& ns, const cards_item& cards, const std::string& route) {
-            const view_each* rows = named_list(ns, cards.view, *cards.list, route);
+            const view_each* rows = named_list(ns, cards.view, cards.list.value_or(""), route);
             if (!rows) return;
             if (cards.columns.empty()) error(cards.view.where, "cards show something, their title first, like title");
             for (const auto& shown : cards.columns) {
                 std::string key = written(*shown.value);
-                if (!in_rows(*rows, key)) error(shown.where, "view " + cards.view.text() + " has no " + key + " in its " + *cards.list + "; add it to the list's block");
+                if (!in_rows(*rows, key)) error(shown.where, "view " + cards.view.text() + " has no " + key + (cards.list ? " in its " + *cards.list : "") + "; add it to the list's block");
             }
             if (cards.link && !routes_.contains(full_route(ns, *cards.link))) {
                 error(cards.link_where, "there's no screen at " + full_route(ns, *cards.link) + " for these cards to open");

@@ -1764,7 +1764,7 @@ namespace one::generators {
                     if (!f.choices.empty()) shown += (shown.empty() ? "" : ", ") + key + ": Object.fromEntries(" + choice_options(f) + ")";
                 }
             }
-            std::string line = "<Cards view={" + view_variable(parts, full_view(ns, cards.view.text())) + "} list=" + web_detail::js_string(*cards.list) +
+            std::string line = "<Cards view={" + view_variable(parts, full_view(ns, cards.view.text())) + "} list=" + web_detail::js_string(cards.list.value_or("rows")) +
                                " columns={{ " + columns + " }}";
             if (cards.hide_empty) line += " hideEmpty";
             if (cards.link) {

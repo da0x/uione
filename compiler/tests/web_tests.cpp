@@ -1710,3 +1710,33 @@ screen "Desk" /desk {
     CHECK(screens->content.find("ordered") < screens->content.find("export"));
     CHECK(screens->content.find("<Section title=\"Log\">") != std::string::npos);
 }
+
+// Cards take a view of one list as a table does, like every public project.
+TEST_CASE("cards show a view of one list") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-cards-bare";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(entity shelf {
+	name  text  required
+	about  text
+}
+view shelves public {
+	each shelf {
+		name  about
+	}
+}
+screen "Shelves" /shelves {
+	cards shelves {
+		name
+		about
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CAPTURE(screens->content);
+    CHECK(screens->content.find(R"(<Cards view={shelves} list="rows")") != std::string::npos);
+}

@@ -799,7 +799,7 @@ namespace one::generators {
                 auto shown = model_.shown_as(ns, c.view.text(), c.list, entity, key, column.label);
                 columns += (columns.empty() ? "" : ", ") + std::string("{") + str(shown.key) + ", " + str(shown.label) + "}";
             }
-            std::string out = "cards(p, {.view = " + view_variable(parts, screens::full_view(ns, c.view.text())) + ", .list = " + str(*c.list) + ", .columns = {" + columns + "}";
+            std::string out = "cards(p, {.view = " + view_variable(parts, screens::full_view(ns, c.view.text())) + ", .list = " + str(c.list.value_or("")) + ", .columns = {" + columns + "}";
             if (c.link) out += ", " + link_settings(ns, *c.link);
             if (c.tally) {
                 // The rows it counts: those of another list whose field names a card, by what each is at.
