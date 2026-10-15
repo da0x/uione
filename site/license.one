@@ -1,28 +1,14 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// uione's license, linked from every page's footer, so anyone can see what they may
-// do with the work.
+// uione's license, linked from every page's footer: what it covers, and the GNU AGPL's
+// full text, from license/license.md, set as a document.
 
 namespace license {
 
 	screen "License" / {
-		hero "uione is free software, under the GNU AGPL, version 3 only." {
-			text "You may use it, study it, change it and share it. Whoever you share it with gets the same freedoms, and so do the people who use a changed version over a network."
-		}
-
-		section "What it covers" {
-			text "All of uione: the compiler, the libraries apps are built on (@uione/react, @uione/radix, @uione/editor, @uione/compiler and the Go library one), the desktop and terminal toolkits, the infrastructure library, the tools, the examples and this site. Each file says so in its first lines, as SPDX-License-Identifier: AGPL-3.0-only."
-		}
-
-		section "Version 3 only" {
-			text "It's version 3 of the license, not any later one, so what the license asks of you doesn't change unless uione's own license does."
-		}
-
-		section "Read it in full" {
-			link "https://github.com/da0x/uione/blob/main/LICENSE" "The license, as it's kept with uione's code"
-			link "https://www.gnu.org/licenses/agpl-3.0.html" "The GNU Affero General Public License, at gnu.org"
-		}
+		subtitle "uione is free software, licensed under the GNU Affero General Public License, version 3 only (AGPL-3.0-only): the compiler, the libraries apps are built on, the desktop and terminal toolkits, the tools, the examples and this site. You may use it, study it, change it and share it, and whoever you share it with gets the same freedoms."
+		markdown "license/*.md" as document
 	}
 
 } // namespace license

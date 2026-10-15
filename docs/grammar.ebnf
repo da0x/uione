@@ -195,7 +195,7 @@ agent_line     ::= "on" NAME "in" NAME "run" STRING "then" NAME ("else" NAME)? E
  * fonts, corners and depth; from another, it changes only what it says. */
 define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END
 theme_line     ::= ( NAME COLOR ("dark" COLOR)?
-                   | ("text" | "heading") STRING
+                   | ("text" | "heading" | "document") STRING
                    | "code" STRING ("ground" COLOR ("dark" COLOR)?)?
                    | "corners" WHOLE
                    | "depth" ("flat" | "raised") ) END
@@ -223,9 +223,10 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_bl
                  | ("main" | "side") screen_block END
                  | "heading" screen_block END
                  | "subtitle" STRING END
-                 | "cards" qualified "." NAME ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
+                 | "cards" qualified ("." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
                  | "text" STRING ("when" condition)? END
-                 | ("code" | "markdown") STRING END
+                 | "code" STRING END
+                 | "markdown" STRING ("as" "document")? END
                  | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
