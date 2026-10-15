@@ -283,13 +283,15 @@ export const plain: ComponentSet = {
 
   Pages: ({ pages, title, html }) => (
     <>
-      <nav aria-label="Pages">
-        {pages.map((page) => (
-          <a key={page.href} href={page.href} onClick={page.onClick} aria-current={page.current ? "page" : undefined}>
-            {page.title}
-          </a>
-        ))}
-      </nav>
+      {pages.length > 1 && (
+        <nav aria-label="Pages">
+          {pages.map((page) => (
+            <a key={page.href} href={page.href} onClick={page.onClick} aria-current={page.current ? "page" : undefined}>
+              {page.title}
+            </a>
+          ))}
+        </nav>
+      )}
       {html === undefined ? (
         <p>There's no page here.</p>
       ) : (

@@ -582,9 +582,9 @@ export const radix: ComponentSet = {
     const body = useMemo(() => (html === undefined ? undefined : highlightCodeBlocks(html, box, display.names)), [html, display.names]);
     const hasCode = body?.includes("one-code") ?? false;
     return (
-      <div className="grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-10">
-        {/* On a phone, the pages are a row of tabs above the page. */}
-        <nav aria-label="Pages" className="flex flex-wrap gap-1 text-sm md:flex-col">
+      <div className={pages.length > 1 ? "grid gap-8 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-10" : undefined}>
+        {/* On a phone, the pages are a row of tabs above the page. One page is just the page. */}
+        {pages.length > 1 && <nav aria-label="Pages" className="flex flex-wrap gap-1 text-sm md:flex-col">
           {pages.map((page) => (
             <a
               key={page.href}
@@ -596,7 +596,7 @@ export const radix: ComponentSet = {
               {page.title}
             </a>
           ))}
-        </nav>
+        </nav>}
         {body === undefined ? (
           <p className="text-muted">There's no page here.</p>
         ) : (

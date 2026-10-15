@@ -108,6 +108,15 @@ describe("pages", () => {
     expect(screen.getByRole("article", { name: "Overview" })).toBeTruthy();
   });
 
+  it("lists no pages beside a page that's alone", () => {
+    const alone = defineScreen({ title: "License", route: "/license/:page?", nav: "License" }, () => (
+      <Pages base="/license" pages={[{ slug: "license", title: "License", html: "<p>Free software.</p>" }]} />
+    ));
+    render(<App name="uione" screens={[alone]} ui={plain} data={memorySource()} location="/license" />);
+    expect(screen.getByText("Free software.")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
+  });
+
   it("says so when the named page doesn't exist", () => {
     renderAt("/docs/nothing");
     expect(screen.getByText("There's no page here.")).toBeTruthy();

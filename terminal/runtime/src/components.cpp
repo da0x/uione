@@ -937,6 +937,8 @@ namespace one::terminal::runtime {
 		for (const auto& w : all) {
 			if (w.name == here) shown = &w;
 		}
+		// One page is just the page, with no list of one above it.
+		if (all.size() == 1) return markdown_view(shown->source);
 		std::vector<terminal::view> across;
 		for (const auto& w : all) {
 			if (&w == shown) across.push_back(terminal::text(w.title, {.bold = true, .underline = true}));

@@ -141,6 +141,8 @@ namespace one::desktop::runtime {
 		for (const auto& w : all) {
 			if (w.name == here) shown = &w;
 		}
+		// One page is just the page, with no list of one beside it.
+		if (all.size() == 1) return markdown_view(shown->source);
 		std::vector<desktop::view> side;
 		for (const auto& w : all) {
 			if (&w == shown) {
