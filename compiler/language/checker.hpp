@@ -2805,7 +2805,7 @@ namespace one::language {
                         const view_each* list = named_list(ns, source.view, source.list, route);
                         if (!list) continue;
                         for (const auto& name : source.by) {
-                            if (!in_rows(*list, name)) error(source.where, "view " + source.view.text() + " has no " + name + " in its " + source.list + " to find by; add it to the list's block");
+                            if (!in_rows(*list, name)) error(source.where, "view " + source.view.text() + " has no " + name + (source.list.empty() ? "" : " in its " + source.list) + " to find by; add it to the list's block");
                         }
                         if (source.link && !routes_.contains(full_route(ns, *source.link))) {
                             error(source.link_where, "there's no screen at " + full_route(ns, *source.link) + " for what's found to open");

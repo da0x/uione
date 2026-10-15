@@ -2060,8 +2060,11 @@ namespace one::language {
                     find_source source;
                     source.where = peek().where;
                     source.view = parse_qualified_name("the view whose list it finds in, like project_page");
-                    expect(token_kind::dot, "'.' and the view's list, like project_page.issues");
-                    source.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                    // A view of one list, like all, or one of a view's lists, like project_page.issues.
+                    if (at(token_kind::dot)) {
+                        advance();
+                        source.list = expect(token_kind::identifier, "the view's list, like issues").text;
+                    }
                     source.label = expect(token_kind::string, "what its results are called, like \"Issues\"").text;
                     if (at_word("link")) {
                         advance();

@@ -1815,3 +1815,31 @@ namespace projects at / {
     CAPTURE(app->content);
     CHECK(app->content.find(R"(navigation: ["/projects", "/docs"])") != std::string::npos);
 }
+
+// A find box finds in a view of one list too, like every public project.
+TEST_CASE("find looks in a view of one list") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-find-bare";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(entity shelf {
+	name  text  required
+}
+view shelves public {
+	each shelf {
+		name
+	}
+}
+screen "Shelves" /shelves {
+	find "Find a shelf" {
+		shelves "Shelves" by name
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CAPTURE(screens->content);
+    CHECK(screens->content.find(R"({ view: shelves, list: "rows", label: "Shelves")") != std::string::npos);
+}

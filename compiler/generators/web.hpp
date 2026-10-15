@@ -1084,7 +1084,7 @@ namespace one::generators {
                     parts.components.insert("Find");
                     std::string sources;
                     for (const auto& source : box->sources) {
-                        std::string one = "{ view: " + view_variable(parts, full_view(ns, source.view.text())) + ", list: " + web_detail::js_string(source.list) +
+                        std::string one = "{ view: " + view_variable(parts, full_view(ns, source.view.text())) + ", list: " + web_detail::js_string(source.list.empty() ? "rows" : source.list) +
                                           ", label: " + web_detail::js_string(source.label);
                         if (source.link) {
                             std::string target = full_route(ns, *source.link);
