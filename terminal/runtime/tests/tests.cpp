@@ -515,3 +515,20 @@ int main() {
 	use_time_zone("UTC");
 	return check::run();
 }
+
+TEST("a meter shares its blocks by how much each part is, and a part that's anything gets one") {
+	auto drawn = [](std::vector<terminal::meter_part> parts, int width) {
+		terminal::view_host host([parts] { return terminal::meter(parts); });
+		host.bring_up_to_date(width, 1);
+		terminal::canvas c(width, 1);
+		host.draw(c);
+		std::string colors;
+		for (int x = 0; x < width; ++x) colors += c.look_at(0, x).foreground == terminal::color::blue ? 'a' : c.look_at(0, x).foreground == terminal::color::bright_blue ? 'b' : '.';
+		return std::pair{c.text(), colors};
+	};
+	auto [blocks, shares] = drawn({{3, terminal::meter_look(0)}, {1, terminal::meter_look(1)}}, 8);
+	CHECK(blocks.starts_with("■■■■■■■■"));
+	CHECK(shares == "aaaaaabb");
+	CHECK(drawn({{100, terminal::meter_look(0)}, {1, terminal::meter_look(1)}}, 8).second == "aaaaaaab");
+	CHECK(drawn({}, 4).second == "....");
+}

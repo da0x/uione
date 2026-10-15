@@ -923,9 +923,11 @@ namespace one::terminal {
 				int bar = std::max(3, a.width - 1 - widest());
 				double along = range_.to > range_.from ? (now() - range_.from) / (range_.to - range_.from) : 0;
 				int knob = static_cast<int>(std::lround(along * (bar - 1)));
+				// btop's blocks: the accent up to the knob, quiet after it.
 				for (int i = 0; i < bar; ++i) {
 					if (i == knob) c.put(a.y, a.x + i, "●", {.bold = focused, .reverse = focused});
-					else c.put(a.y, a.x + i, i < knob ? "━" : "─", {.dim = i > knob});
+					else if (i < knob) c.put(a.y, a.x + i, "■", {.foreground = color::blue});
+					else c.put(a.y, a.x + i, "■", {.dim = true, .foreground = color::bright_black});
 				}
 				std::string shown = written(now(), range_.by);
 				c.put(a.y, a.x + bar + 1 + widest() - display_width(shown), shown, {.bold = focused});
@@ -958,6 +960,46 @@ namespace one::terminal {
 			}
 			state<std::string> value_;
 			number_range range_;
+		};
+
+		class meter_element : public element {
+		public:
+			explicit meter_element(std::vector<meter_part> parts) : parts_(std::move(parts)) {}
+			extent measure_content(int width) override { return {std::max(1, width), 1}; }
+			void paint_content(canvas& c) override {
+				area a = inner();
+				double total = 0;
+				for (const auto& part : parts_) total += std::max(0.0, part.amount);
+				if (total <= 0 || a.width <= 0) {
+					for (int i = 0; i < a.width; ++i) c.put(a.y, a.x + i, "■", {.dim = true, .foreground = color::bright_black});
+					return;
+				}
+				// Each part's share of the blocks, the leftovers to the largest remainders,
+				// and a part that's anything gets one, taken from the largest.
+				std::vector<int> blocks(parts_.size());
+				std::vector<std::pair<double, std::size_t>> remainders;
+				int given = 0;
+				for (std::size_t i = 0; i < parts_.size(); ++i) {
+					double exact = std::max(0.0, parts_[i].amount) / total * a.width;
+					blocks[i] = static_cast<int>(exact);
+					given += blocks[i];
+					remainders.emplace_back(exact - blocks[i], i);
+				}
+				std::ranges::sort(remainders, std::greater{});
+				for (std::size_t r = 0; given < a.width && r < remainders.size(); ++r, ++given) ++blocks[remainders[r].second];
+				for (std::size_t i = 0; i < parts_.size(); ++i) {
+					if (parts_[i].amount <= 0 || blocks[i] > 0) continue;
+					auto largest = std::ranges::max_element(blocks) - blocks.begin();
+					if (blocks[largest] > 1) --blocks[largest], blocks[i] = 1;
+				}
+				int x = a.x;
+				for (std::size_t i = 0; i < parts_.size(); ++i) {
+					for (int b = 0; b < blocks[i] && x < a.right(); ++b) c.put(a.y, x++, "■", parts_[i].look);
+				}
+			}
+
+		private:
+			std::vector<meter_part> parts_;
 		};
 
 		class chosen_element : public element {
@@ -1146,6 +1188,13 @@ namespace one::terminal {
 		return made<radio_element>(std::move(chosen), std::move(options), std::move(on_pick));
 	}
 	view slider(state<std::string> value, number_range range) { return made<slider_element>(std::move(value), range); }
+	view meter(std::vector<meter_part> parts) { return made<meter_element>(std::move(parts)); }
+	style meter_look(std::size_t nth) {
+		// The accent and its lighter shade, each then dimmed: four steps, as the web's
+		// bar fades its accent part by part.
+		static constexpr color shades[] = {color::blue, color::bright_blue};
+		return {.dim = nth % 4 >= 2, .foreground = shades[nth % 2]};
+	}
 
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder) {
 		std::string now = chosen.peek();

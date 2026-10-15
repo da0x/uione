@@ -646,7 +646,12 @@ namespace one::terminal::runtime {
 				inside.push_back(terminal::row(terminal::text(card.title, {.bold = true}).grow(), quiet(tags)).spacing(2));
 			}
 			for (const auto& d : card.details) inside.push_back(quiet(d));
-			if (spec.tally) inside.push_back(quiet(card.tally));
+			if (spec.tally) {
+				inside.push_back(quiet(card.tally));
+				std::vector<terminal::meter_part> parts;
+				for (const auto& [label, count] : card.counted) parts.push_back({static_cast<double>(count), terminal::meter_look(parts.size())});
+				if (!parts.empty()) inside.push_back(terminal::meter(std::move(parts)));
+			}
 			if (!card.filters.empty()) {
 				std::vector<terminal::view> filters;
 				for (const auto& f : card.filters) {
@@ -693,6 +698,17 @@ namespace one::terminal::runtime {
 		});
 	}
 
+	// Two colors as #rrggbb, mixed half and half.
+	static std::string halfway(const std::string& one, const std::string& other) {
+		if (one.size() != 7 || other.size() != 7) return one;
+		std::string out = "#";
+		for (int at = 1; at < 7; at += 2) {
+			int mixed = (std::stoi(one.substr(at, 2), nullptr, 16) + std::stoi(other.substr(at, 2), nullptr, 16)) / 2;
+			out += std::format("{:02x}", mixed);
+		}
+		return out;
+	}
+
 	void draw_terminal_in(const std::optional<palette::theme>& tried) {
 		// Operating system commands, each ended by ST: OSC 4 sets a color of the
 		// terminal's sixteen, 10 and 11 its text and background, and 104, 110 and 111
@@ -706,6 +722,8 @@ namespace one::terminal::runtime {
 			for (auto [slot, role] : {std::pair{1, "danger"}, {2, "success"}, {3, "warning"}, {4, "accent"}, {8, "muted"}}) {
 				said += "\033]4;" + std::to_string(slot) + ";" + t[role].dark + "\033\\";
 			}
+			// The accent's lighter shade, halfway to the text, for bars' second steps.
+			said += "\033]4;12;" + halfway(t["accent"].dark, t["ink"].dark) + "\033\\";
 		}
 		(void)!write(STDOUT_FILENO, said.data(), said.size());
 	}

@@ -308,6 +308,7 @@ namespace one::screens {
 	};
 	struct card_model {
 		std::string id, title, address, tally;
+		std::vector<std::pair<std::string, int>> counted;  // the tally's parts in order, like To do and 3, which a bar draws
 		std::vector<std::string> details;
 		std::vector<std::string> tags;  // its choices beside its title, like Private
 		std::vector<card_link> filters;

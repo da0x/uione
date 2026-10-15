@@ -1341,7 +1341,10 @@ namespace one::screens {
 				std::vector<group> in_order;
 				for (auto& [_, g] : groups) in_order.push_back(g);
 				std::ranges::stable_sort(in_order, {}, &group::order);
-				for (const auto& g : in_order) card.tally += (card.tally.empty() ? "" : " · ") + std::format("{} {}", g.count, g.label);
+				for (const auto& g : in_order) {
+					card.tally += (card.tally.empty() ? "" : " · ") + std::format("{} {}", g.count, g.label);
+					card.counted.emplace_back(g.label, g.count);
+				}
 				if (total == 0) card.tally = "No " + (spec.tally->noun.empty() ? std::string("items") : spec.tally->noun) + " yet";
 			}
 			if (!card.address.empty()) {

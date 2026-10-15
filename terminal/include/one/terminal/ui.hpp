@@ -305,6 +305,16 @@ namespace one::terminal {
 	};
 	view slider(state<std::string> value, number_range range);
 
+	// A bar of btop's blocks, as wide as it's given, shared among its parts by how much
+	// each is, each in its own color; a part that's anything takes a block at least.
+	struct meter_part {
+		double amount = 0;
+		style look = {};
+	};
+	view meter(std::vector<meter_part> parts);
+	// The look of a meter's nth part: the accent, fading as btop's gradients do.
+	style meter_look(std::size_t nth);
+
 	// The app: a view built and drawn when a state it read changes or a key's
 	// pressed, keys given to what has focus, and work handed in from other threads.
 	class view_app {

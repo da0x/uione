@@ -155,7 +155,8 @@ them, as `tools/gallery` does.
 The desktop app is used with the mouse and the keyboard, as the web is, and draws its
 focus ring once the keyboard is used. The terminal app is used with the keyboard:
 Tab moves, Enter opens and q quits. It draws sections and forms as panels with round
-corners, titled in their border, as btop draws itself, and while it runs the
+corners, titled in their border, as btop draws itself, and bars, like a slider or a
+card's tally, in btop's blocks, and while it runs the
 terminal's colors are the theme's dark ones, put back as it quits. With `NO_COLOR`
 set, it keeps the terminal's.
 
