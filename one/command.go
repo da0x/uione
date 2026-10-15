@@ -41,6 +41,10 @@ type Ctx struct {
 	tx    *firestore.Transaction
 	reads []*read
 	made  []*made
+	// What the step is making and hasn't stored yet, the command's own entity first,
+	// so what it dispatches reads it as it will be: a new project's first board
+	// reads the project.
+	making []*made
 
 	counters map[string]*counting // every serial counted in the transaction, by counter
 	before   map[string]any       // the entity as it was stored before the command, for Was
@@ -119,6 +123,7 @@ func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 		ref = collection.Doc(key)
 	}
 	record.ID = ref.ID
+	c.making = append(c.making, &made{schema: s, ref: ref, value: v})
 	if body != nil {
 		if err := body(); err != nil {
 			return err
@@ -260,6 +265,11 @@ func Read[E any, P entityPointer[E]](c *Ctx, id string) (*E, error) {
 	for _, r := range c.reads {
 		if r.ref.Path == ref.Path {
 			return r.value.Addr().Interface().(*E), nil
+		}
+	}
+	for _, m := range c.making {
+		if m.ref.Path == ref.Path {
+			return m.value.Addr().Interface().(*E), nil
 		}
 	}
 	snap, err := c.tx.Get(ref)
@@ -920,6 +930,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				ref = collection.Doc(key)
 			}
 			record.ID = ref.ID
+			body.making = append(body.making, &made{schema: s, ref: ref, value: v})
 			if do != nil {
 				if err := do(body, entity); err != nil {
 					return err

@@ -34,12 +34,18 @@ type Path struct {
 	Pair string `firestore:"pair" one:"refers=routes::path"`
 }
 
-// A stop's own rules: one called closed can't be made, and one renamed says what
-// it was called before.
+// A stop's own rules: one called closed can't be made, one made says the trail it's
+// on, read even while that trail is being made in the same step, and one renamed
+// says what it was called before.
 func stopCreate(c *one.Ctx, s *Stop) error {
 	if s.Name == "closed" {
 		return c.Fail("that stop is closed")
 	}
+	trail, err := one.Read[Trail](c, s.Trail)
+	if err != nil {
+		return err
+	}
+	s.Note = "on " + trail.Title
 	return nil
 }
 
@@ -131,7 +137,7 @@ func TestADispatchedCreateRunsItsCommandsBodyInTheSameStep(t *testing.T) {
 	if start == "" {
 		t.Fatalf("the trail doesn't name the stop it made: %v", stored)
 	}
-	if stop := h.stored("routes_stop", start); stop["trail"] != trail || stop["name"] != "ridge" {
+	if stop := h.stored("routes_stop", start); stop["trail"] != trail || stop["name"] != "ridge" || stop["note"] != "on ridge" {
 		t.Fatalf("the stop made with the trail is %v", stop)
 	}
 
