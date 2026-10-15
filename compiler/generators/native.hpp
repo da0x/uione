@@ -103,6 +103,15 @@ namespace one::generators {
             out.push_back(file("src/app.hpp", app_hpp(stems)));
             out.push_back(file("src/main.cpp", main_cpp(stems)));
             out.push_back(file("CMakeLists.txt", cmake_lists(stems)));
+            // What installing it puts beside it: the project's license, and for the desktop,
+            // how the system lists it among its apps, and its icon.
+            if (auto license = license_text()) out.push_back(copied("packaging/LICENSE", license->second, license->first));
+            if (target_ == "desktop") {
+                out.push_back(file("packaging/" + app_id() + ".desktop", desktop_entry()));
+                if (!model_.project.icon.empty()) {
+                    if (auto svg = platform::read_file(model_.project.icon)) out.push_back(copied("packaging/" + app_id() + ".svg", *svg, model_.project.icon));
+                }
+            }
             return out;
         }
 
@@ -1741,6 +1750,50 @@ namespace one::generators {
         }
         std::vector<std::string> component_sources_;  // each .cpp copied, inside src/components
 
+        std::string app_id() const { return "org.uione." + model_.project.name; }
+        // What the app's installed as: its project's name and its kind, like neotrac-desktop,
+        // so the desktop and terminal apps, and a project's own command, live side by side.
+        std::string installed_name() const { return model_.project.name + "-" + target_; }
+
+        // A file copied as it is, each of its lines its own.
+        static output_file copied(std::string path, std::string content, const std::string& from) {
+            std::size_t lines = static_cast<std::size_t>(std::count(content.begin(), content.end(), '\n'));
+            if (!content.empty() && content.back() != '\n') ++lines;
+            std::vector<std::optional<code::source>> sources;
+            for (std::size_t line = 1; line <= lines; ++line) sources.push_back(code::source{from, static_cast<int>(line)});
+            return {std::move(path), std::move(content), false, std::move(sources)};
+        }
+
+        // The project's license, as LICENSE, LICENSE.md or COPYING, and where it is: beside
+        // its .one files, or in a folder above them, up to the top of its repository.
+        std::optional<std::pair<std::string, std::string>> license_text() const {
+            namespace fs = std::filesystem;
+            std::error_code ignored;
+            for (fs::path folder = fs::absolute(project_dir_, ignored).lexically_normal(); !folder.empty(); folder = folder.parent_path()) {
+                for (const char* name : {"LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"}) {
+                    if (auto text = platform::read_file((folder / name).string())) return std::pair{(folder / name).string(), *text};
+                }
+                if (fs::exists(folder / ".git", ignored) || folder == folder.parent_path()) break;
+            }
+            return std::nullopt;
+        }
+
+        // How the system lists the desktop app among its own: its name, what runs it, and
+        // its icon, by the id its window gives.
+        stream desktop_entry() const {
+            stream out;
+            auto from = out.from(project_path_, project_ ? project_->where.line : 0);
+            out.line("[Desktop Entry]");
+            out.line("Type=Application");
+            out.line("Name=" + model_.site_title());
+            out.line("Exec=" + installed_name() + " %u");
+            if (!model_.project.icon.empty()) out.line("Icon=" + app_id());
+            out.line("Terminal=false");
+            out.line("Categories=Office;");
+            out.line("StartupWMClass=" + app_id());
+            return out;
+        }
+
         stream cmake_lists(const std::vector<std::string>& stems) const {
             stream out("\t");
             auto from = out.from(project_path_, project_ ? project_->where.line : 0);
@@ -1782,6 +1835,32 @@ namespace one::generators {
             out.line("string(REGEX REPLACE \"^git@([^:]+):\" \"https://\\\\1/\" repository \"${repository}\")");
             out.line("string(REGEX REPLACE \"\\\\.git$\" \"\" repository \"${repository}\")");
             out.line("target_compile_definitions(" + name + " PRIVATE UIONE_COMMIT=\"${commit}\" UIONE_REPOSITORY=\"${repository}\")");
+            out.line();
+            const std::string installed = installed_name();
+            out.line("# Installing it: cmake --install out --prefix ~/.local puts it in bin as " + installed + ",");
+            out.line("# with its license" + std::string(target_ == "desktop" ? ", and what lists it among the system's apps, with its icon." : "."));
+            out.line("# The project's LICENSE goes with it, or it isn't installed or packaged at all.");
+            out.line("install(PROGRAMS $<TARGET_FILE:" + name + "> DESTINATION bin RENAME " + installed + ")");
+            out.open("if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE)");
+            out.line("install(FILES packaging/LICENSE DESTINATION share/licenses/" + installed + ")");
+            out.dedent();
+            out.open("else()");
+            out.line("install(CODE \"message(FATAL_ERROR \\\"" + name + " has no LICENSE beside its .one files, so it isn't installed or packaged\\\")\")");
+            out.close("endif()");
+            if (target_ == "desktop") {
+                out.line("install(FILES packaging/" + app_id() + ".desktop DESTINATION share/applications)");
+                if (!model_.project.icon.empty()) out.line("install(FILES packaging/" + app_id() + ".svg DESTINATION share/icons/hicolor/scalable/apps)");
+            }
+            out.line();
+            out.line("# Its package: cmake --build out --target package makes " + installed + "-<version>-linux-<machine>.tar.gz,");
+            out.line("# unpacked into a prefix, like tar -xzf it -C ~/.local. The version is VERSION, or the commit.");
+            out.line("set(VERSION \"${commit}\" CACHE STRING \"the version a package is named for\")");
+            out.line("set(CPACK_GENERATOR TGZ)");
+            out.line("set(CPACK_PACKAGE_NAME " + installed + ")");
+            out.line("set(CPACK_PACKAGE_FILE_NAME \"" + installed + "-${VERSION}-linux-${CMAKE_SYSTEM_PROCESSOR}\")");
+            out.line("set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)");
+            out.line("set(CPACK_PACKAGING_INSTALL_PREFIX \"\")");
+            out.line("include(CPack)");
             return out;
         }
     };

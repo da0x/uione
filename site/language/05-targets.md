@@ -141,6 +141,15 @@ cmake --build build/terminal/out
 build/terminal/out/neotrac
 ```
 
+`cmake --install build/desktop/out --prefix ~/.local` installs it as the project's name
+and its kind, like `neotrac-desktop`, with its license, and for a desktop app what
+lists it among the system's apps, with the project's icon. `cmake --build
+build/desktop/out --target package` makes the same as a download,
+`neotrac-desktop-<version>-linux-<machine>.tar.gz`, unpacked with `tar -xzf` into a
+prefix, its version named by `-DVERSION=…` or else the commit. The project's
+`LICENSE`, beside its `.one` files or above them in its repository, goes with it, and
+without one it isn't installed or packaged.
+
 The program is named after the project. It opens on the front page, or on the
 address it's given: `build/desktop/out/neotrac /tints/boards/website` opens that
 board. Both are built and tested on Linux.

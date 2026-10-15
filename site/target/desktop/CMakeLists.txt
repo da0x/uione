@@ -31,3 +31,25 @@ execute_process(COMMAND git remote get-url origin WORKING_DIRECTORY ${CMAKE_CURR
 string(REGEX REPLACE "^git@([^:]+):" "https://\\1/" repository "${repository}")
 string(REGEX REPLACE "\\.git$" "" repository "${repository}")
 target_compile_definitions(uione PRIVATE UIONE_COMMIT="${commit}" UIONE_REPOSITORY="${repository}")
+
+# Installing it: cmake --install out --prefix ~/.local puts it in bin as uione-desktop,
+# with its license, and what lists it among the system's apps, with its icon.
+# The project's LICENSE goes with it, or it isn't installed or packaged at all.
+install(PROGRAMS $<TARGET_FILE:uione> DESTINATION bin RENAME uione-desktop)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE)
+	install(FILES packaging/LICENSE DESTINATION share/licenses/uione-desktop)
+else()
+	install(CODE "message(FATAL_ERROR \"uione has no LICENSE beside its .one files, so it isn't installed or packaged\")")
+endif()
+install(FILES packaging/org.uione.uione.desktop DESTINATION share/applications)
+install(FILES packaging/org.uione.uione.svg DESTINATION share/icons/hicolor/scalable/apps)
+
+# Its package: cmake --build out --target package makes uione-desktop-<version>-linux-<machine>.tar.gz,
+# unpacked into a prefix, like tar -xzf it -C ~/.local. The version is VERSION, or the commit.
+set(VERSION "${commit}" CACHE STRING "the version a package is named for")
+set(CPACK_GENERATOR TGZ)
+set(CPACK_PACKAGE_NAME uione-desktop)
+set(CPACK_PACKAGE_FILE_NAME "uione-desktop-${VERSION}-linux-${CMAKE_SYSTEM_PROCESSOR}")
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+set(CPACK_PACKAGING_INSTALL_PREFIX "")
+include(CPack)

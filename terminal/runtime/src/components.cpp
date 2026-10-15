@@ -959,7 +959,10 @@ namespace one::terminal::runtime {
 
 	}  // namespace
 
-	terminal::view markdown_view(const std::string& source, bool document) {
+	terminal::view markdown_view(const std::string& source) { return markdown_drawn(source, false); }
+	terminal::view markdown_document(const std::string& source) { return markdown_drawn(source, true); }
+
+	terminal::view markdown_drawn(const std::string& source, bool document) {
 		return terminal::text_laid([source, document](int width) {
 			std::vector<terminal::line> out;
 			for (const auto& l : one::markdown::layout(source, {.width = std::max(10, width), .hyperlinks = false, .document = document})) out.push_back(converted(l));
@@ -983,13 +986,13 @@ namespace one::terminal::runtime {
 			if (w.name == here) shown = &w;
 		}
 		// One page is just the page, with no list of one above it.
-		if (all.size() == 1) return markdown_view(shown->source, document);
+		if (all.size() == 1) return markdown_drawn(shown->source, document);
 		std::vector<terminal::view> across;
 		for (const auto& w : all) {
 			if (&w == shown) across.push_back(terminal::text(w.title, {.bold = true, .underline = true}));
 			else across.push_back(terminal::link(w.title, [&p, to = base + "/" + w.name] { p.open(to); }, {}));
 		}
-		return terminal::column(terminal::row(std::move(across)).spacing(3), markdown_view(shown->source, document)).spacing(1);
+		return terminal::column(terminal::row(std::move(across)).spacing(3), markdown_drawn(shown->source, document)).spacing(1);
 	}
 
 }  // namespace one::terminal::runtime

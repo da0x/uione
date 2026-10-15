@@ -121,3 +121,38 @@ TEST_CASE("a row's when and what roles allow are written as C++") {
     // What a project's roles allow, read from the person's roles in the project the address names.
     CHECK(screens->content.find(R"(.allowed = allows(member_roles, "project", project_id, "issue::create", "role.may"))") != std::string::npos);
 }
+
+// Installing a desktop app lists it among the system's apps, with its icon, and its
+// project's license beside it, found above the project too; without one, it isn't
+// installed or packaged.
+TEST_CASE("a desktop app is installed and packaged with its .desktop file, icon and license") {
+    namespace fs = std::filesystem;
+    fs::path repository = fs::temp_directory_path() / "uione-packaged";
+    fs::remove_all(repository);
+    fs::create_directories(repository / ".git");
+    fs::create_directories(repository / "app" / "assets");
+    platform::write_file((repository / "LICENSE").string(), "The license.\n");
+    platform::write_file((repository / "app" / "assets" / "icon.svg").string(), "<svg/>\n");
+    platform::write_file((repository / "app" / "main.one").string(), "project notes {\n\ttarget desktop\n\ticon \"assets/icon.svg\"\n}\nnamespace notes {\n\tscreen \"Notes\" / {\n\t\ttext \"Hello\"\n\t}\n}\n");
+    std::vector<language::file> files;
+    language::diagnostics out;
+    files.push_back(language::parse((repository / "app" / "main.one").string(), *platform::read_file((repository / "app" / "main.one").string()), out));
+    auto generated = generators::generate_native(files, (repository / "app").string(), "desktop");
+    const auto* license = find(generated, "packaging/LICENSE");
+    const auto* entry = find(generated, "packaging/org.uione.notes.desktop");
+    const auto* cmake = find(generated, "CMakeLists.txt");
+    REQUIRE(license != nullptr);
+    REQUIRE(entry != nullptr);
+    REQUIRE(cmake != nullptr);
+    CHECK(license->content == "The license.\n");
+    CHECK(find(generated, "packaging/org.uione.notes.svg") != nullptr);
+    CHECK(entry->content.find("Exec=notes-desktop %u") != std::string::npos);
+    CHECK(entry->content.find("Icon=org.uione.notes") != std::string::npos);
+    CHECK(cmake->content.find("install(PROGRAMS $<TARGET_FILE:notes> DESTINATION bin RENAME notes-desktop)") != std::string::npos);
+    CHECK(cmake->content.find("install(FILES packaging/LICENSE DESTINATION share/licenses/notes-desktop)") != std::string::npos);
+    CHECK(cmake->content.find("set(CPACK_PACKAGE_FILE_NAME \"notes-desktop-${VERSION}-linux-${CMAKE_SYSTEM_PROCESSOR}\")") != std::string::npos);
+    fs::remove(repository / "LICENSE");
+    auto unlicensed = generators::generate_native(files, (repository / "app").string(), "desktop");
+    CHECK(find(unlicensed, "packaging/LICENSE") == nullptr);
+    fs::remove_all(repository);
+}
