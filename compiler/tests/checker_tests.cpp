@@ -1636,3 +1636,11 @@ TEST_CASE("a board's columns are the stages written in the code when it says no 
     CAPTURE(along);
     CHECK(std::ranges::contains(along, std::string("the board's columns are stage's choices, so its cards go along the steps the workflow writes; take out along")));
 }
+
+// The top bar's order names namespaces, each once.
+TEST_CASE("the header's navigation names namespaces that are there") {
+    const std::string pages = "namespace docs {\n\tscreen \"Docs\" / {\n\t\ttext \"Read me\"\n\t}\n}\n";
+    CHECK(check_source(pages + "header {\n\tnavigation docs\n}\n").empty());
+    CHECK(only_error(pages + "header {\n\tnavigation guides\n}\n").message == "there's no namespace guides for the top bar to list");
+    CHECK(only_error(pages + "header {\n\tnavigation docs docs\n}\n").message == "docs is in the top bar's order twice");
+}

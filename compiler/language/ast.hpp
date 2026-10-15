@@ -1012,6 +1012,9 @@ namespace one::language {
     // address goes on from that path.
     struct header_declaration {
         std::vector<header_badge> badges;
+        // navigation projects docs about: the namespaces whose screens the top bar lists
+        // first, in this order; the rest follow as their files come.
+        std::vector<qualified_name> navigation;
         std::optional<std::string> route;
         location route_where;
         std::vector<screen_item> items;

@@ -911,6 +911,11 @@ namespace one::language {
                 return;
             }
             if (++headers_ > 1) error(where, "a site has one header, beside its name on every page");
+            std::set<std::string> named;
+            for (const auto& n : h.navigation) {
+                if (!scopes_.contains(join(ns, n.text())) && !scopes_.contains(n.text())) error(n.where, "there's no namespace " + n.text() + " for the top bar to list");
+                if (!named.insert(n.text()).second) error(n.where, n.text() + " is in the top bar's order twice");
+            }
             for (const auto& badge : h.badges) {
                 const view_declaration* found = nullptr;
                 for (const auto& [ns, sc] : scopes_) {

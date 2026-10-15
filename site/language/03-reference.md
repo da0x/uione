@@ -2009,7 +2009,9 @@ view project_settings per project {
 
 What's beside the site's name on every page. A `badge` shows a value of a view,
 like what's new to the person reading, once they're signed in and while it's more
-than none. A site has one header, or none.
+than none. `navigation projects docs download` orders the top bar: the screens of
+those namespaces first, in that order, and the rest after, as their files come. A
+site has one header, or none.
 
 `header /:owner/:project { ... }` is what's above every screen whose address goes
 on from that path, like a project's own name and tabs, before the screen's own
@@ -2029,6 +2031,7 @@ header /:project/settings {
 ```one
 header {
 	badge news.unread
+	navigation projects docs about
 }
 
 view news per user {

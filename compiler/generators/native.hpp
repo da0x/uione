@@ -1492,6 +1492,10 @@ namespace one::generators {
                 current_file_ = &f;
                 walk("", f.declarations);
             }
+            // The top bar's order, when the header gives one.
+            std::string navigation;
+            for (const auto& address : model_.navigation(files_)) navigation += (navigation.empty() ? "" : ", ") + str(address);
+            if (!navigation.empty()) bodies.line("s.navigation = {" + navigation + "};");
             stream out("\t");
             out.generated_from(project_path_.empty() ? "the project" : std::filesystem::path(project_path_).filename().string());
             {

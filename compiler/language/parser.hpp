@@ -248,7 +248,14 @@ namespace one::language {
                 advance();
                 header_declaration header;
                 while (in_block()) {
-                    if (!at_word("badge")) fail_expecting("a badge, like badge news.unread");
+                    if (at_word("navigation")) {
+                        advance();
+                        do header.navigation.push_back(parse_qualified_name("a namespace whose screens the top bar lists, like projects"));
+                        while (at(token_kind::identifier));
+                        end_line();
+                        continue;
+                    }
+                    if (!at_word("badge")) fail_expecting("a badge, like badge news.unread, or the top bar's order, like navigation projects docs");
                     header_badge badge;
                     badge.where = advance().where;
                     badge.view = expect(token_kind::identifier, "a view, like news.unread").text;

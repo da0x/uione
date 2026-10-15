@@ -68,7 +68,8 @@ namespace one::desktop::runtime {
 		bar.push_back(desktop::link(s.name, [&nav, &s] {
 			if (!nav.open("/") && !s.screens.empty()) nav.open(s.screens.front().route);
 		}, brand));
-		for (const auto& screen : s.screens) {
+		for (const auto* listed : screens::in_navigation(s)) {
+			const auto& screen = *listed;
 			if (screen.nav.empty()) continue;
 			std::string route = screen.route;
 			bar.push_back(desktop::link(screen.nav, [&nav, route] { nav.open(route); }, screen.route == nav.shown(here).route ? t.strong() : t.body()));

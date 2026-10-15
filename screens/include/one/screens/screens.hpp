@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <any>
 #include <chrono>
 #include <functional>
@@ -247,7 +248,25 @@ namespace one::screens {
 		std::vector<basic_screen<View>> screens = {};
 		std::vector<badge> badges = {};
 		std::function<View(basic_page<View>&)> footer = {};
+		// The addresses the top bar lists first, in this order, like /projects and /docs;
+		// the other screens follow in their own order.
+		std::vector<std::string> navigation = {};
 	};
+
+	// A site's screens in the top bar's order: those at its navigation's addresses
+	// first, by where each is in it, then the rest as they were.
+	template <typename Site>
+	auto in_navigation(const Site& s) {
+		std::vector<const typename decltype(s.screens)::value_type*> out;
+		for (const auto& screen : s.screens) out.push_back(&screen);
+		auto place = [&](const auto* screen) {
+			std::string base = screen->route.substr(0, screen->route.find("/:"));
+			auto at = std::find(s.navigation.begin(), s.navigation.end(), base.empty() ? "/" : base);
+			return at - s.navigation.begin();
+		};
+		std::stable_sort(out.begin(), out.end(), [&](const auto* a, const auto* b) { return place(a) < place(b); });
+		return out;
+	}
 
 	// The trail of pages opened, the last of them shown.
 	class navigator_base {

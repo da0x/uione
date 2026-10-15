@@ -98,10 +98,11 @@ rule           ::= "required" | "unique" | "key" | "after" NAME
 /* header: what's beside the site's name on every page; a badge shows a value of a
  * view, like what's new to the person reading, when it's more than none */
 
-header         ::= "header" "{" NEWLINE? badge* "}" END
+header         ::= "header" "{" NEWLINE? (badge | navigation)* "}" END
                  | "header" ROUTE screen_block END
 /* header /:project { … }: items above every screen whose address goes on from that path */
 badge          ::= "badge" NAME "." NAME END
+navigation     ::= "navigation" qualified+ END
 
 /* footer: what's at the foot of every page, in one line or in columns of sections,
  * drawn with a screen's text, links and sections */

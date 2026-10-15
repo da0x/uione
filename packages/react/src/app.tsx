@@ -51,6 +51,22 @@ export interface AppProps {
   // Display settings beside light and dark: contrast, text size, spacing, a legible
   // font, motion, links and focus, each kept in the reader's browser.
   display?: boolean;
+  // The addresses the navigation lists first, in this order, like ["/projects", "/docs"];
+  // the other screens follow in their own order.
+  navigation?: readonly string[];
+}
+
+// Screens in the navigation's order: those at its addresses first, by where each is
+// in it, then the rest as they were. Routes are matched by how much of an address they
+// name, so the order changes only the navigation.
+const noNavigation: readonly string[] = [];
+
+export function inNavigation(screens: readonly Screen[], navigation: readonly string[]): Screen[] {
+  const place = (s: Screen) => {
+    const at = navigation.indexOf(s.info.route.split("/:")[0] || "/");
+    return at === -1 ? navigation.length : at;
+  };
+  return screens.map((s, at) => ({ s, at })).sort((a, b) => place(a.s) - place(b.s) || a.at - b.at).map(({ s }) => s);
 }
 
 // The site's footer: how it's laid out, and what it holds, drawn on every page.
@@ -231,7 +247,8 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens, ui, data, location, authentication = true, analytics, color, badges = [], build, footer, display = false }: AppProps) {
+export function App({ name, icon, screens: given, ui, data, location, authentication = true, analytics, color, badges = [], build, footer, display = false, navigation = noNavigation }: AppProps) {
+  const screens = useMemo(() => inNavigation(given, navigation), [given, navigation]);
   const routes = (
     <>
       {color && <style>{accentOf(color)}</style>}

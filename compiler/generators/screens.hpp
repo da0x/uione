@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <set>
@@ -294,6 +295,36 @@ namespace one::generators::screens {
             for (const auto& [id, title] : out.stages) {
                 if (id == found->done_at) out.statuses.emplace_back(id, "success");
                 else if (failure_stages.contains(join(ns, card.name + "::" + id))) out.statuses.emplace_back(id, "failed");
+            }
+            return out;
+        }
+
+        // The addresses the top bar lists first, in order, from the header's navigation:
+        // each namespace's screens there, by their address before any parameter, like
+        // /docs for /docs/:page.
+        std::vector<std::string> navigation(const std::vector<language::file>& files) const {
+            std::vector<std::string> names;
+            std::function<void(const std::vector<language::declaration>&)> header = [&](const std::vector<language::declaration>& declarations) {
+                for (const auto& d : declarations) {
+                    if (auto* h = std::get_if<language::header_declaration>(&d.node); h && !h->route) {
+                        for (const auto& n : h->navigation) names.push_back(n.text());
+                    }
+                    if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) header(n->declarations);
+                }
+            };
+            for (const auto& f : files) header(f.declarations);
+            std::vector<std::string> out;
+            for (const auto& name : names) {
+                for (const auto& f : files) {
+                    for (const auto& found : screens_in(f)) {
+                        if (found.ns != name && !found.ns.starts_with(name + "::")) continue;
+                        std::string route = full_route(found.ns, found.screen->route);
+                        std::string base = route.substr(0, route.find("/:"));
+                        std::string title = title_of(*found.screen);
+                        if (base.empty() || title.find('{') != std::string::npos || title == site_title()) continue;
+                        if (std::find(out.begin(), out.end(), base) == out.end()) out.push_back(base);
+                    }
+                }
             }
             return out;
         }

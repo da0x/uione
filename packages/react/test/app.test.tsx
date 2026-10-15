@@ -34,6 +34,12 @@ describe("an app built from screens", () => {
     ]);
   });
 
+  it("lists them in the navigation's order, the rest after", () => {
+    render(<App name="uione" screens={[home, studio, docs]} ui={plain} data={memorySource()} location="/docs" navigation={["/docs"]} />);
+    const labels = Array.from(screen.getByRole("navigation").querySelectorAll("a")).map((a) => a.textContent);
+    expect(labels).toEqual(["Docs", "Studio"]);
+  });
+
   it("follows a link inside the app without reloading", () => {
     renderAt("/");
     expect(screen.getByText("Write the feature once.")).toBeTruthy();

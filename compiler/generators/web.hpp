@@ -2465,6 +2465,10 @@ namespace one::generators {
                 std::string footer = ", build: { version: " + web_detail::js_string(std::string(one::version)) +
                                      ", commit: import.meta.env.VITE_UIONE_COMMIT, repository: import.meta.env.VITE_UIONE_REPOSITORY }";
                 if (footer_) footer += ", footer: { layout: " + web_detail::js_string(footer_layout_) + " as const, content: SiteFooter }";
+                // The top bar's order, when the header gives one.
+                std::string navigation;
+                for (const auto& address : model_.navigation(files_)) navigation += (navigation.empty() ? "" : ", ") + web_detail::js_string(address);
+                if (!navigation.empty()) footer += ", navigation: [" + navigation + "]";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
                          ", data" + offered + (analytics_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") + " };");
             }

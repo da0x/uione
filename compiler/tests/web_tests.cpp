@@ -1778,3 +1778,40 @@ TEST_CASE("markdown pages set as a document") {
     REQUIRE(plain_index != nullptr);
     CHECK(plain_index->content.find("Caslon") == std::string::npos);
 }
+
+// The header's navigation puts the top bar in its order, by the addresses of each
+// namespace's screens there; the rest follow.
+TEST_CASE("the top bar takes the header's order") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-navigation";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(header {
+	navigation projects docs
+}
+namespace about {
+	screen "About" / {
+		text "Who we are"
+	}
+}
+namespace docs {
+	screen "Docs" /:page {
+		text "How it works"
+	}
+}
+namespace projects at / {
+	screen "Projects" /projects {
+		text "Every project"
+	}
+	screen "Settings" /:project/settings {
+		text "A project's settings"
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* app = find(generated, "src/app.tsx");
+    REQUIRE(app != nullptr);
+    CAPTURE(app->content);
+    CHECK(app->content.find(R"(navigation: ["/projects", "/docs"])") != std::string::npos);
+}

@@ -59,6 +59,14 @@ TEST("a row opens its own address, filled from the screen's and the row's") {
 	CHECK(filled("/:project/settings", {{"project", "atlas"}}) == "/atlas/settings");
 }
 
+TEST("the top bar lists the navigation's addresses first, in its order, the rest after") {
+	auto s = tracker();
+	s.navigation = {"/docs", "/projects"};
+	std::vector<std::string> routes;
+	for (const auto* screen : in_navigation(s)) routes.push_back(screen->route);
+	CHECK((routes == std::vector<std::string>{"/docs/:page?", "/projects", "/projects/:project", "/:project/:issue", "/:project/settings"}));
+}
+
 TEST("an address opens the screen most particular to it, a part named outright before a parameter, with its query") {
 	auto s = tracker();
 	memory_source data;
