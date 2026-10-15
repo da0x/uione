@@ -300,6 +300,9 @@ namespace one::screens {
 	// Makes a region as wide as it's dragged to: shown so at once, sent to the canvas's
 	// resize command, and back if it's turned down.
 	void resize_region(page_base& p, const canvas_spec& spec, const std::string& region, double width);
+	// Makes a card of each file pasted, one path a line, at x and y, a little apart;
+	// false when there's nothing to make or no way to make it.
+	bool paste_on_canvas(page_base& p, const canvas_spec& spec, const std::string& pasted, double x, double y);
 
 	// Cards: each a row with what it shows, a tally of what it holds, and links
 	// opening it filtered.

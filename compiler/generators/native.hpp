@@ -728,6 +728,20 @@ namespace one::generators {
             if (c.move) out += ", .move = " + str(screens::full_command(ns, c.move->command));
             if (c.resize) out += ", .resize = " + str(screens::full_command(ns, *c.resize));
             if (group_track_) out += ", .track = " + track_of(parts, ns, nullptr);
+            // A pasted file makes a card as a create form here would, named from the file.
+            if (c.paste && entity) {
+                std::string given, named;
+                for (const auto& field : entity->fields) {
+                    if ((field.name == "title" || field.name == "name") && named.empty() && field.type && field.type->text() == "text") named = field.name;
+                    if (!field.type || field.type->parts.size() != 1 || field.name == c.paste_into) continue;
+                    const std::string& points = field.type->parts[0];
+                    if (!screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
+                    given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", " + id_of(parts, points) + "}";
+                }
+                out += ", .paste = " + str(screens::full_command(ns, *c.paste)) + ", .paste_into = " + str(c.paste_into);
+                if (!named.empty()) out += ", .paste_named = " + str(named);
+                if (!given.empty()) out += ", .given = {" + given + "}";
+            }
             return out + "})";
         }
 

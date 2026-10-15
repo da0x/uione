@@ -59,6 +59,30 @@ TEST("a row opens its own address, filled from the screen's and the row's") {
 	CHECK(filled("/:project/settings", {{"project", "atlas"}}) == "/atlas/settings");
 }
 
+TEST("a file's path pasted on a canvas makes a card of it, named from it, uploaded where it landed") {
+	auto file = std::filesystem::temp_directory_path() / "uione-paste" / "sketch.png";
+	std::filesystem::create_directories(file.parent_path());
+	std::ofstream(file) << "png";
+	site s{.name = "ideas"};
+	s.screens.push_back({"Wall", "/walls/:wall"});
+	memory_source data;
+	navigator nav(s, data);
+	CHECK(nav.open("/walls/w1"));
+	canvas_spec spec{.view = nav.current().view("ideas::wall"), .list = "notes", .grid = 160, .paste = "ideas::note::create", .paste_into = "files", .paste_named = "title", .given = {{"wall", "w1"}}};
+	CHECK(paste_on_canvas(nav.current(), spec, "file://" + file.string() + "\n", 40, 40));
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const auto& made = data.runs()[0];
+	CHECK(made.command == "ideas::note::create");
+	CHECK(made.fields["title"].as_string() == "sketch");
+	CHECK(made.fields["wall"].as_string() == "w1");
+	CHECK(made.fields["x"].as_double() == 40);
+	CHECK(made.fields["w"].as_double() == 160);
+	CHECK(data.uploads() == std::vector<std::string>{file.string()});
+	CHECK(!paste_on_canvas(nav.current(), canvas_spec{.view = spec.view, .list = "notes"}, file.string(), 0, 0));
+	std::filesystem::remove_all(file.parent_path());
+}
+
 TEST("the top bar lists the navigation's addresses first, in its order, the rest after") {
 	auto s = tracker();
 	s.navigation = {"/docs", "/projects"};

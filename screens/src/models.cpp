@@ -21,6 +21,7 @@
 #include <format>
 #include <random>
 #include <set>
+#include <filesystem>
 #include <sstream>
 #include <thread>
 #include <tuple>
@@ -1289,6 +1290,27 @@ namespace one::screens {
 		p.run(spec.place, value(std::map<std::string, value>{{"id", card}, {spec.x, x}, {spec.y, y}, {spec.w, w}, {spec.h, h}}), [placed, card](const answer& a) {
 			if (!a) placed.change([&](auto& now) { now.erase(card); });
 		}, true);
+	}
+
+	bool paste_on_canvas(page_base& p, const canvas_spec& spec, const std::string& pasted, double x, double y) {
+		if (spec.paste.empty() || spec.paste_into.empty()) return false;
+		double step = spec.grid > 0 ? spec.grid : 160;
+		int made = 0;
+		std::istringstream lines(pasted);
+		for (std::string line; std::getline(lines, line);) {
+			std::string path = local_path(line);
+			if (path.empty()) continue;
+			std::map<std::string, value> fields;
+			for (const auto& [name, id] : spec.given) fields[name] = value(id);
+			if (!spec.paste_named.empty()) fields[spec.paste_named] = value(std::filesystem::path(path).stem().string());
+			fields[spec.x] = value(x + made * step / 4);
+			fields[spec.y] = value(y + made * step / 4);
+			fields[spec.w] = value(step);
+			fields[spec.h] = value(step);
+			p.run(spec.paste, value(std::move(fields)), attached_files{{spec.paste_into, {line}}}, {}, false);
+			++made;
+		}
+		return made > 0;
 	}
 
 	void resize_region(page_base& p, const canvas_spec& spec, const std::string& region, double width) {

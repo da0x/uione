@@ -3,10 +3,10 @@
 
 // The plain component set, as someone using a screen reader or a keyboard meets it.
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Section, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Board, Canvas, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Section, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -814,5 +814,38 @@ describe("a landing page", () => {
     const headings = Array.from(page.querySelectorAll("h2")).map((h) => h.textContent);
     expect(headings).toEqual(["You approve every proof", "Ask for a quote"]);
     expect(document.getElementById("quote")?.querySelector("form")).toBeTruthy();
+  });
+});
+
+describe("a canvas", () => {
+  it("makes a card of an image dropped on it, where it landed, and draws the picture its card holds", async () => {
+    const source = memorySource({
+      views: { "ideas::wall": { rows: [{ id: "n1", title: "Sketch", files: ["files/you/0/sketch.png"], x: 40, y: 40, w: 160, h: 160 }] } },
+      files: true,
+    });
+    renderScreen(source, () => (
+      <Canvas
+        view={useView("ideas::wall")}
+        list="rows"
+        columns={{ title: "Title" }}
+        grid={{ step: 160, x: 40, y: 40 }}
+        picture="files"
+        paste={{ command: "ideas::note::create", into: "files", many: true, named: "title", given: { wall: "w1" } }}
+      />
+    ));
+    const surface = screen.getByRole("application");
+    const shot = new File(["png"], "image.png", { type: "image/png" });
+    // jsdom's drag events carry no position, so it's given to this one.
+    const drop = createEvent.drop(surface, { dataTransfer: { files: [shot], types: ["Files"] } });
+    Object.defineProperties(drop, { clientX: { value: 330 }, clientY: { value: 210 } });
+    await act(async () => {
+      fireEvent(surface, drop);
+    });
+    await act(async () => {});
+    expect(source.uploads.map((u) => u.file.name)).toEqual(["image.png"]);
+    expect(source.runs).toEqual([
+      { command: "ideas::note::create", input: { wall: "w1", files: [source.uploads[0]!.path], title: "Pasted image", x: 360, y: 200, w: 160, h: 160 } },
+    ]);
+    expect(document.querySelector("img")?.getAttribute("src")).toContain("sketch.png");
   });
 });

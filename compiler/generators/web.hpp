@@ -1334,6 +1334,25 @@ namespace one::generators {
             if (!c.regions.empty()) line += " regions=" + web_detail::js_string(c.regions);
             if (c.move) line += " move=" + web_detail::js_string(full_command(ns, c.move->command));
             if (c.resize) line += " resize=" + web_detail::js_string(full_command(ns, *c.resize));
+            // A pasted file makes a card as a create form on this screen would: what the
+            // address names given, the file in its field, named from the file.
+            if (const auto* card = listed(ns, c.view.text(), c.list); c.paste && card) {
+                std::string given, named;
+                bool many = false;
+                for (const auto& field : card->fields) {
+                    if (field.name == c.paste_into) many = field.list;
+                    if ((field.name == "title" || field.name == "name") && named.empty() && field.type && field.type->text() == "text") named = field.name;
+                    if (!field.type || field.type->parts.size() != 1 || field.name == c.paste_into) continue;
+                    const std::string& points = field.type->parts[0];
+                    if (!names_parameter(route_, points) || !entity_named(ns, points)) continue;
+                    parts.params.insert(points);
+                    given += (given.empty() ? "" : ", ") + field.name + ": " + web_detail::js_name(points + "_id");
+                }
+                line += " paste={{ command: " + web_detail::js_string(full_command(ns, *c.paste)) + ", into: " + web_detail::js_string(c.paste_into) +
+                        (many ? ", many: true" : "") + (named.empty() ? "" : ", named: " + web_detail::js_string(named)) +
+                        (given.empty() ? "" : ", given: { " + given + " }") + " }}";
+            }
+            if (!c.picture.empty()) line += " picture=" + web_detail::js_string(c.picture);
             if (group_track_) line += track_on(parts, ns, nullptr);
             if (c.link) {
                 std::string target = full_route(ns, *c.link);

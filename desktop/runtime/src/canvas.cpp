@@ -64,9 +64,20 @@ namespace one::desktop::runtime {
 		}
 		std::vector<desktop::view> parts;
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
-		parts.push_back(desktop::surface(std::move(items), std::move(options)));
-		parts.push_back(desktop::text(model.regions.empty() ? "Drag a card to move it, or its corner to resize it; drag the space to look around, and + or − to zoom."
-		                                             : "Drag a card to move it, into another column to move it there, or its corner to resize it; drag a column's edge to widen it, the space to look around, and + or − to zoom.", t.quiet()));
+		auto surface = desktop::surface(std::move(items), std::move(options));
+		// Control+V puts the files whose paths were copied, as a file manager copies
+		// them, on the board.
+		if (!spec.paste.empty()) {
+			surface = std::move(surface).on_key([&p, spec, origin = std::pair{model.origin_x, model.origin_y}](const key_event& e) {
+				if (!e.control || (e.symbol != 'v' && e.symbol != 'V')) return false;
+				auto copied = desktop::clipboard_text();
+				return copied && paste_on_canvas(p, spec, *copied, origin.first, origin.second);
+			});
+		}
+		parts.push_back(std::move(surface));
+		parts.push_back(desktop::text(std::string(model.regions.empty() ? "Drag a card to move it, or its corner to resize it; drag the space to look around, and + or − to zoom."
+		                                             : "Drag a card to move it, into another column to move it there, or its corner to resize it; drag a column's edge to widen it, the space to look around, and + or − to zoom.") +
+		                                  (spec.paste.empty() ? "" : " Copy a file and press Control+V to put it on the board."), t.quiet()));
 		return desktop::column(std::move(parts)).spacing(8);
 	}
 

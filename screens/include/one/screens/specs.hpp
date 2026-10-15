@@ -260,6 +260,12 @@ namespace one::screens {
 		std::string move = "";
 		std::string resize = "";
 		std::optional<track_spec> track = std::nullopt;  // in a switch, the track above, whose pick keeps its rows
+		// A file pasted on it, as its path, makes a card by `paste`: the file in
+		// `paste_into`, named from it in `paste_named`, with what's `given` besides.
+		std::string paste = "";
+		std::string paste_into = "";
+		std::string paste_named = "";
+		std::map<std::string, std::string> given = {};
 	};
 
 	// A view's rows, or one of its lists, a column each for the fields named: a row

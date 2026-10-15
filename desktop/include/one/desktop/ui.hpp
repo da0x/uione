@@ -275,6 +275,8 @@ namespace one::desktop {
 
 	// Puts text on the clipboard, as copying does.
 	void copy_text(std::string text);
+	// What's on the clipboard as text, as pasting would give it; none when there's nothing.
+	std::optional<std::string> clipboard_text();
 
 	// A box ticked or not, with what it says, flipped with a click, Space or Enter.
 	view toggle(state<bool> on, std::string label);

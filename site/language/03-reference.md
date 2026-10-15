@@ -1737,7 +1737,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   moved; and `resize stage::update` saves a band made wider or narrower by dragging
   the line after it, or with `<` and `>` in the terminal. On the web it's drawn as SVG; in the
   desktop app on a surface of its own; in the terminal as boxes, `n` choosing one,
-  the arrows moving it a grid step and Shift resizing it.
+  the arrows moving it a grid step and Shift resizing it. `paste issue::create into
+  attachments` makes a card of each file pasted on the canvas, or dropped on it on
+  the web: the file in that field, the card named from the file and placed where it
+  landed, and what the address names given, as a create form on the screen would.
+  In the desktop app a file copied in the file manager is pasted with Control+V, and
+  in the terminal `p` asks for its path. `picture attachments` shows the first image
+  a card holds on it, on the web.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
   as the classic deploy screen did: a lane for each kind of card, its kind said by
   `lanes by labels`, in the order their stages come, and in it a row for each card,

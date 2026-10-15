@@ -766,6 +766,13 @@ namespace one::language {
         std::optional<button_item> move;
         std::optional<qualified_name> resize;
         location resize_where;
+        // paste issue::create into attachments: a file pasted or dropped on the canvas
+        // makes a card by this command, the file in that field, where it landed.
+        std::optional<qualified_name> paste;
+        std::string paste_into;
+        location paste_where;
+        std::string picture;  // picture attachments: the field whose first image a card shows
+        location picture_where;
         std::vector<table_column> columns;  // what a card shows, its title first
     };
 

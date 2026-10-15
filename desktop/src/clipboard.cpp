@@ -98,6 +98,7 @@ namespace one::desktop {
 	}
 
 	void copy_text(std::string text) { detail::copy_text(std::move(text)); }
+	std::optional<std::string> clipboard_text() { return detail::pasted_text(); }
 
 	namespace detail {
 

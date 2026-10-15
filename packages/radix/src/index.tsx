@@ -1119,7 +1119,7 @@ export const radix: ComponentSet = {
   ),
   // A canvas: cards placed anywhere, on the shared SVG surface, each drawn as a
   // board's card is: its dot, its title, what else it shows; text large and bare.
-  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize }) => (
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize, onFiles }) => (
     <div className="flex flex-col gap-2" aria-busy={status === "loading"}>
       {error && <p className="text-sm text-danger">{error}</p>}
       <Surface
@@ -1129,6 +1129,7 @@ export const radix: ComponentSet = {
         onOpen={onOpen}
         regions={regions}
         onResize={onResize}
+        onFiles={onFiles}
         className="outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         style={{ borderRadius: "var(--radius-box, 10px)", background: "var(--color-sunken)", border: "1px solid var(--color-line)" }}
         card={(card) =>
@@ -1136,6 +1137,7 @@ export const radix: ComponentSet = {
             <div className="h-full p-2 text-lg leading-snug font-medium text-ink">{card.title}</div>
           ) : (
             <div className={`flex h-full flex-col gap-1 overflow-hidden p-2.5 text-sm ${tones[card.tone ?? 3] ?? ""}`}>
+              {card.picture && <img src={card.picture} alt="" draggable={false} className="min-h-0 w-full flex-1 rounded-control object-cover" />}
               <div className="flex items-start gap-1.5">
                 {card.status && <span role="img" aria-label={card.status.words} title={card.status.words} className="mt-1.5 size-2 shrink-0 rounded-full" style={{ background: statusColors[card.status.is] }} />}
                 {card.link ? (
@@ -1155,6 +1157,7 @@ export const radix: ComponentSet = {
         {regions?.length
           ? "Drag a card to move it, into another column to move it there, or by its corner to resize it. Drag a column's edge to widen it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom."
           : "Drag a card to move it, or its corner to resize it. Drag the space, or scroll, to look around; Ctrl and scroll, or pinch, to zoom."}
+        {onFiles && " Paste or drop an image to put it on the board."}
       </p>
     </div>
   ),

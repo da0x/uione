@@ -486,7 +486,7 @@ export const plain: ComponentSet = {
       ))}
     </div>
   ),
-  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize }) => (
+  Canvas: ({ status, cards, grid, error, onPlace, onOpen, regions, onResize, onFiles }) => (
     <div aria-busy={status === "loading"}>
       {error && <p role="alert">{error}</p>}
       <Surface
@@ -496,8 +496,10 @@ export const plain: ComponentSet = {
         onOpen={onOpen}
         regions={regions}
         onResize={onResize}
+        onFiles={onFiles}
         card={(card) => (
           <div style={{ padding: 8, overflow: "hidden", height: "100%", boxSizing: "border-box" }}>
+            {card.picture && <img src={card.picture} alt="" style={{ display: "block", maxWidth: "100%" }} />}
             {card.status && <span title={card.status.words}>● </span>}
             {card.link ? <a {...card.link}>{card.title}</a> : <strong>{card.title}</strong>}
             {card.details.map((d, i) => (

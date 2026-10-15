@@ -281,6 +281,9 @@ export interface CanvasProps {
   // the line between two is dragged to resize one, when onResize says so.
   regions?: CanvasRegion[];
   onResize?: (region: string, width: number) => void;
+  // Files pasted on it, or dropped, each to make a card where they landed, in the
+  // canvas's own units; absent when nothing's made from them.
+  onFiles?: (files: File[], x: number, y: number) => void;
 }
 
 export interface CanvasRegion {
@@ -298,6 +301,7 @@ export interface CanvasCard {
   details: ReactNode[];
   tone?: number;
   status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
+  picture?: string; // an image it holds, as an address to draw it from
   x: number;
   y: number;
   width: number;

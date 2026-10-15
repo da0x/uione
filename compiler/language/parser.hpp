@@ -1871,6 +1871,25 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // paste issue::create into attachments: what a pasted or dropped file makes.
+                        if (at_word("paste") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            canvas.paste_where = peek().where;
+                            canvas.paste = parse_qualified_name("the command a pasted file makes a card by, like issue::create");
+                            if (!at_word("into")) fail_expecting("into and the field the file goes in, like into attachments");
+                            advance();
+                            canvas.paste_into = expect(token_kind::identifier, "the field the file goes in, like attachments").text;
+                            end_line();
+                            continue;
+                        }
+                        // picture attachments: the field whose first image a card shows.
+                        if (at_word("picture") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::newline || peek(2).kind == token_kind::right_brace)) {
+                            advance();
+                            canvas.picture_where = peek().where;
+                            canvas.picture = advance().text;
+                            end_line();
+                            continue;
+                        }
                         // resize stage::update: the command a region's new width is sent to.
                         if (at_word("resize") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();

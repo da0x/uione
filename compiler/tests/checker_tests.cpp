@@ -1644,3 +1644,14 @@ TEST_CASE("the header's navigation names namespaces that are there") {
     CHECK(only_error(pages + "header {\n\tnavigation guides\n}\n").message == "there's no namespace guides for the top bar to list");
     CHECK(only_error(pages + "header {\n\tnavigation docs docs\n}\n").message == "docs is in the top bar's order twice");
 }
+
+// What a pasted file makes is a card of the canvas's own kind, the file in a file field.
+TEST_CASE("a canvas's paste makes its own cards, into a file field") {
+    const std::string cards = "entity note {\n\ttitle  text\n\tfiles  list of file\n\tx  number\n\ty  number\n\tw  number\n\th  number\n}\n"
+                              "entity other {\n\ttitle  text\n}\ncommand note::create\ncommand other::create\n"
+                              "view wall public {\n\tnotes = each note {\n\t\ttitle  files  x  y  w  h\n\t}\n}\n";
+    auto canvas = [&](const std::string& lines) { return cards + "screen \"Wall\" /wall {\n\tcanvas wall.notes {\n" + lines + "\t\ttitle\n\t}\n}\n"; };
+    CHECK(check_source(canvas("\t\tpaste note::create into files\n\t\tpicture files\n")).empty());
+    CHECK(only_error(canvas("\t\tpaste other::create into files\n")).message == "a canvas's cards are notes, so a pasted file makes one by note::create");
+    CHECK(only_error(canvas("\t\tpaste note::create into title\n")).message == "note.title holds what's pasted, so it's a file, or a list of file");
+}

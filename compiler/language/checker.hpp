@@ -3290,6 +3290,25 @@ namespace one::language {
                 if (!canvas.over.parts.empty()) named_list(ns, canvas.over, canvas.over_list, route);
             }
             if (canvas.grid < 0) error(canvas.grid_where, "a grid's step is more than nothing, like grid 160");
+            auto file_field = [&](const std::string& name, location where, const std::string& what) -> const field* {
+                const field* f = find_field(*card, name);
+                if (!f) error(where, "entity " + card->name + " has no field " + name + nearest(name, field_names(*card)));
+                else if (!f->type || f->type->text() != "file") error(where, card->name + "." + name + " " + what + ", so it's a file, or a list of file");
+                return f;
+            };
+            if (canvas.paste) {
+                verify_command_use(ns, *canvas.paste);
+                const auto& parts = canvas.paste->parts;
+                if (parts.size() < 2 || parts.back() != "create" || parts[parts.size() - 2] != card->name) {
+                    error(canvas.paste_where, "a canvas's cards are " + card->name + "s, so a pasted file makes one by " + card->name + "::create");
+                }
+                file_field(canvas.paste_into, canvas.paste_where, "holds what's pasted");
+            }
+            if (!canvas.picture.empty()) {
+                if (file_field(canvas.picture, canvas.picture_where, "is a card's picture") && !in_rows(*cards, canvas.picture)) {
+                    error(canvas.picture_where, "view " + canvas.view.text() + " has no " + canvas.picture + " in its " + *canvas.list + "; add it to the list's block");
+                }
+            }
             // Regions are over's rows, each as wide as its field says.
             if (!canvas.regions.empty() || canvas.move || canvas.resize) {
                 const view_each* bands = canvas.over.parts.empty() ? nullptr : named_list(ns, canvas.over, canvas.over_list, route);

@@ -1813,6 +1813,8 @@ export function Canvas({
   move,
   resize,
   track,
+  paste,
+  picture,
 }: {
   view: ViewState;
   list: string;
@@ -1839,13 +1841,58 @@ export function Canvas({
   move?: string; // the command a card let go in another region is moved there by
   resize?: string; // the command a region's new width is sent to
   track?: TrackSpec; // in a switch, the track above, whose pick keeps its cards
+  // A file pasted or dropped on it makes a card, by this command: the file in its
+  // field into, a list when many, named from the file in named, where it landed.
+  paste?: { command: string; into: string; many?: boolean; named?: string; given?: Record<string, unknown> };
+  picture?: string; // the field whose first image a card shows
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
   const navigate = useNavigate();
   const runner = useConfirmedRunner();
+  const store = useFiles();
   const every = rowsOf(view.data?.[list]);
+  // Where each card's picture is read from, asked once for each file.
+  const imageOf = (card: Row) => {
+    const held = picture ? card[picture] : undefined;
+    const paths = Array.isArray(held) ? held : held ? [held] : [];
+    return paths.map(String).find((path) => /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(path));
+  };
+  const [addresses, setAddresses] = useState<Record<string, string>>({});
+  const images = picture ? every.map(imageOf).filter((path): path is string => Boolean(path)) : [];
+  useEffect(() => {
+    for (const path of images) {
+      if (addresses[path] || !store) continue;
+      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+    }
+  }, [images.join("\n")]);
+  const [pasted, setPasted] = useState<string>();
+  const onFiles =
+    paste && store
+      ? async (files: File[], px: number, py: number) => {
+          setPasted(undefined);
+          const step = grid?.step || 160;
+          for (const [at, file] of files.entries()) {
+            try {
+              const path = await store.upload(file, () => {});
+              const name = file.name.replace(/\.[^.]+$/, "");
+              const fields: CommandInput = {
+                ...(paste.given ?? {}),
+                [paste.into]: paste.many ? [path] : path,
+                [x]: px + at * (step / 4),
+                [y]: py + at * (step / 4),
+                [w]: step,
+                [h]: step,
+              };
+              if (paste.named) fields[paste.named] = !name || name === "image" ? "Pasted image" : name;
+              await runner.run(paste.command, fields);
+            } catch (error) {
+              setPasted(error instanceof Error ? error.message : String(error));
+            }
+          }
+        }
+      : undefined;
   const kept = useTrack(track, every, list);
   const rows = every.filter(kept.keeps);
   const now = useNow(rows.some((card) => typeof (card.data as Record<string, unknown> | undefined)?.since === "string"));
@@ -1916,6 +1963,7 @@ export function Canvas({
         .concat(going(card, undefined, now).extra),
       tone: toneOf(card, tint),
       status: going(card, undefined, now).status,
+      picture: addresses[imageOf(card) ?? ""],
       ...box,
     };
   });
@@ -1925,6 +1973,8 @@ export function Canvas({
       status={loading}
       cards={cards}
       grid={grid}
+      error={pasted}
+      onFiles={onFiles ? (files, px, py) => void onFiles(files, px, py) : undefined}
       onPlace={
         place
           ? (id, px, py, pw, ph) => {

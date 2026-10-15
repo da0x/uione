@@ -23,11 +23,12 @@ export function Surface({
   onOpen,
   regions = [],
   onResize,
+  onFiles,
   card,
   height = 560,
   style,
   className,
-}: Pick<CanvasProps, "cards" | "grid" | "onPlace" | "onOpen" | "regions" | "onResize"> & {
+}: Pick<CanvasProps, "cards" | "grid" | "onPlace" | "onOpen" | "regions" | "onResize" | "onFiles"> & {
   className?: string; // a kit's own look, like its focus ring
   card: (card: CanvasCard, chosen: boolean) => ReactNode; // how a kit draws a card, filling its box
   height?: number;
@@ -65,6 +66,20 @@ export function Surface({
   const local = (event: { clientX: number; clientY: number }) => {
     const r = surface.current?.getBoundingClientRect();
     return { x: event.clientX - (r?.left ?? 0), y: event.clientY - (r?.top ?? 0) };
+  };
+  // Files dropped land where they're let go; pasted, where the pointer last was over
+  // it, or in the middle of what's shown. Either way in the canvas's units, snapped.
+  const pointer = useRef<{ x: number; y: number } | undefined>(undefined);
+  const landing = (at: { x: number; y: number } | undefined) => {
+    const r = surface.current?.getBoundingClientRect();
+    const seen = at && Number.isFinite(at.x) && Number.isFinite(at.y) ? at : { x: (r?.width ?? 0) / 2, y: (r?.height ?? 0) / 2 };
+    return { x: snapped((seen.x - pan.x) / zoom, grid?.x ?? 0), y: snapped((seen.y - pan.y) / zoom, grid?.y ?? 0) };
+  };
+  const filesGiven = (files: File[], at: { x: number; y: number } | undefined) => {
+    if (!onFiles || files.length === 0) return false;
+    const where = landing(at);
+    onFiles(files, where.x, where.y);
+    return true;
   };
   // Zoomed about a point of the surface, from a tenth to four times.
   const zoomAt = (to: number, at: { x: number; y: number }) => {
@@ -203,6 +218,17 @@ export function Surface({
       onPointerCancel={up}
       onWheel={wheel}
       onKeyDown={key}
+      onPointerLeave={() => (pointer.current = undefined)}
+      onPointerMoveCapture={(e) => (pointer.current = local(e))}
+      onDragOver={(e) => {
+        if (onFiles && e.dataTransfer.types.includes("Files")) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (filesGiven(Array.from(e.dataTransfer.files), local(e))) e.preventDefault();
+      }}
+      onPaste={(e) => {
+        if (filesGiven(Array.from(e.clipboardData.files), pointer.current)) e.preventDefault();
+      }}
       style={{ display: "block", touchAction: "none", cursor: held.current && !held.current.card ? "grabbing" : "grab", ...style }}
     >
       {/* The grid's points, while they're far enough apart to read. */}

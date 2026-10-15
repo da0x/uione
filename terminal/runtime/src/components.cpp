@@ -540,10 +540,37 @@ namespace one::terminal::runtime {
 		}
 		std::vector<terminal::view> parts;
 		if (auto note = filter_note(p); note.get()) parts.push_back(std::move(note));
-		parts.push_back(terminal::surface(std::move(items), std::move(options)));
+		// p asks for a file's path, typed or pasted, and makes a card of it, as a form's
+		// file field takes one in a terminal.
+		auto pasting = p.kept<bool>("canvas:pasting", false);
+		auto path = p.kept<std::string>("canvas:path", "");
+		auto surface = terminal::surface(std::move(items), std::move(options));
+		if (!spec.paste.empty()) {
+			surface = std::move(surface).on_key([pasting](const key_press& e) {
+				if (!e.is('p')) return false;
+				pasting.set(true);
+				return true;
+			});
+		}
+		parts.push_back(std::move(surface));
+		if (pasting.get()) {
+			auto put = [&p, spec, pasting, path, origin = std::pair{model.origin_x, model.origin_y}] {
+				if (paste_on_canvas(p, spec, path.peek(), origin.first, origin.second)) path.set("");
+				pasting.set(false);
+			};
+			parts.push_back(terminal::row(quiet("File"), terminal::field(path, {.placeholder = "its path, or paste it", .on_submit = put}).grow(),
+			                              terminal::button("Put it on the board", put))
+			                    .spacing(1)
+			                    .on_key([pasting](const key_press& e) {
+				                    if (!e.is(keys::escape)) return false;
+				                    pasting.set(false);
+				                    return true;
+			                    }));
+		}
 		parts.push_back(quiet(model.placing ? (model.regions.empty() ? "n chooses a card, the arrows move it and Shift resizes it; Enter opens it. + and − zoom."
 		                                                              : "n chooses a card, the arrows move it, into another column to move it there, and Shift resizes it; < and > narrow or widen its column. Enter opens it.")
 		                                    : "n chooses a card and Enter opens it; the arrows look around. + and − zoom."));
+		if (!spec.paste.empty() && !pasting.get()) parts.push_back(quiet("p puts a file on the board, by its path."));
 		return terminal::column(std::move(parts)).spacing(1);
 	}
 

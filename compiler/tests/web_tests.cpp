@@ -1843,3 +1843,45 @@ screen "Shelves" /shelves {
     CAPTURE(screens->content);
     CHECK(screens->content.find(R"({ view: shelves, list: "rows", label: "Shelves")") != std::string::npos);
 }
+
+// A file pasted or dropped on a canvas makes a card as a create form on its screen
+// would, and a card shows the first image its picture field holds.
+TEST_CASE("a canvas makes cards of files pasted on it, and shows their pictures") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-canvas-paste";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(), R"(entity wall {
+	title  text  required
+}
+entity note {
+	wall   wall  required
+	title  text  required
+	files  list of file
+	x  number
+	y  number
+	w  number
+	h  number
+}
+command note::create
+view wall_page per wall public {
+	title
+	notes = each note in wall {
+		title  files  x  y  w  h
+	}
+}
+screen "Wall" /walls/:wall {
+	canvas wall_page.notes {
+		paste note::create into files
+		picture files
+		title
+	}
+}
+)");
+    auto generated = generate_at(dir.string());
+    fs::remove_all(dir);
+    const auto* screens = find(generated, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    CAPTURE(screens->content);
+    CHECK(screens->content.find(R"(paste={{ command: "note::create", into: "files", many: true, named: "title", given: { wall: wallId } }} picture="files")") != std::string::npos);
+}

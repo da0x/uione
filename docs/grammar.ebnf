@@ -250,7 +250,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_bl
                  | "canvas" qualified "." NAME ("by" NAME ("over" qualified "." NAME)?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? canvas_line* "}")? END
 pipeline_line  ::= (("lanes" | "path" | "status") "by" NAME | column+) END
 canvas_line    ::= ("place" qualified | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "kind" NAME | "grid" NUMBER ("from" NUMBER NUMBER)?
-                    | "regions" "by" NAME | "move" qualified ("along" qualified "." NAME)? | "resize" qualified | column+) END
+                    | "regions" "by" NAME | "move" qualified ("along" qualified "." NAME)? | "resize" qualified
+                    | "paste" qualified "into" NAME | "picture" NAME | column+) END
 cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | column+) END
 board_line     ::= ("move" qualified ("along" qualified "." NAME)? | "chime" "when" NAME "has" NAME | "status" "by" NAME | "tint" "by" NAME | "reorder" NAME | track | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
