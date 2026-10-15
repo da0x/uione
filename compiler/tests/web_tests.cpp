@@ -1705,6 +1705,8 @@ screen "Desk" /desk {
     const auto* screens = find(generated, "src/screens/main.tsx");
     REQUIRE(screens != nullptr);
     CAPTURE(screens->content);
-    CHECK(screens->content.find(R"({desk.status === "live" && (((desk.data?.["logged"] ?? null) > 0)) && (<>)") != std::string::npos);
+    // A view's values aren't typed, so tsc refuses a bare > on one.
+    CHECK(screens->content.find(R"({desk.status === "live" && ((ordered((desk.data?.["logged"] ?? null)) > ordered(0))) && (<>)") != std::string::npos);
+    CHECK(screens->content.find("ordered") < screens->content.find("export"));
     CHECK(screens->content.find("<Section title=\"Log\">") != std::string::npos);
 }

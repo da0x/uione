@@ -802,10 +802,16 @@ namespace one::generators {
                     return "listHas(" + condition_of(parts, ns, *binary->left, read) + ", " + condition_of(parts, ns, *binary->right, read) + ")";
                 }
                 if (auto other = against_none(parts, *binary)) return none_test(*binary, condition_of(parts, ns, **other, read));
+                // A view's values aren't typed, so an order is taken as the timeline's is:
+                // logged > 0 is (ordered(…logged…) > ordered(0)), and none is before everything.
+                if (binary->op == token_kind::less || binary->op == token_kind::greater ||
+                    binary->op == token_kind::less_equal || binary->op == token_kind::greater_equal) {
+                    parts.components.insert("ordered");
+                    std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<=" : ">=";
+                    return "(ordered(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " ordered(" + condition_of(parts, ns, *binary->right, read) + "))";
+                }
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
-                               : binary->op == token_kind::logical_and ? "&&" : binary->op == token_kind::logical_or ? "||"
-                               : binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">"
-                               : binary->op == token_kind::less_equal ? "<=" : ">=";
+                               : binary->op == token_kind::logical_and ? "&&" : "||";
                 return "(" + condition_of(parts, ns, *binary->left, read) + " " + op + " " + condition_of(parts, ns, *binary->right, read) + ")";
             }
             if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + condition_of(parts, ns, *unary->operand, read);
