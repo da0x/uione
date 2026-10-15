@@ -425,7 +425,7 @@ export const radix: ComponentSet = {
         {/* The title, and a screen's own buttons at the end of its row. */}
         <div className={`flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>
           {/* The title, and under it what the screen says about itself, like a project's summary. */}
-          <div className="mr-auto flex min-w-0 flex-col gap-1">
+          <div className="mr-auto flex min-w-0 max-w-3xl flex-col gap-1">
             {title !== name && <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
             {subtitle}
           </div>

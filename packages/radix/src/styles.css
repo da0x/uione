@@ -311,7 +311,7 @@
      and sections centered, the text justified, and a fleuron where it breaks. */
   .one-prose.one-document {
     font-family: var(--font-document, "Libre Caslon Text", Georgia, serif);
-    font-size: 1.0625rem;
+    font-size: 1rem;
     line-height: 1.7;
     hyphens: auto;
   }
@@ -328,7 +328,7 @@
     text-wrap: balance;
   }
   .one-prose.one-document h1 {
-    font-size: 2.125rem;
+    font-size: 2rem;
     font-weight: 400;
     line-height: 1.2;
     margin: 0 0 0.75rem;
@@ -341,14 +341,14 @@
     margin-bottom: 2rem;
   }
   .one-prose.one-document h2 {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 400;
     font-variant-caps: all-small-caps;
     letter-spacing: 0.09em;
     margin: 3rem 0 1rem;
   }
   .one-prose.one-document h3 {
-    font-size: 1.0625rem;
+    font-size: 1rem;
     font-weight: 700;
     margin: 2.25rem 0 0.75rem;
   }
