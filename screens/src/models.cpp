@@ -1005,6 +1005,137 @@ namespace one::screens {
 		return s % 86400 / 3600 ? std::format("{}d {}h", s / 86400, s % 86400 / 3600) : std::format("{}d", s / 86400);
 	}
 
+	value value_at(const value& record, const std::string& path) {
+		if (!record.is_map()) return value();
+		if (const value* whole = record.find(path)) return *whole;
+		value at = record;
+		std::size_t from = 0;
+		while (from <= path.size()) {
+			auto dot = path.find('.', from);
+			std::string part = path.substr(from, dot == std::string::npos ? std::string::npos : dot - from);
+			const value* next = at.is_map() ? at.find(part) : nullptr;
+			if (!next) return value();
+			at = *next;
+			if (dot == std::string::npos) break;
+			from = dot + 1;
+		}
+		return at;
+	}
+
+	std::string read_value(double v, const std::string& unit) {
+		if (unit == "percent") return std::format("{}%", static_cast<long long>(std::llround(v)));
+		if (unit == "bytes" || unit == "rate") {
+			static const char* names[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"};
+			std::size_t at = 0;
+			double n = std::max(0.0, v);
+			while (n >= 1024 && at + 1 < std::size(names)) n /= 1024, ++at;
+			std::string shown = at == 0 || n >= 100 ? std::to_string(std::llround(n)) : std::format("{:.1f}", n);
+			if (shown.ends_with(".0")) shown.resize(shown.size() - 2);
+			return shown + " " + names[at] + (unit == "rate" ? "/s" : "");
+		}
+		if (v == std::floor(v)) return std::to_string(static_cast<long long>(v));
+		return std::format("{:.1f}", v);
+	}
+
+	double scale_top(const std::vector<double>& values, const std::string& unit) {
+		if (unit == "percent") return 100;
+		double highest = 0;
+		for (double v : values) highest = std::max(highest, v);
+		if (highest <= 0) return 1;
+		bool binary = unit == "bytes" || unit == "rate";
+		double base = binary ? 1024 : 10, power = 1;
+		while (power * base <= highest) power *= base;
+		static const double binary_steps[] = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024};
+		static const double decimal_steps[] = {1, 2, 5, 10};
+		if (binary) {
+			for (double step : binary_steps) if (power * step >= highest) return power * step;
+		} else {
+			for (double step : decimal_steps) if (power * step >= highest) return power * step;
+		}
+		return power * base;
+	}
+
+	std::string tone_of_state(const std::string& word) {
+		std::string w;
+		for (char c : word) w += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		if (w == "working" || w == "busy" || w == "running") return "working";
+		if (w == "standby" || w == "waiting" || w == "paused") return "waiting";
+		if (w == "idle" || w == "ready" || w == "success" || w == "done" || w == "live" || w == "online") return "success";
+		if (w == "stopped" || w == "failed" || w == "error" || w == "crashed") return "failed";
+		return "inactive";
+	}
+
+	chart_model chart_of(const std::string& title, const value& numbers, const std::string& unit) {
+		chart_model out{.title = title, .unit = unit};
+		if (numbers.is_array()) {
+			for (const auto& n : numbers.as_array()) {
+				if (n.is_integer() || n.is_double()) out.values.push_back(n.as_double());
+			}
+		} else if (numbers.is_integer() || numbers.is_double()) {
+			out.values.push_back(numbers.as_double());
+		}
+		out.top = scale_top(out.values, unit);
+		out.latest = out.values.empty() ? "–" : read_value(out.values.back(), unit);
+		out.top_said = read_value(out.top, unit);
+		return out;
+	}
+
+	std::vector<chart_model> charts_of(page_base&, const chart_spec& spec) {
+		const view_state& v = *spec.view;
+		std::vector<chart_model> out;
+		for (const auto& line : spec.series) out.push_back(chart_of(line.title, v.status == status::ready ? value_at(v.data, line.path) : value(), line.unit));
+		return out;
+	}
+
+	monitor_model monitor_of(page_base& p, const monitor_spec& spec) {
+		monitor_model out;
+		const view_state& v = *spec.view;
+		out.loading = v.status == status::loading;
+		auto now = p.now();
+		auto time_of = [](const value& t) -> std::optional<std::chrono::sys_seconds> {
+			if (t.is_time()) return std::chrono::floor<std::chrono::seconds>(t.as_time());
+			if (!t.is_string()) return std::nullopt;
+			std::chrono::sys_seconds at;
+			std::istringstream in(t.as_string());
+			if (in >> std::chrono::parse("%FT%T", at)) return at;
+			return std::nullopt;
+		};
+		for (const auto& row : rows_of(v, spec.list)) {
+			monitor_tile tile;
+			tile.id = row["id"].as_string();
+			tile.title = show(value_at(row, spec.title));
+			if (tile.title.empty()) tile.title = tile.id;
+			tile.address = spec.link.empty() ? "" : row_link(spec.link, row, p.params(), spec.keyed, spec.named);
+			std::string word = show(value_at(row, spec.status));
+			bool gone = false;
+			if (!spec.seen.empty() && spec.seen_seconds > 0) {
+				auto heard = time_of(value_at(row, spec.seen));
+				gone = !heard || now - *heard > std::chrono::seconds(spec.seen_seconds);
+			}
+			if (gone) {
+				tile.state = "Offline", tile.tone = "inactive";
+			} else {
+				auto found = std::ranges::find_if(spec.choices, [&](const option& o) { return o.value == word; });
+				tile.state = found != spec.choices.end() ? found->label : word;
+				if (!tile.state.empty()) tile.state[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(tile.state[0])));
+				if (tile.state.empty()) tile.state = "Unknown";
+				tile.tone = tone_of_state(word);
+				if (!spec.since.empty()) {
+					if (auto began = time_of(value_at(row, spec.since))) tile.since = running_time(now - *began);
+				}
+				if (!spec.doing.empty()) tile.doing = show(value_at(row, spec.doing));
+				if (!spec.step.empty()) {
+					value at = value_at(row, spec.step), of = value_at(row, spec.steps);
+					bool numbers = (at.is_integer() || at.is_double()) && (of.is_integer() || of.is_double());
+					if (numbers && of.as_double() > 0) tile.progress = std::pair{std::clamp(at.as_double(), 0.0, of.as_double()), of.as_double()};
+				}
+			}
+			for (const auto& c : spec.charts) tile.charts.push_back(chart_of(c.title, gone ? value() : value_at(row, c.path), c.unit));
+			out.tiles.push_back(std::move(tile));
+		}
+		return out;
+	}
+
 	namespace {
 		std::string switch_memory(page_base& p, const std::string& id) {
 			std::string address = p.address();
@@ -1040,6 +1171,11 @@ namespace one::screens {
 		bool held = !holder.empty() && until.is_time() && until.as_time() > std::chrono::system_clock::now();
 		shown.status = !status_words(said).empty() ? said : held ? "working" : named(column_status);
 		if (!data.is_map()) return;
+		// How far it is in its stage, as its holder says: step 2 of 5.
+		const value &step = data["step"], &steps = data["steps"];
+		if ((step.is_integer() || step.is_double()) && (steps.is_integer() || steps.is_double()) && steps.as_double() > 0) {
+			shown.progress = std::pair{std::clamp(step.as_double(), 0.0, steps.as_double()), steps.as_double()};
+		}
 		if (std::string runner = show(data["runner"]); !runner.empty()) shown.runner = "runner " + runner;
 		std::string since = show(data["since"]);
 		std::chrono::sys_seconds started;
@@ -1123,7 +1259,7 @@ namespace one::screens {
 			}
 			board_card dot;
 			status_of(p, card, here ? here->status : "", dot);
-			row.status = dot.status, row.running = dot.running, row.runner = dot.runner;
+			row.status = dot.status, row.running = dot.running, row.runner = dot.runner, row.progress = dot.progress;
 			const value& data = card["data"];
 			if (data.is_map()) row.note = show(data["note"]);
 			// What it waits on that hasn't succeeded keeps it waiting, saying on what.
@@ -1262,7 +1398,7 @@ namespace one::screens {
 			if (!spec.link.empty()) card.link = row_link(spec.link, row, p.params(), spec.keyed, spec.named);
 			board_card dot;
 			status_of(p, row, "", dot);
-			card.status = dot.status, card.running = dot.running, card.runner = dot.runner;
+			card.status = dot.status, card.running = dot.running, card.runner = dot.runner, card.progress = dot.progress;
 			if (auto w = number_of(field_of(row, spec.w)); w && *w > 0) card.w = *w;
 			if (auto h = number_of(field_of(row, spec.h)); h && *h > 0) card.h = *h;
 			auto x = number_of(field_of(row, spec.x)), y = number_of(field_of(row, spec.y));

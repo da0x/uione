@@ -94,6 +94,7 @@ namespace one::desktop::runtime {
 				}
 				for (auto& d : long_details) inside.push_back(std::move(d));
 				if (!details.empty()) inside.push_back(desktop::flow(std::move(details)).spacing(6));
+				if (card.progress) inside.push_back(progress_bar(card.progress->first, card.progress->second, 120));
 				if (!people.empty()) inside.push_back(desktop::row(std::move(people)).spacing(4));
 				std::vector<desktop::view> shown;
 				auto tone = tone_color(card.tone);

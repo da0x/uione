@@ -85,6 +85,11 @@ namespace uione {
 				for (const auto& [name, item] : v.as_map()) out += (out.empty() ? "" : ",") + json(name) + ":" + json(item);
 				return "{" + out + "}";
 			}
+			if (v.is_array()) {
+				std::string out;
+				for (const auto& item : v.as_array()) out += (out.empty() ? "" : ",") + json(item);
+				return "[" + out + "]";
+			}
 			return "null";
 		}
 		inline std::string json(const std::vector<std::string>& list) {

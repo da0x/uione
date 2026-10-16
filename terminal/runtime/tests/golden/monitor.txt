@@ -1,0 +1,20 @@
+ neotrac
+────────────────────────────────────────────────────────────────────────────────
+
+  Agents
+
+  ▸ ● npm: Publishing                                               Working 1m
+    #12 @uione/react 0.16.0: Uploading
+    ■■■■■■■■■■■■■■■■■■■■ 3/5
+    CPU            64%   Memory     610 MiB
+                   ⢠⣠⣆                    ⢀
+    ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣠⣿⣿⣿   ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣶⣿⣿
+    ● sites: Deploying                                                 Offline
+    Not running
+    CPU              –   Memory           –
+
+    ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀   ⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀
+
+
+
+ tab moves   enter opens   q quits

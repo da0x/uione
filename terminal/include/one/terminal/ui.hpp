@@ -314,6 +314,10 @@ namespace one::terminal {
 	view meter(std::vector<meter_part> parts);
 	// The look of a meter's nth part: the accent, fading as btop's gradients do.
 	style meter_look(std::size_t nth);
+	// A run of numbers, newest at the right, as btop draws one: braille dots, two
+	// samples a cell across and four steps a cell up, filled below each sample, `rows`
+	// cells high, out of `top`, in the look given.
+	view graph(std::vector<double> values, double top, int rows, style look);
 
 	// The app: a view built and drawn when a state it read changes or a key's
 	// pressed, keys given to what has focus, and work handed in from other threads.

@@ -196,6 +196,41 @@ namespace one::screens {
 	// The row a table's action asks about, as a view's document for its form.
 	state<view_state> acted_on(page_base& p, const std::string& list, const std::string& command, const value& row);
 
+	// A chart: a run of numbers, newest last, the top of its scale, and how they read.
+	struct chart_model {
+		std::string title;
+		std::vector<double> values = {};
+		double top = 1;
+		std::string latest = "", top_said = "", unit = "";
+	};
+	// A field of a record by its path: a joined field whole, like assignee.name, and
+	// otherwise a name within a field of data, like stats.cpu.
+	value value_at(const value& record, const std::string& path);
+	// A value as it reads: 42%, 1.5 GiB, 3.2 MiB/s, or 12.5.
+	std::string read_value(double v, const std::string& unit);
+	// The top of a chart's scale: 100 for a percent, else the least round number at or
+	// above its highest value.
+	double scale_top(const std::vector<double>& values, const std::string& unit);
+	// What a status word says, as a dot: working, waiting, success, inactive or failed.
+	std::string tone_of_state(const std::string& word);
+	chart_model chart_of(const std::string& title, const value& numbers, const std::string& unit);
+	std::vector<chart_model> charts_of(page_base& p, const chart_spec& spec);
+
+	struct monitor_tile {
+		std::string id = "", title = "", address = "";
+		std::string state = "", tone = "";  // Working, and its dot
+		std::string since = "", doing = "";
+		std::optional<std::pair<double, double>> progress = std::nullopt;  // step, of steps
+		std::vector<chart_model> charts = {};
+	};
+	struct monitor_model {
+		bool loading = false;
+		std::vector<monitor_tile> tiles;
+	};
+	// Its tiles, each record's status, offline once it's gone unheard for seen's
+	// seconds, read again each second as the page's time moves.
+	monitor_model monitor_of(page_base& p, const monitor_spec& spec);
+
 	// A switch's pick on a page: the person's own, kept while the page is open, and
 	// first the one remembered from the last time they were here, by its name, so a
 	// board opens as it was left, even after the app is started again.
@@ -216,6 +251,7 @@ namespace one::screens {
 		// nothing; for how long, like 4m; and which runner is on it, like runner 2.
 		std::string status, running, runner;
 		std::vector<std::string> reaches = {};  // the columns it may be moved to, for one of the reader's roles
+		std::optional<std::pair<double, double>> progress = std::nullopt;  // how far in its stage, as its holder says: step, of steps
 	};
 
 	// How a status is said in words, for a dot's title and for screen readers.
@@ -264,6 +300,7 @@ namespace one::screens {
 		std::vector<pipeline_step> steps;
 		std::string status, running, runner;  // its dot, as a board's card says it
 		std::string note;                     // what its holder last said, like waiting on the packages
+		std::optional<std::pair<double, double>> progress = std::nullopt;  // how far in its stage: step, of steps
 	};
 	struct pipeline_lane {
 		std::string title;
@@ -285,6 +322,7 @@ namespace one::screens {
 		double x = 0, y = 0, w = 150, h = 150;
 		bool placed = false;  // whether its row says where it is, or it's laid out
 		std::string status, running, runner;
+		std::optional<std::pair<double, double>> progress = std::nullopt;  // how far in its stage: step, of steps
 	};
 	struct canvas_region {
 		std::string id, title;

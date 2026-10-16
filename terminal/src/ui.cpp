@@ -1002,6 +1002,51 @@ namespace one::terminal {
 			std::vector<meter_part> parts_;
 		};
 
+		class graph_element : public element {
+		public:
+			graph_element(std::vector<double> values, double top, int rows, style look) : values_(std::move(values)), top_(top > 0 ? top : 1), rows_(std::max(1, rows)), look_(look) {}
+			extent measure_content(int width) override { return {std::max(1, width), rows_}; }
+			void paint_content(canvas& c) override {
+				area a = inner();
+				if (a.width <= 0) return;
+				// Each cell is two samples across, the newest at the right edge, and four
+				// dots up; a sample fills its column from the bottom to its value.
+				int samples = a.width * 2, levels = a.height * 4;
+				std::vector<int> filled(static_cast<std::size_t>(samples), 0);
+				std::size_t shown = std::min<std::size_t>(values_.size(), static_cast<std::size_t>(samples));
+				for (std::size_t i = 0; i < shown; ++i) {
+					double v = values_[values_.size() - shown + i];
+					int dots = static_cast<int>(std::lround(std::clamp(v / top_, 0.0, 1.0) * levels));
+					if (v > 0 && dots == 0) dots = 1;  // anything at all shows
+					filled[static_cast<std::size_t>(samples) - shown + i] = dots;
+				}
+				static constexpr int left[] = {0x40, 0x04, 0x02, 0x01}, right[] = {0x80, 0x20, 0x10, 0x08};  // bottom dot first
+				for (int row = 0; row < a.height; ++row) {
+					int below = (a.height - 1 - row) * 4;  // dots under this row
+					for (int cell = 0; cell < a.width; ++cell) {
+						int bits = 0;
+						for (int d = 0; d < 4; ++d) {
+							if (filled[static_cast<std::size_t>(cell * 2)] > below + d) bits |= left[d];
+							if (filled[static_cast<std::size_t>(cell * 2 + 1)] > below + d) bits |= right[d];
+						}
+						if (bits == 0) {
+							if (row == a.height - 1) c.put(a.y + row, a.x + cell, "⣀", {.dim = true, .foreground = color::bright_black});  // its floor
+							continue;
+						}
+						int point = 0x2800 + bits;
+						std::string dot{static_cast<char>(0xE0 | (point >> 12)), static_cast<char>(0x80 | ((point >> 6) & 0x3F)), static_cast<char>(0x80 | (point & 0x3F))};
+						c.put(a.y + row, a.x + cell, dot, look_);
+					}
+				}
+			}
+
+		private:
+			std::vector<double> values_;
+			double top_;
+			int rows_;
+			style look_;
+		};
+
 		class chosen_element : public element {
 		public:
 			chosen_element(std::string shown, bool placeholder, state<bool> open) : shown_(std::move(shown)), placeholder_(placeholder), open_(std::move(open)) {}
@@ -1188,6 +1233,7 @@ namespace one::terminal {
 		return made<radio_element>(std::move(chosen), std::move(options), std::move(on_pick));
 	}
 	view slider(state<std::string> value, number_range range) { return made<slider_element>(std::move(value), range); }
+	view graph(std::vector<double> values, double top, int rows, style look) { return made<graph_element>(std::move(values), top, rows, look); }
 	view meter(std::vector<meter_part> parts) { return made<meter_element>(std::move(parts)); }
 	style meter_look(std::size_t nth) {
 		// The accent and its lighter shade, each then dimmed: four steps, as the web's

@@ -12,6 +12,8 @@
 
 #include "generators/native.hpp"
 #include "language/checker.hpp"
+#include <filesystem>
+
 #include "language/parser.hpp"
 #include "platform/files.hpp"
 
@@ -110,6 +112,40 @@ TEST_CASE("every line of a native app knows where it came from") {
             }
         }
     }
+}
+
+TEST_CASE("a monitor and charts are written for the desktop and the terminal alike") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-native-monitor";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
+                         "enum agent_status {\n\tworking \"Working\"\n\tidle \"Idle\"\n}\n"
+                         "entity agent {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tstatus  agent_status\n\tsince  date\n"
+                         "\tdoing  text\n\tstep  number\n\tsteps  number\n\tseen_at  date\n\tstats  data\n}\n"
+                         "view agents per project {\n\tname\n\tagents = each agent in project {\n\t\ttitle  status  since  doing  step  steps  seen_at  stats\n\t}\n}\n"
+                         "view agent_page per agent {\n\ttitle\n\tstats\n}\n"
+                         "screen \"Agents\" /:project/agents {\n\tmonitor agents.agents link /:project/agents/:agent {\n\t\tstatus status\n\t\tsince since\n"
+                         "\t\tdoing doing\n\t\tprogress step of steps\n\t\tseen seen_at 30\n\t\tchart stats.cpu \"CPU\" percent\n\t}\n}\n"
+                         "screen \"Agent\" /:project/agents/:agent {\n\tchart agent_page.stats.cpu \"CPU\" percent\n"
+                         "\tcharts agent_page {\n\t\tstats.memory \"Memory\" bytes\n\t\tstats.sent \"Out\" rate\n\t}\n}\n"
+                         "}\n");
+    language::diagnostics out;
+    std::vector<language::file> parsed;
+    for (const auto& path : platform::find_one_files({dir.string()})) parsed.push_back(language::parse(path, *platform::read_file(path), out));
+    language::check(parsed, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto files = generators::generate_native(parsed, dir.string(), "terminal");
+    const auto* screens = find(files, "src/screens/main.cpp");
+    REQUIRE(screens != nullptr);
+    const auto& cpp = screens->content;
+    CHECK(cpp.find(R"(monitor(p, {.view = agents, .list = "agents", .title = "title", .status = "status", .doing = "doing", .since = "since", .step = "step", )"
+                   R"(.steps = "steps", .seen = "seen_at", .seen_seconds = 30, .charts = {chart_line{"stats.cpu", "CPU", "percent"}}, .link = "/:project/agents/:agent")") !=
+          std::string::npos);
+    CHECK(cpp.find(R"(chart(p, {.view = agent_page, .series = {chart_line{"stats.memory", "Memory", "bytes"}, chart_line{"stats.sent", "Out", "rate"}}}))") != std::string::npos);
+    fs::remove_all(dir);
 }
 
 TEST_CASE("a row's when and what roles allow are written as C++") {

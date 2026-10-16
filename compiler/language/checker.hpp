@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdio>
 #include <initializer_list>
+#include <functional>
 #include <map>
 #include <optional>
 #include <regex>
@@ -2966,6 +2967,10 @@ namespace one::language {
                     verify_pipeline(ns, *pipeline, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
                     verify_cards(ns, *cards, route);
+                } else if (auto* chart = std::get_if<chart_item>(&item.node)) {
+                    verify_chart(ns, *chart, route);
+                } else if (auto* monitor = std::get_if<monitor_item>(&item.node)) {
+                    verify_monitor(ns, *monitor, route);
                 } else if (auto* link = std::get_if<content_link>(&item.node)) {
                     this->link(ns, route, *link, item.where);
                 } else if (auto* text = std::get_if<content_text>(&item.node);
@@ -3355,6 +3360,59 @@ namespace one::language {
         // cards project_page.boards link /:project/boards/:board { ... }: the rows hold
         // what the cards show; a tally counts a list's rows by a field naming the card
         // and another; a filter is one of the cards' rows' fields and the value it holds.
+        // A chart's series: a value the view reads, its numbers, or data holding them by
+        // name; and a unit it knows.
+        void verify_series(const chart_series& series, const std::function<bool(const std::string&)>& reads, const std::string& view) {
+            if (series.path.empty()) return;
+            // A field of data holds its names, like stats.cpu; any other is read whole.
+            std::string first = series.path[0];
+            if (!reads(series.text()) && !reads(first)) error(series.where, "view " + view + " has no " + first + "; add it to the view");
+            if (series.path.size() > 2) error(series.where, "a chart's numbers are a field, or a name in a field of data, like stats.cpu");
+            if (series.title.empty()) error(series.where, "a chart has a title, like \"CPU\"");
+        }
+
+        // chart agent_page.stats.cpu "CPU" percent: the view is shown on the page, and
+        // reads the field.
+        void verify_chart(const std::string& ns, const chart_item& chart, const std::string& route) {
+            snake(chart.view);
+            const view_declaration* view = find(ns, chart.view, &scope::views);
+            if (!view) {
+                error(chart.view.where, "there's no view " + chart.view.text() + " for this chart " + in_namespace(ns));
+                return;
+            }
+            verify_shown(*view, chart.view.text(), route, chart.view.where);
+            if (chart.series.empty()) error(chart.view.where, "charts draw one or more runs of numbers, a line each, like stats.cpu \"CPU\" percent");
+            for (const auto& series : chart.series) {
+                verify_series(series, [&](const std::string& key) {
+                    return std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == key; });
+                }, chart.view.text());
+            }
+        }
+
+        // monitor agents_page.agents { status status ... }: each field it shows is in the
+        // list, and a tile's link goes to a screen there is.
+        void verify_monitor(const std::string& ns, const monitor_item& monitor, const std::string& route) {
+            const view_each* rows = named_list(ns, monitor.view, monitor.list, route);
+            if (!rows) return;
+            auto has = [&](const std::string& key, location where) {
+                if (!key.empty() && !in_rows(*rows, key)) error(where, "view " + monitor.view.text() + " has no " + key + " in its " + monitor.list + "; add it to the list's block");
+            };
+            has(monitor.title, monitor.title_where);
+            if (monitor.status.empty()) error(monitor.view.where, "a monitor says how each is with status and its field, like status status");
+            has(monitor.status, monitor.status_where);
+            has(monitor.doing, monitor.doing_where);
+            has(monitor.since, monitor.since_where);
+            has(monitor.step, monitor.progress_where);
+            has(monitor.steps, monitor.progress_where);
+            has(monitor.seen, monitor.seen_where);
+            if (!monitor.seen.empty() && monitor.seen_seconds <= 0) error(monitor.seen_where, "after how many seconds unheard it's offline, more than none, like seen seen_at 15");
+            for (const auto& series : monitor.charts) verify_series(series, [&](const std::string& key) { return in_rows(*rows, key); }, monitor.view.text());
+            if (monitor.charts.size() > 4) error(monitor.charts[4].where, "a tile has four charts at most; its page shows the rest");
+            if (monitor.link && !routes_.contains(full_route(ns, *monitor.link))) {
+                error(monitor.link_where, "there's no screen at " + full_route(ns, *monitor.link) + " for these tiles to open");
+            }
+        }
+
         void verify_cards(const std::string& ns, const cards_item& cards, const std::string& route) {
             const view_each* rows = named_list(ns, cards.view, cards.list.value_or(""), route);
             if (!rows) return;

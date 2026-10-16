@@ -66,6 +66,7 @@ namespace one::desktop::runtime {
 				std::vector<desktop::view> line;
 				line.push_back(desktop::row(std::move(named)).spacing(8).align(align::center).width(280));
 				line.push_back(desktop::flow(std::move(chips)).spacing(3).grow());
+				if (row.progress) line.push_back(progress_bar(row.progress->first, row.progress->second, 70));
 				if (!row.note.empty()) line.push_back(desktop::text(row.note, small).width(300));
 				rows.push_back({row.id, desktop::row(std::move(line)).spacing(12).align(align::center).padding(edges(0, 6))});
 			}

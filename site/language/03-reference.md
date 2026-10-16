@@ -539,7 +539,7 @@ What a field can hold, written after its name: `title  text  required`.
 | `boolean` | true or false | a checkbox |
 | `user` | a person who has signed in, by their id; a view can show their name, picture and username | their name |
 | `file` | a file someone uploaded, kept in the app's bucket, by its path, whose last part is its name; `list of file` holds several (see [Files](#files)) | a box to choose a file, uploaded as it's chosen; where it's shown, a link that opens it, and a small picture of an image |
-| `data` | named values, each text, a number, or yes or no, up to 64; what a command sends is merged in, and a null takes a name out | not asked for in forms; a workflow keeps what its holder reports in one, which a board shows as a dot and a running time |
+| `data` | named values, each text, a number, yes or no, or a list of up to 600 numbers, up to 64 names; what a command sends is merged in, and a null takes a name out | not asked for in forms; a workflow keeps what its holder reports in one, which a board shows as a dot and a running time |
 | `list of permission` | the commands a project's role allows, like `issue::create` | a box to tick for each command |
 | `list of …` | several of a type: `list of text`, `list of user`, `list of label` | each in turn |
 | `enum` | one of the choices it names, each written with its name: `status  enum open \| closed = status::open` | radio buttons for three or fewer, otherwise a list that opens |
@@ -1180,9 +1180,10 @@ command order::move {
 - A claim is taken only while no lease holds, even its own holder's: two programs
   signed in with the same key never take the same order, and one that holds it
   keeps it with `renew`.
-- `data` is named values, each text, a number, or yes or no, up to 64 of them:
-  what whoever holds it says of it with `report`, like `status`, `since` and
-  `runner`, which a board shows as a dot, a running time and who's on it. What's
+- `data` is named values, each text, a number, yes or no, or a list of up to 600
+  numbers, up to 64 of them: what whoever holds it says of it with `report`, like
+  `status`, `since`, `runner`, and `step` and `steps` for how far it is, which a
+  board shows as a dot, a running time, who's on it and a bar. What's
   reported is merged into what's there, and a null takes a name out. A move by its
   holder keeps it; anyone else's move clears it, since it no longer says how it's
   going. A role that may claim may report: no role names `report` itself.
@@ -1692,6 +1693,26 @@ form step::update "Save" {
   table's is: `cards all link /:project { name  summary }`. `hide when empty` leaves the cards out while
   there are none, or while the reader can't read them, like a project's private
   boards to someone outside it.
+- `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
+  at the right, as btop draws one: a line over a soft fill in the accent, its title,
+  its latest value, and the top of its scale. Its numbers are a field of the view, or
+  a name in a field of `data`, which holds a list of numbers as well as single
+  values. They read as they are, or as `percent` (out of 100), `bytes`, or `rate`,
+  bytes a second. `charts agent_page { stats.cpu "CPU" percent ... }` draws several
+  side by side, a line each. On the web, the value under the pointer shows; in the
+  terminal, it's drawn in braille dots.
+- `monitor agents.agents link /:project/agents/:agent { ... }` shows records whose
+  status changes from one thing to another, like agents or machines, rather than
+  moving along stages: a tile each. Its block says what a tile shows: `status
+  status`, the field saying how it is, as a dot and a word (working, standby, idle,
+  offline and stopped, and the like, each colored as a board's dots are); `since
+  since`, for how long; `doing doing`, a line of what it's doing; `progress step of
+  steps`, how far, as a bar, or btop's squares in the terminal; `seen seen_at 30`,
+  after how many seconds unheard it's shown offline, whatever it last said; `title`,
+  when it isn't `title`; and up to four `chart stats.cpu "CPU" percent`, small.
+- A card whose holder says how far it is in its stage, `step` and `steps` in its
+  `data`, shows it: a thin bar on a board, a whiteboard and a pipeline, and btop's
+  squares in the terminal.
 - A filter and a section can each have a color, so the parts of a page can be told
   apart at a glance: `filter "High priority" priority == priority::high color red`,
   `section "Wiki" color violet { ... }`. A section's heading, links and tables

@@ -86,6 +86,8 @@ namespace one::language {
         drawn_by{"cards.link", "cards' link", everywhere},
         drawn_by{"cards.tally", "cards' tally", everywhere},
         drawn_by{"cards.filter", "cards' filter", everywhere},
+        drawn_by{"chart", "chart", everywhere},
+        drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
         drawn_by{"details.tint", "details' tint by", everywhere},
         drawn_by{"form", "a form", everywhere},
@@ -243,6 +245,10 @@ namespace one::language {
                         if (n.link) use("cards.link");
                         if (n.tally) use("cards.tally");
                         if (!n.filters.empty()) use("cards.filter");
+                    } else if constexpr (std::is_same_v<T, chart_item>) {
+                        use("chart");
+                    } else if constexpr (std::is_same_v<T, monitor_item>) {
+                        use("monitor");
                     } else if constexpr (std::is_same_v<T, details_item>) {
                         use("details");
                         if (n.tint) use("details.tint");

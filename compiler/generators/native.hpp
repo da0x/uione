@@ -871,6 +871,36 @@ namespace one::generators {
             return out + "})";
         }
 
+        static std::string chart_line_of(const language::chart_series& c) {
+            return "chart_line{" + str(c.text()) + ", " + str(c.title) + (c.unit.empty() ? "" : ", " + str(c.unit)) + "}";
+        }
+
+        std::string chart(screen_parts& parts, const std::string& ns, const language::chart_item& c) {
+            std::string series;
+            for (const auto& line : c.series) series += (series.empty() ? "" : ", ") + chart_line_of(line);
+            return "chart(p, {.view = " + view_variable(parts, screens::full_view(ns, c.view.text())) + ", .series = {" + series + "}})";
+        }
+
+        std::string monitor(screen_parts& parts, const std::string& ns, const language::monitor_item& m) {
+            const language::entity_declaration* entity = model_.listed(ns, m.view.text(), std::optional<std::string>(m.list));
+            std::string out = "monitor(p, {.view = " + view_variable(parts, screens::full_view(ns, m.view.text())) + ", .list = " + str(m.list) + ", .title = " + str(m.title) +
+                              ", .status = " + str(m.status);
+            if (!m.doing.empty()) out += ", .doing = " + str(m.doing);
+            if (!m.since.empty()) out += ", .since = " + str(m.since);
+            if (!m.step.empty()) out += ", .step = " + str(m.step) + ", .steps = " + str(m.steps);
+            if (!m.seen.empty()) out += ", .seen = " + str(m.seen) + ", .seen_seconds = " + std::to_string(m.seen_seconds);
+            if (!m.charts.empty()) {
+                std::string charts;
+                for (const auto& c : m.charts) charts += (charts.empty() ? "" : ", ") + chart_line_of(c);
+                out += ", .charts = {" + charts + "}";
+            }
+            if (m.link) out += ", " + link_settings(ns, *m.link, m.view.text(), m.list);
+            for (const auto& f : (entity ? entity->fields : no_fields_)) {
+                if (f.name == m.status && !f.choices.empty()) out += ", .choices = " + options_of(screens::model::choice_options(f));
+            }
+            return out + "})";
+        }
+
         // A grid or a diagram: a cell for each pair of the over list's things, opening
         // the entry's create where there's none, and its update and delete where there's one.
         std::string between(screen_parts& parts, const std::string& ns, const language::grid_item& g, const std::vector<language::screen_item>& screen) {
@@ -1262,6 +1292,10 @@ namespace one::generators {
                     code = between(parts, ns, *g, screen);
                 } else if (auto* c = std::get_if<language::cards_item>(&item.node)) {
                     code = cards(parts, ns, *c);
+                } else if (auto* c = std::get_if<language::chart_item>(&item.node)) {
+                    code = chart(parts, ns, *c);
+                } else if (auto* m = std::get_if<language::monitor_item>(&item.node)) {
+                    code = monitor(parts, ns, *m);
                 } else if (auto* b = std::get_if<language::board_item>(&item.node)) {
                     code = board(parts, ns, *b, screen);
                 } else if (auto* c = std::get_if<language::canvas_item>(&item.node)) {

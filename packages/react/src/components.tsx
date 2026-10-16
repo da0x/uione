@@ -11,7 +11,8 @@ import type { ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { BoardCard, CanvasRegion, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
+import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
+import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { fileName, useAuth, useFiles, useRunner } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, runningTime, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1671,6 +1672,7 @@ export function Board({
               people: rest.filter((key) => people[key] !== undefined).flatMap((key) => peopleOf(card, key, people[key])),
               reaches: reaches(where(card)),
               tone: toneOf(card, tint),
+              progress: going(card, statuses[String(where(card))], now).progress,
               status: waitingOn(card).length && (!going(card, statuses[String(where(card))], now).status || going(card, statuses[String(where(card))], now).status?.is === "inactive")
                 ? { is: "waiting" as const, words: `Waiting on ${waitingOn(card).join(", ")}` }
                 : going(card, statuses[String(where(card))], now).status,
@@ -1756,6 +1758,7 @@ export function Pipeline({
         .map((key) => (numbered(key) && show(card[key]) !== "" ? `#${show(card[key])}` : cellOf(ui, links, card, key, {})))
         .filter((detail) => detail !== "")
         .concat(going(card, here?.status, now).extra),
+      progress: going(card, here?.status, now).progress,
       steps: steps
         .map((stage, i) => ({
           id: stage.id,
@@ -1963,6 +1966,7 @@ export function Canvas({
         .concat(going(card, undefined, now).extra),
       tone: toneOf(card, tint),
       status: going(card, undefined, now).status,
+      progress: going(card, undefined, now).progress,
       picture: addresses[imageOf(card) ?? ""],
       ...box,
     };
@@ -2019,7 +2023,7 @@ export { runningTime };
 
 // A card's dot, running time and runner: what its holder reported in its data, else
 // working while someone's lease on it holds, else its column's status.
-function going(card: Row, column: string | undefined, now: number): { status?: BoardCard["status"]; extra: string[] } {
+function going(card: Row, column: string | undefined, now: number): { status?: BoardCard["status"]; extra: string[]; progress?: BoardCard["progress"] } {
   const data = (card.data ?? {}) as Record<string, unknown>;
   const stated = typeof data.status === "string" ? statusOf(data.status) : undefined;
   const said = stated && statusWords[stated] ? stated : undefined;
@@ -2030,7 +2034,10 @@ function going(card: Row, column: string | undefined, now: number): { status?: B
   const extra: string[] = [];
   if (typeof data.runner === "string" && data.runner) extra.push(`runner ${data.runner}`);
   if (typeof data.since === "string" && !Number.isNaN(Date.parse(data.since))) extra.push(runningTime((now - Date.parse(data.since)) / 1000));
-  return { status: is ? { is: is as NonNullable<BoardCard["status"]>["is"], words: statusWords[is]! } : undefined, extra };
+  // How far it is in its stage, as its holder says: step 2 of 5.
+  const step = Number(data.step), steps = Number(data.steps);
+  const progress = typeof data.steps === "number" && steps > 0 && Number.isFinite(step) ? { step: Math.min(Math.max(step, 0), steps), steps } : undefined;
+  return { status: is ? { is: is as NonNullable<BoardCard["status"]>["is"], words: statusWords[is]! } : undefined, extra, progress };
 }
 
 // The time now, ticking each second while something shows a running time.
@@ -2627,5 +2634,91 @@ export function Form({
         {form}
       </ui.Dialog>
     </>
+  );
+}
+
+// What a chart shows of a run of numbers: its values, newest last, and how they read.
+function chartOf(title: string, value: unknown, unit: ChartUnit, size: ChartProps["size"]): ChartProps {
+  const values = seriesOf(value);
+  const top = scaleTop(values, unit);
+  const read = (n: number) => readValue(n, unit);
+  return { title, values, top, latest: values.length ? read(values[values.length - 1]!) : "–", topSaid: read(top), read, size };
+}
+
+// Runs of numbers on a page, like an agent's CPU use over the last two minutes:
+// chart agent_page.stats.cpu "CPU" percent, or several side by side.
+export function Chart({ view, series }: { view: ViewState; series: { path: string; title: string; unit?: ChartUnit }[] }) {
+  const ui = useUI();
+  const charts = series.map((s) => chartOf(s.title, view.status === "live" ? valueAt(view.data, s.path) : undefined, s.unit ?? "", "large"));
+  if (charts.length === 1) return <ui.Chart {...charts[0]!} />;
+  return <ui.Charts charts={charts} />;
+}
+
+// Records whose status changes, each a tile, like a project's agents: monitor
+// agents_page.agents { status status  doing doing  chart stats.cpu "CPU" percent }.
+// One not heard from within seen's seconds is offline, whatever it last said.
+export function Monitor({
+  view,
+  list,
+  link,
+  keyed,
+  named,
+  title = "title",
+  status,
+  doing,
+  step,
+  steps,
+  seen,
+  seenSeconds = 0,
+  since,
+  charts = [],
+  choices = {},
+}: {
+  view: ViewState;
+  list: string;
+  link?: string;
+  keyed?: string[];
+  named?: Record<string, number>;
+  title?: string;
+  status: string;
+  doing?: string;
+  step?: string;
+  steps?: string;
+  seen?: string;
+  seenSeconds?: number;
+  since?: string; // when its status began, for how long it's been so
+  charts?: { path: string; title: string; unit?: ChartUnit }[];
+  choices?: Record<string, Record<string, string>>;
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const params = useParams();
+  const now = useNow(true);
+  const rows = rowsOf(view.data?.[list]);
+  return (
+    <ui.Monitor
+      status={view.status}
+      tiles={rows.map((row) => {
+        const word = show(valueAt(row, status));
+        const heard = seen ? Date.parse(String(valueAt(row, seen) ?? "")) : Number.NaN;
+        const gone = seen !== undefined && seenSeconds > 0 && (Number.isNaN(heard) || now - heard > seenSeconds * 1000);
+        const to = link ? rowLink(link, row, params, keyed, named) : undefined;
+        const began = since ? Date.parse(String(valueAt(row, since) ?? "")) : Number.NaN;
+        const at = step ? Number(valueAt(row, step)) : Number.NaN;
+        const of = steps ? Number(valueAt(row, steps)) : Number.NaN;
+        const said = doing ? show(valueAt(row, doing)) : "";
+        return {
+          id: row.id,
+          title: show(valueAt(row, title)) || row.id,
+          link: to ? links(to) : undefined,
+          state: gone ? "Offline" : (choices[status]?.[word] ?? label(word)) || "Unknown",
+          tone: gone ? "inactive" : toneOfState(word),
+          since: !gone && !Number.isNaN(began) ? runningTime((now - began) / 1000) : undefined,
+          doing: gone ? undefined : said || undefined,
+          progress: !gone && Number.isFinite(at) && Number.isFinite(of) && of > 0 ? { step: Math.min(Math.max(at, 0), of), steps: of } : undefined,
+          charts: charts.map((c) => chartOf(c.title, gone ? [] : valueAt(row, c.path), c.unit ?? "", "small")),
+        };
+      })}
+    />
   );
 }

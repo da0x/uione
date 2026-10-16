@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 
@@ -541,6 +542,76 @@ TEST("a switch opens on the view it's told to start on, until the person picks a
 	nav.current().kept<int>("switched:projects::board_page.issues").set(0);
 	screen_at again(nav, 80, 12);
 	CHECK(again.text().find("the table") != std::string::npos);
+}
+
+namespace {
+	// Two agents: one working, how far and what it uses; one not heard from in minutes.
+	void fill_agents(memory_source& data) {
+		auto at = [](std::chrono::seconds ago) {
+			return std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now() - ago));
+		};
+		auto numbers = [](std::initializer_list<double> each) {
+			list out;
+			for (double n : each) out.emplace_back(n);
+			return value(out);
+		};
+		value stats(fields{{"cpu", numbers({5, 20, 45, 80, 60, 72, 90, 64})}, {"memory", numbers({1e8, 2e8, 4e8, 4.5e8, 5e8, 5.2e8, 6e8, 6.4e8})}});
+		data.set("projects::agents", "atlas",
+		         value(fields{{"agents", list{value(fields{{"id", "atlas-npm"}, {"title", "npm: Publishing"}, {"status", "working"}, {"since", at(std::chrono::seconds(95))},
+		                                                  {"doing", "#12 @uione/react 0.16.0: Uploading"}, {"step", 3}, {"steps", 5}, {"seen_at", at(std::chrono::seconds(2))}, {"stats", stats}}),
+		                                    value(fields{{"id", "atlas-sites"}, {"title", "sites: Deploying"}, {"status", "idle"}, {"seen_at", at(std::chrono::seconds(600))}})}}}));
+		data.set("projects::agent_page", "atlas-npm", value(fields{{"title", "npm: Publishing"}, {"stats", stats}}));
+	}
+
+	site with_agents() {
+		site s{.name = "neotrac"};
+		s.screens.push_back({"Agents", "/:project/agents", "", [](page& p) {
+			                     auto agents = p.view("projects::agents", "atlas");
+			                     return items(monitor(p, {.view = agents, .list = "agents", .status = "status", .doing = "doing", .since = "since", .step = "step", .steps = "steps",
+			                                              .seen = "seen_at", .seen_seconds = 30,
+			                                              .charts = {{"stats.cpu", "CPU", "percent"}, {"stats.memory", "Memory", "bytes"}}}));
+		                     }});
+		s.screens.push_back({"npm", "/:project/agents/:agent", "", [](page& p) {
+			                     auto agent = p.view("projects::agent_page", "atlas-npm");
+			                     return items(chart(p, {.view = agent, .series = {{"stats.cpu", "CPU", "percent"}, {"stats.memory", "Memory", "bytes"}}}));
+		                     }});
+		return s;
+	}
+}  // namespace
+
+// A monitor, as btop draws one: each agent's dot and state, what it's doing and how
+// far, and its charts in braille; one unheard from for minutes is offline, whatever
+// it last said. Its page draws the same numbers large.
+TEST("a monitor of agents, working and offline, and an agent's charts in braille") {
+	memory_source data;
+	fill_agents(data);
+	auto s = with_agents();
+	navigator nav(s, data);
+	nav.open("/atlas/agents");
+	screen_at t(nav, 80, 20);
+	std::string drawn = t.text();
+	CHECK_SAYING(drawn.find("Working 1m") != std::string::npos && drawn.find("3/5") != std::string::npos && drawn.find("90%") == std::string::npos &&
+	                 drawn.find("64%") != std::string::npos && drawn.find("610 MiB") != std::string::npos,
+	             drawn);
+	CHECK_SAYING(drawn.find("Offline") != std::string::npos && drawn.find("Not running") != std::string::npos, drawn);
+	CHECK_SAYING(drawn.find("⣿") != std::string::npos, drawn);  // a full cell of the graph
+	matches_golden("monitor", drawn);
+	nav.open("/atlas/agents/npm");
+	screen_at page(nav, 80, 30);
+	std::string large = page.text();
+	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GiB") != std::string::npos, large);
+}
+
+// A card whose holder says how far it is shows it, in btop's squares.
+TEST("a card shows how far it is in its stage, as its holder says") {
+	memory_source data;
+	fill_board(data, {{"data", value(fields{{"step", 2}, {"steps", 5}})}});
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	screen_at t(nav, 100, 30);
+	std::string drawn = t.text();
+	CHECK_SAYING(drawn.find("■■□□□ 2/5") != std::string::npos, drawn);
 }
 
 // Picked once, a board opens that way the next time the app starts, as on the web.

@@ -24,6 +24,7 @@ import { DisplaySettings } from "./accessibility.js";
 import { Sheet } from "./sheet.js";
 import { ThemeToggle } from "./theme.js";
 import { Landing } from "./landing.js";
+import { Chart, Charts, Monitor, Progress } from "./charts.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
 // A card's dot: gray not started, blue waiting, orange working, green done, red failed.
@@ -962,6 +963,9 @@ export const radix: ComponentSet = {
   // Large cards, three across a wide page and one on a narrow one: a title that opens
   // what it's for, how many it holds and how they split, as a slim bar in the accent
   // with its parts named under it, and a few links that open it filtered.
+  Chart,
+  Charts,
+  Monitor,
   Cards: ({ status, cards }) => (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {
@@ -1109,6 +1113,7 @@ export const radix: ComponentSet = {
                     </li>
                   ))}
                 </ol>
+                {row.progress && <Progress step={row.progress.step} steps={row.progress.steps} className="w-24 shrink-0" />}
                 {row.note && <p className="truncate text-xs text-muted lg:ml-auto lg:max-w-sm" title={row.note}>{row.note}</p>}
               </div>
             ))}
@@ -1149,6 +1154,7 @@ export const radix: ComponentSet = {
                 )}
               </div>
               {card.details.length > 0 && <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted">{card.details.map((d, i) => <span key={i}>{d}</span>)}</div>}
+              {card.progress && <Progress step={card.progress.step} steps={card.progress.steps} />}
             </div>
           )
         }
@@ -1365,6 +1371,7 @@ export const radix: ComponentSet = {
                           {card.people && card.people.length > 0 && <Faces people={card.people} />}
                         </div>
                       )}
+                      {card.progress && <Progress step={card.progress.step} steps={card.progress.steps} className="mt-2" />}
                       {/* A finger can't drag one, so on a phone a card says where it can go. */}
                       {movable && onMove && (
                         <select

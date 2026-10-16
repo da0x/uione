@@ -825,6 +825,54 @@ namespace one::language {
         bool hide_empty = false;  // hide when empty: not there while it has no cards, or can't be read
     };
 
+    // chart agent_page.stats.cpu "CPU" percent: a run of numbers, newest last, drawn
+    // as a line over time with its latest value, as btop draws one. Its numbers are a
+    // field of the view, or a name in a field of data, like stats.cpu. They're shown
+    // as they are, or as percent (out of 100), bytes, or a rate of bytes a second.
+    struct chart_series {
+        std::vector<std::string> path;  // stats, cpu: a field, then a name within it
+        std::string title;
+        std::string unit;  // "", percent, bytes or rate
+        location where;
+        std::string text() const {
+            std::string out;
+            for (const auto& p : path) out += (out.empty() ? "" : ".") + p;
+            return out;
+        }
+    };
+
+    // charts agent_page { stats.cpu "CPU" percent ... }: several, side by side.
+    struct chart_item {
+        qualified_name view;
+        std::vector<chart_series> series;
+    };
+
+    // monitor agents_page.agents link /:project/agents/:agent { ... }: a tile for each
+    // record whose status changes from one thing to another, like an agent or a
+    // machine, rather than moving along stages: its title, its status as a dot and a
+    // word, what it's doing and how far, and small charts of what it reports. One not
+    // heard from for a while shows as offline.
+    struct monitor_item {
+        qualified_name view;
+        std::string list;
+        std::optional<std::string> link;
+        location link_where;
+        std::string title = "title";  // what names a tile
+        location title_where;
+        std::string status;  // the field saying how it is, like working or idle
+        location status_where;
+        std::string doing;  // what it's doing now, a line
+        location doing_where;
+        std::string step, steps;  // progress step of steps: how far, within what it's doing
+        location progress_where;
+        std::string since;  // when its status began, for how long it's been so
+        location since_where;
+        std::string seen;  // seen seen_at 15: when it was last heard from, and after how many seconds it's offline
+        int seen_seconds = 0;
+        location seen_where;
+        std::vector<chart_series> charts;
+    };
+
     // component workbench: a hand-written component, beside the .one file, drawn where
     // the item is: components/workbench.tsx, a React component, on the web, and
     // components/workbench.cpp, a function of the page giving a view, in the desktop
@@ -904,7 +952,7 @@ namespace one::language {
     struct screen_item {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
-                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item,
+                     confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
                      find_item, canvas_item, pipeline_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so

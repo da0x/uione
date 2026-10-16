@@ -753,6 +753,48 @@ namespace one::desktop {
 			std::string initial_;
 		};
 
+		// A run of numbers over time, newest at the right, as btop draws one: a soft fill
+		// under a line in the accent, over a quiet floor and, when large, a grid.
+		class graph_element : public element {
+		public:
+			graph_element(std::vector<double> values, double top, float height, bool large) : values_(std::move(values)), top_(top > 0 ? top : 1), large_(large) {
+				fixed_height = height;
+				fills_across = true;
+			}
+			extent measure_content(float) override { return {0, 0}; }
+			void paint_content(canvas& c) override {
+				const theme& t = current_theme();
+				rect a = frame;
+				color quiet = t.line;
+				if (large_) {
+					for (float at : {0.25f, 0.5f, 0.75f}) c.box({a.x, a.y + a.height * at, a.width, 1}, {.fill = {quiet.red, quiet.green, quiet.blue, quiet.alpha * 0.6f}});
+				}
+				c.box({a.x, a.bottom() - 1, a.width, 1}, {.fill = quiet});
+				if (values_.empty()) return;
+				// At least sixty places, so a run just begun grows leftward from the right.
+				std::size_t places = std::max<std::size_t>(values_.size(), 60);
+				auto x_of = [&](std::size_t i) { return a.x + static_cast<float>(places - values_.size() + i) / static_cast<float>(places - 1) * a.width; };
+				auto y_of = [&](double v) { return a.bottom() - 1 - static_cast<float>(std::clamp(v, 0.0, top_) / top_) * (a.height - 2); };
+				std::vector<point> line;
+				for (std::size_t i = 0; i < values_.size(); ++i) line.push_back({x_of(i), y_of(values_[i])});
+				if (line.size() > 1) {
+					std::vector<point> area = line;
+					area.push_back({line.back().x, a.bottom() - 1});
+					area.push_back({line.front().x, a.bottom() - 1});
+					color soft = t.accent;
+					soft.alpha *= 0.16f;
+					c.fill(area, soft);
+				}
+				for (std::size_t i = 0; i + 1 < line.size(); ++i) c.line(line[i], line[i + 1], large_ ? 2.f : 1.5f, t.accent);
+				if (line.size() == 1) c.box({line[0].x - 1.5f, line[0].y - 1.5f, 3, 3}, {.fill = t.accent, .radius = 1.5f});
+			}
+
+		private:
+			std::vector<double> values_;
+			double top_;
+			bool large_;
+		};
+
 		class rule_element : public element {
 		public:
 			rule_element() {
@@ -855,6 +897,7 @@ namespace one::desktop {
 	}
 	view edge(color c, float width) { return made<edge_element>(c, width); }
 	view avatar(const std::string& name, float size) { return made<avatar_element>(name, size); }
+	view graph(std::vector<double> values, double top, float height, bool large) { return made<graph_element>(std::move(values), top, height, large); }
 	view divider() { return made<rule_element>(); }
 	view spacer() { return std::move(made<element>()).grow(1); }
 

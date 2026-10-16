@@ -390,13 +390,16 @@ func (s *schema) decode(input map[string]any, into reflect.Value) error {
 }
 
 // Data is a field of named values, each text, a number, or yes or no, like an
-// item's status and since: what a board shows of what's working on it.
+// item's status and since: what a board shows of what's working on it. A value can
+// also be a run of numbers, newest last, like the last two minutes of an agent's
+// CPU use, which a chart draws.
 type Data map[string]any
 
 // What data holds is bounded, as a list is.
 const (
-	maxDataNames  = 64
-	maxDataLength = 16 * 1024
+	maxDataNames   = 64
+	maxDataLength  = 32 * 1024
+	maxDataNumbers = 600
 )
 
 var dataName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
@@ -421,8 +424,21 @@ func mergeData(field string, was Data, sent map[string]any) (Data, error) {
 			merged[name] = v
 		case float64, bool:
 			merged[name] = v
+		case []any:
+			if len(v) > maxDataNumbers {
+				return nil, invalid("%s's %s can hold at most %d numbers", label(field), name, maxDataNumbers)
+			}
+			numbers := make([]any, len(v))
+			for i, item := range v {
+				n, ok := item.(float64)
+				if !ok {
+					return nil, invalid("%s's %s should be text, a number, yes or no, or a list of numbers", label(field), name)
+				}
+				numbers[i] = n
+			}
+			merged[name] = numbers
 		default:
-			return nil, invalid("%s's %s should be text, a number, or yes or no", label(field), name)
+			return nil, invalid("%s's %s should be text, a number, yes or no, or a list of numbers", label(field), name)
 		}
 	}
 	if len(merged) > maxDataNames {

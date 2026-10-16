@@ -265,6 +265,7 @@ export interface PipelineRow {
   // How it's going where it is now, as a board's card's dot says it.
   status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
   note?: string; // what its holder last said, like waiting on the packages
+  progress?: { step: number; steps: number }; // how far it is in its stage, like 2 of 5
 }
 
 // Cards placed anywhere on a surface that pans and zooms, like an idea board: each
@@ -302,6 +303,7 @@ export interface CanvasCard {
   tone?: number;
   status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
   picture?: string; // an image it holds, as an address to draw it from
+  progress?: { step: number; steps: number }; // how far it is in its stage, like 2 of 5
   x: number;
   y: number;
   width: number;
@@ -325,6 +327,38 @@ export interface Card {
   tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by stage
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
+}
+
+// A run of numbers over time, newest at the right, as btop draws one: its title, its
+// latest value, and the top of its scale. A tile's chart is small; a page's large.
+export interface ChartProps {
+  title: string;
+  values: number[]; // newest last
+  top: number; // the top of its scale
+  latest: string; // its newest value, as it reads, like 42% or 1.5 GiB
+  topSaid: string; // the top of its scale, as it reads
+  read: (value: number) => string; // any value as it reads, for what's pointed at
+  size: "small" | "large";
+}
+
+// Records whose status changes from one thing to another, like agents or machines,
+// each a tile: its name, its status as a dot and a word and for how long, what it's
+// doing and how far, and small charts of what it reports.
+export interface MonitorProps {
+  status: ViewStatus;
+  tiles: MonitorTile[];
+}
+
+export interface MonitorTile {
+  id: string;
+  title: ReactNode;
+  link?: LinkProps;
+  state: string; // its status as it reads, like Working or Offline
+  tone: "inactive" | "waiting" | "working" | "success" | "failed";
+  since?: string; // how long it's been so, like 4m
+  doing?: string;
+  progress?: { step: number; steps: number };
+  charts: ChartProps[];
 }
 
 // A list's records as large cards in a row, in their order, joined by arrows, like a
@@ -366,6 +400,7 @@ export interface BoardCard {
   // How it's going, as a dot, with its words for those who can't see it: inactive,
   // waiting, working, done or failed.
   status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
+  progress?: { step: number; steps: number }; // how far it is in its stage, as its holder says, like 2 of 5
 }
 
 // Where a page is among the pages above it, like Projects › neotrac › Product:
@@ -617,6 +652,9 @@ export interface ComponentSet {
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;
   Cards: ComponentType<CardsProps>;
+  Chart: ComponentType<ChartProps>;
+  Charts: ComponentType<{ charts: ChartProps[] }>; // several, side by side
+  Monitor: ComponentType<MonitorProps>;
   Track: ComponentType<TrackProps>;
   Labels: ComponentType<LabelsProps>;
   Files: ComponentType<FilesProps>;

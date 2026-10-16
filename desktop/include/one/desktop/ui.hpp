@@ -255,6 +255,10 @@ namespace one::desktop {
 		return list(std::move(rows), std::move(on_open));
 	}
 
+	// A run of numbers over time, newest at the right, out of `top`, as btop draws one:
+	// a line in the accent over a soft fill, across the width it's given, `height`
+	// tall; large ones have a grid.
+	view graph(std::vector<double> values, double top, float height, bool large = false);
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
 	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
 	// shown under it while it's pointed at or has the keyboard. One with no such icon

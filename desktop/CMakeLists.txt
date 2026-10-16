@@ -93,6 +93,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/between.cpp
 		runtime/src/board.cpp
 		runtime/src/canvas.cpp
+		runtime/src/charts.cpp
 		runtime/src/pipeline.cpp
 		runtime/src/components.cpp
 		runtime/src/forms.cpp

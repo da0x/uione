@@ -1146,6 +1146,10 @@ namespace one::generators {
                     this->grid(out, parts, ns, *grid, screen);
                 } else if (auto* cards = std::get_if<language::cards_item>(&item.node)) {
                     shown_while(out, parts, ns, item, [&] { this->cards(out, parts, ns, *cards); });
+                } else if (auto* chart = std::get_if<language::chart_item>(&item.node)) {
+                    shown_while(out, parts, ns, item, [&] { this->chart(out, parts, ns, *chart); });
+                } else if (auto* monitor = std::get_if<language::monitor_item>(&item.node)) {
+                    shown_while(out, parts, ns, item, [&] { this->monitor(out, parts, ns, *monitor); });
                 } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
                     shown_while(out, parts, ns, item, [&] { this->board(out, parts, ns, *board, screen); });
                 } else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) {
@@ -1669,6 +1673,7 @@ namespace one::generators {
                 else if (auto* thread = std::get_if<language::thread_item>(&item.node)) take(thread->view, thread->list);
                 else if (auto* timeline = std::get_if<language::timeline_item>(&item.node)) take(timeline->view, timeline->list);
                 else if (auto* cards = std::get_if<language::cards_item>(&item.node)) take(cards->view, cards->list);
+                else if (auto* monitor = std::get_if<language::monitor_item>(&item.node)) take(monitor->view, monitor->list);
                 else if (auto* board = std::get_if<language::board_item>(&item.node)) take(board->view, board->list);
                 else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) take(canvas->view, canvas->list);
                 else if (auto* pipeline = std::get_if<language::pipeline_item>(&item.node)) take(pipeline->view, pipeline->list);
@@ -1767,6 +1772,53 @@ namespace one::generators {
         // cards project_page.boards link /:project/boards/:board { ... }: a card for each
         // row, its tally counted from another list, and its filters as links that open
         // it filtered, each a field and the value it's to hold.
+        void chart(stream& out, screen_parts& parts, const std::string& ns, const language::chart_item& chart) {
+            parts.components.insert("Chart");
+            std::string series;
+            for (const auto& c : chart.series) {
+                series += (series.empty() ? "" : ", ") + std::string("{ path: ") + web_detail::js_string(c.text()) + ", title: " + web_detail::js_string(c.title) +
+                          (c.unit.empty() ? "" : ", unit: " + web_detail::js_string(c.unit)) + " }";
+            }
+            out.line("<Chart view={" + view_variable(parts, full_view(ns, chart.view.text())) + "} series={[" + series + "]} />");
+        }
+
+        void monitor(stream& out, screen_parts& parts, const std::string& ns, const language::monitor_item& monitor) {
+            parts.components.insert("Monitor");
+            const language::entity_declaration* entity = listed(ns, monitor.view.text(), monitor.list);
+            std::string line = "<Monitor view={" + view_variable(parts, full_view(ns, monitor.view.text())) + "} list=" + web_detail::js_string(monitor.list);
+            if (monitor.title != "title") line += " title=" + web_detail::js_string(monitor.title);
+            line += " status=" + web_detail::js_string(monitor.status);
+            if (!monitor.doing.empty()) line += " doing=" + web_detail::js_string(monitor.doing);
+            if (!monitor.since.empty()) line += " since=" + web_detail::js_string(monitor.since);
+            if (!monitor.step.empty()) line += " step=" + web_detail::js_string(monitor.step) + " steps=" + web_detail::js_string(monitor.steps);
+            if (!monitor.seen.empty()) line += " seen=" + web_detail::js_string(monitor.seen) + " seenSeconds={" + std::to_string(monitor.seen_seconds) + "}";
+            if (!monitor.charts.empty()) {
+                std::string charts;
+                for (const auto& c : monitor.charts) {
+                    charts += (charts.empty() ? "" : ", ") + std::string("{ path: ") + web_detail::js_string(c.text()) + ", title: " + web_detail::js_string(c.title) +
+                              (c.unit.empty() ? "" : ", unit: " + web_detail::js_string(c.unit)) + " }";
+                }
+                line += " charts={[" + charts + "]}";
+            }
+            // A status with choices reads as each choice's label, like Standby.
+            for (const auto& f : entity ? entity->fields : nothing_) {
+                if (f.name == monitor.status && !f.choices.empty()) line += " choices={{ " + f.name + ": Object.fromEntries(" + choice_options(f) + ") }}";
+            }
+            if (monitor.link) {
+                std::string target = full_route(ns, *monitor.link);
+                line += " link=" + web_detail::js_string(target);
+                std::string last = target.substr(target.rfind("/:") == std::string::npos ? 0 : target.rfind("/:") + 2);
+                auto keyed = keyed_by(ns, last, target);
+                if (!keyed.empty()) {
+                    std::string names;
+                    for (const auto& key : keyed) names += (names.empty() ? "" : ", ") + web_detail::js_string(key);
+                    line += " keyed={[" + names + "]}";
+                }
+                line += named_by(ns, target);
+            }
+            out.line(line + " />");
+        }
+
         void cards(stream& out, screen_parts& parts, const std::string& ns, const language::cards_item& cards) {
             parts.components.insert("Cards");
             const language::entity_declaration* entity = listed(ns, cards.view.text(), cards.list);

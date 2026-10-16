@@ -1933,6 +1933,92 @@ namespace one::language {
                 end_line();
                 return {where, std::move(canvas), std::move(shown_when)};
             }
+            if (at_word("chart") && peek(1).kind == token_kind::identifier) {
+                advance();
+                chart_item chart;
+                chart.view = parse_qualified_name("the view whose numbers it draws, like agent_page");
+                chart.series.push_back(parse_chart_series(true));
+                expression_ptr shown_when = shown_while();
+                end_line();
+                return {where, std::move(chart), std::move(shown_when)};
+            }
+            if (at_word("charts") && peek(1).kind == token_kind::identifier) {
+                advance();
+                chart_item chart;
+                chart.view = parse_qualified_name("the view whose numbers they draw, like agent_page");
+                expression_ptr shown_when = shown_while();
+                expect(token_kind::left_brace, "'{' and a chart a line, like stats.cpu \"CPU\" percent");
+                while (in_block()) {
+                    chart.series.push_back(parse_chart_series(false));
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(chart), std::move(shown_when)};
+            }
+            if (at_word("monitor") && peek(1).kind == token_kind::identifier) {
+                advance();
+                monitor_item monitor;
+                monitor.view = parse_qualified_name("the view whose list it shows, like agents_page");
+                expect(token_kind::dot, "'.' and the view's list, like agents_page.agents");
+                monitor.list = expect(token_kind::identifier, "the view's list, like agents").text;
+                if (at_word("link")) {
+                    advance();
+                    monitor.link_where = peek().where;
+                    monitor.link = expect(token_kind::route, "the screen each tile opens, like /:project/agents/:agent").text;
+                }
+                expression_ptr shown_when = shown_while();
+                expect(token_kind::left_brace, "'{' and what each tile shows, like status status");
+                while (in_block()) {
+                    auto field_named = [&](const char* example) {
+                        std::string name = expect(token_kind::identifier, example).text;
+                        while (at(token_kind::dot)) {
+                            advance();
+                            name += "." + expect(token_kind::identifier, example).text;
+                        }
+                        return name;
+                    };
+                    if (at_word("chart")) {
+                        advance();
+                        monitor.charts.push_back(parse_chart_series(false));
+                    } else if (at_word("title")) {
+                        advance();
+                        monitor.title_where = peek().where;
+                        monitor.title = field_named("the field naming each tile, like title");
+                    } else if (at_word("status")) {
+                        advance();
+                        monitor.status_where = peek().where;
+                        monitor.status = field_named("the field saying how it is, like status");
+                    } else if (at_word("doing")) {
+                        advance();
+                        monitor.doing_where = peek().where;
+                        monitor.doing = field_named("the field saying what it's doing, like doing");
+                    } else if (at_word("progress")) {
+                        advance();
+                        monitor.progress_where = peek().where;
+                        monitor.step = field_named("the field saying which step it's on, like step");
+                        if (!at_word("of")) fail_expecting("of and the field saying how many steps there are, like progress step of steps");
+                        advance();
+                        monitor.steps = field_named("the field saying how many steps there are, like steps");
+                    } else if (at_word("since")) {
+                        advance();
+                        monitor.since_where = peek().where;
+                        monitor.since = field_named("the time its status began, like since");
+                    } else if (at_word("seen")) {
+                        advance();
+                        monitor.seen_where = peek().where;
+                        monitor.seen = field_named("the time it was last heard from, like seen_at");
+                        auto seconds = expect(token_kind::number, "after how many seconds unheard it's offline, like seen seen_at 15");
+                        monitor.seen_seconds = std::stoi(seconds.text);
+                    } else {
+                        fail_expecting("what a tile shows: title, status, since, doing, progress, seen or chart");
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(monitor), std::move(shown_when)};
+            }
             if (at_word("cards") && peek(1).kind != token_kind::scope) {
                 advance();
                 cards_item cards;
@@ -2612,6 +2698,23 @@ namespace one::language {
         //     }
         // when board_page.style == style::canvas, after a list's view and link: the
         // condition it's shown while, its block after it.
+        // A chart's series: its numbers, by the field holding them and a name within
+        // it, like stats.cpu, which on a page follows the view's name; its title; and
+        // how its values read: percent, bytes, or rate, bytes a second.
+        chart_series parse_chart_series(bool after_view) {
+            chart_series out;
+            out.where = peek().where;
+            if (after_view) expect(token_kind::dot, "'.' and the field holding its numbers, like agent_page.stats.cpu");
+            out.path.push_back(expect(token_kind::identifier, "the field holding its numbers, like stats.cpu").text);
+            while (at(token_kind::dot)) {
+                advance();
+                out.path.push_back(expect(token_kind::identifier, "a name in the field, like cpu").text);
+            }
+            out.title = expect(token_kind::string, "the chart's title, like \"CPU\"").text;
+            if (at_word("percent") || at_word("bytes") || at_word("rate")) out.unit = advance().text;
+            return out;
+        }
+
         expression_ptr shown_while() {
             if (!at_word("when")) return nullptr;
             advance();

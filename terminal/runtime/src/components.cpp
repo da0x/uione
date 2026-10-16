@@ -461,6 +461,15 @@ namespace one::terminal::runtime {
 		return terminal::column(std::move(parts));
 	}
 
+	// How far something is in its stage, in btop's squares: ■■■□□ 3/5, ten at most.
+	std::string progress_said(double step, double steps) {
+		int blocks = static_cast<int>(std::min(steps, 10.0));
+		int done_blocks = steps > 0 ? static_cast<int>(std::lround(step / steps * blocks)) : 0;
+		std::string out;
+		for (int i = 0; i < blocks; ++i) out += i < done_blocks ? "■" : "□";
+		return out + std::format(" {}/{}", step, steps);
+	}
+
 	// A status's dot: gray not started, blue waiting, orange working (yellow, as
 	// terminals have no orange), green done, red failed.
 	terminal::view status_dot(const std::string& status) {
@@ -500,6 +509,7 @@ namespace one::terminal::runtime {
 				}
 				std::vector<terminal::view> inside;
 				inside.push_back(terminal::row(terminal::text(row.title).width(28), terminal::text(std::move(steps)).grow()).spacing(2));
+				if (row.progress) inside.push_back(quiet("    " + progress_said(row.progress->first, row.progress->second)));
 				if (!row.note.empty()) inside.push_back(quiet("    " + row.note));
 				rows.push_back({row.id, terminal::column(std::move(inside))});
 			}
@@ -625,6 +635,7 @@ namespace one::terminal::runtime {
 					// Who's on it and for how long, beside what it says of itself.
 					if (!card.runner.empty()) details += (details.empty() ? "" : " ") + card.runner;
 					if (!card.running.empty()) details += (details.empty() ? "" : " ") + card.running;
+					if (card.progress) details += (details.empty() ? "" : " ") + progress_said(card.progress->first, card.progress->second);
 					if (card.status.empty()) {
 						cards_shown.push_back({card.id, terminal::row(edge(card.tone), terminal::text(card.title).grow(2), quiet(details).grow(1), quiet(people).grow(1)).spacing(1)});
 					} else {

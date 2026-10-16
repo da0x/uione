@@ -1,0 +1,66 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Monitors and charts: a room's climate sensors, each a tile saying how it is,
+// reading, on standby, idle or offline, and what it's doing and how far; and a
+// sensor's page, its readings over time.
+
+namespace gallery at / {
+
+	enum sensor_status {
+		reading  "Reading"
+		standby  "Standby"
+		idle     "Idle"
+		offline  "Offline"
+	}
+
+	entity sensor {
+		room      room  required  key
+		name      slug  required  key
+		title     text  required
+		status    sensor_status = sensor_status::idle
+		since     date
+		doing     text
+		step      number
+		steps     number
+		seen_at   date
+		// Runs of numbers, newest last: humidity, light and what it sends.
+		readings  data
+	}
+
+	command sensor::create
+	command sensor::update
+
+	view sensors per room {
+		name
+		sensors = each sensor in room {
+			order by title
+			title  status  since  doing  step  steps  seen_at  readings
+		}
+	}
+
+	view sensor_page per sensor {
+		title  readings
+	}
+
+	screen "Sensors" /rooms/:room/sensors {
+		monitor sensors.sensors link /rooms/:room/sensors/:sensor {
+			status status
+			since since
+			doing doing
+			progress step of steps
+			seen seen_at 60
+			chart readings.humidity "Humidity" percent
+			chart readings.sent "Sent" rate
+		}
+	}
+
+	screen "{sensor_page.title}" /rooms/:room/sensors/:sensor {
+		chart sensor_page.readings.humidity "Humidity" percent
+		charts sensor_page {
+			readings.light "Light"
+			readings.memory "Memory" bytes
+		}
+	}
+
+} // namespace gallery

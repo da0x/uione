@@ -313,6 +313,12 @@ namespace one::generators {
             out.line("for (const auto& [name, item] : v.as_map()) out += (out.empty() ? \"\" : \",\") + json(name) + \":\" + json(item);");
             out.line("return \"{\" + out + \"}\";");
             out.close("}");
+            // A run of numbers in data, like the last minutes of a CPU's use.
+            out.open("if (v.is_array()) {");
+            out.line("std::string out;");
+            out.line("for (const auto& item : v.as_array()) out += (out.empty() ? \"\" : \",\") + json(item);");
+            out.line("return \"[\" + out + \"]\";");
+            out.close("}");
             out.line("return \"null\";");
             out.close("}");
             out.open("inline std::string json(const std::vector<std::string>& list) {");

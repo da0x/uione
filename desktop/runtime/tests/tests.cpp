@@ -709,6 +709,58 @@ TEST("a canvas: its cards laid out by stage, one dragged is placed where it's le
 	CHECK(data.runs().back().fields["w"].as_double() == 150);
 }
 
+namespace {
+	// Two agents: one working, how far and what it uses; one not heard from in minutes.
+	void fill_agents(memory_source& data) {
+		auto at = [](std::chrono::seconds ago) {
+			return std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now() - ago));
+		};
+		auto numbers = [](std::initializer_list<double> each) {
+			list out;
+			for (double n : each) out.emplace_back(n);
+			return value(out);
+		};
+		value stats(fields{{"cpu", numbers({5, 20, 45, 80, 60, 72, 90, 64, 70, 55, 58, 62, 75, 81, 77, 69, 74, 79, 85, 88})},
+		                   {"memory", numbers({1e8, 2e8, 4e8, 4.5e8, 5e8, 5.2e8, 6e8, 6.4e8, 6.1e8, 6.3e8, 6.6e8, 6.8e8, 7e8, 6.9e8, 7.1e8, 7.3e8, 7.2e8, 7.4e8, 7.5e8, 7.6e8})}});
+		data.set("projects::agents", "atlas",
+		         value(fields{{"agents", list{value(fields{{"id", "atlas-npm"}, {"title", "npm: Publishing"}, {"status", "working"}, {"since", at(std::chrono::seconds(95))},
+		                                                  {"doing", "#12 @uione/react 0.16.0: Uploading"}, {"step", 3}, {"steps", 5}, {"seen_at", at(std::chrono::seconds(2))}, {"stats", stats}}),
+		                                    value(fields{{"id", "atlas-idle"}, {"title", "installs: To do"}, {"status", "idle"}, {"seen_at", at(std::chrono::seconds(1))}, {"doing", "waiting for issues"}}),
+		                                    value(fields{{"id", "atlas-sites"}, {"title", "sites: Deploying"}, {"status", "idle"}, {"seen_at", at(std::chrono::seconds(600))}})}}}));
+		data.set("projects::agent_page", "atlas-npm", value(fields{{"title", "npm: Publishing"}, {"stats", stats}}));
+	}
+
+	site with_agents() {
+		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Agents", "/:project/agents", "", [](page& p) {
+			                     auto agents = p.view("projects::agents", "atlas");
+			                     return items(monitor(p, {.view = agents, .list = "agents", .status = "status", .doing = "doing", .since = "since", .step = "step", .steps = "steps",
+			                                              .seen = "seen_at", .seen_seconds = 30,
+			                                              .charts = {{"stats.cpu", "CPU", "percent"}, {"stats.memory", "Memory", "bytes"}}}));
+		                     }});
+		s.screens.push_back({"npm", "/:project/agents/:agent", "", [](page& p) {
+			                     auto agent = p.view("projects::agent_page", "atlas-npm");
+			                     return items(chart(p, {.view = agent, .series = {{"stats.cpu", "CPU", "percent"}, {"stats.memory", "Memory", "bytes"}}}));
+		                     }});
+		return s;
+	}
+}  // namespace
+
+// A monitor: a tile for each agent, its dot, state and how long, what it's doing and
+// how far, and its charts; one unheard from for minutes is offline. Its page draws
+// the same numbers large, side by side.
+TEST("a monitor of agents, working, idle and offline, and an agent's charts") {
+	memory_source data;
+	fill_agents(data);
+	auto s = with_agents();
+	navigator nav(s, data);
+	nav.open("/atlas/agents");
+	matches_golden("monitor", {1100, 420}, [&] { return drawn(nav); });
+	nav.open("/atlas/agents/npm");
+	matches_golden("charts", {1100, 420}, [&] { return drawn(nav); });
+}
+
 TEST("a board: its columns, cards tinted by priority with their labels and people, and a move offered") {
 	memory_source data;
 	fill_board(data);

@@ -81,6 +81,10 @@ namespace one::terminal::runtime {
 	terminal::view canvas_board(page& p, canvas_spec spec);
 	terminal::view pipeline_board(page& p, pipeline_spec spec);
 	terminal::view cards(page& p, cards_spec spec);
+	// chart agent_page.stats.cpu "CPU" percent: a run of numbers in braille, as btop draws one.
+	terminal::view chart(page& p, chart_spec spec);
+	// Records whose status changes, like agents, a tile each.
+	terminal::view monitor(page& p, monitor_spec spec);
 	terminal::view filter_note(page& p);
 	terminal::view find(page& p, std::string label, std::vector<find_source> sources);
 	// Themes made at random from a palette, tried on the whole terminal, each written

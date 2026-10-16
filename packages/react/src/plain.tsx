@@ -409,6 +409,54 @@ export const plain: ComponentSet = {
     );
   },
 
+  // A run of numbers as its title, latest value and scale, and the numbers themselves.
+  Chart: ({ title, values, latest, topSaid, read }) => (
+    <figure aria-label={title}>
+      <figcaption>
+        {title}: {latest} (of {topSaid})
+      </figcaption>
+      <ol data-series="">
+        {values.map((v, i) => (
+          <li key={i}>{read(v)}</li>
+        ))}
+      </ol>
+    </figure>
+  ),
+  Charts: ({ charts }) => (
+    <section>
+      {charts.map((chart) => (
+        <figure key={chart.title} aria-label={chart.title}>
+          <figcaption>
+            {chart.title}: {chart.latest} (of {chart.topSaid})
+          </figcaption>
+        </figure>
+      ))}
+    </section>
+  ),
+  Monitor: ({ status, tiles }) => (
+    <section aria-busy={status === "loading"}>
+      {tiles.map((tile) => (
+        <article key={tile.id} data-tone={tile.tone}>
+          <h3>{tile.link ? <a {...tile.link}>{tile.title}</a> : tile.title}</h3>
+          <p>
+            {tile.state}
+            {tile.since ? ` ${tile.since}` : ""}
+          </p>
+          {tile.doing && <p>{tile.doing}</p>}
+          {tile.progress && (
+            <p>
+              step {tile.progress.step} of {tile.progress.steps}
+            </p>
+          )}
+          {tile.charts.map((chart) => (
+            <p key={chart.title}>
+              {chart.title}: {chart.latest}
+            </p>
+          ))}
+        </article>
+      ))}
+    </section>
+  ),
   Cards: ({ status, cards }) => (
     <div aria-busy={status === "loading"}>
       {cards.map((card) => (

@@ -1655,3 +1655,19 @@ TEST_CASE("a canvas's paste makes its own cards, into a file field") {
     CHECK(only_error(canvas("\t\tpaste other::create into files\n")).message == "a canvas's cards are notes, so a pasted file makes one by note::create");
     CHECK(only_error(canvas("\t\tpaste note::create into title\n")).message == "note.title holds what's pasted, so it's a file, or a list of file");
 }
+
+TEST_CASE("a monitor shows fields its list reads, says how each is, and a chart reads its view") {
+    const std::string agents = "entity agent {\n\ttitle  text\n\tstatus  text\n\tseen_at  date\n\tstats  data\n}\ncommand agent::create\n"
+                               "view fleet public {\n\tagents = each agent {\n\t\ttitle  status  seen_at  stats\n\t}\n}\n"
+                               "view one_agent per agent {\n\ttitle\n\tstats\n}\n";
+    auto monitor = [&](const std::string& lines) { return agents + "screen \"Fleet\" /fleet {\n\tmonitor fleet.agents {\n" + lines + "\t}\n}\n"; };
+    CHECK(check_source(monitor("\t\tstatus status\n\t\tseen seen_at 30\n\t\tchart stats.cpu \"CPU\" percent\n")).empty());
+    CHECK(only_error(monitor("\t\tseen seen_at 30\n")).message == "a monitor says how each is with status and its field, like status status");
+    CHECK(only_error(monitor("\t\tstatus state\n")).message == "view fleet has no state in its agents; add it to the list's block");
+    CHECK(only_error(monitor("\t\tstatus status\n\t\tseen seen_at 0\n")).message ==
+          "after how many seconds unheard it's offline, more than none, like seen seen_at 15");
+    auto page = [&](const std::string& line) { return agents + "screen \"Agent\" /agents/:agent {\n\t" + line + "\n}\n"; };
+    CHECK(check_source(page("chart one_agent.stats.cpu \"CPU\" percent")).empty());
+    CHECK(only_error(page("chart one_agent.load.cpu \"CPU\"")).message == "view one_agent has no load; add it to the view");
+    CHECK(only_error(page("chart one_agent.stats.cpu.now \"CPU\"")).message == "a chart's numbers are a field, or a name in a field of data, like stats.cpu");
+}

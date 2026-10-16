@@ -109,6 +109,8 @@ namespace gallery at / {
 	// Runs the room: its pieces, its stages and who works in it.
 	define role curator "Curator" in room {
 		room::update
+		sensor::create
+		sensor::update
 		member::create
 		member::delete
 		role::create

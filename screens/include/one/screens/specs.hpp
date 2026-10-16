@@ -335,6 +335,38 @@ namespace one::screens {
 		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
 	};
 
+	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its
+	// title; and its unit, "", percent, bytes or rate.
+	struct chart_line {
+		std::string path;
+		std::string title;
+		std::string unit = "";
+	};
+
+	// One chart, or several side by side.
+	struct chart_spec {
+		state<view_state> view;
+		std::vector<chart_line> series;
+	};
+
+	// Records whose status changes, each a tile, like a project's agents.
+	struct monitor_spec {
+		state<view_state> view;
+		std::string list;
+		std::string title = "title";
+		std::string status = "status";
+		std::string doing = "";
+		std::string since = "";
+		std::string step = "", steps = "";
+		std::string seen = "";
+		int seen_seconds = 0;  // one not heard from in this long is offline
+		std::vector<chart_line> charts = {};
+		std::string link = "";
+		std::vector<std::string> keyed = {};
+		std::map<std::string, int> named = {};
+		std::vector<option> choices = {};  // its status's, as each is said
+	};
+
 	// A box finding things across a page's lists, like a project's issues by number
 	// or title and its wiki by title, each found opening its address.
 	struct find_source {

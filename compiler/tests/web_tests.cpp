@@ -1227,6 +1227,37 @@ TEST_CASE("cards show a list's rows large, with a tally and filters, under a sub
     fs::remove_all(dir);
 }
 
+TEST_CASE("a monitor shows records whose status changes as tiles, and charts draw a record's runs of numbers") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-monitor";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    platform::write_file((dir / "main.one").string(),
+                         "namespace work at / {\n"
+                         "entity project {\n\tslug  text  required  unique  key\n\tname  text\n}\n"
+                         "enum agent_status {\n\tworking \"Working\"\n\tidle \"Idle\"\n}\n"
+                         "entity agent {\n\tproject  project  required  key\n\tname  text  required  key\n\ttitle  text\n\tstatus  agent_status\n\tsince  date\n"
+                         "\tdoing  text\n\tstep  number\n\tsteps  number\n\tseen_at  date\n\tstats  data\n}\n"
+                         "view agents per project {\n\tname\n\tagents = each agent in project {\n\t\ttitle  status  since  doing  step  steps  seen_at  stats\n\t}\n}\n"
+                         "view agent_page per agent {\n\ttitle\n\tstats\n}\n"
+                         "screen \"Agents\" /:project/agents {\n\tmonitor agents.agents link /:project/agents/:agent {\n\t\tstatus status\n\t\tsince since\n"
+                         "\t\tdoing doing\n\t\tprogress step of steps\n\t\tseen seen_at 30\n\t\tchart stats.cpu \"CPU\" percent\n\t}\n}\n"
+                         "screen \"Agent\" /:project/agents/:agent {\n\tchart agent_page.stats.cpu \"CPU\" percent\n"
+                         "\tcharts agent_page {\n\t\tstats.memory \"Memory\" bytes\n\t\tstats.sent \"Out\" rate\n\t}\n}\n"
+                         "}\n");
+    auto screens_files = generate_at(dir.string());
+    const auto* screens = find(screens_files, "src/screens/main.tsx");
+    REQUIRE(screens != nullptr);
+    const auto& tsx = screens->content;
+    CHECK(tsx.find(R"(<Monitor view={agents} list="agents" status="status" doing="doing" since="since" step="step" steps="steps" seen="seen_at" seenSeconds={30} )"
+                   R"(charts={[{ path: "stats.cpu", title: "CPU", unit: "percent" }]} choices={{ status: Object.fromEntries()") != std::string::npos);
+    CHECK(tsx.find(R"( link="/:project/agents/:agent")") != std::string::npos);
+    CHECK(tsx.find(R"(<Chart view={agentPage} series={[{ path: "stats.cpu", title: "CPU", unit: "percent" }]} />)") != std::string::npos);
+    CHECK(tsx.find(R"(<Chart view={agentPage} series={[{ path: "stats.memory", title: "Memory", unit: "bytes" }, { path: "stats.sent", title: "Out", unit: "rate" }]} />)") !=
+          std::string::npos);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("a button's when can ask whether a list has whoever is reading") {
     namespace fs = std::filesystem;
     fs::path dir = fs::temp_directory_path() / "uione-when-me";

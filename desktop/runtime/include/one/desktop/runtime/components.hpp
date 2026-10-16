@@ -95,6 +95,12 @@ namespace one::desktop::runtime {
 	desktop::view canvas_board(page& p, canvas_spec spec);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
+	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.
+	desktop::view progress_bar(double step, double steps, float width);
+	// chart agent_page.stats.cpu "CPU" percent: a run of numbers over time, large.
+	desktop::view chart(page& p, chart_spec spec);
+	// Records whose status changes, like agents, a tile each.
+	desktop::view monitor(page& p, monitor_spec spec);
 	// What a list on the page is filtered by, with a button showing it all again;
 	// nothing when it isn't.
 	desktop::view filter_note(page& p);
