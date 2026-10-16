@@ -34,7 +34,7 @@ namespace {
 
     const std::string shop = R"(import one
 project shop {
-	one  "0.15.0"
+	one  "0.15.1"
 }
 namespace shop {
 	entity shelf {

@@ -27,7 +27,7 @@ namespace {
     const std::string home = "namespace shop {\n\tscreen \"Home\" / {\n\t\ttext \"Hello\"\n\t\tsection \"More\" color violet {\n\t\t\ttext \"Inside\"\n\t\t}\n\t\tcomponent banner\n\t}\n}\n";
 
     std::string project_with(const std::string& targets) {
-        return "import one\nproject shop {\n\tone  \"0.15.0\"\n" + (targets.empty() ? std::string() : "\ttarget  " + targets + "\n") + "}\n" + home;
+        return "import one\nproject shop {\n\tone  \"0.15.1\"\n" + (targets.empty() ? std::string() : "\ttarget  " + targets + "\n") + "}\n" + home;
     }
 
     std::vector<std::string> messages(const std::string& source) {
@@ -60,7 +60,7 @@ TEST_CASE("a project builds the web alone unless its targets say more, several t
 }
 
 TEST_CASE("the ways people sign in are said on one line, in their order") {
-    const std::string source = "import one\nproject shop {\n\tone  \"0.15.0\"\n\tsignin  google github\n}\n" + home;
+    const std::string source = "import one\nproject shop {\n\tone  \"0.15.1\"\n\tsignin  google github\n}\n" + home;
     CHECK(messages(source).empty());
     language::diagnostics out;
     std::vector<language::file> files;
@@ -68,7 +68,7 @@ TEST_CASE("the ways people sign in are said on one line, in their order") {
     language::check(files, out);
     generators::screens::model m(files);
     CHECK(m.project.authentication == std::vector<std::string>{"google", "github"});
-    CHECK(messages("import one\nproject shop {\n\tone  \"0.15.0\"\n\tsignin  google gitlab\n}\n" + home).size() == 1);
+    CHECK(messages("import one\nproject shop {\n\tone  \"0.15.1\"\n\tsignin  google gitlab\n}\n" + home).size() == 1);
 }
 
 TEST_CASE("each element a target doesn't draw is one error for it, saying what it lacks and what to do") {
@@ -187,7 +187,7 @@ TEST_CASE("a number in a range is a slider, a few choices are radio buttons, and
     auto dir = std::filesystem::temp_directory_path() / "uione-controls";
     std::filesystem::remove_all(dir);
     std::filesystem::create_directories(dir);
-    platform::write_file((dir / "main.one").string(), "import one\nproject mixer {\n\tone  \"0.15.0\"\n\ttarget  web desktop terminal\n}\n"
+    platform::write_file((dir / "main.one").string(), "import one\nproject mixer {\n\tone  \"0.15.1\"\n\ttarget  web desktop terminal\n}\n"
                                                       "namespace mixer {\n\tentity channel {\n\t\tname    text    required\n"
                                                       "\t\tvolume  number  from 0 to 100  by 5 = 50\n\t\tside    enum    left | right\n\t}\n"
                                                       "\tcommand channel::create {\n\t\tby anyone\n\t}\n"
