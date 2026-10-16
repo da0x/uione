@@ -990,7 +990,7 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 	seen := map[string]bool{}
 	// Each way on its own, and what any of them picks, once.
 	for _, way := range q.ways() {
-		queries, err := a.stores(ctx, way, subject, row)
+		queries, keep, err := a.stores(ctx, way, subject, row)
 		if err != nil {
 			return nil, err
 		}
@@ -1000,7 +1000,7 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 				return nil, err
 			}
 			for _, doc := range docs {
-				if !seen[doc.Ref.Path] && !leftOut(ctx, way, doc, subject, row) {
+				if !seen[doc.Ref.Path] && keep(doc) && !leftOut(ctx, way, doc, subject, row) {
 					seen[doc.Ref.Path] = true
 					all = append(all, doc)
 				}
@@ -1015,17 +1015,45 @@ func (a *App) find(ctx context.Context, q Query, subject, row string) ([]*firest
 // each 30 of what it points at, the boards the person follows, as Firestore allows.
 // An Except isn't asked, nor a field having none, which Firestore can't ask of a field
 // that's missing or empty; leftOut checks them on what comes back.
-func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]firestore.Query, error) {
+//
+// A way through what several fields point at, like issues whose stage is a success
+// on a public board, asks the store by the first, and keep checks the rest on what
+// comes back: each document's field is one of those found.
+func (a *App) stores(ctx context.Context, way Query, subject, row string) (queries []firestore.Query, keep func(*firestore.DocumentSnapshot) bool, err error) {
 	s := a.reg.schemas[way.typ]
 	query := a.store.Collection(s.collection).Query
 	var pointing string
 	var among []any
+	more := map[string]map[string]bool{}  // a field pointing somewhere, and the ids it may point at
+	keep = func(doc *firestore.DocumentSnapshot) bool {
+		for field, allowed := range more {
+			switch v := doc.Data()[field].(type) {
+			case string:
+				if !allowed[v] {
+					return false
+				}
+			case []any:
+				found := false
+				for _, item := range v {
+					if id, ok := item.(string); ok && allowed[id] {
+						found = true
+					}
+				}
+				if !found {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+		return true
+	}
 	for _, c := range way.conditions {
 		through, field, hop := strings.Cut(c.field, ".")
 		switch {
 		case c.gate:
 			if !same(givenIn(ctx, c.value, subject, row), c.wanted) {
-				return nil, nil
+				return nil, keep, nil
 			}
 		case hop:
 			target := a.reg.entity(s.through(through).refers)
@@ -1035,15 +1063,35 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]fir
 			}
 			found, err := a.store.Collection(target.collection).Where(field, op, givenIn(ctx, c.value, subject, row)).Documents(ctx).GetAll()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if len(found) == 0 {
-				return nil, nil
+				return nil, keep, nil
 			}
-			pointing, among = through, nil
-			for _, doc := range found {
-				among = append(among, doc.Ref.ID)
+			if pointing == "" {
+				pointing = through
+				for _, doc := range found {
+					among = append(among, doc.Ref.ID)
+				}
+				continue
 			}
+			// Another: checked on what comes back, as Firestore asks one in at a time.
+			allowed := more[through]
+			if allowed == nil {
+				allowed = map[string]bool{}
+				for _, doc := range found {
+					allowed[doc.Ref.ID] = true
+				}
+			} else {
+				both := map[string]bool{}
+				for _, doc := range found {
+					if allowed[doc.Ref.ID] {
+						both[doc.Ref.ID] = true
+					}
+				}
+				allowed = both
+			}
+			more[through] = allowed
 		case c.has:
 			query = query.Where(c.field, "array-contains", givenIn(ctx, c.value, subject, row))
 		case !c.except && c.value != nil:
@@ -1051,13 +1099,12 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) ([]fir
 		}
 	}
 	if pointing == "" {
-		return []firestore.Query{query}, nil
+		return []firestore.Query{query}, keep, nil
 	}
-	var queries []firestore.Query
 	for start := 0; start < len(among); start += 30 {
 		queries = append(queries, query.Where(pointing, "in", among[start:min(start+30, len(among))]))
 	}
-	return queries, nil
+	return queries, keep, nil
 }
 
 // leftOut says whether one of a way's Excepts, or a field it wants to have none,
@@ -1089,7 +1136,7 @@ func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*fire
 	page := l.limit + 10
 	seen := map[string]bool{}
 	for _, way := range l.query.ways() {
-		queries, err := a.stores(ctx, way, subject, "")
+		queries, keep, err := a.stores(ctx, way, subject, "")
 		if err != nil {
 			return nil, false, err
 		}
@@ -1114,7 +1161,7 @@ func (a *App) newest(ctx context.Context, l *list, subject string) (docs []*fire
 				}
 				var fresh []*firestore.DocumentSnapshot
 				for _, doc := range got {
-					if !leftOut(ctx, way, doc, subject, "") {
+					if keep(doc) && !leftOut(ctx, way, doc, subject, "") {
 						fresh = append(fresh, doc)
 					}
 				}
