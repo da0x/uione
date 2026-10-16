@@ -6,6 +6,8 @@
 // a monitor is a tile for each record whose status changes, like an agent, with its
 // dot and state, what it's doing and how far, and its charts.
 
+#include <map>
+
 #include "one/desktop/runtime/components.hpp"
 
 namespace one::desktop::runtime {
@@ -66,46 +68,59 @@ namespace one::desktop::runtime {
 		return desktop::flow(std::move(shown)).spacing(16);
 	}
 
+	// Records whose status changes, as a process list is: a row each under a heading,
+	// its dot and name, its state and for how long, what it's doing, how far, and a
+	// small chart of each thing it reports with its latest value.
 	desktop::view monitor(page& p, monitor_spec spec) {
 		const auto& t = current_theme();
 		auto model = monitor_of(p, spec);
 		if (model.loading) return desktop::text("Loading…", t.quiet());
 		if (model.tiles.empty()) return desktop::text("Nothing here yet.", t.quiet());
-		std::vector<desktop::view> tiles;
+		auto head = t.quiet();
+		head.size -= 2;
+		head.weight = 600;
+		auto small = t.quiet();
+		small.size -= 2;
+		std::vector<std::string> charts;
+		for (const auto& c : model.tiles.front().charts) charts.push_back(c.title);
+		auto spark = [&](const chart_model& c, bool off) {
+			if (off) return desktop::text("–", small).width(170);
+			auto latest = t.strong();
+			latest.size -= 2;
+			return desktop::row(desktop::graph(c.values, c.top, 20.f).grow(), desktop::text(c.latest, latest).width(64)).spacing(8).align(align::center).width(170);
+		};
+		std::vector<desktop::view> heading;
+		heading.push_back(desktop::text("Name", head).width(200));
+		heading.push_back(desktop::text("State", head).width(110));
+		heading.push_back(desktop::text("Doing", head).grow());
+		heading.push_back(desktop::text("Progress", head).width(110));
+		for (const auto& title : charts) heading.push_back(desktop::text(title, head).width(170));
+		std::vector<desktop::list_row> rows;
+		std::map<std::string, std::string> opens;
 		for (const auto& tile : model.tiles) {
-			color dot = tone_of(t, tile.tone);
-			std::vector<desktop::view> inside;
-			auto title = t.strong();
-			desktop::view named = tile.address.empty() ? desktop::text(tile.title, title)
-			                                           : desktop::link(tile.title, [&p, address = tile.address] { p.open(address); }, title);
-			auto dot_style = t.body();
-			dot_style.color = dot;
-			auto state = t.strong();
-			state.size -= 1;
-			auto quiet = t.quiet();
-			std::vector<desktop::view> status;
-			status.push_back(desktop::text("●", dot_style));
-			status.push_back(desktop::text(tile.state, state));
-			if (!tile.since.empty()) status.push_back(desktop::text(tile.since, quiet));
-			inside.push_back(desktop::row(std::move(named).grow(), desktop::row(std::move(status)).spacing(5).align(align::center)).spacing(10).align(align::center));
-			inside.push_back(desktop::text(!tile.doing.empty() ? tile.doing : tile.tone == "inactive" ? "Not running" : "Nothing to do", quiet));
-			if (tile.progress) inside.push_back(progress_bar(tile.progress->first, tile.progress->second, 200));
-			if (!tile.charts.empty()) {
-				std::vector<desktop::view> charts;
-				for (const auto& c : tile.charts) charts.push_back(drawn_chart(c, false).width(122));
-				inside.push_back(desktop::flow(std::move(charts)).spacing(14));
-			}
-			std::vector<desktop::view> edged;
-			edged.push_back(desktop::edge(dot));
-			edged.push_back(desktop::column(std::move(inside)).spacing(10).grow());
-			tiles.push_back(desktop::row(std::move(edged))
-			                    .spacing(12)
-			                    .padding(edges(14, 16, 14, 0))
-			                    .width(300)
-			                    .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners}));
+			opens[tile.id] = tile.address;
+			bool off = tile.tone == "inactive";
+			auto dot = t.body();
+			dot.color = tone_of(t, tile.tone);
+			auto name = off ? t.quiet() : t.strong();
+			std::vector<desktop::view> line;
+			line.push_back(desktop::row(desktop::text("●", dot), desktop::text(tile.title, name)).spacing(6).align(align::center).width(200));
+			std::vector<desktop::view> state;
+			state.push_back(desktop::text(tile.state, off ? t.quiet() : t.body()));
+			if (!tile.since.empty()) state.push_back(desktop::text(tile.since, small));
+			line.push_back(desktop::row(std::move(state)).spacing(6).align(align::center).width(110));
+			line.push_back(desktop::text(tile.doing, t.quiet()).grow());
+			line.push_back(tile.progress ? progress_bar(tile.progress->first, tile.progress->second, 60).width(110) : desktop::text("", small).width(110));
+			for (std::size_t i = 0; i < charts.size(); ++i) line.push_back(i < tile.charts.size() ? spark(tile.charts[i], off) : desktop::text("–", small).width(170));
+			rows.push_back({tile.id, desktop::row(std::move(line)).spacing(16).align(align::center).padding(edges(2, 8))});
 		}
 		p.wide();
-		return desktop::flow(std::move(tiles)).spacing(16);
+		std::vector<desktop::view> table;
+		table.push_back(desktop::row(std::move(heading)).spacing(16).padding(edges(8, 16)).background({.fill = t.sunken, .radius = t.corners}));
+		table.push_back(desktop::list(std::move(rows), [&p, opens](const std::string& id) {
+			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
+		}));
+		return desktop::column(std::move(table)).spacing(2).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners});
 	}
 
 }  // namespace one::desktop::runtime

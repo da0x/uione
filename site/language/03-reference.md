@@ -1703,13 +1703,15 @@ form step::update "Save" {
   terminal, it's drawn in braille dots.
 - `monitor agents.agents link /:project/agents/:agent { ... }` shows records whose
   status changes from one thing to another, like agents or machines, rather than
-  moving along stages: a tile each. Its block says what a tile shows: `status
+  moving along stages, as a process list: a row each under a heading, as btop
+  lists processes. Its block says what a row shows: `status
   status`, the field saying how it is, as a dot and a word (working, standby, idle,
   offline and stopped, and the like, each colored as a board's dots are); `since
   since`, for how long; `doing doing`, a line of what it's doing; `progress step of
   steps`, how far, as a bar, or btop's squares in the terminal; `seen seen_at 30`,
   after how many seconds unheard it's shown offline, whatever it last said; `title`,
-  when it isn't `title`; and up to four `chart stats.cpu "CPU" percent`, small.
+  when it isn't `title`; and up to four `chart stats.cpu "CPU" percent`, each a
+  small line with its latest value.
 - A card whose holder says how far it is in its stage, `step` and `steps` in its
   `data`, shows it: a thin bar on a board, a whiteboard and a pipeline, and btop's
   squares in the terminal.

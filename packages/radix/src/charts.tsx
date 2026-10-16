@@ -85,63 +85,86 @@ export function Chart({ title, values, top, latest, topSaid, read, size }: Chart
   );
 }
 
-function Tile({ tile }: { tile: MonitorTile }) {
-  const color = toneColors[tile.tone];
-  const off = tile.tone === "inactive";
+// A small run of numbers in a row of a monitor: a line over a soft fill, no grid, and
+// its latest value beside it.
+function Spark({ chart }: { chart: ChartProps }) {
+  const width = 120;
+  const height = 22;
+  const places = Math.max(chart.values.length, leastPlaces);
+  const xOf = (i: number) => ((places - chart.values.length + i) / (places - 1)) * width;
+  const yOf = (v: number) => height - (Math.min(Math.max(v, 0), chart.top) / chart.top) * (height - 2) - 1;
+  const line = chart.values.map((v, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join("");
+  const area = chart.values.length > 1 ? `${line}L${xOf(chart.values.length - 1).toFixed(1)},${height}L${xOf(0).toFixed(1)},${height}Z` : "";
   return (
-    <article
-      className={`flex min-w-0 flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel ${off ? "opacity-70" : ""}`}
-      style={{ boxShadow: `inset 3px 0 0 ${color}` }}
-    >
-      <header className="flex items-start justify-between gap-3">
-        <h3 className="min-w-0 truncate font-semibold text-ink">
-          {tile.link ? (
-            <a {...tile.link} className="hover:text-accent hover:underline">
-              {tile.title}
-            </a>
-          ) : (
-            tile.title
-          )}
-        </h3>
-        <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted">
-          <span aria-hidden="true" className={`size-2 rounded-full ${tile.tone === "working" ? "animate-pulse" : ""}`} style={{ background: color }} />
-          <span className="font-medium text-ink">{tile.state}</span>
-          {tile.since && <span className="tabular-nums">{tile.since}</span>}
-        </span>
-      </header>
-      <div className="flex min-h-5 flex-col gap-1.5">
-        <p className="truncate text-sm text-muted" title={tile.doing}>
-          {tile.doing ?? (off ? "Not running" : "Nothing to do")}
-        </p>
-        {tile.progress && (
-          <div className="flex items-center gap-2" aria-label={`step ${tile.progress.step} of ${tile.progress.steps}`}>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken">
-              <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${(100 * tile.progress.step) / tile.progress.steps}%` }} />
-            </div>
-            <span className="text-xs text-muted tabular-nums">
-              {tile.progress.step}/{tile.progress.steps}
-            </span>
-          </div>
-        )}
-      </div>
-      {tile.charts.length > 0 && (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {tile.charts.map((chart) => (
-            <Chart key={chart.title} {...chart} />
-          ))}
-        </div>
-      )}
-    </article>
+    <div className="flex min-w-0 items-center gap-2" role="img" aria-label={`${chart.title}: ${chart.latest}`}>
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="block h-[22px] min-w-0 flex-1" aria-hidden="true">
+        <line x1={0} x2={width} y1={height - 0.5} y2={height - 0.5} stroke="var(--color-line)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {area && <path d={area} fill="var(--color-accent)" fillOpacity={0.14} />}
+        {line && <path d={line} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      <span className="w-16 shrink-0 text-right text-xs font-medium text-ink tabular-nums">{chart.latest}</span>
+    </div>
   );
 }
 
+// Records whose status changes, as a process list is: a row each, under a heading
+// naming each column, its dot and name, its state and for how long, what it's doing,
+// how far, and a small chart of each thing it reports.
 export function Monitor({ status, tiles }: MonitorProps) {
   if (status === "live" && tiles.length === 0) return <p className="text-sm text-muted">Nothing here yet.</p>;
+  const charts = tiles[0]?.charts.map((c) => c.title) ?? [];
+  const columns = `minmax(10rem, 14rem) 7.5rem minmax(10rem, 1fr) 6.5rem${charts.map(() => " minmax(9rem, 12rem)").join("")}`;
   return (
-    <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(18rem, 1fr))" }} aria-busy={status === "loading"}>
-      {tiles.map((tile) => (
-        <Tile key={tile.id} tile={tile} />
-      ))}
+    <div className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel" aria-busy={status === "loading"}>
+      <div role="table" className="min-w-max text-sm">
+        <div role="row" className="grid items-center gap-x-4 border-b border-line bg-sunken px-4 py-2 text-xs font-medium text-muted" style={{ gridTemplateColumns: columns }}>
+          <span role="columnheader">Name</span>
+          <span role="columnheader">State</span>
+          <span role="columnheader">Doing</span>
+          <span role="columnheader">Progress</span>
+          {charts.map((title) => (
+            <span key={title} role="columnheader">
+              {title}
+            </span>
+          ))}
+        </div>
+        {tiles.map((tile) => {
+          const color = toneColors[tile.tone];
+          const off = tile.tone === "inactive";
+          return (
+            <div
+              key={tile.id}
+              role="row"
+              className={`grid items-center gap-x-4 border-b border-line px-4 py-1.5 last:border-b-0 hover:bg-sunken/60 ${off ? "text-muted" : ""}`}
+              style={{ gridTemplateColumns: columns }}
+            >
+              <span role="cell" className="flex min-w-0 items-center gap-2">
+                <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${tile.tone === "working" ? "animate-pulse" : ""}`} style={{ background: color }} />
+                {tile.link ? (
+                  <a {...tile.link} className={`truncate font-medium hover:text-accent hover:underline ${off ? "" : "text-ink"}`}>
+                    {tile.title}
+                  </a>
+                ) : (
+                  <span className="truncate font-medium">{tile.title}</span>
+                )}
+              </span>
+              <span role="cell" className="flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className={off ? "" : "font-medium text-ink"}>{tile.state}</span>
+                {tile.since && <span className="text-xs text-muted tabular-nums">{tile.since}</span>}
+              </span>
+              <span role="cell" className="truncate text-muted" title={tile.doing}>
+                {tile.doing ?? ""}
+              </span>
+              <span role="cell">{tile.progress ? <Progress step={tile.progress.step} steps={tile.progress.steps} /> : null}</span>
+              {charts.map((title, i) => (
+                <span key={title} role="cell" className="min-w-0">
+                  {tile.charts[i] && !off ? <Spark chart={tile.charts[i]!} /> : <span className="text-xs text-muted">–</span>}
+                </span>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

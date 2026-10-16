@@ -588,13 +588,13 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	auto s = with_agents();
 	navigator nav(s, data);
 	nav.open("/atlas/agents");
-	screen_at t(nav, 80, 20);
+	screen_at t(nav, 110, 12);
 	std::string drawn = t.text();
 	CHECK_SAYING(drawn.find("Working 1m") != std::string::npos && drawn.find("3/5") != std::string::npos && drawn.find("90%") == std::string::npos &&
 	                 drawn.find("64%") != std::string::npos && drawn.find("610 MiB") != std::string::npos,
 	             drawn);
-	CHECK_SAYING(drawn.find("Offline") != std::string::npos && drawn.find("Not running") != std::string::npos, drawn);
-	CHECK_SAYING(drawn.find("⣿") != std::string::npos, drawn);  // a full cell of the graph
+	CHECK_SAYING(drawn.find("Offline") != std::string::npos, drawn);
+	CHECK_SAYING(drawn.find("⣷") != std::string::npos, drawn);  // the graph, its last samples near the top
 	matches_golden("monitor", drawn);
 	nav.open("/atlas/agents/npm");
 	screen_at page(nav, 80, 30);

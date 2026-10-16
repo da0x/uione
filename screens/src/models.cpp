@@ -1015,7 +1015,8 @@ namespace one::screens {
 			std::string part = path.substr(from, dot == std::string::npos ? std::string::npos : dot - from);
 			const value* next = at.is_map() ? at.find(part) : nullptr;
 			if (!next) return value();
-			at = *next;
+			value inner = *next;  // copied out first: next points into at
+			at = std::move(inner);
 			if (dot == std::string::npos) break;
 			from = dot + 1;
 		}
