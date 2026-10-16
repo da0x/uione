@@ -1675,7 +1675,7 @@ form step::update "Save" {
   So can a link, `link /:project/boards/:board/workflow "Workflow" icon workflow`,
   and a button in a table's or a board's toolbar, `issue::create "New issue" icon
   add`. The icons are `add`, `archive`, `delete`, `edit`, `follow`, `following`,
-  `settings` and `workflow`.
+  `robot`, `settings` and `workflow`.
 - A screen laid out in regions keeps its `heading` and `subtitle` outside them,
   under its title. Beside the page, in `side`, a `section` is a glance at
   something, with a smaller heading.

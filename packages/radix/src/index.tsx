@@ -257,6 +257,13 @@ const buttonIcons: Record<string, ReactNode> = {
       <path d="M3.8 4.5l.7 8.6a1 1 0 0 0 1 .9h5a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" />
     </svg>
   ),
+  // A robot, for what programs do, like a project's agents.
+  robot: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="10" height="8" rx="2" />
+      <path d="M8 5V3M6 9h.01M10 9h.01M6.5 11h3M1.5 8.5v2M14.5 8.5v2" />
+    </svg>
+  ),
   // A box with its lid, what's put away.
   archive: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

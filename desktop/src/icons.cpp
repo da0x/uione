@@ -49,6 +49,8 @@ namespace one::desktop {
 			    {"delete", {path("M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5"), path("M3.8 4.5l.7 8.6a1 1 0 0 0 1 .9h5a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5")}},
 			    // A box with its lid, what's put away.
 			    {"archive", {box(1.5f, 2.5f, 13, 3, 1), path("M2.8 5.5v7a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1v-7M6.5 8.5h3")}},
+			    // A robot, for what programs do, like a project's agents.
+			    {"robot", {box(3, 5, 10, 8, 2), path("M8 5V3M6 9h.01M10 9h.01M6.5 11h3M1.5 8.5v2M14.5 8.5v2")}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},
