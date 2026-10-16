@@ -17,6 +17,7 @@
 #include <cctype>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <cstdlib>
 #include <format>
 #include <random>
@@ -1507,9 +1508,17 @@ namespace one::screens {
 					std::string label;
 					int count = 0;
 					double order = 0;
+					std::string state = "partial";  // what its stage's status says of it
 				};
 				std::map<std::string, group> groups;
 				int total = 0;
+				// The first stage anything is in, across the whole list: where work hasn't started.
+				double first_order = std::numeric_limits<double>::infinity();
+				if (!spec.tally->order.empty()) {
+					for (const auto& held : rows_of(spec.tally->view.get(), spec.tally->list)) {
+						if (value o = field_of(held, spec.tally->order); o.is_integer() || o.is_double()) first_order = std::min(first_order, o.as_double());
+					}
+				}
 				for (const auto& held : rows_of(spec.tally->view.get(), spec.tally->list)) {
 					if (field_of(held, spec.tally->by).as_string() != card.id) continue;
 					++total;
@@ -1518,6 +1527,11 @@ namespace one::screens {
 					if (g.label.empty()) g.label = show(field_of(held, spec.tally->shown.empty() ? spec.tally->and_by : spec.tally->shown));
 					if (g.label.empty()) g.label = "None";
 					if (!spec.tally->order.empty()) g.order = field_of(held, spec.tally->order).as_double();
+					// Done once its status is success, failed once it's failed, not started in
+					// the first stage of all, and under way anywhere else.
+					std::string status = spec.tally->status.empty() ? "" : show(field_of(held, spec.tally->status));
+					bool first = !spec.tally->order.empty() && field_of(held, spec.tally->order).as_double() == first_order;
+					g.state = status == "success" || status == "done" ? "done" : status == "failed" ? "failed" : first ? "none" : "partial";
 					++g.count;
 				}
 				std::vector<group> in_order;
@@ -1526,6 +1540,7 @@ namespace one::screens {
 				for (const auto& g : in_order) {
 					card.tally += (card.tally.empty() ? "" : " · ") + std::format("{} {}", g.count, g.label);
 					card.counted.emplace_back(g.label, g.count);
+					card.counted_states.push_back(g.state);
 				}
 				if (total == 0) card.tally = "No " + (spec.tally->noun.empty() ? std::string("items") : spec.tally->noun) + " yet";
 			}

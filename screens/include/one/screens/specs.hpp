@@ -316,6 +316,7 @@ namespace one::screens {
 		std::string shown = "";   // like stage.title
 		std::string order = "";   // like stage.position
 		std::string noun = "";    // like issues
+		std::string status = "";  // like stage.status: what each part means, not started, under way, done or failed
 	};
 	struct card_filter {
 		std::string label;

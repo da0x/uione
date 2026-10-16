@@ -324,7 +324,9 @@ export interface Card {
   link?: LinkProps;
   details: ReactNode[];
   tags?: string[]; // its choices shown beside its title, like Private
-  tally?: { label: string; count: number }[]; // how what it holds splits, like its issues by stage
+  // How what it holds splits, like its issues by stage, and what each part means:
+  // not started, under way, done or failed, so a bar shows how far along it is.
+  tally?: { label: string; count: number; state?: "none" | "partial" | "done" | "failed" }[];
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
 }

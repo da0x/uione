@@ -1863,6 +1863,7 @@ namespace one::generators {
                 auto has = [&](const std::string& column) { return std::find(counted.begin(), counted.end(), column) != counted.end(); };
                 if (has(cards.tally_and + ".title")) tally += ", shown: " + web_detail::js_string(cards.tally_and + ".title");
                 if (has(cards.tally_and + ".position")) tally += ", order: " + web_detail::js_string(cards.tally_and + ".position");
+                if (has(cards.tally_and + ".status")) tally += ", status: " + web_detail::js_string(cards.tally_and + ".status");
                 tally += ", noun: " + web_detail::js_string(cards.tally_list);  // issues
                 line += " tally={{ " + tally + " }}";
             }

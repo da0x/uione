@@ -826,13 +826,14 @@ namespace one::generators {
             if (c.link) out += ", " + link_settings(ns, *c.link);
             if (c.tally) {
                 // The rows it counts: those of another list whose field names a card, by what each is at.
-                std::string shown, order;
+                std::string shown, order, status;
                 for (const auto& column : model_.listed_columns(ns, c.tally->text(), c.tally_list)) {
                     if (column == c.tally_and + ".title") shown = column;
                     if (column == c.tally_and + ".position") order = column;
+                    if (column == c.tally_and + ".status") status = column;
                 }
                 out += ", .tally = tally_spec{" + view_variable(parts, screens::full_view(ns, c.tally->text())) + ", " + str(c.tally_list) + ", " + str(c.tally_by) + ", " +
-                       str(c.tally_and) + ", " + str(shown) + ", " + str(order) + ", " + str(c.tally_list) + "}";
+                       str(c.tally_and) + ", " + str(shown) + ", " + str(order) + ", " + str(c.tally_list) + (status.empty() ? "" : ", " + str(status)) + "}";
             }
             if (!c.filters.empty()) {
                 std::string filters;

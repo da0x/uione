@@ -690,7 +690,17 @@ namespace one::terminal::runtime {
 			if (spec.tally) {
 				inside.push_back(quiet(card.tally));
 				std::vector<terminal::meter_part> parts;
-				for (const auto& [label, count] : card.counted) parts.push_back({static_cast<double>(count), terminal::meter_look(parts.size())});
+				// How far along it is: done in the accent, under way lighter, failed in red,
+				// and what hasn't started as the empty track, in that order.
+				for (const char* wanted : {"done", "partial", "failed", "none"}) {
+					for (std::size_t i = 0; i < card.counted.size(); ++i) {
+						std::string state = i < card.counted_states.size() ? card.counted_states[i] : "partial";
+						if (state != wanted) continue;
+						terminal::style look = state == "done" ? terminal::meter_look(0) : state == "partial" ? terminal::meter_look(2)
+						                     : state == "failed" ? terminal::style{.foreground = color::red} : terminal::style{.dim = true, .foreground = color::bright_black};
+						parts.push_back({static_cast<double>(card.counted[i].second), look});
+					}
+				}
 				if (!parts.empty()) inside.push_back(terminal::meter(std::move(parts)));
 			}
 			if (!card.filters.empty()) {

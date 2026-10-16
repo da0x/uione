@@ -37,6 +37,14 @@ const statusColors: Record<string, string> = {
   failed: "var(--color-danger)",
 };
 
+// A tally's parts, by what they mean: done, solid; under way, a tint; failed, red.
+const tallyRank: Record<string, number> = { done: 0, partial: 1, failed: 2, none: 3 };
+const tallyLook: Record<string, CSSProperties> = {
+  done: { background: "var(--color-accent)" },
+  partial: { background: "color-mix(in oklab, var(--color-accent) 35%, var(--color-surface))" },
+  failed: { background: "var(--color-danger)" },
+};
+
 // The box code sits in, on its own or inside a page of docs.
 // Whether the page is a phone's width, narrower than Tailwind's sm, as it changes.
 // Where it can't be told, as in tests, it isn't.
@@ -1006,15 +1014,22 @@ export const radix: ComponentSet = {
                   <span className="font-semibold text-ink tabular-nums">{total}</span> {card.noun ? (total === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
                 </p>
                 {total > 0 && (
-                  <div className="flex h-2 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
-                    {card.tally.map((part, i) => (
-                      <div key={part.label} className="bg-accent" style={{ width: `${(100 * part.count) / total}%`, opacity: Math.max(0.25, 1 - i * 0.18) }} />
-                    ))}
+                  // How far along it is: what's done solid from the left, then what's
+                  // under way in a tint, what failed in red, and what hasn't started
+                  // left as the empty track.
+                  <div className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-sunken" aria-hidden="true">
+                    {[...card.tally]
+                      .filter((part) => part.state !== "none")
+                      .sort((a, b) => tallyRank[a.state ?? "partial"] - tallyRank[b.state ?? "partial"])
+                      .map((part) => (
+                        <div key={part.label} style={{ width: `${(100 * part.count) / total}%`, ...tallyLook[part.state ?? "partial"] }} />
+                      ))}
                   </div>
                 )}
                 <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
                   {card.tally.map((part) => (
-                    <span key={part.label}>
+                    <span key={part.label} className="inline-flex items-center gap-1">
+                      <span aria-hidden="true" className="size-2 rounded-[2px] border border-line" style={part.state === "none" ? undefined : tallyLook[part.state ?? "partial"]} />
                       {part.label} <span className="tabular-nums text-ink">{part.count}</span>
                     </span>
                   ))}

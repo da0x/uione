@@ -2183,6 +2183,15 @@ const ToolbarSlot = createContext<HTMLElement | null>(null);
 // How a card sums up what it holds, like a board's issues: the list they're in, the
 // field naming the card, and the field they're split by, shown by its title and in
 // its order when the list has them.
+type TallyState = "none" | "partial" | "done" | "failed";
+// What a stage says of the rows in it: done once its status is success, failed once
+// it's failed, not started in the first stage of all, and under way anywhere else.
+function tallyState(status: string, first: boolean): TallyState {
+  if (status === "success" || status === "done") return "done";
+  if (status === "failed") return "failed";
+  return first ? "none" : "partial";
+}
+
 export interface Tally {
   view: ViewState;
   list: string;
@@ -2190,6 +2199,7 @@ export interface Tally {
   and: string; // like stage
   shown?: string; // like stage.title
   order?: string; // like stage.position
+  status?: string; // like stage.status: what each part means, not started, under way, done or failed
   noun?: string; // what's counted, like issues
 }
 
@@ -2235,14 +2245,21 @@ export function Cards({
   const sum = (card: Row) => {
     if (!tally) return undefined;
     const mine = counted.filter((row) => row[tally.by] === card.id);
-    const groups = new Map<unknown, { label: string; count: number; order: number }>();
+    const groups = new Map<unknown, { label: string; count: number; order: number; state: TallyState }>();
+    // The first stage anything is in, across the whole list: where work hasn't started.
+    const firstOrder = tally.order ? Math.min(...counted.map((row) => Number(row[tally.order!])).filter((n) => Number.isFinite(n))) : Number.NaN;
     for (const row of mine) {
       const key = row[tally.and];
-      const group = groups.get(key) ?? { label: show(tally.shown ? row[tally.shown] : key) || "None", count: 0, order: Number(tally.order ? row[tally.order] : 0) || 0 };
+      const group = groups.get(key) ?? {
+        label: show(tally.shown ? row[tally.shown] : key) || "None",
+        count: 0,
+        order: Number(tally.order ? row[tally.order] : 0) || 0,
+        state: tallyState(tally.status ? show(row[tally.status]) : "", tally.order !== undefined && Number(row[tally.order]) === firstOrder),
+      };
       group.count += 1;
       groups.set(key, group);
     }
-    return [...groups.values()].sort((a, b) => a.order - b.order).map(({ label: name, count }) => ({ label: name, count }));
+    return [...groups.values()].sort((a, b) => a.order - b.order).map(({ label: name, count, state }) => ({ label: name, count, state }));
   };
   return (
     <ui.Cards

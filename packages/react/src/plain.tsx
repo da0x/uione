@@ -60,6 +60,9 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
   );
 }
 
+// What a tally's part means, said: not started, under way, done or failed.
+const tallyWords: Record<string, string> = { none: "not started", partial: "under way", done: "done", failed: "failed" };
+
 export const plain: ComponentSet = {
   Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, children }) => (
     <>
@@ -470,7 +473,7 @@ export const plain: ComponentSet = {
             <p>
               {card.tally.reduce((n, part) => n + part.count, 0)}{" "}
               {card.noun ? (card.tally.reduce((n, part) => n + part.count, 0) === 1 ? card.noun.replace(/s$/, "") : card.noun) : "in all"}
-              {card.tally.map((part) => `, ${part.label} ${part.count}`).join("")}
+              {card.tally.map((part) => `, ${part.label} ${part.count}${part.state ? ` ${tallyWords[part.state]}` : ""}`).join("")}
             </p>
           )}
           {card.filters.length > 0 && (

@@ -276,9 +276,10 @@ describe("cards", () => {
       data: {
         boards: [{ id: "ark-main", title: "Product" }],
         issues: [
-          { id: "i1", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1 },
-          { id: "i2", board: "ark-main", stage: "p2", "stage.title": "Done", "stage.position": 2 },
-          { id: "i3", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1 },
+          { id: "i1", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1, "stage.status": "inactive" },
+          { id: "i2", board: "ark-main", stage: "p2", "stage.title": "Done", "stage.position": 3, "stage.status": "success" },
+          { id: "i3", board: "ark-main", stage: "p1", "stage.title": "Triage", "stage.position": 1, "stage.status": "inactive" },
+          { id: "i4", board: "ark-main", stage: "p3", "stage.title": "Review", "stage.position": 2, "stage.status": "inactive" },
         ],
       },
     };
@@ -289,11 +290,12 @@ describe("cards", () => {
         columns={{ title: "Title" }}
         link="/:project/boards/:board"
         keyed={["project"]}
-        tally={{ view: page, list: "issues", by: "board", and: "stage", shown: "stage.title", order: "stage.position", noun: "issues" }}
+        tally={{ view: page, list: "issues", by: "board", and: "stage", shown: "stage.title", order: "stage.position", status: "stage.status", noun: "issues" }}
         filters={[{ label: "High priority", query: { priority: "high" } }]}
       />
     ));
-    expect(screen.getByText("3 issues, Triage 2, Done 1")).toBeTruthy();
+    // The first stage hasn't started, one in between is under way, and one that's a success is done.
+    expect(screen.getByText("4 issues, Triage 2 not started, Review 1 under way, Done 1 done")).toBeTruthy();
     expect(screen.getByRole("link", { name: "High priority" }).getAttribute("href")).toBe("/ark/boards/main?is=High+priority&priority=high");
   });
 });
