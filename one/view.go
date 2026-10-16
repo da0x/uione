@@ -2070,8 +2070,8 @@ func (v *ViewSpec) definition() string {
 // composing changes whenever how views are put together changes in a way their
 // stored documents need rebuilding for, like building a new view per entity for the
 // entities already stored, or naming in each public-when document what it reads
-// through.
-const composing = "4"
+// through, or counting through two fields that point elsewhere by both (5).
+const composing = "5"
 
 // rebuildChanged rebuilds the stored documents of every view whose definition
 // changed since the backend last started, as when a deploy adds a field to a view,
