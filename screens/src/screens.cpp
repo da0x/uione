@@ -485,6 +485,47 @@ namespace one::screens {
 		errors_.change([&](auto& now) { now.erase(command); });
 	}
 
+	namespace {
+		void held_in(const value& v, std::vector<std::string>& out) {
+			if (v.is_array()) {
+				for (const auto& item : v.as_array()) held_in(item, out);
+				return;
+			}
+			if (!v.is_map()) return;
+			std::string holder = show(v["held_by"]);
+			const value& until = v["held_until"];
+			if (!holder.empty() && until.is_time() && until.as_time() > std::chrono::system_clock::now()) {
+				std::string title = show(v["title"]);
+				if (title.empty()) title = show(v["name"]);
+				if (title.empty()) title = show(v["id"]);
+				std::string who = show(v["held_by.name"]);
+				std::string said = who.empty() ? title : title + " (" + who + ")";
+				if (std::find(out.begin(), out.end(), said) == out.end()) out.push_back(said);
+			}
+			for (const auto& [name, field] : v.as_map()) {
+				if (field.is_array() || field.is_map()) held_in(field, out);
+			}
+		}
+	}  // namespace
+
+	std::vector<std::string> page_base::worked() const {
+		std::vector<std::string> out;
+		for (const auto& [name, l] : views_) {
+			if (l->current.peek().status == status::ready) held_in(l->current.peek().data, out);
+		}
+		return out;
+	}
+
+	std::vector<std::string> navigator_base::worked() const {
+		std::vector<std::string> out;
+		for (const auto& p : trail_) {
+			for (auto& said : p->worked()) {
+				if (std::find(out.begin(), out.end(), said) == out.end()) out.push_back(std::move(said));
+			}
+		}
+		return out;
+	}
+
 	std::string page_base::title() const { return title_.empty() ? screen_title_ : said(title_); }
 
 	std::chrono::sys_seconds page_base::now() {

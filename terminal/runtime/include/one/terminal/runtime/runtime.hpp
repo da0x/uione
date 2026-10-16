@@ -37,7 +37,15 @@ namespace one::terminal::runtime {
 	terminal::view drawn(navigator& nav);
 	terminal::view page_view(navigator& nav, page& p);
 
-	// Runs a site in the terminal until q: opens `address`, or the first screen's.
+	// What a key does before the page's own: Esc goes back. When quitting stops agents
+	// started with the app, q asks first while they're working on something, naming
+	// it, and q again quits, Esc goes on. True when it's done; false when it's the
+	// page's, or q quits.
+	bool key(navigator& nav, const key_press& e, bool stops_agents);
+
+	// Runs a site in the terminal until q. ONE_QUIT_STOPS_AGENTS=1 says the agents
+	// started with it stop when it quits, so q asks first while they're working. It opens `address`, or the
+	// first screen's.
 	int run(const site& s, terminal::view_app& app, screens::source& from, const std::string& address = "/");
 
 }  // namespace one::terminal::runtime

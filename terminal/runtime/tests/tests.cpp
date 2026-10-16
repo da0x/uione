@@ -194,9 +194,12 @@ namespace {
 		return s;
 	}
 
-	void fill_board(memory_source& data) {
-		auto issue = [](std::string id, int n, std::string title, std::string stage, std::string priority, list labels = {}, list people = {}) {
-			return value(fields{{"id", id}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}});
+	// first: more of the first card's fields, like who holds it.
+	void fill_board(memory_source& data, const fields& first = {}) {
+		auto issue = [&first](std::string id, int n, std::string title, std::string stage, std::string priority, list labels = {}, list people = {}) {
+			fields f{{"id", id}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}};
+			if (n == 12) f.insert(first.begin(), first.end());
+			return value(f);
 		};
 		data.set("projects::board_page", "atlas-main",
 		         value(fields{{"stages", list{value(fields{{"id", "s1"}, {"title", "To do"}}), value(fields{{"id", "s2"}, {"title", "Doing"}}), value(fields{{"id", "s3"}, {"title", "Done"}})}},
@@ -280,6 +283,34 @@ namespace {
 	}
 
 }  // namespace
+
+// Started by publish, whose agents stop when it quits: q asks first while one is
+// working on a card, naming it, Esc goes on, and q again quits; with nothing worked
+// on, or agents that don't stop with it, q quits at once.
+TEST("q asks before quitting stops agents working on cards") {
+	memory_source data;
+	fill_board(data);
+	auto s = with_board();
+	navigator nav(s, data);
+	auto handled = [&nav](terminal::key_press e, bool stops) { return one::terminal::runtime::key(nav, e, stops); };
+	nav.open("/atlas/boards/main");
+	screen_at t(nav, 80, 30);
+	(void)t.text();
+	CHECK(!handled(letter('q'), true));  // nothing's held: it quits
+	value until;
+	until.type = value::kind::time;
+	until.time.seconds = std::chrono::duration_cast<std::chrono::seconds>((std::chrono::system_clock::now() + std::chrono::minutes(10)).time_since_epoch()).count();
+	fill_board(data, {{"held_by", "npm-agent"}, {"held_by.name", "npm"}, {"held_until", until}});
+	(void)t.text();
+	CHECK(!handled(letter('q'), false));  // its agents don't stop with it
+	CHECK(handled(letter('q'), true));
+	std::string asked = t.text();
+	matches_golden("board-quitting", asked);
+	CHECK(handled(key(terminal::keys::escape), true));
+	CHECK(t.text().find("Quit?") == std::string::npos);
+	CHECK(handled(letter('q'), true));
+	CHECK(!handled(letter('q'), true));  // q again quits
+}
 
 TEST("a board in a terminal: its columns one after another, and m moving a card along a step the reader may take") {
 	memory_source data;

@@ -9,6 +9,8 @@
 
 #include <cstdlib>
 #include <format>
+#include <functional>
+#include <optional>
 
 #include "one/terminal/runtime/components.hpp"
 
@@ -51,6 +53,13 @@ namespace one::terminal::runtime {
 		return terminal::column(std::move(parts)).spacing(1).padding(1, 2);
 	}
 
+	namespace {
+		// What agents were working on when q was pressed, while the app asks whether to
+		// quit, which stops them.
+		state<std::optional<std::vector<std::string>>> asking_to_quit;
+		std::function<void()> quit_now;
+	}  // namespace
+
 	terminal::view drawn(navigator& nav) {
 		const auto& s = nav.site();
 		(void)nav.changes();
@@ -75,8 +84,43 @@ namespace one::terminal::runtime {
 		std::string keys = nav.depth() > 1 ? "tab moves   enter opens   esc back   q quits" : "tab moves   enter opens   q quits";
 		// Keyed by where it is, so a page keeps nothing of the one before it.
 		std::string key = std::format("{}#{}", here.address(), nav.depth());
-		return terminal::column(terminal::row(std::move(bar)).spacing(3).padding(0, 1), terminal::divider(), terminal::scroll(page_view(nav, here)).key(key).grow(),
-		                        terminal::text(" " + keys, dim()));
+		std::vector<terminal::view> parts;
+		parts.push_back(terminal::row(std::move(bar)).spacing(3).padding(0, 1));
+		parts.push_back(terminal::divider());
+		if (const auto& asking = asking_to_quit.get()) {
+			std::vector<terminal::view> said;
+			said.push_back(terminal::text(asking->size() == 1 ? "An agent is working on this, and quitting stops it midway:"
+			                                                          : std::format("Agents are working on these {}, and quitting stops them midway:", asking->size()),
+			                              {.bold = true}));
+			for (const auto& worked : *asking) said.push_back(terminal::text("  • " + worked));
+			said.push_back(terminal::row(terminal::button("Quit", [] { if (quit_now) quit_now(); }, true),
+			                             terminal::button("Cancel", [] { asking_to_quit.set(std::nullopt); }).autofocus())
+			                   .spacing(2));
+			parts.push_back(terminal::column(terminal::column(std::move(said)).spacing(1).padding(0, 1).boxed("Quit?")).padding(0, 2));
+			keys = "q quits   esc goes on";
+		}
+		parts.push_back(terminal::scroll(page_view(nav, here)).key(key).grow());
+		parts.push_back(terminal::text(" " + keys, dim()));
+		return terminal::column(std::move(parts));
+	}
+
+	bool key(navigator& nav, const key_press& e, bool stops_agents) {
+		if (asking_to_quit.peek()) {
+			if (e.is(keys::escape)) {
+				asking_to_quit.set(std::nullopt);
+				return true;
+			}
+			if (e.is('q')) asking_to_quit.set(std::nullopt);  // q again quits
+			return false;
+		}
+		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
+		if (e.is('q') && stops_agents) {
+			if (auto worked = nav.worked(); !worked.empty()) {
+				asking_to_quit.set(std::move(worked));
+				return true;
+			}
+		}
+		return false;
 	}
 
 	int run(const site& s, terminal::view_app& app, screens::source& from, const std::string& address) {
@@ -90,10 +134,13 @@ namespace one::terminal::runtime {
 		};
 		if (s.look.colors) draw(std::nullopt);
 		screens::tried_themes::on_tried(draw);
-		int ended = app.run([&] { return drawn(nav); }, [&](const key_press& e) {
-			if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
-			return false;
-		});
+		// Started with agents that stop when it quits, as publish starts its own.
+		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");
+		bool stops_agents = stops && *stops && std::string(stops) != "0";
+		quit_now = [&app] { app.quit(); };
+		int ended = app.run([&] { return drawn(nav); }, [&](const key_press& e) { return key(nav, e, stops_agents); });
+		asking_to_quit.set(std::nullopt);
+		quit_now = nullptr;
 		if (colored && (s.look.colors || screens::tried_themes::theme().peek())) draw_terminal_in(std::nullopt);
 		return ended;
 	}

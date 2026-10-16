@@ -152,6 +152,11 @@ namespace one::screens {
 		std::optional<person> reader() const { return source_.reader(); }
 		std::string me() const { return reader() ? reader()->uid : ""; }
 
+		// What's being worked on now in what the page reads: each record someone holds
+		// on a lease that hasn't run out, like a card an agent took, as its title and,
+		// when the view reads it, who holds it, like "@uione/react 0.15.0 (npm)".
+		std::vector<std::string> worked() const;
+
 		// A title read from views, like "#{number} {title}", which it shows once they've arrived.
 		void title(std::vector<part> parts) { title_ = std::move(parts); }
 		std::string title() const;
@@ -284,6 +289,8 @@ namespace one::screens {
 		bool replace(const std::string& address);
 		std::size_t depth() const { return trail_.size(); }
 		page_base& current_page() { return *trail_.back(); }
+		// What's being worked on now in the pages opened, each said once.
+		std::vector<std::string> worked() const;
 		// Read by what draws it, so a page opened or left builds it again.
 		int changes() const { return *changed_; }
 
