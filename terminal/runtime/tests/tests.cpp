@@ -652,6 +652,15 @@ TEST("a switch's pick is remembered for its page between runs of the app") {
 	std::filesystem::remove_all(folder);
 }
 
+// person.service != true: whoever isn't a service, a person said as one or never said.
+TEST("a filter keeps the rows that don't hold a value, by a field read through what they point at") {
+	auto row = [](fields f) { return value(f); };
+	std::vector<std::pair<std::string, std::string>> people{{"person.service!", "true"}};
+	CHECK(one::screens::kept(row({{"person.service", false}}), people, ""));
+	CHECK(one::screens::kept(row({{"person.name", "Ade"}}), people, ""));
+	CHECK(!one::screens::kept(row({{"person.service", true}}), people, ""));
+}
+
 int main() {
 	use_time_zone("UTC");
 	return check::run();

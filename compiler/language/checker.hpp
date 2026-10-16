@@ -2881,8 +2881,8 @@ namespace one::language {
                     if (table->only) {
                         verify_filter(*table->only, table->only_where);
                         auto* b = std::get_if<binary_expression>(&table->only->node);
-                        auto* n = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
-                        if (n && !in_rows(n->name.text())) error(table->only_where, "the table keeps only rows by " + n->name.text() + ", which its rows don't have");
+                        std::string by = b && filter_field(*b->left) ? written(*b->left) : "";
+                        if (!by.empty() && !in_rows(by)) error(table->only_where, "the table keeps only rows by " + by + ", which its rows don't have");
                     }
                     // reorder position: rows dragged into order, which an update sets.
                     if (table->reorder && list) verify_reorder(ns, *list, *table->reorder, table->reorder_where, "table", "rows");
@@ -3464,15 +3464,22 @@ namespace one::language {
 
         // A filter, a card's or a table's only: a field and the value it holds, or a
         // time it's before or after, counted from now.
+        // A filter's field: one of the rows', or one they read through what they point at,
+        // like person.service.
+        static bool filter_field(const expression& e) {
+            if (auto* n = std::get_if<name_expression>(&e.node)) return n->name.parts.size() == 1;
+            if (auto* m = std::get_if<member_expression>(&e.node)) return filter_field(*m->object);
+            return false;
+        }
+
         void verify_filter(const expression& condition, location where) {
             auto* b = std::get_if<binary_expression>(&condition.node);
-            auto* field = b ? std::get_if<name_expression>(&b->left->node) : nullptr;
             auto* literal = b ? std::get_if<literal_expression>(&b->right->node) : nullptr;
             bool time = literal && literal->type == literal_expression::kind::time;
             bool compared = b && (b->op == token_kind::less || b->op == token_kind::greater || b->op == token_kind::less_equal ||
                                   b->op == token_kind::greater_equal);
-            if (!b || !(b->op == token_kind::equal || compared) || !field || field->name.parts.size() != 1) {
-                error(where, "a filter is a field and the value it holds, like author == me, or a time it's after, like updated_at > 7 days ago");
+            if (!b || !(b->op == token_kind::equal || b->op == token_kind::not_equal || compared) || !filter_field(*b->left)) {
+                error(where, "a filter is a field and the value it holds, or doesn't, like author == me or person.service != true, or a time it's after, like updated_at > 7 days ago");
             } else if (compared != time) {
                 error(where, compared ? "a filter compares a time with one counted from now, like updated_at > 7 days ago"
                                       : "a filter keeps a time before or after one, like updated_at > 7 days ago");

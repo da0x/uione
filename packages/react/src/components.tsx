@@ -1121,9 +1121,13 @@ function kept(row: Row, picks: [string, string][], me: string): boolean {
   return picks.every(([name, wanted]) => {
     const compared = /^(.*?)(<=|>=|<|>)$/.exec(name);
     if (compared) return keptByTime(row[compared[1]], compared[2], wanted);
+    // field! keeps the rows that don't hold it, like person.service! true: whoever isn't a service.
+    const not = name.endsWith("!");
+    const field = not ? name.slice(0, -1) : name;
     const value = wanted === "me" ? me : wanted;
-    const held = row[name];
-    return Array.isArray(held) ? held.includes(value) : held === value;
+    const held = row[field];
+    const holds = Array.isArray(held) ? held.map(String).includes(value) : held !== undefined && held !== null && String(held) === value;
+    return not ? !holds : holds;
   });
 }
 

@@ -1537,7 +1537,9 @@ screen "Book" /books/:book {
   box that finds rows by those fields, `sort by number descending` puts its rows in
   order, largest or latest first, and `page 25` shows them 25 at a time. `by status`
   can go there too. `only due <= 2 weeks from now` keeps only the rows a filter
-  picks, worked out as it's shown, and `tint by priority` colors each row by its
+  picks, worked out as it's shown; a filter can read through what the rows point
+  at and keep what isn't so, like `only person.service != true`, a project's people
+  without its services. `tint by priority` colors each row by its
   choice, as Trac colored a ticket's priority: the field's first choice red, then
   yellow, plain, cyan and blue. A board's block and a details block can say `tint by`
   too.

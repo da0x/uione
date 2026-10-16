@@ -1671,3 +1671,13 @@ TEST_CASE("a monitor shows fields its list reads, says how each is, and a chart 
     CHECK(only_error(page("chart one_agent.load.cpu \"CPU\"")).message == "view one_agent has no load; add it to the view");
     CHECK(only_error(page("chart one_agent.stats.cpu.now \"CPU\"")).message == "a chart's numbers are a field, or a name in a field of data, like stats.cpu");
 }
+
+TEST_CASE("a table keeps rows by a field they read through what they point at, or by a value it isn't") {
+    const std::string people = "entity person {\n\tname  text\n\tservice  boolean\n}\nentity member {\n\tperson  person\n}\ncommand member::create\n"
+                               "view crew public {\n\tmembers = each member {\n\t\tperson  person.name  person.service\n\t}\n}\n";
+    auto table = [&](const std::string& only) { return people + "screen \"People\" /people {\n\ttable crew.members {\n\t\tonly " + only + "\n\t\tperson.name\n\t}\n}\n"; };
+    CHECK(check_source(table("person.service != true")).empty());
+    CHECK(only_error(table("person.picture != true")).message == "the table keeps only rows by person.picture, which its rows don't have");
+    CHECK(only_error(table("count(person) == 1")).message ==
+          "a filter is a field and the value it holds, or doesn't, like author == me or person.service != true, or a time it's after, like updated_at > 7 days ago");
+}

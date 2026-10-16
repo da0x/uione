@@ -386,10 +386,14 @@ namespace one::screens {
 			for (const char* op : {"<=", ">=", "<", ">"}) {
 				if (name.ends_with(op)) return kept_by_time(field_of(row, name.substr(0, name.size() - std::strlen(op))), op, wanted);
 			}
+			// name! keeps the rows that don't hold it, like person.service! true: whoever isn't a service.
+			bool negated = name.ends_with("!");
+			std::string field = negated ? name.substr(0, name.size() - 1) : name;
 			std::string looked_for = wanted == "me" ? me : wanted;
-			const value& held = field_of(row, name);
-			if (held.is_array()) return std::ranges::any_of(held.items, [&](const value& item) { return show(item) == looked_for; });
-			return show(held) == looked_for;
+			const value& held = field_of(row, field);
+			auto said = [](const value& v) { return v.is_bool() ? std::string(v.as_bool() ? "true" : "false") : show(v); };
+			bool holds = held.is_array() ? std::ranges::any_of(held.items, [&](const value& item) { return said(item) == looked_for; }) : said(held) == looked_for;
+			return negated ? !holds : holds;
 		});
 	}
 

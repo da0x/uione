@@ -1889,6 +1889,7 @@ namespace one::generators {
                 case language::token_kind::greater: field += ">"; break;
                 case language::token_kind::less_equal: field += "<="; break;
                 case language::token_kind::greater_equal: field += ">="; break;
+                case language::token_kind::not_equal: field += "!"; break;  // anything but it
                 default: break;
             }
             std::string value;

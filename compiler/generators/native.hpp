@@ -588,7 +588,7 @@ namespace one::generators {
                 }
                 using language::token_kind;
                 std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<="
-                               : binary->op == token_kind::greater_equal ? ">=" : "";
+                               : binary->op == token_kind::greater_equal ? ">=" : binary->op == token_kind::not_equal ? "!" : "";
                 std::string field = screens::text_of(*binary->left);
                 std::string wanted;
                 if (auto* literal = std::get_if<language::literal_expression>(&binary->right->node)) wanted = literal->value;
@@ -849,7 +849,7 @@ namespace one::generators {
                         }
                         using language::token_kind;
                         std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<="
-                                       : binary->op == token_kind::greater_equal ? ">=" : "";
+                                       : binary->op == token_kind::greater_equal ? ">=" : binary->op == token_kind::not_equal ? "!" : "";
                         std::string wanted;
                         if (auto* literal = std::get_if<language::literal_expression>(&binary->right->node)) wanted = literal->value;
                         else if (auto* name = std::get_if<language::name_expression>(&binary->right->node)) wanted = name->name.parts.back();

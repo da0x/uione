@@ -300,6 +300,23 @@ describe("cards", () => {
   });
 });
 
+describe("a table keeping only some rows", () => {
+  it("leaves out those holding a value, by a field read through what they point at", () => {
+    const view = {
+      status: "live" as const,
+      data: {
+        rows: [
+          { id: "m1", "person.name": "Maya", "person.service": false },
+          { id: "m2", "person.name": "publisher", "person.service": true },
+          { id: "m3", "person.name": "Ade" },
+        ],
+      },
+    };
+    renderScreen(memorySource(), () => <Table view={view} columns={{ "person.name": "Name" }} only={{ "person.service!": "true" }} />);
+    expect(screen.getAllByRole("row").slice(1).map((r) => r.textContent)).toEqual(["Maya", "Ade"]);
+  });
+});
+
 describe("a table hidden when empty", () => {
   it("isn't there while it has no rows, and is once it has", () => {
     const empty = { status: "live" as const, data: { rows: [] } };
