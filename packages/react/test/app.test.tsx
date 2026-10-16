@@ -89,6 +89,19 @@ describe("the pages above a page", () => {
     expect(Array.from(trail.querySelectorAll("li")).map((li) => li.textContent?.trim())).toEqual(["uione", "Issue 12"]);
   });
 
+  it("go back to a page as it was left, like a board with a milestone picked", () => {
+    const shownBoard = defineScreen({ title: "Features", route: "/:project/boards/:board", shown: true }, () => (
+      <Link to="/uione/issues/12">Issue 12</Link>
+    ));
+    const issue = defineScreen({ title: "Issue 12", route: "/:project/issues/:issue" }, () => (
+      <Crumbs items={[{ to: "/:project/boards/:board", title: ["Features"], fill: { board: [{ status: "live", data: { board: "features" } } as ViewState, "board", 1] } }]} />
+    ));
+    render(<App name="neotrac" screens={[home, shownBoard, issue]} ui={plain} data={memorySource()} location="/uione/boards/features/pipeline/milestone/0_15_0" />);
+    fireEvent.click(screen.getByRole("link", { name: "Issue 12" }));
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(trail.querySelector("a")?.getAttribute("href")).toBe("/uione/boards/features/pipeline/milestone/0_15_0");
+  });
+
   it("aren't shown on a page with no title of its own", () => {
     at("/da0x/neotrac/theme");
     expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();

@@ -458,13 +458,15 @@ export function Crumbs({
     if (typeof id !== "string" || id === "") return undefined;
     return from[2] > 1 ? (partsOf(id, from[2])?.at(-1) ?? id) : id;
   };
+  // A page above that was left showing part of itself is returned to as it was.
+  const back = (to: string) => lastLeftAt(to.replace(/\/$/, "") || "/") ?? to;
   const own = items.filter(({ title }) => !(title.length === 1 && title[0] === name));
   const shown = own.map(({ to, title, fill }) => ({
     label: title.map((part) => (typeof part === "string" ? part : String(part[0].data?.[part[1]] ?? ""))).join("").trim() || "…",
-    link: link(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+    link: link(back(to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
       const value = filled(name, fill);
       return value === undefined ? written : encodeURIComponent(value);
-    })),
+    }))),
   }));
   // A page with no title of its own shows no heading, and so no trail to it either.
   if (untitled) return null;
@@ -501,6 +503,31 @@ function routerPath(route: string, shown = false): string {
 // shows in the page instead.
 export const ShownPath = createContext<{ base: string; parts: string[]; open: boolean }>({ base: "", parts: [], open: false });
 
+// Where each page that shows more in its address was last left, like a board with a
+// milestone picked, so a crumb back to it returns there rather than to all of it.
+// Kept for the tab's session, so it holds across a reload of the page below it.
+const leftAt = new Map<string, string>();
+const leftAtKey = "one.left-at";
+function rememberLeftAt(base: string, at: string) {
+  leftAt.set(base, at);
+  try {
+    sessionStorage.setItem(leftAtKey, JSON.stringify(Object.fromEntries(leftAt)));
+  } catch {
+    // Without storage it's remembered while the page is open.
+  }
+}
+function lastLeftAt(base: string): string | undefined {
+  if (leftAt.size === 0) {
+    try {
+      const kept = JSON.parse(sessionStorage.getItem(leftAtKey) ?? "{}") as Record<string, unknown>;
+      for (const [at, to] of Object.entries(kept)) if (typeof to === "string" && !leftAt.has(at)) leftAt.set(at, to);
+    } catch {
+      // Nothing kept.
+    }
+  }
+  return leftAt.get(base);
+}
+
 // Every route's element is a Page, so going from /books/a to /books/b keeps the
 // same one mounted. The body is keyed by the address, so what was typed about one
 // book, or why a command on it failed, is never shown or sent as another's. What a
@@ -517,6 +544,10 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
   // changing it keeps the page as it is.
   const parts = shown && taken ? taken.split("/").filter(Boolean).map(decodeURIComponent) : [];
   const base = shown ? key || "/" : pathname;
+  const { search } = useLocation();
+  useEffect(() => {
+    if (shown) rememberLeftAt(base, pathname + search);
+  }, [shown, base, pathname, search]);
   return (
     <Shell name={name} icon={icon} title={titled ?? Body.info.title} screens={screens}>
       <Rest.Provider value={rest}>
