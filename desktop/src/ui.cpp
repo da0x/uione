@@ -7,6 +7,7 @@
 #include <typeinfo>
 
 #include "one/desktop/ui.hpp"
+#include "one/desktop/icons.hpp"
 #include "ui_internal.hpp"
 
 namespace one::desktop {
@@ -577,9 +578,9 @@ namespace one::desktop {
 
 		class button_element : public element {
 		public:
-			button_element(std::string label, std::function<void()> pressed, bool primary)
-			    : label_(std::move(label)), pressed_(std::move(pressed)), primary_(primary) {
-				padding = edges(8, 16);
+			button_element(std::string label, std::function<void()> pressed, bool primary, std::string icon = "")
+			    : label_(std::move(label)), pressed_(std::move(pressed)), primary_(primary), icon_(has_icon(icon) ? std::move(icon) : std::string()) {
+				padding = icon_.empty() ? edges(8, 16) : edges(8, 9);
 			}
 
 			bool focusable() const override { return true; }
@@ -587,10 +588,16 @@ namespace one::desktop {
 
 			extent measure_content(float) override {
 				const auto& laid = laid_out();
+				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
+				if (!icon_.empty()) return {16, laid.height()};
 				return {laid.width(), laid.height()};
 			}
 			void paint_content(canvas& c) override {
 				const theme& t = current_theme();
+				if (!icon_.empty()) {
+					paint_icon(c, t);
+					return;
+				}
 				color fill = primary_ ? t.accent : t.surface;
 				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
@@ -616,6 +623,25 @@ namespace one::desktop {
 			static color mixed(color a, color b, float by) {
 				return {a.red + (b.red - a.red) * by, a.green + (b.green - a.green) * by, a.blue + (b.blue - a.blue) * by, a.alpha};
 			}
+			// Its icon in place of its words, which show under it while it's pointed at.
+			void paint_icon(canvas& c, const theme& t) {
+				color fill = primary_ ? t.accent : t.surface;
+				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
+				if (focused && !focused_by_default) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
+				rect area = inner();
+				draw_icon(c, icon_, {area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, primary_ ? color::hex(0xffffff) : t.ink);
+				if (!hovered && !(focused && !focused_by_default)) return;
+				text_style s = t.quiet();
+				s.color = t.page;
+				auto named = lay_out({label_, s}, 0, detail::layout_scale());
+				rect under{frame.x + (frame.width - named.width()) / 2 - 8, frame.bottom() + 6, named.width() + 16, named.height() + 8};
+				color behind = t.ink;
+				c.later([named = std::move(named), under, behind](canvas& on) {
+					on.box(under, {.fill = behind, .radius = 6});
+					on.text(named, {under.x + 8, under.y + 4});
+				});
+			}
 			const text_layout& laid_out() {
 				double scale = detail::layout_scale();
 				if (!laid_ || scale != scale_) {
@@ -629,6 +655,7 @@ namespace one::desktop {
 			std::string label_;
 			std::function<void()> pressed_;
 			bool primary_;
+			std::string icon_;
 			std::optional<text_layout> laid_;
 			double scale_ = 0;
 		};
@@ -819,6 +846,9 @@ namespace one::desktop {
 
 	view button(std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary);
+	}
+	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary) {
+		return made<button_element>(std::move(label), std::move(pressed), primary, std::move(icon));
 	}
 	view link(std::string words, std::function<void()> go, std::optional<text_style> style) {
 		return made<link_element>(std::move(words), std::move(go), std::move(style));

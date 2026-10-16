@@ -186,6 +186,20 @@ namespace one::desktop {
 		add(false);
 	}
 
+	void renderer::line(point a, point b, float half_width, color tint, const rect& clip) {
+		float grow = half_width + 1;
+		rect area{std::min(a.x, b.x) - grow, std::min(a.y, b.y) - grow, std::abs(b.x - a.x) + 2 * grow, std::abs(b.y - a.y) + 2 * grow};
+		point center{area.x + area.width / 2, area.y + area.height / 2};
+		box_instance l{};
+		put(l.bounds, area);
+		put(l.fill, tint);
+		l.edge[0] = a.x - center.x, l.edge[1] = a.y - center.y, l.edge[2] = b.x - center.x, l.edge[3] = b.y - center.y;
+		l.shape[1] = half_width, l.shape[3] = 1;
+		put_clip(l.clip, clip);
+		boxes_.push_back(l);
+		add(false);
+	}
+
 	const renderer::placed& renderer::atlas_entry(const fonts::face* face, std::uint32_t id, int bin) {
 		auto key = std::tuple{face, id, bin};
 		if (auto it = placed_.find(key); it != placed_.end()) return it->second;
@@ -334,12 +348,49 @@ namespace one::desktop {
 		renderer_.box(in_pixels(moved, scale()), tint, {0, 0, 0, 0}, radius * s, 0, std::max(0.5f, blur * s), clip_in_pixels(clips_, renderer_));
 	}
 
+	void canvas::line(point a, point b, float width, one::desktop::color tint) {
+		auto s = static_cast<float>(scale());
+		renderer_.line({a.x * s, a.y * s}, {b.x * s, b.y * s}, std::max(0.5f, width * s / 2), tint, clip_in_pixels(clips_, renderer_));
+	}
+
+	void canvas::fill(const std::vector<point>& outline, one::desktop::color tint) {
+		if (outline.size() < 3) return;
+		auto s = static_cast<float>(scale());
+		float top = outline[0].y, bottom = outline[0].y;
+		for (const auto& p : outline) top = std::min(top, p.y), bottom = std::max(bottom, p.y);
+		rect clip = clip_in_pixels(clips_, renderer_);
+		// A span of whole pixels for each row it covers, between where its edges cross
+		// the row's middle, by the even-odd rule.
+		for (float row = std::floor(top * s); row < std::ceil(bottom * s); ++row) {
+			float y = (row + 0.5f) / s;
+			std::vector<float> crossings;
+			for (std::size_t i = 0; i < outline.size(); ++i) {
+				point a = outline[i], b = outline[(i + 1) % outline.size()];
+				if ((a.y <= y) == (b.y <= y)) continue;
+				crossings.push_back(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+			}
+			std::sort(crossings.begin(), crossings.end());
+			for (std::size_t i = 0; i + 1 < crossings.size(); i += 2) {
+				float left = crossings[i] * s, right = crossings[i + 1] * s;
+				renderer_.box({left, row, right - left, 1}, tint, {0, 0, 0, 0}, 0, 0, 0, clip);
+			}
+		}
+	}
+
 	void canvas::text(const text_layout& laid, point at) {
 		auto s = static_cast<float>(scale());
 		float x = std::round(at.x * s), y = std::round(at.y * s);
 		rect clip = clip_in_pixels(clips_, renderer_);
 		for (const auto& g : laid.glyphs()) renderer_.glyph(static_cast<const fonts::face*>(g.face), g.id, x + g.x, y + g.y, g.color, clip);
 		for (const auto& rule : laid.rules()) renderer_.box({x + rule.x, y + rule.y, rule.width, rule.thickness}, rule.color, {0, 0, 0, 0}, 0, 0, 0, clip);
+	}
+
+	void canvas::finish() {
+		auto saved = std::move(clips_);
+		clips_.clear();
+		for (std::size_t i = 0; i < later_.size(); ++i) later_[i](*this);  // what's drawn later may leave more for later
+		later_.clear();
+		clips_ = std::move(saved);
 	}
 
 	canvas::clip_scope canvas::clip(const rect& area) {

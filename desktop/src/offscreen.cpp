@@ -52,6 +52,7 @@ namespace one::desktop::offscreen {
 		painter.begin(pixels, scale, 0);
 		canvas c{painter};
 		paint(c);
+		c.finish();
 
 		vk::raii::CommandPool pool{device, vk::CommandPoolCreateInfo{.queueFamilyIndex = gpu.family}};
 		auto buffers = device.allocateCommandBuffers({.commandPool = *pool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1});

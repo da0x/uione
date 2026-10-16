@@ -7,8 +7,8 @@
 
 layout(location = 0) in vec4 bounds;    // x, y, width, height, in pixels
 layout(location = 1) in vec4 fill;      // premultiplied, linear
-layout(location = 2) in vec4 edge;      // the border's color, premultiplied
-layout(location = 3) in vec4 shape;     // radius, border width, blur, unused
+layout(location = 2) in vec4 edge;      // the border's color, premultiplied; a line's ends, from its center
+layout(location = 3) in vec4 shape;     // radius, border width, blur, 1 for a line
 layout(location = 4) in vec4 clip;      // x0, y0, x1, y1
 
 layout(push_constant) uniform frame { vec2 viewport; } screen;

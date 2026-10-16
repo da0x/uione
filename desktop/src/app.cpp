@@ -249,6 +249,7 @@ namespace one::desktop {
 				        detail::theme_in_use() = &w.look;
 				        detail::layout_scale() = w.scale;
 				        w.root->paint(c);
+				        c.finish();
 				        detail::theme_in_use() = nullptr;
 			        }
 			        if (shown.on_draw) shown.on_draw(c);

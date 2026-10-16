@@ -4,7 +4,8 @@
 // Pipelines, drawn as the classic deploy screen drew one: a heading for each lane,
 // and in it a row for each card, its title, then its stages in order, each a chip:
 // done with a tick, the one it's at in its status's color, the one it failed in red,
-// those to come faint; and what its holder last said.
+// those to come faint; and what its holder last said. Dense, a card a line, as on
+// the web, so a whole release fits on one screen.
 
 #include <map>
 
@@ -28,14 +29,19 @@ namespace one::desktop::runtime {
 			for (const auto& row : lane.rows) {
 				links[row.id] = row.link;
 				std::vector<desktop::view> named;
-				named.push_back(desktop::text(row.title, t.strong()));
+				auto title_style = t.strong();
+				title_style.size -= 1;
+				named.push_back(desktop::text(row.title, title_style));
 				std::string details;
 				for (const auto& d : row.details) details += (details.empty() ? "" : " · ") + d;
-				if (!details.empty()) named.push_back(desktop::text(details, t.quiet()));
+				auto small = t.quiet();
+				small.size -= 2;
+				if (!details.empty()) named.push_back(desktop::text(details, small));
 				std::vector<desktop::view> chips;
 				for (const auto& step : row.steps) {
 					auto look = t.quiet();
-					box_style chip{.radius = 10};
+					look.size -= 2;
+					box_style chip{.radius = 9};
 					std::string said = step.title;
 					if (step.at == "done") {
 						look.color = t.success;
@@ -55,23 +61,27 @@ namespace one::desktop::runtime {
 						look.color.alpha = 0.6f;
 						chip.border = t.line, chip.border_width = 1;
 					}
-					chips.push_back(desktop::text(said, look).padding(edges(2, 9)).background(chip));
+					chips.push_back(desktop::text(said, look).padding(edges(0, 6)).background(chip));
 				}
 				std::vector<desktop::view> line;
-				line.push_back(desktop::column(std::move(named)).spacing(2).width(240));
-				line.push_back(desktop::flow(std::move(chips)).spacing(6).grow());
-				if (!row.note.empty()) line.push_back(desktop::text(row.note, t.quiet()).width(220));
-				rows.push_back({row.id, desktop::row(std::move(line)).spacing(16).padding(edges(10, 14))});
+				line.push_back(desktop::row(std::move(named)).spacing(8).align(align::center).width(280));
+				line.push_back(desktop::flow(std::move(chips)).spacing(3).grow());
+				if (!row.note.empty()) line.push_back(desktop::text(row.note, small).width(300));
+				rows.push_back({row.id, desktop::row(std::move(line)).spacing(12).align(align::center).padding(edges(0, 6))});
 			}
 			std::vector<desktop::view> shown;
-			shown.push_back(desktop::row(desktop::text(lane.title, t.strong()), desktop::text(std::to_string(lane.rows.size()), t.quiet())).spacing(8));
+			auto lane_style = t.strong();
+			lane_style.size -= 2;
+			auto count_style = t.quiet();
+			count_style.size -= 2;
+			shown.push_back(desktop::row(desktop::text(lane.title, lane_style), desktop::text(std::to_string(lane.rows.size()), count_style)).spacing(6));
 			shown.push_back(desktop::list(std::move(rows), [&p, links](const std::string& id) {
 				                if (auto found = links.find(id); found != links.end() && !found->second.empty()) p.open(found->second);
 			                }).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners}));
-			lanes.push_back(desktop::column(std::move(shown)).spacing(8));
+			lanes.push_back(desktop::column(std::move(shown)).spacing(4));
 		}
 		p.wide();
-		return desktop::column(std::move(lanes)).spacing(20);
+		return desktop::column(std::move(lanes)).spacing(12);
 	}
 
 }  // namespace one::desktop::runtime

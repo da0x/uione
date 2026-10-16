@@ -70,6 +70,7 @@ add_library(one_desktop
 	src/offscreen.cpp
 	src/renderer.cpp
 	src/seat.cpp
+	src/icons.cpp
 	src/text.cpp
 	src/text_input.cpp
 	src/ui.cpp

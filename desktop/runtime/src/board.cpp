@@ -69,8 +69,11 @@ namespace one::desktop::runtime {
 			std::map<std::string, std::string> links;
 			for (const auto& card : column.cards) {
 				links[card.id] = card.link;
-				std::vector<desktop::view> details;
-				for (const auto& d : card.details) details.push_back(desktop::text(d, t.quiet()));
+				// Short details, like #12, go beside its labels, on to a new line where they
+				// don't fit; a long one, like what it waits on, is a line of its own, wrapped
+				// to the card, so nothing runs out of it.
+				std::vector<desktop::view> details, long_details;
+				for (const auto& d : card.details) (d.size() > 16 ? long_details : details).push_back(desktop::text(d, t.quiet()));
 				for (const auto& word : card.labels) {
 					auto look = t.quiet();
 					look.color = t.accent;
@@ -89,7 +92,8 @@ namespace one::desktop::runtime {
 				} else {
 					inside.push_back(desktop::text(card.title, t.body()));
 				}
-				if (!details.empty()) inside.push_back(desktop::row(std::move(details)).spacing(6));
+				for (auto& d : long_details) inside.push_back(std::move(d));
+				if (!details.empty()) inside.push_back(desktop::flow(std::move(details)).spacing(6));
 				if (!people.empty()) inside.push_back(desktop::row(std::move(people)).spacing(4));
 				std::vector<desktop::view> shown;
 				auto tone = tone_color(card.tone);

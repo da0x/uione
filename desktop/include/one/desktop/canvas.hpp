@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include "one/desktop/app.hpp"
@@ -48,8 +49,18 @@ namespace one::desktop {
 		// A shadow under a box of the same area and corners, softened by blur and
 		// moved by offset.
 		void shadow(const rect& area, float radius, float blur, one::desktop::color tint, point offset = {});
+		// A line from a to b, its ends round, as an icon's strokes are drawn.
+		void line(point a, point b, float width, one::desktop::color tint);
+		// The inside of an outline, by the even-odd rule, as an icon's filled shapes are.
+		void fill(const std::vector<point>& outline, one::desktop::color tint);
 		// Text laid out by one::desktop::lay_out, its first line's top at `at`.
 		void text(const text_layout& laid, point at);
+
+		// Drawn once everything else is, over it, outside any clip: a button's name
+		// shown while it's pointed at.
+		void later(std::function<void(canvas&)> draw) { later_.push_back(std::move(draw)); }
+		// Draws what was left for later; what draws a window calls it last.
+		void finish();
 
 		// Draws only within an area until the scope ends, within any clip already in force.
 		class clip_scope {
@@ -70,6 +81,7 @@ namespace one::desktop {
 	private:
 		renderer& renderer_;
 		std::vector<rect> clips_;
+		std::vector<std::function<void(canvas&)>> later_;
 	};
 
 }  // namespace one::desktop

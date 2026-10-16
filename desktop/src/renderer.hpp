@@ -43,6 +43,8 @@ namespace one::desktop {
 
 		// In pixels, premultiplied, within the clip given in pixels.
 		void box(const rect& area, color fill, color edge, float radius, float border, float blur, const rect& clip);
+		// A segment with round ends, from a to b, in pixels.
+		void line(point a, point b, float half_width, color tint, const rect& clip);
 		void glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip);
 
 	private:

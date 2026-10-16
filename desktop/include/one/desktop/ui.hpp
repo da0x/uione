@@ -256,6 +256,10 @@ namespace one::desktop {
 	}
 
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
+	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
+	// shown under it while it's pointed at or has the keyboard. One with no such icon
+	// is drawn with its words.
+	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary = false);
 	// Words that go somewhere: in the accent color, underlined while pointed at or
 	// focused, followed with a click or Enter.
 	view link(std::string words, std::function<void()> go, std::optional<text_style> style = {});

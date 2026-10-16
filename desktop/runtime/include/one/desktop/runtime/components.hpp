@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "one/desktop/icons.hpp"
 #include "one/desktop/runtime/runtime.hpp"
 
 namespace one::desktop::runtime {

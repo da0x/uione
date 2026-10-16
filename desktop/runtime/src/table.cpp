@@ -81,12 +81,16 @@ namespace one::desktop::runtime {
 			if (record.status == "success" || record.status == "failed") {
 				auto dot = t.body();
 				dot.color = record.status == "failed" ? t.danger : t.success;
-				inside.push_back(desktop::row(desktop::text("●", dot), desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style)).spacing(6));
+				inside.push_back(desktop::row(desktop::text("●", dot), desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style), desktop::spacer())
+				                     .spacing(6));
 			} else {
-				inside.push_back(desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style));
+				// As wide as its title, so its ring once it has the keyboard is around the title alone.
+				inside.push_back(desktop::row(desktop::link(record.title, [model = *model, id = record.id] { model.pick(id); }, heading_style), desktop::spacer()));
 			}
 			for (const auto& d : record.details) inside.push_back(desktop::text(d, t.quiet()));
+			// Picked by a click anywhere on it, as on the web.
 			cards_shown.push_back(desktop::column(std::move(inside))
+			                          .on_click([model = *model, id = record.id] { model.pick(id); })
 			                          .spacing(4)
 			                          .padding(edges(10, 14))
 			                          .width(200)

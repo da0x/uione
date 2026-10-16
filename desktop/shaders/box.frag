@@ -3,6 +3,8 @@
 
 // A box's color at a pixel, from its rounded rectangle's signed distance: its fill,
 // its border inside the edge, or, blurred, a shadow falling off as a Gaussian does.
+// A line, as an icon is drawn, is a segment with round ends: its ends where the
+// border's color would be, its half width where the border's would be.
 #version 450
 
 layout(location = 0) in vec2 local;
@@ -27,8 +29,20 @@ float erf_approx(float x) {
 	return s - s / (t * t);
 }
 
+float segment(vec2 p, vec2 a, vec2 b) {
+	vec2 pa = p - a, ba = b - a;
+	float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+	return length(pa - ba * h);
+}
+
 void main() {
 	if (gl_FragCoord.x < clip.x || gl_FragCoord.y < clip.y || gl_FragCoord.x > clip.z || gl_FragCoord.y > clip.w) discard;
+	if (shape.w > 0.5) {
+		float d = segment(local, edge_color.xy, edge_color.zw) - shape.y;
+		color = fill_color * clamp(0.5 - d, 0.0, 1.0);
+		if (color.a <= 0.0) discard;
+		return;
+	}
 	float radius = min(shape.x, min(half_size.x, half_size.y));
 	float d = rounded_box(local, half_size, radius);
 	float blur = shape.z;

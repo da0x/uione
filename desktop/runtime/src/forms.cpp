@@ -30,7 +30,11 @@ namespace one::desktop::runtime {
 		const auto& t = current_theme();
 		if (!model.open()) {
 			std::string opens = model.opens();
-			// A button with an icon is a quiet one, as on the web, beside the page's main ones.
+			// A button with an icon is a quiet one, as on the web, beside the page's main
+			// ones: one of the web's icons is drawn as just that, named when pointed at.
+			if (desktop::has_icon(spec.icon)) {
+				return desktop::column(desktop::icon_button(spec.icon, opens, [model] { model.set_open(true); })).align(align::start);
+			}
 			if (std::string g = glyph_of(spec.icon); !g.empty()) opens = g + " " + opens;
 			// As wide as it says, as on the web, not across the page, and no wider among
 			// the buttons beside a title, so they stay on one line beside it.

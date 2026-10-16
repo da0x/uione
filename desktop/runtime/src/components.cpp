@@ -129,6 +129,10 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view link(page& p, std::string words, std::string to, std::string icon) {
+		// One of the web's icons is a quiet button drawn as just that, as on the web.
+		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
+			return desktop::icon_button(icon, std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
+		}
 		if (std::string g = glyph_of(icon); !g.empty()) words = g + " " + words;
 		if (leaves(to)) return desktop::link(std::move(words), [to] { open_in_browser(to); });
 		if (to.starts_with("#")) {
@@ -153,10 +157,12 @@ namespace one::desktop::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
-		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;
-		return desktop::button(label_now, [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
 			if (!busy) p.run(name, fields);
-		}, b.primary);
+		};
+		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
+		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;
+		return desktop::button(label_now, std::move(run), b.primary);
 	}
 
 	desktop::view confirm(page& p, std::string command, std::string question) {
