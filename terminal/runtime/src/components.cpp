@@ -225,13 +225,16 @@ namespace one::terminal::runtime {
 	}
 
 	terminal::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, int start, std::vector<terminal::view> ways) {
-		auto chosen = p.kept<int>("switched:" + id, -1);  // the person's own pick, once they've made one
+		auto chosen = switch_pick(p, id, options);  // the person's own pick, once they've made one, kept between runs
 		int now = std::clamp(chosen.get() >= 0 ? chosen.get() : std::max(start, 0), 0, static_cast<int>(ways.size()) - 1);
 		std::vector<terminal::view> buttons;
 		buttons.push_back(quiet(label_text));
 		for (std::size_t i = 0; i < options.size() && i < ways.size(); ++i) {
 			int which = static_cast<int>(i);
-			buttons.push_back(terminal::button(options[i], [chosen, which] { chosen.set(which); }, which == now));
+			buttons.push_back(terminal::button(options[i], [chosen, which, &p, id, name = options[i]] {
+				chosen.set(which);
+				remember_switch(p, id, name);
+			}, which == now));
 		}
 		return terminal::column(terminal::row(std::move(buttons)).spacing(2), std::move(ways[static_cast<std::size_t>(now)])).spacing(1);
 	}

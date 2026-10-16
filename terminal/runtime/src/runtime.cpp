@@ -124,6 +124,7 @@ namespace one::terminal::runtime {
 	}
 
 	int run(const site& s, terminal::view_app& app, screens::source& from, const std::string& address) {
+		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
 		// The app's theme, or one tried from a palette, draws the whole terminal, whose

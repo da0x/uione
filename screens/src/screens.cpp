@@ -12,6 +12,9 @@
 #include <chrono>
 #include <cstring>
 #include <format>
+#include <optional>
+#include <fstream>
+#include <filesystem>
 #include <sstream>
 #include <map>
 
@@ -507,6 +510,62 @@ namespace one::screens {
 			}
 		}
 	}  // namespace
+
+	namespace remembered {
+		namespace {
+			struct kept {
+				std::filesystem::path file;
+				std::map<std::string, std::string> values;
+			};
+			kept& store() {
+				static kept k;
+				return k;
+			}
+		}  // namespace
+
+		void open(const std::string& app) {
+			auto& k = store();
+			k.values.clear();
+			const char* state = std::getenv("XDG_STATE_HOME");
+			const char* home = std::getenv("HOME");
+			if (state && *state) k.file = std::filesystem::path(state) / app / "remembered";
+			else if (home && *home) k.file = std::filesystem::path(home) / ".local" / "state" / app / "remembered";
+			else k.file.clear();
+			if (k.file.empty()) return;
+			// A line each: its name, a tab, and its value.
+			std::ifstream in(k.file);
+			std::string line;
+			while (std::getline(in, line)) {
+				if (auto tab = line.find('\t'); tab != std::string::npos) k.values[line.substr(0, tab)] = line.substr(tab + 1);
+			}
+		}
+
+		std::optional<std::string> get(const std::string& name) {
+			auto& k = store();
+			auto found = k.values.find(name);
+			if (found == k.values.end()) return std::nullopt;
+			return found->second;
+		}
+
+		void set(const std::string& name, const std::string& value) {
+			auto& k = store();
+			if (name.find_first_of("\t\n") != std::string::npos || value.find('\n') != std::string::npos) return;
+			if (auto found = k.values.find(name); found != k.values.end() && found->second == value) return;
+			k.values[name] = value;
+			if (k.file.empty()) return;
+			std::error_code ignored;
+			std::filesystem::create_directories(k.file.parent_path(), ignored);
+			// Written whole beside it and moved into place, so a run that ends midway
+			// leaves what was there.
+			auto writing = k.file;
+			writing += ".writing";
+			{
+				std::ofstream out(writing, std::ios::trunc);
+				for (const auto& [n, v] : k.values) out << n << '\t' << v << '\n';
+			}
+			std::filesystem::rename(writing, k.file, ignored);
+		}
+	}  // namespace remembered
 
 	std::vector<std::string> page_base::worked() const {
 		std::vector<std::string> out;

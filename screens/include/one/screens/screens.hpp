@@ -235,6 +235,16 @@ namespace one::screens {
 		std::function<View(basic_page<View>&)> build = {};
 	};
 
+	// What the app remembers across its runs for whoever runs it, like the way each
+	// board was last shown: names and values, kept in ~/.local/state/<app>/remembered
+	// ($XDG_STATE_HOME's, when it's set). Until the app says which it is, nothing is
+	// kept past the run.
+	namespace remembered {
+		void open(const std::string& app);
+		std::optional<std::string> get(const std::string& name);
+		void set(const std::string& name, const std::string& value);
+	}  // namespace remembered
+
 	// A number beside the app's name, like what's new to whoever's reading, shown
 	// while it's more than none.
 	struct badge {

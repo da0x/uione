@@ -51,15 +51,24 @@ namespace one::desktop::runtime {
 
 	desktop::view switched(page& p, std::string id, std::string label_text, std::vector<std::string> options, int start, std::vector<desktop::view> ways) {
 		const auto& t = current_theme();
-		auto chosen = p.kept<int>("switched:" + id, -1);  // the person's own pick, once they've made one
+		auto chosen = switch_pick(p, id, options);  // the person's own pick, once they've made one, kept between runs
 		int now = std::clamp(chosen.get() >= 0 ? chosen.get() : std::max(start, 0), 0, static_cast<int>(ways.size()) - 1);
+		// Each way drawn as its icon, as on the web, its name shown when pointed at.
 		std::vector<desktop::view> buttons;
-		buttons.push_back(desktop::text(label_text, t.quiet()));
 		for (std::size_t i = 0; i < options.size() && i < ways.size(); ++i) {
 			int which = static_cast<int>(i);
-			buttons.push_back(desktop::button(options[i], [chosen, which] { chosen.set(which); }, which == now));
+			auto pick = [chosen, which, &p, id, name = options[i]] {
+				chosen.set(which);
+				remember_switch(p, id, name);
+			};
+			std::string icon = switch_icon(options[i]);
+			buttons.push_back(desktop::has_icon(icon) ? desktop::icon_button(icon, options[i], std::move(pick), which == now)
+			                                          : desktop::button(options[i], std::move(pick), which == now));
 		}
-		return desktop::column(desktop::row(std::move(buttons)).spacing(8).align(align::center), std::move(ways[static_cast<std::size_t>(now)])).spacing(12);
+		auto group = desktop::row(std::move(buttons)).spacing(4).padding(edges(3, 3)).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 8.f) + 3});
+		return desktop::column(desktop::row(desktop::text(label_text, t.quiet()), std::move(group)).spacing(8).align(align::center),
+		                       std::move(ways[static_cast<std::size_t>(now)]))
+		    .spacing(12);
 	}
 
 	desktop::view steps(page& p, steps_spec spec) {

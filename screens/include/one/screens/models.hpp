@@ -196,6 +196,15 @@ namespace one::screens {
 	// The row a table's action asks about, as a view's document for its form.
 	state<view_state> acted_on(page_base& p, const std::string& list, const std::string& command, const value& row);
 
+	// A switch's pick on a page: the person's own, kept while the page is open, and
+	// first the one remembered from the last time they were here, by its name, so a
+	// board opens as it was left, even after the app is started again.
+	state<int> switch_pick(page_base& p, const std::string& id, const std::vector<std::string>& options);
+	void remember_switch(page_base& p, const std::string& id, const std::string& option);
+	// The icon a way of showing a list is drawn as, as on the web: table, board,
+	// whiteboard or pipeline.
+	std::string switch_icon(const std::string& option);
+
 	// A board: its columns, each with its cards, and a card's move being chosen.
 	struct board_card {
 		std::string id, title;

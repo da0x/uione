@@ -145,6 +145,7 @@ namespace one::desktop::runtime {
 	}
 
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
+		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown
 		auto& window = app.open({.title = s.name, .id = s.id, .size = {1200, 800}});
 		window.look(s.look);
 		window.background = s.look.page;

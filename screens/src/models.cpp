@@ -1005,6 +1005,29 @@ namespace one::screens {
 		return s % 86400 / 3600 ? std::format("{}d {}h", s / 86400, s % 86400 / 3600) : std::format("{}d", s / 86400);
 	}
 
+	namespace {
+		std::string switch_memory(page_base& p, const std::string& id) {
+			std::string address = p.address();
+			if (auto query = address.find('?'); query != std::string::npos) address.resize(query);
+			return "switch " + id + " " + address;
+		}
+	}  // namespace
+
+	state<int> switch_pick(page_base& p, const std::string& id, const std::vector<std::string>& options) {
+		int remembered_at = -1;
+		if (auto said = remembered::get(switch_memory(p, id))) {
+			auto found = std::ranges::find(options, *said);
+			if (found != options.end()) remembered_at = static_cast<int>(found - options.begin());
+		}
+		return p.kept<int>("switched:" + id, remembered_at);
+	}
+
+	void remember_switch(page_base& p, const std::string& id, const std::string& option) { remembered::set(switch_memory(p, id), option); }
+
+	std::string switch_icon(const std::string& option) {
+		return option == "Whiteboard" ? "whiteboard" : option == "Pipeline" ? "pipeline" : option == "Board" ? "board" : "table";
+	}
+
 	// A card's dot, running time and runner: what its holder reported in its data,
 	// else working while someone's lease on it holds, else its column's status.
 	void status_of(page_base& p, const value& card, const std::string& column_status, board_card& shown) {

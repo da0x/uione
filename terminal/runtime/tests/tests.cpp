@@ -7,6 +7,7 @@
 // before it's committed.
 
 #include <cstdlib>
+#include <unistd.h>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -540,6 +541,44 @@ TEST("a switch opens on the view it's told to start on, until the person picks a
 	nav.current().kept<int>("switched:projects::board_page.issues").set(0);
 	screen_at again(nav, 80, 12);
 	CHECK(again.text().find("the table") != std::string::npos);
+}
+
+// Picked once, a board opens that way the next time the app starts, as on the web.
+TEST("a switch's pick is remembered for its page between runs of the app") {
+	auto folder = std::filesystem::temp_directory_path() / ("one-remembered-" + std::to_string(::getpid()));
+	std::filesystem::remove_all(folder);
+	::setenv("XDG_STATE_HOME", folder.c_str(), 1);
+	site s{.name = "neotrac"};
+	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
+		                     return items(switched(p, "projects::board_page.issues", "Show issues as", {"Table", "Board", "Pipeline"}, 0, terminal::text("the table"),
+		                                           terminal::text("the board"), terminal::text("the pipeline")));
+	                     }});
+	{
+		one::screens::remembered::open("org.uione.tests");
+		memory_source data;
+		navigator nav(s, data);
+		nav.open("/atlas/boards/main");
+		screen_at t(nav, 80, 12);
+		CHECK(t.text().find("the table") != std::string::npos);
+		t.press(key(terminal::keys::tab));
+		t.press(key(terminal::keys::tab));
+		CHECK(t.press(key(terminal::keys::newline)));  // Board
+		CHECK(t.text().find("the board") != std::string::npos);
+	}
+	{
+		one::screens::remembered::open("org.uione.tests");  // started again
+		memory_source data;
+		navigator nav(s, data);
+		nav.open("/atlas/boards/main");
+		screen_at t(nav, 80, 12);
+		CHECK_SAYING(t.text().find("the board") != std::string::npos, t.text());
+		nav.open("/atlas/boards/other");  // another board keeps its own
+		screen_at other(nav, 80, 12);
+		CHECK(other.text().find("the table") != std::string::npos);
+	}
+	::unsetenv("XDG_STATE_HOME");
+	one::screens::remembered::open("org.uione.tests");
+	std::filesystem::remove_all(folder);
 }
 
 int main() {
