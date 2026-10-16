@@ -40,7 +40,7 @@ const pages = {
   "/language": ["Start", "Your first project"],
   "/language/overview": ["Overview", "One architecture"],
   "/language/reference": ["Tab width", "Reference", "A <code>.one</code> file is a list of declarations", 'class="one-code', 'class="shiki'],
-  "/releases": ["0.14.3", "A milestone where any card failed"],
+  "/releases": ["0.15.0", "Pictures on a canvas"],
   "/mission": ["An application should be as short as what it does."],
   "/license": ["AGPL-3.0-only", "Version 3, 19 November 2007", "Terms and Conditions"],
   "/about": ["About uione", "https://www.linkedin.com/in/daheralfawares"],

@@ -8,7 +8,7 @@
 import one
 
 project print_shop {
-	one     "0.14.3"
+	one     "0.15.0"
 	target  web desktop terminal
 }
 
