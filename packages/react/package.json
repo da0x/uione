@@ -1,6 +1,6 @@
 {
   "name": "@uione/react",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "The runtime every uione screen is built on: routing, live views, commands, and the component contract.",
   "license": "AGPL-3.0-only",
   "author": "Daher Alfawares",

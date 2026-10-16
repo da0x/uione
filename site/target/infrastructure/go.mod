@@ -2,6 +2,6 @@ module www.uione.io/infrastructure
 
 go 1.26
 
-require github.com/da0x/uione/infrastructure v0.15.1
+require github.com/da0x/uione/infrastructure v0.15.2
 
 replace github.com/da0x/uione/infrastructure => ../../../infrastructure
