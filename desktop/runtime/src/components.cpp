@@ -184,7 +184,8 @@ namespace one::desktop::runtime {
 
 	desktop::view cards(page& p, cards_spec spec) {
 		const view_state& v = *spec.view;
-		if (spec.hide_empty && v.status == status::failed) return {};
+		// Hidden when empty is hidden until there's something to show, not drawn while it loads.
+		if (spec.hide_empty && v.status != status::ready) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		const auto& t = current_theme();
 		std::vector<desktop::list_row> shown;

@@ -1393,7 +1393,8 @@ export function Table({
   // them, so it isn't drawn; signing in shows it.
   if (view.status === "denied" && auth && !auth.person) return null;
   // Hidden while it's empty, and from whoever can't read it at all.
-  if (hideEmpty && (view.status === "denied" || (view.status === "live" && own.length === 0))) return null;
+  // Hidden when empty is hidden until there's something to show, not drawn while it loads.
+  if (hideEmpty && (view.status !== "live" || own.length === 0)) return null;
   // Put in order while the rows are in the list's own order and none is hidden by
   // what's typed. Within a tab or a page, a row's neighbors are still its neighbors in
   // the whole list, between which it goes.
@@ -2245,7 +2246,8 @@ export function Cards({
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
   const rows = rowsOf(view.data?.[list]);
-  if (hideEmpty && (view.status === "denied" || (view.status === "live" && rows.length === 0))) return null;
+  // Hidden when empty is hidden until there's something to show, not drawn while it loads.
+  if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
     if (!tally) return undefined;
     const mine = counted.filter((row) => row[tally.by] === card.id);

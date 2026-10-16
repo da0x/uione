@@ -333,7 +333,8 @@ namespace one::terminal::runtime {
 	terminal::view table(page& p, table_spec spec) {
 		const view_state& v = *spec.view;
 		// A list that's hidden while empty is hidden too from whoever can't read it.
-		if (spec.hide_empty && v.status == status::failed) return {};
+		// Hidden when empty is hidden until there's something to show, not drawn while it loads.
+		if (spec.hide_empty && v.status != status::ready) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		auto model = table_of(p, spec);
 		if (model.hidden) return {};
@@ -672,7 +673,8 @@ namespace one::terminal::runtime {
 
 	terminal::view cards(page& p, cards_spec spec) {
 		const view_state& v = *spec.view;
-		if (spec.hide_empty && v.status == status::failed) return {};
+		// Hidden when empty is hidden until there's something to show, not drawn while it loads.
+		if (spec.hide_empty && v.status != status::ready) return {};
 		if (auto instead = not_shown(v)) return std::move(*instead);
 		std::vector<terminal::list_row> shown;
 		std::map<std::string, std::string> opens;

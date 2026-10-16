@@ -327,6 +327,12 @@ describe("a table hidden when empty", () => {
     renderScreen(memorySource(), () => <Table view={one} columns={{ title: "Your reports" }} hideEmpty />);
     expect(screen.getByRole("table")).toBeTruthy();
   });
+
+  it("isn't drawn while it loads, so it doesn't show for a moment and go", () => {
+    const loading = { status: "loading" as const, data: undefined };
+    renderScreen(memorySource(), () => <Table view={loading} columns={{ title: "Due soon" }} hideEmpty />);
+    expect(screen.queryByRole("table")).toBeNull();
+  });
 });
 
 describe("a table opened filtered", () => {
