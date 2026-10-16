@@ -1024,7 +1024,7 @@ func (a *App) stores(ctx context.Context, way Query, subject, row string) (queri
 	query := a.store.Collection(s.collection).Query
 	var pointing string
 	var among []any
-	more := map[string]map[string]bool{}  // a field pointing somewhere, and the ids it may point at
+	more := map[string]map[string]bool{} // a field pointing somewhere, and the ids it may point at
 	keep = func(doc *firestore.DocumentSnapshot) bool {
 		for field, allowed := range more {
 			switch v := doc.Data()[field].(type) {
