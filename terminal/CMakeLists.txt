@@ -5,7 +5,7 @@
 # and the system's ncursesw; nothing is downloaded.
 
 cmake_minimum_required(VERSION 3.28)
-project(one_terminal VERSION 0.15.2 LANGUAGES CXX)
+project(one_terminal VERSION 0.16.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
