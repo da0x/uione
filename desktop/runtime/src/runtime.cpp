@@ -7,7 +7,10 @@
 
 #include "one/desktop/runtime/runtime.hpp"
 
+#include <cstdlib>
 #include <format>
+#include <functional>
+#include <optional>
 
 #include "one/desktop/runtime/components.hpp"
 
@@ -55,6 +58,34 @@ namespace one::desktop::runtime {
 		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
 	}
 
+	namespace {
+		// What agents were working on when the window was asked to close, while it asks
+		// whether to, which stops them.
+		state<std::optional<std::vector<std::string>>> asking_to_close;
+		std::function<void()> close_now;
+	}  // namespace
+
+	bool may_close(navigator& nav, bool stops_agents) {
+		if (asking_to_close.peek()) {  // asked to close again: it does
+			asking_to_close.set(std::nullopt);
+			return true;
+		}
+		if (!stops_agents) return true;
+		auto worked = nav.worked();
+		if (worked.empty()) return true;
+		asking_to_close.set(std::move(worked));
+		return false;
+	}
+
+	bool key(navigator& nav, const key_event& e) {
+		if (e.is(keys::escape) && asking_to_close.peek()) {
+			asking_to_close.set(std::nullopt);
+			return true;
+		}
+		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
+		return false;
+	}
+
 	desktop::view drawn(navigator& nav) {
 		const auto& t = current_theme();
 		const auto& s = nav.site();
@@ -90,7 +121,27 @@ namespace one::desktop::runtime {
 		auto top = desktop::row(std::move(bar)).spacing(14).align(align::center).padding(edges(10, 20)).background({.fill = t.surface});
 		// Keyed by where it is, so a page keeps nothing of the one before it.
 		std::string key = std::format("{}#{}", here.address(), nav.depth());
-		return desktop::column(std::move(top), desktop::divider(), page_view(nav, here).key(key).grow());
+		std::vector<desktop::view> parts;
+		parts.push_back(std::move(top));
+		parts.push_back(desktop::divider());
+		if (const auto& asking = asking_to_close.get()) {
+			std::vector<desktop::view> said;
+			said.push_back(desktop::text("Quit?", t.heading(20)));
+			said.push_back(desktop::text(asking->size() == 1 ? "An agent is working on this, and quitting stops it midway:"
+			                                                 : std::format("Agents are working on these {}, and quitting stops them midway:", asking->size()),
+			                             t.strong()));
+			for (const auto& worked : *asking) said.push_back(desktop::text("• " + worked, t.body()));
+			said.push_back(desktop::row(desktop::button("Quit", [] { if (close_now) close_now(); }, true),
+			                            desktop::button("Cancel", [] { asking_to_close.set(std::nullopt); }).autofocus())
+			                   .spacing(8));
+			parts.push_back(desktop::column(desktop::column(std::move(said))
+			                                    .spacing(10)
+			                                    .padding(16)
+			                                    .background({.fill = t.surface, .border = t.warning, .border_width = 1.5f, .radius = t.corners}))
+			                    .padding(edges(16, 32)));
+		}
+		parts.push_back(page_view(nav, here).key(key).grow());
+		return desktop::column(std::move(parts));
 	}
 
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
@@ -109,11 +160,19 @@ namespace one::desktop::runtime {
 			window.title(title.empty() || title == s.name ? s.name : title + " · " + s.name);
 			return shown;
 		});
-		window.on_key = [&](const key_event& e) {
-			if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
-			return false;
+		window.on_key = [&](const key_event& e) { return key(nav, e); };
+		// Started with agents that stop when it quits, as publish starts its own, it asks
+		// before closing while they're working on something.
+		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");
+		bool stops_agents = stops && *stops && std::string(stops) != "0";
+		close_now = [&app] { app.quit(); };
+		window.on_close = [&] {
+			if (may_close(nav, stops_agents)) app.quit();
 		};
-		return app.run();
+		int ended = app.run();
+		asking_to_close.set(std::nullopt);
+		close_now = nullptr;
+		return ended;
 	}
 
 }  // namespace one::desktop::runtime

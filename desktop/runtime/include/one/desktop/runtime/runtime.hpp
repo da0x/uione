@@ -40,8 +40,17 @@ namespace one::desktop::runtime {
 	// A page's own part: its title, what's around it, and what it's built of, scrolled.
 	desktop::view page_view(navigator& nav, page& p);
 
+	// Whether the window may close now. When closing stops agents started with the
+	// app, it asks first while they're working on something, naming it, and closing
+	// again closes it.
+	bool may_close(navigator& nav, bool stops_agents);
+	// What a key does that nothing in the view took: Esc puts away the question
+	// about closing, or goes back.
+	bool key(navigator& nav, const key_event& e);
+
 	// Runs a site in a window until it's closed: opens `address`, or the first
-	// screen's, and goes back with Esc.
+	// screen's, and goes back with Esc. ONE_QUIT_STOPS_AGENTS=1 says the agents
+	// started with it stop when it closes, so it asks first while they're working.
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address = "/");
 
 }  // namespace one::desktop::runtime

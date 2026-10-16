@@ -404,9 +404,12 @@ TEST("an issue's page: its body in Markdown, its comments, and its timeline with
 
 namespace {
 
-	void fill_board(memory_source& data) {
-		auto issue = [](std::string id, int n, std::string title, std::string stage, std::string priority, list labels = {}, list people = {}) {
-			return value(fields{{"id", id}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}});
+	// first: more of the first card's fields, like who holds it.
+	void fill_board(memory_source& data, const fields& first = {}) {
+		auto issue = [&first](std::string id, int n, std::string title, std::string stage, std::string priority, list labels = {}, list people = {}) {
+			fields f{{"id", id}, {"number", n}, {"title", title}, {"stage", stage}, {"priority", priority}, {"labels", labels}, {"assignees.name", people}};
+			if (n == 12) f.insert(first.begin(), first.end());
+			return value(f);
 		};
 		data.set("projects::board_page", "atlas-main",
 		         value(fields{{"stages", list{value(fields{{"id", "atlas-main-to_do"}, {"title", "To do"}}), value(fields{{"id", "atlas-main-doing"}, {"title", "Doing"}}),
@@ -714,6 +717,29 @@ TEST("a board: its columns, cards tinted by priority with their labels and peopl
 	nav.open("/atlas/boards/main");
 	nav.current().kept<std::string>("board:issues:moving").set("atlas-12");
 	matches_golden("board", {1000, 600}, [&] { return drawn(nav); });
+}
+
+// Started by publish, whose agents stop when it quits: closing the window asks first
+// while one is working on a card, naming it, Esc puts the question away, and closing
+// again closes it; with nothing worked on, or agents that don't stop with it, it closes.
+TEST("closing the window asks first while agents that stop with it are working on cards") {
+	memory_source data;
+	fill_board(data);
+	auto s = with_board();
+	navigator nav(s, data);
+	nav.open("/atlas/boards/main");
+	(void)drawn(nav);
+	CHECK(may_close(nav, true));  // nothing's held
+	value until;
+	until.type = value::kind::time;
+	until.time.seconds = std::chrono::duration_cast<std::chrono::seconds>((std::chrono::system_clock::now() + std::chrono::minutes(10)).time_since_epoch()).count();
+	fill_board(data, {{"held_by", "npm-agent"}, {"held_by.name", "npm"}, {"held_until", until}});
+	CHECK(may_close(nav, false));  // its agents don't stop with it
+	CHECK(!may_close(nav, true));
+	matches_golden("board-closing", {1000, 600}, [&] { return drawn(nav); });
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::escape, .text = ""}));
+	CHECK(!may_close(nav, true));
+	CHECK(may_close(nav, true));  // asked again, it closes
 }
 
 TEST("a card's link opens its page filtered, said in words, and Show all opens it whole in its place") {
