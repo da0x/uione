@@ -6,6 +6,7 @@ package one
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // A role that holds another, in each of what's within: an organization's owner
@@ -148,11 +149,19 @@ func (a *App) inheritMember(c *Ctx, h heldRole, action, id string, v reflect.Val
 // in it; moved to another, what the first gave goes and the second's comes.
 func (a *App) inheritScope(c *Ctx, h heldRole, action, id string, v reflect.Value, before map[string]any) error {
 	now := v.FieldByIndex(h.pointing.index).String()
+	was, _ := before[h.pointing.name].(string)
+	if (action == "create" || action == "update") && now != "" && now != was {
+		// Only whoever holds the role there brings something into it, as only an
+		// organization's owner brings a project in; what the system moves, as a
+		// migration does, it moves.
+		if err := a.mayBringIn(c, h, now); err != nil {
+			return err
+		}
+	}
 	switch action {
 	case "create":
 		return a.giveHolders(c, h, now, id)
 	case "update":
-		was, _ := before[h.pointing.name].(string)
 		if was == now {
 			return nil
 		}
@@ -168,6 +177,24 @@ func (a *App) inheritScope(c *Ctx, h heldRole, action, id string, v reflect.Valu
 		return a.giveHolders(c, h, now, id)
 	}
 	return nil // a scope deleted takes its members with it
+}
+
+// mayBringIn says whether whoever runs the command holds the role in the outer place.
+func (a *App) mayBringIn(c *Ctx, h heldRole, outer string) error {
+	if c.me == "" {
+		return nil
+	}
+	members, err := c.tx.Documents(a.store.Collection(h.outer.member.collection).Where(h.outer.memberPlace.name, "==", outer).Where(h.outer.memberPerson.name, "==", c.me)).GetAll()
+	if err != nil {
+		return err
+	}
+	for _, m := range members {
+		roleID, _ := m.Data()[h.outer.memberRole.name].(string)
+		if role, err := a.roleName(c, h.outer, roleID); err == nil && role == h.role {
+			return nil
+		}
+	}
+	return invalid("only %s %s of that %s brings a %s into it", article(h.role), h.role, h.outer.scope.name, h.inner.scope.name)
 }
 
 // giveHolders gives each holder of the outer place the held role in one inner scope.
@@ -235,4 +262,12 @@ func (a *App) dropHeld(c *Ctx, h heldRole, field, value string) error {
 		c.drop(h.inner.member, d)
 	}
 	return nil
+}
+
+// a or an, before a word.
+func article(word string) string {
+	if word != "" && strings.ContainsRune("aeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
 }

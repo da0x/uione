@@ -81,10 +81,11 @@ var docks = one.Module("dock",
 		return one.Create(c, &Docker{Dock: d.ID, Person: c.Me(), Role: one.Key(d.ID, "harbormaster")})
 	}),
 	one.Command[Dock]("dock::update").Allow(one.SignedIn).Fields("fleet"),
+	one.Command[Docker]("docker::create"),
 	one.Command[Docker]("docker::delete"),
 	one.Command[Berth]("berth::create"),
 	one.Roles(one.Entity[DockRole](), one.Entity[Dock](), one.Entity[Docker](), "may").
-		Default("harbormaster", "Harbormaster", "berth::create", "docker::delete"),
+		Default("harbormaster", "Harbormaster", "berth::create", "docker::create", "docker::delete"),
 )
 
 func init() { modules = append(modules, fleets, docks) }
@@ -131,15 +132,20 @@ func TestOnlyTheHoldingRoleGivesAndAProjectMovedChangesHands(t *testing.T) {
 	h := start(t)
 	_, ann := h.signUp("ann@example.com")
 	cat, catToken := h.signUp("cat@example.com")
-	_, dan := h.signUp("dan@example.com")
+	danID, dan := h.signUp("dan@example.com")
 	h.mustRun("fleet/fleet/create", ann, map[string]any{"slug": "green"})
 	h.mustRun("fleet/fleet/create", dan, map[string]any{"slug": "red"})
 	h.mustRun("fleet/sailor/create", ann, map[string]any{"fleet": "green", "person": cat, "rank": one.Key("green", "lookout")})
 	h.mustRun("dock/dock/create", ann, map[string]any{"slug": "jetty", "fleet": "green"})
 	h.expect("dock/berth/create", catToken, map[string]any{"dock": "jetty", "title": "one"}, 403, "you don't have permission to do this")
 
-	// Cat is an admiral of red; the dock moves there.
+	// Only an admiral of red brings a dock into it: Ann isn't one.
+	h.expect("dock/dock/update", ann, map[string]any{"id": "jetty", "fleet": "red"}, 400, "only an admiral of that fleet brings a dock into it")
+
+	// Cat is an admiral of red, and Dan, red's admiral, is made the dock's harbormaster
+	// by Ann; he brings it into red.
 	h.mustRun("fleet/sailor/create", dan, map[string]any{"fleet": "red", "person": cat, "rank": one.Key("red", "admiral")})
-	h.mustRun("dock/dock/update", ann, map[string]any{"id": "jetty", "fleet": "red"})
+	h.mustRun("dock/docker/create", ann, map[string]any{"dock": "jetty", "person": danID, "role": one.Key("jetty", "harbormaster")})
+	h.mustRun("dock/dock/update", dan, map[string]any{"id": "jetty", "fleet": "red"})
 	h.mustRun("dock/berth/create", catToken, map[string]any{"dock": "jetty", "title": "two"})
 }
