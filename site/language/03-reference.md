@@ -299,6 +299,19 @@ text black or white, quieter text, links and the rest at 7:1, and lines at 3:1. 
 menu changes how the page is drawn, and nothing else: it isn't an overlay, and it
 doesn't stand in for a screen reader or a magnifier.
 
+`extends neotrac` builds the project on another one: a hosted edition, say, on an
+open-source app kept in a repository of its own. A name is a project's folder beside
+this one's, and a path in quotes is anywhere, `extends "../neotrac"`. The other
+project's files are this project's too, checked and built together, and a file one of
+them names, like `markdown "license/*.md"`, is still found beside it. This project
+adds what it likes: namespaces, entities, screens, roles, and screens in a namespace
+the other declares. What the other says, it can't say again, so the app it builds on
+works the same in both: an entity declared twice is an error, on its line, naming
+where the first is. Its project block says what it is, and whatever it doesn't say,
+like its targets, icon or environments, is taken from the other's. A project it
+extends can extend another, and none extends itself. `one upgrade` changes only the
+project's own files.
+
 `analytics google` counts the site's visitors with Firebase Analytics, which is
 Google Analytics underneath, once its Firebase project is linked to a Google
 Analytics account of the owner's. It records each screen as it's opened. A visitor

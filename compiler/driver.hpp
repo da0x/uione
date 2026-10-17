@@ -17,6 +17,7 @@
 #include <sstream>
 #include <tuple>
 #include <type_traits>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -25,6 +26,7 @@
 #include "generators/theme.hpp"
 #include "language/checker.hpp"
 #include "language/diagnostics.hpp"
+#include "language/extends.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
 #include "version.hpp"
@@ -296,15 +298,72 @@ namespace one::driver {
         std::size_t errors_before = found.size();
         std::vector<language::file> files;
         for (const auto& [path, source] : given) files.push_back(language::parse(path, source, found));
+        // A project that extends another has one project block, its own with the
+        // other's folded in.
+        language::inherit_projects(files);
         if (found.size() == errors_before) language::check(files, found);
         if (kept) *kept = std::move(files);
     }
 
-    // Reads a project's .one files, saying which can't be read.
+    // The folders of the projects a project extends, nearest first: the one its
+    // project block names, the one that one names, and so on. One that's missing is
+    // the checker's to say; one that comes back round is said here, and goes no
+    // further.
+    inline std::vector<std::string> extended_roots(const std::string& root, language::diagnostics& found) {
+        namespace fs = std::filesystem;
+        auto canonical = [](const std::string& dir) {
+            std::error_code ignored;
+            return fs::weakly_canonical(fs::absolute(dir, ignored), ignored).string();
+        };
+        std::vector<std::string> out;
+        std::vector<std::string> names{fs::path(canonical(root)).filename().string()};
+        std::set<std::string> seen{canonical(root)};
+        for (std::string at = root;;) {
+            const language::setting* extends = nullptr;
+            std::string from;
+            language::diagnostics ignored;
+            std::vector<language::file> parsed;
+            for (const auto& path : platform::find_one_files({at})) {
+                auto source = platform::read_file(path);
+                if (source) parsed.push_back(language::parse(path, *source, ignored));
+            }
+            for (const auto& f : parsed) {
+                for (const auto& d : f.declarations) {
+                    auto* p = std::get_if<language::project_declaration>(&d.node);
+                    if (!p) continue;
+                    for (const auto& s : p->settings) {
+                        if (s.key == "extends") extends = &s, from = f.path;
+                    }
+                }
+            }
+            if (!extends) break;
+            std::string next = language::extended_folder(language::folder_of(from), *extends);
+            if (!fs::is_directory(next)) break;
+            if (seen.contains(canonical(next))) {
+                std::string through;
+                for (std::size_t i = 1; i < names.size(); ++i) through += (i == 1 ? "" : ", then ") + names[i];
+                found.push_back({from, extends->where,
+                                 names.front() + " extends itself" + (through.empty() ? "" : " through " + through) +
+                                     "; a project builds on another, never on itself"});
+                break;
+            }
+            seen.insert(canonical(next));
+            names.push_back(fs::path(canonical(next)).filename().string());
+            out.push_back(next);
+            at = next;
+        }
+        return out;
+    }
+
+    // Reads a project's .one files, and those of the projects it extends, saying
+    // which can't be read.
     inline sources read_sources(const std::string& root, language::diagnostics& found) {
         sources read;
         auto paths = platform::find_one_files({root});
         if (paths.empty()) found.push_back({root, {}, "there are no .one files here"});
+        for (const auto& extended : extended_roots(root, found)) {
+            for (const auto& path : platform::find_one_files({extended})) paths.push_back(path);
+        }
         for (const auto& path : paths) {
             if (auto source = platform::read_file(path)) read[path] = *source;
             else found.push_back({path, {}, "can't read this file"});
@@ -820,8 +879,10 @@ namespace one::driver {
             out.recorded = false;
             return out;
         }
+        // Only its own files: those of a project it extends are that project's.
+        auto own = platform::find_one_files({root});
         for (const auto& [path, text] : files) {
-            if (original[path] != text) out.changed[path] = text;
+            if (original[path] != text && std::find(own.begin(), own.end(), path) != own.end()) out.changed[path] = text;
         }
         return out;
     }
