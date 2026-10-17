@@ -30,7 +30,9 @@ export const home = screen({ title: "uione", route: "/" }, () => {
       </Section>
       <Section title="Free software">
         <Text>uione is free software under the AGPL. What the compiler generates belongs to you.</Text>
+        <Text>You can support its work through Open Collective, where every donation and every expense is public.</Text>
         <Link to="/mission">Why uione exists</Link>
+        <Link to="https://opencollective.com/uione">Donate</Link>
       </Section>
       <Section title="Join the waitlist" id="waitlist">
         <Text>Leave your address to hear about new releases.</Text>

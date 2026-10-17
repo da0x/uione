@@ -12,6 +12,7 @@ export function SiteFooter() {
       <BuiltLink to="release">uione <Built value="version" /></BuiltLink>
       <BuiltLink to="source"><Built value="commit" /></BuiltLink>
       <Link to="/license">AGPL-3.0-only</Link>
+      <Link to="https://opencollective.com/uione">Donate</Link>
     </>
   );
 }
