@@ -802,7 +802,7 @@ namespace one::generators::screens {
         // from a list of what the form makes, `asking`.
         std::optional<listing> listed_on_screen(const std::string& ns, const std::string& route, const std::string& entity, const std::string& asking = "") const {
             auto scope = views.find(ns);
-            if (scope == views.end()) return std::nullopt;
+            if (scope == views.end()) return entity == "user" ? std::nullopt : own_list_of(ns, entity);
             if (entity == "user") {
                 for (const auto& [name, view] : scope->second) {
                     if (!view->per || !names_parameter(route, *view->per)) continue;
@@ -836,6 +836,37 @@ namespace one::generators::screens {
                     }
                     if (shown.empty()) continue;
                     return listing{join(ns, name), *each.name, shown, std::nullopt, *view->per};
+                }
+            }
+            return own_list_of(ns, entity);
+        }
+
+        // A person's own list of rows pointing at an entity, in any namespace, like the
+        // organizations they're in: a view per user whose rows hold a field of that
+        // entity and its name or title, offered by it. It's read as theirs, by no
+        // address.
+        std::optional<listing> own_list_of(const std::string& ns, const std::string& entity) const {
+            const std::string wanted = entity.find("::") == std::string::npos ? join(ns, entity) : entity;
+            for (const auto& [view_ns, named] : views) {
+                auto kinds = entities.find(view_ns);
+                if (kinds == entities.end()) continue;
+                for (const auto& [name, view] : named) {
+                    if (!view->per || *view->per != "user") continue;
+                    for (const auto& each : view->each) {
+                        auto* source = std::get_if<language::name_expression>(&each.source->node);
+                        if (each.changes || !source || !kinds->second.contains(source->name.text())) continue;
+                        std::vector<std::string> columns;
+                        for (const auto& row : each.rows) columns.push_back(row.name ? *row.name : text_of(*row.value));
+                        auto has = [&](const std::string& column) { return std::find(columns.begin(), columns.end(), column) != columns.end(); };
+                        for (const auto& f : kinds->second.at(source->name.text())->fields) {
+                            if (f.list || !f.type) continue;
+                            std::string type = f.type->text();
+                            if ((type.find("::") == std::string::npos ? join(view_ns, type) : type) != wanted || !has(f.name)) continue;
+                            for (const char* label : {"name", "title"}) {
+                                if (has(f.name + "." + label)) return listing{join(view_ns, name), each.name ? *each.name : "rows", f.name + "." + label, f.name, ""};
+                            }
+                        }
+                    }
                 }
             }
             return std::nullopt;

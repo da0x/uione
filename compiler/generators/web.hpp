@@ -691,6 +691,23 @@ namespace one::generators {
         }
         std::string title_parts(screen_parts& parts, const std::string& ns, std::string_view text) { return title_parts(parts, model_.title_parts(ns, text)); }
 
+        // Where a link in words goes: the address as it's written, or, with
+        // {view.field} in it, like /organizations/{project_page.organization}, each
+        // value read from its view as the page shows it.
+        std::string address(screen_parts& parts, const std::string& ns, std::string_view to) {
+            std::string whole = to.starts_with("/") ? full_route(ns, std::string(to)) : std::string(to);
+            if (whole.find('{') == std::string::npos) return web_detail::js_string(whole);
+            std::string out = "{`";
+            for (const auto& part : model_.title_parts(ns, whole)) {
+                if (part.live()) {
+                    out += "${encodeURIComponent(String(" + view_variable(parts, part.view) + ".data?.[" + web_detail::js_string(part.field) + "] ?? \"\"))}";
+                    continue;
+                }
+                for (char c : part.text) out += c == '`' || c == '\\' || c == '$' ? std::string("\\") + c : std::string(1, c);
+            }
+            return out + "`}";
+        }
+
         // Text with {view.field} in it: the plain parts as they are, and each value as
         // a <Live> reading that view.
         std::string live_text(screen_parts& parts, const std::string& ns, std::string_view text) {
@@ -702,7 +719,7 @@ namespace one::generators {
                 std::string_view to = text.substr(middle + 2, close - middle - 2);
                 if (!(to.starts_with("https://") || to.starts_with("http://") || to.starts_with("/") || to.starts_with("#"))) continue;
                 parts.components.insert("Link");
-                return live_text(parts, ns, text.substr(0, open)) + "<Link to=" + web_detail::js_string(to.starts_with("/") ? full_route(ns, std::string(to)) : std::string(to)) + ">" +
+                return live_text(parts, ns, text.substr(0, open)) + "<Link to=" + address(parts, ns, to) + ">" +
                        live_text(parts, ns, text.substr(open + 1, middle - open - 1)) + "</Link>" + live_text(parts, ns, text.substr(close + 1));
             }
             std::string out;
@@ -2201,7 +2218,7 @@ namespace one::generators {
         // A list of an entity on the screen, as listChoices takes it: projectPage,
         // "roles", "title"; for people, their name and who they are.
         std::string listing(screen_parts& parts, const screens::listing& list) {
-            parts.params.insert(list.within);
+            if (!list.within.empty()) parts.params.insert(list.within);
             return view_variable(parts, list.view) + ", " + web_detail::js_string(list.list) + ", " + web_detail::js_string(list.shown) +
                    (list.person ? ", " + web_detail::js_string(*list.person) : "");
         }

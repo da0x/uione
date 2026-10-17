@@ -534,3 +534,36 @@ screen "Yard" /yard {
         CHECK(screen->content.find("items(actions(") != std::string::npos);
     }
 }
+
+TEST_CASE("a link in words goes to an address with a view's values in it, on the web as natively") {
+    const std::string source = R"one(namespace yard {
+entity crew {
+	name  text  required
+}
+entity job {
+	title  text  required
+	crew   crew
+}
+view job_page per job {
+	title  crew  crew.name
+}
+screen "{job_page.title}" /jobs/:job {
+	text "Done by [{job_page.crew.name}](/crews/{job_page.crew})"
+}
+screen "Crew" /crews/:crew {
+	text "A crew"
+}
+}
+)one";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto page = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("Done by") != std::string::npos; });
+    REQUIRE(page != web.end());
+    CAPTURE(page->content);
+    CHECK(page->content.find("{job_page.crew}") == std::string::npos);
+    CHECK(page->content.find(R"(encodeURIComponent(String(jobPage.data?.["crew"] ?? "")))") != std::string::npos);
+}

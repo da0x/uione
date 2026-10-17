@@ -314,7 +314,7 @@ namespace one::generators {
         }
 
         std::string listing_of(screen_parts& parts, const screens::listing& l) {
-            parts.params.insert(l.within);
+            if (!l.within.empty()) parts.params.insert(l.within);
             return "list_choices(" + view_variable(parts, l.view) + ", " + str(l.list) + ", " + str(l.shown) + (l.person ? ", " + str(*l.person) : "") + ")";
         }
 

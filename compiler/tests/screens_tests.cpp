@@ -209,3 +209,55 @@ TEST_CASE("a form's fields have their kinds, and their choices from the field or
     CHECK(visibility.start == "public");
     CHECK(!visibility.from.has_value());
 }
+
+TEST_CASE("a field pointing at another namespace's entity picks from a person's own list of them, by name") {
+    auto files = parsed(R"(import one
+project clubs {
+	one  "0.16.1"
+}
+namespace clubs {
+	entity club {
+		name  text  required
+	}
+	entity seat {
+		club    club  required
+		person  user  required
+	}
+	// The clubs a person sits in, as an organization's members are listed.
+	view my_clubs per user {
+		each seat where person == me {
+			club  club.name
+		}
+	}
+}
+namespace teams {
+	entity team {
+		name  text  required
+		club  clubs::club
+	}
+	command team::create
+	screen "Teams" /teams {
+		form team::create "Make" {
+			name  club
+		}
+	}
+}
+)");
+    model m(files);
+    auto found = std::find_if(m.every_screen.begin(), m.every_screen.end(), [](const auto& s) { return s.screen->route == "/teams"; });
+    REQUIRE(found != m.every_screen.end());
+    const language::form_item* form = nullptr;
+    for (const auto& item : found->screen->items) {
+        if (auto* f = std::get_if<language::form_item>(&item.node)) form = f;
+    }
+    REQUIRE(form);
+    auto fields = m.form_fields("teams", found->screen->route, *form);
+    REQUIRE(fields.size() == 2);
+    CHECK(fields[1].type == "pick");
+    REQUIRE(fields[1].from.has_value());
+    CHECK(fields[1].from->view == "clubs::my_clubs");
+    CHECK(fields[1].from->list == "rows");
+    CHECK(fields[1].from->shown == "club.name");
+    CHECK(fields[1].from->person == std::optional<std::string>("club"));
+    CHECK(fields[1].from->within.empty());  // read as the person's own, by no address
+}
