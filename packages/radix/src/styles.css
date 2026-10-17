@@ -326,7 +326,7 @@ main:has(.one-document) .one-heading > div:first-child > :not(h1) {
      and sections centered, the text justified, and a fleuron where it breaks. */
   .one-prose.one-document {
     font-family: var(--font-document, "Libre Caslon Text", Georgia, serif);
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     line-height: 1.7;
     hyphens: auto;
   }
@@ -363,7 +363,7 @@ main:has(.one-document) .one-heading > div:first-child > :not(h1) {
     margin: 3rem 0 1rem;
   }
   .one-prose.one-document h3 {
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     font-weight: 700;
     margin: 2.25rem 0 0.75rem;
   }
