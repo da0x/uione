@@ -298,7 +298,8 @@ export function Thread({ view, list }: { view: ViewState; list: string }) {
     author: show(row["author.name"]),
     picture: typeof row["author.picture"] === "string" ? (row["author.picture"] as string) : undefined,
     when: when(row.created_at),
-    body: <ui.Markdown status="live" source={typeof row.body === "string" ? row.body : ""} />,
+    // The thread draws each comment's box, so its text has no frame of its own.
+    body: <ui.Markdown status="live" source={typeof row.body === "string" ? row.body : ""} framed={false} />,
   }));
   return <ui.Thread status={view.status} entries={entries} />;
 }

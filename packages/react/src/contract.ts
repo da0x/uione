@@ -598,6 +598,7 @@ export interface MarkdownProps {
   // protocols (https, http, mailto), never javascript: or data:.
   source: string | undefined;
   plain?: boolean; // as running words, like a page's subtitle, rather than a document in a frame
+  framed?: boolean; // in a frame of its own, as it is unless something around it frames it already, like a comment's box
 }
 
 export interface LiveProps {

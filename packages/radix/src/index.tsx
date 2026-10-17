@@ -1890,11 +1890,13 @@ export const radix: ComponentSet = {
   ),
 
   // Nothing written, like an issue without a description, takes no room.
-  Markdown: ({ status, source, plain }) =>
+  Markdown: ({ status, source, plain, framed = true }) =>
     status === "live" && source?.trim() && plain ? (
       <div className="max-w-3xl text-base text-muted [&_p]:my-0">
         <MarkdownText source={source} />
       </div>
+    ) : status === "live" && source?.trim() && !framed ? (
+      <MarkdownText source={source} />
     ) : status === "live" && source?.trim() ? (
       <div className="rounded-box border border-line bg-surface px-5 py-4 shadow-panel">
         <MarkdownText source={source} />

@@ -20,6 +20,7 @@ import {
   Section,
   Table,
   Text,
+  Thread,
   memorySource,
   screen as defineScreen,
   useView,
@@ -394,6 +395,19 @@ describe("markdown someone wrote", () => {
     fireEvent.keyDown(preview, { key: "Home" });
     expect(document.activeElement).toBe(write);
     expect(screen.getByRole("textbox", { name: "Summary" })).toBe(textbox);
+  });
+});
+
+describe("a thread of comments", () => {
+  it("draws each comment as one box, its text inside it with no frame of its own", () => {
+    const source = memorySource({
+      views: { "tracker::issue_page": { comments: [{ id: "c1", "author.name": "Ann", body: "Looks **good**.", created_at: "2026-10-17T10:00:00Z" }] } },
+    });
+    renderScreen(() => <Thread view={useView("tracker::issue_page")} list="comments" />, source);
+    const comment = screen.getByRole("article");
+    expect(within(comment).getByText("good").tagName).toBe("STRONG");
+    // The comment is the box; nothing inside it draws a border and a card of its own.
+    expect(comment.querySelector(".rounded-box, .shadow-panel")).toBeNull();
   });
 });
 
