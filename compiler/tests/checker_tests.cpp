@@ -1697,3 +1697,14 @@ TEST_CASE("a role holds a role there is, in each of what points at where it's he
     CHECK(only_error(source("holds projects::maintainer in each projects::project", "")).message ==
           "role owner holds a role in each projects::project, which needs a field pointing at its organization, like organization  organizations::organization");
 }
+
+TEST_CASE("each member in a view is its own namespace's member, though another namespace has one") {
+    const std::string source =
+        "namespace organizations {\nentity organization {\n\tslug  text  required  key\n}\ncommand organization::update\n"
+        "define role owner \"Owner\" in organization {\n\torganization::update\n}\n"
+        "view people per organization {\n\tpeople = each member in organization {\n\t\tperson\n\t}\n}\n}\n"
+        "namespace projects {\nentity project {\n\tslug  text  required  key\n\torganization  organizations::organization\n}\ncommand project::update\n"
+        "define role maintainer \"Maintainer\" in project {\n\tproject::update\n}\n"
+        "view crew per project {\n\tpeople = each member in project {\n\t\tperson\n\t}\n}\n}\n";
+    CHECK(check_source(source).empty());
+}

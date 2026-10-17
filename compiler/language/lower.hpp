@@ -98,16 +98,29 @@ namespace one::language {
 
             void error(location where, std::string message) { out.push_back({*path, where, std::move(message)}); }
 
-            void index(const std::vector<declaration>& declarations) {
+            std::string here;  // the namespace being lowered
+
+            // Each entity by its full name, its namespace's before it: projects::member.
+            void index(const std::vector<declaration>& declarations, const std::string& ns = "") {
                 for (const auto& d : declarations) {
-                    if (const auto* e = std::get_if<entity_declaration>(&d.node)) entities.emplace(e->name, e);
-                    else if (const auto* ns = std::get_if<namespace_declaration>(&d.node)) index(ns->declarations);
+                    if (const auto* e = std::get_if<entity_declaration>(&d.node)) entities.emplace(ns.empty() ? e->name : ns + "::" + e->name, e);
+                    else if (const auto* n = std::get_if<namespace_declaration>(&d.node)) index(n->declarations, ns.empty() ? n->name : ns + "::" + n->name);
                 }
+            }
+
+            // An entity by the name it's written with where it's written: the
+            // namespace's own first, then those around it.
+            std::map<std::string, const entity_declaration*>::const_iterator named(const std::string& name) const {
+                for (std::string ns = here;; ns = ns.substr(0, ns.rfind("::") == std::string::npos ? 0 : ns.rfind("::"))) {
+                    if (auto found = entities.find(ns.empty() ? name : ns + "::" + name); found != entities.end()) return found;
+                    if (ns.empty()) break;
+                }
+                return entities.end();
             }
 
             // The one field of an entity that points at another, by its type.
             const field* pointing(const std::string& from, const std::string& at, location where) {
-                auto found = entities.find(from);
+                auto found = named(from);
                 if (found == entities.end()) return nullptr;  // the checker says so
                 std::vector<const field*> fields;
                 for (const auto& f : found->second->fields) {
@@ -189,7 +202,7 @@ namespace one::language {
                                    fix{before, list.where_length + 1, ""}});
                     return;
                 }
-                auto found = entities.find(listed);
+                auto found = named(listed);
                 if (found == entities.end()) return;
                 const field* only = nullptr;
                 int count = 0;
@@ -238,7 +251,10 @@ namespace one::language {
             void lower(std::vector<declaration>& declarations) {
                 for (auto& d : declarations) {
                     if (auto* ns = std::get_if<namespace_declaration>(&d.node)) {
+                        std::string outer = here;
+                        here = here.empty() ? ns->name : here + "::" + ns->name;
                         lower(ns->declarations);
+                        here = outer;
                     } else if (auto* v = std::get_if<view_declaration>(&d.node)) {
                         for (auto& value : v->values) reading(value.value), reader(value.value);
                         reading(v->public_when), reader(v->public_when);
@@ -1123,7 +1139,7 @@ namespace one::language {
         lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
         for (auto& f : files) workflows.find(f.declarations, "", f.path);
         workflows.define();
-        lowering::lowerer l{nullptr, out, {}};
+        lowering::lowerer l{nullptr, out, {}, ""};
         for (const auto& f : files) l.index(f.declarations);
         for (auto& f : files) {
             l.path = &f.path;
