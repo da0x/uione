@@ -44,7 +44,7 @@ func (a *App) publish(ctx context.Context, events ...event) {
 	cause := map[page]string{} // the last change that touched it, kept with it
 	for _, v := range a.reg.views {
 		for _, ev := range events {
-			if _, reads := v.reads[ev.Entity]; !reads {
+			if _, reads := v.reads[ev.Entity]; !reads || !v.touches(a.reg, ev) {
 				continue
 			}
 			subjects, err := v.subjects(ctx, a, ev)
