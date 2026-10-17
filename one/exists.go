@@ -75,8 +75,13 @@ func (c *Ctx) Held(roles []string) (bool, error) {
 			return false, err
 		}
 		within, err := c.app.within(c.tx, c.entity, f.scope)
-		if err != nil || within == "" {
+		if err != nil {
 			return false, err
+		}
+		// Roles of a place the record isn't within, like an organization's for an
+		// issue, say nothing about it; the next set may.
+		if within == "" {
+			continue
 		}
 		query := c.app.store.Collection(f.member.collection).Where(f.memberPlace.name, "==", within).Where(f.memberPerson.name, "==", c.me).Limit(20)
 		docs, err := c.tx.Documents(query).GetAll()

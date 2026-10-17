@@ -84,6 +84,18 @@ var docks = one.Module("dock",
 	one.Command[Docker]("docker::create"),
 	one.Command[Docker]("docker::delete"),
 	one.Command[Berth]("berth::create"),
+	// Asks whether the person holds harbormaster where the berth is, as a workflow's
+	// step does: the fleet's roles, defined first, don't reach a berth at all.
+	one.Command[Berth]("berth::inspect").Allow(one.SignedIn).Do(func(c *one.Ctx, b *Berth) error {
+		held, err := c.Held([]string{one.Key(b.Dock, "harbormaster")})
+		if err != nil {
+			return err
+		}
+		if !held {
+			return c.Fail("you aren't its harbormaster")
+		}
+		return nil
+	}),
 	one.Roles(one.Entity[DockRole](), one.Entity[Dock](), one.Entity[Docker](), "may").
 		Default("harbormaster", "Harbormaster", "berth::create", "docker::create", "docker::delete"),
 )
@@ -148,4 +160,16 @@ func TestOnlyTheHoldingRoleGivesAndAProjectMovedChangesHands(t *testing.T) {
 	h.mustRun("dock/docker/create", ann, map[string]any{"dock": "jetty", "person": danID, "role": one.Key("jetty", "harbormaster")})
 	h.mustRun("dock/dock/update", dan, map[string]any{"id": "jetty", "fleet": "red"})
 	h.mustRun("dock/berth/create", catToken, map[string]any{"dock": "jetty", "title": "two"})
+}
+
+// Held looks through every set of roles for one that reaches the record: a fleet's
+// don't reach a berth, so they're passed over, not taken as the answer.
+func TestHeldPassesOverRolesThatDontReachTheRecord(t *testing.T) {
+	h := start(t)
+	_, ann := h.signUp("ann@example.com")
+	_, ben := h.signUp("ben@example.com")
+	h.mustRun("dock/dock/create", ann, map[string]any{"slug": "wharf"})
+	berth := h.mustRun("dock/berth/create", ann, map[string]any{"dock": "wharf", "title": "one"})
+	h.mustRun("dock/berth/inspect", ann, map[string]any{"id": berth})
+	h.expect("dock/berth/inspect", ben, map[string]any{"id": berth}, 400, "you aren't its harbormaster")
 }
