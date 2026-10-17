@@ -489,3 +489,48 @@ TEST_CASE("a project whose roles are held within something gets a view per perso
     CHECK(app->content.find(R"(personal: ["tracker::mine", "tracker::member_roles"])") != std::string::npos);
     CHECK(api->content.find(R"(one.View("member_roles").PerUser().)") != std::string::npos);
 }
+
+TEST_CASE("a board's buttons, like New issue, are drawn with it in every app, as a table's are") {
+    const std::string source = R"(namespace yard {
+entity stage {
+	title  text  required
+}
+entity job {
+	title  text  required
+	stage  stage
+}
+command job::create
+view yard_page {
+	jobs = each job {
+		title  stage
+	}
+	stages = each stage {
+		title
+	}
+}
+screen "Yard" /yard {
+	board yard_page.jobs by stage over yard_page.stages {
+		job::create "New job" icon add
+		title
+	}
+}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
+    auto page = std::ranges::find_if(web, [](const auto& f) { return f.path.find("screens/") != std::string::npos && f.content.find("<Board") != std::string::npos; });
+    REQUIRE(page != web.end());
+    CHECK(page->content.find("New job") != std::string::npos);
+    for (const char* target : {"desktop", "terminal"}) {
+        auto native = generators::generate_native(files, root + "/examples/tasks", target);
+        auto screen = std::ranges::find_if(native, [](const auto& f) { return f.content.find("board(p, {") != std::string::npos; });
+        REQUIRE(screen != native.end());
+        CAPTURE(screen->content);
+        CHECK(screen->content.find("\"New job\"") != std::string::npos);
+        CHECK(screen->content.find("items(actions(") != std::string::npos);
+    }
+}

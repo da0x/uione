@@ -442,6 +442,13 @@ namespace one::generators {
 
         // Buttons for what a table's or a board's block names as commands, like New issue.
         std::string toolbar(screen_parts& parts, const std::string& ns, const std::vector<language::table_column>& columns, const std::vector<language::screen_item>& screen) {
+            std::string tools = buttons(parts, ns, columns, screen);
+            return tools.empty() ? "" : "[=, &p] { return " + tools + "; }";
+        }
+
+        // A list's buttons, like New issue: actions(...), each a command, opening its
+        // form where the screen gives one.
+        std::string buttons(screen_parts& parts, const std::string& ns, const std::vector<language::table_column>& columns, const std::vector<language::screen_item>& screen) {
             std::vector<std::string> tools;
             for (const auto& column : columns) {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
@@ -454,7 +461,7 @@ namespace one::generators {
             if (tools.empty()) return "";
             std::string joined;
             for (const auto& t : tools) joined += (joined.empty() ? "" : ", ") + t;
-            return "[=, &p] { return actions(" + joined + "); }";
+            return "actions(" + joined + ")";
         }
 
         std::string command_of(screen_parts& parts, const std::string& ns, const language::button_item& button) {
@@ -673,7 +680,8 @@ namespace one::generators {
                 out += ", .statuses = {" + statuses + "}";
             }
             if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) out += ", .waits_on = " + str(waits);
-            (void)screen;
+            // Its buttons, like New issue, above it, as a table has them beside its search.
+            if (std::string tools = buttons(parts, ns, b.columns, screen); !tools.empty()) return "items(" + tools + ", " + out + "}))";
             return out + "})";
         }
 
