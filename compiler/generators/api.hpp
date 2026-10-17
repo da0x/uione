@@ -151,6 +151,7 @@ namespace one::generators {
         const language::entity_declaration* outer_entity_ = nullptr;
         std::string outer_me_;
         bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
+        std::set<std::string> imports_;  // the other namespaces a package's views read, as their packages
 
         code::source at(const void* declaration) const {
             auto it = declared_.find(declaration);
@@ -482,6 +483,7 @@ namespace one::generators {
             }
             bool uses_time = false;
             counts_time_ = false;
+            imports_.clear();
             stream body("\t");
 
             for (auto* e : pkg.entities) {
@@ -736,11 +738,16 @@ namespace one::generators {
             auto fixed = out.fixed();  // what every package file has
             out.line("package " + package_name(ns));
             out.line();
-            if (uses_time || counts_time_) {
+            if (uses_time || counts_time_ || !imports_.empty()) {
                 out.open("import (");
-                out.line("\"time\"");
-                out.line();
-                out.line("\"github.com/da0x/uione/one\"");
+                if (uses_time || counts_time_) {
+                    out.line("\"time\"");
+                    out.line();
+                }
+                // In order, as gofmt keeps them: the library, and the other namespaces'.
+                std::set<std::string> paths{"github.com/da0x/uione/one"};
+                for (const auto& other : imports_) paths.insert(module_path() + "/" + other);
+                for (const auto& path : paths) out.line(api_detail::go_string(path));
                 out.close(")");
             } else {
                 out.line("import \"github.com/da0x/uione/one\"");
@@ -1946,13 +1953,21 @@ namespace one::generators {
             auto* name = std::get_if<language::name_expression>(&source.node);
             const language::entity_declaration* e =
                 name && name->name.parts.size() == 1 ? entity(pkg, name->name.parts[0]) : nullptr;
+            // Another namespace's, like an organization's projects: its package's type.
+            std::string go = e ? api_detail::go_name(e->name) : "";
+            if (!e && name && (e = other_entity(name->name))) {
+                std::string ns;
+                for (std::size_t i = 0; i + 1 < name->name.parts.size(); ++i) ns += (ns.empty() ? "" : "::") + name->name.parts[i];
+                imports_.insert(package_name(ns));
+                go = package_name(ns) + "." + api_detail::go_name(e->name);
+            }
             if (!e) {
-                unsupported(path_, source.where, "a view reading an entity from another namespace");
+                unsupported(path_, source.where, "a view reading an entity that isn't declared");
                 return std::nullopt;
             }
             // The changes of an entity are asked by what each holds: the entity's id
             // under its own name, and what it points at.
-            std::string type = changes ? "one.ChangeOf[" + api_detail::go_name(e->name) + "]" : api_detail::go_name(e->name);
+            std::string type = changes ? "one.ChangeOf[" + go + "]" : go;
             std::vector<const language::expression*> parts;
             std::function<void(const language::expression&)> split = [&](const language::expression& x) {
                 if (auto* b = std::get_if<language::binary_expression>(&x.node); b && b->op == language::token_kind::logical_and) {

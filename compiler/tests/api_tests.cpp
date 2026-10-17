@@ -2028,6 +2028,12 @@ TEST_CASE("a role holds another namespace's role in each of what points at where
 		slug  text  required  unique  key
 	}
 	command organization::update
+	view organization_page per organization {
+		slug
+		projects = each projects::project where organization == organization.id {
+			slug
+		}
+	}
 	define role owner "Owner" in organization {
 		organization::update
 		holds projects::maintainer in each projects::project
@@ -2057,4 +2063,7 @@ namespace projects at / {
     CHECK(in("organizations/organizations.go").find(R"(Holds("owner", "projects", "maintainer", "organization"))") != std::string::npos);
     CHECK(in("projects/projects.go").find(R"(one:"refers=organizations::organization")") != std::string::npos);
     CHECK(in("projects/projects.go").find(R"(Through string `firestore:"through"`)") != std::string::npos);
+    // An organization's page lists its projects, another namespace's, by their package.
+    CHECK(in("organizations/organizations.go").find(R"(one.Where[projects.Project]("organization", one.Subject))") != std::string::npos);
+    CHECK(in("organizations/organizations.go").find("/projects\"") != std::string::npos);
 }
