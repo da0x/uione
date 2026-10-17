@@ -1173,9 +1173,10 @@ namespace one::screens {
 		bool held = !holder.empty() && until.is_time() && until.as_time() > std::chrono::system_clock::now();
 		shown.status = !status_words(said).empty() ? said : held ? "working" : named(column_status);
 		if (!data.is_map()) return;
-		// How far it is in its stage, as its holder says: step 2 of 5.
+		// How far it is in its stage, as its holder says: step 2 of 5. Only while they
+		// hold it: let go or moved on, what they last said is about where it was.
 		const value &step = data["step"], &steps = data["steps"];
-		if ((step.is_integer() || step.is_double()) && (steps.is_integer() || steps.is_double()) && steps.as_double() > 0) {
+		if (held && (step.is_integer() || step.is_double()) && (steps.is_integer() || steps.is_double()) && steps.as_double() > 0) {
 			shown.progress = std::pair{std::clamp(step.as_double(), 0.0, steps.as_double()), steps.as_double()};
 		}
 		if (std::string runner = show(data["runner"]); !runner.empty()) shown.runner = "runner " + runner;

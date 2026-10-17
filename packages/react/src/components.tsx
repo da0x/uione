@@ -2040,9 +2040,10 @@ function going(card: Row, column: string | undefined, now: number): { status?: B
   const extra: string[] = [];
   if (typeof data.runner === "string" && data.runner) extra.push(`runner ${data.runner}`);
   if (typeof data.since === "string" && !Number.isNaN(Date.parse(data.since))) extra.push(runningTime((now - Date.parse(data.since)) / 1000));
-  // How far it is in its stage, as its holder says: step 2 of 5.
+  // How far it is in its stage, as its holder says: step 2 of 5. Only while they
+  // hold it: let go or moved on, what they last said is about where it was.
   const step = Number(data.step), steps = Number(data.steps);
-  const progress = typeof data.steps === "number" && steps > 0 && Number.isFinite(step) ? { step: Math.min(Math.max(step, 0), steps), steps } : undefined;
+  const progress = held && typeof data.steps === "number" && steps > 0 && Number.isFinite(step) ? { step: Math.min(Math.max(step, 0), steps), steps } : undefined;
   return { status: is ? { is: is as NonNullable<BoardCard["status"]>["is"], words: statusWords[is]! } : undefined, extra, progress };
 }
 

@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import {
   App,
+  Board,
   Code,
   Command,
   Confirm,
@@ -395,6 +396,30 @@ describe("markdown someone wrote", () => {
     fireEvent.keyDown(preview, { key: "Home" });
     expect(document.activeElement).toBe(write);
     expect(screen.getByRole("textbox", { name: "Summary" })).toBe(textbox);
+  });
+});
+
+describe("a card's progress", () => {
+  it("shows while its holder works it, and not once it's let go or moved on", () => {
+    const later = new Date(Date.now() + 60_000).toISOString();
+    const source = memorySource({
+      views: {
+        "projects::board_page": {
+          stages: [{ id: "ark-deploying", title: "Deploying" }, { id: "ark-live", title: "Live" }],
+          issues: [
+            { id: "ark-1", title: "studio", stage: "ark-deploying", held_by: "deployer", held_until: later, data: { step: 2, steps: 5 } },
+            { id: "ark-2", title: "neotrac", stage: "ark-live", data: { step: 4, steps: 5 } },
+          ],
+        },
+      },
+    });
+    renderScreen(() => {
+      const page = useView("projects::board_page");
+      return <Board view={page} list="issues" by="stage" over={page} overList="stages" columns={{ title: "Title" }} />;
+    }, source);
+    expect(screen.getByRole("img", { name: "step 2 of 5" })).toBeTruthy();
+    // Its holder's last word from the stage it left isn't how far it is in this one.
+    expect(screen.queryByRole("img", { name: "step 4 of 5" })).toBeNull();
   });
 });
 

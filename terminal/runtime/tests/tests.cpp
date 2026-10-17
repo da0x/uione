@@ -602,16 +602,24 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GiB") != std::string::npos, large);
 }
 
-// A card whose holder says how far it is shows it, in btop's squares.
-TEST("a card shows how far it is in its stage, as its holder says") {
+// A card whose holder says how far it is shows it, in btop's squares, while they
+// hold it; let go or moved on, what they last said isn't how far it is any more.
+TEST("a card shows how far it is in its stage, as its holder says, while they hold it") {
+	value until;
+	until.type = value::kind::time;
+	until.time.seconds = std::chrono::duration_cast<std::chrono::seconds>((std::chrono::system_clock::now() + std::chrono::minutes(10)).time_since_epoch()).count();
 	memory_source data;
-	fill_board(data, {{"data", value(fields{{"step", 2}, {"steps", 5}})}});
+	fill_board(data, {{"data", value(fields{{"step", 2}, {"steps", 5}})}, {"held_by", "npm-agent"}, {"held_by.name", "npm"}, {"held_until", until}});
 	auto s = with_board();
 	navigator nav(s, data);
 	nav.open("/atlas/boards/main");
 	screen_at t(nav, 100, 30);
 	std::string drawn = t.text();
 	CHECK_SAYING(drawn.find("■■□□□ 2/5") != std::string::npos, drawn);
+
+	fill_board(data, {{"data", value(fields{{"step", 4}, {"steps", 5}})}});
+	drawn = t.text();
+	CHECK_SAYING(drawn.find("4/5") == std::string::npos, drawn);
 }
 
 // Picked once, a board opens that way the next time the app starts, as on the web.
