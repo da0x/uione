@@ -208,8 +208,17 @@ func (a *App) giveHeld(c *Ctx, h heldRole, place, person, through string) error 
 	m.FieldByIndex(h.inner.memberPerson.index).SetString(person)
 	m.FieldByIndex(h.inner.memberRole.index).SetString(roleID)
 	if key, ok := h.inner.member.id(m); ok {
-		if _, err := c.tx.Get(a.store.Collection(h.inner.member.collection).Doc(key)); err == nil {
+		ref := a.store.Collection(h.inner.member.collection).Doc(key)
+		if _, err := c.tx.Get(ref); err == nil {
 			return nil // they hold it themselves
+		}
+		// Or are given it themselves in this same step, like whoever makes a project.
+		for _, list := range [][]*made{c.made, c.making} {
+			for _, m := range list {
+				if m.ref.Path == ref.Path {
+					return nil
+				}
+			}
 		}
 	}
 	m.FieldByIndex(h.through.index).SetString(through)

@@ -76,7 +76,10 @@ var fleets = one.Module("fleet",
 )
 
 var docks = one.Module("dock",
-	one.Command[Dock]("dock::create").Allow(one.SignedIn),
+	// Whoever makes a dock is its harbormaster themselves, as a project's maker is.
+	one.Command[Dock]("dock::create").Allow(one.SignedIn).Do(func(c *one.Ctx, d *Dock) error {
+		return one.Create(c, &Docker{Dock: d.ID, Person: c.Me(), Role: one.Key(d.ID, "harbormaster")})
+	}),
 	one.Command[Dock]("dock::update").Allow(one.SignedIn).Fields("fleet"),
 	one.Command[Docker]("docker::delete"),
 	one.Command[Berth]("berth::create"),
@@ -89,10 +92,14 @@ func init() { modules = append(modules, fleets, docks) }
 // What an admiral holds in each dock: made with the dock, and with the admiral.
 func TestAnOrganizationsOwnerHoldsTheirRoleInEachOfItsProjects(t *testing.T) {
 	h := start(t)
-	_, ann := h.signUp("ann@example.com")
+	annID, ann := h.signUp("ann@example.com")
 	ben, benToken := h.signUp("ben@example.com")
 	h.mustRun("fleet/fleet/create", ann, map[string]any{"slug": "blue"})
 	h.mustRun("dock/dock/create", ann, map[string]any{"slug": "pier", "fleet": "blue"})
+	// Ann made it, so her harbormaster role is her own, not the fleet's to take away.
+	if through := h.stored("dock_docker", one.Key("pier", annID, one.Key("pier", "harbormaster")))["through"]; through != nil && through != "" {
+		t.Fatalf("the dock's maker holds it through %v", through)
+	}
 
 	// Ben isn't in the fleet, so the dock is closed to him.
 	h.expect("dock/berth/create", benToken, map[string]any{"dock": "pier", "title": "one"}, 403, "you don't have permission to do this")
