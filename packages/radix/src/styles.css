@@ -305,13 +305,28 @@
   color: var(--shiki-dark) !important;
 }
 
+/* A screen showing a document keeps its title and words in the document's column, smaller than the document's
+   own title, the way a cover note sits above a letter. Outside any layer, so it
+   outranks the title's utility classes. */
+main:has(.one-document) .one-heading {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 46rem;
+}
+main:has(.one-document) .one-heading h1 {
+  font-size: 1.375rem;
+}
+main:has(.one-document) .one-heading > div:first-child > :not(h1) {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
 /* Docs pages arrive as HTML, so they're styled by element rather than by class. */
 @layer components {
   /* A page set as a printed document, like a license, over the prose styles below: a book face, its title, parts
      and sections centered, the text justified, and a fleuron where it breaks. */
   .one-prose.one-document {
     font-family: var(--font-document, "Libre Caslon Text", Georgia, serif);
-    font-size: 1rem;
+    font-size: 0.9375rem;
     line-height: 1.7;
     hyphens: auto;
   }
@@ -328,7 +343,7 @@
     text-wrap: balance;
   }
   .one-prose.one-document h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 400;
     line-height: 1.2;
     margin: 0 0 0.75rem;
@@ -341,14 +356,14 @@
     margin-bottom: 2rem;
   }
   .one-prose.one-document h2 {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: 400;
     font-variant-caps: all-small-caps;
     letter-spacing: 0.09em;
     margin: 3rem 0 1rem;
   }
   .one-prose.one-document h3 {
-    font-size: 1rem;
+    font-size: 0.9375rem;
     font-weight: 700;
     margin: 2.25rem 0 0.75rem;
   }

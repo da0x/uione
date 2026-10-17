@@ -439,7 +439,7 @@ export const radix: ComponentSet = {
       <main id="content" tabIndex={-1} className={`px-4 pb-8 outline-none sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
         {crumbs}
         {/* The title, and a screen's own buttons at the end of its row. */}
-        <div className={`flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>
+        <div className={`one-heading flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>
           {/* The title, and under it what the screen says about itself, like a project's summary. */}
           <div className="mr-auto flex min-w-0 max-w-3xl flex-col gap-1">
             {title !== name && <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
