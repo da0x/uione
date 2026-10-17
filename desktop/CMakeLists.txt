@@ -7,7 +7,7 @@
 # is downloaded. Wayland's protocol glue is written by wayland-scanner as it builds.
 
 cmake_minimum_required(VERSION 3.28)
-project(one_desktop VERSION 0.16.0 LANGUAGES C CXX)
+project(one_desktop VERSION 0.16.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
