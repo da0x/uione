@@ -165,7 +165,9 @@ under a different one.
 
 - **A release moves everything together.** `compiler/version.hpp`, the four
   `packages/*/package.json` and the site's expected `go.mod` and `package.json`
-  files change in one commit, with a new page at the top of `site/releases/`. The
+  files change in one commit. A 0.x.0 release adds a new page at the top of
+  `site/releases/`; a patch release adds a short section for itself to the end of
+  its 0.x.0's page, so the list of releases stays one page per line. The
   tags `v<version>`, `one/v<version>` and `infrastructure/v<version>` go on the
   pushed commit; `v<version>` runs `.github/workflows/release.yml`, which publishes
   the compiler's builds and its container. The npm packages are published by hand
