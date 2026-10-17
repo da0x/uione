@@ -67,6 +67,8 @@ var fleets = one.Module("fleet",
 	}),
 	one.Command[Sailor]("sailor::create"),
 	one.Command[Sailor]("sailor::delete"),
+	// A fleet's docks: another module's entity, read before that module is registered.
+	one.View("fleet_docks").Per(one.Entity[Fleet]()).Public().List("docks", one.Where[Dock]("fleet", one.Subject)).Fields("slug"),
 	one.Roles(one.Entity[FleetRank](), one.Entity[Fleet](), one.Entity[Sailor](), "may").
 		Default("admiral", "Admiral", "sailor::create", "sailor::delete").
 		Default("lookout", "Lookout").

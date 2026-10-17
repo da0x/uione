@@ -49,8 +49,19 @@ func (m *ModuleSpec) Add(items ...Item) *ModuleSpec {
 
 func (m *ModuleSpec) register(r *registry, ns string) {
 	for _, item := range m.items {
-		item.register(r, join(ns, m.name))
+		if registersNow(r, item) {
+			item.register(r, join(ns, m.name))
+		}
 	}
+}
+
+// Views are registered after every module's entities and commands, so an entity
+// one module's view reads from another, like an organization's projects, is
+// already known by its own namespace.
+func registersNow(r *registry, item Item) bool {
+	_, view := item.(*ViewSpec)
+	_, module := item.(*ModuleSpec)
+	return module || view == r.viewsPass
 }
 
 // RoleSpec is a role, made with Role.
@@ -99,18 +110,19 @@ func (ro *RoleSpec) register(r *registry, ns string) {
 }
 
 type registry struct {
-	commands map[string]func(*App, *call) (string, error)
-	views    []*ViewSpec
-	roles    map[string][]string
-	scoped   []*RoleSpec   // roles held within an entity, like a project
-	defined  []*RolesSpec  // roles each project, or the like, defines for itself as records
-	once     []*OnceSpec   // work done the first time a backend with it starts
-	signin   []*SignInSpec // work done each time someone opens the app signed in
-	named    map[string]bool
-	twice    []string // roles given more than once, which is a mistake
-	hooks    []*GitHubSpec
-	services []*ServiceSpec // systems that run commands, not people
-	schemas  map[reflect.Type]*schema
+	viewsPass bool // registering views, after every module's entities and commands
+	commands  map[string]func(*App, *call) (string, error)
+	views     []*ViewSpec
+	roles     map[string][]string
+	scoped    []*RoleSpec   // roles held within an entity, like a project
+	defined   []*RolesSpec  // roles each project, or the like, defines for itself as records
+	once      []*OnceSpec   // work done the first time a backend with it starts
+	signin    []*SignInSpec // work done each time someone opens the app signed in
+	named     map[string]bool
+	twice     []string // roles given more than once, which is a mistake
+	hooks     []*GitHubSpec
+	services  []*ServiceSpec // systems that run commands, not people
+	schemas   map[reflect.Type]*schema
 }
 
 // entity finds a known entity by its full name, like library::book.
@@ -242,8 +254,13 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 		named:    map[string]bool{},
 		schemas:  map[reflect.Type]*schema{reflect.TypeFor[Profile](): profiles()},
 	}
-	for _, item := range items {
-		item.register(reg, "")
+	for _, pass := range []bool{false, true} {
+		reg.viewsPass = pass
+		for _, item := range items {
+			if registersNow(reg, item) {
+				item.register(reg, "")
+			}
+		}
 	}
 	if len(reg.twice) > 0 {
 		return nil, fmt.Errorf("one: role %s is given more than once; give it every permission in one Role", reg.twice[0])
