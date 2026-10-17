@@ -994,6 +994,7 @@ entity member {
 	project  project  required  key
 	person   user     required  key
 	role     role     required  key
+	through  text
 }
 ```
 
@@ -1003,6 +1004,34 @@ entity member {
   what points at that, like an issue's comment. A role allows only commands on
   those. Changing a role changes what everyone who holds it may do, at once, and
   their pages show it.
+- A role can hold another namespace's role in each of what's within where it's
+  held: an organization's owner maintaining each of its projects.
+
+```one
+namespace organizations {
+	define role owner "Owner" in organization {
+		organization::update
+		holds projects::maintainer in each projects::project
+	}
+}
+
+namespace projects {
+	entity project {
+		slug          text  required  key
+		organization  organizations::organization
+	}
+}
+```
+
+  Whoever holds the owner role is given a member in each project whose
+  organization it is, marked in its `through` with the membership it comes from.
+  It's made when they become an owner or a project joins the organization, and
+  taken away when they stop or the project leaves. A role they hold there
+  themselves is left as it is. One that comes from the organization is taken away
+  there, not in the project. Since it's a member like any other, it's everything
+  a member is: what they may do, which pages they read, and which change when it
+  does. Each namespace has its own roles, so an organization's and a project's
+  live in two.
 - Screens, views and commands name `role` and `member` like any entity of the
   project's own: `each member in project`, `dispatch member::create`, `readers
   member`. Their commands, like `member::create` and `role::update`, are declared

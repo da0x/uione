@@ -322,6 +322,21 @@ namespace one::language {
                 }
                 expect(token_kind::left_brace, "'{' and the commands it allows, one a line");
                 while (in_block()) {
+                    // holds projects::maintainer in each projects::project
+                    if (at_word("holds") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        role_holding h;
+                        h.where = peek().where;
+                        h.role = parse_qualified_name("the role it holds, like projects::maintainer");
+                        if (!at_word("in")) fail_expecting("in each and where it holds it, like holds projects::maintainer in each projects::project");
+                        advance();
+                        if (!at_word("each")) fail_expecting("each and where it holds it, like in each projects::project");
+                        advance();
+                        h.each = parse_qualified_name("where it holds it, like projects::project");
+                        role.holds.push_back(std::move(h));
+                        end_line();
+                        continue;
+                    }
                     role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
                     end_line();
                 }

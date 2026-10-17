@@ -168,8 +168,9 @@ row_line       ::= (postfix+ | postfix* NAME "=" expression) END
 role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? END
 /* define role: a role each project starts with, kept as the language's role
  * records, given to people by member records, with the commands it allows, one
- * a line. */
-define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? (qualified END)* "}" END
+ * a line, and the roles it holds in each of what's within, like an organization's
+ * owner maintaining each of its projects. */
+define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? ((qualified | "holds" qualified "in" "each" qualified) END)* "}" END
 /* define workflow: the rules an entity moves by, along a field pointing at its
  * stages: the stage's field listing the roles that work it, the entity of steps
  * between them, and how long a claim lasts. Along a field of choices, its stages

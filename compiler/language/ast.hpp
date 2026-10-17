@@ -387,6 +387,15 @@ namespace one::language {
         std::vector<qualified_name> permissions;
     };
 
+    // holds projects::maintainer in each projects::project: whoever holds the role holds
+    // that one too, in each of those within what the role is in, like an organization's
+    // owner maintaining each of its projects.
+    struct role_holding {
+        qualified_name role;  // projects::maintainer
+        qualified_name each;  // projects::project
+        location where;
+    };
+
     // A role each project starts with: maintainer "Maintainer"  issue::create ...
     struct default_role {
         std::string name;
@@ -394,6 +403,7 @@ namespace one::language {
         std::string title;
         std::vector<qualified_name> permissions;
         bool services = false;  // a service account may hold it, as well as a person
+        std::vector<role_holding> holds = {};  // what else it holds, in each of what's within
     };
 
     // roles role per project from member { ... }: the roles each project defines for
@@ -460,6 +470,7 @@ namespace one::language {
         bool services = false;  // for services: service accounts may hold it too
         location services_where;
         std::vector<qualified_name> permissions;
+        std::vector<role_holding> holds;
     };
 
     // proofing worked by proofreader, in a workflow whose stages are an enum's

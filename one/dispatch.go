@@ -50,6 +50,11 @@ func DispatchUpdate[E any, P entityPointer[E]](c *Ctx, id string, set func(*E), 
 		set(entity)
 	}
 	s.normalize(v)
+	// What's held through it, as when its own command changes it: a project moved to
+	// another organization is maintained by that one's owners.
+	if err := c.app.inherit(c, s, "update", id, v, before); err != nil {
+		return err
+	}
 	if body == nil {
 		return nil
 	}
@@ -89,6 +94,9 @@ func DispatchDelete[E any, P entityPointer[E]](c *Ctx, id string, given map[stri
 	// What goes with it as when its own command deletes it: a service's key, or a
 	// project's roles, members and services.
 	if err := c.app.serviceChanged(c, s, "delete", id, v); err != nil {
+		return err
+	}
+	if err := c.app.inherit(c, s, "delete", id, v, before); err != nil {
 		return err
 	}
 	return c.app.scopeDeleted(c, s, id)

@@ -646,6 +646,7 @@ namespace one::language {
 
         void verify(const std::string& ns, location, const define_role_declaration& r) {
             snake(r.name, r.where);
+            for (const auto& h : r.holds) verify_holding(ns, r, h);
             if (!r.services) return;
             // A role a program may hold never hands out access: not roles, members or
             // services, nor anything that gives a role, like an invitation.
@@ -658,6 +659,44 @@ namespace one::language {
                     gives = std::any_of(e->fields.begin(), e->fields.end(), [](const field& f) { return f.type && f.type->text() == "role"; });
                 }
                 if (gives) error(p.where, "role " + r.name + " is for services, which never change who has access, so it can't allow " + p.text());
+            }
+        }
+
+        // holds projects::maintainer in each projects::project: the entity is where the
+        // other namespace's roles are, it points at what this role is in, and the role
+        // is one of them.
+        void verify_holding(const std::string& ns, const define_role_declaration& r, const role_holding& h) {
+            std::string there = h.each.parts.size() > 1 ? h.each.parts[0] : ns;
+            const entity_declaration* each = find_entity(ns, h.each);
+            if (!each) {
+                error(h.each.where, "role " + r.name + " holds a role in each " + h.each.text() + ", which isn't an entity " + in_namespace(ns));
+                return;
+            }
+            bool points = std::any_of(each->fields.begin(), each->fields.end(), [&](const field& f) {
+                if (!f.type || f.list) return false;
+                const auto& parts = f.type->parts;
+                return parts.back() == r.in && (parts.size() == 1 ? there == ns : parts[0] == ns);
+            });
+            if (!points) {
+                error(h.each.where, "role " + r.name + " holds a role in each " + h.each.text() + ", which needs a field pointing at its " + r.in + ", like " + r.in + "  " +
+                                        (ns.empty() ? r.in : ns + "::" + r.in));
+            }
+            auto at = scopes_.find(there);
+            const roles_declaration* roles = nullptr;
+            if (at != scopes_.end()) {
+                for (const auto* d : at->second.defined) {
+                    if (d->per == each->name) roles = d;
+                }
+            }
+            if (!roles) {
+                error(h.role.where, "role " + r.name + " holds a role in each " + h.each.text() + ", which has no roles; define them with define role ... in " + each->name);
+                return;
+            }
+            std::string name = h.role.parts.back();
+            if (std::none_of(roles->defaults.begin(), roles->defaults.end(), [&](const default_role& d) { return d.name == name; })) {
+                std::vector<std::string> names;
+                for (const auto& d : roles->defaults) names.push_back(d.name);
+                error(h.role.where, "there's no role " + name + " in each " + each->name + "; there are " + join_words(names));
             }
         }
 

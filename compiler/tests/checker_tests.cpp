@@ -1681,3 +1681,19 @@ TEST_CASE("a table keeps rows by a field they read through what they point at, o
     CHECK(only_error(table("count(person) == 1")).message ==
           "a filter is a field and the value it holds, or doesn't, like author == me or person.service != true, or a time it's after, like updated_at > 7 days ago");
 }
+
+TEST_CASE("a role holds a role there is, in each of what points at where it's held") {
+    auto source = [](const std::string& holds, const std::string& pointing) {
+        return "namespace organizations {\nentity organization {\n\tslug  text  required  key\n}\ncommand organization::update\n"
+               "define role owner \"Owner\" in organization {\n\torganization::update\n\t" + holds + "\n}\n}\n"
+               "namespace projects {\nentity project {\n\tslug  text  required  key\n" + pointing + "}\ncommand project::update\n"
+               "define role maintainer \"Maintainer\" in project {\n\tproject::update\n}\n}\n";
+    };
+    const std::string points = "\torganization  organizations::organization\n";
+    CHECK(check_source(source("holds projects::maintainer in each projects::project", points)).empty());
+    CHECK(only_error(source("holds projects::keeper in each projects::project", points)).message == "there's no role keeper in each project; there are maintainer");
+    CHECK(only_error(source("holds projects::maintainer in each projects::shop", points)).message ==
+          "role owner holds a role in each projects::shop, which isn't an entity in namespace organizations");
+    CHECK(only_error(source("holds projects::maintainer in each projects::project", "")).message ==
+          "role owner holds a role in each projects::project, which needs a field pointing at its organization, like organization  organizations::organization");
+}

@@ -383,6 +383,15 @@ namespace one::generators {
             bool uses_time = false;
         };
 
+        // The entity another namespace declares, like organizations::organization.
+        const language::entity_declaration* other_entity(const language::qualified_name& type) const {
+            if (type.parts.size() < 2) return nullptr;
+            std::string ns;
+            for (std::size_t i = 0; i + 1 < type.parts.size(); ++i) ns += (ns.empty() ? "" : "::") + type.parts[i];
+            auto found = namespaces_.find(ns);
+            return found == namespaces_.end() ? nullptr : entity(found->second, type.parts.back());
+        }
+
         std::optional<go_type> type_of(const package& pkg, const language::field& f) {
             if (!f.choices.empty()) return go_type{"string"};
             if (f.list) return go_type{"[]string"};  // each one's id, or a piece of text
@@ -391,7 +400,9 @@ namespace one::generators {
                 return std::nullopt;
             }
             if (f.type->parts.size() != 1) {
-                unsupported(path_, f.where, "a field whose type is in another namespace");
+                // An entity of another namespace, like a project's organization: its id.
+                if (other_entity(*f.type)) return go_type{"string"};
+                unsupported(path_, f.where, "a field whose type is in another namespace, unless it's an entity there");
                 return std::nullopt;
             }
             const auto& t = f.type->parts[0];
@@ -503,6 +514,8 @@ namespace one::generators {
                         if (e->history_of && *e->history_of == f.type->parts[0]) rules.push_back("history");
                     } else if (f.type && f.type->text() == "user") {
                         rules.push_back("refers=user");  // a person, whose name and picture a view can show
+                    } else if (f.type && other_entity(*f.type)) {
+                        rules.push_back("refers=" + f.type->text());  // another namespace's, like organizations::organization
                     }
                     if (!f.choices.empty()) {
                         std::string choices;
@@ -643,12 +656,38 @@ namespace one::generators {
                     for (const auto& d : r->defaults) {
                         if (d.services) services += ", " + api_detail::go_string(d.name);
                     }
+                    // What a role holds in each of what's within, like an organization's
+                    // owner maintaining its projects: the role there, by its namespace, and
+                    // the field there pointing here.
+                    std::string here;
+                    for (const auto& [name, p] : namespaces_) {
+                        if (&p == &pkg) here = name;
+                    }
+                    std::vector<std::string> holds;
+                    for (const auto& d : r->defaults) {
+                        for (const auto& h : d.holds) {
+                            std::string ns = h.each.parts.size() > 1 ? h.each.parts[0] : here;
+                            auto found = namespaces_.find(ns);
+                            const language::entity_declaration* each = found == namespaces_.end() ? nullptr : entity(found->second, h.each.parts.back());
+                            std::string pointing;
+                            for (std::size_t at = 0; each && at < each->fields.size(); ++at) {
+                                const auto& f = each->fields[at];
+                                if (!f.type || f.list) continue;
+                                const auto& parts = f.type->parts;
+                                bool named = parts.back() == r->per && (parts.size() == 1 ? ns == here : parts[0] == here);
+                                if (named && pointing.empty()) pointing = f.name;
+                            }
+                            holds.push_back("Holds(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(ns) + ", " + api_detail::go_string(h.role.parts.back()) +
+                                            ", " + api_detail::go_string(pointing) + ")");
+                        }
+                    }
                     for (std::size_t i = 0; i < r->defaults.size(); ++i) {
                         const auto& d = r->defaults[i];
                         std::string line = "Default(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(d.title);
                         for (const auto& p : d.permissions) line += ", " + api_detail::go_string(p.text());
-                        body.line(line + ")" + (i + 1 < r->defaults.size() || !services.empty() ? "." : ""));
+                        body.line(line + ")" + (i + 1 < r->defaults.size() || !services.empty() || !holds.empty() ? "." : ""));
                     }
+                    for (std::size_t i = 0; i < holds.size(); ++i) body.line(holds[i] + (i + 1 < holds.size() || !services.empty() ? "." : ""));
                     if (!services.empty()) body.line("Services(one.Entity[Service]()" + services + ")");
                     body.dedent();
                 }

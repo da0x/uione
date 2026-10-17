@@ -162,7 +162,9 @@ func create(c *Ctx, s *schema, v reflect.Value, body func() error) error {
 		return err
 	}
 	c.made = append(c.made, &made{schema: s, ref: ref, value: v, before: before})
-	return nil
+	// What's held through it, as when its own command makes it: an organization's
+	// owner made by a dispatch maintains its projects too.
+	return c.app.inherit(c, s, "create", ref.ID, v, nil)
 }
 
 // derive works out what a new entity reads from what it points at, like a step's
@@ -943,6 +945,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := a.serviceChanged(body, s, action, ref.ID, v); err != nil {
 				return err
 			}
+			if err := a.inherit(body, s, action, ref.ID, v, nil); err != nil {
+				return err
+			}
 			if err := s.validate(v); err != nil {
 				return err
 			}
@@ -1034,6 +1039,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := a.serviceChanged(body, s, action, id, v); err != nil {
 				return err
 			}
+			if err := a.inherit(body, s, action, id, v, body.before); err != nil {
+				return err
+			}
 			// A project takes its roles, members and services with it.
 			if err := a.scopeDeleted(body, s, id); err != nil {
 				return err
@@ -1079,6 +1087,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 		}
 		if err := a.serviceChanged(body, s, action, id, v); err != nil {
+			return err
+		}
+		if err := a.inherit(body, s, action, id, v, body.before); err != nil {
 			return err
 		}
 		var named map[string]any // what an update says a key made from a field is

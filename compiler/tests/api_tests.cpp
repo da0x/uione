@@ -2015,3 +2015,46 @@ TEST_CASE("UIONE_LIBRARIES builds a project against a checkout's libraries rathe
     REQUIRE(released != nullptr);
     CHECK(released->content.find("replace") == std::string::npos);
 }
+
+// An organization's owner maintains each of its projects: the project points at its
+// organization, a field of another namespace's entity, and the owner's roles hold the
+// project's maintainer there.
+TEST_CASE("a role holds another namespace's role in each of what points at where it's held") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace organizations at / {
+	entity organization {
+		readers member
+		slug  text  required  unique  key
+	}
+	command organization::update
+	define role owner "Owner" in organization {
+		organization::update
+		holds projects::maintainer in each projects::project
+	}
+}
+namespace projects at / {
+	entity project {
+		readers member
+		slug          text  required  unique  key
+		organization  organizations::organization
+	}
+	command project::update
+	define role maintainer "Maintainer" in project {
+		project::update
+	}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto in = [&](const std::string& path) {
+        auto found = std::find_if(generated.files.begin(), generated.files.end(), [&](const auto& f) { return f.path == path; });
+        REQUIRE(found != generated.files.end());
+        return found->content;
+    };
+    CHECK(in("organizations/organizations.go").find(R"(Holds("owner", "projects", "maintainer", "organization"))") != std::string::npos);
+    CHECK(in("projects/projects.go").find(R"(one:"refers=organizations::organization")") != std::string::npos);
+    CHECK(in("projects/projects.go").find(R"(Through string `firestore:"through"`)") != std::string::npos);
+}

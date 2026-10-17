@@ -296,16 +296,18 @@ namespace one::language {
                 }
             }
 
-            static bool declares(const std::vector<file>& files, const std::string& name) {
-                std::function<bool(const std::vector<declaration>&)> any = [&](const std::vector<declaration>& ds) {
+            // Whether the namespace declares an entity of that name itself: another
+            // namespace's roles, like a project's under an organization's, are its own.
+            static bool declares(const std::vector<file>& files, const std::string& ns, const std::string& name) {
+                std::function<bool(const std::vector<declaration>&, const std::string&)> any = [&](const std::vector<declaration>& ds, const std::string& here) {
                     for (const auto& d : ds) {
-                        if (auto* e = std::get_if<entity_declaration>(&d.node); e && e->name == name) return true;
-                        if (auto* n = std::get_if<namespace_declaration>(&d.node); n && any(n->declarations)) return true;
+                        if (auto* e = std::get_if<entity_declaration>(&d.node); e && e->name == name && here == ns) return true;
+                        if (auto* n = std::get_if<namespace_declaration>(&d.node); n && any(n->declarations, here.empty() ? n->name : here + "::" + n->name)) return true;
                     }
                     return false;
                 };
                 for (const auto& f : files) {
-                    if (any(f.declarations)) return true;
+                    if (any(f.declarations, "")) return true;
                 }
                 return false;
             }
@@ -314,6 +316,7 @@ namespace one::language {
                 // A namespace inside another first, so adding to the outer one moves nothing
                 // still to be added to.
                 for (auto it = by_namespace.rbegin(); it != by_namespace.rend(); ++it) {
+                    const std::string& ns = it->first;
                     auto& at = it->second;
                     const define_role_declaration& first = *at.roles.front();
                     bool fine = true;
@@ -327,7 +330,7 @@ namespace one::language {
                     std::vector<const char*> owns{"role", "member"};
                     if (services) owns.push_back("service");
                     for (const char* own : owns) {
-                        if (declares(files, own)) {
+                        if (declares(files, ns, own)) {
                             out.push_back({*at.path, first.where, std::string("define role keeps roles as the language's own ") + own +
                                                                       " records; take out entity " + own + ", which it declares"});
                             fine = false;
@@ -338,7 +341,7 @@ namespace one::language {
                     std::string text = "entity role {\n\t" + in + "  " + in + "  required  key\n\tname  text  required  key = slug(title)\n"
                                        "\ttitle  text  required\n\tmay  list of permission\n}\n"
                                        "entity member {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
-                                       "\trole  role  required  key\n}\n"
+                                       "\trole  role  required  key\n\tthrough  text\n}\n"
                                        "roles role per " + in + " from member {\n";
                     // A role for services brings the project's service accounts: each
                     // named by its title, holding one role, and what's shown of its key.
@@ -367,6 +370,7 @@ namespace one::language {
                                 roles->defaults[i].title = at.roles[i]->title;
                                 roles->defaults[i].permissions = at.roles[i]->permissions;
                                 roles->defaults[i].services = at.roles[i]->services;
+                                roles->defaults[i].holds = at.roles[i]->holds;
                             }
                         }
                     }
