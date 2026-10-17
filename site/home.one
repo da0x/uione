@@ -30,7 +30,9 @@ screen "uione" / {
 
 	section "Free software" {
 		text "uione is free software under the AGPL. What the compiler generates belongs to you."
+		text "You can support its work through Open Collective, where every donation and every expense is public."
 		link namespace mission "Why uione exists"
+		link "https://opencollective.com/uione" "Donate"
 	}
 
 	section "Join the waitlist" #waitlist {

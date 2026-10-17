@@ -46,3 +46,9 @@ tools/           repository checks, run by the pre-commit hook and on every push
 Copyright 2026 Daher Alfawares. All of uione is licensed under the GNU Affero
 General Public License v3 (`LICENSE`). Code uione generates belongs to whoever
 generated it.
+
+## Support
+
+uione is made in the open, and you can support it through
+[Open Collective](https://opencollective.com/uione), where every donation and every
+expense is public.

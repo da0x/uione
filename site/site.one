@@ -25,4 +25,5 @@ footer {
 	link build.release "uione {build.version}"
 	link build.source "{build.commit}"
 	link namespace license "AGPL-3.0-only"
+	link "https://opencollective.com/uione" "Donate"
 }
