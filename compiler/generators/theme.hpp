@@ -135,7 +135,7 @@ namespace one::generators::theme {
             // then the warning's, then plain, then what can wait in the theme's own. Each
             // is its role's hue made vivid, since a role's own color is darkened to be read
             // as text and mixes to tan, then mixed over the surface without its hue, so
-            // warm tones on a navy page don't cancel to grey. The high one leans to orange.
+            // warm tones on a navy page don't cancel to gray. The high one leans to orange.
             struct tone { const char* n; const char* from; const char* vivid; int percent; };
             for (const auto& t : {tone{"1", "danger", "0.68 0.2 h", 15}, tone{"2", "warning", "0.76 0.16 calc(h - 18)", 18},
                                   tone{"4", "success", "0.74 0.15 h", 15}, tone{"5", "accent", "0.68 0.16 h", 14}}) {

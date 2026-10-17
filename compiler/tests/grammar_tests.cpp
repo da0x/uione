@@ -369,6 +369,6 @@ TEST_CASE("the grammar turns away what the language doesn't allow") {
     CHECK(fits(g, "entity book {\n\ttitle  text  required\n}\n"));
     CHECK_FALSE(fits(g, "entity book {\n\ttitle\n}\n"));                      // a field needs a type
     CHECK_FALSE(fits(g, "fn sort(title) {\n\treturn title\n}\n"));            // functions are declared with function
-    CHECK_FALSE(fits(g, "project p {\n\tcolour \"blue\"\n}\n"));              // not a setting
+    CHECK_FALSE(fits(g, "project p {\n\thue \"blue\"\n}\n"));              // not a setting
     CHECK_FALSE(fits(g, "entity book {\n\ttitle  text\n"));                   // never closed
 }

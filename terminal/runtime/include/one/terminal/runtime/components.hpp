@@ -92,7 +92,7 @@ namespace one::terminal::runtime {
 	terminal::view themes(page& p);
 	// Draws the terminal in a theme from a palette, its dark colors, by setting the
 	// terminal's own: the text and what's behind it, and red, green, yellow, blue and
-	// grey as danger, success, warning, the accent and quieter text. Nothing puts them
+	// gray as danger, success, warning, the accent and quieter text. Nothing puts them
 	// back to the terminal's.
 	void draw_terminal_in(const std::optional<palette::theme>& tried);
 	terminal::view copy(page& p, state<view_state> from, std::string label, std::vector<copied_field> fields, std::vector<copied_list> lists,

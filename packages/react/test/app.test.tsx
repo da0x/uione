@@ -148,7 +148,7 @@ describe("values from a view", () => {
     expect(show({ status: "working", runner: 2, note: "" })).toBe("Working, runner 2");
     expect(show({ status: "failed", at: "Publishing to npm", since: "2026-10-11T07:50:00Z", note: "step publish exited 1" }, new Date(Date.UTC(2026, 9, 11, 10, 0))))
       .toBe("Failed at Publishing to npm, 2h 10m ago: step publish exited 1");
-    expect(show({ size: 3, colour: "red" })).toBe("size 3, colour red");
+    expect(show({ size: 3, color: "red" })).toBe("size 3, color red");
     expect(show(undefined)).toBe("");
   });
 });

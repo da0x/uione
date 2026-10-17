@@ -175,7 +175,7 @@ describe("dialogs", () => {
     expect(source.runs).toEqual([]);
   });
 
-  it("has a labelled close button that closes it without running anything", async () => {
+  it("has a labeled close button that closes it without running anything", async () => {
     const source = memorySource();
     renderScreen(
       () => (

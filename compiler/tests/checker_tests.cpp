@@ -251,8 +251,8 @@ TEST_CASE("two screens can't share a route, counting the namespace") {
 }
 
 TEST_CASE("one project block, with known settings") {
-    CHECK(only_error("import one\nproject a {\n\tcolour \"red\"\n}\n").message ==
-          "'colour' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, target, icon, theme, appearance, layout, serve, redirect, accessibility or analytics");
+    CHECK(only_error("import one\nproject a {\n\thue \"red\"\n}\n").message ==
+          "'hue' isn't a setting of a project; it says one, title, domain, firebase, region, ui, signin, target, icon, theme, appearance, layout, serve, redirect, accessibility or analytics");
     CHECK(check_source("import one\nproject p {\n\tanalytics google\n}\n").empty());
     CHECK(only_error("import one\nproject p {\n\tanalytics plausible\n}\n").message == "analytics is google, written plainly, like analytics google");
     CHECK(only_error("import one\nproject a {\n\tui radix\n}\nproject b {\n\tui radix\n}\n").message.starts_with(
@@ -433,8 +433,8 @@ command column::delete {
     CHECK(only_error(field).message == "title is a field of entity column already; an input is something else it's sent");
 
     std::string picked = board;
-    picked.replace(picked.find("where column == id"), 18, "where colour == id");
-    CHECK(only_error(picked).message.starts_with("entity card has no field colour"));
+    picked.replace(picked.find("where column == id"), 18, "where hue == id");
+    CHECK(only_error(picked).message.starts_with("entity card has no field hue"));
 
     std::string shape = board;
     shape.replace(shape.find("where column == into"), 20, "where column != into");

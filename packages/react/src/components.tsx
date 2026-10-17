@@ -2402,7 +2402,7 @@ export function Grid({ corner, ...between }: Between & { corner?: string }) {
 }
 
 // The same drawn: each thing a box, in the list's order, and each entry an arrow
-// from one to another, labelled with what it shows. Pressing an arrow changes or
+// from one to another, labeled with what it shows. Pressing an arrow changes or
 // removes it; drawing one from a box to another adds it.
 export function Diagram(between: Between) {
   const ui = useUI();

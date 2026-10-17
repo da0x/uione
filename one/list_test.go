@@ -50,7 +50,7 @@ func TestATicketsLabelsAreAListWithEachOnce(t *testing.T) {
 		t.Errorf("the board shows labels %v", labels)
 	}
 	if got := h.view("desk::bugs")["open"]; got != int64(1) {
-		t.Errorf("%v tickets are labelled bug", got)
+		t.Errorf("%v tickets are labeled bug", got)
 	}
 	h.expect("desk/ticket/create", token, map[string]any{"title": "Odd", "labels": "bug"}, http.StatusBadRequest, "Labels should be a list")
 }

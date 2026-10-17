@@ -149,7 +149,7 @@ namespace one::terminal {
 		if (boxed && frame.width >= 2 && frame.height >= 2) {
 			int left = frame.x, top = frame.y;
 			int w = frame.width, h = frame.height;
-			// Quiet grey, the theme's muted, or the accent while it has the keyboard.
+			// Quiet gray, the theme's muted, or the accent while it has the keyboard.
 			style edge_style = focused ? style{.bold = true, .foreground = color::blue} : style{.foreground = color::bright_black};
 			std::string across;
 			for (int i = 0; i < w - 2; ++i) across += "─";

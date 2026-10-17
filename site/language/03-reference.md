@@ -1817,7 +1817,7 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   holds.
 - `diagram project_page.steps by from and to over project_page.stages { roles.title }`
   draws the same as a grid: each stage a box in a row, in order, and each step an
-  arrow, forward above and back below, labelled with what its block shows. An arrow
+  arrow, forward above and back below, labeled with what its block shows. An arrow
   is pressed to change or remove it, and dragged from one box to another, a new
   one is added, by the same forms as a grid's.
 - A command on a line of its own is a button, and `form` lists the fields it asks
@@ -1940,7 +1940,7 @@ issue::verify "Verify" when {
   issue::update "Save" { title  body }` below it. A form several buttons open is
   written on its own.
 - A field can be called something other than its name: `form comment::create
-  "Comment" { body "Comment" }` asks for the body, labelled Comment.
+  "Comment" { body "Comment" }` asks for the body, labeled Comment.
 - A field can say what it means under it: `takes_reports "Public reports" { hint
   "Anyone may report a problem, signed in or not" }`.
 - `confirm` asks before a command runs.

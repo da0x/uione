@@ -1513,11 +1513,11 @@ TEST_CASE("changes goes only in a command that changes what's there, naming the 
     language::diagnostics out;
     std::vector<language::file> files;
     files.push_back(language::parse("main.one", "namespace tracker {\nentity issue {\n\ttitle  text\n}\n"
-                                                "command issue::create {\n\tchanges title\n}\ncommand issue::update {\n\tchanges colour\n}\n}\n", out));
+                                                "command issue::create {\n\tchanges title\n}\ncommand issue::update {\n\tchanges hue\n}\n}\n", out));
     language::check(files, out);
     REQUIRE(out.size() == 2);
     CHECK(out[0].message == "changes goes in a command that changes what's there, like an update or a move, naming the fields it takes");
-    CHECK(out[1].message == "'changes colour' names a field entity issue doesn't have");
+    CHECK(out[1].message == "'changes hue' names a field entity issue doesn't have");
 }
 
 TEST_CASE("what the library can't do yet stops the build, and says where") {
