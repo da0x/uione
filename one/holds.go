@@ -84,6 +84,11 @@ func (a *App) inherit(c *Ctx, s *schema, action, id string, v reflect.Value, bef
 	if err := a.keepsEnough(c, s, action, id, v, before); err != nil {
 		return err
 	}
+	if action == "create" {
+		if err := a.notSuspended(c, s, v); err != nil {
+			return err
+		}
+	}
 	if err := a.give(c, s, action, id, v, before); err != nil {
 		return err
 	}

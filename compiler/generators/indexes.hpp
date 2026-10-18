@@ -16,7 +16,8 @@
 // The indexes Firestore needs to read a list kept to its newest rows, newest first,
 // as the one library asks it to: for each way the list is picked by, the fields its
 // conditions compare, then created_at, newest first. A list read whole needs none.
-// They're written to firestore.indexes.json, and the deploy declares each one.
+// They're written to firestore.indexes.json, and the deploy declares each one, with
+// the collections whose records expire, like suspensions after 90 days.
 
 namespace one::generators {
 
@@ -70,6 +71,9 @@ namespace one::generators {
             }
 
             std::set<index> found;
+            // Collections whose records Firestore deletes once a date in them is past:
+            // each suspension define role declares, at its until.
+            std::set<std::string> expiring;
 
         private:
             std::map<std::string, const language::entity_declaration*> entities_;
@@ -77,6 +81,11 @@ namespace one::generators {
             void walk(const std::string& ns, const std::vector<language::declaration>& declarations) {
                 for (const auto& d : declarations) {
                     if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) walk(joined(ns, n->name), n->declarations);
+                    if (auto* r = std::get_if<language::roles_declaration>(&d.node); r && r->defined && entities_.contains(joined(ns, "suspension"))) {
+                        std::string collection = joined(ns, "suspension");
+                        for (std::size_t at = collection.find("::"); at != std::string::npos; at = collection.find("::")) collection.replace(at, 2, "_");
+                        expiring.insert(collection);
+                    }
                     auto* v = std::get_if<language::view_declaration>(&d.node);
                     if (!v) continue;
                     for (const auto& each : v->each) {
@@ -171,7 +180,18 @@ namespace one::generators {
             }
             out += "{ \"field\": \"created_at\", \"order\": \"DESCENDING\" }] }";
         }
-        out += first ? "]\n}\n" : "\n  ]\n}\n";
+        out += first ? "]" : "\n  ]";
+        // A suspension over 90 days old is final, and goes.
+        if (!finder.expiring.empty()) {
+            out += ",\n  \"expire\": [";
+            bool next = false;
+            for (const auto& collection : finder.expiring) {
+                out += std::string(next ? "," : "") + "\n    { \"collection\": \"" + collection + "\", \"field\": \"until\" }";
+                next = true;
+            }
+            out += "\n  ]";
+        }
+        out += "\n}\n";
         output_file f{"firestore.indexes.json", out};
         f.sources.assign(static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n')), code::source{});
         return f;

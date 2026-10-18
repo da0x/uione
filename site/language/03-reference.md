@@ -1070,6 +1070,37 @@ namespace projects {
   refused, with "an organization keeps at least one owner; make someone else an
   owner first". A place deleted with its people keeps nothing. It names the role
   it's said in, and at least 1.
+- Someone can be suspended rather than removed: `member::suspend`, run on one of
+  their members, sets aside all of their members in that place, and in what's
+  within it, on a record of a third entity the language declares, `suspension`:
+
+```one
+entity suspension {
+	project  project  required  key
+	person   user     required  key
+	until    date
+	held     list of text
+}
+```
+
+  Suspended, they're in no list of who holds what, so they hold nothing: not their
+  own roles, not what an organization or a team gave them, and no page they could
+  read before. They aren't given a role there again while suspended; that's
+  refused, with "they're suspended here; restore them instead". Suspending the last
+  owner is refused, as removing them is. Their name stays on everything they made.
+  `suspension::restore` gives back what they held, and with it what that gives,
+  like the projects an owner maintains. After 90 days it's final: there's nothing
+  to restore, and Firestore deletes the suspension. `each suspension in
+  organization` lists who's suspended. Both commands are declared and allowed like
+  any other:
+
+```one
+command member::suspend {
+	require person != me  "you can't suspend yourself"
+}
+command suspension::restore
+```
+
 - Screens, views and commands name `role` and `member` like any entity of the
   project's own: `each member in project`, `dispatch member::create`, `readers
   member`. Their commands, like `member::create` and `role::update`, are declared

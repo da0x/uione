@@ -1470,7 +1470,7 @@ command service::key
     REQUIRE(found != generated.files.end());
     const auto& go = found->content;
     CHECK(go.find("type Service struct {") != std::string::npos);
-    CHECK(go.find("\tDefault(\"welder\", \"Welder\", \"crew::update\").\n\tServices(one.Entity[Service](), \"welder\")\n") != std::string::npos);
+    CHECK(go.find("\tDefault(\"welder\", \"Welder\", \"crew::update\").\n\tSuspends(one.Entity[Suspension]()).\n\tServices(one.Entity[Service](), \"welder\")\n") != std::string::npos);
     CHECK(go.find(R"(one.Command[Service]("service::key"))") != std::string::npos);
 }
 
@@ -1505,7 +1505,8 @@ command member::create
     CHECK(found->content.find("Role: one.Key(x.ID, \"captain\")") != std::string::npos);
     CHECK(found->content.find("var Roles = one.Roles(one.Entity[Role](), one.Entity[Crew](), one.Entity[Member](), \"may\").\n"
                               "\tDefault(\"captain\", \"Captain\", \"member::create\").\n"
-                              "\tDefault(\"deckhand\", \"Deckhand\", \"member::create\")\n") != std::string::npos);
+                              "\tDefault(\"deckhand\", \"Deckhand\", \"member::create\").\n"
+                              "\tSuspends(one.Entity[Suspension]())\n") != std::string::npos);
     CHECK(found->content.find(", Roles)") != std::string::npos);
 }
 
@@ -2104,6 +2105,61 @@ TEST_CASE("a role a place keeps at least some of is said in it, and only of itse
     language::check(again, wrong);
     REQUIRE(wrong.size() == 1);
     CHECK(wrong[0].message == "keep at least names the role it's said in, like keep at least 1 chair");
+}
+
+// Someone suspended in a club: the suspension define role declares, the commands
+// that suspend a member and restore them, and suspensions expiring after 90 days.
+TEST_CASE("a member is suspended onto the suspension define role declares, and restored from it") {
+    const std::string source = R"(namespace clubs {
+	entity club {
+		readers member
+		slug  text  required  unique  key
+	}
+	define role chair "Chair" in club {
+		member::suspend
+		suspension::restore
+	}
+	command member::suspend {
+		require person != me  "you can't suspend yourself"
+	}
+	command suspension::restore
+	view club_suspended per club {
+		each suspension in club {
+			person  until
+		}
+	}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "clubs/clubs.go"; });
+    REQUIRE(found != generated.files.end());
+    const std::string& go = found->content;
+    CAPTURE(go);
+    CHECK(go.find("\tDefault(\"chair\", \"Chair\", \"member::suspend\", \"suspension::restore\").\n\tSuspends(one.Entity[Suspension]())\n") != std::string::npos);
+    CHECK(go.find("Until  time.Time `firestore:\"until\"`") != std::string::npos);
+    CHECK(go.find("Held   []string  `firestore:\"held\"`") != std::string::npos);
+    CHECK(go.find(R"(one.Command[Member]("member::suspend"))") != std::string::npos);
+    CHECK(go.find(R"(one.Command[Suspension]("suspension::restore"))") != std::string::npos);
+    auto indexes = generators::indexes_file(files);
+    CHECK(indexes.content.find(R"("expire": [
+    { "collection": "clubs_suspension", "field": "until" }
+  ])") != std::string::npos);
+
+    // It's the language's own, as role and member are.
+    std::string own = source;
+    own.replace(own.find("\tview club_suspended"), 0, "\tentity suspension {\n\t\tclub  club  required  key\n\t}\n");
+    language::diagnostics wrong;
+    std::vector<language::file> again;
+    again.push_back(language::parse("main.one", own, wrong));
+    language::check(again, wrong);
+    REQUIRE(!wrong.empty());
+    CHECK(wrong[0].message == "define role keeps roles as the language's own suspension records; take out entity suspension, which it declares");
 }
 
 // A team's role in a project: a record that gives a project's role to everyone in a

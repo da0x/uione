@@ -183,7 +183,7 @@ func TestTheIndexesDeclaredAreTheGeneratedOnes(t *testing.T) {
 	dir := build(t)
 	index := `{ "indexes": [
 	{ "collection": "projects_issue_history", "fields": [{ "field": "assignees", "array": "CONTAINS" }, { "field": "created_at", "order": "DESCENDING" }] }
-] }`
+], "expire": [{ "collection": "projects_suspension", "field": "until" }] }`
 	if err := os.WriteFile(filepath.Join(dir, "build", "firestore.indexes.json"), []byte(index), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -201,6 +201,11 @@ func TestTheIndexesDeclaredAreTheGeneratedOnes(t *testing.T) {
 	}
 	if !got["skipWait"].BoolValue() || got["deletionPolicy"].StringValue() != "DELETE" {
 		t.Errorf("the index waits %v and is deleted %v", got["skipWait"], got["deletionPolicy"])
+	}
+	// A suspension goes once its until is past.
+	expire := m.get(t, "gcp:firestore/field:Field::expire-projects_suspension-until")
+	if expire["collection"].StringValue() != "projects_suspension" || expire["field"].StringValue() != "until" || !expire["ttlConfig"].IsObject() {
+		t.Errorf("suspensions expire as %v", expire)
 	}
 }
 

@@ -1026,7 +1026,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if err := a.permittedAs(ctx, tx, c.me, c.service, permission, &owned{s, v}); err != nil {
 			return err
 		}
-		if action == "delete" {
+		// A member suspended goes, kept on a suspension, and a suspension restored
+		// goes, giving back what it kept.
+		roles, suspends := a.suspending(s, action)
+		if action == "delete" || suspends {
 			// Its body says whether it may go, as a require does, before it goes, and
 			// what goes with it, like the issues of a stage moving to another. What it
 			// dispatches to delete it again, like a link's other side, does nothing.
@@ -1039,12 +1042,23 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			if err := a.serviceChanged(body, s, action, id, v); err != nil {
 				return err
 			}
-			if err := a.inherit(body, s, action, id, v, body.before); err != nil {
-				return err
-			}
-			// A project takes its roles, members and services with it.
-			if err := a.scopeDeleted(body, s, id); err != nil {
-				return err
+			switch action {
+			case "suspend":
+				if err := a.suspend(body, roles, v); err != nil {
+					return err
+				}
+			case "restore":
+				if err := a.restore(body, roles, v); err != nil {
+					return err
+				}
+			default:
+				if err := a.inherit(body, s, action, id, v, body.before); err != nil {
+					return err
+				}
+				// A project takes its roles, members and services with it.
+				if err := a.scopeDeleted(body, s, id); err != nil {
+					return err
+				}
 			}
 			changed, err := body.save()
 			if err != nil {

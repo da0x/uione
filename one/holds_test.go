@@ -5,6 +5,7 @@ package one_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/da0x/uione/one"
 )
@@ -31,6 +32,16 @@ type Sailor struct {
 	Fleet  string `firestore:"fleet" one:"required,key,refers=fleet::fleet"`
 	Person string `firestore:"person" one:"required,key,refers=user"`
 	Rank   string `firestore:"rank" one:"required,key,refers=fleet::fleet_rank"`
+}
+
+// A sailor on furlough: kept, holding nothing in the fleet or its docks, until
+// they're brought back.
+type Furlough struct {
+	one.Record
+	Fleet  string    `firestore:"fleet" one:"required,key,refers=fleet::fleet"`
+	Person string    `firestore:"person" one:"required,key,refers=user"`
+	Until  time.Time `firestore:"until"`
+	Held   []string  `firestore:"held"`
 }
 
 type Dock struct {
@@ -67,13 +78,21 @@ var fleets = one.Module("fleet",
 	}),
 	one.Command[Sailor]("sailor::create"),
 	one.Command[Sailor]("sailor::delete"),
+	one.Command[Sailor]("sailor::suspend").Do(func(c *one.Ctx, s *Sailor) error {
+		if s.Person == c.Me() {
+			return c.Fail("you can't suspend yourself")
+		}
+		return nil
+	}),
+	one.Command[Furlough]("furlough::restore"),
 	// A fleet's docks: another module's entity, read before that module is registered.
 	one.View("fleet_docks").Per(one.Entity[Fleet]()).Public().List("docks", one.Where[Dock]("fleet", one.Subject)).Fields("slug"),
 	one.Roles(one.Entity[FleetRank](), one.Entity[Fleet](), one.Entity[Sailor](), "may").
-		Default("admiral", "Admiral", "sailor::create", "sailor::delete").
+		Default("admiral", "Admiral", "sailor::create", "sailor::delete", "sailor::suspend", "furlough::restore").
 		Default("lookout", "Lookout").
 		Holds("admiral", "dock", "harbormaster", "fleet").
-		Keeps("admiral", 1),
+		Keeps("admiral", 1).
+		Suspends(one.Entity[Furlough]()),
 )
 
 var docks = one.Module("dock",

@@ -289,6 +289,13 @@ namespace one::language {
         //         project  project  required  key
         //         person   user     required  key
         //         role     role     required  key
+        //         through  text
+        //     }
+        //     entity suspension {
+        //         project  project  required  key
+        //         person   user     required  key
+        //         until    date
+        //         held     list of text
         //     }
         //     roles role per project from member { maintainer "Maintainer" { ... } }
         struct definer {
@@ -343,7 +350,7 @@ namespace one::language {
                         }
                     }
                     bool services = std::any_of(at.roles.begin(), at.roles.end(), [](const auto* r) { return r->services; });
-                    std::vector<const char*> owns{"role", "member"};
+                    std::vector<const char*> owns{"role", "member", "suspension"};
                     if (services) owns.push_back("service");
                     for (const char* own : owns) {
                         if (declares(files, ns, own)) {
@@ -358,6 +365,10 @@ namespace one::language {
                                        "\ttitle  text  required\n\tmay  list of permission\n}\n"
                                        "entity member {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
                                        "\trole  role  required  key\n\tthrough  text\n}\n"
+                                       // Someone suspended: their memberships here, and in
+                                       // what's within, set aside until they're restored.
+                                       "entity suspension {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
+                                       "\tuntil  date\n\theld  list of text\n}\n"
                                        "roles role per " + in + " from member {\n";
                     // A role for services brings the project's service accounts: each
                     // named by its title, holding one role, and what's shown of its key.

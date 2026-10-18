@@ -28,6 +28,7 @@ type RolesSpec struct {
 	forServices         []string     // the roles a service may hold, like agent
 	holds               []holding    // roles that hold another's, in what's within (holds.go)
 	keeps               []keeping    // roles a place is never left without (keeps.go)
+	suspension          reflect.Type // where a person suspended there is kept (suspend.go)
 }
 
 type defaultRole struct {
@@ -62,6 +63,9 @@ func (r *RolesSpec) register(reg *registry, ns string) {
 	reg.schema(r.member, ns)
 	if r.service != nil {
 		reg.schema(r.service, ns)
+	}
+	if r.suspension != nil {
+		reg.schema(r.suspension, ns)
 	}
 	reg.defined = append(reg.defined, r)
 }

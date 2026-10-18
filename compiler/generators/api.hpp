@@ -702,6 +702,8 @@ namespace one::generators {
                         // A place never left with fewer of it than it keeps.
                         if (d.keep > 0) holds.push_back("Keeps(" + api_detail::go_string(d.name) + ", " + std::to_string(d.keep) + ")");
                     }
+                    // Someone suspended is kept on the suspension define role declares.
+                    if (r->defined && entity(pkg, "suspension")) holds.push_back("Suspends(one.Entity[Suspension]())");
                     for (std::size_t i = 0; i < r->defaults.size(); ++i) {
                         const auto& d = r->defaults[i];
                         std::string line = "Default(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(d.title);

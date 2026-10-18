@@ -652,7 +652,8 @@ func answers(ctx context.Context, project, address string) (bool, error) {
 }
 
 // indexes declares the Firestore indexes in firestore.indexes.json, beside the
-// rules. A build from before there were any has none to declare.
+// rules, and the fields whose records expire. A build from before there were any
+// has none to declare.
 func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options ...pulumi.ResourceOption) error {
 	written, err := os.ReadFile(filepath.Join(p.Build, "firestore.indexes.json"))
 	if errors.Is(err, os.ErrNotExist) {
@@ -670,6 +671,10 @@ func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options
 				Array string `json:"array"`
 			} `json:"fields"`
 		} `json:"indexes"`
+		Expire []struct {
+			Collection string `json:"collection"`
+			Field      string `json:"field"`
+		} `json:"expire"`
 	}
 	if err := json.Unmarshal(written, &file); err != nil {
 		return fmt.Errorf("infrastructure: firestore.indexes.json: %w", err)
@@ -696,6 +701,19 @@ func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options
 			Fields:         fields,
 			SkipWait:       pulumi.Bool(true),
 			DeletionPolicy: pulumi.String("DELETE"),
+		}, options...); err != nil {
+			return err
+		}
+	}
+	// Records Firestore deletes once the date in that field is past, like a
+	// suspension over 90 days old. The field keeps the indexes it had.
+	for _, e := range file.Expire {
+		if _, err := firestore.NewField(ctx, "expire-"+e.Collection+"-"+e.Field, &firestore.FieldArgs{
+			Project:    project,
+			Database:   pulumi.String("(default)"),
+			Collection: pulumi.String(e.Collection),
+			Field:      pulumi.String(e.Field),
+			TtlConfig:  &firestore.FieldTtlConfigArgs{},
 		}, options...); err != nil {
 			return err
 		}
