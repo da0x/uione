@@ -72,7 +72,8 @@ var fleets = one.Module("fleet",
 	one.Roles(one.Entity[FleetRank](), one.Entity[Fleet](), one.Entity[Sailor](), "may").
 		Default("admiral", "Admiral", "sailor::create", "sailor::delete").
 		Default("lookout", "Lookout").
-		Holds("admiral", "dock", "harbormaster", "fleet"),
+		Holds("admiral", "dock", "harbormaster", "fleet").
+		Keeps("admiral", 1),
 )
 
 var docks = one.Module("dock",
@@ -172,4 +173,21 @@ func TestHeldPassesOverRolesThatDontReachTheRecord(t *testing.T) {
 	berth := h.mustRun("dock/berth/create", ann, map[string]any{"dock": "wharf", "title": "one"})
 	h.mustRun("dock/berth/inspect", ann, map[string]any{"id": berth})
 	h.expect("dock/berth/inspect", ben, map[string]any{"id": berth}, 400, "you aren't its harbormaster")
+}
+
+// A fleet keeps an admiral: the last can't be removed, and once there's another,
+// either can go.
+func TestAPlaceKeepsAtLeastOneOfARoleItSaysItKeeps(t *testing.T) {
+	h := start(t)
+	annID, ann := h.signUp("ann@example.com")
+	ben, _ := h.signUp("ben@example.com")
+	h.mustRun("fleet/fleet/create", ann, map[string]any{"slug": "white"})
+	own := one.Key("white", annID, one.Key("white", "admiral"))
+	h.expect("fleet/sailor/delete", ann, map[string]any{"id": own}, 400, "a fleet keeps at least one admiral; make someone else an admiral first")
+	// Made a lookout too, the admiral record is still the last: a role is a record of its own.
+	h.mustRun("fleet/sailor/create", ann, map[string]any{"fleet": "white", "person": annID, "rank": one.Key("white", "lookout")})
+	h.expect("fleet/sailor/delete", ann, map[string]any{"id": own}, 400, "a fleet keeps at least one admiral; make someone else an admiral first")
+
+	h.mustRun("fleet/sailor/create", ann, map[string]any{"fleet": "white", "person": ben, "rank": one.Key("white", "admiral")})
+	h.mustRun("fleet/sailor/delete", ann, map[string]any{"id": own})
 }

@@ -682,6 +682,8 @@ namespace one::generators {
                             holds.push_back("Holds(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(ns) + ", " + api_detail::go_string(h.role.parts.back()) +
                                             ", " + api_detail::go_string(pointing) + ")");
                         }
+                        // A place never left with fewer of it than it keeps.
+                        if (d.keep > 0) holds.push_back("Keeps(" + api_detail::go_string(d.name) + ", " + std::to_string(d.keep) + ")");
                     }
                     for (std::size_t i = 0; i < r->defaults.size(); ++i) {
                         const auto& d = r->defaults[i];

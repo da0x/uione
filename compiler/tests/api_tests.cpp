@@ -2067,3 +2067,41 @@ namespace projects at / {
     CHECK(in("organizations/organizations.go").find(R"(one.Where[projects.Project]("organization", one.Subject))") != std::string::npos);
     CHECK(in("organizations/organizations.go").find("/projects\"") != std::string::npos);
 }
+
+// An organization keeps an owner: said in the role, generated beside it, and only
+// of itself.
+TEST_CASE("a role a place keeps at least some of is said in it, and only of itself") {
+    const std::string source = R"(namespace clubs {
+	entity club {
+		readers member
+		slug  text  required  unique  key
+	}
+	command club::update
+	define role chair "Chair" in club {
+		club::update
+		keep at least 1 chair
+	}
+	define role guest "Guest" in club {
+	}
+}
+)";
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", source, out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "clubs/clubs.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(Keeps("chair", 1))") != std::string::npos);
+
+    std::string other = source;
+    other.replace(other.find("keep at least 1 chair"), 21, "keep at least 1 guest");
+    language::diagnostics wrong;
+    std::vector<language::file> again;
+    again.push_back(language::parse("main.one", other, wrong));
+    language::check(again, wrong);
+    REQUIRE(wrong.size() == 1);
+    CHECK(wrong[0].message == "keep at least names the role it's said in, like keep at least 1 chair");
+}

@@ -81,6 +81,9 @@ func (a *App) holdings() ([]heldRole, error) {
 // deleted, like a project. An inner member that comes from an outer one is the
 // outer's to take away, not its own.
 func (a *App) inherit(c *Ctx, s *schema, action, id string, v reflect.Value, before map[string]any) error {
+	if err := a.keepsEnough(c, s, action, id, v, before); err != nil {
+		return err
+	}
 	hs, err := a.holdings()
 	if err != nil || len(hs) == 0 {
 		return err

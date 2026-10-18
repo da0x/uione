@@ -404,6 +404,7 @@ namespace one::language {
         std::vector<qualified_name> permissions;
         bool services = false;  // a service account may hold it, as well as a person
         std::vector<role_holding> holds = {};  // what else it holds, in each of what's within
+        int keep = 0;                          // how many of it a place keeps, at least
     };
 
     // roles role per project from member { ... }: the roles each project defines for
@@ -471,6 +472,10 @@ namespace one::language {
         location services_where;
         std::vector<qualified_name> permissions;
         std::vector<role_holding> holds;
+        // keep at least 1 owner: a place never left with fewer of this role.
+        int keep = 0;
+        std::string keep_role;
+        location keep_where;
     };
 
     // proofing worked by proofreader, in a workflow whose stages are an enum's

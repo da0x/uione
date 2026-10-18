@@ -387,6 +387,7 @@ namespace one::language {
                                 roles->defaults[i].permissions = at.roles[i]->permissions;
                                 roles->defaults[i].services = at.roles[i]->services;
                                 roles->defaults[i].holds = at.roles[i]->holds;
+                                roles->defaults[i].keep = at.roles[i]->keep;
                             }
                         }
                     }

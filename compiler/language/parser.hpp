@@ -337,6 +337,18 @@ namespace one::language {
                         end_line();
                         continue;
                     }
+                    // keep at least 1 owner: a place is never left with fewer of it.
+                    if (at_word("keep") && peek(1).kind == token_kind::identifier && peek(1).text == "at") {
+                        role.keep_where = peek().where;
+                        advance();
+                        advance();
+                        if (!at_word("least")) fail_expecting("least, how many and the role, like keep at least 1 owner");
+                        advance();
+                        role.keep = std::stoi(expect(token_kind::number, "how many it keeps, like keep at least 1 owner").text);
+                        role.keep_role = expect(token_kind::identifier, "the role it keeps, like keep at least 1 owner").text;
+                        end_line();
+                        continue;
+                    }
                     role.permissions.push_back(parse_qualified_name("a command it allows, like issue::create"));
                     end_line();
                 }

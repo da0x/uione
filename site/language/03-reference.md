@@ -1045,6 +1045,11 @@ namespace projects {
   a member is: what they may do, which pages they read, and which change when it
   does. Each namespace has its own roles, so an organization's and a project's
   live in two.
+- `keep at least 1 owner`, in role owner, means a place is never left with fewer
+  of that role: removing the last owner, or the last of however many it says, is
+  refused, with "an organization keeps at least one owner; make someone else an
+  owner first". A place deleted with its people keeps nothing. It names the role
+  it's said in, and at least 1.
 - Screens, views and commands name `role` and `member` like any entity of the
   project's own: `each member in project`, `dispatch member::create`, `readers
   member`. Their commands, like `member::create` and `role::update`, are declared

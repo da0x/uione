@@ -27,6 +27,7 @@ type RolesSpec struct {
 	service             reflect.Type // the project's service accounts, when it has them
 	forServices         []string     // the roles a service may hold, like agent
 	holds               []holding    // roles that hold another's, in what's within (holds.go)
+	keeps               []keeping    // roles a place is never left without (keeps.go)
 }
 
 type defaultRole struct {

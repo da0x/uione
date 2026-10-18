@@ -648,6 +648,12 @@ namespace one::language {
         void verify(const std::string& ns, location, const define_role_declaration& r) {
             snake(r.name, r.where);
             for (const auto& h : r.holds) verify_holding(ns, r, h);
+            // keep at least 1 owner, said in role owner: of itself, and at least one.
+            if (!r.keep_role.empty() && r.keep_role != r.name) {
+                error(r.keep_where, "keep at least names the role it's said in, like keep at least 1 " + r.name);
+            } else if (!r.keep_role.empty() && r.keep < 1) {
+                error(r.keep_where, "a place keeps at least 1 " + r.name + ", or says nothing");
+            }
             if (!r.services) return;
             // A role a program may hold never hands out access: not roles, members or
             // services, nor anything that gives a role, like an invitation.
