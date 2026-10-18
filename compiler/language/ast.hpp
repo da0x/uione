@@ -316,6 +316,11 @@ namespace one::language {
         // the one signing in, and it's deleted, both at once.
         std::optional<std::string> invites;
         location invites_where;
+        // entity access gives projects::member to each teams::member: each record gives
+        // a role in a place to everyone in a group, like a team's role in a project.
+        std::optional<qualified_name> gives;
+        qualified_name gives_each;
+        location gives_where;
         // readers member and public when visibility == visibility::public: who may read
         // the views of it, and of what's within it, unless a view says its own.
         std::optional<std::string> readers;

@@ -98,7 +98,8 @@ var docks = one.Module("dock",
 		return nil
 	}),
 	one.Roles(one.Entity[DockRole](), one.Entity[Dock](), one.Entity[Docker](), "may").
-		Default("harbormaster", "Harbormaster", "berth::create", "docker::create", "docker::delete"),
+		Default("harbormaster", "Harbormaster", "berth::create", "docker::create", "docker::delete").
+		Default("deckhand", "Deckhand", "berth::create"),
 )
 
 func init() { modules = append(modules, fleets, docks) }

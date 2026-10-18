@@ -607,6 +607,23 @@ namespace one::generators {
                 body.line();
             }
 
+            // entity access gives projects::member to each teams::member: kept up as
+            // the records and the group's members change.
+            for (auto* e : pkg.entities) {
+                if (!e->gives) continue;
+                std::string here;
+                for (const auto& [name, p] : namespaces_) {
+                    if (&p == &pkg) here = name;
+                }
+                auto ns_of = [&](const language::qualified_name& n) { return n.parts.size() > 1 ? n.parts[0] : here; };
+                std::string var = api_detail::go_name(e->name) + "Gives";
+                members.push_back(var);
+                auto from_entity = in(body, at(e), at(e).line);
+                body.line("var " + var + " = one.Gives[" + api_detail::go_name(e->name) + "](" + api_detail::go_string(ns_of(*e->gives)) + ", " +
+                          api_detail::go_string(ns_of(e->gives_each)) + ")");
+                body.line();
+            }
+
             for (const auto& [o, where] : pkg.onces) {
                 // Named for its words, like Once20261007Workflows, or OnSignIn.
                 std::string var = o->signin ? "OnSignIn" : "Once";

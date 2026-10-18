@@ -2105,3 +2105,59 @@ TEST_CASE("a role a place keeps at least some of is said in it, and only of itse
     REQUIRE(wrong.size() == 1);
     CHECK(wrong[0].message == "keep at least names the role it's said in, like keep at least 1 chair");
 }
+
+// A team's role in a project: a record that gives a project's role to everyone in a
+// team, kept up by the runtime, and checked for what it points at.
+TEST_CASE("a record gives a role in a place to each of a group's members") {
+    const std::string source = R"(namespace teams at / {
+	entity team {
+		readers member
+		slug  text  required  unique  key
+	}
+	command team::update
+	define role lead "Lead" in team {
+		team::update
+	}
+}
+namespace projects at / {
+	entity project {
+		readers member
+		slug  text  required  unique  key
+	}
+	command project::update
+	define role maintainer "Maintainer" in project {
+		project::update
+		access::create
+	}
+	entity access gives projects::member to each teams::member {
+		team     teams::team  required  key
+		project  project      required  key
+		role     role         required
+	}
+	command access::create
+}
+)";
+    auto generate = [&](const std::string& text, language::diagnostics& out) {
+        std::vector<language::file> files;
+        files.push_back(language::parse("main.one", text, out));
+        language::check(files, out);
+        return files;
+    };
+    language::diagnostics out;
+    auto files = generate(source, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "projects/projects.go"; });
+    REQUIRE(found != generated.files.end());
+    CHECK(found->content.find(R"(one.Gives[Access]("projects", "teams"))") != std::string::npos);
+
+    // Without the role it gives, it says so.
+    std::string missing = source;
+    const std::string line = "\t\trole     role         required\n";
+    missing.erase(missing.find(line), line.size());
+    language::diagnostics wrong;
+    generate(missing, wrong);
+    REQUIRE(wrong.size() == 1);
+    CHECK(wrong[0].message == "access gives a role, so it has a field for the role it gives, a projects::role");
+}

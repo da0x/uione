@@ -669,6 +669,43 @@ namespace one::language {
             }
         }
 
+        // entity access gives projects::member to each teams::member: both are a define
+        // role's members, and the record points at the first's place and names one of
+        // its roles, and points at the second's place, its group.
+        void verify_giving(const std::string& ns, const entity_declaration& e) {
+            auto namespace_of = [&](const qualified_name& n) { return n.parts.size() > 1 ? n.parts[0] : ns; };
+            auto full = [](const std::string& in, const std::string& type) { return type.find("::") == std::string::npos ? in + "::" + type : type; };
+            // A define role's member: a person, a role and a place, and what gave it.
+            struct membership {
+                std::string place, role;  // their types, in full
+            };
+            auto member_of = [&](const qualified_name& n, const char* what) -> std::optional<membership> {
+                const entity_declaration* m = find_entity(ns, n);
+                std::string in = namespace_of(n);
+                if (!m || !find_field(*m, "through") || !find_field(*m, "person")) {
+                    error(n.where, std::string("gives ") + what + " a define role's members, like teams::member; there's no such member " + n.text());
+                    return std::nullopt;
+                }
+                membership out;
+                for (const auto& f : m->fields) {
+                    if (!f.type || f.list || f.name == "person" || f.name == "through") continue;
+                    if (f.name == "role") out.role = full(in, f.type->text());
+                    else if (out.place.empty()) out.place = full(in, f.type->text());
+                }
+                return out;
+            };
+            auto inner = member_of(*e.gives, "a role to");
+            auto each = member_of(e.gives_each, "it to each of");
+            if (!inner || !each) return;
+            auto points = [&](const std::string& type) {
+                return std::any_of(e.fields.begin(), e.fields.end(), [&](const field& f) { return f.type && !f.list && full(ns, f.type->text()) == type; });
+            };
+            for (const auto& [type, says] : std::vector<std::pair<std::string, std::string>>{
+                     {inner->place, "the place it gives the role in"}, {inner->role, "the role it gives"}, {each->place, "whose members get it"}}) {
+                if (!points(type)) error(e.gives_where, e.name + " gives a role, so it has a field for " + says + ", a " + type);
+            }
+        }
+
         // holds projects::maintainer in each projects::project: the entity is where the
         // other namespace's roles are, it points at what this role is in, and the role
         // is one of them.
@@ -1223,6 +1260,7 @@ namespace one::language {
         }
 
         void verify(const std::string& ns, location where, const entity_declaration& e) {
+            if (e.gives) verify_giving(ns, e);
             // entity invitation invites member: one email to match, the member's one
             // person to fill, and everything else the member needs, by the same name.
             if (e.invites) {

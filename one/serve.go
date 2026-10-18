@@ -116,6 +116,7 @@ type registry struct {
 	roles     map[string][]string
 	scoped    []*RoleSpec   // roles held within an entity, like a project
 	defined   []*RolesSpec  // roles each project, or the like, defines for itself as records
+	gives     []*giving     // records giving a role in a place to everyone in a group (grants.go)
 	once      []*OnceSpec   // work done the first time a backend with it starts
 	signin    []*SignInSpec // work done each time someone opens the app signed in
 	named     map[string]bool

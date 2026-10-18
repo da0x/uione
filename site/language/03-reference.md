@@ -527,6 +527,26 @@ entity invitation invites member {
 }
 ```
 
+- `entity access gives projects::member to each teams::member { ... }` makes a
+  record that gives a role in a place to everyone in a group: a team given the
+  reporter role in a project. Both are a [define role](#define-role)'s members, and
+  the record has a field pointing at the place the role is in, one naming the role,
+  and one pointing at the group. Each person in the group holds the role there, as a
+  member marked in its `through` with the record it comes from: given as they join
+  the group or the record is made, and taken away as they leave or it's deleted.
+  It's taken away at the group, not at the place: removing it there says "this role
+  comes from the team, so it's taken away there". A person given the same role in
+  the same place by two records keeps it while either gives it, and a role they hold
+  themselves stays theirs.
+
+```one
+entity access gives projects::member to each teams::member {
+	team     teams::team  required  key
+	project  project      required  key
+	role     role         required
+}
+```
+
 - `on signin { ... }` is done each time someone opens the app signed in, as them:
   its steps are a once's, `each invitation where email == me.email { ... }`, and
   `delete each invitation where email == me.email`, with `me.email` the email their

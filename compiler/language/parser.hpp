@@ -513,6 +513,16 @@ namespace one::language {
                 entity.invites_where = peek().where;
                 entity.invites = expect(token_kind::identifier, "what it invites to be, like member").text;
             }
+            if (at_word("gives")) {
+                advance();
+                entity.gives_where = peek().where;
+                entity.gives = parse_qualified_name("the member it gives, like projects::member");
+                if (!at_word("to")) fail_expecting("to each and whose members get it, like to each teams::member");
+                advance();
+                if (!at_word("each")) fail_expecting("each and whose members get it, like each teams::member");
+                advance();
+                entity.gives_each = parse_qualified_name("whose members get it, like teams::member");
+            }
             if (at_word("history")) {
                 advance();
                 if (at_word("of")) {

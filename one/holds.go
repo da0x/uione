@@ -84,6 +84,9 @@ func (a *App) inherit(c *Ctx, s *schema, action, id string, v reflect.Value, bef
 	if err := a.keepsEnough(c, s, action, id, v, before); err != nil {
 		return err
 	}
+	if err := a.give(c, s, action, id, v, before); err != nil {
+		return err
+	}
 	hs, err := a.holdings()
 	if err != nil || len(hs) == 0 {
 		return err
@@ -99,7 +102,13 @@ func (a *App) inherit(c *Ctx, s *schema, action, id string, v reflect.Value, bef
 				return err
 			}
 		case h.inner.member:
-			if action == "delete" && v.FieldByIndex(h.through.index).String() != "" {
+			through := v.FieldByIndex(h.through.index).String()
+			if action != "delete" || through == "" {
+				continue
+			}
+			// Given by one of the outer place's memberships, not by another record,
+			// like a team's role in a project, which grants.go speaks for.
+			if _, err := c.tx.Get(a.store.Collection(h.outer.member.collection).Doc(through)); err == nil {
 				return invalid("this role comes from the %s, so it's taken away there", h.outer.scope.name)
 			}
 		}
