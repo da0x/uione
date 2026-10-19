@@ -894,6 +894,10 @@ view book_page per book {
   public project stays closed. When people join a project, or something a
   condition reads through changes, like the board turning private, only the
   documents that read through it are rebuilt.
+- `readers owner`, naming one of the roles of a define role, lets only those
+  holding it read each document, like an organization's audit; another line,
+  like `readers auditor`, adds another role. A view is read by roles or by one
+  entity's people, never both.
 - Another `readers` line names people in a field of the view's entity:
   `readers report.author` lets whoever filed a report read it, even outside the
   project, and `readers report.watchers` lets each person a list of them names.
@@ -1100,6 +1104,39 @@ command member::suspend {
 }
 command suspension::restore
 ```
+
+- `audit kept 1 year`, a line of the entity whose roles they are, keeps a record
+  of every command run in each of them and in what's within it, like an
+  organization's projects and their issues, on a fourth entity the language
+  declares, `audit`:
+
+```one
+entity organization {
+	slug  text  required  unique  key
+	audit kept 1 year
+}
+
+entity audit {
+	organization  organization  required
+	command       text
+	person        user
+	address       text
+	kind          text
+	item          text
+	changed       list of text
+	changes       data
+	until         date
+}
+```
+
+  Each says the command, like `projects::issue::update`, who ran it, the address
+  it came from, the kind of record it ran on and its id, the fields it changed,
+  and in `changes` each one's `before` and `after`. It's written in the command's
+  own transaction, so what's done is recorded and what's refused isn't. No command
+  makes, changes or deletes one, even an owner's, and declaring one is a mistake.
+  Firestore deletes each once it's older than the audit keeps them, said in days,
+  weeks, months or years. `each audit in organization` lists them, in a view read
+  by the roles that may, like `readers owner`.
 
 - Screens, views and commands name `role` and `member` like any entity of the
   project's own: `each member in project`, `dispatch member::create`, `readers
@@ -1661,6 +1698,12 @@ screen "Book" /books/:book {
   too, like `assigned = issue.assignees.name`.
 - `hide when empty` leaves a table out while it has no rows, like a person's
   reports on a front page they may never have used.
+- `download "audit.csv"` adds a Download CSV button that saves every row the
+  table keeps, on every page and as it's searched and tabbed, as comma-separated
+  values: a line of its columns' names, then a line a row, a choice as it's shown
+  and a time in full, in UTC. The browser downloads it by that name; the desktop
+  and terminal apps save it where downloads go, beside any file already there,
+  and say where. The name ends in `.csv`, with no folder.
 - `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and
   Alt+↓ on a row's handle, for whoever may update them. A drop gives the row a
   position between its new neighbors', so only it changes. The list is ordered by

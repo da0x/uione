@@ -56,6 +56,7 @@ type Ctx struct {
 	deleted  *schema              // and its kind
 	leaving  map[string]bool      // the paths of everything it deletes, its own entity too
 	service  bool                 // run by a service account, with its key
+	address  string               // where the request came from, for an audit
 	writes   []write              // what it changes outside any entity, like a key
 	revealed map[string]any       // what its answer shows once, like a new key
 	own      *owning              // its own entity as it's saved, for the files it attaches
@@ -839,6 +840,7 @@ type call struct {
 	me       string // the signed-in person's id, or empty
 	input    map[string]any
 	system   bool           // run by the backend's own code, which may run any command
+	address  string         // where the request came from, for an audit
 	service  bool           // run by a service account, which may only do what its role allows
 	revealed map[string]any // what the answer shows once, like a new key
 }
@@ -846,6 +848,10 @@ type call struct {
 func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, permission Permission, fields, inputs []string, do func(*Ctx, *E) error, afterwards []func(*System, *E)) (string, error) {
 	if c.system {
 		permission = Anyone
+	}
+	// An audit is written by the commands it records, and nothing else.
+	if a.isAudit(s) {
+		return "", &Failure{Status: 403, Message: "an audit can't be changed"}
 	}
 	// What it's sent besides its entity's fields is kept apart, for its body.
 	given := map[string]any{}
@@ -897,7 +903,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		v := reflect.ValueOf(entity).Elem()
 		record := P(entity).record()
 		before, after, movedFrom = nil, nil, ""
-		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given, service: c.service}
+		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given, service: c.service, address: c.address}
 		body.entity = &owned{s, v}
 		pointed = nil
 		c.revealed = nil
@@ -986,6 +992,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 			}
 			id, after = ref.ID, s.data(v)
 			body.own = &owning{s, id, before, after}
+			if err := a.audit(body, s, id, v, before, after); err != nil {
+				return err
+			}
 			changed, err := body.save()
 			if err != nil {
 				return err
@@ -1060,6 +1069,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 					return err
 				}
 			}
+			if err := a.audit(body, s, id, v, before, nil); err != nil {
+				return err
+			}
 			changed, err := body.save()
 			if err != nil {
 				return err
@@ -1132,6 +1144,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		record.UpdatedAt, record.UpdatedBy = now, c.me
 		after = s.data(v)
 		body.own = &owning{s, id, before, after}
+		if err := a.audit(body, s, id, v, before, after); err != nil {
+			return err
+		}
 		changed, err := body.save()
 		if err != nil {
 			return err

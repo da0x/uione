@@ -346,6 +346,15 @@ namespace one::terminal::runtime {
 		if (!spec.search.empty()) tools.push_back(terminal::field(model.query, {.placeholder = "Search"}).width(30));
 		if (spec.tools)
 			if (auto made = spec.tools(); made.get()) tools.push_back(std::move(made));
+		// Every row it keeps, saved where downloads go, and where that was said.
+		auto saved = p.kept<std::string>(model.key + ":saved");
+		if (!spec.download.empty()) {
+			tools.push_back(terminal::button("Download CSV", [saved, name = spec.download, columns = spec.columns, choices = spec.choices, rows = model.kept] {
+				auto at = save_download(name, csv_of(columns, choices, rows));
+				saved.set(at ? "Saved to " + *at : "Not saved: " + at.error());
+			}));
+			if (!saved.get().empty()) tools.push_back(quiet(saved.get()));
+		}
 		if (!tools.empty()) parts.push_back(terminal::row(std::move(tools)).spacing(2));
 		if (!model.tabs.empty()) {
 			std::vector<terminal::view> tabs;

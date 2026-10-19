@@ -704,6 +704,11 @@ namespace one::generators {
                     }
                     // Someone suspended is kept on the suspension define role declares.
                     if (r->defined && entity(pkg, "suspension")) holds.push_back("Suspends(one.Entity[Suspension]())");
+                    // And every command in a place recorded, for as long as it says.
+                    const language::entity_declaration* place = entity(pkg, r->per);
+                    if (r->defined && place && place->audit_days > 0 && entity(pkg, "audit")) {
+                        holds.push_back("Audits(one.Entity[Audit](), one.Days(" + std::to_string(place->audit_days) + "))");
+                    }
                     for (std::size_t i = 0; i < r->defaults.size(); ++i) {
                         const auto& d = r->defaults[i];
                         std::string line = "Default(" + api_detail::go_string(d.name) + ", " + api_detail::go_string(d.title);
@@ -2421,6 +2426,12 @@ namespace one::generators {
             std::vector<std::pair<std::string, int>> calls;  // each with the line it came from
             subject_ = v.per && *v.per != "user" ? *v.per : "";
             if (v.readers) head += ".Readers(one.Entity[" + api_detail::go_name(*v.readers) + "]())";
+            // readers owner: only those holding these roles.
+            if (!v.reader_roles.empty()) {
+                std::string names;
+                for (const auto& r : v.reader_roles) names += (names.empty() ? "" : ", ") + api_detail::go_string(r);
+                head += ".Holding(" + names + ")";
+            }
             for (const auto& people : v.reader_people) {
                 if (auto* m = std::get_if<language::member_expression>(&people->node)) head += ".ReadersFrom(" + api_detail::go_string(m->member) + ")";
             }

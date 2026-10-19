@@ -2125,6 +2125,7 @@ namespace one::generators {
             line += track_on(parts, ns, table.track ? &*table.track : nullptr);
             if (!table.hue.empty()) line += " hue=" + web_detail::js_string(table.hue);
             if (table.hide_empty) line += " hideEmpty";
+            if (table.download) line += " download=" + web_detail::js_string(*table.download);
             line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.
             if (table.reorder && entity) {

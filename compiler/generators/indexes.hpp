@@ -81,10 +81,14 @@ namespace one::generators {
             void walk(const std::string& ns, const std::vector<language::declaration>& declarations) {
                 for (const auto& d : declarations) {
                     if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) walk(joined(ns, n->name), n->declarations);
-                    if (auto* r = std::get_if<language::roles_declaration>(&d.node); r && r->defined && entities_.contains(joined(ns, "suspension"))) {
-                        std::string collection = joined(ns, "suspension");
-                        for (std::size_t at = collection.find("::"); at != std::string::npos; at = collection.find("::")) collection.replace(at, 2, "_");
-                        expiring.insert(collection);
+                    if (auto* r = std::get_if<language::roles_declaration>(&d.node); r && r->defined) {
+                        // A suspension after 90 days, and an audit's records once older than it keeps them.
+                        for (const char* own : {"suspension", "audit"}) {
+                            if (!entities_.contains(joined(ns, own))) continue;
+                            std::string collection = joined(ns, own);
+                            for (std::size_t at = collection.find("::"); at != std::string::npos; at = collection.find("::")) collection.replace(at, 2, "_");
+                            expiring.insert(collection);
+                        }
                     }
                     auto* v = std::get_if<language::view_declaration>(&d.node);
                     if (!v) continue;

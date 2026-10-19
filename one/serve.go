@@ -388,7 +388,7 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	run := &call{ctx: r.Context(), me: who.id, input: input, service: who.service}
+	run := &call{ctx: r.Context(), me: who.id, input: input, service: who.service, address: addressOf(r)}
 	id, err := command(a, run)
 	if err != nil {
 		replyFailure(w, a, name, err)

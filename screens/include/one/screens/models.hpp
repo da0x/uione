@@ -9,6 +9,7 @@
 #pragma once
 
 #include <chrono>
+#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -179,6 +180,7 @@ namespace one::screens {
 	struct table_model {
 		std::string key;
 		std::vector<value> rows;  // those shown
+		std::vector<value> kept;  // every row it keeps, on every page, as a download saves them
 		std::vector<table_tab> tabs;
 		std::size_t first = 0, last = 0, total = 0;  // the page shown, of all that are kept
 		state<std::string> query, tab, acting;
@@ -189,6 +191,11 @@ namespace one::screens {
 	};
 	template <class View>
 	table_model table_of(page_base& p, const basic_table_spec<View>& spec);
+	// Rows as comma-separated values: a line of the columns' names, then a line a row.
+	std::string csv_of(const std::vector<column>& columns, const std::map<std::string, std::vector<option>>& choices, const std::vector<value>& rows);
+	// Saves a file where downloads go, by its name and never in another folder, as
+	// name-2.csv when name.csv is there: the path it's saved at, or why it wasn't.
+	std::expected<std::string, std::string> save_download(const std::string& name, const std::string& text);
 	// A cell's words: a choice as it's shown, and anything else as it reads.
 	std::string cell_text(const std::map<std::string, std::vector<option>>& choices, const value& row, const std::string& column);
 	// The names of the people a cell holds, one or several.

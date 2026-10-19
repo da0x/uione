@@ -704,12 +704,6 @@ TEST_CASE("a menu is a block of links") {
     CHECK(std::get<content_link>(block.items[1].node).label == "B");
 }
 
-TEST_CASE("a view's readers come from one entity") {
-    auto out = parse_errors("view page per issue {\n\treaders member\n\treaders person\n}\n");
-    REQUIRE(!out.empty());
-    CHECK(out[0].message == "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
-}
-
 TEST_CASE("a time counted from now is said with ago or from now, in a filter") {
     auto out = parse_errors("screen \"Boards\" / {\n\tcards board_list.boards link /boards/:board {\n\t\tfilter \"Recent\" updated_at > 7 days\n\t}\n}\n");
     REQUIRE(out.size() == 1);

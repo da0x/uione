@@ -319,6 +319,19 @@ namespace one::language {
                 }
             }
 
+            // The entity of that name the namespace declares, if it does.
+            static const entity_declaration* entity_in(const std::vector<file>& files, const std::string& ns, const std::string& name) {
+                const entity_declaration* found = nullptr;
+                std::function<void(const std::vector<declaration>&, const std::string&)> any = [&](const std::vector<declaration>& ds, const std::string& here) {
+                    for (const auto& d : ds) {
+                        if (auto* e = std::get_if<entity_declaration>(&d.node); e && e->name == name && here == ns) found = e;
+                        if (auto* n = std::get_if<namespace_declaration>(&d.node)) any(n->declarations, here.empty() ? n->name : here + "::" + n->name);
+                    }
+                };
+                for (const auto& f : files) any(f.declarations, "");
+                return found;
+            }
+
             // Whether the namespace declares an entity of that name itself: another
             // namespace's roles, like a project's under an organization's, are its own.
             static bool declares(const std::vector<file>& files, const std::string& ns, const std::string& name) {
@@ -352,6 +365,9 @@ namespace one::language {
                     bool services = std::any_of(at.roles.begin(), at.roles.end(), [](const auto* r) { return r->services; });
                     std::vector<const char*> owns{"role", "member", "suspension"};
                     if (services) owns.push_back("service");
+                    const entity_declaration* place = entity_in(files, ns, first.in);
+                    bool audited = place && place->audit_days > 0;
+                    if (audited) owns.push_back("audit");
                     for (const char* own : owns) {
                         if (declares(files, ns, own)) {
                             out.push_back({*at.path, first.where, std::string("define role keeps roles as the language's own ") + own +
@@ -370,6 +386,12 @@ namespace one::language {
                                        "entity suspension {\n\t" + in + "  " + in + "  required  key\n\tperson  user  required  key\n"
                                        "\tuntil  date\n\theld  list of text\n}\n"
                                        "roles role per " + in + " from member {\n";
+                    // audit kept 1 year: a record of each command run in a place, and in
+                    // what's within it, written with it, which nothing changes or deletes.
+                    if (audited) {
+                        text = "entity audit {\n\t" + in + "  " + in + "  required\n\tcommand  text\n\tperson  user\n\taddress  text\n"
+                               "\tkind  text\n\titem  text\n\tchanged  list of text\n\tchanges  data\n\tuntil  date\n}\n" + text;
+                    }
                     // A role for services brings the project's service accounts: each
                     // named by its title, holding one role, and what's shown of its key.
                     if (services) {
@@ -1140,6 +1162,46 @@ namespace one::language {
             }
         }
 
+        // readers owner: a view read by those holding a role of its namespace's define
+        // role, which is readers member, kept to those roles. More than one is fine;
+        // more than one entity isn't.
+        inline void reader_roles(std::vector<file>& files, diagnostics& out) {
+            std::map<std::string, std::set<std::string>> roles;  // by namespace
+            std::function<void(const std::vector<declaration>&, const std::string&)> find = [&](const std::vector<declaration>& ds, const std::string& ns) {
+                for (const auto& d : ds) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) find(n->declarations, ns.empty() ? n->name : ns + "::" + n->name);
+                    if (auto* r = std::get_if<define_role_declaration>(&d.node)) roles[ns].insert(r->name);
+                }
+            };
+            for (const auto& f : files) find(f.declarations, "");
+            std::function<void(std::vector<declaration>&, const std::string&, const std::string&)> each = [&](std::vector<declaration>& ds, const std::string& ns,
+                                                                                                            const std::string& path) {
+                for (auto& d : ds) {
+                    if (auto* n = std::get_if<namespace_declaration>(&d.node)) each(n->declarations, ns.empty() ? n->name : ns + "::" + n->name, path);
+                    auto* v = std::get_if<view_declaration>(&d.node);
+                    if (!v || !v->readers) continue;
+                    const auto& here = roles[ns];
+                    if (!here.contains(*v->readers)) {
+                        if (!v->reader_roles.empty()) {
+                            out.push_back({path, v->reader_roles_where.front(), "a view's readers come from one entity, like readers member, or are roles, like readers owner; "
+                                                                                "another readers line names people, like readers report.author"});
+                        }
+                        continue;
+                    }
+                    v->reader_roles.insert(v->reader_roles.begin(), *v->readers);
+                    v->reader_roles_where.insert(v->reader_roles_where.begin(), v->readers_where);
+                    v->readers = "member";
+                    for (std::size_t i = 0; i < v->reader_roles.size(); ++i) {
+                        if (!here.contains(v->reader_roles[i])) {
+                            out.push_back({path, v->reader_roles_where[i], "readers " + v->reader_roles[i] + " isn't a role " + (ns.empty() ? "here" : "in " + ns) +
+                                                                               "; a view read by roles names only roles, like readers owner"});
+                        }
+                    }
+                }
+            };
+            for (auto& f : files) each(f.declarations, "", f.path);
+        }
+
     } // namespace lowering
 
     inline void lower(std::vector<file>& files, diagnostics& out) {
@@ -1148,6 +1210,7 @@ namespace one::language {
         lowering::definer roles{out, {}};
         for (auto& f : files) roles.find(f.declarations, "", f.path);
         roles.define(files);
+        lowering::reader_roles(files, out);
         lowering::workflower workflows{out, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
         for (auto& f : files) workflows.find(f.declarations, "", f.path);
         workflows.define();

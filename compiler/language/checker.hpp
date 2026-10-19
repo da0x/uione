@@ -916,6 +916,17 @@ namespace one::language {
             return nullptr;
         }
 
+        // Whether a namespace's define role keeps an audit: its place says audit kept.
+        bool audit_of(const std::string& ns) {
+            auto it = scopes_.find(ns);
+            if (it == scopes_.end()) return false;
+            for (const auto* r : it->second.defined) {
+                const entity_declaration* place = find_entity(ns, qualified_name{{r->per}, {}});
+                if (r->defined && place && place->audit_days > 0) return true;
+            }
+            return false;
+        }
+
         void verify(const std::string& ns, location where, const namespace_declaration& n) {
             snake(n.name, where);
             verify(join(ns, n.name), n.declarations);
@@ -1533,6 +1544,11 @@ namespace one::language {
             if (!entity) {
                 error(c.name.where, "command " + c.name.text() + " is on entity " + c.name.parts[0] +
                                         ", which isn't declared " + in_namespace(ns));
+                return;
+            }
+            // An audit is written by the commands it records, and changed by none.
+            if (entity->name == "audit" && audit_of(ns)) {
+                error(c.name.where, "an audit is written by the commands it records; no command makes, changes or deletes one");
                 return;
             }
             context in{ns, entity, nullptr, {}, false};
@@ -2972,6 +2988,11 @@ namespace one::language {
                     }
                     // reorder position: rows dragged into order, which an update sets.
                     if (table->reorder && list) verify_reorder(ns, *list, *table->reorder, table->reorder_where, "table", "rows");
+                    // download "audit.csv": a file's name, saved where downloads go.
+                    if (table->download && (!table->download->ends_with(".csv") || table->download->find_first_of("/\\") != std::string::npos ||
+                                            table->download->size() <= 4)) {
+                        error(table->download_where, "a table downloads to a file named like \"audit.csv\", ending in .csv, with no folder");
+                    }
                     // Tabs by a choice the table shows, like status: one for each of its choices.
                     if (table->by && table->by_over) {
                         // by stage over project_page.stages: a tab for each stage, the rows

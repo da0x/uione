@@ -130,6 +130,15 @@ namespace one::desktop::runtime {
 		if (!spec.search.empty()) tools.push_back(desktop::field(model.query, {.placeholder = "Search"}).width(280));
 		if (spec.tools)
 			if (auto made = spec.tools(); made.get()) tools.push_back(std::move(made));
+		// Every row it keeps, saved where downloads go, and where that was said.
+		auto saved = p.kept<std::string>(model.key + ":saved");
+		if (!spec.download.empty()) {
+			tools.push_back(desktop::button("Download CSV", [saved, name = spec.download, columns = spec.columns, choices = spec.choices, rows = model.kept] {
+				auto at = save_download(name, csv_of(columns, choices, rows));
+				saved.set(at ? "Saved to " + *at : "Not saved: " + at.error());
+			}));
+			if (!saved.get().empty()) tools.push_back(desktop::text(saved.get(), t.quiet()));
+		}
 		if (!tools.empty()) parts.push_back(desktop::row(std::move(tools)).spacing(10).align(align::center));
 		// Tabs, one for each choice of the column it's by, with how many each has.
 		if (!model.tabs.empty()) {

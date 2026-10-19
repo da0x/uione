@@ -575,6 +575,7 @@ namespace one::generators {
             if (std::string tools = toolbar(parts, ns, t.columns, screen); !tools.empty()) out += ", .tools = " + tools;
             if (t.hide_empty) out += ", .hide_empty = true";
             if (t.only) out += ", .only = " + only_of(*t.only);
+            if (t.download) out += ", .download = " + str(*t.download);
             if (std::string tint = tint_of(ns, t.view, t.list, t.tint); !tint.empty()) out += ", .tint = " + tint;
             if (std::string track = track_of(parts, ns, t.track ? &*t.track : nullptr); !track.empty()) out += ", .track = " + track;
             if (std::string reorder = reorder_of(parts, ns, t.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;

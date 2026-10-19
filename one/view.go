@@ -207,6 +207,7 @@ type ViewSpec struct {
 	copies  []copied
 	secrets []string           // values holding the document's project's GitHub webhook secret
 	readers reflect.Type       // the entity whose people may read each document, like member
+	holding []string           // and the roles of theirs that do, like owner, when only some do
 	people  []string           // fields of the document's entity naming people who may read it, like author
 	opens   []condition        // when a document is public: each a field of its entity, or of what it points at, like project.visibility, all holding
 	openers map[string]*schema // the entities those reach through, whose changes rebuild the documents that name them
@@ -246,6 +247,13 @@ func (v *ViewSpec) Per(kind Kind) *ViewSpec {
 // for a page per project, or an issue's project for a page per issue.
 func (v *ViewSpec) Readers(member Kind) *ViewSpec {
 	v.readers = member.typ
+	return v
+}
+
+// Holding keeps a view's readers to the members holding these roles of the place,
+// by name: an organization's audit, read by its owners.
+func (v *ViewSpec) Holding(roles ...string) *ViewSpec {
+	v.holding = append(v.holding, roles...)
 	return v
 }
 
@@ -1799,8 +1807,30 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 					person = f.name
 				}
 			}
+			// Only the members holding its roles, when it says them.
+			roleField, roles := "", map[string]bool{}
+			if len(v.holding) > 0 {
+				for _, r := range a.reg.defined {
+					if r.member != v.readers {
+						continue
+					}
+					f, err := a.rolesFields(r)
+					if err != nil {
+						return err
+					}
+					roleField = f.memberRole.name
+					for _, name := range v.holding {
+						id, err := a.roleID(f, within, name)
+						if err != nil {
+							return err
+						}
+						roles[id] = true
+					}
+				}
+			}
+			memoKey := member.entity + ":" + within + ":" + strings.Join(v.holding, ",")
 			memo, _ := ctx.Value(readersRead{}).(map[string][]string)
-			if known, ok := memo[member.entity+":"+within]; ok && memo != nil {
+			if known, ok := memo[memoKey]; ok && memo != nil {
 				readers = append(readers, known...)
 			} else {
 				docs, err := a.store.Collection(member.collection).Where(place, "==", within).Documents(ctx).GetAll()
@@ -1808,12 +1838,15 @@ func (a *App) access(ctx context.Context, v *ViewSpec, subject string, fields, d
 					return err
 				}
 				for _, doc := range docs {
+					if role, _ := doc.Data()[roleField].(string); roleField != "" && !roles[role] {
+						continue
+					}
 					if id, _ := doc.Data()[person].(string); id != "" && !contains(readers, id) {
 						readers = append(readers, id)
 					}
 				}
 				if memo != nil {
-					memo[member.entity+":"+within] = append([]string(nil), readers...)
+					memo[memoKey] = append([]string(nil), readers...)
 				}
 			}
 		}

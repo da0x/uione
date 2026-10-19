@@ -29,6 +29,7 @@ type RolesSpec struct {
 	holds               []holding    // roles that hold another's, in what's within (holds.go)
 	keeps               []keeping    // roles a place is never left without (keeps.go)
 	suspension          reflect.Type // where a person suspended there is kept (suspend.go)
+	audit               *auditing    // where what's done there is recorded (audit.go)
 }
 
 type defaultRole struct {
@@ -66,6 +67,9 @@ func (r *RolesSpec) register(reg *registry, ns string) {
 	}
 	if r.suspension != nil {
 		reg.schema(r.suspension, ns)
+	}
+	if r.audit != nil {
+		reg.schema(r.audit.typ, ns)
 	}
 	reg.defined = append(reg.defined, r)
 }

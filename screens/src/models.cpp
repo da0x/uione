@@ -23,6 +23,7 @@
 #include <random>
 #include <set>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <thread>
 #include <tuple>
@@ -784,7 +785,54 @@ namespace one::screens {
 			out.last = std::min(out.total, out.first + size);
 		}
 		out.rows.assign(rows.begin() + static_cast<std::ptrdiff_t>(out.first), rows.begin() + static_cast<std::ptrdiff_t>(out.last));
+		out.kept = std::move(rows);
 		return out;
+	}
+
+	std::string csv_of(const std::vector<column>& columns, const std::map<std::string, std::vector<option>>& choices, const std::vector<value>& rows) {
+		auto quoted = [](const std::string& text) {
+			if (text.find_first_of("\",\r\n") == std::string::npos) return text;
+			std::string out = "\"";
+			for (char c : text) out += c == '"' ? std::string("\"\"") : std::string(1, c);
+			return out + "\"";
+		};
+		std::string out;
+		for (std::size_t i = 0; i < columns.size(); ++i) out += (i ? "," : "") + quoted(columns[i].label);
+		out += "\r\n";
+		for (const auto& row : rows) {
+			for (std::size_t i = 0; i < columns.size(); ++i) {
+				const value& v = field_of(row, columns[i].field);
+				std::string said;
+				if (v.is_array()) {
+					for (const auto& item : v.items) said += (said.empty() ? "" : ", ") + show(item);
+				} else if (v.is_time()) {
+					// The full time, in UTC, as the web saves it.
+					said = std::format("{:%FT%T}Z", std::chrono::floor<std::chrono::milliseconds>(v.as_time()));
+				} else {
+					said = cell_text(choices, row, columns[i].field);
+				}
+				out += (i ? "," : "") + quoted(said);
+			}
+			out += "\r\n";
+		}
+		return out;
+	}
+
+	std::expected<std::string, std::string> save_download(const std::string& name, const std::string& text) {
+		namespace fs = std::filesystem;
+		std::string file = fs::path(name).filename().string();
+		if (file.empty() || file == "." || file == "..") return std::unexpected("there's no file name to save it as");
+		fs::path folder;
+		if (const char* named = std::getenv("XDG_DOWNLOAD_DIR"); named && *named) folder = named;
+		else if (const char* home = std::getenv("HOME"); home && *home) folder = fs::exists(fs::path(home) / "Downloads") ? fs::path(home) / "Downloads" : fs::path(home);
+		else folder = fs::current_path();
+		fs::path at = folder / file;
+		std::string stem = fs::path(file).stem().string(), extension = fs::path(file).extension().string();
+		for (int n = 2; fs::exists(at); ++n) at = folder / (stem + "-" + std::to_string(n) + extension);
+		std::ofstream out(at, std::ios::binary);
+		out << text;
+		if (!out) return std::unexpected("it couldn't be saved in " + folder.string());
+		return at.string();
 	}
 
 	board_model board_of(page_base& p, const board_spec& spec) {

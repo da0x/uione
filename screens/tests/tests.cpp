@@ -148,6 +148,48 @@ TEST("a value reads as the web shows it: a date alone as that day, wherever it's
 	CHECK(show(other) == "size 3");
 }
 
+TEST("a table's rows saved as comma-separated values, every one it keeps, quoted where they must be") {
+	value at;
+	at.type = value::kind::time;
+	at.time.seconds = 1'792'324'800;  // Oct 18, 2026, noon UTC
+	value first = value::map();
+	first.fields["command"] = value("projects::issue::create");
+	first.fields["person"] = value("Ann, of Lisbon");
+	first.fields["at"] = at;
+	first.fields["role"] = value("owner");
+	first.fields["changed"] = value(std::vector<value>{"title", "stage"});
+	value second = value::map();
+	second.fields["command"] = value("projects::issue::update");
+	second.fields["person"] = value("Ben \"Bo\"");
+	second.fields["at"] = at;
+	second.fields["role"] = value("member");
+	second.fields["changed"] = value(std::vector<value>{});
+	std::vector<column> columns{{"command", "Command"}, {"person", "Who"}, {"at", "When"}, {"role", "Role"}, {"changed", "Changed"}};
+	std::map<std::string, std::vector<option>> choices{{"role", {{"owner", "Owner"}, {"member", "Member"}}}};
+	CHECK(csv_of(columns, choices, {first, second}) ==
+	      "Command,Who,When,Role,Changed\r\n"
+	      "projects::issue::create,\"Ann, of Lisbon\",2026-10-18T12:00:00.000Z,Owner,\"title, stage\"\r\n"
+	      "projects::issue::update,\"Ben \"\"Bo\"\"\",2026-10-18T12:00:00.000Z,Member,\r\n");
+
+	// Saved where downloads go, never in another folder, and beside one already there.
+	namespace fs = std::filesystem;
+	fs::path folder = fs::temp_directory_path() / "uione-downloads";
+	fs::remove_all(folder);
+	fs::create_directories(folder);
+	setenv("XDG_DOWNLOAD_DIR", folder.c_str(), 1);
+	auto saved = save_download("../audit.csv", "a\r\n");
+	CHECK(saved.has_value());
+	if (!saved) return;
+	CHECK(*saved == (folder / "audit.csv").string());
+	auto again = save_download("audit.csv", "b\r\n");
+	CHECK(again.has_value());
+	if (!again) return;
+	CHECK(*again == (folder / "audit-2.csv").string());
+	std::ifstream read(*again);
+	CHECK(std::string(std::istreambuf_iterator<char>(read), {}) == "b\r\n");
+	unsetenv("XDG_DOWNLOAD_DIR");
+}
+
 TEST("a field with nothing in it is none, as a condition compares it") {
 	CHECK(same(value(""), value()));
 	CHECK(same(value(std::vector<value>{}), value()));

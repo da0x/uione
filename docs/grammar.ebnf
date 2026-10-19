@@ -82,6 +82,7 @@ example        ::= "example" PATTERN END
 /* entity invitation invites member: when someone signs in with its email, they become one */
 entity         ::= "entity" NAME ("invites" NAME)? ("gives" qualified "to" "each" qualified)? ("history" ("of" NAME)?)? "{" NEWLINE? (entity_readers | field)* "}" END
 entity_readers ::= "readers" NAME END
+                 | "audit" "kept" NUMBER ("day" | "days" | "week" | "weeks" | "month" | "months" | "year" | "years") END
                  | "public" "when" condition END
 /* who may read the views of it, and of what's within it, unless a view says its own */
 field          ::= NAME (enum | type) rule* STRING? ("=" expression)? END
@@ -148,8 +149,8 @@ if             ::= "if" expression block ("else" (if | block))?
 
 /* a value can count the rows of the view's own list that pass, compared with its
  * other values: unread = count(changes where created_at > seen) */
-view           ::= "view" NAME "public"? "{" NEWLINE? ("readers" NAME END)? view_line* "}" END
-                 | "view" NAME "public"? "per" NAME "public"? "{" NEWLINE? ("readers" NAME END)? (view_line | view_fields)* "}" END
+view           ::= "view" NAME "public"? "{" NEWLINE? ("readers" NAME END)* view_line* "}" END
+                 | "view" NAME "public"? "per" NAME "public"? "{" NEWLINE? ("readers" NAME END)* (view_line | view_fields)* "}" END
 view_line      ::= (NAME "=")? each
                  | "readers" NAME ("." NAME)+ END
                  | "public" "when" condition END
@@ -316,6 +317,7 @@ table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? ("icon" NAME)? END
                  | "reorder" NAME END
                  | "hide" "when" "empty" END
+                 | "download" STRING END
                  | "search" (NAME ("." NAME)*)+ END
                  | "sort" "by" NAME ("ascending" | "descending")? END
                  | "page" WHOLE END

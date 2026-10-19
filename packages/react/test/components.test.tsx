@@ -4,7 +4,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { App, Code, Hero, Link, Menu, Pages, useParam, Section, Text, memorySource, screen as defineScreen } from "../src/index.js";
-import { changed } from "../src/index.js";
+import { changed, csvOf } from "../src/index.js";
 import { show } from "../src/ui.js";
 import type { DocPage } from "../src/index.js";
 import { label } from "../src/index.js";
@@ -147,5 +147,20 @@ describe("what a change says", () => {
 describe("a date", () => {
   it("picked without a time shows as that day, wherever the reader is", () => {
     expect(show(new Date(Date.UTC(2026, 10, 1)))).toBe(new Date(2026, 10, 1).toLocaleDateString(undefined, { dateStyle: "medium" }));
+  });
+});
+
+describe("a table saved as comma-separated values", () => {
+  it("has a line of the columns' names, then a line a row, quoted where it must be", () => {
+    const rows = [
+      { id: "a", command: "projects::issue::create", person: "Ann, of Lisbon", at: new Date("2026-10-18T12:00:00Z"), role: "owner", changed: ["title", "stage"] },
+      { id: "b", command: "projects::issue::update", person: 'Ben "Bo"', at: new Date("2026-10-18T13:30:00Z"), role: "member", changed: [] },
+    ];
+    const csv = csvOf(rows, { command: "Command", person: "Who", at: "When", role: "Role", changed: "Changed" }, { role: { owner: "Owner", member: "Member" } });
+    expect(csv).toBe(
+      "Command,Who,When,Role,Changed\r\n" +
+        'projects::issue::create,"Ann, of Lisbon",2026-10-18T12:00:00.000Z,Owner,"title, stage"\r\n' +
+        'projects::issue::update,"Ben ""Bo""",2026-10-18T13:30:00.000Z,Member,\r\n',
+    );
   });
 });

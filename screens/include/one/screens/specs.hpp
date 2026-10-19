@@ -303,6 +303,7 @@ namespace one::screens {
 		std::optional<reorder_spec> reorder = std::nullopt;
 		std::string color = "";  // what its rows open in this color, rather than the theme's
 		std::string empty = "Nothing here yet.";
+		std::string download = "";  // a button saving every row it keeps in a file of this name, like audit.csv
 	};
 
 	// A list's rows as large cards, like a project's boards: each its title, what

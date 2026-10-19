@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <map>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -550,6 +551,22 @@ namespace one::language {
                     end_line();
                     continue;
                 }
+                // audit kept 1 year: every command in it recorded, for that long.
+                if (at_word("audit") && peek(1).kind == token_kind::identifier && peek(1).text == "kept") {
+                    entity.audit_where = advance().where;
+                    advance();
+                    const token& amount = expect(token_kind::number, "how long it's kept, like audit kept 1 year");
+                    const token& unit = expect(token_kind::identifier, "days, weeks, months or years, like audit kept 1 year");
+                    int days = 0;
+                    std::from_chars(amount.text.data(), amount.text.data() + amount.text.size(), days);
+                    static const std::map<std::string, int> units{{"day", 1},    {"days", 1},     {"week", 7},  {"weeks", 7},
+                                                                  {"month", 30}, {"months", 30}, {"year", 365}, {"years", 365}};
+                    auto found = units.find(unit.text);
+                    if (found == units.end()) fail(unit.where, "an audit is kept days, weeks, months or years, like audit kept 1 year");
+                    else entity.audit_days = days * found->second;
+                    end_line();
+                    continue;
+                }
                 entity.fields.push_back(parse_field());
             }
             expect(token_kind::right_brace, "'}'");
@@ -746,8 +763,12 @@ namespace one::language {
                     location where = advance().where;
                     expression_ptr readers = parse_postfix();
                     auto* name = std::get_if<name_expression>(&readers->node);
-                    if (name && name->name.parts.size() == 1) {
-                        if (view.readers) fail(where, "a view's readers come from one entity, like readers member; another readers line names people, like readers report.author");
+                    if (name && name->name.parts.size() == 1 && view.readers) {
+                        // Another, like readers auditor beside readers owner: roles, which
+                        // lowering finds, or a second entity, which it says is a mistake.
+                        view.reader_roles.push_back(name->name.parts[0]);
+                        view.reader_roles_where.push_back(where);
+                    } else if (name && name->name.parts.size() == 1) {
                         view.readers_where = where;
                         view.readers = name->name.parts[0];
                         std::tie(view.readers_line, view.readers_length) = line_of(first);
@@ -1552,6 +1573,14 @@ namespace one::language {
                             if (!at_word("empty")) fail_expecting("empty, as in hide when empty");
                             advance();
                             table.hide_empty = true;
+                            end_line();
+                            continue;
+                        }
+                        // download "audit.csv": its rows saved as comma-separated values.
+                        if (at_word("download") && peek(1).kind == token_kind::string) {
+                            advance();
+                            table.download_where = peek().where;
+                            table.download = advance().text;
                             end_line();
                             continue;
                         }

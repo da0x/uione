@@ -326,6 +326,10 @@ namespace one::language {
         std::optional<std::string> readers;
         location readers_where;
         expression_ptr public_when;
+        // audit kept 1 year: a record of every command run in it and in what's
+        // within it, kept that many days, on the audit records define role declares.
+        int audit_days = 0;
+        location audit_where;
         std::vector<field> fields;
     };
 
@@ -375,6 +379,10 @@ namespace one::language {
         std::optional<std::string> readers;  // readers member: the people a member names may read it
         location readers_where;
         std::vector<expression_ptr> reader_people;  // readers report.author: who a field of the entity names
+        // readers owner, readers auditor: only those holding these roles, of the
+        // place's define role, read it; said as readers member and these.
+        std::vector<std::string> reader_roles;
+        std::vector<location> reader_roles_where;
         expression_ptr public_when;          // public when project.visibility == public
         // Where each of those lines is, whole, so a line that says what its entity
         // already does can be taken out.
@@ -664,6 +672,10 @@ namespace one::language {
         std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
         bool hide_empty = false;             // hide when empty: not there at all while it has no rows
         location reorder_where;
+        // download "audit.csv": a button that saves every row it keeps, in a file of
+        // that name, as comma-separated values.
+        std::optional<std::string> download;
+        location download_where;
         // only due <= 2 weeks from now: the rows it keeps, worked out when it's shown,
         // like a card's filter.
         expression_ptr only;

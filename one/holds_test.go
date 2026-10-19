@@ -44,6 +44,20 @@ type Furlough struct {
 	Held   []string  `firestore:"held"`
 }
 
+// A fleet's logbook: every command run in the fleet and its docks, kept a year.
+type Logbook struct {
+	one.Record
+	Fleet   string    `firestore:"fleet" one:"required,refers=fleet::fleet"`
+	Command string    `firestore:"command"`
+	Person  string    `firestore:"person" one:"refers=user"`
+	Address string    `firestore:"address"`
+	Kind    string    `firestore:"kind"`
+	Item    string    `firestore:"item"`
+	Changed []string  `firestore:"changed"`
+	Changes one.Data  `firestore:"changes"`
+	Until   time.Time `firestore:"until"`
+}
+
 type Dock struct {
 	one.Record
 	Slug  string `firestore:"slug" one:"required,unique,key"`
@@ -85,14 +99,20 @@ var fleets = one.Module("fleet",
 		return nil
 	}),
 	one.Command[Furlough]("furlough::restore"),
+	// No command changes a logbook, even one declared and allowed.
+	one.Command[Logbook]("logbook::delete"),
+	// Read by the fleet's admirals, and no one else in it.
+	one.View("fleet_log").Per(one.Entity[Fleet]()).Readers(one.Entity[Sailor]()).Holding("admiral").
+		List("entries", one.Where[Logbook]("fleet", one.Subject)).Fields("command", "person"),
 	// A fleet's docks: another module's entity, read before that module is registered.
 	one.View("fleet_docks").Per(one.Entity[Fleet]()).Public().List("docks", one.Where[Dock]("fleet", one.Subject)).Fields("slug"),
 	one.Roles(one.Entity[FleetRank](), one.Entity[Fleet](), one.Entity[Sailor](), "may").
-		Default("admiral", "Admiral", "sailor::create", "sailor::delete", "sailor::suspend", "furlough::restore").
+		Default("admiral", "Admiral", "sailor::create", "sailor::delete", "sailor::suspend", "furlough::restore", "logbook::delete").
 		Default("lookout", "Lookout").
 		Holds("admiral", "dock", "harbormaster", "fleet").
 		Keeps("admiral", 1).
-		Suspends(one.Entity[Furlough]()),
+		Suspends(one.Entity[Furlough]()).
+		Audits(one.Entity[Logbook](), one.Days(365)),
 )
 
 var docks = one.Module("dock",

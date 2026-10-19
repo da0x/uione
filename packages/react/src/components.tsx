@@ -1310,12 +1310,13 @@ export function Table({
   sort,
   page,
   reorder,
-  tools,
+  tools: ownTools,
   hideEmpty = false,
   only,
   tint,
   hue,
   track,
+  download,
 }: {
   view: ViewState;
   list?: string; // which of the view's lists, like comments
@@ -1341,6 +1342,7 @@ export function Table({
   tint?: Tint; // each row colored by how urgent it is, like its priority
   hue?: Hue; // its rows' links in this color, rather than the site's own
   track?: TrackSpec; // cards above it for a list's records, like milestones, picking one keeping the rows in it
+  download?: string; // a button saving every row it keeps, in a file of this name, like audit.csv
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -1375,6 +1377,17 @@ export function Table({
   const count = page ? Math.max(1, Math.ceil(sorted.length / page)) : 1;
   const current = Math.min(at, count);
   const rows = page ? sorted.slice((current - 1) * page, current * page) : sorted;
+  // Every row it keeps, on every page, as comma-separated values.
+  const tools = download ? (
+    <>
+      {ownTools}
+      <ui.Button kind="secondary" onClick={() => saveFile(download, csvOf(sorted, columns, choices), "text/csv")}>
+        Download CSV
+      </ui.Button>
+    </>
+  ) : (
+    ownTools
+  );
   const tabs = by
     ? options.map((option) => ({
         label: choices[by]?.[option] ?? option,
@@ -1472,6 +1485,31 @@ export function Table({
       )}
     </>
   );
+}
+
+// Rows as comma-separated values, a line for the columns' names and one for each
+// row: a choice as it's shown, a time as its full date and time, and a list joined.
+export function csvOf(rows: Row[], columns: Record<string, string>, choices: Record<string, Record<string, string>> = {}): string {
+  const said = (value: unknown, key: string): string => {
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => said(item, key)).join(", ");
+    if (typeof value === "string") return choices[key]?.[value] ?? value;
+    return show(value);
+  };
+  const quoted = (text: string) => (/[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
+  const lines = [Object.values(columns).map(quoted).join(",")];
+  for (const row of rows) lines.push(Object.keys(columns).map((key) => quoted(said(row[key], key))).join(","));
+  return lines.join("\r\n") + "\r\n";
+}
+
+// Saves text as a file the browser downloads, by that name.
+function saveFile(name: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 // The roles a person holds where something is, like their roles in a project, from
