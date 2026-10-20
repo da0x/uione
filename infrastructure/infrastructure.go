@@ -655,6 +655,17 @@ func answers(ctx context.Context, project, address string) (bool, error) {
 // rules, and the fields whose records expire. A build from before there were any
 // has none to declare.
 func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options ...pulumi.ResourceOption) error {
+	// What the one library keeps for a while in every app: how many of each kind each
+	// person made in a day, counted against the most a day allows.
+	if _, err := firestore.NewField(ctx, "expire-made_per_day-expires", &firestore.FieldArgs{
+		Project:    project,
+		Database:   pulumi.String("(default)"),
+		Collection: pulumi.String("made_per_day"),
+		Field:      pulumi.String("expires"),
+		TtlConfig:  &firestore.FieldTtlConfigArgs{},
+	}, options...); err != nil {
+		return err
+	}
 	written, err := os.ReadFile(filepath.Join(p.Build, "firestore.indexes.json"))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil

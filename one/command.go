@@ -346,7 +346,11 @@ func (c *Ctx) save() ([]event, error) {
 		}
 	}
 	for _, n := range c.counters {
-		if err := c.tx.Set(n.ref, map[string]any{"last": n.value}); err != nil {
+		counted := map[string]any{"last": n.value}
+		if !n.expires.IsZero() {
+			counted["expires"] = n.expires
+		}
+		if err := c.tx.Set(n.ref, counted); err != nil {
 			return nil, err
 		}
 	}
@@ -926,6 +930,11 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 					return err
 				}
 			}
+			if !c.system {
+				if err := a.madeToday(tx, s, c.me, now, body.counters); err != nil {
+					return err
+				}
+			}
 			// The id is known before the body runs, so the body can name it, as in
 			// a member made for the new project. Keys and serials never change in a
 			// body, so it can't change either.
@@ -1193,8 +1202,9 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 
 // counting is the last number a counter gave in a transaction, to be written back.
 type counting struct {
-	ref   *firestore.DocumentRef
-	value float64
+	ref     *firestore.DocumentRef
+	value   float64
+	expires time.Time // when the counter may be forgotten, for one that counts a day
 }
 
 // serials gives a new entity its serials: the next number of its kind, or, for a

@@ -217,7 +217,8 @@ namespace one::client {
 		// An app that says to slow down is asked again once the wait it gives is over,
 		// up to five times, so a program sending many commands slows down rather than
 		// stopping partway. A request turned down this way was never run, so sending it
-		// again is safe.
+		// again is safe. A wait of more than a minute, like a day's most being made, is
+		// passed on rather than waited out.
 		template <class Ask>
 		ember::response patiently(Ask ask) {
 			for (int tries = 1;; ++tries) {
@@ -228,7 +229,8 @@ namespace one::client {
 					wait = ember::parse_json(answer.body)["retry_after"].as_integer();
 				} catch (...) {
 				}
-				std::this_thread::sleep_for(std::chrono::seconds(std::clamp<std::int64_t>(wait, 1, 60)));
+				if (wait > 60) return answer;
+				std::this_thread::sleep_for(std::chrono::seconds(std::max<std::int64_t>(wait, 1)));
 			}
 		}
 	}  // namespace

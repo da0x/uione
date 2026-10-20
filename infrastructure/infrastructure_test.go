@@ -219,6 +219,11 @@ func TestABuildWithoutIndexesDeclaresNone(t *testing.T) {
 			t.Errorf("a build without indexes declares %s", name)
 		}
 	}
+	// What a person made in a day is forgotten after it, in every app.
+	made := m.get(t, "gcp:firestore/field:Field::expire-made_per_day-expires")
+	if made["collection"].StringValue() != "made_per_day" || made["field"].StringValue() != "expires" || !made["ttlConfig"].IsObject() {
+		t.Errorf("each day's count expires as %v", made)
+	}
 }
 
 func TestTheBackendCanTouchFirestoreAndNothingElse(t *testing.T) {

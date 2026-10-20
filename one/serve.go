@@ -208,12 +208,13 @@ func snake(name string) string {
 
 // App is a running backend: the store, sign-in, and everything its modules declare.
 type App struct {
-	store  *firestore.Client
-	auth   *auth.Client
-	reg    *registry
-	log    *log.Logger
-	files  *files  // the bucket files are kept in, for an app with a file field
-	limits *limits // how fast each caller may still ask
+	store      *firestore.Client
+	auth       *auth.Client
+	reg        *registry
+	log        *log.Logger
+	files      *files  // the bucket files are kept in, for an app with a file field
+	limits     *limits // how fast each caller may still ask
+	madePerDay int     // how many of a kind a caller may make in a day, when not the default
 
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept

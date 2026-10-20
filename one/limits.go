@@ -8,6 +8,10 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"cloud.google.com/go/firestore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Every person and every service is limited in how fast it may ask, so nobody, and
@@ -111,4 +115,65 @@ func (a *App) allow(kind, who string, r rate, doing string) error {
 		return slowDown(doing, wait)
 	}
 	return nil
+}
+
+// How many of a kind one person or service may make in a day, by default. A script
+// that gets past the rates above still can't fill the database.
+const madePerDay = 1000
+
+// madeToday counts what the caller has made of this kind today, in UTC, in the
+// command's own transaction, and refuses one past the most a day allows. Each day's
+// count is its own document, forgotten two days later by Firestore's time to live.
+func (a *App) madeToday(tx *firestore.Transaction, s *schema, who string, now time.Time, counters map[string]*counting) error {
+	if who == "" {
+		return nil
+	}
+	day := now.UTC().Truncate(24 * time.Hour)
+	ref := a.store.Collection("made_per_day").Doc(s.collection + "." + who + "." + day.Format("2006-01-02"))
+	counter, read := counters[ref.Path]
+	if !read {
+		counter = &counting{ref: ref, expires: day.Add(72 * time.Hour)}
+		snap, err := tx.Get(ref)
+		if err == nil {
+			switch last := snap.Data()["last"].(type) {
+			case float64:
+				counter.value = last
+			case int64:
+				counter.value = float64(last)
+			}
+		} else if status.Code(err) != codes.NotFound {
+			return err
+		}
+		counters[ref.Path] = counter
+	}
+	most := a.madePerDay
+	if most == 0 {
+		most = madePerDay
+	}
+	if counter.value >= float64(most) {
+		tomorrow := day.Add(24 * time.Hour)
+		return &Failure{
+			Status:     429,
+			Message:    fmt.Sprintf("you've made %d of these today, the most a day allows; you can make more in %s", most, hoursSaid(tomorrow.Sub(now))),
+			RetryAfter: tomorrow.Sub(now).Round(time.Second),
+		}
+	}
+	counter.value++
+	return nil
+}
+
+// hoursSaid is a wait of up to a day, in words.
+func hoursSaid(d time.Duration) string {
+	if d < time.Hour {
+		minutes := max(1, int(math.Ceil(d.Minutes())))
+		if minutes == 1 {
+			return "a minute"
+		}
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+	hours := int(math.Ceil(d.Hours()))
+	if hours == 1 {
+		return "an hour"
+	}
+	return fmt.Sprintf("%d hours", hours)
 }

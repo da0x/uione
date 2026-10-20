@@ -4,6 +4,11 @@
 package one
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -77,5 +82,69 @@ func TestARefusalSaysHowLongToWait(t *testing.T) {
 	}
 	if f := slowDown("asking", time.Millisecond); f.Message != "you're asking too fast; wait 1 second and try again" {
 		t.Fatalf("a moment is said as a second: %q", f.Message)
+	}
+}
+
+type jotting struct {
+	Record
+	Title string `firestore:"title" one:"required"`
+}
+
+func TestMakingMoreThanADayAllowsIsRefusedUntilTomorrow(t *testing.T) {
+	if os.Getenv("FIRESTORE_EMULATOR_HOST") == "" {
+		os.Setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+		os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
+	}
+	ctx := context.Background()
+	a, err := New(ctx, Module("pad", Command[jotting]("jotting::create").Allow(SignedIn)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	a.madePerDay = 3
+	who := fmt.Sprint("ada-", time.Now().UnixNano())
+	jot := func(by string) error {
+		_, err := a.reg.commands["pad::jotting::create"](a, &call{ctx: ctx, me: by, input: map[string]any{"title": "a note"}})
+		return err
+	}
+	for i := range 3 {
+		if err := jot(who); err != nil {
+			t.Fatalf("the %dth note of the day is allowed: %v", i+1, err)
+		}
+	}
+	err = jot(who)
+	var refused *Failure
+	if !errors.As(err, &refused) || refused.Status != 429 || refused.RetryAfter <= 0 || refused.RetryAfter > 24*time.Hour ||
+		!strings.HasPrefix(refused.Message, "you've made 3 of these today, the most a day allows; you can make more in ") {
+		t.Fatalf("the 4th is refused until tomorrow: %v", err)
+	}
+	if err := jot(who + "-grace"); err != nil {
+		t.Fatalf("someone else's count is their own: %v", err)
+	}
+	// The backend's own code isn't counted.
+	if _, err := a.reg.commands["pad::jotting::create"](a, &call{ctx: ctx, me: who, system: true, input: map[string]any{"title": "by the system"}}); err != nil {
+		t.Fatalf("the system makes what it must: %v", err)
+	}
+	// Each day's count is forgotten after it.
+	day := time.Now().UTC().Truncate(24 * time.Hour)
+	snap, err := a.store.Collection("made_per_day").Doc("pad_jotting." + who + "." + day.Format("2006-01-02")).Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expires, _ := snap.Data()["expires"].(time.Time); !expires.Equal(day.Add(72 * time.Hour)) {
+		t.Fatalf("the count expires at %v", snap.Data()["expires"])
+	}
+}
+
+func TestAWaitIsSaidInHoursOrMinutes(t *testing.T) {
+	for wait, said := range map[time.Duration]string{
+		30 * time.Second:             "a minute",
+		90 * time.Second:             "2 minutes",
+		5*time.Hour + 10*time.Minute: "6 hours",
+		time.Hour:                    "an hour",
+	} {
+		if got := hoursSaid(wait); got != said {
+			t.Errorf("%v is said %q, not %q", wait, got, said)
+		}
 	}
 }
