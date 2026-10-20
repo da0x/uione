@@ -337,6 +337,23 @@ describe("titles made from what a page shows", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("#12 Tabs are too wide");
     expect(document.title).toBe("#12 Tabs are too wide · tracker");
   });
+
+  it("keeps its heading when what it shows reads like the app's name, like a project called neotrac", () => {
+    const source = memorySource();
+    const project = defineScreen({ title: "", route: "/:project" }, () => {
+      const page = useView("tracker::project_page", useParam("project"));
+      useTitle([[page, "name"]]);
+      return <Text>body</Text>;
+    });
+    render(<App name="neotrac" screens={[project]} ui={plain} data={source} location="/neotrac" />);
+    act(() => source.set("tracker::project_page", { name: "neotrac" }, "neotrac"));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("neotrac");
+  });
+
+  it("has no heading of its own when the screen is titled with just the app's name, like its home page", () => {
+    renderAt("/");
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
 });
 
 describe("a site's own color", () => {

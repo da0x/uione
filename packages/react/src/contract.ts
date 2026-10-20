@@ -28,6 +28,10 @@ export interface PageProps {
   home: LinkProps;
   nav: NavItem[];
   title: string;
+  // Whether the screen is titled with just the app's name, like its home page, so the
+  // title isn't said again under the name. Never judged by the title shown: a project
+  // named like the app is still titled.
+  untitled: boolean;
   account?: ReactNode; // who's signed in, drawn with Account, when the app has sign-in
   heading?: ReactNode; // where a screen's own buttons go on the title's row, at its end
   crumbs?: ReactNode; // where the pages above a screen go, above its title

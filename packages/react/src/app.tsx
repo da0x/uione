@@ -311,12 +311,14 @@ function Shell({
   name,
   icon,
   title,
+  untitled,
   screens,
   children,
 }: {
   name: string;
   icon: string | undefined;
   title: string;
+  untitled: boolean;
   screens: Screen[];
   children: ReactNode;
 }) {
@@ -363,6 +365,7 @@ function Shell({
       home={link("/")}
       nav={nav}
       title={title}
+      untitled={untitled}
       heading={<div ref={setSlot} style={{ display: "contents" }} />}
       crumbs={<div ref={setTrail} style={{ display: "contents" }} />}
       subtitle={<div ref={setUnder} style={{ display: "contents" }} />}
@@ -549,7 +552,7 @@ function Page({ name, icon, screen: Body, screens }: { name: string; icon: strin
     if (shown) rememberLeftAt(base, pathname + search);
   }, [shown, base, pathname, search]);
   return (
-    <Shell name={name} icon={icon} title={titled ?? Body.info.title} screens={screens}>
+    <Shell name={name} icon={icon} title={titled ?? Body.info.title} untitled={Body.info.title === name} screens={screens}>
       <Rest.Provider value={rest}>
         <ShownPath.Provider value={{ base, parts, open: shown }}>
         <Titling.Provider value={setTitled}>
@@ -613,7 +616,7 @@ function Broken() {
 function NotFound({ name, icon, screens }: { name: string; icon: string | undefined; screens: Screen[] }) {
   const ui = useUI();
   return (
-    <Shell name={name} icon={icon} title="Not found" screens={screens}>
+    <Shell name={name} icon={icon} title="Not found" untitled={false} screens={screens}>
       <ui.Text>There's nothing at this address.</ui.Text>
     </Shell>
   );
@@ -688,7 +691,7 @@ function Authorize({ name, icon, screens }: { name: string; icon: string | undef
     );
   }
   return (
-    <Shell name={name} icon={icon} title="Sign in on your computer" screens={screens}>
+    <Shell name={name} icon={icon} title="Sign in on your computer" untitled={false} screens={screens}>
       {body}
     </Shell>
   );

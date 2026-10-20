@@ -64,7 +64,7 @@ function PlainDialog({ open, title, onClose, children }: DialogProps) {
 const tallyWords: Record<string, string> = { none: "not started", partial: "under way", done: "done", failed: "failed" };
 
 export const plain: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, children }) => (
+  Page: ({ name, icon, home, nav, title, untitled, account, heading, crumbs, subtitle, badges, footer, children }) => (
     <>
       <header>
         <a {...home}>
@@ -83,7 +83,7 @@ export const plain: ComponentSet = {
       </header>
       <main>
         {crumbs}
-        {title !== name && <h1>{title}</h1>}
+        {!untitled && <h1>{title}</h1>}
         {subtitle}
         {heading}
         {children}

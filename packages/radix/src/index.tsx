@@ -388,7 +388,7 @@ export function labelHue(label: string): number {
 }
 
 export const radix: ComponentSet = {
-  Page: ({ name, icon, home, nav, title, account, heading, crumbs, subtitle, badges, footer, display, children }) => (
+  Page: ({ name, icon, home, nav, title, untitled, account, heading, crumbs, subtitle, badges, footer, display, children }) => (
     // Clipped across, so a hero's grid, drawn past the page's sides, never widens it.
     <div className="min-h-screen overflow-x-clip bg-page text-ink">
       {/* The first thing a keyboard reaches: past the header, straight to the page's own. */}
@@ -436,13 +436,13 @@ export const radix: ComponentSet = {
           its own reading width. */}
       {/* A page with a heading of its own has room above it; one whose first thing
           is its own header, like a project's, starts close under the navigation. */}
-      <main id="content" tabIndex={-1} className={`px-4 pb-8 outline-none sm:px-6 sm:pb-10 lg:px-8 ${title !== name ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
+      <main id="content" tabIndex={-1} className={`px-4 pb-8 outline-none sm:px-6 sm:pb-10 lg:px-8 ${!untitled ? "pt-5 sm:pt-6" : "pt-4 sm:pt-5"}`}>
         {crumbs}
         {/* The title, and a screen's own buttons at the end of its row. */}
-        <div className={`one-heading flex flex-wrap items-start gap-3 ${title !== name ? "mb-5" : ""}`}>
+        <div className={`one-heading flex flex-wrap items-start gap-3 ${!untitled ? "mb-5" : ""}`}>
           {/* The title, and under it what the screen says about itself, like a project's summary. */}
           <div className="mr-auto flex min-w-0 max-w-3xl flex-col gap-1">
-            {title !== name && <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
+            {!untitled && <h1 className="text-[1.75rem] leading-tight font-semibold tracking-[-0.025em]">{title || "\u00a0"}</h1>}
             {subtitle}
           </div>
           <div className="ml-auto flex items-center gap-2 pt-1 empty:hidden">{heading}</div>
