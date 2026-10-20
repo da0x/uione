@@ -237,11 +237,9 @@ func (a *App) serveDownload(w http.ResponseWriter, r *http.Request) {
 		replyFailure(w, a, "signing in", err)
 		return
 	}
-	if who.id != "" {
-		if err := a.allow("asking", who.id, askingRate, "downloading"); err != nil {
-			replyFailure(w, a, "downloading", err)
-			return
-		}
+	if err := a.allow("asking", asker(who, r), askingRate, "downloading"); err != nil {
+		replyFailure(w, a, "downloading", err)
+		return
 	}
 	p := r.URL.Query().Get("path")
 	missing := map[string]any{"error": "that file isn't there"}

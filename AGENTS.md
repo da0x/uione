@@ -172,7 +172,9 @@ under a different one.
   tags `v<version>`, `one/v<version>` and `infrastructure/v<version>` go on the
   pushed commit; `v<version>` runs `.github/workflows/release.yml`, which publishes
   the compiler's builds and its container. The npm packages are published by hand
-  after `tools/wasm/build`, in the order react, radix, compiler, editor.
+  after `tools/wasm/build`, in the order react, radix, compiler, editor. Before a
+  release, `tools/google-addresses` refreshes the lists `one` uses to tell Firebase
+  Hosting from a caller, since Google changes them now and then.
 
 - **Highlighting moves with the language.** A change that adds, removes or renames a
   word in a `.one` file updates both grammars under `editors/` and `expected.tsv` in

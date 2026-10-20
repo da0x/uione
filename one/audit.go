@@ -4,11 +4,8 @@
 package one
 
 import (
-	"net"
-	"net/http"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -163,18 +160,4 @@ func (a *App) audit(c *Ctx, s *schema, id string, v reflect.Value, before, after
 		c.writes = append(c.writes, write{ref: ref, data: data, event: &event{Type: f.schema.name + ".updated", Entity: f.schema.entity, ID: ref.ID, After: data}})
 	}
 	return nil
-}
-
-// addressOf is where a request came from: the first address it was forwarded for,
-// as Cloud Run and Firebase Hosting say it, or the connection's own.
-func addressOf(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		first, _, _ := strings.Cut(forwarded, ",")
-		return strings.TrimSpace(first)
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

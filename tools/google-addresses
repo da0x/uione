@@ -1,0 +1,22 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Refreshes the lists of Google's addresses that one/address.go is built with: all of
+# Google's, and those Google Cloud's customers send from. An address in the first and
+# not the second is Google's own, like Firebase Hosting's, and only then does the
+# backend believe the address it was forwarded for. Google changes them now and then,
+# so refresh them before a release.
+#
+#   tools/google-addresses
+
+set -eu
+cd "$(git rev-parse --show-toplevel)/one"
+
+for list in goog:google-addresses cloud:google-cloud-addresses; do
+	from=${list%%:*} to=${list#*:}
+	curl -fsS "https://www.gstatic.com/ipranges/$from.json" -o "$to.json.new"
+	grep -q '"prefixes"' "$to.json.new" || { echo "google-addresses: $from.json has no prefixes" >&2; rm -f "$to.json.new"; exit 1; }
+	mv "$to.json.new" "$to.json"
+done
+git diff --stat -- google-addresses.json google-cloud-addresses.json

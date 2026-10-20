@@ -390,22 +390,21 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		replyFailure(w, a, "signing in", err)
 		return
 	}
-	if who.id != "" {
-		asking := askingRate
-		if a.reg.asking != nil {
-			asking = *a.reg.asking
-		}
-		err := a.allow("asking", who.id, asking, "asking")
-		if own, ok := a.reg.rates[name]; ok && err == nil {
-			err = a.allow("running "+name, who.id, own, "doing that")
-		}
-		if err == nil && strings.HasSuffix(name, "::create") {
-			err = a.allow("making", who.id, makingRate, "making things")
-		}
-		if err != nil {
-			replyFailure(w, a, name, err)
-			return
-		}
+	asking := askingRate
+	if a.reg.asking != nil {
+		asking = *a.reg.asking
+	}
+	asker := asker(who, r)
+	err = a.allow("asking", asker, asking, "asking")
+	if own, ok := a.reg.rates[name]; ok && err == nil {
+		err = a.allow("running "+name, asker, own, "doing that")
+	}
+	if err == nil && strings.HasSuffix(name, "::create") {
+		err = a.allow("making", asker, makingRate, "making things")
+	}
+	if err != nil {
+		replyFailure(w, a, name, err)
+		return
 	}
 
 	input := map[string]any{}

@@ -37,11 +37,11 @@ func TestEveryCommandInAPlaceAndWhatsWithinItIsAudited(t *testing.T) {
 	ben, benToken := h.signUp("ben@example.com")
 	h.mustRun("fleet/fleet/create", annToken, map[string]any{"slug": "navy"})
 	h.mustRun("dock/dock/create", annToken, map[string]any{"slug": "pier", "fleet": "navy"})
-	// Run from an address, as Cloud Run says it.
+	// Run through the site: Hosting writes where Ann is, and Cloud Run adds Hosting.
 	body, _ := json.Marshal(map[string]any{"dock": "pier", "title": "first"})
 	request, _ := http.NewRequest(http.MethodPost, h.server.URL+"/api/dock/berth/create", bytes.NewReader(body))
 	request.Header.Set("Authorization", "Bearer "+annToken)
-	request.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
+	request.Header.Set("X-Forwarded-For", "203.0.113.7, 66.249.84.225")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil || response.StatusCode != http.StatusOK {
 		t.Fatalf("berth::create: %v %v", response.StatusCode, err)

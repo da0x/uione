@@ -126,6 +126,11 @@ func (a *App) authorized(ctx context.Context, code, verifier string) (string, er
 
 // tokenForCode answers /api/token for a program trading its code.
 func (a *App) tokenForCode(w http.ResponseWriter, r *http.Request) {
+	// A code is a secret, so whoever guesses at them is slowed, by where they ask from.
+	if err := a.allow("signing in", asker(caller{}, r), signingInRate, "signing in"); err != nil {
+		replyFailure(w, a, "signing in", err)
+		return
+	}
 	var sent struct {
 		Code     string `json:"code"`
 		Verifier string `json:"verifier"`

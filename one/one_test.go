@@ -455,6 +455,34 @@ func TestMakingTooFastIsRefusedWithHowLongToWait(t *testing.T) {
 	h.mustRun("studio/project/create", grace, map[string]any{"name": "grace's"})
 }
 
+func TestThoseNotSignedInMakingTooFastAreRefusedByWhereTheyAsk(t *testing.T) {
+	h := start(t)
+	join := func(email, from string) *http.Response {
+		body, _ := json.Marshal(map[string]any{"email": email})
+		request, _ := http.NewRequest(http.MethodPost, h.server.URL+"/api/waitlist/signup/create", bytes.NewReader(body))
+		// Straight to Cloud Run, with a made-up address before the real one.
+		request.Header.Set("X-Forwarded-For", "203.0.113.9, "+from)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		return response
+	}
+	for i := range 20 {
+		if response := join(fmt.Sprint("p", i, "@example.com"), "198.51.100.1"); response.StatusCode != http.StatusOK {
+			t.Fatalf("signup %d: %d", i, response.StatusCode)
+		}
+	}
+	if response := join("one-too-many@example.com", "198.51.100.1"); response.StatusCode != http.StatusTooManyRequests || response.Header.Get("Retry-After") == "" {
+		t.Fatalf("the 21st signup at once from one address is refused, whatever it says it's for; got %d", response.StatusCode)
+	}
+	// Someone else, somewhere else, isn't held up.
+	if response := join("elsewhere@example.com", "198.51.100.2"); response.StatusCode != http.StatusOK {
+		t.Fatalf("another address isn't held up; got %d", response.StatusCode)
+	}
+}
+
 // A desk whose chits say how often each may be run, and how many may be made.
 type Chit struct {
 	one.Record
