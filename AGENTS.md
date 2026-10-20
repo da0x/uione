@@ -176,6 +176,10 @@ under a different one.
   release, `tools/google-addresses` refreshes the lists `one` uses to tell Firebase
   Hosting from a caller, since Google changes them now and then.
 
+- **What markets uione says it's protected from abuse.** The home page, the
+  language overview and the notes of each release that changes the protection say
+  that every app limits how fast each person may ask and how much they may make,
+  and that `at most` changes it. A page that sells uione without it is incomplete.
 - **Highlighting moves with the language.** A change that adds, removes or renames a
   word in a `.one` file updates both grammars under `editors/` and `expected.tsv` in
   the same commit, and `node editors/test.mjs` passes. See `editors/README.md`.

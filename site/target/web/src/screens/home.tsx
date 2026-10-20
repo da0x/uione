@@ -22,6 +22,7 @@ export const home = screen({ title: "uione", route: "/" }, () => {
       <Section title="One file in, a whole project out">
         <Text>one, the compiler, turns a folder of .one files into a React app, a Go backend, the Firestore rules that guard its data, and a Pulumi program for the cloud it runs on. What it writes is short enough to read and built with the tools you already use.</Text>
         <Text>Every app works the same way: commands are the only writes, every write is an event, views are built from events, and every screen is live.</Text>
+        <Text>Every app is protected from abuse from its first deploy: each person, and anyone not signed in, is limited in how fast they may ask and how much they may make. One line changes a limit where a feature needs it.</Text>
       </Section>
       <Section title="Install">
         <Text>uione 0.16.1 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh</Text>

@@ -44,4 +44,7 @@ true of every feature:
 - validation: a rule written once on the entity is checked in the form and in the
   command;
 - hiding a button from someone who may not press it, and asking for sign-in on a
-  screen whose views need it.
+  screen whose views need it;
+- protection from abuse: how fast each person may ask, and how much they may make,
+  with anyone not signed in limited by where they ask from. A line of
+  [`at most`](/language/reference#at-most) changes a limit where a feature needs it.
