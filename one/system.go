@@ -46,6 +46,9 @@ func (s *System) SignedIn(r *http.Request) (string, error) {
 	if service, _ := token.Claims["service"].(bool); service {
 		return "", &Failure{Status: http.StatusForbidden, Message: "a service can't use this"}
 	}
+	if err := s.app.turnedOff(r.Context(), token.UID); err != nil {
+		return "", err
+	}
 	s.app.remember(r.Context(), token)
 	return token.UID, nil
 }

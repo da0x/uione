@@ -51,12 +51,13 @@ type bucket struct {
 type limits struct {
 	mu      sync.Mutex
 	buckets map[string]*bucket
+	logged  map[string]time.Time // when a refusal of each was last logged
 	now     func() time.Time
 	swept   time.Time
 }
 
 func newLimits() *limits {
-	return &limits{buckets: map[string]*bucket{}, now: time.Now}
+	return &limits{buckets: map[string]*bucket{}, logged: map[string]time.Time{}, now: time.Now}
 }
 
 // take spends one of what the caller may do, or, when there's none left, says how
@@ -90,7 +91,34 @@ func (l *limits) sweep(now time.Time) {
 			delete(l.buckets, key)
 		}
 	}
+	for key, at := range l.logged {
+		if now.Sub(at) >= time.Minute {
+			delete(l.logged, key)
+		}
+	}
 	l.swept = now
+}
+
+// firstRefusal says whether a refusal of this key is the first in a minute, which
+// is logged, so whoever runs the site can see who's held back without a flood of
+// lines from the one who's flooding.
+func (l *limits) firstRefusal(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.now()
+	if at, ok := l.logged[key]; ok && now.Sub(at) < time.Minute {
+		return false
+	}
+	l.logged[key] = now
+	return true
+}
+
+// refused logs that a caller was held back by a limit, at most once a minute for
+// each: "one: limited <who> <what>", which is what to search the logs for.
+func (a *App) refused(kind, who string) {
+	if a.limits.firstRefusal(kind + ":" + who) {
+		a.log.Printf("one: limited %s %s", who, kind)
+	}
 }
 
 // slowDown is the refusal for a caller past a limit: how long to wait, in the
@@ -114,6 +142,7 @@ func slowDown(doing string, wait time.Duration) *Failure {
 // allow spends one of what the caller may do at this rate, or refuses.
 func (a *App) allow(kind, who string, r rate, doing string) error {
 	if ok, wait := a.limits.take(kind+":"+who, r); !ok {
+		a.refused(kind, who)
 		return slowDown(doing, wait)
 	}
 	return nil
@@ -156,6 +185,7 @@ func (a *App) madeToday(tx *firestore.Transaction, s *schema, who string, now ti
 		most = madePerDay
 	}
 	if counter.value >= float64(most) {
+		a.refused("making "+s.collection+" today", who)
 		tomorrow := day.Add(24 * time.Hour)
 		return &Failure{
 			Status:     429,

@@ -220,6 +220,8 @@ type App struct {
 	files  *files  // the bucket files are kept in, for an app with a file field
 	limits *limits // how fast each caller may still ask
 
+	disabled *disabledAccounts // who has been turned off, as Firebase last said
+
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
 	rebuilt  atomic.Int64 // how many view documents have been worked out, which tests count
@@ -285,7 +287,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 			return nil, err
 		}
 	}
-	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits()}
+	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits(), disabled: newDisabledAccounts()}
 	if a.files, err = filesFor(ctx, project, reg); err != nil {
 		return nil, err
 	}
@@ -476,6 +478,9 @@ func (a *App) caller(r *http.Request) (caller, error) {
 		place, _ := token.Claims["place"].(string)
 		return caller{id: token.UID, service: true, place: place}, nil
 	}
+	if err := a.turnedOff(r.Context(), token.UID); err != nil {
+		return caller{}, err
+	}
 	a.remember(r.Context(), token)
 	return caller{id: token.UID}, nil
 }
@@ -593,6 +598,10 @@ func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 	if service, _ := token.Claims["service"].(bool); service {
 		reply(w, http.StatusBadRequest, map[string]any{"error": "a service doesn't sign in; it uses its key"})
+		return
+	}
+	if err := a.turnedOff(r.Context(), token.UID); err != nil {
+		replyFailure(w, a, "signing in", err)
 		return
 	}
 	if err := a.allow("signing in", token.UID, signingInRate, "signing in"); err != nil {

@@ -839,9 +839,10 @@ command project::create {
 Every site is protected from abuse without saying anything. Each person, and each
 service with a key, may run 10 commands a second, with up to 30 at once; may make one
 thing a second, with up to 20 at once; and may make at most 1000 of each kind in a
-day. Asking faster is turned down with how long to wait, which a screen shows as it
-is, and which the desktop and terminal apps wait out by themselves when it's a minute
-or less.
+day. Someone not signed in is held to the same rates by where they ask from, as
+Google saw it rather than as they say. Asking faster is turned down with how long to
+wait, which a screen shows as it is, and which the desktop and terminal apps wait out
+by themselves when it's a minute or less.
 
 `at most` changes those limits where a site needs to:
 
@@ -874,6 +875,11 @@ command ticket::create {
 A limit counts each person on their own, so one person asking too fast never slows
 anyone else. What a command makes along the way, like a project's first member, and
 what the backend does by itself, aren't counted.
+
+Whoever runs a site sees who's being held back in its logs: each is logged as
+`one: limited`, then who and what, at most once a minute. To turn someone off
+everywhere, disable their account in the Firebase console, under Authentication. They
+can't sign in again, and the backend refuses them within a minute.
 
 ## view
 
