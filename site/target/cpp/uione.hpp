@@ -12,6 +12,7 @@
 
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <format>
 #include <functional>
@@ -20,6 +21,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 #if defined(__unix__) || defined(__APPLE__)
@@ -583,14 +585,33 @@ namespace uione {
 			return headers;
 		}
 
+		// An app that says to slow down is asked again once the wait it gives is over,
+		// up to five times, so a program sending many commands slows down rather than
+		// stopping partway. A request turned down this way was never run, so sending it
+		// again is safe. A wait of more than a minute, like a day's most being made, is
+		// passed on rather than waited out.
+		template <class Ask>
+		static ember::response patiently(Ask ask) {
+			for (int tries = 1;; ++tries) {
+				auto answer = ask();
+				if (answer.status != 429 || tries == 5) return answer;
+				std::int64_t wait = 1;
+				try {
+					wait = ember::parse_json(answer.body)["retry_after"].as_integer();
+				} catch (...) {}
+				if (wait > 60) return answer;
+				std::this_thread::sleep_for(std::chrono::seconds(wait < 1 ? 1 : wait));
+			}
+		}
+
 		std::string post(const std::string& route, const std::string& body) {
-			auto answer = ember::https_post(options_.server + route, credentials(), body);
+			auto answer = patiently([&] { return ember::https_post(options_.server + route, credentials(), body); });
 			if (answer.status != 200) throw refused(answer.status, why(answer));
 			return answer.body;
 		}
 
 		std::string get(const std::string& route) {
-			auto answer = ember::https_get(options_.server + route, credentials());
+			auto answer = patiently([&] { return ember::https_get(options_.server + route, credentials()); });
 			if (answer.status != 200) throw refused(answer.status, why(answer));
 			return answer.body;
 		}
