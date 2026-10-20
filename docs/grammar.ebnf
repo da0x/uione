@@ -54,7 +54,7 @@ settings       ::= "settings" NAME "{" NEWLINE? field* "}" END
 
 /* project */
 
-project        ::= "project" NAME "{" NEWLINE? (setting | environment)* "}" END
+project        ::= "project" NAME "{" NEWLINE? (setting | environment | at_most)* "}" END
 setting        ::= setting_name (STRING | qualified+) END   /* a list may say several, target web desktop */
                  | "redirect" STRING STRING END
                  | "domain" STRING STRING END     /* a second domain, like www, sends people to the first */
@@ -80,7 +80,7 @@ example        ::= "example" PATTERN END
 
 /* entity comment history of issue: a comment's changes are kept in its issue's history */
 /* entity invitation invites member: when someone signs in with its email, they become one */
-entity         ::= "entity" NAME ("invites" NAME)? ("gives" qualified "to" "each" qualified)? ("history" ("of" NAME)?)? "{" NEWLINE? (entity_readers | field)* "}" END
+entity         ::= "entity" NAME ("invites" NAME)? ("gives" qualified "to" "each" qualified)? ("history" ("of" NAME)?)? "{" NEWLINE? (entity_readers | at_most | field)* "}" END
 entity_readers ::= "readers" NAME END
                  | "audit" "kept" NUMBER ("day" | "days" | "week" | "weeks" | "month" | "months" | "year" | "years") END
                  | "public" "when" condition END
@@ -124,7 +124,11 @@ signin         ::= "on" "signin" "{" NEWLINE? (once_step | "delete" "each" NAME 
 
 /* command */
 
-command        ::= "command" qualified block? END
+command        ::= "command" qualified ("{" NEWLINE? (at_most | statement)* "}")? END
+/* at most 30 per hour: how often each person or service may run a command; on an
+ * entity, how many of it each may make in a day; in a project, what every command
+ * and entity allows unless it says its own */
+at_most        ::= "at" "most" NUMBER "per" ("second" | "minute" | "hour" | "day") END
 block          ::= "{" NEWLINE? statement* "}"
 statement      ::= ( "require" (expression STRING | STRING "{" NEWLINE? (expression END)+ "}")
                    | "permission" qualified

@@ -6,6 +6,7 @@ package one
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"sync"
 	"time"
 
@@ -42,6 +43,7 @@ var (
 type bucket struct {
 	tokens float64
 	last   time.Time
+	rate   rate
 }
 
 // limits holds a bucket for each caller and each kind of asking. A bucket that has
@@ -68,11 +70,11 @@ func (l *limits) take(key string, r rate) (bool, time.Duration) {
 	}
 	b := l.buckets[key]
 	if b == nil {
-		b = &bucket{tokens: r.burst, last: now}
+		b = &bucket{tokens: r.burst, last: now, rate: r}
 		l.buckets[key] = b
 	}
 	b.tokens = min(r.burst, b.tokens+now.Sub(b.last).Seconds()*r.perSecond)
-	b.last = now
+	b.last, b.rate = now, r
 	if b.tokens < 1 {
 		return false, time.Duration((1 - b.tokens) / r.perSecond * float64(time.Second))
 	}
@@ -80,11 +82,11 @@ func (l *limits) take(key string, r rate) (bool, time.Duration) {
 	return true, 0
 }
 
-// sweep forgets every bucket idle long enough to have filled again. The longest
-// any rate takes to fill is its burst over its rate, at most half a minute.
+// sweep forgets every bucket idle long enough to have filled again, which is just
+// as if it were new. An hour's limit is kept for up to an hour.
 func (l *limits) sweep(now time.Time) {
 	for key, b := range l.buckets {
-		if now.Sub(b.last) > 30*time.Second {
+		if b.tokens+now.Sub(b.last).Seconds()*b.rate.perSecond >= b.rate.burst {
 			delete(l.buckets, key)
 		}
 	}
@@ -146,7 +148,10 @@ func (a *App) madeToday(tx *firestore.Transaction, s *schema, who string, now ti
 		}
 		counters[ref.Path] = counter
 	}
-	most := a.madePerDay
+	most := a.reg.madeOf[s.collection]
+	if most == 0 {
+		most = a.reg.madeADay
+	}
 	if most == 0 {
 		most = madePerDay
 	}
@@ -177,3 +182,30 @@ func hoursSaid(d time.Duration) string {
 	}
 	return fmt.Sprintf("%d hours", hours)
 }
+
+// AtMost changes how often each person or service may run any command, from 10 a
+// second and 30 at once: AtMost(600, time.Minute) is 600 at once, then 10 a second.
+// A command that says its own is limited by both.
+func AtMost(n int, per time.Duration) Item {
+	return limitItem(func(r *registry, _ string) {
+		r.asking = &rate{perSecond: float64(n) / per.Seconds(), burst: float64(n)}
+	})
+}
+
+// AtMostADay changes how many of each kind each person or service may make in a
+// day, from 1000.
+func AtMostADay(n int) Item {
+	return limitItem(func(r *registry, _ string) { r.madeADay = n })
+}
+
+// AtMostADayOf says how many of entity E each person or service may make in a day,
+// like 10 projects.
+func AtMostADayOf[E any, P entityPointer[E]](n int) Item {
+	return limitItem(func(r *registry, ns string) {
+		r.madeOf[r.schema(reflect.TypeFor[E](), ns).collection] = n
+	})
+}
+
+type limitItem func(r *registry, ns string)
+
+func (l limitItem) register(r *registry, ns string) { l(r, ns) }

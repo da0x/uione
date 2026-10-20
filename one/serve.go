@@ -125,6 +125,11 @@ type registry struct {
 	hooks     []*GitHubSpec
 	services  []*ServiceSpec // systems that run commands, not people
 	schemas   map[reflect.Type]*schema
+
+	asking   *rate           // how often a caller may run any command, when not the default
+	rates    map[string]rate // how often a caller may run a command that says its own
+	madeADay int             // how many of a kind a caller may make in a day, when not the default
+	madeOf   map[string]int  // the same, for an entity that says its own, by collection
 }
 
 // entity finds a known entity by its full name, like library::book.
@@ -208,13 +213,12 @@ func snake(name string) string {
 
 // App is a running backend: the store, sign-in, and everything its modules declare.
 type App struct {
-	store      *firestore.Client
-	auth       *auth.Client
-	reg        *registry
-	log        *log.Logger
-	files      *files  // the bucket files are kept in, for an app with a file field
-	limits     *limits // how fast each caller may still ask
-	madePerDay int     // how many of a kind a caller may make in a day, when not the default
+	store  *firestore.Client
+	auth   *auth.Client
+	reg    *registry
+	log    *log.Logger
+	files  *files  // the bucket files are kept in, for an app with a file field
+	limits *limits // how fast each caller may still ask
 
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
@@ -256,6 +260,8 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 		commands: map[string]func(*App, *call) (string, error){},
 		roles:    map[string][]string{},
 		named:    map[string]bool{},
+		rates:    map[string]rate{},
+		madeOf:   map[string]int{},
 		schemas:  map[reflect.Type]*schema{reflect.TypeFor[Profile](): profiles()},
 	}
 	for _, pass := range []bool{false, true} {
@@ -385,7 +391,14 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if who.id != "" {
-		err := a.allow("asking", who.id, askingRate, "asking")
+		asking := askingRate
+		if a.reg.asking != nil {
+			asking = *a.reg.asking
+		}
+		err := a.allow("asking", who.id, asking, "asking")
+		if own, ok := a.reg.rates[name]; ok && err == nil {
+			err = a.allow("running "+name, who.id, own, "doing that")
+		}
 		if err == nil && strings.HasSuffix(name, "::create") {
 			err = a.allow("making", who.id, makingRate, "making things")
 		}

@@ -131,9 +131,9 @@ Words for values that aren't written out:
 
 The language's own words, inside what a declaration says:
 
-- in a field: `enum`, `list of`, `serial per`;
+- in a field: `enum`, `list of`, `serial per`, and in an entity, `at most … per day`;
 - in a command: `require`, `by`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
-  `input`, `each … where`, `each other … where`, `match`, `else`;
+  `input`, `each … where`, `each other … where`, `match`, `else`, `at most … per`;
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
@@ -143,7 +143,7 @@ The language's own words, inside what a declaration says:
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
-- in a project: the settings `one`'s library defines, below;
+- in a project: the settings `one`'s library defines, below, and `at most … per`;
 - in a footer: `bar`, `columns`, and in a link, `build.release` and `build.source`.
 
 ## import
@@ -833,6 +833,47 @@ command project::create {
 	}
 }
 ```
+
+## at most
+
+Every site is protected from abuse without saying anything. Each person, and each
+service with a key, may run 10 commands a second, with up to 30 at once; may make one
+thing a second, with up to 20 at once; and may make at most 1000 of each kind in a
+day. Asking faster is turned down with how long to wait, which a screen shows as it
+is, and which the desktop and terminal apps wait out by themselves when it's a minute
+or less.
+
+`at most` changes those limits where a site needs to:
+
+```one
+project desk {
+	at most 600 per minute
+	at most 5000 per day
+}
+
+entity ticket {
+	at most 10 per day
+	title  text  required
+}
+
+command ticket::create {
+	by anyone signed in
+	at most 30 per hour
+}
+```
+
+- In a command, `at most 30 per hour` is how often each person may run it, on top of
+  what every command allows: 30 at once, then one every two minutes. It's per
+  `second`, `minute` or `hour`.
+- In an entity, `at most 10 per day` is how many of it each person may make in a day,
+  counted exactly, in place of 1000. A day starts at midnight UTC.
+- In a project, `at most 600 per minute` is how often each person may run any command,
+  and `at most 5000 per day` how many of each kind they may make in a day, unless an
+  entity says its own.
+
+A limit counts each person on their own, so one person asking too fast never slows
+anyone else. What a command makes along the way, like a project's first member, and
+what the backend does by itself, aren't counted.
 
 ## view
 

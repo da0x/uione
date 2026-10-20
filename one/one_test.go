@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/da0x/uione/one"
@@ -452,4 +453,47 @@ func TestMakingTooFastIsRefusedWithHowLongToWait(t *testing.T) {
 	}
 	// Grace isn't held up by Ada.
 	h.mustRun("studio/project/create", grace, map[string]any{"name": "grace's"})
+}
+
+// A desk whose chits say how often each may be run, and how many may be made.
+type Chit struct {
+	one.Record
+	Title string `firestore:"title" one:"required"`
+}
+
+func TestACommandAndAProjectSayHowOftenEachPersonMayAsk(t *testing.T) {
+	start(t) // a clean emulator
+	ctx := context.Background()
+	app, err := one.New(ctx,
+		one.Module("desk",
+			one.Command[Chit]("chit::create").Allow(one.SignedIn).AtMost(2, time.Hour),
+			one.Command[Chit]("chit::update").Allow(one.SignedIn),
+		),
+		one.AtMost(3, time.Minute),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := firestore.NewClient(ctx, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &harness{t: t, server: httptest.NewServer(app.Handler()), store: store}
+	t.Cleanup(func() { h.server.Close(); store.Close(); app.Close() })
+	_, ada := h.signUp("ada@example.com")
+	_, grace := h.signUp("grace@example.com")
+
+	// Two chits an hour, by the command's own.
+	first := h.mustRun("desk/chit/create", ada, map[string]any{"title": "One"})
+	h.mustRun("desk/chit/create", ada, map[string]any{"title": "Two"})
+	if status, reply := h.run("desk/chit/create", ada, map[string]any{"title": "Three"}); status != http.StatusTooManyRequests ||
+		!strings.HasPrefix(fmt.Sprint(reply["error"]), "you're doing that too fast; wait ") {
+		t.Fatalf("a third chit in the hour is refused: %d %v", status, reply)
+	}
+	// Three commands a minute, any of them, by the project's: Ada has asked three times.
+	if status, reply := h.run("desk/chit/update", ada, map[string]any{"id": first, "title": "First"}); status != http.StatusTooManyRequests ||
+		!strings.HasPrefix(fmt.Sprint(reply["error"]), "you're asking too fast; wait ") {
+		t.Fatalf("a fourth command in the minute is refused: %d %v", status, reply)
+	}
+	h.mustRun("desk/chit/create", grace, map[string]any{"title": "Grace's"})
 }

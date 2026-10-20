@@ -37,7 +37,7 @@ syn match uionePattern    "[^[:space:]{]\+" contained
 
 " Words inside blocks, never the entity a command is on: board in board::create
 " is a name.
-syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|themes\|details\|layout\|landing\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|minute\|minutes\|hour\|hours\|day\|days\|week\|weeks\|new\|open\|badge\|find\|only\|tint\|track\|color\|match\|other\|services\|worked\|steps\|lease\|notify\|chime\|status\|depends\|done\|run\|then\|canvas\|place\|size\|kind\|pipeline\|chart\|charts\|monitor\|percent\|bytes\|rate\|doing\|progress\|seen\|since\|holds\|gives\|keep\|least\|audit\|kept\|month\|months\|year\|years\|download\|lanes\|path\|regions\|resize\|picked\|last\|while\|document\|navigation\|paste\|picture\|into\)\>\%(\s*::\)\@!"
+syn match   uioneKeyword   "\<\%(require\|permission\|clear\|dispatch\|readers\|as\|dark\|ground\|depth\|flat\|raised\|corners\|when\|was\|add\|remove\|to\|has\|of\|in\|limit\|for\|by\|on\|component\|order\|each\|per\|where\|from\|table\|form\|confirm\|hint\|hero\|section\|menu\|link\|markdown\|thread\|timeline\|copy\|themes\|details\|layout\|landing\|main\|side\|search\|sort\|ascending\|descending\|page\|at\|grid\|diagram\|board\|under\|cards\|tally\|filter\|subtitle\|icon\|hide\|empty\|along\|over\|and\|reorder\|heading\|ago\|second\|minute\|minutes\|hour\|hours\|day\|days\|week\|weeks\|new\|open\|badge\|find\|only\|tint\|track\|color\|match\|other\|services\|worked\|steps\|lease\|notify\|chime\|status\|depends\|done\|run\|then\|canvas\|place\|size\|kind\|pipeline\|chart\|charts\|monitor\|percent\|bytes\|rate\|doing\|progress\|seen\|since\|holds\|gives\|keep\|least\|most\|audit\|kept\|month\|months\|year\|years\|download\|lanes\|path\|regions\|resize\|picked\|last\|while\|document\|navigation\|paste\|picture\|into\)\>\%(\s*::\)\@!"
 " each change in issue: change is the language's own record of an entity's changes,
 " a type, as text is.
 syn match   uioneType      "\<change\>\ze\s\+in\>"
@@ -82,10 +82,15 @@ syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
 " or another entity, so `project  project  required  key` is a field named project
 " holding a project, not a declaration. Inside it, words that start declarations
 " elsewhere are names.
-syn region uioneFields start="\%(^\s*\%(entity\|settings\)\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\%(\s\+history\%(\s\+of\s\+\h\w*\)\=\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf
+syn region uioneFields start="\%(^\s*\%(entity\|settings\)\s\+\h\w*\%(\s\+invites\s\+\h\w*\)\=\%(\s\+history\%(\s\+of\s\+\h\w*\)\=\)\=\s*\)\@<={" end="^\s*}" contains=uioneFieldName,uioneComment,uioneString,uioneModifier,uioneBuiltin,uioneNumber,uioneOperator,uioneNamespace,uioneScope,uioneFieldWord,uioneListOf,uioneAtMost
 syn match   uioneFieldName "^\s*\zs\h\w*" contained nextgroup=uioneUserType,uioneType skipwhite
 syn match   uioneUserType  "\h\w*\%(::\h\w*\)*" contained
 syn match   uioneFieldWord "\<\%(per\|of\)\>" contained
+" at most 30 per hour: how often each caller may ask, in a project, an entity or a
+" command, read as a whole line, so in an entity's block at isn't a field's name.
+" Defined after uioneFieldName, so it wins where both start.
+syn match   uioneAtMost     "^\s*\zsat\s\+most\>.*$" contained contains=uioneAtMostWord,uioneNumber,uioneComment
+syn match   uioneAtMostWord "\<\%(at\|most\|per\|second\|minute\|hour\|day\)\>" contained
 " A list's type is one type, read as a unit: list of text, list of label. Defined
 " after uioneFieldWord, so of in a list's type is the type's own.
 syn match   uioneListOf    "\%(^\s*\h\w*\s\+list\s\+\)\@<=of\>" contained nextgroup=uioneListType,uioneUserType skipwhite
@@ -105,7 +110,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 " A project's block: its settings, each a word at the start of its line, and its
 " environments, whose blocks hold settings too. Elsewhere those words are names, like
 " a column called title.
-syn cluster uioneProjectItems contains=uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
+syn cluster uioneProjectItems contains=uioneAtMost,uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
 syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|target\|icon\|theme\|appearance\|accessibility\|layout\|serve\|redirect\|title\|one\|analytics\|extends\)\>" contained
@@ -151,6 +156,7 @@ hi def link uioneType        Type
 hi def link uioneUserType    Type
 hi def link uioneFieldName   Identifier
 hi def link uioneFieldWord   Statement
+hi def link uioneAtMostWord  Statement
 hi def link uioneListOf      Type
 hi def link uioneListType    Type
 hi def link uioneBuiltin     Constant

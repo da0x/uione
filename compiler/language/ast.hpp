@@ -254,9 +254,20 @@ namespace one::language {
         std::vector<setting> settings;
     };
 
+    // at most 30 per hour: how many a caller may do in that time. On an entity it's
+    // how many of it each caller may make in a day; in a project block, what every
+    // command or entity has unless it says its own.
+    struct at_most {
+        int count = 0;
+        std::string per;  // second, minute, hour or day
+        location where;   // its at
+        location per_where;
+    };
+
     struct project_declaration {
         std::string name;
         std::vector<setting> settings;          // shared by every environment
+        std::vector<language::at_most> at_most;  // at most 600 per minute, at most 5000 per day
         std::vector<environment_block> environments;
         std::string environment;                // the one being built, once chosen; empty with none
         location end;                           // its closing brace
@@ -306,6 +317,7 @@ namespace one::language {
 
     struct entity_declaration {
         std::string name;
+        std::optional<language::at_most> at_most;  // at most 10 per day: made by each caller
         bool history = false;  // entity issue history: every change is kept
         // entity comment history of issue: each change to a comment is kept in its
         // issue's history, through its field pointing at the issue.
@@ -344,6 +356,7 @@ namespace one::language {
         qualified_name name;
         bool has_body = false;
         std::vector<statement> body;
+        std::optional<language::at_most> at_most;
     };
 
     // One value in a view: either something shown as it is (book.title), or a name

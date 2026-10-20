@@ -769,6 +769,7 @@ type Cmd[E any, P entityPointer[E]] struct {
 	inputs     []string // what it's sent besides its entity's fields, when it says
 	do         func(*Ctx, *E) error
 	after      []func(*System, *E)
+	atMost     *rate // how often each caller may run it, when it says
 }
 
 // Command declares a command on entity E, named after the entity and the action,
@@ -785,6 +786,14 @@ func Command[E any, P entityPointer[E]](name string) *Cmd[E, P] {
 // permission named after it: signup::create needs "signup:create".
 func (c *Cmd[E, P]) Allow(p Permission) *Cmd[E, P] {
 	c.permission = p
+	return c
+}
+
+// AtMost says how often each person or service may run the command, on top of what
+// every command allows: AtMost(30, time.Hour) is 30 at once, then one every two
+// minutes. A day's worth is said on the entity, with AtMostADayOf.
+func (c *Cmd[E, P]) AtMost(n int, per time.Duration) *Cmd[E, P] {
+	c.atMost = &rate{perSecond: float64(n) / per.Seconds(), burst: float64(n)}
 	return c
 }
 
@@ -833,6 +842,9 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 	permission := qualified(ns, c.permission)
 	if permission == "" {
 		permission = Permission(s.entity + ":" + c.action)
+	}
+	if c.atMost != nil {
+		r.rates[s.entity+"::"+c.action] = *c.atMost
 	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
 		return run[E, P](a, call, s, c.action, permission, c.fields, c.inputs, c.do, c.after)

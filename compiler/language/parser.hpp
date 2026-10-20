@@ -436,6 +436,12 @@ namespace one::language {
                 return said;
             };
             while (in_block()) {
+                // at most 600 per minute: what every command allows each caller, unless it
+                // says its own; at most 5000 per day, what every entity does.
+                if (at_most_next()) {
+                    project.at_most.push_back(parse_at_most());
+                    continue;
+                }
                 // environment staging { ... }: a place the project runs, and what's its own there.
                 if (at_word("environment") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::left_brace) {
                     environment_block environment;
@@ -549,6 +555,11 @@ namespace one::language {
                     advance();
                     entity.public_when = parse_when();
                     end_line();
+                    continue;
+                }
+                // at most 10 per day: how many of it each caller may make in a day.
+                if (at_most_next()) {
+                    entity.at_most = parse_at_most();
                     continue;
                 }
                 // audit kept 1 year: every command in it recorded, for that long.
@@ -703,10 +714,36 @@ namespace one::language {
             command.name = parse_qualified_name("the command's name, like book::create");
             if (at(token_kind::left_brace)) {
                 command.has_body = true;
-                command.body = parse_statement_block();
+                advance();
+                while (in_block()) {
+                    if (at_most_next()) {
+                        command.at_most = parse_at_most();
+                        continue;
+                    }
+                    command.body.push_back(parse_statement());
+                }
+                expect(token_kind::right_brace, "'}'");
             }
             end_line();
             return command;
+        }
+
+        bool at_most_next() const { return at_word("at") && peek(1).kind == token_kind::identifier && peek(1).text == "most"; }
+
+        // at most 30 per hour
+        at_most parse_at_most() {
+            at_most limit;
+            limit.where = advance().where;
+            advance();
+            const token& count = expect(token_kind::number, "how many, like at most 30 per hour");
+            std::from_chars(count.text.data(), count.text.data() + count.text.size(), limit.count);
+            if (!at_word("per")) fail_expecting("per and how long, like at most 30 per hour");
+            advance();
+            const token& per = expect(token_kind::identifier, "second, minute, hour or day, like at most 30 per hour");
+            limit.per = per.text;
+            limit.per_where = per.where;
+            end_line();
+            return limit;
         }
 
         once_declaration parse_once(bool signin = false) {

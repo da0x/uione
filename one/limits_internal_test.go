@@ -96,12 +96,11 @@ func TestMakingMoreThanADayAllowsIsRefusedUntilTomorrow(t *testing.T) {
 		os.Setenv("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
 	}
 	ctx := context.Background()
-	a, err := New(ctx, Module("pad", Command[jotting]("jotting::create").Allow(SignedIn)))
+	a, err := New(ctx, Module("pad", Command[jotting]("jotting::create").Allow(SignedIn), AtMostADayOf[jotting](3)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer a.Close()
-	a.madePerDay = 3
 	who := fmt.Sprint("ada-", time.Now().UnixNano())
 	jot := func(by string) error {
 		_, err := a.reg.commands["pad::jotting::create"](a, &call{ctx: ctx, me: by, input: map[string]any{"title": "a note"}})
@@ -146,5 +145,18 @@ func TestAWaitIsSaidInHoursOrMinutes(t *testing.T) {
 		if got := hoursSaid(wait); got != said {
 			t.Errorf("%v is said %q, not %q", wait, got, said)
 		}
+	}
+}
+
+func TestAnHoursLimitIsKeptThroughAQuietMinute(t *testing.T) {
+	c := &clock{at: time.Unix(1_000_000, 0)}
+	l := limitsAt(c)
+	hourly := rate{perSecond: 2.0 / 3600, burst: 2}
+	takes(l, "ada", hourly)
+	takes(l, "ada", hourly)
+	c.pass(2 * time.Minute)
+	takes(l, "grace", askingRate) // sweeps
+	if takes(l, "ada", hourly) {
+		t.Fatal("two an hour, used up, aren't given back by two quiet minutes")
 	}
 }

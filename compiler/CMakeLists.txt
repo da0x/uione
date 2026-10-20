@@ -84,6 +84,7 @@ if(ONE_TESTS)
         tests/native_tests.cpp
         tests/api_tests.cpp
         tests/audit_tests.cpp
+        tests/limits_tests.cpp
         tests/infrastructure_tests.cpp
         tests/cpp_tests.cpp
         tests/sources_tests.cpp

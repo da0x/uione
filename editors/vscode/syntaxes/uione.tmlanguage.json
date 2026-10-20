@@ -352,7 +352,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "(?<!::)(?<!\\.)\\b(?!(?:\\w+)\\s*::)(?:require|permission|clear|dispatch|readers|as|dark|ground|depth|flat|raised|corners|when|was|add|remove|to|has|of|in|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|themes|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|landing|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|minute|minutes|hour|hours|day|days|week|weeks|new|open|badge|find|only|tint|track|color|match|other|services|worked|steps|lease|notify|chime|status|depends|done|run|then|canvas|place|size|kind|pipeline|chart|charts|monitor|percent|bytes|rate|doing|progress|seen|since|holds|gives|keep|least|audit|kept|month|months|year|years|download|lanes|path|regions|resize|picked|last|while|document|navigation|paste|picture|into)\\b",
+          "match": "(?<!::)(?<!\\.)\\b(?!(?:\\w+)\\s*::)(?:require|permission|clear|dispatch|readers|as|dark|ground|depth|flat|raised|corners|when|was|add|remove|to|has|of|in|limit|for|by|on|component|order|each|per|where|from|table|form|confirm|hint|hero|section|menu|thread|timeline|copy|themes|details|grid|diagram|board|under|cards|tally|filter|subtitle|icon|hide|empty|along|over|and|reorder|heading|layout|landing|main|side|search|sort|ascending|descending|page|link|markdown|at|ago|second|minute|minutes|hour|hours|day|days|week|weeks|new|open|badge|find|only|tint|track|color|match|other|services|worked|steps|lease|notify|chime|status|depends|done|run|then|canvas|place|size|kind|pipeline|chart|charts|monitor|percent|bytes|rate|doing|progress|seen|since|holds|gives|keep|least|most|audit|kept|month|months|year|years|download|lanes|path|regions|resize|picked|last|while|document|navigation|paste|picture|into)\\b",
           "name": "keyword.other.uione"
         },
         {
@@ -441,6 +441,27 @@
         },
         {
           "include": "#strings"
+        },
+        {
+          "comment": "at most 30 per hour: how often each caller may ask, in a project, an entity or a command, read as a whole line, so in an entity's block at isn't a field's name.",
+          "match": "^\\s*(at)\\s+(most)\\s+(\\d+)\\s+(per)\\s+(second|minute|hour|day)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            },
+            "2": {
+              "name": "keyword.other.uione"
+            },
+            "3": {
+              "name": "constant.numeric.uione"
+            },
+            "4": {
+              "name": "keyword.other.uione"
+            },
+            "5": {
+              "name": "keyword.other.uione"
+            }
+          }
         },
         {
           "comment": "A list's type is one type, read as a unit: list of text, list of label.",
@@ -540,6 +561,27 @@
         },
         {
           "include": "#strings"
+        },
+        {
+          "comment": "at most 30 per hour: how often each caller may ask, in a project, an entity or a command, read as a whole line, so in an entity's block at isn't a field's name.",
+          "match": "^\\s*(at)\\s+(most)\\s+(\\d+)\\s+(per)\\s+(second|minute|hour|day)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.uione"
+            },
+            "2": {
+              "name": "keyword.other.uione"
+            },
+            "3": {
+              "name": "constant.numeric.uione"
+            },
+            "4": {
+              "name": "keyword.other.uione"
+            },
+            "5": {
+              "name": "keyword.other.uione"
+            }
+          }
         },
         {
           "match": "^\\s*(domain|firebase|region|ui|signin|target|icon|theme|appearance|accessibility|layout|serve|redirect|title|one|analytics|extends)\\b",

@@ -55,6 +55,12 @@ namespace one::generators {
         }
 
         inline std::string go_string(std::string_view text) { return web_detail::js_string(text); }
+        // at most 30 per hour: the hour, as Go's time says it.
+        inline std::string duration(std::string_view per) {
+            if (per == "second") return "time.Second";
+            if (per == "minute") return "time.Minute";
+            return "time.Hour";
+        }
 
         // Pads text to a width, as gofmt aligns struct fields and constants.
         inline std::string pad(const std::string& text, std::size_t width) {
@@ -141,6 +147,7 @@ namespace one::generators {
         // Where each declaration is, so every generated line can say what it came from.
         std::map<const void*, code::source> declared_;
         code::source project_;  // the project block, or fixed without one
+        std::vector<language::at_most> project_at_most_;  // at most 600 per minute in the project block
         std::string collecting_;  // the file being collected
         std::map<std::string, std::vector<std::string>> form_fields_;  // by command, like projects::issue::update
         std::map<const language::expression*, std::string> existing_;  // each exists(...) or held(...) asked in a command, and what holds its answer
@@ -212,6 +219,7 @@ namespace one::generators {
                 if (auto* p = std::get_if<language::project_declaration>(&d.node)) {
                     project_name_ = p->name;
                     project_ = {collecting_, d.where.line};
+                    project_at_most_ = p->at_most;
                     for (const auto& s : p->settings) {
                         if (s.key == "domain") domain_ = s.value;
                     }
@@ -330,7 +338,14 @@ namespace one::generators {
             out.generated_from(source_name());
             out.line("package main");
             out.line();
+            // at most 600 per minute and at most 5000 per day in the project block: what
+            // every command and every entity allows each caller, unless it says its own.
+            bool timed = std::any_of(project_at_most_.begin(), project_at_most_.end(), [](const auto& l) { return l.per != "day"; });
             out.open("import (");
+            if (timed) {
+                out.line("\"time\"");
+                out.line();
+            }
             out.line("\"github.com/da0x/uione/one\"");
             out.line();
             for (const auto& p : packages) out.line(api_detail::go_string(module_path() + "/" + p));
@@ -339,7 +354,17 @@ namespace one::generators {
             std::string modules;
             for (const auto& p : packages) modules += (modules.empty() ? "" : ", ") + p + ".Module";
             out.open("func main() {");
-            out.line("one.Serve(" + modules + ")");
+            if (project_at_most_.empty()) {
+                out.line("one.Serve(" + modules + ")");
+            } else {
+                out.open("one.Serve(" + modules + ",");
+                for (const auto& limit : project_at_most_) {
+                    auto from_limit = out.from(project_.path, limit.where.line);
+                    if (limit.per == "day") out.line("one.AtMostADay(" + std::to_string(limit.count) + "),");
+                    else out.line("one.AtMost(" + std::to_string(limit.count) + ", " + api_detail::duration(limit.per) + "),");
+                }
+                out.close(")");
+            }
             out.close("}");
             return out;
         }
@@ -738,6 +763,16 @@ namespace one::generators {
                 body.line();
             }
 
+            // at most 10 per day on an entity: how many of it each caller may make in a day.
+            for (auto* e : pkg.entities) {
+                if (!e->at_most) continue;
+                auto from_limit = in(body, at(e), e->at_most->where.line);
+                std::string var = "AtMostADayOf" + api_detail::go_name(e->name);
+                body.line("var " + var + " = one.AtMostADayOf[" + api_detail::go_name(e->name) + "](" + std::to_string(e->at_most->count) + ")");
+                body.line();
+                members.push_back(var);
+            }
+
             // the module
             std::string args = api_detail::go_string(ns);
             for (const auto& m : members) args += ", " + m;
@@ -809,6 +844,10 @@ namespace one::generators {
                                api_detail::go_string(c.name.text()) + ")";
             std::string allow = permission(c);
             if (!allow.empty()) head += ".Allow(" + allow + ")";
+            if (c.at_most) {
+                head += ".AtMost(" + std::to_string(c.at_most->count) + ", " + api_detail::duration(c.at_most->per) + ")";
+                uses_time = true;
+            }
             // An update changes only what its forms ask for, so editing an issue's
             // title can't also set its status.
             // It also changes what its changes statements name, for a hand-written

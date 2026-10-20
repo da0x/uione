@@ -1,0 +1,31 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// How often each person may ask, for the highlighting test: at most on a project, an
+// entity and a command, with each time it takes.
+
+import one
+
+project desk {
+	at most 10 per second
+	at most 5000 per day
+}
+
+namespace desk {
+
+	entity ticket {
+		at most 10 per day
+		title  text  required
+	}
+
+	command ticket::create {
+		by anyone signed in
+		at most 30 per hour
+	}
+
+	command ticket::update {
+		by anyone signed in
+		at most 5 per minute
+	}
+
+} // namespace desk

@@ -1057,6 +1057,15 @@ namespace one::language {
                 error(imports_at_, "a project's file says import one, uione's own library, which says what a project may say",
                       fix{imports_at_, 0, "import one\n\n"});
             }
+            // at most 600 per minute: every command's, and at most 5000 per day: every
+            // entity's. Each is said once.
+            bool rate = false, daily = false;
+            for (const auto& limit : p.at_most) {
+                verify_at_most(limit, {"second", "minute", "hour", "day"}, "per second, minute, hour or day, like at most 600 per minute");
+                bool& said = limit.per == "day" ? daily : rate;
+                if (said) error(limit.where, limit.per == "day" ? "a project says once how many of each kind someone may make in a day" : "a project says once how often someone may run each command");
+                said = true;
+            }
             const scope& library = scopes_["one"];
             auto settings_of = [&](std::string_view name) -> const settings_declaration* {
                 auto it = library.settings.find(name);
@@ -1272,6 +1281,13 @@ namespace one::language {
 
         void verify(const std::string& ns, location where, const entity_declaration& e) {
             if (e.gives) verify_giving(ns, e);
+            if (e.at_most) {
+                if (e.at_most->per != "day") {
+                    error(e.at_most->per_where, "on an entity, at most is how many of it each person may make in a day, like at most 10 per day; how often a command may be run is said on the command");
+                } else {
+                    verify_at_most(*e.at_most, {"day"}, "per day, like at most 10 per day");
+                }
+            }
             // entity invitation invites member: one email to match, the member's one
             // person to fill, and everything else the member needs, by the same name.
             if (e.invites) {
@@ -1533,8 +1549,23 @@ namespace one::language {
                               "user, file, a format, or an entity");
         }
 
+        // at most 30 per hour: a count of at least one, and a unit the place takes.
+        void verify_at_most(const at_most& limit, std::initializer_list<std::string_view> units, const std::string& how) {
+            if (limit.count < 1 || limit.count > 1000000) error(limit.where, "at most is a count from 1 to 1000000, like " + how);
+            if (std::find(units.begin(), units.end(), limit.per) == units.end()) error(limit.per_where, "'" + limit.per + "' isn't a time this takes; say " + how);
+        }
+
         void verify(const std::string& ns, location where, const command_declaration& c) {
             snake(c.name);
+            // A command's at most counts what each caller asks in a short while. What
+            // they make in a day is counted on the entity, so it's exact.
+            if (c.at_most) {
+                if (c.at_most->per == "day") {
+                    error(c.at_most->per_where, "a command's at most is per second, minute or hour; how many of a kind each person may make in a day is said on the entity, like at most 10 per day");
+                } else {
+                    verify_at_most(*c.at_most, {"second", "minute", "hour"}, "per second, minute or hour, like at most 30 per hour");
+                }
+            }
             if (c.name.parts.size() != 2) {
                 error(c.name.where, "a command is named after its entity, like book::create");
                 return;
