@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/firestore"
@@ -425,4 +426,30 @@ func TestARequestIsBounded(t *testing.T) {
 	h.expect("studio/handle/create", ada, map[string]any{"name": "ada", "tags": many}, http.StatusBadRequest, "Tags can hold at most 1000")
 	h.expect("studio/project/delete", ada, map[string]any{"id": "a/b"}, http.StatusNotFound, "that doesn't exist")
 	h.expect("studio/project/delete", ada, map[string]any{"id": "__name__"}, http.StatusNotFound, "that doesn't exist")
+}
+
+func TestMakingTooFastIsRefusedWithHowLongToWait(t *testing.T) {
+	h := start(t)
+	_, ada := h.signUp("ada@example.com")
+	_, grace := h.signUp("grace@example.com")
+	for i := range 20 {
+		h.mustRun("studio/project/create", ada, map[string]any{"name": fmt.Sprint("p", i)})
+	}
+	body, _ := json.Marshal(map[string]any{"name": "one too many"})
+	request, _ := http.NewRequest(http.MethodPost, h.server.URL+"/api/studio/project/create", bytes.NewReader(body))
+	request.Header.Set("Authorization", "Bearer "+ada)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	reply := map[string]any{}
+	json.NewDecoder(response.Body).Decode(&reply)
+	if response.StatusCode != http.StatusTooManyRequests || response.Header.Get("Retry-After") == "" ||
+		fmt.Sprint(reply["retry_after"]) != response.Header.Get("Retry-After") ||
+		!strings.HasPrefix(fmt.Sprint(reply["error"]), "you're making things too fast; wait ") {
+		t.Fatalf("the 21st project at once is refused: %d %q %v", response.StatusCode, response.Header.Get("Retry-After"), reply)
+	}
+	// Grace isn't held up by Ada.
+	h.mustRun("studio/project/create", grace, map[string]any{"name": "grace's"})
 }

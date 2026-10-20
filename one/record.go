@@ -262,6 +262,9 @@ func label(name string) string {
 type Failure struct {
 	Status  int
 	Message string
+	// RetryAfter, when set, is how long to wait before asking again, sent as the
+	// answer's Retry-After.
+	RetryAfter time.Duration
 }
 
 func (f *Failure) Error() string { return f.Message }

@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -288,46 +287,11 @@ func (a *App) keyed(ctx context.Context, key string) (service, place string, err
 	}
 	service, _ = snap.Data()["service"].(string)
 	place, _ = snap.Data()["place"].(string)
-	if !a.allowKey(id) {
-		return "", "", &Failure{Status: 429, Message: "too many requests with this key; slow down"}
+	if err := a.allow("key", id, keyRate, "using this key"); err != nil {
+		return "", "", err
 	}
 	a.keyUsed(ctx, service)
 	return service, place, nil
-}
-
-// A key may make 10 requests a second, and 30 at once, on each instance of the
-// backend; past that it's told to slow down.
-const (
-	keyRate  = 10.0
-	keyBurst = 30.0
-)
-
-type bucket struct {
-	tokens float64
-	last   time.Time
-}
-
-var (
-	bucketsMu sync.Mutex
-	buckets   = map[string]*bucket{}
-)
-
-func (a *App) allowKey(id string) bool {
-	bucketsMu.Lock()
-	defer bucketsMu.Unlock()
-	now := time.Now()
-	b := buckets[id]
-	if b == nil {
-		b = &bucket{tokens: keyBurst, last: now}
-		buckets[id] = b
-	}
-	b.tokens = min(keyBurst, b.tokens+now.Sub(b.last).Seconds()*keyRate)
-	b.last = now
-	if b.tokens < 1 {
-		return false
-	}
-	b.tokens--
-	return true
 }
 
 // keyUsed notes when a service last used its key, at most once an hour, so its

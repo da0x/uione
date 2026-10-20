@@ -162,6 +162,10 @@ func (a *App) serveUpload(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusUnauthorized, map[string]any{"error": "sign in to upload a file"})
 		return
 	}
+	if err := a.allow("asking", who.id, askingRate, "uploading"); err != nil {
+		replyFailure(w, a, "uploading", err)
+		return
+	}
 	var asked struct {
 		Name string  `json:"name"`
 		Type string  `json:"type"`
@@ -232,6 +236,12 @@ func (a *App) serveDownload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		replyFailure(w, a, "signing in", err)
 		return
+	}
+	if who.id != "" {
+		if err := a.allow("asking", who.id, askingRate, "downloading"); err != nil {
+			replyFailure(w, a, "downloading", err)
+			return
+		}
 	}
 	p := r.URL.Query().Get("path")
 	missing := map[string]any{"error": "that file isn't there"}

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -207,11 +208,12 @@ func snake(name string) string {
 
 // App is a running backend: the store, sign-in, and everything its modules declare.
 type App struct {
-	store *firestore.Client
-	auth  *auth.Client
-	reg   *registry
-	log   *log.Logger
-	files *files // the bucket files are kept in, for an app with a file field
+	store  *firestore.Client
+	auth   *auth.Client
+	reg    *registry
+	log    *log.Logger
+	files  *files  // the bucket files are kept in, for an app with a file field
+	limits *limits // how fast each caller may still ask
 
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
@@ -276,7 +278,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 			return nil, err
 		}
 	}
-	a := &App{store: store, auth: authClient, reg: reg, log: log.Default()}
+	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits()}
 	if a.files, err = filesFor(ctx, project, reg); err != nil {
 		return nil, err
 	}
@@ -381,6 +383,16 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 		replyFailure(w, a, "signing in", err)
 		return
 	}
+	if who.id != "" {
+		err := a.allow("asking", who.id, askingRate, "asking")
+		if err == nil && strings.HasSuffix(name, "::create") {
+			err = a.allow("making", who.id, makingRate, "making things")
+		}
+		if err != nil {
+			replyFailure(w, a, name, err)
+			return
+		}
+	}
 
 	input := map[string]any{}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil {
@@ -406,7 +418,14 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 func replyFailure(w http.ResponseWriter, a *App, doing string, err error) {
 	var failure *Failure
 	if errors.As(err, &failure) {
-		reply(w, failure.Status, map[string]any{"error": failure.Message})
+		body := map[string]any{"error": failure.Message}
+		if failure.RetryAfter > 0 {
+			// In the body too, for programs whose HTTP client doesn't give them headers.
+			seconds := int(failure.RetryAfter.Seconds())
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+			body["retry_after"] = seconds
+		}
+		reply(w, failure.Status, body)
 		return
 	}
 	a.log.Printf("one: %s failed: %v", doing, err)
@@ -561,6 +580,10 @@ func (a *App) serveSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 	if service, _ := token.Claims["service"].(bool); service {
 		reply(w, http.StatusBadRequest, map[string]any{"error": "a service doesn't sign in; it uses its key"})
+		return
+	}
+	if err := a.allow("signing in", token.UID, signingInRate, "signing in"); err != nil {
+		replyFailure(w, a, "signing in", err)
 		return
 	}
 	a.remember(r.Context(), token)

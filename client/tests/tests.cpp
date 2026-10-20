@@ -4,7 +4,8 @@
 // one::client's tests: reading fields and roles, keeping a sign-in, and, through
 // tests/run, a person signed in to the tasks example on the emulators, watching their
 // list change live as they create a task and complete it, and turned down when they
-// complete it twice.
+// complete it twice, and a program making more than it may at once slowed down
+// rather than stopped.
 
 #include <chrono>
 #include <cstdlib>
@@ -124,6 +125,28 @@ TEST("a person sees their list change live as they create a task and complete it
 	}
 	CHECK(said == "that task is already done");
 	CHECK(status == 400);
+}
+
+TEST("a program making more than it may at once waits as it's told, and every one is made") {
+	std::string server = env("ONE_CLIENT_SERVER");
+	CHECK_SAYING(!server.empty(), "run through client/tests/run, which starts the tasks example's backend");
+	if (server.empty()) return;
+	one::client::session app({.server = server, .project = "demo-uione", .firestore_host = "localhost:8080", .auth_host = "localhost:9099"});
+	std::string token = signed_up("grace");
+	if (token.empty()) return;
+	app.sign_in_with_refresh_token(token);
+	// 20 may be made at once, then one a second: the 21st to the 23rd each wait.
+	auto started = std::chrono::steady_clock::now();
+	int made = 0;
+	for (int i = 0; i < 23; ++i) {
+		try {
+			if (!app.run("tasks::task::create", value(fields{{"title", "Task " + std::to_string(i)}})).empty()) ++made;
+		} catch (const one::client::refused& e) {
+			CHECK_SAYING(false, std::string("task ") + std::to_string(i) + " was turned down: " + e.what());
+		}
+	}
+	CHECK(made == 23);
+	CHECK_SAYING(std::chrono::steady_clock::now() - started >= std::chrono::seconds(2), "the ones past 20 waited to be made");
 }
 
 int main() { return check::run(); }

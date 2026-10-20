@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <thread>
 
 #include "browser.hpp"
 
@@ -211,14 +213,34 @@ namespace one::client {
 		}
 	}  // namespace
 
+	namespace {
+		// An app that says to slow down is asked again once the wait it gives is over,
+		// up to five times, so a program sending many commands slows down rather than
+		// stopping partway. A request turned down this way was never run, so sending it
+		// again is safe.
+		template <class Ask>
+		ember::response patiently(Ask ask) {
+			for (int tries = 1;; ++tries) {
+				auto answer = ask();
+				if (answer.status != 429 || tries == 5) return answer;
+				std::int64_t wait = 1;
+				try {
+					wait = ember::parse_json(answer.body)["retry_after"].as_integer();
+				} catch (...) {
+				}
+				std::this_thread::sleep_for(std::chrono::seconds(std::clamp<std::int64_t>(wait, 1, 60)));
+			}
+		}
+	}  // namespace
+
 	std::string session::post(const std::string& route, const std::string& body) {
-		auto answer = ember::https_post(options_.server + route, credentials(), body);
+		auto answer = patiently([&] { return ember::https_post(options_.server + route, credentials(), body); });
 		if (answer.status != 200) throw refused(answer.status, why(answer));
 		return answer.body;
 	}
 
 	std::string session::read(const std::string& route) {
-		auto answer = ember::https_get(options_.server + route, credentials());
+		auto answer = patiently([&] { return ember::https_get(options_.server + route, credentials()); });
 		if (answer.status != 200) throw refused(answer.status, why(answer));
 		return answer.body;
 	}
