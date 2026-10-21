@@ -302,6 +302,20 @@ namespace one::language {
                 end_line();
                 return {where, std::move(service)};
             }
+            if (word == "extend" && peek(1).kind == token_kind::identifier && peek(1).text == "role") {
+                advance();
+                advance();
+                extend_role_declaration extension;
+                extension.role = parse_qualified_name("the role it adds to, like organizations::owner");
+                expect(token_kind::left_brace, "'{' and the commands it adds, one a line");
+                while (in_block()) {
+                    extension.permissions.push_back(parse_qualified_name("a command it adds, like account::subscribe"));
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(extension)};
+            }
             if (word == "define" && peek(1).kind == token_kind::identifier && peek(1).text == "role") {
                 advance();
                 advance();

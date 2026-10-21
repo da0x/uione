@@ -516,6 +516,14 @@ namespace one::language {
         location keep_where;
     };
 
+    // extend role organizations::owner { account::subscribe }: commands a project adds
+    // to a role another declares, like a hosted edition's billing for the owners of the
+    // open-source app's organizations. Lowering adds them to that role.
+    struct extend_role_declaration {
+        qualified_name role;
+        std::vector<qualified_name> permissions;
+    };
+
     // proofing worked by proofreader, in a workflow whose stages are an enum's
     // choices: the roles that work that stage.
     struct workflow_stage {
@@ -1141,7 +1149,7 @@ namespace one::language {
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
-                     define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration>
+                     define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration, extend_role_declaration>
             node;
     };
 

@@ -651,6 +651,9 @@ namespace one::language {
             }
         }
 
+        // Lowering has added its commands to the role, where they're checked.
+        void verify(const std::string&, location, const extend_role_declaration&) {}
+
         void verify(const std::string& ns, location, const define_role_declaration& r) {
             snake(r.name, r.where);
             for (const auto& h : r.holds) verify_holding(ns, r, h);
@@ -786,7 +789,9 @@ namespace one::language {
                     any = true;
                     auto at = here.defined_at.find(r);
                     for (const auto& d : r->defaults) {
-                        for (const auto& p : d.permissions) allowed[join(ns, p.text())].push_back({&p, at == here.defined_at.end() ? origin{} : at->second});
+                        for (const auto& p : d.permissions) {
+                            allowed[p.parts.size() > 2 ? p.text() : join(ns, p.text())].push_back({&p, at == here.defined_at.end() ? origin{} : at->second});
+                        }
                     }
                 }
             }
@@ -863,10 +868,17 @@ namespace one::language {
                 if (!seen.insert(d.name).second) error(d.where, "every " + r.per + " starts with one " + d.name + "; it's given twice");
                 for (const auto& p : d.permissions) {
                     snake(p);
-                    // What a project's role allows is running commands, so each is one.
-                    auto here = scopes_.find(ns);
-                    if (p.parts.size() != 2 || here == scopes_.end() || !here->second.commands.contains(p.text())) {
-                        error(p.where, d.name + " allows " + p.text() + ", which isn't a command " + in_namespace(ns));
+                    // What a project's role allows is running commands, so each is one: its
+                    // namespace's, or another's named in full, like billing::account::subscribe.
+                    std::string in = ns;
+                    if (p.parts.size() > 2) {
+                        in = p.parts[0];
+                        for (std::size_t i = 1; i + 2 < p.parts.size(); ++i) in += "::" + p.parts[i];
+                    }
+                    auto here = scopes_.find(in);
+                    std::string command = p.parts.size() >= 2 ? p.parts[p.parts.size() - 2] + "::" + p.parts.back() : p.text();
+                    if (p.parts.size() < 2 || here == scopes_.end() || !here->second.commands.contains(command)) {
+                        error(p.where, d.name + " allows " + p.text() + ", which isn't a command " + in_namespace(in));
                     } else {
                         within_scope(ns, *scope, "role " + d.name, p);
                     }

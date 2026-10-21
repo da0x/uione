@@ -298,6 +298,45 @@ namespace one::language {
         //         held     list of text
         //     }
         //     roles role per project from member { maintainer "Maintainer" { ... } }
+        // extend role organizations::owner { account::subscribe }: each command added to
+        // the role it names, said in full when it's another namespace's, so the role
+        // allows it as if it had said it itself.
+        inline void extend_roles(std::vector<file>& files, diagnostics& out) {
+            std::map<std::string, define_role_declaration*> roles;  // by namespace and name
+            std::vector<std::tuple<std::string, const extend_role_declaration*, const std::string*, location>> extensions;
+            std::function<void(std::vector<declaration>&, const std::string&, const std::string&)> find =
+                [&](std::vector<declaration>& ds, const std::string& ns, const std::string& path) {
+                    for (auto& d : ds) {
+                        if (auto* n = std::get_if<namespace_declaration>(&d.node)) find(n->declarations, ns.empty() ? n->name : ns + "::" + n->name, path);
+                        if (auto* r = std::get_if<define_role_declaration>(&d.node)) roles[ns.empty() ? r->name : ns + "::" + r->name] = r;
+                        if (auto* e = std::get_if<extend_role_declaration>(&d.node)) extensions.emplace_back(ns, e, &path, d.where);
+                    }
+                };
+            for (auto& f : files) find(f.declarations, "", f.path);
+            for (const auto& [ns, e, path, where] : extensions) {
+                std::string named = e->role.parts.size() > 1 || ns.empty() ? e->role.text() : ns + "::" + e->role.text();
+                auto role = roles.find(named);
+                if (role == roles.end()) {
+                    out.push_back({*path, e->role.where, "there's no define role " + e->role.text() + " to extend; name it with its namespace, like organizations::owner"});
+                    continue;
+                }
+                std::string role_ns = named.rfind("::") == std::string::npos ? "" : named.substr(0, named.rfind("::"));
+                for (auto p : e->permissions) {
+                    if (p.parts.size() == 2 && ns != role_ns && !ns.empty()) {
+                        std::vector<std::string> full;
+                        for (std::size_t at = 0, next; at <= ns.size(); at = next + 2) {
+                            next = ns.find("::", at);
+                            if (next == std::string::npos) next = ns.size();
+                            full.push_back(ns.substr(at, next - at));
+                        }
+                        full.insert(full.end(), p.parts.begin(), p.parts.end());
+                        p.parts = full;
+                    }
+                    role->second->permissions.push_back(std::move(p));
+                }
+            }
+        }
+
         struct definer {
             diagnostics& out;
             struct place {
@@ -1205,6 +1244,7 @@ namespace one::language {
     } // namespace lowering
 
     inline void lower(std::vector<file>& files, diagnostics& out) {
+        lowering::extend_roles(files, out);
         lowering::reporting(files);
         lowering::inherit_readers(files, out);
         lowering::definer roles{out, {}};

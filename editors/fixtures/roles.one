@@ -45,4 +45,11 @@ namespace guild {
 		hall   hall   required  key
 		email  email  required  key
 	}
+
+	command hall::rent
+
+	// What a hall's people may also do, added to another namespace's role.
+	extend role tracker::maintainer {
+		hall::rent
+	}
 }

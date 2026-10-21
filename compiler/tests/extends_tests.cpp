@@ -145,3 +145,43 @@ TEST_CASE("a project extends one that's there, and never itself") {
     CAPTURE(errors_of(found));
     CHECK(errors_of(found).find("extends itself") != std::string::npos);
 }
+
+TEST_CASE("a project that extends another adds commands to the roles the other defines") {
+    folder("base", "import one\nproject base {\n" + pinned() +
+                       "\tenvironment production {\n\t\tdomain    \"base.example\"\n\t\tfirebase  \"base\"\n\t\tregion    \"us-east4\"\n\t}\n}\n"
+                       "namespace organizations {\n\tentity organization {\n\t\treaders member\n\t\tslug  text  required  unique  key\n\t}\n"
+                       "\tcommand organization::create {\n\t\tby anyone signed in\n\t}\n\tcommand organization::update\n"
+                       "\tdefine role owner \"Owner\" in organization {\n\t\torganization::update\n\t}\n}\n");
+    auto cloud = [](const std::string& role) {
+        return folder("cloud", "import one\nproject cloud {\n" + pinned() +
+                                   "\textends base\n}\n"
+                                   "namespace billing {\n\tentity account {\n\t\torganization  organizations::organization  required  key\n\t\tplan  text\n\t}\n"
+                                   "\tcommand account::subscribe\n"
+                                   "\textend role " + role + " {\n\t\taccount::subscribe\n\t}\n}\n");
+    };
+    language::diagnostics found;
+    std::vector<language::file> files;
+    check_project(cloud("organizations::owner").string(), found, &files);
+    CAPTURE(errors_of(found));
+    CHECK(found.empty());
+    // The owner allows the other namespace's command, named in full.
+    const language::roles_declaration* roles = nullptr;
+    for (const auto& f : files) {
+        for (const auto& d : f.declarations) {
+            auto* n = std::get_if<language::namespace_declaration>(&d.node);
+            if (!n || n->name != "organizations") continue;
+            for (const auto& inner : n->declarations) {
+                if (auto* r = std::get_if<language::roles_declaration>(&inner.node)) roles = r;
+            }
+        }
+    }
+    REQUIRE(roles != nullptr);
+    REQUIRE(roles->defaults.size() == 1);
+    std::vector<std::string> allows;
+    for (const auto& p : roles->defaults[0].permissions) allows.push_back(p.text());
+    CHECK(allows == std::vector<std::string>{"organization::update", "billing::account::subscribe"});
+
+    language::diagnostics wrong;
+    check_project(cloud("organizations::ownr").string(), wrong);
+    CHECK(errors_of(wrong).find("there's no define role organizations::ownr to extend; name it with its namespace, like organizations::owner") != std::string::npos);
+}

@@ -1123,6 +1123,13 @@ namespace projects {
   a member is: what they may do, which pages they read, and which change when it
   does. Each namespace has its own roles, so an organization's and a project's
   live in two.
+- `extend role organizations::owner { account::subscribe }` adds commands to a
+  role another namespace defines, as a project that `extends` another adds its own
+  to the roles of the app it builds on: a hosted edition's billing, for the owners
+  of the open-source app's organizations, which says nothing about billing. Each
+  command is its own namespace's, so the role allows `billing::account::subscribe`,
+  and a role can name another namespace's command in full that way itself. Places
+  made before get it too: the next start adds it to each one's role of that name.
 - `keep at least 1 owner`, in role owner, means a place is never left with fewer
   of that role: removing the last owner, or the last of however many it says, is
   refused, with "an organization keeps at least one owner; make someone else an

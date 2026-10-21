@@ -84,9 +84,35 @@ var crews = one.Module("crew",
 		return nil
 	}),
 	one.Roles(one.Entity[Rank](), one.Entity[Crew](), one.Entity[Hand](), "may").
-		Default("captain", "Captain", "hand::create", "rank::create", "rank::update", "job::create", "job::update", "job::move", "stage::create", "leg::create").
+		Default("captain", "Captain", "hand::create", "rank::create", "rank::update", "job::create", "job::update", "job::move", "stage::create", "leg::create",
+			"galley::pantry::create").
 		Default("deckhand", "Deckhand", "job::create", "job::move"),
 )
+
+// A crew's pantry, in a module of its own, which the captain stocks: a role allowing
+// another namespace's command, as one a project extending another adds to its roles.
+type Pantry struct {
+	one.Record
+	Crew  string `firestore:"crew" one:"required,key,refers=crew::crew"`
+	Stock string `firestore:"stock"`
+}
+
+var galley = one.Module("galley", one.Command[Pantry]("pantry::create"))
+
+func init() { modules = append(modules, galley) }
+
+func TestARoleAllowsAnotherNamespacesCommandNamedInFull(t *testing.T) {
+	h := start(t)
+	_, captain := h.signUp("cyd@example.com")
+	deckhand, token := h.signUp("dee@example.com")
+	_, stranger := h.signUp("sal@example.com")
+	h.mustRun("crew/crew/create", captain, map[string]any{"slug": "skiff"})
+	h.mustRun("crew/crew/create", stranger, map[string]any{"slug": "raft"})
+	h.mustRun("crew/hand/create", captain, map[string]any{"crew": "skiff", "person": deckhand, "rank": one.Key("skiff", "deckhand")})
+	h.mustRun("galley/pantry/create", captain, map[string]any{"crew": "skiff", "stock": "biscuits"})
+	h.expect("galley/pantry/create", token, map[string]any{"crew": "skiff", "stock": "rum"}, 403, "you don't have permission to do this")
+	h.expect("galley/pantry/create", stranger, map[string]any{"crew": "skiff", "stock": "rum"}, 403, "you don't have permission to do this")
+}
 
 func TestACrewStartsWithItsDefaultRolesAndItsMakerAsCaptain(t *testing.T) {
 	h := start(t)
@@ -235,7 +261,7 @@ func TestWhatADeployAddsToTheRolesCrewsStartWithReachesEveryCrew(t *testing.T) {
 	}
 	defer later.Close()
 	captain := h.stored("crew_rank", one.Key("junk", "captain"))
-	if may, _ := captain["may"].([]any); len(may) != 9 || may[8] != "stage::delete" {
+	if may, _ := captain["may"].([]any); len(may) != 10 || may[9] != "stage::delete" {
 		t.Fatalf("the captain after the deploy may %v", captain["may"])
 	}
 	// What the crew took away stays away, since the deploy didn't add it.

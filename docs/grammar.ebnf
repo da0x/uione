@@ -44,7 +44,7 @@
 
 file           ::= declaration* EOF
 
-declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | define_service | define_theme | define_workflow | define_agent
+declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | extend_role | define_service | define_theme | define_workflow | define_agent
                  | function | screen | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
@@ -181,6 +181,7 @@ role           ::= "role" NAME qualified* ("{" NEWLINE? (qualified+ END)* "}")? 
  * a line, and the roles it holds in each of what's within, like an organization's
  * owner maintaining each of its projects. */
 define_role    ::= "define" "role" NAME STRING "in" NAME ("for" "services")? "{" NEWLINE? ((qualified | "holds" qualified "in" "each" qualified | "keep" "at" "least" NUMBER NAME) END)* "}" END
+extend_role    ::= "extend" "role" qualified "{" NEWLINE? (qualified END)* "}" END
 /* define workflow: the rules an entity moves by, along a field pointing at its
  * stages: the stage's field listing the roles that work it, the entity of steps
  * between them, and how long a claim lasts. Along a field of choices, its stages

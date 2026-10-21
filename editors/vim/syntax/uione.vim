@@ -69,6 +69,8 @@ syn match   uioneType      +\%(^\s*define\s\+\%(role\|service\)\s\+\h\w*\s\+"[^"
 " define role maintainer "Maintainer" in project: a role each project starts with;
 " define service github "GitHub" in project, a system that runs commands.
 syn match   uioneDeclare   "^\s*\zs\<define\>\s\+\%(role\|service\|theme\|workflow\|agent\)\>" nextgroup=uioneName skipwhite
+" extend role organizations::owner: commands added to a role another project defines.
+syn match   uioneDeclare   "^\s*\zs\<extend\>\s\+role\>" nextgroup=uioneQualifier,uioneName skipwhite
 syn match   uioneLiteral   "\S.*$" contained
 
 syn match uioneCall     "\<\h\w*\ze\s*("

@@ -145,6 +145,24 @@
           }
         },
         {
+          "comment": "extend role organizations::owner: commands added to a role another project defines.",
+          "match": "^\\s*(extend)\\s+(role)\\s+((?:[A-Za-z_]\\w*::)*)([A-Za-z_]\\w*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.uione"
+            },
+            "2": {
+              "name": "storage.type.uione"
+            },
+            "3": {
+              "name": "entity.name.namespace.uione"
+            },
+            "4": {
+              "name": "entity.name.type.uione"
+            }
+          }
+        },
+        {
           "comment": "define role maintainer \"Maintainer\" in project: a role each project starts with.",
           "match": "^\\s*(define)\\s+(role|service|theme|workflow|agent)\\s+([A-Za-z_]\\w*)(?:\\s+(\"[^\"]*\")\\s+(in)\\s+([A-Za-z_]\\w*))?",
           "captures": {
