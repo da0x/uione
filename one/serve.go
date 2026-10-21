@@ -123,6 +123,7 @@ type registry struct {
 	named     map[string]bool
 	twice     []string // roles given more than once, which is a mistake
 	hooks     []*GitHubSpec
+	stripe    *StripeSpec    // Stripe's webhook and customer, when the app sells subscriptions
 	services  []*ServiceSpec // systems that run commands, not people
 	schemas   map[reflect.Type]*schema
 
@@ -221,6 +222,7 @@ type App struct {
 	limits *limits // how fast each caller may still ask
 
 	disabled *disabledAccounts // who has been turned off, as Firebase last said
+	stripe   *stripeAPI        // how Stripe is called, when the app uses it
 
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
@@ -287,7 +289,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 			return nil, err
 		}
 	}
-	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits(), disabled: newDisabledAccounts()}
+	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits(), disabled: newDisabledAccounts(), stripe: stripeFromEnvironment()}
 	if a.files, err = filesFor(ctx, project, reg); err != nil {
 		return nil, err
 	}
@@ -368,6 +370,9 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /api/files", a.serveDownload)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
+	}
+	if s := a.reg.stripe; s != nil {
+		mux.HandleFunc("POST "+s.route, a.serveStripe(s))
 	}
 	routesMu.Lock()
 	defer routesMu.Unlock()

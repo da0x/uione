@@ -451,6 +451,57 @@ func TestGitHubsSecretIsMadeKeptAndReadableByTheBackendAlone(t *testing.T) {
 	}
 }
 
+func TestStripesSecretsAreKeptAndReadableByTheBackendAlone(t *testing.T) {
+	m, err := declareChanged(t, build(t), `{"uione:stripe_secret_key": "sk_test_x", "uione:stripe_webhook_secret": "whsec_x"}`, "000000-000000-000000",
+		func(p *Project) { p.Stripe = "/hooks/stripe" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.get(t, "gcp:projects/service:Service::secretmanager.googleapis.com")
+	container := m.get(t, "gcp:cloudrunv2/service:Service::backend")["template"].ObjectValue()["containers"].ArrayValue()[0].ObjectValue()
+	for name, variable := range map[string]string{"stripe-secret-key": "STRIPE_SECRET_KEY", "stripe-webhook-secret": "STRIPE_WEBHOOK_SECRET"} {
+		if got := m.get(t, "gcp:secretmanager/secret:Secret::"+name)["secretId"].StringValue(); got != name {
+			t.Errorf("the secret is called %s", got)
+		}
+		access := m.get(t, "gcp:secretmanager/secretIamMember:SecretIamMember::runtime-"+name)
+		if access["role"].StringValue() != "roles/secretmanager.secretAccessor" || access["member"].StringValue() != "serviceAccount:uione-api@ui-one.iam.gserviceaccount.com" {
+			t.Errorf("%s can be read by %v as %v", name, access["member"], access["role"])
+		}
+		found := false
+		for _, env := range container["envs"].ArrayValue() {
+			e := env.ObjectValue()
+			if e["name"].StringValue() != variable {
+				continue
+			}
+			found = true
+			if _, plain := e["value"]; plain {
+				t.Errorf("%s is given to the backend as plain text", variable)
+			}
+			if ref := e["valueSource"].ObjectValue()["secretKeyRef"].ObjectValue(); ref["secret"].StringValue() != name {
+				t.Errorf("the backend reads %s from %v", variable, ref)
+			}
+		}
+		if !found {
+			t.Errorf("the backend isn't given %s", variable)
+		}
+	}
+	if ttl := m.get(t, "gcp:firestore/field:Field::expire-stripe_events-expires"); ttl["collection"].StringValue() != "stripe_events" || ttl["field"].StringValue() != "expires" {
+		t.Errorf("Stripe's events expire as %v", ttl)
+	}
+}
+
+func TestStripeWithNoSecretsYetDeclaresNone(t *testing.T) {
+	m, err := declareChanged(t, build(t), settings, "000000-000000-000000", func(p *Project) { p.Stripe = "/hooks/stripe" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key := range m.resources {
+		if strings.Contains(key, "secretmanager/secret") {
+			t.Errorf("a project whose owner hasn't set Stripe's secrets declares %s", key)
+		}
+	}
+}
+
 func TestWithoutGitHubThereIsNoSecret(t *testing.T) {
 	m, err := declare(t, build(t), settings)
 	if err != nil {

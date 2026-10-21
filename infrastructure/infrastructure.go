@@ -41,6 +41,8 @@
 //     master secret each project's webhook secret is derived from, as a Pulumi
 //     secret. It's never pasted into GitHub itself; each project's maintainers see
 //     their own secret in the app.
+//   - stripe_webhook_url, when the project sells subscriptions through Stripe: the
+//     address Stripe's webhook endpoint is pointed at.
 package infrastructure
 
 import (
@@ -89,6 +91,13 @@ type Project struct {
 	// secret in the app.
 	GitHub string
 
+	// Where Stripe's webhook comes in, like /hooks/stripe, when the project sells
+	// subscriptions through Stripe. Its secret key and its webhook's signing secret
+	// are the config secrets stripe_secret_key and stripe_webhook_secret, set by the
+	// project's owner from Stripe's dashboard, test ones until they set live ones.
+	// Each is kept in Secret Manager, readable by the backend and nothing else.
+	Stripe string
+
 	// Whether the project has service accounts, programs given a role made for
 	// services. Each trades its key for a Firebase sign-in of its own, a custom token
 	// the backend signs as itself, so the backend may make tokens as its own account.
@@ -136,9 +145,10 @@ func Deploy(p Project) {
 	pulumi.Run(func(ctx *pulumi.Context) error { return Declare(ctx, p) })
 }
 
-// Declare declares a project's resources. The one setting that isn't in the .one
-// files is budget, the monthly amount in the billing account's currency, which is 10
-// unless the program's config sets it.
+// Declare declares a project's resources. The settings that aren't in the .one
+// files are budget, the monthly amount in the billing account's currency, which is
+// 10 unless the program's config sets it, and Stripe's secrets, for a project that
+// uses Stripe.
 func Declare(ctx *pulumi.Context, p Project) error {
 	if err := p.check(); err != nil {
 		return err
@@ -151,7 +161,7 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	opt := func(deps ...pulumi.Resource) pulumi.ResourceOrInvokeOption { return pulumi.DependsOn(deps) }
 
 	needed := append([]string(nil), apis...)
-	if p.GitHub != "" {
+	if p.GitHub != "" || p.Stripe != "" {
 		needed = append(needed, "secretmanager.googleapis.com")
 	}
 	// A custom token, a service's or a program's, or an address for a file, is
@@ -280,6 +290,22 @@ func Declare(ctx *pulumi.Context, p Project) error {
 		}
 		envs = append(envs, env)
 		backendNeeds = append(backendNeeds, access)
+	}
+	if p.Stripe != "" {
+		for _, name := range []string{"stripe_secret_key", "stripe_webhook_secret"} {
+			value, err := settings.TrySecret(name)
+			if err != nil {
+				// Until it's set, the backend refuses Stripe's webhook and its calls.
+				continue
+			}
+			env, access, err := keptSecret(ctx, project, runtime, after, strings.ReplaceAll(name, "_", "-"), strings.ToUpper(name), value)
+			if err != nil {
+				return err
+			}
+			envs = append(envs, env)
+			backendNeeds = append(backendNeeds, access)
+		}
+		ctx.Export("stripe_webhook_url", pulumi.Sprintf("https://%s%s", p.Domain, p.Stripe))
 	}
 	if p.Files {
 		env, access, err := filesBucket(ctx, p, project, runtime, after)
@@ -556,6 +582,47 @@ func githubSecret(ctx *pulumi.Context, p Project, project pulumi.StringInput, ru
 	return env, pulumi.Resource(access), nil
 }
 
+// keptSecret keeps a secret given to the project, like Stripe's key, in Secret
+// Manager, readable by the backend and nothing else, which reads it as an
+// environment variable.
+func keptSecret(ctx *pulumi.Context, project pulumi.StringInput, runtime *serviceaccount.Account, after pulumi.ResourceOrInvokeOption,
+	id, variable string, value pulumi.StringOutput) (*cloudrunv2.ServiceTemplateContainerEnvArgs, pulumi.Resource, error) {
+	secret, err := secretmanager.NewSecret(ctx, id, &secretmanager.SecretArgs{
+		Project:     project,
+		SecretId:    pulumi.String(id),
+		Replication: &secretmanager.SecretReplicationArgs{Auto: &secretmanager.SecretReplicationAutoArgs{}},
+	}, after)
+	if err != nil {
+		return nil, nil, err
+	}
+	version, err := secretmanager.NewSecretVersion(ctx, id, &secretmanager.SecretVersionArgs{
+		Secret:     secret.ID(),
+		SecretData: value,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	access, err := secretmanager.NewSecretIamMember(ctx, "runtime-"+id, &secretmanager.SecretIamMemberArgs{
+		Project:  project,
+		SecretId: secret.SecretId,
+		Role:     pulumi.String("roles/secretmanager.secretAccessor"),
+		Member:   pulumi.Sprintf("serviceAccount:%s", runtime.Email),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	env := &cloudrunv2.ServiceTemplateContainerEnvArgs{
+		Name: pulumi.String(variable),
+		ValueSource: &cloudrunv2.ServiceTemplateContainerEnvValueSourceArgs{
+			SecretKeyRef: &cloudrunv2.ServiceTemplateContainerEnvValueSourceSecretKeyRefArgs{
+				Secret:  secret.SecretId,
+				Version: version.Version,
+			},
+		},
+	}
+	return env, pulumi.Resource(access), nil
+}
+
 var (
 	projectNames = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 	firebaseIds  = regexp.MustCompile(`^[a-z][a-z0-9-]{4,28}[a-z0-9]$`)
@@ -665,6 +732,18 @@ func indexes(ctx *pulumi.Context, p Project, project pulumi.StringInput, options
 		TtlConfig:  &firestore.FieldTtlConfigArgs{},
 	}, options...); err != nil {
 		return err
+	}
+	// And the Stripe events it has handled, so one sent again is handled once.
+	if p.Stripe != "" {
+		if _, err := firestore.NewField(ctx, "expire-stripe_events-expires", &firestore.FieldArgs{
+			Project:    project,
+			Database:   pulumi.String("(default)"),
+			Collection: pulumi.String("stripe_events"),
+			Field:      pulumi.String("expires"),
+			TtlConfig:  &firestore.FieldTtlConfigArgs{},
+		}, options...); err != nil {
+			return err
+		}
 	}
 	written, err := os.ReadFile(filepath.Join(p.Build, "firestore.indexes.json"))
 	if errors.Is(err, os.ErrNotExist) {
