@@ -197,11 +197,11 @@ TEST_CASE("Stripe's webhook and calls become the runtime's, and its route goes t
     CAPTURE(code);
     CHECK(has(code, R"(var WebhookStripe = one.Stripe("/hooks/stripe").For(one.Entity[Organization]()).As("stripe").)"));
     CHECK(has(code, "OnSubscription(func(c *one.Ctx, s one.Subscription) error {"));
-    CHECK(has(code, "one.DispatchUpdate(c, s.Of, func(e *Organization) { e.Plan = s.Price; e.Seats = float64(s.Quantity); e.Renews = s.PeriodEnd }, nil, nil)"));
-    CHECK(has(code, "one.DispatchUpdate(c, i.Of, func(e *Organization) { e.Paid = i.Paid }, nil, nil)"));
+    CHECK(has(code, "one.DispatchUpdate(c, s.Of, func(e *Organization) {\n\t\t\te.Plan = s.Price\n\t\t\te.Seats = float64(s.Quantity)\n\t\t\te.Renews = s.PeriodEnd\n\t\t}, nil, nil); err != nil {"));
+    CHECK(has(code, "one.DispatchUpdate(c, i.Of, func(e *Organization) {\n\t\t\te.Paid = i.Paid\n\t\t}, nil, nil); err != nil {"));
     CHECK(has(code, "priceKey, _ := c.Input(\"price_key\").(string)"));
     CHECK(has(code, R"(c.StripeCheckout(o.ID, one.Price{LookupKey: priceKey}, int(o.Seats), "https://shop.example/billing", "https://shop.example/billing"))"));
-    CHECK(has(code, R"(c.StripePortal(o.ID, "https://shop.example/organizations/" + url.PathEscape(o.Slug) + "/billing"))"));
+    CHECK(has(code, R"(c.StripePortal(o.ID, "https://shop.example/organizations/"+url.PathEscape(o.Slug)+"/billing"))"));
     CHECK(has(code, "import (\n\t\"net/url\"\n\t\"time\"\n\n"));
     CHECK(has(code, "c.StripeChange(o.ID, one.Price{LookupKey: priceKey}, int(o.Seats))"));
     CHECK(has(code, "c.StripeCancel(o.ID, false)"));

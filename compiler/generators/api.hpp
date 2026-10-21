@@ -1487,8 +1487,9 @@ namespace one::generators {
                         std::size_t close = address.find('}', open);
                         if (close == std::string::npos) break;
                         std::string field = address.substr(open + 1, close - open - 1);
-                        joined += api_detail::go_string(address.substr(from, open - from)) + " + url.PathEscape(" + me + "." +
-                                  (field == "id" ? std::string("ID") : api_detail::go_name(field)) + ") + ";
+                        // Without spaces, as gofmt writes + among a call's arguments.
+                        joined += api_detail::go_string(address.substr(from, open - from)) + "+url.PathEscape(" + me + "." +
+                                  (field == "id" ? std::string("ID") : api_detail::go_name(field)) + ")+";
                         from = close + 1;
                     }
                     given[v.name] = joined + api_detail::go_string(address.substr(from));
@@ -2394,15 +2395,18 @@ namespace one::generators {
                             return false;
                         }
                         fields += (d->command.parts[1] == "create" ? (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value
-                                                                   : "e." + api_detail::go_name(f->name) + " = " + *value + "; ");
+                                                                   : "e." + api_detail::go_name(f->name) + " = " + *value + "\n");
                     }
                     std::string type = api_detail::go_name(target->name);
                     std::string run = body ? body_function(d->command.text()) : std::string("nil");
                     if (d->command.parts[1] == "create") {
                         out.open("if err := one.DispatchCreate(c, &" + type + "{" + fields + "}, nil, " + run + "); err != nil {");
                     } else {
-                        if (!fields.empty()) fields.pop_back(), fields.pop_back();
-                        out.open("if err := one.DispatchUpdate(c, " + id + ", func(e *" + type + ") { " + fields + " }, nil, " + run + "); err != nil {");
+                        // A line each, as gofmt writes a function past a few of them.
+                        out.open("if err := one.DispatchUpdate(c, " + id + ", func(e *" + type + ") {");
+                        for (std::size_t at = 0, next; (next = fields.find('\n', at)) != std::string::npos; at = next + 1) out.line(fields.substr(at, next - at));
+                        out.dedent();
+                        out.open("}, nil, " + run + "); err != nil {");
                     }
                     out.line("return err");
                     out.close("}");
