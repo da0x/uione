@@ -503,7 +503,7 @@
           "name": "keyword.other.uione"
         },
         {
-          "match": "\\b(?:required|unique|after|key)\\b",
+          "match": "\\b(?:required|unique|searchable|after|key)\\b",
           "name": "storage.modifier.uione"
         },
         {

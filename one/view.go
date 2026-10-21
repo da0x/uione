@@ -1502,6 +1502,12 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 			}
 		}
 	}
+	return a.shaped(ctx, l, subject, docs)
+}
+
+// shaped makes a list's rows of what it picked: in its order, kept to its limit, each
+// with the fields it shows, read through what they point at.
+func (a *App) shaped(ctx context.Context, l *list, subject string, docs []*firestore.DocumentSnapshot) ([]any, error) {
 	// Newest first, by when each was made, so the order never depends on the store.
 	// A list in an order of its own, like by position, keeps the ones that tie in the
 	// order they were made, so a new one goes after the others.
@@ -1566,9 +1572,11 @@ func (a *App) rows(ctx context.Context, l *list, subject string) ([]any, error) 
 			}
 			switch ids := doc.Data()[through].(type) {
 			case string:
-				if row[name], err = read(ids); err != nil {
+				value, err := read(ids)
+				if err != nil {
 					return nil, err
 				}
+				row[name] = value
 			case []any: // through each in a list: every assignee's name
 				values := []any{}
 				for _, item := range ids {

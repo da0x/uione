@@ -16,6 +16,7 @@
 // The indexes Firestore needs to read a list kept to its newest rows, newest first,
 // as the one library asks it to: for each way the list is picked by, the fields its
 // conditions compare, then created_at, newest first. A list read whole needs none.
+// A list a find box searches by words needs one too: the same fields, and the words.
 // They're written to firestore.indexes.json, and the deploy declares each one, with
 // the collections whose records expire, like suspensions after 90 days.
 
@@ -68,6 +69,7 @@ namespace one::generators {
             explicit finder(const std::vector<language::file>& files) {
                 for (const auto& f : files) entities_in("", f.declarations, entities_);
                 for (const auto& f : files) walk("", f.declarations);
+                for (const auto& [ns, source] : finds_) searched(ns, *source);
             }
 
             std::set<index> found;
@@ -77,6 +79,44 @@ namespace one::generators {
 
         private:
             std::map<std::string, const language::entity_declaration*> entities_;
+            std::map<std::string, const language::view_declaration*> views_;
+            std::vector<std::pair<std::string, const language::find_source*>> finds_;  // with the namespace it's in
+
+            void items(const std::string& ns, const std::vector<language::screen_item>& all) {
+                for (const auto& i : all) {
+                    if (auto* block = std::get_if<language::content_block>(&i.node)) items(ns, block->items);
+                    if (auto* box = std::get_if<language::find_item>(&i.node)) {
+                        for (const auto& source : box->sources) finds_.emplace_back(ns, &source);
+                    }
+                }
+            }
+
+            // A find box's list, when it's found by a searchable field its rows don't
+            // hold: the server asks for its rows holding a word, the newest first.
+            void searched(const std::string& ns, const language::find_source& source) {
+                std::string name = source.view.parts.size() == 1 ? joined(ns, source.view.parts[0]) : source.view.text();
+                auto view = views_.find(name);
+                if (view == views_.end()) return;
+                std::string view_ns = name.rfind("::") == std::string::npos ? "" : name.substr(0, name.rfind("::"));
+                for (const auto& each : view->second->each) {
+                    if (!(each.name ? *each.name == source.list : source.list.empty()) || each.changes) continue;
+                    auto* listed = std::get_if<language::name_expression>(&each.source->node);
+                    auto entity = listed ? entities_.find(joined(view_ns, listed->name.parts.back())) : entities_.end();
+                    if (entity == entities_.end()) return;
+                    bool words = false;
+                    for (const auto& by : source.by) {
+                        const auto* f = field_of(*entity->second, by);
+                        bool shown = std::any_of(each.rows.begin(), each.rows.end(), [&](const language::view_value& row) {
+                            return (row.name ? *row.name : web_detail::text_of(*row.value)) == by;
+                        });
+                        words = words || (f && f->searchable && !shown);
+                    }
+                    if (!words) return;
+                    std::vector<index_field> also{{"search_words", true}};
+                    for (const auto& [within, _] : each.within) also.push_back({within, false});
+                    list(view_ns, each, also);
+                }
+            }
 
             void walk(const std::string& ns, const std::vector<language::declaration>& declarations) {
                 for (const auto& d : declarations) {
@@ -90,15 +130,17 @@ namespace one::generators {
                             expiring.insert(collection);
                         }
                     }
+                    if (auto* screen = std::get_if<language::screen_declaration>(&d.node)) items(ns, screen->items);
                     auto* v = std::get_if<language::view_declaration>(&d.node);
                     if (!v) continue;
+                    views_[joined(ns, v->name)] = v;
                     for (const auto& each : v->each) {
                         if (newest_first(each)) list(ns, each);
                     }
                 }
             }
 
-            void list(const std::string& ns, const language::view_each& each) {
+            void list(const std::string& ns, const language::view_each& each, const std::vector<index_field>& also = {}) {
                 auto* source = std::get_if<language::name_expression>(&each.source->node);
                 if (!source || source->name.parts.size() != 1) return;
                 auto entity = entities_.find(joined(ns, source->name.parts[0]));
@@ -126,23 +168,26 @@ namespace one::generators {
                     else rest.push_back(part);
                 }
                 if (ways.empty()) {
-                    add(collection, *entity->second, rest);
+                    add(collection, *entity->second, rest, also);
                     return;
                 }
                 for (const auto* way : ways) {
                     std::vector<const language::expression*> all = rest;
                     split(*way, all, language::token_kind::logical_and);
-                    add(collection, *entity->second, all);
+                    add(collection, *entity->second, all, also);
                 }
             }
 
             // One way's index: the fields compared with == or has, in name order, then when
-            // each was made. A != is checked on what comes back, so it needs no field.
-            void add(const std::string& collection, const language::entity_declaration& entity, const std::vector<const language::expression*>& conditions) {
-                std::vector<index_field> fields;
+            // each was made. A != is checked on what comes back, so it needs no field, as
+            // is an == none, which the store can't ask of a field that's missing.
+            void add(const std::string& collection, const language::entity_declaration& entity, const std::vector<const language::expression*>& conditions,
+                     const std::vector<index_field>& also) {
+                std::vector<index_field> fields = also;
                 for (const auto* part : conditions) {
                     auto* b = std::get_if<language::binary_expression>(&part->node);
                     if (!b || (b->op != language::token_kind::equal && b->op != language::token_kind::has)) continue;
+                    if (web_detail::text_of(*b->right) == "none") continue;
                     std::string name;
                     bool has = b->op == language::token_kind::has;
                     if (auto* n = std::get_if<language::name_expression>(&b->left->node); n && n->name.parts.size() == 1) {

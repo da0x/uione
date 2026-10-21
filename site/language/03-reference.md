@@ -465,7 +465,7 @@ entity loan {
   counts within each book, so every book's loans start from 1. Two made at the same
   moment never get the same number, and nobody types one: a form can't ask for it
   and a command can't set it.
-- Rules: `required`, `unique`, `after <field>`, and `key`.
+- Rules: `required`, `unique`, `searchable`, `after <field>`, and `key`.
 - `key` makes the field the entity's id. A book with shelf mark HIS-0142 is
   `HIS-0142`, and its page is `/books/HIS-0142`. With several key fields their
   values are joined by dashes, so the third loan of that book is `HIS-0142-3`.
@@ -629,6 +629,12 @@ What a field must be, written after its type: `shelfmark  shelfmark  required  u
 
 - `required`: it always has a value; a form can't leave it empty.
 - `unique`: no two of the entity have the same one.
+- `searchable`: a text or markdown field whose words a find box finds it by, like a
+  wiki page's `body  markdown  searchable`, though the page's list doesn't hold it.
+  Each record keeps its words, lowercased, with accents folded, each once, written
+  with the record and never worked out again. So a search reads only the records
+  holding a word, however many there are. It finds whole words only: `deploy` finds
+  "Deploy the site", and `depl` doesn't.
 - `key`: it names the entity, so its id is made from its key fields, like a book's
   shelfmark, or a project's owner and slug.
 - `after lent_at`: a date that has to come after another field's.
@@ -1738,7 +1744,10 @@ screen "Book" /books/:book {
   number title labels }` is a box that finds rows of several lists, one a line, as
   it's typed in: each list's first eight under its label, each opening its page.
   `#12` or `12` finds the twelfth by number. What's typed is in the address, as
-  `?find=date`.
+  `?find=date`. A searchable field the rows don't hold, like `by title body`, is
+  found by its words: once typing pauses, the server is asked for the newest rows
+  holding every word typed, at most 20, which only the people who may read the
+  list see. Each person, or address when signed out, may search twice a second.
 - A form's field holding a person, or a list of people, picks them from a list on
   the screen whose rows hold a person and their name, like a project's members, each
   person once; a form making one of those rows, like adding a member, doesn't.

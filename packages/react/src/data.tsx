@@ -44,6 +44,10 @@ export interface DataSource {
   auth?: AuthSource;
   // Files, for an app with a file field.
   files?: FileStore;
+  // The rows of a view's list holding every word, as the list shows them, found by
+  // the server in fields marked searchable, which the rows don't hold. It rejects
+  // with a readable message when it can't.
+  search?(view: string, subject: string | undefined, list: string, words: string): Promise<Record<string, unknown>[]>;
 }
 
 // Where an app's files go. A file is uploaded on its own, then a command puts its
@@ -117,6 +121,12 @@ export function useShownOnce(): ShownOnce {
 // Where the app's files go, when it keeps any.
 export function useFiles(): FileStore | undefined {
   return useContext(DataContext)?.files;
+}
+
+// How to search a view's list by its words, when the source can. A source's search
+// reads nothing of this, so it's the same function from one render to the next.
+export function useSearch(): DataSource["search"] {
+  return useContext(DataContext)?.search;
 }
 
 function useSource(): DataSource {

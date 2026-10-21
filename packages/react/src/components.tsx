@@ -13,7 +13,7 @@ import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
-import { fileName, useAuth, useFiles, useRunner } from "./data.js";
+import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, runningTime, shortAddress, show, useLinks, useUI } from "./ui.js";
 import { generate, on, randomSeed, roles, schemeTitle, schemes, written, type PaletteTheme, type Scheme } from "./palette.js";
@@ -560,29 +560,67 @@ let pendingParts: { base: string; parts: string[]; path: string } | undefined;
 // number, title and labels, and its wiki pages by title: each list's first eight,
 // under its label, each opening its page. #12 or 12 finds the twelfth by number.
 // What's typed is kept in the address, so a link shows the same results.
+// How long typing pauses before a search asks the server, so a word is asked for once
+// it's whole, rather than at every letter.
+const searchPause = 400;
+
 export function Find({
   label: words,
   sources,
 }: {
   label: string;
-  sources: { view: ViewState; list: string; label: string; link?: string; keyed?: string[]; by: string[] }[];
+  sources: {
+    view: ViewState;
+    list: string;
+    label: string;
+    link?: string;
+    keyed?: string[];
+    by: string[];
+    // A view's list found by the words of a field its rows don't hold, which the server searches.
+    search?: { view: string; subject?: string };
+  }[];
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
+  const search = useSearch();
   const [query, setQuery] = useAddressState("find");
   const wanted = query.trim().toLowerCase();
   const number = /^#?(\d+)$/.exec(wanted)?.[1];
+  // What the server found for each source, and for what it was asked.
+  const [searched, setSearched] = useState<{ wanted: string; rows: Record<number, Row[]> }>({ wanted: "", rows: {} });
+  const asked = sources.map((source) => (source.search ? `${source.search.view}:${source.search.subject ?? ""}:${source.list}` : "")).join("|");
+  useEffect(() => {
+    if (!search || !/[\p{L}\p{N}]{2}/u.test(wanted) || number !== undefined) return;
+    let current = true;
+    const pause = setTimeout(() => {
+      sources.forEach((source, at) => {
+        if (!source.search) return;
+        search(source.search.view, source.search.subject, source.list, wanted).then(
+          (rows) => current && setSearched((was) => ({ wanted, rows: { ...(was.wanted === wanted ? was.rows : {}), [at]: rowsOf(rows) } })),
+          () => {}, // found by what the rows hold alone
+        );
+      });
+    }, searchPause);
+    return () => {
+      current = false;
+      clearTimeout(pause);
+    };
+    // The sources are new at each render; asked says what they search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, wanted, number, asked]);
   const groups = !wanted
     ? []
-    : sources.flatMap((source) => {
+    : sources.flatMap((source, at) => {
         const numbered = source.by.find((field) => field === "number" || field.endsWith(".number"));
         const named = source.by.find((field) => field !== numbered) ?? source.by[0];
-        const found = rowsOf(source.view.data?.[source.list]).filter((row) =>
+        const held = rowsOf(source.view.data?.[source.list]).filter((row) =>
           number !== undefined && numbered
             ? String(row[numbered]) === number || source.by.some((field) => field !== numbered && show(row[field]).toLowerCase().includes(wanted))
             : source.by.some((field) => show(row[field]).toLowerCase().includes(wanted)),
         );
+        const more = searched.wanted === wanted ? (searched.rows[at] ?? []).filter((row) => !held.some((own) => own.id === row.id)) : [];
+        const found = [...held, ...more];
         if (found.length === 0) return [];
         const results = found.slice(0, 8).map((row) => {
           const to = source.link ? links(rowLink(source.link, row, params, source.keyed)) : undefined;

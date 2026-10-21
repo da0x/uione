@@ -224,6 +224,23 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
 
     files: liveFiles(backend, api, options.fetch ?? ((...args) => fetch(...args))),
 
+    async search(view, subject, list, words) {
+      const asked = new URLSearchParams({ view, list, words });
+      if (subject !== undefined) asked.set("id", subject);
+      const headers: Record<string, string> = {};
+      let response: Response;
+      try {
+        const token = await backend.token();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        response = await (options.fetch ?? fetch)(`${api}/search?${asked}`, { headers });
+      } catch {
+        throw new Error("couldn't reach the server; check your connection and try again");
+      }
+      const reply = (await response.json().catch(() => ({}))) as { rows?: unknown; error?: unknown };
+      if (!response.ok) throw new Error(typeof reply.error === "string" ? reply.error : "something went wrong on our side; try again");
+      return Array.isArray(reply.rows) ? (reply.rows as Record<string, unknown>[]) : [];
+    },
+
     async run(command, input: CommandInput) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       let response: Response;

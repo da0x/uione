@@ -12,6 +12,7 @@ import {
   Command,
   Confirm,
   Details,
+  Find,
   Form,
   Live,
   Table,
@@ -1166,5 +1167,47 @@ describe("something that moved", () => {
     expect(window.location.pathname).toBe("/da0x/roles/review");
     readdress("da0x-review", "da0x-reviewing");
     expect(window.location.pathname).toBe("/da0x/roles/reviewing");
+  });
+});
+
+describe("a find box", () => {
+  function Wiki() {
+    const page = useView("projects::project_page", "neotrac");
+    return (
+      <Find
+        label="Search this project"
+        sources={[{ view: page, list: "pages", label: "Wiki", by: ["title", "body"], search: { view: "projects::project_page", subject: "neotrac" } }]}
+      />
+    );
+  }
+
+  it("finds by the titles it holds at once, and asks the server for the words once typing pauses", async () => {
+    const asked: string[] = [];
+    const source = memorySource({
+      views: {
+        "projects::project_page:neotrac": {
+          pages: [
+            { id: "neotrac-deploying", title: "Deploying" },
+            { id: "neotrac-releases", title: "Releases" },
+          ],
+        },
+      },
+      search: async (view, subject, list, words) => {
+        asked.push(`${view}:${subject}:${list}:${words}`);
+        return [
+          { id: "neotrac-releases", title: "Releases" },
+          { id: "neotrac-signing", title: "Signing" },
+        ];
+      },
+    });
+    renderScreen(source, () => <Wiki />);
+    fireEvent.change(screen.getByLabelText("Search this project"), { target: { value: "releases" } });
+    // What the page holds shows at once; the server isn't asked at every letter.
+    expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Releases"]);
+    expect(asked).toEqual([]);
+    // Once asked, what it found joins what's there, each once.
+    await waitFor(() => expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem")).toHaveLength(2));
+    expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Releases", "Signing"]);
+    expect(asked).toEqual(["projects::project_page:neotrac:pages:releases"]);
   });
 });

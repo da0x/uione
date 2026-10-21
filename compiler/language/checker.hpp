@@ -1367,6 +1367,13 @@ namespace one::language {
                     error(f.initial->where, f.name + " is counted, so it doesn't start with a value");
                 }
                 if (f.range) verify_range(f);
+                // A search finds words, so what's searched holds them.
+                if (f.searchable && (f.list || !f.type || (f.type->text() != "text" && f.type->text() != "markdown"))) {
+                    error(f.searchable_where, f.name + " holds no words to search; only a text or markdown field is searchable");
+                }
+                if (f.searchable && find_field(e, "search_words")) {
+                    error(f.searchable_where, "a " + e.name + " keeps the words of " + f.name + " in search_words, so no field of its own is called that");
+                }
                 if (f.after && !find_field(e, *f.after)) {
                     error(f.where, "'after " + *f.after + "' names a field entity " + e.name + " doesn't have");
                 }
@@ -2783,6 +2790,13 @@ namespace one::language {
             }
         }
 
+        // Whether a list's condition asks whether a list holds something, like assignees
+        // has me: the store asks that of one field at a time, as it does a search.
+        static bool asks_has(const expression& e) {
+            auto* b = std::get_if<binary_expression>(&e.node);
+            return b && (b->op == token_kind::has || asks_has(*b->left) || asks_has(*b->right));
+        }
+
         bool in_rows(const view_each& each, const std::string& key) {
             for (const auto& row : each.rows) {
                 if ((row.name && *row.name == key) || (!row.name && written(*row.value) == key)) return true;
@@ -2946,8 +2960,20 @@ namespace one::language {
                     for (const auto& source : box->sources) {
                         const view_each* list = named_list(ns, source.view, source.list, route);
                         if (!list) continue;
+                        // A field the rows don't hold is found by its words, when it's searchable,
+                        // asking the server, which reads only what holds them.
+                        const entity_declaration* listed = listed_entity(ns, *list);
                         for (const auto& name : source.by) {
-                            if (!in_rows(*list, name)) error(source.where, "view " + source.view.text() + " has no " + name + (source.list.empty() ? "" : " in its " + source.list) + " to find by; add it to the list's block");
+                            if (in_rows(*list, name)) continue;
+                            const field* searched = listed ? find_field(*listed, name) : nullptr;
+                            if (!searched || !searched->searchable) {
+                                error(source.where, "view " + source.view.text() + " has no " + name + (source.list.empty() ? "" : " in its " + source.list) + " to find by; add it to the list's block" +
+                                                        (searched && (!searched->type || searched->type->text() == "text" || searched->type->text() == "markdown") ? ", or mark it searchable, like " + name + "  " + (searched->type ? searched->type->text() : "text") + "  searchable" : ""));
+                            } else if (list->changes) {
+                                error(source.where, "a list of changes isn't searched by its words; find it by what its rows hold");
+                            } else if (list->condition && asks_has(*list->condition)) {
+                                error(source.where, "the list " + source.list + " is picked by has, so it can't be searched by " + name + "'s words too; find it by what its rows hold");
+                            }
                         }
                         if (source.link && !routes_.contains(full_route(ns, *source.link))) {
                             error(source.link_where, "there's no screen at " + full_route(ns, *source.link) + " for what's found to open");

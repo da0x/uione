@@ -328,6 +328,10 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.fillChoices(ctx); err != nil {
 		return nil, err
 	}
+	// Records whose fields searched changed get their words, so they're found.
+	if err := a.wordsChanged(ctx); err != nil {
+		return nil, err
+	}
 	// Then what a deploy changes once, before views are rebuilt, so they show it.
 	if err := a.doOnce(ctx); err != nil {
 		return nil, err
@@ -368,6 +372,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /api/me", a.serveMe)
 	mux.HandleFunc("POST /api/files", a.serveUpload)
 	mux.HandleFunc("GET /api/files", a.serveDownload)
+	mux.HandleFunc("GET /api/search", a.serveSearch)
 	for _, g := range a.reg.hooks {
 		mux.HandleFunc("POST "+g.route, a.serveGitHub(g))
 	}

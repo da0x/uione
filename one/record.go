@@ -98,6 +98,7 @@ type field struct {
 	file     bool   // a file's path in the app's bucket, or a list of them (files.go)
 	through  string // worked out when it's made from what another field points at, like board.project
 	within   string // for a list of roles it starts with: the field naming where they're held, like project
+	searched bool   // its words are kept on the record, for a search to find it by (search.go)
 }
 
 type schema struct {
@@ -183,6 +184,8 @@ func schemaOf(t reflect.Type, entity string) *schema {
 				fd.through = value
 			case "within":
 				fd.within = value
+			case "searchable":
+				fd.searched = true
 			}
 		}
 		s.fields = append(s.fields, fd)
@@ -668,6 +671,9 @@ func (s *schema) data(v reflect.Value) map[string]any {
 			value = []string{} // an empty list is stored as one, so has can ask it
 		}
 		out[f.name] = value
+	}
+	if words := s.words(out); words != nil {
+		out[searchWords] = words
 	}
 	return out
 }

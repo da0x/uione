@@ -312,6 +312,8 @@ namespace one::language {
         bool required = false;
         bool unique = false;
         bool key = false;
+        bool searchable = false;              // body  markdown  searchable: its words kept, for find to search
+        location searchable_where;
         std::optional<std::string> per;       // serial per book: counted within each book
         std::optional<std::string> after;
         // volume  number  from 0 to 100  by 5: the numbers it may hold, each as written,

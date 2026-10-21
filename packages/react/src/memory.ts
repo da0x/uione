@@ -31,6 +31,8 @@ export interface MemoryOptions {
   // Gives the source files, kept as uploaded; with upload, a way of its own to
   // upload them, like one that waits or fails.
   files?: boolean | { upload: FileStore["upload"] };
+  // Searches a view's list by its words, as a server would.
+  search?: DataSource["search"];
 }
 
 export function memorySource(options: MemoryOptions = {}): MemorySource {
@@ -95,6 +97,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
     uploads,
     auth,
     files,
+    search: options.search,
 
     subscribe(view, subject, emit) {
       const k = key(view, subject);

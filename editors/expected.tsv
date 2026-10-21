@@ -222,6 +222,7 @@ compiler/library/one.one	signin      list of signin	list	type
 compiler/library/one.one	enum appearance {	enum	declare
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	color	keyword
 editors/fixtures/body.one	filter "Recent" updated_at > 7 days ago  color green	green	plain
+editors/fixtures/body.one	notes     markdown  searchable	searchable	modifier
 editors/fixtures/environments.one	footer columns {	footer	declare
 editors/fixtures/environments.one	footer columns {	columns	keyword
 editors/fixtures/environments.one	link build.release "uione {build.version}"	build	constant

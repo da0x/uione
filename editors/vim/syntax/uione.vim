@@ -55,7 +55,7 @@ syn keyword uioneKeyword   example nextgroup=uioneLiteral skipwhite
 syn keyword uioneStatement if else return
 " A field's rules, only in an entity's block; elsewhere these words are names, like a
 " column called after.
-syn keyword uioneModifier  contained required unique after key
+syn keyword uioneModifier  contained required unique searchable after key
 " public is a view's modifier, before its block or when, and otherwise a choice's
 " name, as in visibility enum public | private, which stays plain.
 syn match   uioneModifier  /\%(::\||\s*\|\<enum\s\+\)\@<!\<public\>\%(\s*\%({\|$\|when\>\)\)\@=/

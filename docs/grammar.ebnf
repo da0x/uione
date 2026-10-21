@@ -93,7 +93,7 @@ enum_type      ::= "enum" NAME "{" NEWLINE? (choice+ END)* "}" END
 type           ::= "text" | "markdown" | "email" | "slug" | "date" | "number" | serial | "boolean" | "user" | "file" | "data" | list | qualified
 list           ::= "list" "of" ("text" | "user" | "permission" | qualified)
 serial         ::= "serial" ("per" NAME)?
-rule           ::= "required" | "unique" | "key" | "after" NAME
+rule           ::= "required" | "unique" | "key" | "searchable" | "after" NAME
                  | "from" "-"? NUMBER "to" "-"? NUMBER ( "by" NUMBER )?
 
 /* header: what's beside the site's name on every page; a badge shows a value of a

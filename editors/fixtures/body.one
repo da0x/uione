@@ -8,6 +8,7 @@ namespace board {
 
 	entity column {
 		title     text
+		notes     markdown  searchable
 		position  number
 	}
 
@@ -60,7 +61,7 @@ namespace board {
 		}
 		subtitle "The columns"
 		find "Find a column" {
-			columns.columns "Columns" by title
+			columns.columns "Columns" by title notes
 		}
 		timeline columns.changes "What's new" {
 			new when created_at > columns.seen

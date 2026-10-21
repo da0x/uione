@@ -580,6 +580,23 @@ namespace one::generators::screens {
             return e == found->second.end() ? nullptr : e->second;
         }
 
+        // What a find box finds a list's rows by that they don't hold: searchable fields,
+        // like a wiki page's body, which the server searches by their words.
+        std::vector<std::string> searched_by(const std::string& ns, const std::string& view, const std::optional<std::string>& list,
+                                             const std::vector<std::string>& by) const {
+            std::vector<std::string> searched;
+            const auto* entity = listed(ns, view, list);
+            if (!entity) return searched;
+            auto columns = listed_columns(ns, view, list);
+            for (const auto& name : by) {
+                if (std::find(columns.begin(), columns.end(), name) != columns.end()) continue;
+                for (const auto& f : entity->fields) {
+                    if (f.name == name && f.searchable) searched.push_back(name);
+                }
+            }
+            return searched;
+        }
+
         // The columns a view's list holds, as written, like issue.number.
         std::vector<std::string> listed_columns(const std::string& ns, const std::string& view, const std::optional<std::string>& list) const {
             std::vector<std::string> columns;

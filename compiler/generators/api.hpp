@@ -529,6 +529,7 @@ namespace one::generators {
                     if (f.required) rules.push_back("required");
                     if (f.key) rules.push_back("key");
                     if (f.unique) rules.push_back("unique");
+                    if (f.searchable) rules.push_back("searchable");
                     if (f.type && f.type->text() == "serial") rules.push_back(f.per ? "serial=" + *f.per : "serial");
                     if (f.type && f.type->text() == "email") rules.push_back("email");
                     if (f.type && f.type->text() == "slug") rules.push_back("slug");

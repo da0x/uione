@@ -1114,6 +1114,14 @@ namespace one::generators {
                                 one += ", keyed: [" + names + "]";
                             }
                         }
+                        // Words in what the rows don't hold, the server finds.
+                        std::optional<std::string> list;
+                        if (!source.list.empty()) list = source.list;
+                        if (!model_.searched_by(ns, source.view.text(), list, source.by).empty()) {
+                            std::string full = full_view(ns, source.view.text());
+                            auto per = per_entity(full);
+                            one += ", search: { view: " + web_detail::js_string(full) + (per ? ", subject: " + web_detail::js_name(*per + "_id") : std::string()) + " }";
+                        }
                         std::string by;
                         for (const auto& name : source.by) by += (by.empty() ? "" : ", ") + web_detail::js_string(name);
                         sources += (sources.empty() ? "" : ", ") + one + ", by: [" + by + "] }";

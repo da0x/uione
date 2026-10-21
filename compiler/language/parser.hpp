@@ -508,7 +508,7 @@ namespace one::language {
         }
 
         static bool is_field_rule(std::string_view word) {
-            return word == "required" || word == "unique" || word == "key" || word == "after" || word == "from";
+            return word == "required" || word == "unique" || word == "key" || word == "searchable" || word == "after" || word == "from";
         }
 
         entity_declaration parse_entity() {
@@ -676,6 +676,10 @@ namespace one::language {
                 } else if (rule.text == "key") {
                     advance();
                     f.key = true;
+                } else if (rule.text == "searchable") {
+                    advance();
+                    f.searchable = true;
+                    f.searchable_where = rule.where;
                 } else if (rule.text == "after") {
                     advance();
                     f.after = expect(token_kind::identifier, "the field it has to come after").text;
@@ -695,7 +699,7 @@ namespace one::language {
                     f.range = std::move(range);
                 } else {
                     fail(rule.where, "'" + rule.text + "' isn't a field rule; expected required, "
-                                     "unique, key, after or from");
+                                     "unique, key, searchable, after or from");
                 }
             }
             // number  serial  key  "#": what screens call it.
