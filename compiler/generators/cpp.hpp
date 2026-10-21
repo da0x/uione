@@ -703,6 +703,13 @@ namespace one::generators {
             out.line("return ember::parse_json(post(route, body));");
             out.close("}");
             out.line();
+            // A view's method is named by the view, unless another namespace has one of
+            // the same name, like the member_roles each place's roles make: then both
+            // are named by their namespace too, since nothing else tells them apart.
+            std::map<std::string, int> named;
+            for (auto& [ns, at] : namespaces_)
+                if (!ns.empty())
+                    for (const auto& [v, where] : at.views) ++named[v->name];
             for (auto& [ns, at] : namespaces_) {
                 if (ns.empty()) continue;
                 std::string space = cpp_detail::identifier(ns);
@@ -718,8 +725,8 @@ namespace one::generators {
                 }
                 for (const auto& [v, where] : at.views) {
                     auto view_guard = out.from(where.first, where.second);
-                    std::string name = cpp_detail::identifier(v->name);
-                    std::string type = space + "::" + name;
+                    std::string type = space + "::" + cpp_detail::identifier(v->name);
+                    std::string name = cpp_detail::identifier(named[v->name] > 1 ? ns + "_" + v->name : v->name);
                     if (!v->per) {
                         out.line("live<" + type + "> " + name + "() { connect(); return {*store_, " + type + "::path()}; }");
                     } else if (*v->per == "user") {

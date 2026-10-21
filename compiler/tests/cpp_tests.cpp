@@ -189,6 +189,50 @@ int main() {
     fs::remove_all(dir);
 }
 
+TEST_CASE("two views of one name, in two namespaces, are each called by their namespace") {
+    namespace fs = std::filesystem;
+    auto header = generated(R"(namespace fleet {
+entity ship {
+	slug  slug  required  unique  key
+}
+view page per ship {
+	slug
+}
+view harbor {
+	ships = each ship {
+		slug
+	}
+}
+}
+namespace port {
+entity dock {
+	slug  slug  required  unique  key
+}
+view page per dock {
+	slug
+}
+}
+)");
+    const auto& h = header.content;
+    CHECK(has(h, "live<fleet::page> fleet_page(const std::string& ship) {"));
+    CHECK(has(h, "live<port::page> port_page(const std::string& dock) {"));
+    CHECK(has(h, "live<fleet::harbor> harbor() {"));
+    CHECK(!has(h, " page(const std::string&"));
+    if (std::system("g++ --version > /dev/null 2>&1") != 0) return;
+    fs::path dir = fs::temp_directory_path() / "uione-cpp-views";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    std::ofstream(dir / "tasks.hpp") << h;
+    fs::copy_file(fs::path(root) / "compiler" / "tests" / "ember_contract.hpp", dir / "ember.hpp");
+    std::ofstream(dir / "views.cpp") << "#include \"tasks.hpp\"\nvoid both(tasks::client& c) { c.fleet_page(\"a\"); c.port_page(\"b\"); c.harbor(); }\n";
+    std::string build = "g++ -std=c++23 -fsyntax-only -Wall -Wextra -Werror -I" + dir.string() + " " + (dir / "views.cpp").string() + " > " +
+                        (dir / "build.log").string() + " 2>&1";
+    int built = std::system(build.c_str());
+    if (built != 0) MESSAGE(platform::read_file((dir / "build.log").string()).value_or(""));
+    CHECK(built == 0);
+    fs::remove_all(dir);
+}
+
 TEST_CASE("the site's C++ client is generated exactly as its target says") {
     language::diagnostics out;
     std::vector<language::file> files;
