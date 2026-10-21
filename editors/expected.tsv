@@ -271,3 +271,8 @@ editors/fixtures/limits.one	at most 5 per minute	minute	keyword
 editors/fixtures/limits.one	at most 5000 per day	day	keyword
 editors/fixtures/limits.one	at most 10 per day	most	keyword
 editors/fixtures/limits.one	at most 10 per day	day	keyword
+editors/fixtures/stripe.one	stripe checkout { price = price_key  quantity = seats  done = "/billing"  canceled = "/billing" }	stripe	keyword
+editors/fixtures/stripe.one	stripe checkout { price = price_key  quantity = seats  done = "/billing"  canceled = "/billing" }	checkout	keyword
+editors/fixtures/stripe.one	stripe portal { back = "/billing" }	portal	keyword
+editors/fixtures/stripe.one	stripe cancel now	cancel	keyword
+editors/fixtures/stripe.one	webhook stripe /hooks/stripe as stripe {	webhook	declare

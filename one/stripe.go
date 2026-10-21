@@ -45,16 +45,24 @@ import (
 type StripeSpec struct {
 	route          string
 	customer       reflect.Type // the entity that is Stripe's customer, like an organization
+	as             string       // the service its handlers run as
 	onSubscription func(*Ctx, Subscription) error
 	onInvoice      func(*Ctx, Invoice) error
 }
 
 // Stripe receives Stripe's webhook at a route, like /hooks/stripe.
-func Stripe(route string) *StripeSpec { return &StripeSpec{route: route} }
+func Stripe(route string) *StripeSpec { return &StripeSpec{route: route, as: "stripe"} }
 
 // For says which entity is Stripe's customer, like For(Entity[Organization]()).
 func (s *StripeSpec) For(customer Kind) *StripeSpec {
 	s.customer = customer.typ
+	return s
+}
+
+// As names the service its handlers run as, which allows what they dispatch, when
+// it isn't stripe.
+func (s *StripeSpec) As(service string) *StripeSpec {
+	s.as = service
 	return s
 }
 
@@ -347,7 +355,7 @@ func (a *App) stripeEvent(ctx context.Context, s *StripeSpec, kind string, objec
 		if kind == "invoice.paid" {
 			invoice.Paid = true
 		}
-		return a.stripeHandle(ctx, stripeText(now, "customer"), "stripe::invoice", func(c *Ctx, of string, _ *firestore.DocumentSnapshot) error {
+		return a.stripeHandle(ctx, s.as, stripeText(now, "customer"), "stripe::invoice", func(c *Ctx, of string, _ *firestore.DocumentSnapshot) error {
 			if s.onInvoice == nil {
 				return nil
 			}
@@ -363,7 +371,7 @@ func (a *App) stripeEvent(ctx context.Context, s *StripeSpec, kind string, objec
 // ended is let go when another is live, so a late event about an old subscription
 // never undoes a new one.
 func (a *App) stripeSubscription(ctx context.Context, s *StripeSpec, customer string, sub Subscription) error {
-	return a.stripeHandle(ctx, customer, "stripe::subscription", func(c *Ctx, of string, kept *firestore.DocumentSnapshot) error {
+	return a.stripeHandle(ctx, s.as, customer, "stripe::subscription", func(c *Ctx, of string, kept *firestore.DocumentSnapshot) error {
 		current, _ := kept.Data()["subscription"].(string)
 		currentStatus, _ := kept.Data()["status"].(string)
 		if current != "" && current != sub.ID && !sub.Live() && (Subscription{Status: currentStatus}).Live() {
@@ -382,9 +390,9 @@ func (a *App) stripeSubscription(ctx context.Context, s *StripeSpec, customer st
 }
 
 // stripeHandle runs an app's handler for one of a customer's events, in a
-// transaction of its own, as "stripe". A customer that isn't one of this app's is
+// transaction of its own, as its service. A customer that isn't one of this app's is
 // let go, as is what the handler refuses, which isn't Stripe's to retry.
-func (a *App) stripeHandle(ctx context.Context, customer, command string, do func(*Ctx, string, *firestore.DocumentSnapshot) error) error {
+func (a *App) stripeHandle(ctx context.Context, as, customer, command string, do func(*Ctx, string, *firestore.DocumentSnapshot) error) error {
 	if customer == "" {
 		return nil
 	}
@@ -405,7 +413,7 @@ func (a *App) stripeHandle(ctx context.Context, customer, command string, do fun
 		if err != nil {
 			return err
 		}
-		body := &Ctx{Context: ctx, me: "stripe", now: now, app: a, tx: tx, counters: map[string]*counting{}, command: command}
+		body := &Ctx{Context: ctx, me: as, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: command}
 		if err := do(body, of, kept); err != nil {
 			return err
 		}

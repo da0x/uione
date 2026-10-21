@@ -180,6 +180,16 @@ namespace one::language {
         expression_ptr value;
     };
 
+    // stripe checkout { price = plan  quantity = seats  done = "/billing"  canceled = "/billing" }:
+    // a call to Stripe for the customer the command is on, like an organization:
+    // checkout, portal, change, or cancel, at its period's end or now.
+    struct stripe_statement {
+        std::string action;
+        location action_where;
+        std::vector<field_value> values;
+        bool now = false;  // cancel now
+    };
+
     struct if_statement {
         expression_ptr condition;
         std::vector<statement> then_body;
@@ -218,7 +228,7 @@ namespace one::language {
         location where;
         std::variant<require_statement, permission_statement, clear_statement, changes_statement, assign_statement,
                      create_statement, list_statement, return_statement, if_statement, input_statement, each_statement,
-                     delete_statement, dispatch_statement>
+                     delete_statement, dispatch_statement, stripe_statement>
             node;
         std::string text = {};  // as written, for a statement on one line, which a fix rewrites
     };
@@ -1038,12 +1048,13 @@ namespace one::language {
     };
 
     // webhook github /hooks/github { for project by repository  on commit { ... } }
+    // webhook stripe /hooks/stripe { for organization  on subscription { ... } }
     struct webhook_declaration {
         std::string provider;
         location provider_where;
         std::string route;
         std::string scope;       // project
-        std::string repository;  // the field naming its repository
+        std::string repository;  // the field naming its repository, for github
         location scope_where;
         std::vector<webhook_handler> handlers;
         std::string as;          // the service it runs as, which allows what it dispatches

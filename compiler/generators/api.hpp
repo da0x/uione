@@ -977,6 +977,9 @@ namespace one::generators {
             if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) {
                 return std::any_of(d->values.begin(), d->values.end(), [&](const auto& v) { return mentions(*v.value, name); }) || any(d->lists);
             }
+            if (auto* st = std::get_if<language::stripe_statement>(&s.node)) {
+                return std::any_of(st->values.begin(), st->values.end(), [&](const auto& v) { return mentions(*v.value, name); });
+            }
             return false;
         }
 
@@ -1428,6 +1431,8 @@ namespace one::generators {
                 }
             } else if (auto* d = std::get_if<language::dispatch_statement>(&s.node)) {
                 dispatch(out, e, *d, me, s.where);
+            } else if (auto* st = std::get_if<language::stripe_statement>(&s.node)) {
+                stripe_call(out, e, *st, me);
             } else if (std::holds_alternative<language::input_statement>(s.node)) {
                 // Read where the body starts.
             } else if (auto* cl = std::get_if<language::clear_statement>(&s.node)) {
@@ -1466,6 +1471,32 @@ namespace one::generators {
         // dispatch board::create { ... }: the command run in this one's transaction,
         // its body too, through one.DispatchCreate, DispatchUpdate or DispatchDelete.
         // An update or delete acts on the id it's given, or on the row an each picked.
+        // stripe checkout { ... }: a call to Stripe for the customer the command is on.
+        // An address written from the site's root, like "/billing", is on its domain.
+        void stripe_call(stream& out, const language::entity_declaration& e, const language::stripe_statement& st, const std::string& me) {
+            std::map<std::string, std::string> given;
+            for (const auto& v : st.values) {
+                auto* text = std::get_if<language::literal_expression>(&v.value->node);
+                if (text && text->type == language::literal_expression::kind::string && text->value.starts_with("/") && !domain_.empty()) {
+                    given[v.name] = api_detail::go_string("https://" + domain_ + text->value);
+                    continue;
+                }
+                auto value = expression(e, *v.value, me, nullptr);
+                if (!value) return;
+                given[v.name] = *value;
+            }
+            std::string quantity = given.contains("quantity") ? "int(" + given["quantity"] + ")" : "1";
+            std::string price = "one.Price{LookupKey: " + given["price"] + "}";
+            std::string call;
+            if (st.action == "checkout") call = "c.StripeCheckout(" + me + ".ID, " + price + ", " + quantity + ", " + given["done"] + ", " + given["canceled"] + ")";
+            else if (st.action == "portal") call = "c.StripePortal(" + me + ".ID, " + given["back"] + ")";
+            else if (st.action == "change") call = "c.StripeChange(" + me + ".ID, " + price + ", " + quantity + ")";
+            else call = "c.StripeCancel(" + me + ".ID, " + (st.now ? "true" : "false") + ")";
+            out.open("if err := " + call + "; err != nil {");
+            out.line("return err");
+            out.close("}");
+        }
+
         void dispatch(stream& out, const language::entity_declaration& e, const language::dispatch_statement& d, const std::string& me,
                       language::location where) {
             const language::entity_declaration* target = pkg_ && d.command.parts.size() == 2 ? entity(*pkg_, d.command.parts[0]) : nullptr;
@@ -2232,6 +2263,7 @@ namespace one::generators {
         // webhooks
 
         bool webhook(stream& out, const package& pkg, const language::webhook_declaration& w) {
+            if (w.provider == "stripe") return stripe_webhook(out, pkg, w);
             const language::entity_declaration* scope = entity(pkg, w.scope);
             const language::entity_declaration* issue = nullptr;
             for (auto* e : pkg.entities) {
@@ -2292,11 +2324,93 @@ namespace one::generators {
             return true;
         }
 
+        // webhook stripe: each handler dispatches the app's own commands, as the
+        // webhook's service, given what Stripe says now.
+        bool stripe_webhook(stream& out, const package& pkg, const language::webhook_declaration& w) {
+            const language::entity_declaration* customer = entity(pkg, w.scope);
+            if (!customer) {
+                unsupported(path_, w.scope_where, "a Stripe webhook whose customer isn't in its namespace");
+                return false;
+            }
+            static const std::map<std::string, std::string> subscription{
+                {"of", "s.Of"}, {"id", "s.ID"}, {"status", "s.Status"}, {"price", "s.Price"}, {"quantity", "float64(s.Quantity)"},
+                {"period_end", "s.PeriodEnd"}, {"cancel_at_period_end", "s.CancelAtPeriodEnd"}, {"live", "s.Live()"}};
+            static const std::map<std::string, std::string> invoice{
+                {"of", "i.Of"}, {"id", "i.ID"}, {"subscription", "i.Subscription"}, {"status", "i.Status"}, {"paid", "i.Paid"},
+                {"amount_due", "float64(i.AmountDue)"}, {"amount_paid", "float64(i.AmountPaid)"}, {"currency", "i.Currency"}};
+            out.open("var Webhook" + api_detail::go_name(w.provider) + " = one.Stripe(" + api_detail::go_string(w.route) + ").For(one.Entity[" +
+                     api_detail::go_name(customer->name) + "]()).As(" + api_detail::go_string(w.as) + ")" + (w.handlers.empty() ? "" : "."));
+            for (std::size_t i = 0; i < w.handlers.size(); ++i) {
+                const auto& h = w.handlers[i];
+                const auto& sent = h.event == "subscription" ? subscription : invoice;
+                auto from_handler = in(out, at(&w), h.where.line);
+                out.open(h.event == "subscription" ? "OnSubscription(func(c *one.Ctx, s one.Subscription) error {" : "OnInvoice(func(c *one.Ctx, i one.Invoice) error {");
+                for (const auto& st : h.body) {
+                    auto* d = std::get_if<language::dispatch_statement>(&st.node);
+                    const language::entity_declaration* target = d && d->command.parts.size() == 2 ? entity(pkg, d->command.parts[0]) : nullptr;
+                    if (!target) {
+                        unsupported(path_, st.where, "this statement in a webhook");
+                        return false;
+                    }
+                    const language::command_declaration* runs = nullptr;
+                    for (const auto& [command, _] : pkg.commands) {
+                        if (command->name.text() == d->command.text()) runs = command;
+                    }
+                    bool body = runs && std::any_of(runs->body.begin(), runs->body.end(), [](const language::statement& b) {
+                        return !std::holds_alternative<language::permission_statement>(b.node) && !std::holds_alternative<language::changes_statement>(b.node);
+                    });
+                    auto from_statement = in(out, at(&w), st.where.line);
+                    std::string id, fields;
+                    for (const auto& v : d->values) {
+                        if (v.name == "id") {
+                            auto* n = std::get_if<language::name_expression>(&v.value->node);
+                            auto found = n && n->name.parts.size() == 1 ? sent.find(n->name.parts[0]) : sent.end();
+                            if (found == sent.end()) {
+                                unsupported(path_, v.value->where, "an id but what Stripe sends, like id = of");
+                                return false;
+                            }
+                            id = found->second;
+                            continue;
+                        }
+                        const language::field* f = field(*target, v.name);
+                        if (!f) continue;
+                        auto value = given_by_hook(*v.value, *f, sent);
+                        if (!value) {
+                            unsupported(path_, v.value->where, "giving " + v.name + " anything but what Stripe sends, a choice, or now");
+                            return false;
+                        }
+                        fields += (d->command.parts[1] == "create" ? (fields.empty() ? "" : ", ") + api_detail::go_name(f->name) + ": " + *value
+                                                                   : "e." + api_detail::go_name(f->name) + " = " + *value + "; ");
+                    }
+                    std::string type = api_detail::go_name(target->name);
+                    std::string run = body ? body_function(d->command.text()) : std::string("nil");
+                    if (d->command.parts[1] == "create") {
+                        out.open("if err := one.DispatchCreate(c, &" + type + "{" + fields + "}, nil, " + run + "); err != nil {");
+                    } else {
+                        if (!fields.empty()) fields.pop_back(), fields.pop_back();
+                        out.open("if err := one.DispatchUpdate(c, " + id + ", func(e *" + type + ") { " + fields + " }, nil, " + run + "); err != nil {");
+                    }
+                    out.line("return err");
+                    out.close("}");
+                }
+                out.line("return nil");
+                out.close(i + 1 < w.handlers.size() ? "})." : "})");
+            }
+            out.dedent();
+            return true;
+        }
+
         // What a webhook's handler gives a field: what GitHub sent, a choice, or now.
         std::optional<std::string> mentioned(const language::expression& x, const language::field& target) const {
             static const std::map<std::string, std::string> sent{
                 {"mentioned", "m.Issue"}, {"message", "m.Message"}, {"title", "m.Title"}, {"url", "m.URL"},
                 {"author", "m.Author"},   {"sha", "m.SHA"},         {"number", "m.Number"}};
+            return given_by_hook(x, target, sent);
+        }
+
+        // What a webhook's handler gives a field: what was sent, by the Go it's read
+        // as, a choice, or now.
+        std::optional<std::string> given_by_hook(const language::expression& x, const language::field& target, const std::map<std::string, std::string>& sent) const {
             auto* n = std::get_if<language::name_expression>(&x.node);
             if (n) {
                 if (auto c = language::choice_of(n->name, target)) return choice(target, *c);

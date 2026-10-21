@@ -138,6 +138,7 @@ statement      ::= ( "require" (expression STRING | STRING "{" NEWLINE? (express
                    | "return" expression
                    | if
                    | dispatch
+                   | stripe
                    | list_change
                    | "input" NAME qualified
                    /* other: a row of the command's own kind, its fields other.pair */
@@ -146,6 +147,10 @@ statement      ::= ( "require" (expression STRING | STRING "{" NEWLINE? (express
 /* dispatch: another command run in the same step, its body too: an update or a
  * delete says which with id = ..., or acts on the row of an each over its entity. */
 dispatch       ::= "dispatch" NAME "::" NAME ("{" NEWLINE? (((NAME "=" postfix)+ | list_change) END)* "}")?
+/* stripe: a call to Stripe for the customer the command is on, like an organization:
+ * checkout, the Customer Portal, a change of price or quantity, or cancel, at its
+ * period's end or now. */
+stripe         ::= "stripe" ("checkout" | "portal" | "change" | "cancel" "now"?) ("{" NEWLINE? ((NAME "=" postfix)+ END)* "}")?
 list_change    ::= "add" postfix "to" NAME | "remove" postfix "from" NAME
 if             ::= "if" expression block ("else" (if | block))?
 
@@ -283,7 +288,7 @@ picker         ::= "picker" NAME "from" NAME END
 /* webhook */
 
 webhook        ::= "webhook" NAME ROUTE ("as" NAME)? "{" NEWLINE? webhook_line* "}" END
-webhook_line   ::= "for" NAME "by" NAME END
+webhook_line   ::= "for" NAME ("by" NAME)? END
                  | "on" NAME block END
 
 /* expressions, loosest first */

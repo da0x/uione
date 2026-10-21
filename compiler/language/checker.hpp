@@ -177,6 +177,9 @@ namespace one::language {
         std::vector<std::string> targets_;  // the apps being built, which say what files a component needs
         std::map<std::string, scope> scopes_;  // by namespace, "" is the top level
         std::map<std::string, origin> routes_;
+        // The app's Stripe webhook, which names Stripe's customer, and its namespace.
+        const webhook_declaration* stripe_ = nullptr;
+        std::string stripe_ns_;
         std::map<const entity_declaration*, entity_declaration> changes_;  // what each history holds
         std::optional<origin> project_;
         const std::vector<screen_item>* screen_ = nullptr;  // the screen being checked, whose tables a form can open from
@@ -291,6 +294,9 @@ namespace one::language {
                     add(here.themes, th->name, *th, d.where, "theme", ns);
                 } else if (auto* sv = std::get_if<define_service_declaration>(&d.node)) {
                     add(here.services, sv->name, *sv, d.where, "service", ns);
+                } else if (auto* wh = std::get_if<webhook_declaration>(&d.node); wh && wh->provider == "stripe") {
+                    if (stripe_) error(d.where, "an app takes Stripe's webhook once");
+                    else stripe_ = wh, stripe_ns_ = ns;
                 } else if (auto* rs = std::get_if<roles_declaration>(&d.node)) {
                     here.defined.push_back(rs);
                     here.defined_at[rs] = origin{path_, d.where};
@@ -1718,6 +1724,8 @@ namespace one::language {
                     }
                 } else if (auto* d = std::get_if<dispatch_statement>(&s.node)) {
                     verify_dispatch(ns, *d, in);
+                } else if (auto* st = std::get_if<stripe_statement>(&s.node)) {
+                    verify_stripe_call(s, *st, entity, in);
                 } else if (auto* a = std::get_if<assign_statement>(&s.node); a && entity && (in.picked || in.stored)) {
                     // A row an each picked is changed by its own command, as anything
                     // but the command's own entity is.
@@ -3720,8 +3728,12 @@ namespace one::language {
         }
 
         void verify(const std::string& ns, location where, const webhook_declaration& w) {
+            if (w.provider == "stripe") {
+                verify_stripe(ns, where, w);
+                return;
+            }
             if (w.provider != "github") {
-                error(w.provider_where, "'" + w.provider + "' isn't a webhook uione knows; it knows github");
+                error(w.provider_where, "'" + w.provider + "' isn't a webhook uione knows; it knows github and stripe");
                 return;
             }
             if (!w.route.starts_with("/hooks/")) {
@@ -3734,6 +3746,10 @@ namespace one::language {
             const entity_declaration* scope = find_entity(ns, qualified_name{{w.scope}, w.scope_where});
             if (!scope) {
                 error(w.scope_where, "there's no entity " + w.scope + " " + in_namespace(ns));
+                return;
+            }
+            if (w.repository.empty()) {
+                error(w.scope_where, "webhook github finds a " + scope->name + " by the field naming its repository, like for " + scope->name + " by repository");
                 return;
             }
             const field* repository = find_field(*scope, w.repository);
@@ -3800,6 +3816,118 @@ namespace one::language {
                     }
                 }
             }
+        }
+
+        // webhook stripe /hooks/stripe as stripe { for organization  on subscription { ... } }:
+        // Stripe tells the app about its customers' subscriptions and invoices, and the
+        // app keeps what it needs by dispatching its own commands, run as a service of
+        // the whole app.
+        void verify_stripe(const std::string& ns, location where, const webhook_declaration& w) {
+            if (!w.route.starts_with("/hooks/")) error(where, "a webhook is received under /hooks/, like /hooks/stripe");
+            if (w.scope.empty()) {
+                error(where, "webhook stripe needs to know who Stripe's customer is, like for organization");
+                return;
+            }
+            const entity_declaration* customer = find_entity(ns, qualified_name{{w.scope}, w.scope_where});
+            if (!customer) {
+                error(w.scope_where, "there's no entity " + w.scope + " " + in_namespace(ns));
+                return;
+            }
+            if (!w.repository.empty()) error(w.scope_where, "webhook stripe finds each " + w.scope + " itself: for " + w.scope + ", without by");
+            const define_service_declaration* service = nullptr;
+            if (w.as.empty()) {
+                error(where, "webhook stripe runs as a service, which allows what it does, like webhook stripe " + w.route +
+                                 " as stripe, with define service stripe \"Stripe\" { ... }");
+            } else if (auto found = scopes_.find(ns); found == scopes_.end() || !found->second.services.contains(w.as)) {
+                error(w.as_where, "there's no service " + w.as + " " + in_namespace(ns) + "; declare it, like define service " + w.as + " \"Stripe\" { ... }");
+            } else {
+                service = found->second.services.at(w.as).node;
+                if (!service->in.empty()) {
+                    error(w.as_where, "webhook stripe is for the whole app, so service " + w.as + " isn't connected in each " + service->in +
+                                          ": define service " + w.as + " \"" + service->title + "\" { ... }");
+                }
+            }
+            std::set<std::string, std::less<>> seen;
+            for (const auto& h : w.handlers) {
+                std::vector<std::string> given;
+                if (h.event == "subscription") given = {"of", "id", "status", "price", "quantity", "period_end", "cancel_at_period_end", "live"};
+                else if (h.event == "invoice") given = {"of", "id", "subscription", "status", "paid", "amount_due", "amount_paid", "currency"};
+                else {
+                    error(h.where, "stripe sends subscription and invoice, not " + h.event + nearest(h.event, {"subscription", "invoice"}));
+                    continue;
+                }
+                if (!seen.insert(h.event).second) error(h.where, "webhook stripe handles " + h.event + " twice");
+                context in{ns, nullptr, nullptr, given, false, nullptr, true};
+                for (const auto& s : h.body) {
+                    auto* d = std::get_if<dispatch_statement>(&s.node);
+                    if (!d) {
+                        error(s.where, "webhook stripe changes things with dispatch, like dispatch " + w.scope + "::subscribed { id = of ... }");
+                        continue;
+                    }
+                    verify_dispatch(ns, *d, in);
+                    if (service && std::none_of(service->permissions.begin(), service->permissions.end(),
+                                                [&](const qualified_name& p) { return p.text() == d->command.text(); })) {
+                        error(d->command.where, "service " + service->name + " doesn't run " + d->command.text() + "; add it to define service " + service->name);
+                    }
+                }
+            }
+        }
+
+        // stripe checkout { ... }, in a command of Stripe's customer: what each call
+        // is given, and what it needs.
+        void verify_stripe_call(const statement& s, const stripe_statement& st, const entity_declaration* entity, const context& in) {
+            static const std::map<std::string, std::pair<std::vector<std::string>, std::vector<std::string>>> calls{
+                {"checkout", {{"price", "done", "canceled"}, {"quantity"}}},
+                {"portal", {{"back"}, {}}},
+                {"change", {{"price", "quantity"}, {}}},
+                {"cancel", {{}, {}}},
+            };
+            if (!in.command || in.stored) {
+                error(s.where, "stripe goes in a command, which a person runs, like " + (stripe_ ? stripe_->scope : std::string("organization")) + "::subscribe");
+                return;
+            }
+            auto call = calls.find(st.action);
+            if (call == calls.end()) {
+                error(st.action_where, "stripe does checkout, portal, change and cancel, not " + st.action + nearest(st.action, {"checkout", "portal", "change", "cancel"}));
+                return;
+            }
+            if (!stripe_) {
+                error(s.where, "stripe " + st.action + " needs the app to take Stripe's webhook, which says who its customer is, like webhook stripe /hooks/stripe as stripe { for organization ... }");
+            } else if (const entity_declaration* customer = find_entity(stripe_ns_, qualified_name{{stripe_->scope}, stripe_->scope_where}); customer && entity != customer) {
+                error(st.action_where, "stripe " + st.action + " is for a " + stripe_->scope + ", Stripe's customer, so it goes in a command of " + stripe_->scope +
+                                           ", like " + stripe_->scope + "::" + (st.action == "checkout" ? "subscribe" : st.action));
+            }
+            if (st.now && st.action != "cancel") error(st.action_where, "only stripe cancel says now, to end it at once rather than when its period does");
+            const auto& [needed, optional] = call->second;
+            std::set<std::string, std::less<>> given;
+            for (const auto& v : st.values) {
+                if (!given.insert(v.name).second) error(v.where, v.name + " is given a value twice");
+                if (std::find(needed.begin(), needed.end(), v.name) == needed.end() && std::find(optional.begin(), optional.end(), v.name) == optional.end()) {
+                    std::vector<std::string> takes = needed;
+                    takes.insert(takes.end(), optional.begin(), optional.end());
+                    error(v.where, "stripe " + st.action + (takes.empty() ? " is given nothing" : " is given " + listed_words(takes)) + ", not " + v.name +
+                                       nearest(v.name, takes));
+                    names_in(*v.value);
+                    continue;
+                }
+                resolve(in, *v.value);
+            }
+            for (const auto& name : needed) {
+                if (!given.contains(name)) error(st.action_where, "stripe " + st.action + " needs " + name + ", like " + name + " = " + example_of(name));
+            }
+        }
+
+        static std::string listed_words(const std::vector<std::string>& words) {
+            std::string out;
+            for (std::size_t i = 0; i < words.size(); ++i) out += (i == 0 ? "" : i + 1 == words.size() ? " and " : ", ") + words[i];
+            return out;
+        }
+
+        static std::string example_of(const std::string& name) {
+            if (name == "price") return "plan, the lookup key of a price in Stripe";
+            if (name == "quantity") return "seats";
+            if (name == "back") return "\"/settings\"";
+            return "\"/billing\"";
         }
 
         void verify(const std::string& ns, location where, const picker_declaration& p) {

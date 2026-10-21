@@ -982,7 +982,7 @@ TEST_CASE("a github webhook finds a project by its repository, and runs as its s
               .empty());
 
     auto e = only_error(start + "webhook gitlab /hooks/gitlab {\n}\n");
-    CHECK(e.message == "'gitlab' isn't a webhook uione knows; it knows github");
+    CHECK(e.message == "'gitlab' isn't a webhook uione knows; it knows github and stripe");
     e = only_error(start + "webhook github /github as github {\n\tfor project by repository\n}\n");
     CHECK(e.message == "a webhook is received under /hooks/, like /hooks/github");
     e = only_error(start + "webhook github /hooks/github as github {\n\tfor project by slugg\n}\n");

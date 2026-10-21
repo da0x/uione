@@ -133,7 +133,8 @@ The language's own words, inside what a declaration says:
 
 - in a field: `enum`, `list of`, `serial per`, and in an entity, `at most … per day`;
 - in a command: `require`, `by`, `dispatch`, `clear`, `changes`, `was`, `add … to`, `remove … from`,
-  `input`, `each … where`, `each other … where`, `match`, `else`, `at most … per`;
+  `input`, `each … where`, `each other … where`, `match`, `else`, `at most … per`, and
+  `stripe checkout`, `stripe portal`, `stripe change`, `stripe cancel`, `stripe cancel now`;
 - in a view: `per`, `public`, `each`, `change`, `in`, `where`, `order`, `ascending`,
   `descending`, `limit`,
   `readers`, `public when`;
@@ -2166,7 +2167,7 @@ picker book from shelf
 
 ## webhook
 
-Takes GitHub's webhook. A commit or pull request that mentions `#12` makes
+Takes GitHub's webhook, or [Stripe's](#stripe). A commit or pull request that mentions `#12` makes
 something on issue 12 of the project whose `repository` is that repository, as
 the project's GitHub [service](#define-service), which allows what it makes.
 
@@ -2223,6 +2224,68 @@ view project_settings per project {
 - The deploy makes the master secret that every project's secret is derived
   from, keeps it in Secret Manager, and gives it only to the backend. It never
   goes into GitHub itself.
+
+### Stripe
+
+Sells subscriptions through Stripe. One entity is Stripe's customer, like an
+organization. A command of it calls Stripe, and Stripe's webhook tells the app
+when a subscription or an invoice changes, which it keeps in its own fields, as
+the webhook's [service](#define-service). Plans, seats and prices are the app's:
+which price is which plan, and what a status means, is said in its handlers.
+
+```one
+define service stripe "Stripe" {
+	organization::subscribed
+}
+
+command organization::subscribed
+
+command organization::subscribe {
+	input price_key text
+	stripe checkout { price = price_key  quantity = seats  done = "/billing"  canceled = "/billing" }
+}
+
+webhook stripe /hooks/stripe as stripe {
+	for organization
+	on subscription {
+		dispatch organization::subscribed {
+			id = of  plan = price  seats = quantity  status = status  renews = period_end
+		}
+	}
+}
+```
+
+- `stripe checkout` starts a subscription to a price, named by its lookup key in
+  Stripe, like `team_monthly`, for a quantity, like seats. The command's answer
+  shows Checkout's address as `url`, where the person pays; `done` and `canceled`
+  are where Checkout sends them back. An address from the site's root, like
+  `/billing`, is on the project's domain. One with a subscription already is
+  refused, and changes it instead.
+- `stripe portal { back = "/billing" }` opens Stripe's Customer Portal, for the
+  card, the billing address, the tax ID and the invoices, and shows its address as
+  `url`.
+- `stripe change { price = plan  quantity = seats }` moves the subscription to
+  another price or quantity, prorated. The quantity is always given, since a new
+  price on its own would reset it to one.
+- `stripe cancel` ends it when its period does, and `stripe cancel now` at once.
+- `for organization` names Stripe's customer, whose commands call Stripe. Each
+  customer is made in Stripe once, the first time it's needed, and what Stripe
+  knows of it is kept by the backend where no command reaches it.
+- `on subscription` runs when a subscription starts, renews, changes, falls past
+  due or ends. It gives `of`, the customer's id, and `id`, `status`, `price`,
+  `quantity`, `period_end`, `cancel_at_period_end` and `live`. `on invoice` runs when
+  an invoice is paid or its payment fails, and gives `of`, `id`, `subscription`,
+  `status`, `paid`, `amount_due`, `amount_paid` and `currency`.
+- The service runs for the whole app, so it isn't connected `in` anything, and it
+  allows what the handlers dispatch, which may make or change things.
+- Every event is checked against the webhook's signing secret and refused when
+  older than five minutes. One sent twice is handled once, and Stripe is asked how
+  things are now rather than believed, since its events come late, twice and out of
+  order: a late event about an ended subscription never undoes a newer one.
+- The project's owner sets the config secrets `stripe_secret_key` and
+  `stripe_webhook_secret` from Stripe's dashboard, test ones first. The deploy
+  keeps each in Secret Manager, for the backend alone, and gives the address to
+  point Stripe's webhook at as `stripe_webhook_url`.
 
 ## header
 

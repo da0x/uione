@@ -2517,10 +2517,11 @@ namespace one::language {
                 if (at_word("for")) {
                     advance();
                     hook.scope_where = peek().where;
-                    hook.scope = expect(token_kind::identifier, "what a repository belongs to, like project").text;
-                    if (!at_word("by")) fail_expecting("'by' and the field naming the repository, like by repository");
-                    advance();
-                    hook.repository = expect(token_kind::identifier, "the field naming the repository").text;
+                    hook.scope = expect(token_kind::identifier, "what it's about, like project or organization").text;
+                    if (at_word("by")) {
+                        advance();
+                        hook.repository = expect(token_kind::identifier, "the field naming the repository").text;
+                    }
                     end_line();
                 } else if (at_word("on")) {
                     advance();
@@ -2584,6 +2585,35 @@ namespace one::language {
                             const std::size_t first = pos_;
                             value.where = peek().where;
                             value.name = expect(token_kind::identifier, "a field of what it acts on, like stage").text;
+                            expect(token_kind::assign, "'='");
+                            value.value = parse_postfix();
+                            cut(value, first);
+                            s.values.push_back(std::move(value));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(s)};
+            }
+            if (at_word("stripe") && peek(1).kind == token_kind::identifier) {
+                advance();
+                stripe_statement s;
+                s.action_where = peek().where;
+                s.action = advance().text;
+                if (at_word("now")) {
+                    advance();
+                    s.now = true;
+                }
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        while (!at_line_end()) {
+                            field_value value;
+                            const std::size_t first = pos_;
+                            value.where = peek().where;
+                            value.name = expect(token_kind::identifier, "what it's given, like price").text;
                             expect(token_kind::assign, "'='");
                             value.value = parse_postfix();
                             cut(value, first);

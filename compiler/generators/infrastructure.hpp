@@ -35,6 +35,7 @@ namespace one::generators {
         std::string stack = "production";
         code::source from;  // the project block they're written in
         std::string github;  // where GitHub's webhook comes in, which needs a secret
+        std::string stripe;  // where Stripe's webhook comes in, whose secrets the owner sets
         bool services = false;  // a role is made for services, whose tokens the backend signs
         bool signs_in = false;  // people sign in, so programs on their computers may too, with a token the backend signs
         bool files = false;  // a field holds a file, kept in a bucket of the project's
@@ -42,12 +43,12 @@ namespace one::generators {
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
 
-    static std::string github_route(const std::vector<language::declaration>& declarations) {
+    static std::string hook_route(const std::vector<language::declaration>& declarations, std::string_view provider) {
         for (const auto& d : declarations) {
             if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
-                if (auto route = github_route(n->declarations); !route.empty()) return route;
+                if (auto route = hook_route(n->declarations, provider); !route.empty()) return route;
             }
-            if (auto* w = std::get_if<language::webhook_declaration>(&d.node); w && w->provider == "github") return w->route;
+            if (auto* w = std::get_if<language::webhook_declaration>(&d.node); w && w->provider == provider) return w->route;
         }
         return "";
     }
@@ -93,7 +94,8 @@ namespace one::generators {
                 if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
                 if (!p->environment.empty()) s.stack = s.firebase;
                 for (const auto& other : files) {
-                    if (s.github.empty()) s.github = github_route(other.declarations);
+                    if (s.github.empty()) s.github = hook_route(other.declarations, "github");
+                    if (s.stripe.empty()) s.stripe = hook_route(other.declarations, "stripe");
                     s.services = s.services || has_services(other.declarations);
                     s.files = s.files || has_files(other.declarations);
                 }
@@ -196,6 +198,7 @@ namespace one::generators {
             g.line("Firebase: " + quoted(s.firebase) + ",");
             g.line("Region:   " + quoted(s.region) + ",");
             if (!s.github.empty()) g.line("GitHub:   " + quoted(s.github) + ",");
+            if (!s.stripe.empty()) g.line("Stripe:   " + quoted(s.stripe) + ",");
             if (s.services) g.line("Services: true,");
             if (s.signs_in) g.line("SignIn:   true,");
             if (s.files) g.line("Files:    true,");
@@ -248,7 +251,7 @@ namespace one::generators {
             }
             j.open("\"rewrites\": [");
             j.line("{ \"source\": \"/api/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
-            if (!s.github.empty()) j.line("{ \"source\": \"/hooks/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
+            if (!s.github.empty() || !s.stripe.empty()) j.line("{ \"source\": \"/hooks/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
             j.line("{ \"source\": \"**\", \"destination\": \"/index.html\" }");
             j.close("]");
             j.close("}");

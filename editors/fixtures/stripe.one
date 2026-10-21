@@ -1,0 +1,46 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// Selling through Stripe, for the highlighting test: a call in a command, and the
+// webhook that tells the app what changed.
+
+import one
+
+namespace billing {
+
+	entity organization {
+		slug   slug  required  unique  key
+		plan   text
+		seats  number
+	}
+
+	define service stripe "Stripe" {
+		organization::subscribed
+	}
+
+	command organization::subscribed
+
+	command organization::subscribe {
+		by anyone signed in
+		input price_key text
+		stripe checkout { price = price_key  quantity = seats  done = "/billing"  canceled = "/billing" }
+	}
+
+	command organization::billing {
+		by anyone signed in
+		stripe portal { back = "/billing" }
+	}
+
+	command organization::leave {
+		by anyone signed in
+		stripe cancel now
+	}
+
+	webhook stripe /hooks/stripe as stripe {
+		for organization
+		on subscription {
+			dispatch organization::subscribed { id = of  plan = price  seats = quantity }
+		}
+	}
+
+} // namespace billing
