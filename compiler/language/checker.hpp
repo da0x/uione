@@ -3948,6 +3948,17 @@ namespace one::language {
                     names_in(*v.value);
                     continue;
                 }
+                // An address may name the record's fields, like /organizations/{slug}/billing.
+                auto* text = std::get_if<literal_expression>(&v.value->node);
+                if (text && text->type == literal_expression::kind::string && entity) {
+                    for (std::size_t open = text->value.find('{'); open != std::string::npos; open = text->value.find('{', open + 1)) {
+                        std::size_t close = text->value.find('}', open);
+                        std::string name = text->value.substr(open + 1, close == std::string::npos ? std::string::npos : close - open - 1);
+                        if (name != "id" && !find_field(*entity, name)) {
+                            error(v.where, "a " + entity->name + " has no " + name + " for the address to name; it names its fields, like {id}");
+                        }
+                    }
+                }
                 resolve(in, *v.value);
             }
             for (const auto& name : needed) {

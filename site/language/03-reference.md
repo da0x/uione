@@ -2275,7 +2275,8 @@ webhook stripe /hooks/stripe as stripe {
   Stripe, like `team_monthly`, for a quantity, like seats. The command's answer
   shows Checkout's address as `url`, where the person pays; `done` and `canceled`
   are where Checkout sends them back. An address from the site's root, like
-  `/billing`, is on the project's domain. One with a subscription already is
+  `/billing`, is on the project's domain, and names the record's fields in braces,
+  like `/organizations/{slug}/billing`. One with a subscription already is
   refused, and changes it instead.
 - `stripe portal { back = "/billing" }` opens Stripe's Customer Portal, for the
   card, the billing address, the tax ID and the invoices, and shows its address as

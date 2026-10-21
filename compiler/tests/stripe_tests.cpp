@@ -57,7 +57,7 @@ namespace billing {
 	}
 	command organization::billing {
 		by anyone signed in
-		stripe portal { back = "/billing" }
+		stripe portal { back = "/organizations/{slug}/billing" }
 	}
 	command organization::resize {
 		by anyone signed in
@@ -152,7 +152,8 @@ TEST_CASE("a stripe call is made in a command of Stripe's customer, given what i
     CHECK(has(wrong("stripe portal {", "stripe portl {"), "stripe does checkout, portal, change and cancel, not portl; did you mean portal?"));
     CHECK(has(wrong("price = price_key  quantity = seats  done", "quantity = seats  done"), "stripe checkout needs price, like price = plan"));
     CHECK(has(wrong("stripe change { price = price_key  quantity = seats }", "stripe change { price = price_key }"), "stripe change needs quantity, like quantity = seats"));
-    CHECK(has(wrong("stripe portal { back = \"/billing\" }", "stripe portal { back = \"/billing\"  colour = \"red\" }"), "stripe portal is given back, not colour"));
+    CHECK(has(wrong("stripe portal { back = \"/organizations/{slug}/billing\" }", "stripe portal { back = \"/organizations/{slug}/billing\"  colour = \"red\" }"), "stripe portal is given back, not colour"));
+    CHECK(has(wrong("/organizations/{slug}/billing", "/organizations/{slg}/billing"), "a organization has no slg for the address to name; it names its fields, like {id}"));
     CHECK(has(wrong("stripe cancel now", "stripe portal now { back = \"/billing\" }"), "only stripe cancel says now"));
     CHECK(has(wrong("command ticket::create {\n\t\tby anyone signed in\n", "command ticket::create {\n\t\tby anyone signed in\n\t\tstripe cancel\n"),
               "stripe cancel is for a organization, Stripe's customer, so it goes in a command of organization, like organization::cancel"));
@@ -200,7 +201,8 @@ TEST_CASE("Stripe's webhook and calls become the runtime's, and its route goes t
     CHECK(has(code, "one.DispatchUpdate(c, i.Of, func(e *Organization) { e.Paid = i.Paid }, nil, nil)"));
     CHECK(has(code, "priceKey, _ := c.Input(\"price_key\").(string)"));
     CHECK(has(code, R"(c.StripeCheckout(o.ID, one.Price{LookupKey: priceKey}, int(o.Seats), "https://shop.example/billing", "https://shop.example/billing"))"));
-    CHECK(has(code, R"(c.StripePortal(o.ID, "https://shop.example/billing"))"));
+    CHECK(has(code, R"(c.StripePortal(o.ID, "https://shop.example/organizations/" + url.PathEscape(o.Slug) + "/billing"))"));
+    CHECK(has(code, "import (\n\t\"net/url\"\n\t\"time\"\n\n"));
     CHECK(has(code, "c.StripeChange(o.ID, one.Price{LookupKey: priceKey}, int(o.Seats))"));
     CHECK(has(code, "c.StripeCancel(o.ID, false)"));
     CHECK(has(code, "c.StripeCancel(o.ID, true)"));

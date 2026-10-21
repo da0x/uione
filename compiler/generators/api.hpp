@@ -158,6 +158,7 @@ namespace one::generators {
         const language::entity_declaration* outer_entity_ = nullptr;
         std::string outer_me_;
         bool counts_time_ = false;  // whether a package's commands count a time from now, which needs Go's time
+        bool uses_url_ = false;     // whether a Stripe address names a record's field, escaped by Go's net/url
         std::set<std::string> imports_;  // the other namespaces a package's views read, as their packages
 
         code::source at(const void* declaration) const {
@@ -508,6 +509,7 @@ namespace one::generators {
             }
             bool uses_time = false;
             counts_time_ = false;
+            uses_url_ = false;
             imports_.clear();
             stream body("\t");
 
@@ -800,12 +802,11 @@ namespace one::generators {
             auto fixed = out.fixed();  // what every package file has
             out.line("package " + package_name(ns));
             out.line();
-            if (uses_time || counts_time_ || !imports_.empty()) {
+            if (uses_time || counts_time_ || uses_url_ || !imports_.empty()) {
                 out.open("import (");
-                if (uses_time || counts_time_) {
-                    out.line("\"time\"");
-                    out.line();
-                }
+                if (uses_url_) out.line("\"net/url\"");
+                if (uses_time || counts_time_) out.line("\"time\"");
+                if (uses_time || counts_time_ || uses_url_) out.line();
                 // In order, as gofmt keeps them: the library, and the other namespaces'.
                 std::set<std::string> paths{"github.com/da0x/uione/one"};
                 for (const auto& other : imports_) paths.insert(module_path() + "/" + other);
@@ -1479,7 +1480,19 @@ namespace one::generators {
             for (const auto& v : st.values) {
                 auto* text = std::get_if<language::literal_expression>(&v.value->node);
                 if (text && text->type == language::literal_expression::kind::string && text->value.starts_with("/") && !domain_.empty()) {
-                    given[v.name] = api_detail::go_string("https://" + domain_ + text->value);
+                    // Each {field} in it is the record's, like /organizations/{id}/billing.
+                    std::string address = "https://" + domain_ + text->value, joined;
+                    std::size_t from = 0;
+                    for (std::size_t open = address.find('{'); open != std::string::npos; open = address.find('{', from)) {
+                        std::size_t close = address.find('}', open);
+                        if (close == std::string::npos) break;
+                        std::string field = address.substr(open + 1, close - open - 1);
+                        joined += api_detail::go_string(address.substr(from, open - from)) + " + url.PathEscape(" + me + "." +
+                                  (field == "id" ? std::string("ID") : api_detail::go_name(field)) + ") + ";
+                        from = close + 1;
+                    }
+                    given[v.name] = joined + api_detail::go_string(address.substr(from));
+                    if (from > 0) uses_url_ = true;
                     continue;
                 }
                 auto value = expression(e, *v.value, me, nullptr);
