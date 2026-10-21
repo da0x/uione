@@ -153,6 +153,14 @@ func TestABaysNameCanBeGivenAndAChangeElsewhereLeavesIt(t *testing.T) {
 	if id := h.mustRun("storeroom/bay/update", "", map[string]any{"id": "pantry-chiller", "title": "Chiller"}); id != "pantry-chiller" {
 		t.Fatalf("the same title moved the bay to %s", id)
 	}
+	// A form that shows the name sends it back as it was: the title still names it,
+	// and only a name changed there does.
+	if id := h.mustRun("storeroom/bay/update", "", map[string]any{"id": "pantry-chiller", "title": "Freezer", "name": "chiller"}); id != "pantry-freezer" {
+		t.Fatalf("a name sent as it was kept the bay at %s, not pantry-freezer", id)
+	}
+	if id := h.mustRun("storeroom/bay/update", "", map[string]any{"id": "pantry-freezer", "title": "Ice", "name": "deep_freeze"}); id != "pantry-deep_freeze" {
+		t.Fatalf("a name changed with the title named the bay %s, not pantry-deep_freeze", id)
+	}
 }
 
 func TestRenamingAShelfMovesItsBaysAndTheirHops(t *testing.T) {

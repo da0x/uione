@@ -494,8 +494,8 @@ entity loan {
   than taken for the first.
 - The name follows the field it's made from. Renaming the stage to Reviewing names
   it `reviewing`, and an update form may ask for the name itself, to name it
-  something else. Either way it moves to the id its new name makes, and in the same
-  step:
+  something else; left as it was there, the title still names it. Either way it
+  moves to the id its new name makes, and in the same step:
   - everything pointing at it points at the new id, like its issues and a board's
     start;
   - what's named by it moves too, as a stage's steps do. Renaming a board moves its

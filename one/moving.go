@@ -52,7 +52,8 @@ type move struct {
 
 // keyFollows works out a key made from another field again, when the update changed
 // that field or gave the key itself: a key given is made a key as a title is, so
-// "Intake" names it intake. Says whether a key changed, as only then does it move.
+// "Intake" names it intake. A key given as it was, as a form showing it sends it
+// back, isn't given. Says whether a key changed, as only then does it move.
 func (s *schema) keyFollows(v reflect.Value, before map[string]any, given map[string]any) bool {
 	changed := false
 	for _, f := range s.keys {
@@ -60,17 +61,18 @@ func (s *schema) keyFollows(v reflect.Value, before map[string]any, given map[st
 			continue
 		}
 		key := v.FieldByIndex(f.index)
-		if said, ok := given[f.name].(string); ok && strings.TrimSpace(said) != "" {
+		had, _ := before[f.name].(string)
+		if said, ok := given[f.name].(string); ok && strings.TrimSpace(said) != "" && slugOf(said) != had {
 			key.SetString(slugOf(said))
 		} else if source := s.field(f.from); source != nil {
 			now := v.FieldByIndex(source.index).String()
 			if was, _ := before[f.from].(string); now != "" && now != was {
 				key.SetString(slugOf(now))
-			} else if was, _ := before[f.name].(string); was != "" {
-				key.SetString(was) // what a body did to it is put back, as a key isn't set by hand
+			} else if had != "" {
+				key.SetString(had) // what a body did to it is put back, as a key isn't set by hand
 			}
 		}
-		if was, _ := before[f.name].(string); key.String() != was {
+		if key.String() != had {
 			changed = true
 		}
 	}
