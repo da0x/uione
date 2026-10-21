@@ -602,6 +602,10 @@ view crew_page per crew {
     ungranted.replace(ungranted.find("command job::create"), 19, "command job::create\ncommand job::update");
     auto e = only_error(ungranted);
     CHECK(e.message == "job::update isn't allowed by any role or service; add it to a define role, or say by anyone signed in in the command");
+    // A role given everywhere, like the site's own staff, allows it too.
+    std::string staffed = ungranted;
+    staffed.replace(staffed.find("command job::update"), 19, "command job::update\nrole staff  job::update");
+    CHECK(check_source(staffed).size() == 0);
 
     std::string both = crew;
     both.replace(both.find("\tmember::create\n\tjob::create"), 15, "\tmember::create\n\tcrew::create");

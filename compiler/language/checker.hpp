@@ -800,6 +800,12 @@ namespace one::language {
                     any = true;
                     for (const auto& p : service.node->permissions) allowed[join(ns, p.text())].push_back({&p, service.from});
                 }
+                // A role given everywhere, like a site's own staff, allows commands too.
+                for (const auto* r : here.roles) {
+                    if (r->per) continue;
+                    auto at = here.role_names.find(r->name);
+                    for (const auto& p : r->permissions) allowed[join(ns, p.text())].push_back({&p, at == here.role_names.end() ? origin{} : at->second});
+                }
             }
             if (!any) return;
             std::string kept = path_;
