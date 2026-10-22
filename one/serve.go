@@ -123,6 +123,7 @@ type registry struct {
 	named     map[string]bool
 	twice     []string // roles given more than once, which is a mistake
 	hooks     []*GitHubSpec
+	people    []*PeopleSpec  // lists of everyone, read when asked
 	stripe    *StripeSpec    // Stripe's webhook and customer, when the app sells subscriptions
 	services  []*ServiceSpec // systems that run commands, not people
 	schemas   map[reflect.Type]*schema
@@ -179,7 +180,7 @@ func (r *registry) schema(t reflect.Type, ns string) *schema {
 // library::book:withdraw, so a role in one module never grants another's.
 func qualified(ns string, p Permission) Permission {
 	switch p {
-	case "", Anyone, SignedIn, Owner:
+	case "", Anyone, SignedIn, Owner, ViewPeople:
 		return p
 	}
 	if strings.Contains(string(p), "::") {
@@ -338,6 +339,10 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.heldCounted(ctx); err != nil {
 		return nil, err
 	}
+	// And everyone who signed up before, so they're listed.
+	if err := a.everyoneListed(ctx); err != nil {
+		return nil, err
+	}
 	// Then what a deploy changes once, before views are rebuilt, so they show it.
 	if err := a.doOnce(ctx); err != nil {
 		return nil, err
@@ -376,6 +381,7 @@ func (a *App) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST /api/", a.serveCommand)
 	mux.HandleFunc("POST /api/signin", a.serveSignIn)
+	mux.HandleFunc("GET /api/people", a.servePeople)
 	mux.HandleFunc("POST /api/token", a.serveToken)
 	mux.HandleFunc("POST /api/authorize", a.serveAuthorize)
 	mux.HandleFunc("GET /api/me", a.serveMe)

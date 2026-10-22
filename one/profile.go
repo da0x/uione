@@ -178,6 +178,10 @@ func (a *App) remember(ctx context.Context, token *auth.Token) {
 		return
 	}
 	a.profiles.Store(token.UID, seen)
+	if before == nil {
+		email, _ := token.Claims["email"].(string)
+		a.joined(ctx, token.UID, email, now)
+	}
 	after := map[string]any{}
 	for k, v := range before {
 		after[k] = v
