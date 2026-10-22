@@ -1203,9 +1203,13 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		After:   after,
 	}}
 	if movedFrom != "" {
-		events = append(events, event{Type: s.name + ".updated", Entity: s.entity, ID: movedFrom, Version: now.UnixNano(), Before: before})
+		events = append(events, event{Type: s.name + ".updated", Entity: s.entity, ID: movedFrom, Version: now.UnixNano(), Before: before, moved: true})
 	}
-	a.publish(c.ctx, append(events, pointed...)...)
+	events = append(events, pointed...)
+	rebuilt := a.publish(c.ctx, events...)
+	if !c.system {
+		a.usage.ran(c.me, len(events)+rebuilt)
+	}
 	for _, then := range afterwards {
 		then(&System{app: a, ctx: c.ctx}, saved)
 	}

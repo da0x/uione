@@ -18,6 +18,7 @@ type event struct {
 	Version int64          // later events have larger versions
 	Before  map[string]any // the entity before, or nil if it's new
 	After   map[string]any // the entity after, or nil if it was deleted
+	moved   bool           // for the key a record left when its key moved, which isn't deleted
 }
 
 func (ev event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, ev.Version) }
@@ -32,10 +33,11 @@ func (ev event) id() string { return fmt.Sprintf("%s/%s/%d", ev.Entity, ev.ID, e
 // A failure here never fails the command: the write has already happened, and
 // saying otherwise would be wrong. It's logged, and the view catches up on the next
 // event. Delivery through Pub/Sub, with a fallback for when publishing fails, comes
-// when the library runs in the cloud.
-func (a *App) publish(ctx context.Context, events ...event) {
+// when the library runs in the cloud. It says how many pages it rebuilt.
+func (a *App) publish(ctx context.Context, events ...event) int {
 	ctx = context.WithoutCancel(ctx)
 	a.forgetFiles(ctx, events)
+	a.usage.kept(a.reg, events)
 	type page struct {
 		view    *ViewSpec
 		subject string
@@ -74,6 +76,7 @@ func (a *App) publish(ctx context.Context, events ...event) {
 		}()
 	}
 	wg.Wait()
+	return len(pages)
 }
 
 // How many pages are rebuilt at the same time after a command.

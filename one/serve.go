@@ -224,6 +224,8 @@ type App struct {
 	disabled *disabledAccounts // who has been turned off, as Firebase last said
 	stripe   *stripeAPI        // how Stripe is called, when the app uses it
 
+	usage *usage // what each person has used since it was last kept
+
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
 	rebuilt  atomic.Int64 // how many view documents have been worked out, which tests count
@@ -289,7 +291,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 			return nil, err
 		}
 	}
-	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits(), disabled: newDisabledAccounts(), stripe: stripeFromEnvironment()}
+	a := &App{store: store, auth: authClient, reg: reg, log: log.Default(), limits: newLimits(), usage: newUsage(), disabled: newDisabledAccounts(), stripe: stripeFromEnvironment()}
 	if a.files, err = filesFor(ctx, project, reg); err != nil {
 		return nil, err
 	}
@@ -332,6 +334,10 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.wordsChanged(ctx); err != nil {
 		return nil, err
 	}
+	// What each person kept before usage was counted, counted once.
+	if err := a.heldCounted(ctx); err != nil {
+		return nil, err
+	}
 	// Then what a deploy changes once, before views are rebuilt, so they show it.
 	if err := a.doOnce(ctx); err != nil {
 		return nil, err
@@ -346,11 +352,14 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 	if err := a.rebuildChanged(ctx); err != nil {
 		return nil, err
 	}
+	a.usage.start(a)
 	return a, nil
 }
 
-// Close lets go of the app's connection to Firestore.
+// Close keeps what each person used, then lets go of the app's connection to
+// Firestore.
 func (a *App) Close() error {
+	a.usage.close()
 	if a.files != nil {
 		a.files.client.Close()
 	}
@@ -476,6 +485,7 @@ func (a *App) caller(r *http.Request) (caller, error) {
 		if err != nil {
 			return caller{}, err
 		}
+		a.usage.asked(service)
 		return caller{id: service, service: true, place: place}, nil
 	}
 	token, err := a.auth.VerifyIDToken(r.Context(), credential)
@@ -486,12 +496,14 @@ func (a *App) caller(r *http.Request) (caller, error) {
 	// person, and its profile isn't rewritten from it.
 	if service, _ := token.Claims["service"].(bool); service {
 		place, _ := token.Claims["place"].(string)
+		a.usage.asked(token.UID)
 		return caller{id: token.UID, service: true, place: place}, nil
 	}
 	if err := a.turnedOff(r.Context(), token.UID); err != nil {
 		return caller{}, err
 	}
 	a.remember(r.Context(), token)
+	a.usage.asked(token.UID)
 	return caller{id: token.UID}, nil
 }
 

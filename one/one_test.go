@@ -137,6 +137,7 @@ var modules = []one.Item{
 // harness is a fresh backend on empty emulators, and a way to talk to it.
 type harness struct {
 	t      *testing.T
+	app    *one.App
 	server *httptest.Server
 	store  *firestore.Client
 }
@@ -161,7 +162,7 @@ func start(t *testing.T) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, server: httptest.NewServer(app.Handler()), store: store}
+	h := &harness{t: t, app: app, server: httptest.NewServer(app.Handler()), store: store}
 	t.Cleanup(func() {
 		h.server.Close()
 		store.Close()
@@ -506,7 +507,7 @@ func TestACommandAndAProjectSayHowOftenEachPersonMayAsk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{t: t, server: httptest.NewServer(app.Handler()), store: store}
+	h := &harness{t: t, app: app, server: httptest.NewServer(app.Handler()), store: store}
 	t.Cleanup(func() { h.server.Close(); store.Close(); app.Close() })
 	_, ada := h.signUp("ada@example.com")
 	_, grace := h.signUp("grace@example.com")

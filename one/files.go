@@ -199,6 +199,7 @@ func (a *App) serveUpload(w http.ResponseWriter, r *http.Request) {
 		replyFailure(w, a, "keeping an upload", err)
 		return
 	}
+	a.usage.filed(who.id, size)
 	go a.sweepUploads(context.WithoutCancel(r.Context()))
 
 	headers := map[string]string{"Content-Type": kind}
@@ -433,7 +434,12 @@ func (a *App) deleteFile(ctx context.Context, p string) {
 		a.log.Printf("one: file %s wasn't deleted: %v", p, err)
 		return
 	}
-	if _, err := a.fileRecord(p).Delete(ctx); err != nil {
+	record := a.fileRecord(p)
+	if snap, err := record.Get(ctx); err == nil {
+		by, _ := snap.Data()["uploaded_by"].(string)
+		a.usage.filed(by, -asInt(snap.Data()["size"]))
+	}
+	if _, err := record.Delete(ctx); err != nil {
 		a.log.Printf("one: file %s wasn't forgotten: %v", p, err)
 	}
 }

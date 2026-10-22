@@ -43,7 +43,8 @@ var guides = one.Module("guide",
 	}),
 	one.Command[Leaf]("leaf::create"),
 	one.Command[Leaf]("leaf::update"),
-	one.Role("writer", "leaf:create", "leaf:update").Per(one.Entity[Guide](), one.Entity[Writer]()),
+	one.Command[Leaf]("leaf::delete"),
+	one.Role("writer", "leaf:create", "leaf:update", "leaf:delete").Per(one.Entity[Guide](), one.Entity[Writer]()),
 	one.View("guide_page").Per(one.Entity[Guide]()).Readers(one.Entity[Writer]()).PublicWhen("visibility", "public").
 		List("leaves", one.Where[Leaf]("guide", one.Subject)).Fields("title"),
 )
