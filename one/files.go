@@ -414,7 +414,8 @@ func (a *App) forgetFiles(ctx context.Context, events []event) {
 	}
 	for _, ev := range events {
 		s := a.reg.entity(ev.Entity)
-		if s == nil || ev.Before == nil {
+		// What moved to a new id took its files with it.
+		if s == nil || ev.Before == nil || ev.moved {
 			continue
 		}
 		for _, f := range s.fields {

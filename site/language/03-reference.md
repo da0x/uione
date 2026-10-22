@@ -702,6 +702,19 @@ command loan::checkin {
   component sends. An update with neither may change any field but its keys.
   Another command, like a move, takes only the fields its `changes` and its forms
   name: `changes stage` takes the stage an issue moves to.
+- `changes slug`, naming a key given as it is, like a project's address, lets the
+  command change it, which moves it and everything named by it: a project's
+  boards, issues, their comments and histories, its roles and members, the files
+  attached to them and its services' keys. Its services keep their ids, and point
+  at its new address. Everything that points at what moved points at its new
+  address, and its old address leads to the new, so a link to it, or to an issue
+  in it, still opens it, and a GitHub repository connected before keeps its
+  secret. A move may be more than a transaction writes, so it's done in batches:
+  until it's done, nothing in it changes, and a command that tries is refused with
+  "try again in a minute". The command answers with its new id once it's moved;
+  if the backend stops before then, it's finished when the backend next starts.
+  A key made from another field, a serial, and one that points at what it's
+  within can't be named.
 - `was issue.stage` is what a field held before the command changed it.
 - `exists(step where from == was issue.stage && to == issue.stage)` asks whether
   there's one, in a `require`. Inside it, the entity's own fields are named

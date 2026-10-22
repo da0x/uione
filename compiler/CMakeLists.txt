@@ -88,6 +88,7 @@ if(ONE_TESTS)
         tests/search_tests.cpp
         tests/people_tests.cpp
         tests/extend_command_tests.cpp
+        tests/address_tests.cpp
         tests/stripe_tests.cpp
         tests/infrastructure_tests.cpp
         tests/cpp_tests.cpp

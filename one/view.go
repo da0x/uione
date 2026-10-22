@@ -1432,7 +1432,10 @@ func (a *App) compose(ctx context.Context, v *ViewSpec, subject string) (map[str
 		}
 	}
 	for _, name := range v.secrets {
-		set(name, GitHubSecret(subject), nil)
+		run(func() {
+			first, err := a.firstID(ctx, a.reg.schemas[v.per], subject)
+			set(name, GitHubSecret(first), err)
+		})
 	}
 	for _, c := range v.counts {
 		run(func() {

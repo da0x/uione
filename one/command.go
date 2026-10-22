@@ -846,6 +846,10 @@ func (c *Cmd[E, P]) register(r *registry, ns string) {
 	if c.atMost != nil {
 		r.rates[s.entity+"::"+c.action] = *c.atMost
 	}
+	// A key given as it is that the command may change can move it.
+	for _, name := range s.retypes(c.fields) {
+		s.field(name).retyped = true
+	}
 	r.commands[s.entity+"::"+c.action] = func(a *App, call *call) (string, error) {
 		return run[E, P](a, call, s, c.action, permission, c.fields, c.inputs, c.do, c.after)
 	}
@@ -900,6 +904,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	var before, after map[string]any
 	var pointed []event  // changes to entities the command points at
 	var movedFrom string // the id it had, when a key made from a field moved it
+	var movingTo string  // the id it's moving to, when a key given as it is changed
 
 	// Creating is checked before anything is read, unless only a role within an
 	// entity, such as a project, could allow it: then it's checked once what's sent
@@ -918,7 +923,7 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		entity := new(E)
 		v := reflect.ValueOf(entity).Elem()
 		record := P(entity).record()
-		before, after, movedFrom = nil, nil, ""
+		before, after, movedFrom, movingTo = nil, nil, "", ""
 		body := &Ctx{Context: ctx, me: c.me, now: now, app: a, tx: tx, counters: map[string]*counting{}, command: s.entity + "::" + action, given: given, service: c.service, address: c.address}
 		body.entity = &owned{s, v}
 		pointed = nil
@@ -941,6 +946,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				if err := a.permittedWithin(tx, c.me, permission, &owned{s, v}); err != nil {
 					return err
 				}
+			}
+			// Nothing is made in a place that's moving to a new address.
+			if err := a.closed(tx, s, "", v); err != nil {
+				return err
 			}
 			if !c.system {
 				if err := a.madeToday(tx, s, c.me, now, body.counters); err != nil {
@@ -1056,6 +1065,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if err := a.permittedAs(ctx, tx, c.me, c.service, permission, &owned{s, v}); err != nil {
 			return err
 		}
+		// Nothing changes while it, or the place it's in, moves to a new address.
+		if err := a.closed(tx, s, id, v); err != nil {
+			return err
+		}
 		// A member suspended goes, kept on a suspension, and a suspension restored
 		// goes, giving back what it kept.
 		roles, suspends := a.suspending(s, action)
@@ -1107,9 +1120,14 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		}
 		// An update takes what's sent; another command, like move, only the fields
 		// it says it changes, like the stage an issue moves to.
+		retyped := map[string]any{} // keys given as they are, which move it once it's saved
 		if action == "update" || fields != nil {
 			input := map[string]any{}
 			for name, value := range c.input {
+				if fields != nil && s.isKey(name) && contains(s.retypes(fields), name) {
+					retyped[name] = value
+					continue
+				}
 				// A key made from another field may be given by an update, as a stage's
 				// name may: it's named again, and moves. Other keys stay as they are.
 				if name == "id" || (s.isKey(name) && !(action == "update" && s.field(name).from != "" && !a.namedOnce(s))) {
@@ -1118,6 +1136,10 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 				if fields != nil && !c.system && !contains(fields, name) && s.field(name) != nil {
 					return invalid("%s can't be changed by %s::%s", label(name), s.name, action)
 				}
+				input[name] = value
+			}
+			// Its body, and what it requires, read the new key, as it will be once moved.
+			for name, value := range retyped {
 				input[name] = value
 			}
 			if err := s.decode(input, v); err != nil {
@@ -1154,10 +1176,16 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 		if err := a.unique(tx, s, v, id); err != nil {
 			return err
 		}
+		// A key given as it is moves it, and everything named by it, once this is saved.
+		if len(retyped) > 0 {
+			if movingTo, err = a.relocate(body, s, id, v); err != nil {
+				return err
+			}
+		}
 		// A key made from a field that changed moves it, and what points at it.
 		var moves *move
 		if to, ok := s.id(v); ok && follows && to != id {
-			if moves, err = a.moved(body, s, ref, v, before, to); err != nil {
+			if moves, err = a.moved(inTransaction{tx}, now, s, ref, v, before, to, false); err != nil {
 				return err
 			}
 			movedFrom, id, record.ID = id, to, to
@@ -1212,6 +1240,12 @@ func run[E any, P entityPointer[E]](a *App, c *call, s *schema, action string, p
 	}
 	for _, then := range afterwards {
 		then(&System{app: a, ctx: c.ctx}, saved)
+	}
+	// What moves is moved before the command answers, as much as it can be: what it
+	// can't, the backend finishes when it's next asked for or starts.
+	if movingTo != "" {
+		a.relocated(context.WithoutCancel(c.ctx), relocationOf(s.collection, id))
+		return movingTo, nil
 	}
 	return id, nil
 }

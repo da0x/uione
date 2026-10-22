@@ -95,6 +95,7 @@ type write struct {
 	data   map[string]any // nil deletes it
 	merged bool
 	event  *event
+	left   bool // deletes where something that moved was, which a move in batches does last
 }
 
 // serviceChanged does what a change to a service brings with it, in the command's

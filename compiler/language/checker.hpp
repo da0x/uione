@@ -1759,6 +1759,14 @@ namespace one::language {
                         snake(name, s.where);
                         const field* f = entity ? find_field(*entity, name) : nullptr;
                         if (entity && !f) error(s.where, "'changes " + name + "' names a field entity " + entity->name + " doesn't have");
+                        // changes slug: a key given as it is, like a project's address, which
+                        // moves it and everything named by it.
+                        if (f && (is_serial(*f) || (f->key && (named_from(*f) || pointed(ns, *f) || (f->type && f->type->text() == "user") ||
+                                                               entity->name == "role" || entity->name == "service")))) {
+                            error(s.where, "changes may name a key that's given as it is, like a project's slug, which moves it; " + name +
+                                               (is_serial(*f) ? " is counted when it's made" : named_from(*f) ? " follows what it's made from" :
+                                                entity->name == "role" || entity->name == "service" ? " names it for good" : " points at what it's within"));
+                        }
                     }
                 } else if (auto* d = std::get_if<dispatch_statement>(&s.node)) {
                     verify_dispatch(ns, *d, in);
@@ -3379,8 +3387,15 @@ namespace one::language {
                     bool updates = form->commands.front().parts.back() == "update";
                     // What the command is sent besides its entity's fields, a form asks for too.
                     std::map<std::string, field, std::less<>> inputs;
+                    // And the keys it says it changes, like a project's address, which move it.
+                    std::set<std::string, std::less<>> retyped;
                     if (auto here = scopes_.find(ns); here != scopes_.end()) {
-                        if (auto c = here->second.command_nodes.find(form->commands.front().text()); c != here->second.command_nodes.end()) inputs = inputs_of(*c->second);
+                        if (auto c = here->second.command_nodes.find(form->commands.front().text()); c != here->second.command_nodes.end()) {
+                            inputs = inputs_of(*c->second);
+                            for (const auto& st : c->second->body) {
+                                if (auto* changes = std::get_if<changes_statement>(&st.node)) retyped.insert(changes->fields.begin(), changes->fields.end());
+                            }
+                        }
                     }
                     for (const auto& f : form->fields) {
                         snake(f.name, f.where);
@@ -3399,7 +3414,8 @@ namespace one::language {
                         if (entity && !asked) {
                             error(f.where, "the form asks for " + f.name + ", which isn't a field of entity " +
                                                entity->name);
-                        } else if (asked && fixed_once_made(*asked) && !(creates && asked->key && !is_serial(*asked)) && !(updates && named_from(*asked) && entity->name != "role" && entity->name != "service")) {
+                        } else if (asked && fixed_once_made(*asked) && !(creates && asked->key && !is_serial(*asked)) && !(updates && named_from(*asked) && entity->name != "role" && entity->name != "service") &&
+                                   !(asked->key && !is_serial(*asked) && retyped.contains(f.name))) {
                             // A create form asks for a key, which names what it makes, and
                             // an update form for one made from a field, which renames it;
                             // but roles and services keep the names they're made with.

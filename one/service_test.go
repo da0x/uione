@@ -58,11 +58,12 @@ var desks = one.Module("desks",
 	one.Command[Desk]("desk::create").Allow(one.SignedIn).Do(func(c *one.Ctx, d *Desk) error {
 		return one.Create(c, &DeskSeat{Desk: d.ID, Person: c.Me(), Role: one.Key(d.ID, "owner")})
 	}),
+	one.Command[Desk]("desk::move").Fields("slug"),
 	one.Command[DeskRole]("desk_role::update").Fields("title", "may"),
 	one.Command[DeskTicket]("desk_ticket::create"),
 	one.Command[DeskNote]("desk_note::create"),
 	one.Roles(one.Entity[DeskRole](), one.Entity[Desk](), one.Entity[DeskSeat](), "may").
-		Default("owner", "Owner", "desk_role::update", "desk_ticket::create"),
+		Default("owner", "Owner", "desk_role::update", "desk_ticket::create", "desk::move"),
 	one.Service("github", "GitHub", "desk_note::create"),
 	one.GitHub("/hooks/desks").For(one.Entity[Desk](), "repository").Mentions(one.Entity[DeskTicket]()).
 		OnCommit(func(c *one.Ctx, m one.Mention) error {

@@ -227,7 +227,14 @@ func (a *App) serveGitHub(g *GitHubSpec) http.HandlerFunc {
 			reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong on our side; GitHub will try again"})
 			return
 		}
-		if project == "" || !signed(GitHubSecret(project), body, r.Header.Get("X-Hub-Signature-256")) {
+		// A project that moved to a new address keeps the secret it had.
+		first, err := a.firstID(r.Context(), a.reg.schemas[g.scope], project)
+		if err != nil {
+			a.log.Printf("one: a GitHub delivery's project couldn't be found: %v", err)
+			reply(w, http.StatusInternalServerError, map[string]any{"error": "something went wrong on our side; GitHub will try again"})
+			return
+		}
+		if project == "" || !signed(GitHubSecret(first), body, r.Header.Get("X-Hub-Signature-256")) {
 			reply(w, http.StatusUnauthorized, map[string]any{"error": "that delivery isn't signed with this repository's secret"})
 			return
 		}

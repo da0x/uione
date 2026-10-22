@@ -99,6 +99,7 @@ type field struct {
 	through  string // worked out when it's made from what another field points at, like board.project
 	within   string // for a list of roles it starts with: the field naming where they're held, like project
 	searched bool   // its words are kept on the record, for a search to find it by (search.go)
+	retyped  bool   // a key given as it is, like a project's address, that a command may change, moving it (relocating.go)
 }
 
 type schema struct {

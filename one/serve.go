@@ -227,6 +227,8 @@ type App struct {
 
 	usage *usage // what each person has used since it was last kept
 
+	relocating relocating // the moves this backend is doing (relocating.go)
+
 	profiles sync.Map     // each person's name and picture, as last saved
 	used     sync.Map     // when each service last used its key, as last kept
 	rebuilt  atomic.Int64 // how many view documents have been worked out, which tests count
@@ -358,6 +360,7 @@ func New(ctx context.Context, items ...Item) (*App, error) {
 		return nil, err
 	}
 	a.usage.start(a)
+	a.relocations(ctx)
 	return a, nil
 }
 

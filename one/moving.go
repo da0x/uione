@@ -7,6 +7,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"google.golang.org/grpc/codes"
@@ -91,11 +92,53 @@ func (a *App) namedOnce(s *schema) bool {
 	return false
 }
 
-// moved works out what moving an entity from id to its new one changes, in the
-// command's transaction: what points at it, what's named by what points at it, all
-// the way down, its history and theirs, the counters kept per each, and the old ids
-// as addresses of the new.
-func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Value, stored map[string]any, newID string) (*move, error) {
+// reader reads what a move changes: in a command's transaction, or as it's stored,
+// for a move done in the background, a batch at a time (relocating.go).
+type reader interface {
+	all(q firestore.Query) ([]*firestore.DocumentSnapshot, error)
+	get(ref *firestore.DocumentRef) (*firestore.DocumentSnapshot, error)
+}
+
+// inTransaction reads in a command's transaction.
+type inTransaction struct{ tx *firestore.Transaction }
+
+func (r inTransaction) all(q firestore.Query) ([]*firestore.DocumentSnapshot, error) {
+	return r.tx.Documents(q).GetAll()
+}
+
+func (r inTransaction) get(ref *firestore.DocumentRef) (*firestore.DocumentSnapshot, error) {
+	return r.tx.Get(ref)
+}
+
+// asStored reads what's stored, outside any transaction.
+type asStored struct{ ctx context.Context }
+
+func (r asStored) all(q firestore.Query) ([]*firestore.DocumentSnapshot, error) {
+	return q.Documents(r.ctx).GetAll()
+}
+
+func (r asStored) get(ref *firestore.DocumentRef) (*firestore.DocumentSnapshot, error) {
+	return ref.Get(r.ctx)
+}
+
+// keepsItsID says whether an entity keeps its id when what names it moves: a
+// service, whose id is who it is, held by its key, its profile and everything it
+// did. It points at where it moved, and stays as it's named.
+func (a *App) keepsItsID(s *schema) bool {
+	for _, r := range a.reg.defined {
+		if r.service != nil && a.reg.schemas[r.service] == s {
+			return true
+		}
+	}
+	return false
+}
+
+// moved works out what moving an entity from id to its new one changes: what points
+// at it, what's named by what points at it, all the way down, its history and
+// theirs, the counters kept per each, the service keys held in it and the files
+// attached to each, and the old ids as addresses of the new. resuming is a move
+// done in the background picked up again, whose new ids may be there already.
+func (a *App) moved(c reader, now time.Time, s *schema, ref *firestore.DocumentRef, v reflect.Value, stored map[string]any, newID string, resuming bool) (*move, error) {
 	m := &move{all: map[string]*moving{}, finalIDs: map[string]string{}}
 	root := &moving{schema: s, from: ref, value: v, stored: stored, moves: true, to: newID}
 	m.all[ref.Path] = root
@@ -118,7 +161,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 				if list {
 					op = "array-contains"
 				}
-				docs, err := c.tx.Documents(a.store.Collection(t.collection).Where(f.name, op, target.from.ID)).GetAll()
+				docs, err := c.all(a.store.Collection(t.collection).Where(f.name, op, target.from.ID))
 				if err != nil {
 					return nil, err
 				}
@@ -143,7 +186,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 					} else {
 						one.repoint = append(one.repoint, repointing{field: f, at: -1, target: target})
 					}
-					if f.key && !one.moves {
+					if f.key && !one.moves && !a.keepsItsID(t) {
 						one.moves = true
 					}
 				}
@@ -183,10 +226,10 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 			continue
 		}
 		to := a.store.Collection(one.schema.collection).Doc(one.to)
-		if leaving, ok := m.all[to.Path]; ok && leaving.moves {
+		if leaving, ok := m.all[to.Path]; (ok && leaving.moves) || resuming {
 			continue
 		}
-		_, err := c.tx.Get(to)
+		_, err := c.get(to)
 		if err == nil {
 			if one == root {
 				return nil, takenBy(s, v)
@@ -224,7 +267,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 				if f.refers != one.schema.entity {
 					continue
 				}
-				docs, err := c.tx.Documents(a.store.Collection(h.collection).Where(f.name, "==", one.from.ID)).GetAll()
+				docs, err := c.all(a.store.Collection(h.collection).Where(f.name, "==", one.from.ID))
 				if err != nil {
 					return nil, err
 				}
@@ -238,7 +281,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 					continue
 				}
 				for _, side := range []string{"before", "after"} {
-					docs, err := c.tx.Documents(a.store.Collection(h.collection).Where("field", "==", f.name).Where(side, "==", one.from.ID)).GetAll()
+					docs, err := c.all(a.store.Collection(h.collection).Where("field", "==", f.name).Where(side, "==", one.from.ID))
 					if err != nil {
 						return nil, err
 					}
@@ -266,7 +309,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 				}
 				counter := t.collection + "." + f.name + "."
 				old := a.store.Collection("serials").Doc(counter + one.from.ID)
-				snap, err := c.tx.Get(old)
+				snap, err := c.get(old)
 				if status.Code(err) == codes.NotFound {
 					continue
 				}
@@ -285,7 +328,7 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 			continue
 		}
 		former := a.store.Collection("moved")
-		earlier, err := c.tx.Documents(former.Where("collection", "==", one.schema.collection).Where("to", "==", one.from.ID)).GetAll()
+		earlier, err := c.all(former.Where("collection", "==", one.schema.collection).Where("to", "==", one.from.ID))
 		if err != nil {
 			return nil, err
 		}
@@ -293,8 +336,34 @@ func (a *App) moved(c *Ctx, s *schema, ref *firestore.DocumentRef, v reflect.Val
 			m.writes = append(m.writes, write{ref: doc.Ref, data: map[string]any{"to": one.to}, merged: true})
 		}
 		m.writes = append(m.writes,
-			write{ref: former.Doc(movedID(one.schema.collection, one.from.ID)), data: map[string]any{"collection": one.schema.collection, "entity": one.schema.entity, "to": one.to, "at": c.now}},
+			write{ref: former.Doc(movedID(one.schema.collection, one.from.ID)), data: map[string]any{"collection": one.schema.collection, "entity": one.schema.entity, "to": one.to, "at": now}},
 			write{ref: former.Doc(movedID(one.schema.collection, one.to))})
+	}
+
+	// A service's key says which place it's held in, and a file which record it's
+	// attached to.
+	for _, one := range m.order {
+		if !one.moves || one.to == one.from.ID {
+			continue
+		}
+		if a.isScope(one.schema) {
+			keys, err := c.all(a.store.Collection("keys").Where("place", "==", one.from.ID))
+			if err != nil {
+				return nil, err
+			}
+			for _, doc := range keys {
+				m.writes = append(m.writes, write{ref: doc.Ref, data: map[string]any{"place": one.to}, merged: true})
+			}
+		}
+		if one.schema.keepsFiles() {
+			files, err := c.all(a.store.Collection("files").Where("entity", "==", one.schema.entity).Where("record", "==", one.from.ID))
+			if err != nil {
+				return nil, err
+			}
+			for _, doc := range files {
+				m.writes = append(m.writes, write{ref: doc.Ref, data: map[string]any{"record": one.to}, merged: true})
+			}
+		}
 	}
 
 	for path, data := range histories {
@@ -331,7 +400,7 @@ func (a *App) mayMove(s *schema, depth int) bool {
 		return false
 	}
 	for _, f := range s.keys {
-		if f.from != "" {
+		if f.from != "" || f.retyped {
 			return true
 		}
 		if t := a.reg.entity(f.refers); f.refers != "" && t != nil && a.mayMove(t, depth+1) {
@@ -357,35 +426,10 @@ func takenBy(s *schema, v reflect.Value) error {
 	return invalid("%s is already taken", label(s.keys[len(s.keys)-1].name))
 }
 
-// save writes the move: each one that moves under its new id, and gone from its old,
-// with its own change kept, and each that points at one that moves, changed in place.
-// The root, the command's own entity, is written by the command.
+// save writes the move in the command's transaction. The root, the command's own
+// entity, is written by the command.
 func (m *move) save(c *Ctx, root *moving) error {
-	for _, one := range m.order {
-		if one == root {
-			continue
-		}
-		record := one.value.Addr().Interface().(interface{ record() *Record }).record()
-		record.UpdatedAt, record.UpdatedBy = c.now, c.me
-		if one.moves {
-			record.ID = one.to
-		}
-		after := one.schema.data(one.value)
-		to := c.app.store.Collection(one.schema.collection).Doc(one.to)
-		if err := c.tx.Set(to, after); err != nil {
-			return err
-		}
-		if one.moves && one.to != one.from.ID {
-			if err := c.tx.Delete(one.from); err != nil {
-				return err
-			}
-			m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.from.ID, Version: c.now.UnixNano(), Before: one.stored})
-			m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.to, Version: c.now.UnixNano(), After: after})
-			continue
-		}
-		m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.to, Version: c.now.UnixNano(), Before: one.stored, After: after})
-	}
-	for _, w := range m.writes {
+	for _, w := range m.ops(c.app.store, c.now, c.me, root) {
 		var err error
 		switch {
 		case w.data == nil:
@@ -398,11 +442,45 @@ func (m *move) save(c *Ctx, root *moving) error {
 		if err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// ops is the move as writes, in order: each one that moves under its new id, and gone
+// from its old, which a write marks as left, each that points at one that moves
+// changed in place, then the rest, its histories, counters, keys, files and old
+// addresses. What each changes is added to its events. skip, when there is one, is
+// left for whoever writes it.
+func (m *move) ops(store *firestore.Client, now time.Time, me string, skip *moving) []write {
+	var out []write
+	for _, one := range m.order {
+		if one == skip {
+			continue
+		}
+		record := one.value.Addr().Interface().(interface{ record() *Record }).record()
+		record.UpdatedAt, record.UpdatedBy = now, me
+		if one.moves {
+			record.ID = one.to
+		}
+		after := one.schema.data(one.value)
+		out = append(out, write{ref: store.Collection(one.schema.collection).Doc(one.to), data: after})
+		if one.moves && one.to != one.from.ID {
+			// It's the same record at its new id, changed from what it was, and its old
+			// id is where it moved from, which isn't deleting it, its files or its count.
+			out = append(out, write{ref: one.from, left: true})
+			m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.from.ID, Version: now.UnixNano(), Before: one.stored, moved: true})
+			m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.to, Version: now.UnixNano(), Before: one.stored, After: after})
+			continue
+		}
+		m.events = append(m.events, event{Type: one.schema.name + ".updated", Entity: one.schema.entity, ID: one.to, Version: now.UnixNano(), Before: one.stored, After: after})
+	}
+	for _, w := range m.writes {
+		out = append(out, w)
 		if w.event != nil {
 			ev := *w.event
-			ev.Version = c.now.UnixNano()
+			ev.Version = now.UnixNano()
 			m.events = append(m.events, ev)
 		}
 	}
-	return nil
+	return out
 }
