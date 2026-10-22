@@ -556,7 +556,9 @@ namespace one::generators {
                     bodies.embed(items);
                     bodies.close("));");
                 } else {
-                    for (const auto& [variable, view] : parts.views) components.insert(people_view(view) ? "usePeople" : "useView");
+                    for (const auto& [variable, view] : parts.views) {
+                        components.insert(!people_view(view) ? "useView" : names_parameter(route, "user") ? "usePerson" : "usePeople");
+                    }
                     bodies.open("export const " + name + " = screen(" + info + ", () => {");
                     // A view per entity is read for the entity the address names, and a
                     // form can send it.
@@ -576,7 +578,13 @@ namespace one::generators {
                         bodies.line("const " + web_detail::js_name(param + "_id") + " = useParam(" + web_detail::js_string(param) + ");");
                     }
                     for (const auto& [variable, view] : parts.views) {
-                        // Everyone who has signed up is asked for a page at a time.
+                        // Everyone who has signed up is asked for a page at a time, or
+                        // one person, whom the address names.
+                        if (people_view(view) && names_parameter(route, "user")) {
+                            components.insert("useParam");
+                            bodies.line("const " + variable + " = usePerson(" + web_detail::js_string(view) + ", useParam(\"user\"));");
+                            continue;
+                        }
                         if (people_view(view)) {
                             bodies.line("const " + variable + " = usePeople(" + web_detail::js_string(view) + ");");
                             continue;
@@ -2087,7 +2095,7 @@ namespace one::generators {
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(column_shown.label);
             }
             std::string line = "<Table view={" + view_variable(parts, view) + "}";
-            if (people_view(view)) line += " more={" + view_variable(parts, view) + ".more}";
+            if (people_view(view) && !names_parameter(route_, "user")) line += " more={" + view_variable(parts, view) + ".more}";
             if (table.list) line += " list=" + web_detail::js_string(*table.list);
             if (table.link) {
                 std::string target = full_route(ns, *table.link);

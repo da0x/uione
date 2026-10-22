@@ -302,6 +302,17 @@ namespace one::language {
                 end_line();
                 return {where, std::move(service)};
             }
+            if (word == "extend" && peek(1).kind == token_kind::identifier && peek(1).text == "command") {
+                advance();
+                advance();
+                extend_command_declaration extension;
+                extension.command = parse_qualified_name("the command it adds to, like projects::project::create");
+                expect(token_kind::left_brace, "'{' and the requires it adds, one a line");
+                while (in_block()) extension.body.push_back(parse_statement());
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(extension)};
+            }
             if (word == "extend" && peek(1).kind == token_kind::identifier && peek(1).text == "role") {
                 advance();
                 advance();
@@ -991,6 +1002,17 @@ namespace one::language {
                         }
                         each.limit = limit;
                         end_line();
+                        continue;
+                    }
+                    // payments = each billing::payment where ...: a list in a row.
+                    if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::assign && peek(2).kind == token_kind::identifier &&
+                        peek(2).text == "each") {
+                        location where = peek().where;
+                        std::string name = advance().text;
+                        advance();
+                        each.lists.push_back(parse_each());
+                        each.lists.back().name = name;
+                        each.lists.back().where = where;
                         continue;
                     }
                     parse_view_row_line(each.rows);

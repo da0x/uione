@@ -653,6 +653,7 @@ namespace one::language {
 
         // Lowering has added its commands to the role, where they're checked.
         void verify(const std::string&, location, const extend_role_declaration&) {}
+        void verify(const std::string&, location, const extend_command_declaration&) {}
 
         void verify(const std::string& ns, location, const define_role_declaration& r) {
             snake(r.name, r.where);
@@ -1622,6 +1623,18 @@ namespace one::language {
             std::map<std::string, field, std::less<>> inputs = inputs_of(c);
             in.inputs = &inputs;
             statements(ns, c.body, entity, in);
+            // What extend command adds, read as if written here, checked where it's written.
+            for (const auto& more : c.extended) {
+                std::string here = path_;
+                path_ = more.path;
+                for (const auto& st : more.body) {
+                    if (!std::holds_alternative<require_statement>(st.node)) {
+                        error(st.where, "extend command adds requires to a command, like require organization == none  \"...\"; what it does is its own namespace's to say");
+                    }
+                }
+                statements(ns, more.body, entity, in);
+                path_ = here;
+            }
         }
 
         // What a command is sent besides its entity's fields: input into stage.
@@ -2132,6 +2145,7 @@ namespace one::language {
                     error(key->where, "each user is ordered by when they were last active or joined, like order by active descending");
                 }
             }
+            for (const auto& list : each.lists) verify_theirs(ns, list);
             static const std::vector<std::string> shown{"name", "picture", "username", "service", "email", "joined", "active", "commands", "writes", "bytes"};
             for (const auto& row : each.rows) {
                 auto* name = std::get_if<name_expression>(&row.value->node);
@@ -2184,33 +2198,80 @@ namespace one::language {
             if (!f || !f->type || f->type->text() != "number" || f->list) {
                 error(row.value->where, "sum adds up a number, and " + e->name + " holds no number " + total.member);
             }
+            if (!theirs(ns, kind->name, *e, over->condition.get())) {
+                error(over->condition ? over->condition->where : over->source->where,
+                      "sum adds up the records that are each person's, which name them, as created_by does, or name what's theirs, " + like);
+            }
+        }
+
+        // Whether a where picks the records that are each person's: account.created_by ==
+        // user, through one field they point at, or created_by == user, naming them.
+        bool theirs(const std::string& ns, const qualified_name& kind, const entity_declaration& e, const expression* condition) const {
             // Where the entity is declared, which what its fields point at is named from.
             std::string at = ns;
-            if (kind->name.parts.size() > 1) {
+            if (kind.parts.size() > 1) {
                 at.clear();
-                for (std::size_t i = 0; i + 1 < kind->name.parts.size(); ++i) at += (at.empty() ? "" : "::") + kind->name.parts[i];
+                for (std::size_t i = 0; i + 1 < kind.parts.size(); ++i) at += (at.empty() ? "" : "::") + kind.parts[i];
             }
             auto names_person = [&](const entity_declaration& in, const std::string& name) {
                 if (name == "created_by") return true;
                 const field* g = find_field(in, name);
                 return g && !g->list && g->type && g->type->text() == "user";
             };
-            auto* test = std::get_if<binary_expression>(&over->condition->node);
+            auto* test = condition ? std::get_if<binary_expression>(&condition->node) : nullptr;
             auto* person = test && test->op == token_kind::equal ? std::get_if<name_expression>(&test->right->node) : nullptr;
-            bool theirs = false;
-            if (person && person->name.text() == "user") {
-                if (auto* by = std::get_if<name_expression>(&test->left->node); by && by->name.parts.size() == 1) {
-                    theirs = names_person(*e, by->name.parts[0]);
-                } else if (auto* through = std::get_if<member_expression>(&test->left->node)) {
-                    auto* hop = std::get_if<name_expression>(&through->object->node);
-                    const field* g = hop && hop->name.parts.size() == 1 ? find_field(*e, hop->name.parts[0]) : nullptr;
-                    const entity_declaration* pointed = g && !g->list && g->type ? find_entity(at, *g->type) : nullptr;
-                    theirs = pointed && names_person(*pointed, through->member);
+            if (!person || person->name.text() != "user") return false;
+            if (auto* by = std::get_if<name_expression>(&test->left->node); by && by->name.parts.size() == 1) return names_person(e, by->name.parts[0]);
+            auto* through = std::get_if<member_expression>(&test->left->node);
+            auto* hop = through ? std::get_if<name_expression>(&through->object->node) : nullptr;
+            const field* g = hop && hop->name.parts.size() == 1 ? find_field(e, hop->name.parts[0]) : nullptr;
+            const entity_declaration* pointed = g && !g->list && g->type ? find_entity(at, *g->type) : nullptr;
+            return pointed && names_person(*pointed, through->member);
+        }
+
+        // payments = each billing::payment where account.created_by == user { ... }: a
+        // person's own records, shown when they're read alone, ordered and kept to a
+        // limit, each row the entity's fields or those of what it points at.
+        void verify_theirs(const std::string& ns, const view_each& list) {
+            const std::string like = "like payments = each billing::payment where account.created_by == user { created_at  amount_paid }";
+            auto* kind = std::get_if<name_expression>(&list.source->node);
+            const entity_declaration* e = kind ? find_entity(ns, kind->name) : nullptr;
+            if (!e) {
+                error(list.source->where, "a person's list is of an entity's records, " + like);
+                return;
+            }
+            snake(*list.name, list.where);
+            if (!theirs(ns, kind->name, *e, list.condition.get())) {
+                error(list.condition ? list.condition->where : list.where,
+                      "a person's list holds the records that are theirs, which name them, as created_by does, or name what's theirs, " + like);
+            }
+            if (!list.within.empty() || list.changes || !list.lists.empty()) error(list.where, "a person's list is only what's theirs, " + like);
+            std::string at = ns;
+            if (kind->name.parts.size() > 1) {
+                at.clear();
+                for (std::size_t i = 0; i + 1 < kind->name.parts.size(); ++i) at += (at.empty() ? "" : "::") + kind->name.parts[i];
+            }
+            // A field of the entity's, or, through one pointing at another, of that one.
+            auto shown = [&](const expression& x) {
+                if (auto* n = std::get_if<name_expression>(&x.node); n && n->name.parts.size() == 1) return field_or_id(*e, n->name.parts[0]) != nullptr;
+                auto* m = std::get_if<member_expression>(&x.node);
+                auto* hop = m ? std::get_if<name_expression>(&m->object->node) : nullptr;
+                const field* g = hop && hop->name.parts.size() == 1 ? find_field(*e, hop->name.parts[0]) : nullptr;
+                const entity_declaration* pointed = g && !g->list && g->type ? find_entity(at, *g->type) : nullptr;
+                return pointed && field_or_id(*pointed, m->member);
+            };
+            for (const auto& key : list.order) {
+                const expression* x = key.get();
+                if (auto* u = std::get_if<unary_expression>(&x->node)) x = u->operand.get();
+                auto* n = std::get_if<name_expression>(&x->node);
+                if (!n || n->name.parts.size() != 1 || !field_or_id(*e, n->name.parts[0])) {
+                    error(key->where, "a person's list is ordered by a field of " + e->name + ", like order by created_at descending");
                 }
             }
-            if (!theirs) {
-                error(over->condition->where, "sum adds up the records that are each person's, which name them, as created_by does, "
-                                              "or name what's theirs, " + like);
+            for (const auto& row : list.rows) {
+                if (row.name || !shown(*row.value)) {
+                    error(row.where, "a person's list shows fields of " + e->name + ", or of what it points at, like account.organization");
+                }
             }
         }
 
@@ -2219,6 +2280,9 @@ namespace one::language {
             if (auto* each = people_list(ns, v)) {
                 verify_people(ns, where, v, *each);
                 return;
+            }
+            for (const auto& each : v.each) {
+                if (!each.lists.empty()) error(each.lists.front().where, "a list inside a row is a person's, in view { each user { ... } }; here, put it beside the view's rows");
             }
             if (v.per && *v.per != "user") {
                 snake(*v.per, where);
@@ -2442,6 +2506,10 @@ namespace one::language {
         const view_each* table_list(const view_declaration& view, const std::string& view_name, const table_item& table) {
             for (const auto& each : view.each) {
                 if (each.name == table.list) return &each;
+                // A person's own list, in each user.
+                for (const auto& theirs : each.lists) {
+                    if (theirs.name == table.list) return &theirs;
+                }
             }
             if (table.list) {
                 error(table.view.where, "view " + view_name + " has no list called " + *table.list);
@@ -3138,6 +3206,13 @@ namespace one::language {
                             std::string key = written(*f.value);
                             bool has = false;
                             for (const auto& v : view->values) has = has || (v.name ? *v.name : written(*v.value)) == key;
+                            // A person's row, on a screen whose address names them.
+                            if (const view_each* person = people_list(ns, *view)) {
+                                for (const auto& v : person->rows) has = has || (v.name ? *v.name : written(*v.value)) == key;
+                                if (&f == &details->fields.front() && (route + "/").find("/:user/") == std::string::npos) {
+                                    error(details->view.where, "view " + details->view.text() + " shows one person on a screen whose address names them, like /staff/people/:user");
+                                }
+                            }
                             if (!has) error(f.where, "view " + details->view.text() + " has no " + key + " to show");
                         }
                         if (details->tint && std::none_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == *details->tint; })) {

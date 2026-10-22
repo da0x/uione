@@ -52,15 +52,32 @@ namespace staff {
 			projects = keeps(projects::project)
 			paid = sum(projects::charge where project.created_by == user).amount
 			charged = sum(projects::charge where created_by == user).amount
+			charges = each projects::charge where project.created_by == user {
+				order by amount descending
+				limit 10
+				project  amount  project.slug
+			}
 		}
 	}
 
 	screen "People" /people {
-		table people {
+		table people link /people/:user {
 			name "Name"
 			email "Email"
 			joined "Joined"
 			projects "Projects"
+			paid "Paid"
+		}
+	}
+
+	screen "Person" /people/:user {
+		details people {
+			name "Name"
+			email "Email"
+		}
+		table people.charges {
+			project.slug "Project"
+			amount "Amount"
 		}
 	}
 }
@@ -103,7 +120,8 @@ TEST_CASE("a clerk's list of everyone becomes the runtime's people, asked for a 
                            "\tKeeps(\"projects\", one.Entity[projects.Project]()).\n"
                            "\tSums(\"paid\", one.Entity[projects.Charge](), \"amount\", \"project.created_by\").\n"
                            "\tSums(\"charged\", one.Entity[projects.Charge](), \"amount\", \"created_by\").\n"
-                           "\tLimit(50)\n"));
+                           "\tLimit(50).\n"
+                           "\tList(\"charges\", one.Entity[projects.Charge](), \"project.created_by\").Order(\"-amount\").Limit(10).Fields(\"project\", \"amount\", \"project.slug\")\n"));
     CHECK(has(go->content, "one.Role(\"clerk\", \"user:view\")"));
 
     auto web = generators::generate_web(files, root + "/examples/tasks", root + "/examples/tasks/build/web");
@@ -113,6 +131,10 @@ TEST_CASE("a clerk's list of everyone becomes the runtime's people, asked for a 
     CHECK(has(screen->content, "const people = usePeople(\"staff::people\");"));
     CHECK(has(screen->content, "<Table view={people} more={people.more}"));
     CHECK(!has(screen->content, "useView("));
+    // A person's own page reads them alone, by the address, with their lists.
+    CHECK(has(screen->content, "const people = usePerson(\"staff::people\", useParam(\"user\"));"));
+    CHECK(has(screen->content, "list=\"charges\""));
+    CHECK(has(screen->content, "link=\"/staff/people/:user\""));
 }
 
 TEST_CASE("a list of everyone is read by a role given user::view, and holds nothing else") {
@@ -136,6 +158,13 @@ TEST_CASE("a list of everyone is read by a role given user::view, and holds noth
     CHECK(has(wrong("where created_by == user", "where created_by != user"), "sum adds up the records that are each person's"));
     CHECK(has(wrong("sum(projects::charge where created_by", "total(projects::charge where created_by"),
               "a person's row adds up a number of the records that are theirs"));
+    CHECK(has(wrong("charges = each projects::charge where project.created_by == user", "charges = each projects::charge where amount == user"),
+              "a person's list holds the records that are theirs"));
+    CHECK(has(wrong("project  amount  project.slug", "project  amount  project.name"), "a person's list shows fields of charge, or of what it points at"));
+    CHECK(has(wrong("order by amount descending", "order by price descending"), "a person's list is ordered by a field of charge"));
+    CHECK(has(wrong("charges = each projects::charge", "charges = each projects::plan"), "a person's list is of an entity's records"));
+    CHECK(has(wrong("screen \"Person\" /people/:user {", "screen \"Person\" /people/:id {"),
+              "view people shows one person on a screen whose address names them, like /staff/people/:user"));
     CHECK(has(wrong("command project::create {\n\t\tby anyone signed in", "command project::create {\n\t\tpermission user::view"),
               "user::view reads the lists of everyone who has signed up, so it's given to a role, like role staff  user::view"));
 }

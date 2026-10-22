@@ -24,12 +24,15 @@ type Fee struct {
 }
 
 // An office whose clerks see everyone who has signed up, two to a page, with how
-// many guides each keeps, what their guides were charged, and what each charged.
+// many guides each keeps, what their guides were charged, and what each charged;
+// and on a person's own page, the fees their guides were charged, and a guide.
 var office = one.Module("office",
 	one.People("people").Fields("name", "email", "joined", "active", "commands").Keeps("guides", one.Entity[Guide]()).
 		Sums("paid", one.Entity[Fee](), "amount", "guide.created_by").
 		Sums("charged", one.Entity[Fee](), "amount", "created_by").
-		Limit(2),
+		Limit(2).
+		List("fees", one.Entity[Fee](), "guide.created_by").Order("-amount").Fields("guide", "amount", "guide.visibility").
+		List("made", one.Entity[Guide](), "created_by").Fields("slug").Limit(1),
 	one.Role("clerk", string(one.ViewPeople)),
 	one.Command[Fee]("fee::create").Allow(one.SignedIn),
 )
@@ -56,6 +59,24 @@ func (h *harness) people(token, after string) (int, []map[string]any, string) {
 	}
 	json.NewDecoder(response.Body).Decode(&reply)
 	return response.StatusCode, reply.Rows, reply.Next
+}
+
+// person asks for one person's row, and gives the status and the row.
+func (h *harness) person(token, id string) (int, map[string]any) {
+	h.t.Helper()
+	asked := url.Values{"view": {"office::people"}, "person": {id}}
+	request, _ := http.NewRequest(http.MethodGet, h.server.URL+"/api/people?"+asked.Encode(), nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var reply struct {
+		Person map[string]any `json:"person"`
+	}
+	json.NewDecoder(response.Body).Decode(&reply)
+	return response.StatusCode, reply.Person
 }
 
 func TestAClerkSeesEveryoneAPageAtATime(t *testing.T) {
@@ -131,6 +152,48 @@ func TestAClerkSeesWhatEachPersonPaid(t *testing.T) {
 	// Ada's guides were charged 1500 and ada charged 50; grace the other way round.
 	if want := map[any][2]any{ada: {float64(1500), float64(50)}, grace: {float64(50), float64(1500)}}; !reflect.DeepEqual(sums, want) {
 		t.Errorf("what each paid and charged is %v, not %v", sums, want)
+	}
+}
+
+func TestAClerkSeesOnePersonWithWhatsTheirs(t *testing.T) {
+	h := start(t)
+	ada, adaToken := h.signUp("ada@example.com")
+	grace, graceToken := h.signUp("grace@example.com")
+	h.mustRun("guide/guide/create", adaToken, map[string]any{"slug": "kitchen"})
+	h.mustRun("guide/guide/create", adaToken, map[string]any{"slug": "cellar"})
+	h.mustRun("guide/guide/create", graceToken, map[string]any{"slug": "garden"})
+	h.mustRun("office/fee/create", graceToken, map[string]any{"guide": "kitchen", "amount": 1200})
+	h.mustRun("office/fee/create", graceToken, map[string]any{"guide": "cellar", "amount": 300})
+	h.mustRun("office/fee/create", graceToken, map[string]any{"guide": "garden", "amount": 50})
+	h.app.KeepUsage()
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"role_id": "clerk"}, firestore.MergeAll); err != nil {
+		t.Fatal(err)
+	}
+	status, row := h.person(adaToken, ada)
+	if status != http.StatusOK || row["email"] != "ada@example.com" || row["paid"] != float64(1500) || row["guides"] != float64(2) {
+		t.Fatalf("ada is %d %v", status, row)
+	}
+	// Hers alone, the most first, with what each points at read through.
+	fees, _ := row["fees"].([]any)
+	var shown []any
+	for _, fee := range fees {
+		f := fee.(map[string]any)
+		shown = append(shown, []any{f["guide"], f["amount"], f["guide.visibility"]})
+	}
+	if want := []any{[]any{"kitchen", float64(1200), "public"}, []any{"cellar", float64(300), "public"}}; !reflect.DeepEqual(shown, want) {
+		t.Errorf("ada's fees are %v, not %v", shown, want)
+	}
+	if made, _ := row["made"].([]any); len(made) != 1 {
+		t.Errorf("ada's guides, one at most, are %v", row["made"])
+	}
+	if status, _ := h.person(graceToken, ada); status != http.StatusForbidden {
+		t.Errorf("someone without the role reading ada got %d", status)
+	}
+	if status, _ := h.person(adaToken, "nobody"); status != http.StatusNotFound {
+		t.Errorf("reading someone who isn't there got %d", status)
+	}
+	if _, row := h.person(adaToken, grace); len(row["fees"].([]any)) != 1 {
+		t.Errorf("grace's fees are %v", row["fees"])
 	}
 }
 

@@ -35,6 +35,8 @@ export interface MemoryOptions {
   search?: DataSource["search"];
   // Lists everyone a page at a time, as a server would.
   people?: DataSource["people"];
+  // Reads one person of that list, as a server would.
+  readPerson?: DataSource["person"];
 }
 
 export function memorySource(options: MemoryOptions = {}): MemorySource {
@@ -101,6 +103,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
     files,
     search: options.search,
     people: options.people,
+    person: options.readPerson,
 
     subscribe(view, subject, emit) {
       const k = key(view, subject);

@@ -52,6 +52,8 @@ export interface DataSource {
   // user::view, or denied for anyone else. It rejects with a readable message when
   // it can't.
   people?(view: string, after: string): Promise<PeoplePage | "denied">;
+  // One person's row of such a list, with the lists of what's theirs, or denied.
+  person?(view: string, person: string): Promise<Record<string, unknown> | "denied">;
 }
 
 // A page of people, and the person the next page starts after, or "" at the end.
@@ -167,6 +169,35 @@ function remember(source: DataSource, key: string, state: ViewState) {
   if (state.status !== "live") return;
   memory.set(key, state);
   if (memory.size > remembers) memory.delete(memory.keys().next().value!);
+}
+
+// One person of a list of everyone, as a view per entity is: their row, with the
+// lists of what's theirs. It's read when the screen opens, as the list is.
+export function usePerson(view: string, person: string | undefined): ViewState {
+  const source = useSource();
+  const [state, setState] = useState<{ key: string; view: ViewState }>({ key: "", view: loading });
+  const key = `${view}:${person ?? ""}`;
+  useEffect(() => {
+    let gone = false;
+    setState({ key, view: loading });
+    if (!source.person || !person) {
+      setState({ key, view: { status: "denied", data: undefined } });
+      return;
+    }
+    source.person(view, person).then(
+      (row) => {
+        if (!gone) setState({ key, view: row === "denied" ? { status: "denied", data: undefined } : { status: "live", data: row } });
+      },
+      () => {
+        if (!gone) setState({ key, view: { status: "stale", data: undefined } });
+      },
+    );
+    return () => {
+      gone = true;
+    };
+  }, [source, view, person, key]);
+  // The render right after switching people never shows the one before.
+  return state.key === key ? state.view : loading;
 }
 
 // Everyone who has signed up, as a view whose rows come a page at a time, and more,

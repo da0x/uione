@@ -35,18 +35,9 @@ func Exists[E any, P entityPointer[E]](c *Ctx, q Query, keep func(*E) (bool, err
 		return false, err
 	}
 	for _, doc := range docs {
-		excepted := false
-		for _, cond := range q.conditions {
-			if cond.except && same(doc.Data()[cond.field], cond.value) {
-				excepted = true
-			}
-			// A field wanted to have none, which Firestore can't ask of a field that's
-			// missing or empty.
-			if !cond.except && !cond.has && cond.value == nil && !none(doc.Data()[cond.field]) {
-				excepted = true
-			}
-		}
-		if excepted {
+		// A field wanted to have none is checked here, since Firestore can't ask it of
+		// a field that's missing or empty.
+		if !q.keeps(doc.Data()) {
 			continue
 		}
 		if keep == nil {
@@ -61,6 +52,69 @@ func Exists[E any, P entityPointer[E]](c *Ctx, q Query, keep func(*E) (bool, err
 		}
 	}
 	return false, nil
+}
+
+// Count says how many entities the query finds, as they're stored, counted in the
+// command's transaction without reading them: how many projects an organization
+// has, before one more is made, as in
+//
+//	one.Count[Project](c, one.Where[Project]("organization", p.Organization))
+//
+// Only what a query can ask of the store is counted on: a field's value, or a list
+// holding it. A condition Except leaves out reads each one instead.
+func Count[E any, P entityPointer[E]](c *Ctx, q Query) (int, error) {
+	s := c.app.reg.schemas[reflect.TypeFor[E]()]
+	if s == nil {
+		return 0, fmt.Errorf("one: %s isn't an entity any module uses", reflect.TypeFor[E]().Name())
+	}
+	query := c.app.store.Collection(s.collection).Query
+	checked := false
+	for _, cond := range q.conditions {
+		switch {
+		case cond.has:
+			query = query.Where(cond.field, "array-contains", cond.value)
+		case !cond.except && cond.value != nil:
+			query = query.Where(cond.field, "==", cond.value)
+		default:
+			checked = true
+		}
+	}
+	if checked {
+		n := 0
+		docs, err := c.tx.Documents(query).GetAll()
+		if err != nil {
+			return 0, err
+		}
+		for _, doc := range docs {
+			if q.keeps(doc.Data()) {
+				n++
+			}
+		}
+		return n, nil
+	}
+	result, err := query.NewAggregationQuery().WithCount("n").Transaction(c.tx).Get(c.Context)
+	if err != nil {
+		return 0, err
+	}
+	n, ok := result["n"].(interface{ GetIntegerValue() int64 })
+	if !ok {
+		return 0, fmt.Errorf("one: counting %s gave %T, not a number", s.entity, result["n"])
+	}
+	return int(n.GetIntegerValue()), nil
+}
+
+// keeps says whether a document passes what a query asks after reading: what Except
+// leaves out, and a field wanted to have none.
+func (q Query) keeps(data map[string]any) bool {
+	for _, cond := range q.conditions {
+		if cond.except && same(data[cond.field], cond.value) {
+			return false
+		}
+		if !cond.except && !cond.has && cond.value == nil && !none(data[cond.field]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Held says whether the person running the command holds one of these roles, by

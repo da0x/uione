@@ -902,6 +902,13 @@ namespace one::generators {
                     body.push_back(&s);
                 }
             }
+            // What extend command adds, after the command's own requires.
+            auto mine = std::find_if(body.begin(), body.end(), [](const language::statement* s) { return !std::holds_alternative<language::require_statement>(s->node); });
+            std::vector<const language::statement*> added;
+            for (const auto& more : c.extended) {
+                for (const auto& s : more.body) added.push_back(&s);
+            }
+            body.insert(mine, added.begin(), added.end());
             if (body.empty()) {
                 out.line(head);
                 inputs_.clear();
@@ -1186,6 +1193,27 @@ namespace one::generators {
                 find_pointed(e, *b->right);
             } else if (auto* u = std::get_if<language::unary_expression>(&x.node)) {
                 find_pointed(e, *u->operand);
+            } else if (auto* call = std::get_if<language::call_expression>(&x.node)) {
+                // exists(account where organization == project.organization): the
+                // values its where compares with, which are the command's.
+                for (const auto& a : call->arguments) {
+                    if (auto* w = std::get_if<language::where_expression>(&a->node)) {
+                        if (w->condition) compared_pointed(e, *w->condition);
+                    } else {
+                        find_pointed(e, *a);
+                    }
+                }
+            }
+        }
+
+        void compared_pointed(const language::entity_declaration& e, const language::expression& x) {
+            auto* b = std::get_if<language::binary_expression>(&x.node);
+            if (!b) return;
+            if (b->op == language::token_kind::logical_and || b->op == language::token_kind::logical_or) {
+                compared_pointed(e, *b->left);
+                compared_pointed(e, *b->right);
+            } else {
+                find_pointed(e, *b->right);
             }
         }
 
@@ -1697,12 +1725,22 @@ namespace one::generators {
             auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
             if (callee && callee->name.text() == "held") return held_before(out, e, x, *call, me);
             if (callee && callee->name.text() == "waiting") return waiting_before(out, e, x, *call, me);
-            if (!callee || callee->name.text() != "exists") return true;
+            bool counting = callee && callee->name.text() == "count";
+            if (!callee || (callee->name.text() != "exists" && !counting)) return true;
             auto* w = std::get_if<language::where_expression>(&call->arguments[0]->node);
-            auto* source = w ? std::get_if<language::name_expression>(&w->source->node) : nullptr;
-            const language::entity_declaration* found = source && pkg_ ? entity(*pkg_, source->name.text()) : nullptr;
-            if (!found) {
-                unsupported(path_, x.where, "exists of an entity from another namespace");
+            auto* source = std::get_if<language::name_expression>(w ? &w->source->node : &call->arguments[0]->node);
+            // Its own namespace's, or another's, named in full, like billing::account.
+            const language::entity_declaration* found = nullptr;
+            std::string type;
+            if (source && pkg_ && source->name.parts.size() == 1) {
+                found = entity(*pkg_, source->name.text());
+                if (found) type = api_detail::go_name(found->name);
+            } else if (source && pkg_) {
+                found = other_entity(source->name);
+                if (auto t = found ? entity_type(*pkg_, source->name) : std::nullopt) type = *t;
+            }
+            if (!found || type.empty()) {
+                unsupported(path_, x.where, std::string(counting ? "count" : "exists") + " of an entity that isn't declared");
                 return false;
             }
             std::vector<const language::expression*> parts;
@@ -1714,7 +1752,7 @@ namespace one::generators {
                     parts.push_back(&part);
                 }
             };
-            if (w->condition) split(*w->condition);
+            if (w && w->condition) split(*w->condition);
             std::string query, keep;
             std::string each = found->name.substr(0, 1) == me ? "x" : found->name.substr(0, 1);
             for (const auto* part : parts) {
@@ -1724,24 +1762,42 @@ namespace one::generators {
                 if (b && b->op == language::token_kind::equal && f) {
                     auto value = expression(e, *b->right, me, f);
                     if (!value) return false;
-                    query += (query.empty() ? "one.Where[" + api_detail::go_name(found->name) + "](" : ".And(") + api_detail::go_string(f->name) + ", " + *value + ")";
+                    query += (query.empty() ? "one.Where[" + type + "](" : ".And(") + api_detail::go_string(f->name) + ", " + *value + ")";
+                    continue;
+                }
+                // price != none: one that has a value, or another value than it.
+                if (b && b->op == language::token_kind::not_equal && f) {
+                    auto* nothing = std::get_if<language::name_expression>(&b->right->node);
+                    auto value = nothing && nothing->name.text() == "none" ? std::optional<std::string>{"nil"} : expression(e, *b->right, me, f);
+                    if (!value) return false;
+                    if (query.empty()) query = "one.All[" + type + "]()";
+                    query += ".Except(" + api_detail::go_string(f->name) + ", " + *value + ")";
                     continue;
                 }
                 auto* held = std::get_if<language::call_expression>(&part->node);
                 auto* named = held ? std::get_if<language::name_expression>(&held->callee->node) : nullptr;
                 auto* roles = named && named->name.text() == "held" ? std::get_if<language::name_expression>(&held->arguments[0]->node) : nullptr;
-                if (roles && field(*found, roles->name.text())) {
-                    keep = "func(" + each + " *" + api_detail::go_name(found->name) + ") (bool, error) { return c.Held(" + each + "." +
+                if (roles && field(*found, roles->name.text()) && !counting) {
+                    keep = "func(" + each + " *" + type + ") (bool, error) { return c.Held(" + each + "." +
                            api_detail::go_name(roles->name.text()) + ") }";
                     continue;
                 }
-                unsupported(path_, part->where, "a condition in exists other than a field == a value, and held(...)");
+                unsupported(path_, part->where, std::string("a condition in ") + (counting ? "count" : "exists") + " other than a field == or != a value" + (counting ? "" : ", and held(...)"));
                 return false;
             }
-            if (query.empty()) query = "one.All[" + api_detail::go_name(found->name) + "]()";
+            if (query.empty()) query = "one.All[" + type + "]()";
+            if (counting) {
+                std::string name = "counted" + (existing_.empty() ? std::string() : std::to_string(existing_.size() + 1));
+                out.line(name + ", err := one.Count[" + type + "](c, " + query + ")");
+                out.open("if err != nil {");
+                out.line("return err");
+                out.close("}");
+                existing_[&x] = name;
+                return true;
+            }
             std::string name = "found" + (existing_.empty() ? std::string() : std::to_string(existing_.size() + 1));
             // With nothing to keep, nothing says which entity it asks of, so it's named.
-            std::string asks = keep.empty() ? "one.Exists[" + api_detail::go_name(found->name) + "](c, " : "one.Exists(c, ";
+            std::string asks = keep.empty() ? "one.Exists[" + type + "](c, " : "one.Exists(c, ";
             out.line(name + ", err := " + asks + query + ", " + (keep.empty() ? "nil" : keep) + ")");
             out.open("if err != nil {");
             out.line("return err");
@@ -2591,6 +2647,8 @@ namespace one::generators {
             if (!e) return std::nullopt;
             std::string ns;
             for (std::size_t i = 0; i + 1 < named.parts.size(); ++i) ns += (ns.empty() ? "" : "::") + named.parts[i];
+            // Its own namespace's, named in full, is its own.
+            if (auto here = namespaces_.find(ns); here != namespaces_.end() && &here->second == &pkg) return api_detail::go_name(e->name);
             imports_.insert(package_name(ns));
             return package_name(ns) + "." + api_detail::go_name(e->name);
         }
@@ -2644,11 +2702,35 @@ namespace one::generators {
             }
             std::string list;
             for (const auto& f : fields) list += (list.empty() ? "" : ", ") + f;
-            out.line(head + ".Fields(" + list + ")" + (keeps.empty() && !each.limit ? "" : "."));
-            for (std::size_t i = 0; i < keeps.size(); ++i) {
-                out.line("\t" + keeps[i].substr(1) + (i + 1 < keeps.size() || each.limit ? "." : ""));
+            // Each call after the first line on a line of its own.
+            std::vector<std::string> after;
+            for (const auto& k : keeps) after.push_back(k.substr(1));
+            if (each.limit) after.push_back("Limit(" + std::to_string(*each.limit) + ")");
+            // A person's own lists, read when they're read alone.
+            for (const auto& theirs : each.lists) {
+                auto type = entity_type(pkg, std::get<language::name_expression>(theirs.source->node).name);
+                if (!type) {
+                    unsupported(path_, theirs.where, "a person's list of an entity that isn't declared");
+                    return false;
+                }
+                const auto& by = *std::get<language::binary_expression>(theirs.condition->node).left;
+                std::string line = "List(" + api_detail::go_string(*theirs.name) + ", one.Entity[" + *type + "](), " + api_detail::go_string(web_detail::text_of(by)) + ")";
+                for (const auto& key : theirs.order) {
+                    const language::expression* x = key.get();
+                    std::string dash;
+                    if (auto* u = std::get_if<language::unary_expression>(&x->node)) {
+                        x = u->operand.get();
+                        dash = "-";
+                    }
+                    line += ".Order(" + api_detail::go_string(dash + web_detail::text_of(*x)) + ")";
+                }
+                if (theirs.limit) line += ".Limit(" + std::to_string(*theirs.limit) + ")";
+                std::string shown;
+                for (const auto& row : theirs.rows) shown += (shown.empty() ? "" : ", ") + api_detail::go_string(web_detail::text_of(*row.value));
+                after.push_back(line + ".Fields(" + shown + ")");
             }
-            if (each.limit) out.line("\tLimit(" + std::to_string(*each.limit) + ")");
+            out.line(head + ".Fields(" + list + ")" + (after.empty() ? "" : "."));
+            for (std::size_t i = 0; i < after.size(); ++i) out.line("\t" + after[i] + (i + 1 < after.size() ? "." : ""));
             return true;
         }
 

@@ -364,11 +364,27 @@ namespace one::language {
         std::vector<field> fields;
     };
 
+    // What another file adds to a command with extend command: its requires, checked
+    // where they're written.
+    struct command_extension {
+        std::string path;
+        std::vector<statement> body;
+    };
+
     struct command_declaration {
         qualified_name name;
         bool has_body = false;
         std::vector<statement> body;
         std::optional<language::at_most> at_most;
+        std::vector<command_extension> extended;
+    };
+
+    // extend command projects::project::create { require ... }: requires a project adds
+    // to a command another declares, like a hosted edition's limits on the open-source
+    // app's commands. Lowering moves them onto that command.
+    struct extend_command_declaration {
+        qualified_name command;
+        std::vector<statement> body;
     };
 
     // One value in a view: either something shown as it is (book.title), or a name
@@ -395,6 +411,9 @@ namespace one::language {
         expression_ptr source;
         expression_ptr condition;
         std::vector<view_value> rows;
+        // In each user: lists of what's each person's, read for one person, like
+        // payments = each billing::payment where account.created_by == user { ... }.
+        std::vector<view_each> lists;
     };
 
     struct view_declaration {
@@ -1149,7 +1168,8 @@ namespace one::language {
                      role_declaration, function_declaration, screen_declaration, picker_declaration,
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
-                     define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration, extend_role_declaration>
+                     define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration, extend_role_declaration,
+                     extend_command_declaration>
             node;
     };
 

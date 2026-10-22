@@ -261,6 +261,23 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
       };
     },
 
+    async person(view, person) {
+      const asked = new URLSearchParams({ view, person });
+      const headers: Record<string, string> = {};
+      let response: Response;
+      try {
+        const token = await backend.token();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        response = await (options.fetch ?? fetch)(`${api}/people?${asked}`, { headers });
+      } catch {
+        throw new Error("couldn't reach the server; check your connection and try again");
+      }
+      if (response.status === 401 || response.status === 403) return "denied";
+      const reply = (await response.json().catch(() => ({}))) as { person?: unknown; error?: unknown };
+      if (!response.ok) throw new Error(typeof reply.error === "string" ? reply.error : "something went wrong on our side; try again");
+      return reply.person && typeof reply.person === "object" ? (reply.person as Record<string, unknown>) : {};
+    },
+
     async run(command, input: CommandInput) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       let response: Response;

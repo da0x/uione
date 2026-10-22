@@ -32,6 +32,7 @@ import {
   screen as defineScreen,
   useParam,
   usePeople,
+  usePerson,
   useView,
 } from "../src/index.js";
 import type { DataSource, MemorySource, Person, ViewState } from "../src/index.js";
@@ -1254,5 +1255,36 @@ describe("a list of everyone", () => {
     // Signed out, a list refused isn't there at all.
     await waitFor(() => expect(shown.container.querySelector("table")).toBeNull());
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+  });
+
+  function Person() {
+    const [id, setId] = useState("ada");
+    const person = usePerson("staff::people", id);
+    return (
+      <>
+        <button onClick={() => setId("grace")}>Grace</button>
+        <Table view={person} list="payments" columns={{ amount_paid: "Paid" }} />
+      </>
+    );
+  }
+
+  it("shows one person, with what's theirs, and switches to another without showing the first", async () => {
+    const asked: string[] = [];
+    let answer: (row: Record<string, unknown>) => void = () => {};
+    const source = memorySource({
+      readPerson: (view, person) => {
+        asked.push(`${view}:${person}`);
+        if (person === "ada") return Promise.resolve({ id: "ada", payments: [{ id: "in_1", amount_paid: 1500 }] });
+        return new Promise((resolve) => (answer = resolve));
+      },
+    });
+    renderScreen(source, () => <Person />);
+    await waitFor(() => expect(screen.getByText("1500")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Grace" }));
+    // Grace isn't read yet, so ada's payments are gone.
+    await waitFor(() => expect(screen.queryByText("1500")).toBeNull());
+    answer({ id: "grace", payments: [{ id: "in_2", amount_paid: 300 }] });
+    await waitFor(() => expect(screen.getByText("300")).toBeTruthy());
+    expect(asked).toEqual(["staff::people:ada", "staff::people:grace"]);
   });
 });

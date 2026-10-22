@@ -831,6 +831,27 @@ command link::create {
 
 - Values given in a dispatch are worked out where the command runs. `id` is the id
   of the command's own entity, and `me` is the person running it.
+- `count(project where organization == project.organization) < 3`, in a `require`,
+  is how many there are as they're stored, before the command makes any, counted
+  without reading them: an organization's projects before one more is made. It
+  asks what `exists` does: each field `==` a value, or `!=` one, like `price !=
+  none` for one that has a price, which reads each to count it.
+- `extend command projects::project::create { require ... }` adds requires to a
+  command another namespace declares, as a project that `extends` another adds its
+  own rules to the app it builds on: a hosted edition's limits on what a free
+  organization has, in an app that says nothing about plans. They're read as if
+  written in that command, so its entity's fields are named plainly, and another
+  namespace's entities in full, like `billing::account`. They run wherever the
+  command runs, after its own requires: someone running it, or another command
+  dispatching it, as a project's first board is made with the project.
+
+```one
+extend command projects::project::create {
+	require "a free organization has 3 projects; subscribe for more" {
+		organization == none || exists(billing::account where organization == project.organization && price != none) || count(projects::project where organization == project.organization) < 3
+	}
+}
+```
 
 ```one
 command project::create {
@@ -1039,6 +1060,22 @@ view people {
 		name  email  joined  active  commands
 		projects = keeps(projects::project)
 		paid = sum(billing::payment where account.created_by == user).amount_paid
+		payments = each billing::payment where account.created_by == user {
+			order by created_at descending
+			limit 24
+			created_at  amount_paid  account.organization
+		}
+	}
+}
+
+screen "Person" /staff/people/:user {
+	details people {
+		email "Email"
+		paid "Paid"
+	}
+	table people.payments {
+		created_at "Billed"
+		amount_paid "Paid"
 	}
 }
 ```
@@ -1057,6 +1094,14 @@ view people {
   == user` does, or name what's theirs by one field they point at, like the payments
   of the accounts they made. It's added up as each page is read, from every record
   it's over, so it suits what's few for each person, like what they paid.
+- `payments = each billing::payment where account.created_by == user { ... }` is a
+  list of a person's records, picked the same way. It's read only for one person:
+  on a screen whose address names `:user`, the view is that person's row, with
+  their lists, as a view per entity is for the entity its address names. A table
+  of the list links each person there with `table people link
+  /staff/people/:user`. A list is ordered by its entity's fields, kept to a `limit`,
+  and shows fields of its entity or of what they point at, like
+  `account.organization`.
 - It's ordered by `active` or `joined`, with `descending` for the latest first.
   With no `order by`, the most recently active come first.
 - It holds nothing else, and picks no one out with `where`.

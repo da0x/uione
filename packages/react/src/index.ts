@@ -9,7 +9,7 @@ export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Badge } from 
 export { Actions, Board, Canvas, Cards, Chart, Monitor, Pipeline, Code, Command, Copy, Details, Files, Find, Landing, useAddressState, toneOf, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Section, Steps, Switched, Table, Text, Themes, Thread, Timeline, useTriedTheme, changed, csvOf, done, holds, keptByTime, allows, isNone, listChoices, listHas, markdownOf, ordered, phrase } from "./components.js";
 export type { BoardMove, CopiedField, Tally, CopiedList, DocPage, FieldSpec, GridCommand, RowAction } from "./components.js";
 
-export { fileName, useAuth, useCommand, useFiles, useRunner, usePeople, useSearch, useView } from "./data.js";
+export { fileName, useAuth, useCommand, useFiles, useRunner, usePeople, usePerson, useSearch, useView } from "./data.js";
 export type {
   AuthSource,
   AuthState,

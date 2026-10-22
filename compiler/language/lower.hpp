@@ -337,6 +337,34 @@ namespace one::language {
             }
         }
 
+        // extend command projects::project::create { require ... }: its requires moved
+        // onto the command it names, said in full when it's another namespace's, with
+        // the file they're written in, so they run wherever the command does and are
+        // checked where they're written.
+        inline void extend_commands(std::vector<file>& files, diagnostics& out) {
+            std::map<std::string, command_declaration*> commands;  // by namespace and name
+            std::vector<std::tuple<std::string, extend_command_declaration*, const std::string*>> extensions;
+            std::function<void(std::vector<declaration>&, const std::string&, const std::string&)> find =
+                [&](std::vector<declaration>& ds, const std::string& ns, const std::string& path) {
+                    for (auto& d : ds) {
+                        if (auto* n = std::get_if<namespace_declaration>(&d.node)) find(n->declarations, ns.empty() ? n->name : ns + "::" + n->name, path);
+                        if (auto* c = std::get_if<command_declaration>(&d.node)) commands[ns.empty() ? c->name.text() : ns + "::" + c->name.text()] = c;
+                        if (auto* e = std::get_if<extend_command_declaration>(&d.node)) extensions.emplace_back(ns, e, &path);
+                    }
+                };
+            for (auto& f : files) find(f.declarations, "", f.path);
+            for (auto& [ns, e, path] : extensions) {
+                std::string named = e->command.parts.size() > 2 || ns.empty() ? e->command.text() : ns + "::" + e->command.text();
+                auto command = commands.find(named);
+                if (command == commands.end()) {
+                    out.push_back({*path, e->command.where, "there's no command " + e->command.text() + " to extend; name it with its namespace, like projects::project::create"});
+                    continue;
+                }
+                command->second->has_body = true;
+                command->second->extended.push_back({*path, std::move(e->body)});
+            }
+        }
+
         struct definer {
             diagnostics& out;
             struct place {
@@ -1245,6 +1273,7 @@ namespace one::language {
 
     inline void lower(std::vector<file>& files, diagnostics& out) {
         lowering::extend_roles(files, out);
+        lowering::extend_commands(files, out);
         lowering::reporting(files);
         lowering::inherit_readers(files, out);
         lowering::definer roles{out, {}};

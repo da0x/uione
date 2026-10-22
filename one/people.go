@@ -45,6 +45,7 @@ type PeopleSpec struct {
 	sums   []summed
 	order  ordering
 	limit  int
+	lists  []*theirs
 }
 
 // kept is a count of the records of a kind each person keeps, like their projects.
@@ -63,14 +64,27 @@ type summed struct {
 	by    string
 }
 
+// theirs is a list of one person's records, like the payments of the accounts
+// they made, shown when the list is read for that person alone: whose field by names
+// them, or names what's theirs by one field it points at.
+type theirs struct {
+	list
+	by string
+}
+
 // People lists everyone who has signed up, for whoever holds ViewPeople, a page at a
 // time, the most recently active first.
 func People(name string) *PeopleSpec {
 	return &PeopleSpec{name: name, order: ordering{field: "active", reverse: true}}
 }
 
-// Fields picks what each row shows, of peopleFields.
+// Fields picks what each row shows, of peopleFields. After List, it picks what
+// that list's rows hold, as a view's list does.
 func (p *PeopleSpec) Fields(names ...string) *PeopleSpec {
+	if l := p.current(); l != nil {
+		l.fields = names
+		return p
+	}
 	for _, name := range names {
 		if !slices.Contains(peopleFields, name) {
 			panic(fmt.Sprintf("one: people %s can't show %s; a row shows %v, and Keeps", p.name, name, peopleFields))
@@ -96,9 +110,30 @@ func (p *PeopleSpec) Sums(name string, kind Kind, field, by string) *PeopleSpec 
 	return p
 }
 
+// List adds a list of each person's records, read only when the list is read for
+// one person, as on a page of theirs: List("payments", Entity[Payment](),
+// "account.created_by"). Order, Limit and Fields after it describe it.
+func (p *PeopleSpec) List(name string, kind Kind, by string) *PeopleSpec {
+	p.lists = append(p.lists, &theirs{list: list{name: name, query: Query{typ: kind.typ}}, by: by})
+	return p
+}
+
+// current is the list Order, Limit and Fields describe, or nil before any.
+func (p *PeopleSpec) current() *list {
+	if len(p.lists) == 0 {
+		return nil
+	}
+	return &p.lists[len(p.lists)-1].list
+}
+
 // Order sorts everyone by when they joined or were last active, with - in front for
-// the latest first, as "-active" is unless it says.
+// the latest first, as "-active" is unless it says. After List, it sorts that list
+// by its fields instead.
 func (p *PeopleSpec) Order(key string) *PeopleSpec {
+	if l := p.current(); l != nil {
+		l.order = append(l.order, ordering{field: trimDash(key), reverse: trimDash(key) != key})
+		return p
+	}
 	field := trimDash(key)
 	if field != "active" && field != "joined" {
 		panic(fmt.Sprintf("one: people %s can be ordered by active or joined, not %s", p.name, field))
@@ -107,8 +142,13 @@ func (p *PeopleSpec) Order(key string) *PeopleSpec {
 	return p
 }
 
-// Limit is how many people a page holds.
+// Limit is how many people a page holds, or after List, how many rows that list
+// keeps.
 func (p *PeopleSpec) Limit(n int) *PeopleSpec {
+	if l := p.current(); l != nil {
+		l.limit = n
+		return p
+	}
 	p.limit = n
 	return p
 }
@@ -126,7 +166,8 @@ func (p *PeopleSpec) register(r *registry, ns string) {
 }
 
 // servePeople answers GET /api/people?view=admin::people&after=<person>, with a page
-// of everyone and the person the next page starts after, for whoever may read them.
+// of everyone and the person the next page starts after, for whoever may read them;
+// or with &person=<id>, that person's row alone, with their lists.
 func (a *App) servePeople(w http.ResponseWriter, r *http.Request) {
 	who, err := a.caller(r)
 	if err != nil {
@@ -153,6 +194,15 @@ func (a *App) servePeople(w http.ResponseWriter, r *http.Request) {
 	}
 	if who.service || !a.grants(r.Context(), who.id, string(ViewPeople)) {
 		reply(w, http.StatusForbidden, map[string]any{"error": "you can't read this"})
+		return
+	}
+	if person := r.URL.Query().Get("person"); person != "" {
+		row, err := a.personOf(r.Context(), p, person)
+		if err != nil {
+			replyFailure(w, a, "reading a person", err)
+			return
+		}
+		reply(w, http.StatusOK, map[string]any{"person": row})
 		return
 	}
 	rows, next, err := a.peopleAfter(r.Context(), p, r.URL.Query().Get("after"))
@@ -192,13 +242,56 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 	if err != nil {
 		return nil, "", err
 	}
+	rows, err := a.rowsOf(ctx, p, docs)
+	if err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(docs) == limit {
+		next = docs[len(docs)-1].Ref.ID
+	}
+	return rows, next, nil
+}
+
+// personOf is one person's row, with the lists of what's theirs.
+func (a *App) personOf(ctx context.Context, p *PeopleSpec, person string) (map[string]any, error) {
+	if !validID(person) {
+		return nil, &Failure{Status: 400, Message: "that isn't a person"}
+	}
+	snap, err := a.store.Collection("usage").Doc(person).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return nil, &Failure{Status: 404, Message: "that person isn't listed"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	rows, err := a.rowsOf(ctx, p, []*firestore.DocumentSnapshot{snap})
+	if err != nil {
+		return nil, err
+	}
+	row := rows[0]
+	for _, l := range p.lists {
+		docs, _, err := a.whose(ctx, a.reg.schemas[l.query.typ], l.by, []string{person})
+		if err != nil {
+			return nil, err
+		}
+		if row[l.name], err = a.shaped(ctx, &l.list, "", docs); err != nil {
+			return nil, err
+		}
+	}
+	return row, nil
+}
+
+// rowsOf makes the rows of people of their usage documents: who they are, from their
+// profiles, and what they used, keep and add up to.
+func (a *App) rowsOf(ctx context.Context, p *PeopleSpec, docs []*firestore.DocumentSnapshot) ([]map[string]any, error) {
 	refs := make([]*firestore.DocumentRef, len(docs))
 	for i, doc := range docs {
 		refs[i] = a.store.Collection("users").Doc(doc.Ref.ID)
 	}
 	profiles, err := a.store.GetAll(ctx, refs)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	people := make([]string, len(docs))
 	for i, doc := range docs {
@@ -207,7 +300,7 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 	totals := make([]map[string]float64, len(p.sums))
 	for i, sum := range p.sums {
 		if totals[i], err = a.totalled(ctx, sum, people); err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 	month := time.Now().UTC().Format("2006-01")
@@ -244,70 +337,82 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 		}
 		rows = append(rows, row)
 	}
-	next := ""
-	if len(docs) == limit {
-		next = docs[len(docs)-1].Ref.ID
-	}
-	return rows, next, nil
+	return rows, nil
 }
 
-// totalled adds up a sum for each of some people, reading each record it's over, 30
-// people at a time: what's theirs is first found by the field it's through, if any,
-// then the records naming it.
+// totalled adds up a sum for each of some people, of every record that's theirs.
 func (a *App) totalled(ctx context.Context, sum summed, people []string) (map[string]float64, error) {
 	of := a.reg.schemas[sum.of]
 	if of == nil || of.field(sum.field) == nil {
 		return nil, fmt.Errorf("one: there's no %s to add up", sum.field)
 	}
-	whose := map[string]string{}
-	for _, person := range people {
-		whose[person] = person
+	docs, owner, err := a.whose(ctx, of, sum.by, people)
+	if err != nil {
+		return nil, err
 	}
-	by, last, through := strings.Cut(sum.by, ".")
-	if through {
-		f := of.field(by)
-		var theirs *schema
-		if f != nil {
-			theirs = a.reg.entity(f.refers)
+	totals := map[string]float64{}
+	for _, doc := range docs {
+		switch n := doc.Data()[sum.field].(type) {
+		case int64:
+			totals[owner(doc)] += float64(n)
+		case float64:
+			totals[owner(doc)] += n
 		}
-		if theirs == nil || !holds(theirs, last) {
-			return nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, sum.by)
+	}
+	return totals, nil
+}
+
+// whose finds the records of an entity that are some people's, 30 people at a time,
+// and says whose each is: those whose field by names them, or, through a field it
+// points at, like account.created_by, names what's theirs, which is found first.
+func (a *App) whose(ctx context.Context, of *schema, by string, people []string) ([]*firestore.DocumentSnapshot, func(*firestore.DocumentSnapshot) string, error) {
+	if of == nil {
+		return nil, nil, fmt.Errorf("one: there's no entity to find %s of", by)
+	}
+	named := map[string]string{} // what the records' field holds, to whose it is
+	for _, person := range people {
+		named[person] = person
+	}
+	field, last, through := strings.Cut(by, ".")
+	if through {
+		f := of.field(field)
+		var pointed *schema
+		if f != nil {
+			pointed = a.reg.entity(f.refers)
+		}
+		if pointed == nil || !holds(pointed, last) {
+			return nil, nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, by)
 		}
 		owned := map[string]string{}
 		for start := 0; start < len(people); start += 30 {
-			docs, err := a.store.Collection(theirs.collection).Where(last, "in", people[start:min(start+30, len(people))]).Select(last).Documents(ctx).GetAll()
+			docs, err := a.store.Collection(pointed.collection).Where(last, "in", people[start:min(start+30, len(people))]).Select(last).Documents(ctx).GetAll()
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			for _, doc := range docs {
 				owned[doc.Ref.ID], _ = doc.Data()[last].(string)
 			}
 		}
-		whose = owned
-	} else if !holds(of, by) {
-		return nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, sum.by)
+		named = owned
+	} else if !holds(of, field) {
+		return nil, nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, by)
 	}
-	named := make([]string, 0, len(whose))
-	for id := range whose {
-		named = append(named, id)
+	values := make([]string, 0, len(named))
+	for value := range named {
+		values = append(values, value)
 	}
-	totals := map[string]float64{}
-	for start := 0; start < len(named); start += 30 {
-		docs, err := a.store.Collection(of.collection).Where(by, "in", named[start:min(start+30, len(named))]).Select(by, sum.field).Documents(ctx).GetAll()
+	var found []*firestore.DocumentSnapshot
+	for start := 0; start < len(values); start += 30 {
+		docs, err := a.store.Collection(of.collection).Where(field, "in", values[start:min(start+30, len(values))]).Documents(ctx).GetAll()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		for _, doc := range docs {
-			id, _ := doc.Data()[by].(string)
-			switch n := doc.Data()[sum.field].(type) {
-			case int64:
-				totals[whose[id]] += float64(n)
-			case float64:
-				totals[whose[id]] += n
-			}
-		}
+		found = append(found, docs...)
 	}
-	return totals, nil
+	return found, func(doc *firestore.DocumentSnapshot) string {
+		value, _ := doc.Data()[field].(string)
+		return named[value]
+	}, nil
 }
 
 // holds says whether an entity's records hold a field, as each holds who made it.
