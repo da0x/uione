@@ -1355,8 +1355,10 @@ export function Table({
   hue,
   track,
   download,
+  more,
 }: {
   view: ViewState;
+  more?: () => void; // asks for the next page of rows, for a list read a page at a time, like everyone's
   list?: string; // which of the view's lists, like comments
   columns: Record<string, string>;
   actions?: (string | RowAction)[];
@@ -1416,16 +1418,24 @@ export function Table({
   const current = Math.min(at, count);
   const rows = page ? sorted.slice((current - 1) * page, current * page) : sorted;
   // Every row it keeps, on every page, as comma-separated values.
-  const tools = download ? (
-    <>
-      {ownTools}
-      <ui.Button kind="secondary" onClick={() => saveFile(download, csvOf(sorted, columns, choices), "text/csv")}>
-        Download CSV
-      </ui.Button>
-    </>
-  ) : (
-    ownTools
-  );
+  const tools =
+    download || more ? (
+      <>
+        {ownTools}
+        {download && (
+          <ui.Button kind="secondary" onClick={() => saveFile(download, csvOf(sorted, columns, choices), "text/csv")}>
+            Download CSV
+          </ui.Button>
+        )}
+        {more && (
+          <ui.Button kind="secondary" onClick={more}>
+            Show more
+          </ui.Button>
+        )}
+      </>
+    ) : (
+      ownTools
+    );
   const tabs = by
     ? options.map((option) => ({
         label: choices[by]?.[option] ?? option,

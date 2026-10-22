@@ -1024,6 +1024,40 @@ view project_page per project {
 - A view is rebuilt whenever an entity it reads changes: `desk` reads books through
   `book.title`, so renaming a book updates the desk.
 
+### Everyone
+
+`each user` lists everyone who has signed up, for the app's own people, like its
+staff: who they are, when they joined and were last active, what they did this month,
+and how many of something they keep.
+
+```one
+role staff  user::view
+
+view people {
+	each user {
+		order by active descending
+		name  email  joined  active  commands
+		projects = keeps(projects::project)
+	}
+}
+```
+
+- Only a role given `user::view` reads it, a role held everywhere like staff, never
+  one held within a project. It's never public and names no readers.
+- It's read a page at a time when a screen opens it, never kept as a document, since
+  it changes whenever anyone does anything. `limit 50` is how many a page holds, 50
+  unless it says, and a table of it shows **Show more** while there are more.
+- A row shows `name`, `picture`, `username`, `service`, `email`, `joined`,
+  `active`, `commands` and `writes` (this month's, counting the view pages each
+  command rebuilt), and `bytes` (of the files they keep). `projects =
+  keeps(projects::project)` counts the projects they made and still have.
+- It's ordered by `active` or `joined`, with `descending` for the latest first.
+  With no `order by`, the most recently active come first.
+- It holds nothing else, and picks no one out with `where`.
+- What each person does is counted as they do it, and what was stored before is
+  counted once when the backend first starts with it, so everyone who ever signed up
+  is listed.
+
 ## role
 
 A default role and the permissions it holds. A person is given a role everywhere,
@@ -1035,6 +1069,8 @@ role librarian  book::view  book::create  book::update  book::withdraw
 
 - A role given everywhere is never held within something; a role each project has
   its own of is a [define role](#define-role).
+- `user::view` lets a role read the lists of [everyone](#everyone) who has signed
+  up.
 
 ## define role
 

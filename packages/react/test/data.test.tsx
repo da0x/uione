@@ -31,6 +31,7 @@ import {
   shortAddress,
   screen as defineScreen,
   useParam,
+  usePeople,
   useView,
 } from "../src/index.js";
 import type { DataSource, MemorySource, Person, ViewState } from "../src/index.js";
@@ -1209,5 +1210,49 @@ describe("a find box", () => {
     await waitFor(() => expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem")).toHaveLength(2));
     expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Releases", "Signing"]);
     expect(asked).toEqual(["projects::project_page:neotrac:pages:releases"]);
+  });
+});
+
+describe("a list of everyone", () => {
+  function People() {
+    const people = usePeople("staff::people");
+    return <Table view={people} more={people.more} columns={{ name: "Name", email: "Email" }} />;
+  }
+
+  it("shows a page of people, and the next when asked, until there are no more", async () => {
+    const asked: string[] = [];
+    const source = memorySource({
+      people: async (view, after) => {
+        asked.push(`${view}:${after}`);
+        return after === ""
+          ? { rows: [{ id: "bob", name: "Bob", email: "bob@example.com" }, { id: "grace", name: "Grace", email: "grace@example.com" }], next: "grace" }
+          : { rows: [{ id: "ada", name: "Ada", email: "ada@example.com" }], next: "" };
+      },
+    });
+    renderScreen(source, () => <People />);
+    await waitFor(() => expect(screen.getByText("Grace")).toBeTruthy());
+    expect(screen.queryByText("Ada")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    await waitFor(() => expect(screen.getByText("Ada")).toBeTruthy());
+    // Everyone, in order, and no button once there's no one left.
+    expect(screen.getByText("Bob")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+    expect(asked).toEqual(["staff::people:", "staff::people:grace"]);
+  });
+
+  it("is refused to someone the server won't show it to", async () => {
+    let asked = false;
+    const source = memorySource({
+      person: null,
+      people: async () => {
+        asked = true;
+        return "denied";
+      },
+    });
+    const shown = renderScreen(source, () => <People />);
+    await waitFor(() => expect(asked).toBe(true));
+    // Signed out, a list refused isn't there at all.
+    await waitFor(() => expect(shown.container.querySelector("table")).toBeNull());
+    expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
   });
 });

@@ -254,6 +254,7 @@ namespace one::generators {
             return model_.edit_view(ns, entity, form);
         }
         std::optional<std::string> per_entity(const std::string& full) const { return model_.per_entity(full); }
+        bool people_view(const std::string& full) const { return model_.people_view(full); }
         std::string full_route(const std::string& ns, const std::string& route) const { return model_.full_route(ns, route); }
         bool entity_named(const std::string& ns, const std::string& name) const { return model_.entity_named(ns, name); }
         std::vector<std::string> keyed_by(const std::string& ns, const std::string& entity, const std::string& route) const {
@@ -555,7 +556,7 @@ namespace one::generators {
                     bodies.embed(items);
                     bodies.close("));");
                 } else {
-                    if (!parts.views.empty()) components.insert("useView");
+                    for (const auto& [variable, view] : parts.views) components.insert(people_view(view) ? "usePeople" : "useView");
                     bodies.open("export const " + name + " = screen(" + info + ", () => {");
                     // A view per entity is read for the entity the address names, and a
                     // form can send it.
@@ -575,6 +576,11 @@ namespace one::generators {
                         bodies.line("const " + web_detail::js_name(param + "_id") + " = useParam(" + web_detail::js_string(param) + ");");
                     }
                     for (const auto& [variable, view] : parts.views) {
+                        // Everyone who has signed up is asked for a page at a time.
+                        if (people_view(view)) {
+                            bodies.line("const " + variable + " = usePeople(" + web_detail::js_string(view) + ");");
+                            continue;
+                        }
                         auto per = per_entity(view);
                         bodies.line("const " + variable + " = useView(" + web_detail::js_string(view) +
                                     (per ? ", " + web_detail::js_name(*per + "_id") : std::string()) + ");");
@@ -2081,6 +2087,7 @@ namespace one::generators {
                 columns += (columns.empty() ? "" : ", ") + (web_detail::is_identifier(key) ? key : web_detail::js_string(key)) + ": " + web_detail::js_string(column_shown.label);
             }
             std::string line = "<Table view={" + view_variable(parts, view) + "}";
+            if (people_view(view)) line += " more={" + view_variable(parts, view) + ".more}";
             if (table.list) line += " list=" + web_detail::js_string(*table.list);
             if (table.link) {
                 std::string target = full_route(ns, *table.link);

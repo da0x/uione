@@ -2074,6 +2074,16 @@ namespace one::language {
                 return;
             }
             qualified_name on{{p.parts.begin(), p.parts.end() - 1}, p.where};
+            // user::view reads the lists of everyone who has signed up, given to a role
+            // held everywhere, like staff.
+            if (p.text() == "user::view" && !find_entity(ns, on)) {
+                if (entity) {
+                    error(p.where, "user::view reads the lists of everyone who has signed up, so it's given to a role, like role staff  user::view");
+                    return;
+                }
+                mean(p.where, p.text().size(), "built-in permission user::view: reading the lists of everyone who has signed up", std::nullopt, "role");
+                return;
+            }
             if (!find_entity(ns, on)) {
                 error(p.where, "permission " + p.text() + " is on entity " + on.text() +
                                    ", which isn't declared " + in_namespace(ns));
@@ -2088,8 +2098,70 @@ namespace one::language {
             }
         }
 
+        // each user in a view: everyone who has signed up, unless the project has an
+        // entity of its own called user.
+        const view_each* people_list(const std::string& ns, const view_declaration& v) {
+            for (const auto& each : v.each) {
+                auto* source = std::get_if<name_expression>(&each.source->node);
+                if (source && source->name.text() == "user" && !find_entity(ns, source->name)) return &each;
+            }
+            return nullptr;
+        }
+
+        // A view of everyone: read a page at a time by a role given user::view, so it
+        // holds nothing else, picks no one out, and shows what's known of each person.
+        void verify_people(const std::string& ns, location where, const view_declaration& v, const view_each& each) {
+            const std::string says = "view " + v.name + " lists everyone who has signed up";
+            if (v.is_public || v.public_when) {
+                error(where, says + ", so it isn't public; a role given user::view reads it, like role staff  user::view");
+            } else if (v.per || v.readers || !v.reader_people.empty() || !v.reader_roles.empty()) {
+                error(where, says + ", read by a role given user::view, so it isn't per anything and names no readers");
+            }
+            if (!v.values.empty() || v.each.size() > 1 || each.name) {
+                error(each.where, says + ", and holds nothing else: view " + v.name + " { each user { ... } }");
+            }
+            if (each.condition || !each.within.empty() || each.changes) {
+                error(each.where, "each user lists everyone, so it doesn't pick some out with where or in");
+            }
+            if (each.order.size() > 1) error(each.where, "each user is ordered by one of active and joined, like order by active descending");
+            for (const auto& key : each.order) {
+                const expression* x = key.get();
+                if (auto* u = std::get_if<unary_expression>(&x->node)) x = u->operand.get();
+                auto* name = std::get_if<name_expression>(&x->node);
+                if (!name || (name->name.text() != "active" && name->name.text() != "joined")) {
+                    error(key->where, "each user is ordered by when they were last active or joined, like order by active descending");
+                }
+            }
+            static const std::vector<std::string> shown{"name", "picture", "username", "service", "email", "joined", "active", "commands", "writes", "bytes"};
+            for (const auto& row : each.rows) {
+                auto* name = std::get_if<name_expression>(&row.value->node);
+                if (name && !row.name) {
+                    if (std::find(shown.begin(), shown.end(), name->name.text()) == shown.end()) {
+                        error(row.where, "a person's row shows name, picture, username, service, email, joined, active, commands, writes or bytes, "
+                                         "or how many of something they keep, like projects = keeps(projects::project), not " + name->name.text());
+                    }
+                    continue;
+                }
+                auto* call = std::get_if<call_expression>(&row.value->node);
+                auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+                if (!row.name || !callee || callee->name.text() != "keeps" || call->arguments.size() != 1) {
+                    error(row.where, "a person's row shows what's known of them, like email, or how many of something they keep, like projects = keeps(projects::project)");
+                    continue;
+                }
+                snake(*row.name, row.where);
+                auto* kind = std::get_if<name_expression>(&call->arguments[0]->node);
+                if (!kind || !find_entity(ns, kind->name)) {
+                    error(call->arguments[0]->where, "keeps counts the records of an entity each person made and still has, like keeps(projects::project)");
+                }
+            }
+        }
+
         void verify(const std::string& ns, location where, const view_declaration& v) {
             snake(v.name, where);
+            if (auto* each = people_list(ns, v)) {
+                verify_people(ns, where, v, *each);
+                return;
+            }
             if (v.per && *v.per != "user") {
                 snake(*v.per, where);
                 if (!find_entity(ns, qualified_name{{*v.per}, where})) {

@@ -241,6 +241,26 @@ export function liveSource(backend: Backend, options: LiveOptions = {}): DataSou
       return Array.isArray(reply.rows) ? (reply.rows as Record<string, unknown>[]) : [];
     },
 
+    async people(view, after) {
+      const asked = new URLSearchParams({ view, after });
+      const headers: Record<string, string> = {};
+      let response: Response;
+      try {
+        const token = await backend.token();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        response = await (options.fetch ?? fetch)(`${api}/people?${asked}`, { headers });
+      } catch {
+        throw new Error("couldn't reach the server; check your connection and try again");
+      }
+      if (response.status === 401 || response.status === 403) return "denied";
+      const reply = (await response.json().catch(() => ({}))) as { rows?: unknown; next?: unknown; error?: unknown };
+      if (!response.ok) throw new Error(typeof reply.error === "string" ? reply.error : "something went wrong on our side; try again");
+      return {
+        rows: Array.isArray(reply.rows) ? (reply.rows as Record<string, unknown>[]) : [],
+        next: typeof reply.next === "string" ? reply.next : "",
+      };
+    },
+
     async run(command, input: CommandInput) {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       let response: Response;

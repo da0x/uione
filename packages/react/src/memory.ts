@@ -33,6 +33,8 @@ export interface MemoryOptions {
   files?: boolean | { upload: FileStore["upload"] };
   // Searches a view's list by its words, as a server would.
   search?: DataSource["search"];
+  // Lists everyone a page at a time, as a server would.
+  people?: DataSource["people"];
 }
 
 export function memorySource(options: MemoryOptions = {}): MemorySource {
@@ -98,6 +100,7 @@ export function memorySource(options: MemoryOptions = {}): MemorySource {
     auth,
     files,
     search: options.search,
+    people: options.people,
 
     subscribe(view, subject, emit) {
       const k = key(view, subject);

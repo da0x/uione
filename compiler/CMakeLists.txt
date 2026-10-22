@@ -86,6 +86,7 @@ if(ONE_TESTS)
         tests/audit_tests.cpp
         tests/limits_tests.cpp
         tests/search_tests.cpp
+        tests/people_tests.cpp
         tests/stripe_tests.cpp
         tests/infrastructure_tests.cpp
         tests/cpp_tests.cpp

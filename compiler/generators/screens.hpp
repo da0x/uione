@@ -509,6 +509,23 @@ namespace one::generators::screens {
             return *view->second->per;
         }
 
+        // Whether a view lists everyone who has signed up, read a page at a time
+        // rather than kept: each user, when the namespace has no entity of that name.
+        bool people_view(const std::string& full) const {
+            std::size_t cut = full.rfind("::");
+            std::string ns = cut == std::string::npos ? "" : full.substr(0, cut);
+            std::string name = cut == std::string::npos ? full : full.substr(cut + 2);
+            auto scope = views.find(ns);
+            if (scope == views.end()) return false;
+            auto view = scope->second.find(name);
+            if (view == scope->second.end() || entity_named(ns, "user")) return false;
+            for (const auto& each : view->second->each) {
+                auto* source = std::get_if<language::name_expression>(&each.source->node);
+                if (source && source->name.text() == "user") return true;
+            }
+            return false;
+        }
+
         bool entity_named(const std::string& ns, const std::string& name) const {
             auto scope = entities.find(ns);
             return scope != entities.end() && scope->second.contains(name);

@@ -48,6 +48,16 @@ export interface DataSource {
   // the server in fields marked searchable, which the rows don't hold. It rejects
   // with a readable message when it can't.
   search?(view: string, subject: string | undefined, list: string, words: string): Promise<Record<string, unknown>[]>;
+  // A page of everyone who has signed up, after the person named, for a role given
+  // user::view, or denied for anyone else. It rejects with a readable message when
+  // it can't.
+  people?(view: string, after: string): Promise<PeoplePage | "denied">;
+}
+
+// A page of people, and the person the next page starts after, or "" at the end.
+export interface PeoplePage {
+  rows: Record<string, unknown>[];
+  next: string;
 }
 
 // Where an app's files go. A file is uploaded on its own, then a command puts its
@@ -157,6 +167,55 @@ function remember(source: DataSource, key: string, state: ViewState) {
   if (state.status !== "live") return;
   memory.set(key, state);
   if (memory.size > remembers) memory.delete(memory.keys().next().value!);
+}
+
+// Everyone who has signed up, as a view whose rows come a page at a time, and more,
+// which asks for the next page while there is one. It's read when the screen opens,
+// not kept live, since it changes whenever anyone does anything.
+export function usePeople(view: string): ViewState & { more?: () => void } {
+  const source = useSource();
+  const [state, setState] = useState<{ status: ViewStatus; rows: Record<string, unknown>[]; next: string; asking: boolean }>({
+    status: "loading",
+    rows: [],
+    next: "",
+    asking: true,
+  });
+  const ask = useCallback(
+    (after: string, earlier: Record<string, unknown>[], gone: () => boolean = () => false) => {
+      if (!source.people) {
+        setState({ status: "denied", rows: [], next: "", asking: false });
+        return;
+      }
+      source.people(view, after).then(
+        (page) => {
+          if (gone()) return;
+          if (page === "denied") setState({ status: "denied", rows: [], next: "", asking: false });
+          else setState({ status: "live", rows: [...earlier, ...page.rows], next: page.next, asking: false });
+        },
+        () => {
+          if (!gone()) setState((was) => ({ ...was, status: "stale", asking: false }));
+        },
+      );
+    },
+    [source, view],
+  );
+  useEffect(() => {
+    let gone = false;
+    setState({ status: "loading", rows: [], next: "", asking: true });
+    ask("", [], () => gone);
+    return () => {
+      gone = true;
+    };
+  }, [ask]);
+  const { status, rows, next, asking } = state;
+  const more =
+    next !== "" && !asking
+      ? () => {
+          setState((was) => ({ ...was, asking: true }));
+          ask(next, rows);
+        }
+      : undefined;
+  return { status, data: status === "loading" || status === "denied" ? undefined : { rows }, ...(more ? { more } : {}) };
 }
 
 // The live state of a view. `subject` picks one document of a view that has one per

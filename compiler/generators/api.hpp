@@ -2581,7 +2581,62 @@ namespace one::generators {
             }
         }
 
+        // The Go type of an entity named in a view, in this namespace or another, whose
+        // package it imports.
+        std::optional<std::string> entity_type(const package& pkg, const language::qualified_name& named) {
+            if (named.parts.size() == 1) {
+                if (auto* e = entity(pkg, named.parts[0])) return api_detail::go_name(e->name);
+            }
+            auto* e = other_entity(named);
+            if (!e) return std::nullopt;
+            std::string ns;
+            for (std::size_t i = 0; i + 1 < named.parts.size(); ++i) ns += (ns.empty() ? "" : "::") + named.parts[i];
+            imports_.insert(package_name(ns));
+            return package_name(ns) + "." + api_detail::go_name(e->name);
+        }
+
+        // view people { each user { ... } }: everyone who has signed up, read a page at
+        // a time by a role given user::view.
+        bool people(stream& out, const package& pkg, const language::view_declaration& v, const language::view_each& each, const std::string& var) {
+            std::string head = "var " + var + " = one.People(" + api_detail::go_string(v.name) + ")";
+            for (const auto& key : each.order) {
+                const language::expression* x = key.get();
+                std::string dash;
+                if (auto* u = std::get_if<language::unary_expression>(&x->node)) {
+                    x = u->operand.get();
+                    dash = "-";
+                }
+                head += ".Order(" + api_detail::go_string(dash + std::get<language::name_expression>(x->node).name.text()) + ")";
+            }
+            std::vector<std::string> fields, keeps;
+            for (const auto& row : each.rows) {
+                if (!row.name) {
+                    fields.push_back(api_detail::go_string(std::get<language::name_expression>(row.value->node).name.text()));
+                    continue;
+                }
+                const auto& call = std::get<language::call_expression>(row.value->node);
+                auto type = entity_type(pkg, std::get<language::name_expression>(call.arguments[0]->node).name);
+                if (!type) {
+                    unsupported(path_, row.where, "keeps of an entity that isn't declared");
+                    return false;
+                }
+                keeps.push_back(".Keeps(" + api_detail::go_string(*row.name) + ", one.Entity[" + *type + "]())");
+            }
+            std::string list;
+            for (const auto& f : fields) list += (list.empty() ? "" : ", ") + f;
+            out.line(head + ".Fields(" + list + ")" + (keeps.empty() && !each.limit ? "" : "."));
+            for (std::size_t i = 0; i < keeps.size(); ++i) {
+                out.line("\t" + keeps[i].substr(1) + (i + 1 < keeps.size() || each.limit ? "." : ""));
+            }
+            if (each.limit) out.line("\tLimit(" + std::to_string(*each.limit) + ")");
+            return true;
+        }
+
         bool view(stream& out, const package& pkg, const language::view_declaration& v, language::location where, const std::string& var) {
+            for (const auto& each : v.each) {
+                auto* source = std::get_if<language::name_expression>(&each.source->node);
+                if (source && source->name.text() == "user" && !entity(pkg, "user")) return people(out, pkg, v, each, var);
+            }
             std::string head = "var " + var + " = one.View(" + api_detail::go_string(v.name) + ")";
             if (v.is_public) head += ".Public()";
             if (v.per) {
