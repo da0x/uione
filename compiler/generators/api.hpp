@@ -2608,10 +2608,30 @@ namespace one::generators {
                 }
                 head += ".Order(" + api_detail::go_string(dash + std::get<language::name_expression>(x->node).name.text()) + ")";
             }
+            // How many of something each keeps, and what theirs add up to.
             std::vector<std::string> fields, keeps;
             for (const auto& row : each.rows) {
                 if (!row.name) {
                     fields.push_back(api_detail::go_string(std::get<language::name_expression>(row.value->node).name.text()));
+                    continue;
+                }
+                if (auto* total = std::get_if<language::member_expression>(&row.value->node)) {
+                    const auto& call = std::get<language::call_expression>(total->object->node);
+                    const auto& over = std::get<language::where_expression>(call.arguments[0]->node);
+                    auto type = entity_type(pkg, std::get<language::name_expression>(over.source->node).name);
+                    if (!type) {
+                        unsupported(path_, row.where, "a sum of an entity that isn't declared");
+                        return false;
+                    }
+                    const auto& by = *std::get<language::binary_expression>(over.condition->node).left;
+                    std::string path;
+                    if (auto* through = std::get_if<language::member_expression>(&by.node)) {
+                        path = std::get<language::name_expression>(through->object->node).name.text() + "." + through->member;
+                    } else {
+                        path = std::get<language::name_expression>(by.node).name.text();
+                    }
+                    keeps.push_back(".Sums(" + api_detail::go_string(*row.name) + ", one.Entity[" + *type + "](), " + api_detail::go_string(total->member) + ", " +
+                                    api_detail::go_string(path) + ")");
                     continue;
                 }
                 const auto& call = std::get<language::call_expression>(row.value->node);

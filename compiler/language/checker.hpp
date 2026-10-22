@@ -2142,10 +2142,15 @@ namespace one::language {
                     }
                     continue;
                 }
+                if (auto* total = std::get_if<member_expression>(&row.value->node)) {
+                    verify_sum(ns, row, *total);
+                    continue;
+                }
                 auto* call = std::get_if<call_expression>(&row.value->node);
                 auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
                 if (!row.name || !callee || callee->name.text() != "keeps" || call->arguments.size() != 1) {
-                    error(row.where, "a person's row shows what's known of them, like email, or how many of something they keep, like projects = keeps(projects::project)");
+                    error(row.where, "a person's row shows what's known of them, like email, how many of something they keep, like projects = keeps(projects::project), "
+                                     "or what theirs add up to, like paid = sum(billing::payment where account.created_by == user).amount_paid");
                     continue;
                 }
                 snake(*row.name, row.where);
@@ -2153,6 +2158,59 @@ namespace one::language {
                 if (!kind || !find_entity(ns, kind->name)) {
                     error(call->arguments[0]->where, "keeps counts the records of an entity each person made and still has, like keeps(projects::project)");
                 }
+            }
+        }
+
+        // paid = sum(billing::payment where account.created_by == user).amount_paid: what
+        // a number adds up to for each person, over the records that are theirs, which
+        // name them, or name what's theirs by one field they point at.
+        void verify_sum(const std::string& ns, const view_value& row, const member_expression& total) {
+            const std::string like = "like paid = sum(billing::payment where account.created_by == user).amount_paid";
+            auto* call = std::get_if<call_expression>(&total.object->node);
+            auto* callee = call ? std::get_if<name_expression>(&call->callee->node) : nullptr;
+            auto* over = call && call->arguments.size() == 1 ? std::get_if<where_expression>(&call->arguments[0]->node) : nullptr;
+            auto* kind = over ? std::get_if<name_expression>(&over->source->node) : nullptr;
+            if (!row.name || !callee || callee->name.text() != "sum" || !kind) {
+                error(row.where, "a person's row adds up a number of the records that are theirs, " + like);
+                return;
+            }
+            snake(*row.name, row.where);
+            const entity_declaration* e = find_entity(ns, kind->name);
+            if (!e) {
+                error(over->source->where, "sum adds up a number the records of an entity hold, " + like);
+                return;
+            }
+            const field* f = find_field(*e, total.member);
+            if (!f || !f->type || f->type->text() != "number" || f->list) {
+                error(row.value->where, "sum adds up a number, and " + e->name + " holds no number " + total.member);
+            }
+            // Where the entity is declared, which what its fields point at is named from.
+            std::string at = ns;
+            if (kind->name.parts.size() > 1) {
+                at.clear();
+                for (std::size_t i = 0; i + 1 < kind->name.parts.size(); ++i) at += (at.empty() ? "" : "::") + kind->name.parts[i];
+            }
+            auto names_person = [&](const entity_declaration& in, const std::string& name) {
+                if (name == "created_by") return true;
+                const field* g = find_field(in, name);
+                return g && !g->list && g->type && g->type->text() == "user";
+            };
+            auto* test = std::get_if<binary_expression>(&over->condition->node);
+            auto* person = test && test->op == token_kind::equal ? std::get_if<name_expression>(&test->right->node) : nullptr;
+            bool theirs = false;
+            if (person && person->name.text() == "user") {
+                if (auto* by = std::get_if<name_expression>(&test->left->node); by && by->name.parts.size() == 1) {
+                    theirs = names_person(*e, by->name.parts[0]);
+                } else if (auto* through = std::get_if<member_expression>(&test->left->node)) {
+                    auto* hop = std::get_if<name_expression>(&through->object->node);
+                    const field* g = hop && hop->name.parts.size() == 1 ? find_field(*e, hop->name.parts[0]) : nullptr;
+                    const entity_declaration* pointed = g && !g->list && g->type ? find_entity(at, *g->type) : nullptr;
+                    theirs = pointed && names_person(*pointed, through->member);
+                }
+            }
+            if (!theirs) {
+                error(over->condition->where, "sum adds up the records that are each person's, which name them, as created_by does, "
+                                              "or name what's theirs, " + like);
             }
         }
 

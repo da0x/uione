@@ -16,11 +16,22 @@ import (
 	"github.com/da0x/uione/one"
 )
 
+// What a guide was charged, in cents, by whoever charged it.
+type Fee struct {
+	one.Record
+	Guide  string  `firestore:"guide" one:"required,refers=guide::guide"`
+	Amount float64 `firestore:"amount"`
+}
+
 // An office whose clerks see everyone who has signed up, two to a page, with how
-// many guides each keeps.
+// many guides each keeps, what their guides were charged, and what each charged.
 var office = one.Module("office",
-	one.People("people").Fields("name", "email", "joined", "active", "commands").Keeps("guides", one.Entity[Guide]()).Limit(2),
+	one.People("people").Fields("name", "email", "joined", "active", "commands").Keeps("guides", one.Entity[Guide]()).
+		Sums("paid", one.Entity[Fee](), "amount", "guide.created_by").
+		Sums("charged", one.Entity[Fee](), "amount", "created_by").
+		Limit(2),
 	one.Role("clerk", string(one.ViewPeople)),
+	one.Command[Fee]("fee::create").Allow(one.SignedIn),
 )
 
 func init() { modules = append(modules, office) }
@@ -95,6 +106,31 @@ func TestAClerkSeesEveryoneAPageAtATime(t *testing.T) {
 	}
 	if everyone[0]["guides"] != float64(1) {
 		t.Errorf("bob's row is %v", everyone[0])
+	}
+}
+
+func TestAClerkSeesWhatEachPersonPaid(t *testing.T) {
+	h := start(t)
+	ada, adaToken := h.signUp("ada@example.com")
+	grace, graceToken := h.signUp("grace@example.com")
+	h.mustRun("guide/guide/create", adaToken, map[string]any{"slug": "kitchen"})
+	h.mustRun("guide/guide/create", adaToken, map[string]any{"slug": "cellar"})
+	h.mustRun("guide/guide/create", graceToken, map[string]any{"slug": "garden"})
+	h.mustRun("office/fee/create", graceToken, map[string]any{"guide": "kitchen", "amount": 1200})
+	h.mustRun("office/fee/create", graceToken, map[string]any{"guide": "cellar", "amount": 300})
+	h.mustRun("office/fee/create", adaToken, map[string]any{"guide": "garden", "amount": 50})
+	h.app.KeepUsage()
+	if _, err := h.store.Collection("users").Doc(ada).Set(context.Background(), map[string]any{"role_id": "clerk"}, firestore.MergeAll); err != nil {
+		t.Fatal(err)
+	}
+	_, rows, _ := h.people(adaToken, "")
+	sums := map[any][2]any{}
+	for _, row := range rows {
+		sums[row["id"]] = [2]any{row["paid"], row["charged"]}
+	}
+	// Ada's guides were charged 1500 and ada charged 50; grace the other way round.
+	if want := map[any][2]any{ada: {float64(1500), float64(50)}, grace: {float64(50), float64(1500)}}; !reflect.DeepEqual(sums, want) {
+		t.Errorf("what each paid and charged is %v, not %v", sums, want)
 	}
 }
 

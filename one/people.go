@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -41,6 +42,7 @@ type PeopleSpec struct {
 	full   string
 	fields []string
 	keeps  []kept
+	sums   []summed
 	order  ordering
 	limit  int
 }
@@ -49,6 +51,16 @@ type PeopleSpec struct {
 type kept struct {
 	name string
 	of   reflect.Type
+}
+
+// summed is a total, for each person, of a number the records of a kind hold, over
+// those that are theirs: whose field by names them, directly, or through what it
+// points at, like a payment's account.created_by.
+type summed struct {
+	name  string
+	of    reflect.Type
+	field string
+	by    string
 }
 
 // People lists everyone who has signed up, for whoever holds ViewPeople, a page at a
@@ -72,6 +84,15 @@ func (p *PeopleSpec) Fields(names ...string) *PeopleSpec {
 // that haven't been deleted: Keeps("projects", Entity[Project]()).
 func (p *PeopleSpec) Keeps(name string, kind Kind) *PeopleSpec {
 	p.keeps = append(p.keeps, kept{name, kind.typ})
+	return p
+}
+
+// Sums shows a total for each person of a number the records of a kind hold, over
+// those whose field by names them, or names what's theirs by one field it points
+// at: Sums("paid", Entity[Payment](), "amount_paid", "account.created_by"). It's added
+// up as each page is read, from every record it's over.
+func (p *PeopleSpec) Sums(name string, kind Kind, field, by string) *PeopleSpec {
+	p.sums = append(p.sums, summed{name, kind.typ, field, by})
 	return p
 }
 
@@ -179,6 +200,16 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 	if err != nil {
 		return nil, "", err
 	}
+	people := make([]string, len(docs))
+	for i, doc := range docs {
+		people[i] = doc.Ref.ID
+	}
+	totals := make([]map[string]float64, len(p.sums))
+	for i, sum := range p.sums {
+		if totals[i], err = a.totalled(ctx, sum, people); err != nil {
+			return nil, "", err
+		}
+	}
 	month := time.Now().UTC().Format("2006-01")
 	rows := make([]map[string]any, 0, len(docs))
 	for i, doc := range docs {
@@ -208,6 +239,9 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 				row[k.name] = asInt(held[s.collection])
 			}
 		}
+		for j, sum := range p.sums {
+			row[sum.name] = totals[j][doc.Ref.ID]
+		}
 		rows = append(rows, row)
 	}
 	next := ""
@@ -215,6 +249,70 @@ func (a *App) peopleAfter(ctx context.Context, p *PeopleSpec, after string) ([]m
 		next = docs[len(docs)-1].Ref.ID
 	}
 	return rows, next, nil
+}
+
+// totalled adds up a sum for each of some people, reading each record it's over, 30
+// people at a time: what's theirs is first found by the field it's through, if any,
+// then the records naming it.
+func (a *App) totalled(ctx context.Context, sum summed, people []string) (map[string]float64, error) {
+	of := a.reg.schemas[sum.of]
+	if of == nil || of.field(sum.field) == nil {
+		return nil, fmt.Errorf("one: there's no %s to add up", sum.field)
+	}
+	whose := map[string]string{}
+	for _, person := range people {
+		whose[person] = person
+	}
+	by, last, through := strings.Cut(sum.by, ".")
+	if through {
+		f := of.field(by)
+		var theirs *schema
+		if f != nil {
+			theirs = a.reg.entity(f.refers)
+		}
+		if theirs == nil || !holds(theirs, last) {
+			return nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, sum.by)
+		}
+		owned := map[string]string{}
+		for start := 0; start < len(people); start += 30 {
+			docs, err := a.store.Collection(theirs.collection).Where(last, "in", people[start:min(start+30, len(people))]).Select(last).Documents(ctx).GetAll()
+			if err != nil {
+				return nil, err
+			}
+			for _, doc := range docs {
+				owned[doc.Ref.ID], _ = doc.Data()[last].(string)
+			}
+		}
+		whose = owned
+	} else if !holds(of, by) {
+		return nil, fmt.Errorf("one: %s.%s doesn't name a person", of.entity, sum.by)
+	}
+	named := make([]string, 0, len(whose))
+	for id := range whose {
+		named = append(named, id)
+	}
+	totals := map[string]float64{}
+	for start := 0; start < len(named); start += 30 {
+		docs, err := a.store.Collection(of.collection).Where(by, "in", named[start:min(start+30, len(named))]).Select(by, sum.field).Documents(ctx).GetAll()
+		if err != nil {
+			return nil, err
+		}
+		for _, doc := range docs {
+			id, _ := doc.Data()[by].(string)
+			switch n := doc.Data()[sum.field].(type) {
+			case int64:
+				totals[whose[id]] += float64(n)
+			case float64:
+				totals[whose[id]] += n
+			}
+		}
+	}
+	return totals, nil
+}
+
+// holds says whether an entity's records hold a field, as each holds who made it.
+func holds(s *schema, name string) bool {
+	return name == "created_by" || s.field(name) != nil
 }
 
 // joined keeps who a person is, and when they joined, the first time they're seen,

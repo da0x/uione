@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // A view of everyone who has signed up, for the app's own people: read a page at a
-// time by a role given user::view, showing what's known of each person and how many
-// of something they keep.
+// time by a role given user::view, showing what's known of each person, how many of
+// something they keep, and what theirs add up to.
 
 #include <doctest/doctest.h>
 
@@ -31,6 +31,14 @@ namespace projects {
 	command project::create {
 		by anyone signed in
 	}
+	entity charge {
+		project  projects::project  required
+		amount   number
+		note     text
+	}
+	command charge::create {
+		by anyone signed in
+	}
 }
 
 namespace staff {
@@ -42,6 +50,8 @@ namespace staff {
 			limit 50
 			name  email  joined  active  commands
 			projects = keeps(projects::project)
+			paid = sum(projects::charge where project.created_by == user).amount
+			charged = sum(projects::charge where created_by == user).amount
 		}
 	}
 
@@ -91,6 +101,8 @@ TEST_CASE("a clerk's list of everyone becomes the runtime's people, asked for a 
     CAPTURE(go->content);
     CHECK(has(go->content, "var People = one.People(\"people\").Order(\"-active\").Fields(\"name\", \"email\", \"joined\", \"active\", \"commands\").\n"
                            "\tKeeps(\"projects\", one.Entity[projects.Project]()).\n"
+                           "\tSums(\"paid\", one.Entity[projects.Charge](), \"amount\", \"project.created_by\").\n"
+                           "\tSums(\"charged\", one.Entity[projects.Charge](), \"amount\", \"created_by\").\n"
                            "\tLimit(50)\n"));
     CHECK(has(go->content, "one.Role(\"clerk\", \"user:view\")"));
 
@@ -116,6 +128,14 @@ TEST_CASE("a list of everyone is read by a role given user::view, and holds noth
               "or how many of something they keep, like projects = keeps(projects::project), not password"));
     CHECK(has(wrong("keeps(projects::project)", "keeps(projects::plan)"),
               "keeps counts the records of an entity each person made and still has, like keeps(projects::project)"));
+    CHECK(has(wrong(".amount\n\t\t\tcharged", ".note\n\t\t\tcharged"), "sum adds up a number, and charge holds no number note"));
+    CHECK(has(wrong("sum(projects::charge where project", "sum(projects::plan where project"), "sum adds up a number the records of an entity hold"));
+    CHECK(has(wrong("where project.created_by == user", "where project.slug == user"),
+              "sum adds up the records that are each person's, which name them, as created_by does, or name what's theirs"));
+    CHECK(has(wrong("where created_by == user", "where amount == user"), "sum adds up the records that are each person's"));
+    CHECK(has(wrong("where created_by == user", "where created_by != user"), "sum adds up the records that are each person's"));
+    CHECK(has(wrong("sum(projects::charge where created_by", "total(projects::charge where created_by"),
+              "a person's row adds up a number of the records that are theirs"));
     CHECK(has(wrong("command project::create {\n\t\tby anyone signed in", "command project::create {\n\t\tpermission user::view"),
               "user::view reads the lists of everyone who has signed up, so it's given to a role, like role staff  user::view"));
 }

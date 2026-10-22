@@ -1028,7 +1028,7 @@ view project_page per project {
 
 `each user` lists everyone who has signed up, for the app's own people, like its
 staff: who they are, when they joined and were last active, what they did this month,
-and how many of something they keep.
+how many of something they keep, and what theirs add up to.
 
 ```one
 role staff  user::view
@@ -1038,6 +1038,7 @@ view people {
 		order by active descending
 		name  email  joined  active  commands
 		projects = keeps(projects::project)
+		paid = sum(billing::payment where account.created_by == user).amount_paid
 	}
 }
 ```
@@ -1051,6 +1052,11 @@ view people {
   `active`, `commands` and `writes` (this month's, counting the view pages each
   command rebuilt), and `bytes` (of the files they keep). `projects =
   keeps(projects::project)` counts the projects they made and still have.
+- `paid = sum(billing::payment where account.created_by == user).amount_paid` adds
+  up a number of the records that are theirs: those that name them, as `created_by
+  == user` does, or name what's theirs by one field they point at, like the payments
+  of the accounts they made. It's added up as each page is read, from every record
+  it's over, so it suits what's few for each person, like what they paid.
 - It's ordered by `active` or `joined`, with `descending` for the latest first.
   With no `order by`, the most recently active come first.
 - It holds nothing else, and picks no one out with `where`.
