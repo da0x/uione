@@ -53,15 +53,22 @@ async function person(name) {
   return (await response.json()).idToken;
 }
 
-// Runs a command as someone; what it answers, or what it refused with.
+// Runs a command as someone; what it answers, or what it refused with. Told to slow
+// down for a moment, it waits as long as it's told and asks again, as the clients do.
 async function run(token, command, fields) {
-  const response = await fetch(`${server}/api/shop/${command.replace("::", "/")}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(fields),
-  });
-  const said = await response.json().catch(() => ({}));
-  return { ok: response.ok, said };
+  for (;;) {
+    const response = await fetch(`${server}/api/shop/${command.replace("::", "/")}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(fields),
+    });
+    const said = await response.json().catch(() => ({}));
+    if (response.status === 429 && said.retry_after > 0 && said.retry_after <= 10) {
+      await new Promise((resolve) => setTimeout(resolve, said.retry_after * 1000));
+      continue;
+    }
+    return { ok: response.ok, said };
+  }
 }
 
 async function must(token, command, fields) {
@@ -187,11 +194,12 @@ try {
 
   // A burst: many plates made and moved at once, worked by three presses on the
   // same key, four at a time each. Every one is etched, once, and nothing's left
-  // held or saying it's working. BURST=n says how many; 100 unless said.
+  // held or saying it's working. BURST=n says how many; 20 unless said, as many as
+  // one person may make at once before being asked to slow down.
   for (const r of running.splice(2)) r.kill();
   const presses = ["a", "b", "c"].map((name) => agent(`burst-${name}`, pressKey, { ONE_AGENT_PARALLEL: "4" }));
   await new Promise((resolve) => setTimeout(resolve, 2000));
-  const count = Number(process.env.BURST ?? 100);
+  const count = Number(process.env.BURST ?? 20);
   const started = Date.now();
   const burst = await Promise.all(Array.from({ length: count }, (_, i) => must(foreman, "plate::create", { shop, name: `Burst ${i + 1}` }).then((r) => r.id)));
   await Promise.all(burst.map((id) => must(foreman, "plate::move", { id, stage: "etching" })));
