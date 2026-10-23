@@ -9,6 +9,7 @@ root=$(git rev-parse --show-toplevel) || exit 1
 
 "$root/tools/check-license" --staged || exit 1
 "$root/tools/check-names" --staged || exit 1
+"$root/tools/check-includes" --staged || exit 1
 
 # The highlighting test runs when anything it covers is staged.
 if git diff --cached --name-only | grep -qE '\.one$|^editors/'; then

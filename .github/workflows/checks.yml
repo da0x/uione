@@ -26,6 +26,9 @@ jobs:
       - name: Every file name is lowercase
         run: tools/check-names
 
+      - name: Each part of the compiler includes only the parts below it
+        run: tools/check-includes
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22

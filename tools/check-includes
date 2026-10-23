@@ -1,0 +1,96 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# The compiler is components, each a header and a source beside it whose first
+# include is that header, so the source compiling alone shows the header includes
+# everything it uses itself. What's worth compiling once is defined in the source,
+# and the header says only what others use.
+#
+# Components are in levels, and each includes only those on levels below its own:
+# the language first, then the generators, which never include one another, then
+# the project that runs them all, then the driver. A level is what keeps one header
+# from pulling in the whole compiler, which is what made every test file compile it
+# again. Only the command line, the browser's build and the driver's own source
+# include driver.hpp, which is all of it.
+#
+#   tools/check-includes            every component
+#   tools/check-includes --staged   the same, run when compiler files are committed
+
+set -u
+cd "$(git rev-parse --show-toplevel)/compiler" || exit 1
+
+if [ "${1:-}" = "--staged" ] && [ -z "$(git diff --cached --name-only --diff-filter=ACMR -- .)" ]; then
+	exit 0
+fi
+
+# The level of a component, by its path without .hpp or .cpp.
+level() {
+	case "$1" in
+		version|code/stream|platform/files|language/token|language/names|language/colors|language/library) echo 0 ;;
+		generators/cpp_browser|generators/markdown|generators/native_names) echo 0 ;;
+		toolchain|language/ast|language/diagnostics|generators/output|generators/javascript) echo 1 ;;
+		language/lexer|language/written|language/extends|language/targets) echo 2 ;;
+		language/parser) echo 3 ;;
+		language/lower|generators/roles|generators/theme) echo 4 ;;
+		language/checker|generators/screens) echo 5 ;;
+		generators/web|generators/native|generators/api|generators/cpp|generators/infrastructure) echo 6 ;;
+		generators/indexes|generators/rules|generators/agent) echo 6 ;;
+		generators/project) echo 7 ;;
+		driver/outline) echo 8 ;;
+		driver/check) echo 9 ;;
+		driver/upgrade|driver/editor|driver/themes|driver/build) echo 10 ;;
+		driver) echo 11 ;;
+		main|wasm) echo 12 ;;
+		*) echo "" ;;
+	esac
+}
+
+failed=0
+for f in $(git ls-files '*.hpp' '*.cpp' | grep -v '^tests/'); do
+	self=${f%.*}
+	mine=$(level "$self")
+	if [ -z "$mine" ]; then
+		echo "check-includes: compiler/$f: give $self a level in tools/check-includes" >&2
+		failed=1
+		continue
+	fi
+	case "$f" in
+		*.hpp)
+			if [ ! -f "$self.cpp" ]; then
+				echo "check-includes: compiler/$f: has no $self.cpp beside it" >&2
+				failed=1
+			fi
+			;;
+		*.cpp)
+			if [ -f "$self.hpp" ]; then
+				first=$(grep -m1 '^#include' "$f")
+				if [ "$first" != "#include \"$self.hpp\"" ]; then
+					echo "check-includes: compiler/$f: its first include is $self.hpp, so it shows the header stands alone" >&2
+					failed=1
+				fi
+				if ! grep -q "^    $f\$\|^    $f)\$" CMakeLists.txt; then
+					echo "check-includes: compiler/$f: isn't in ONE_SOURCES in CMakeLists.txt" >&2
+					failed=1
+				fi
+			fi
+			;;
+	esac
+	for included in $(sed -n 's/^#include "\(.*\)\.[ch]pp"$/\1/p' "$f"); do
+		[ "$included" = "$self" ] && continue
+		if [ "$included" = driver ] && [ "$self" != main ] && [ "$self" != wasm ] && [ "$self" != driver ]; then
+			echo "check-includes: compiler/$f: includes driver.hpp, which is all of the compiler; include the driver's part it uses" >&2
+			failed=1
+			continue
+		fi
+		theirs=$(level "$included")
+		if [ -z "$theirs" ]; then
+			echo "check-includes: compiler/$f: includes $included, which has no level in tools/check-includes" >&2
+			failed=1
+		elif [ "$theirs" -ge "$mine" ]; then
+			echo "check-includes: compiler/$f: includes $included, on level $theirs, from level $mine; a component includes only those below it" >&2
+			failed=1
+		fi
+	done
+done
+exit $failed

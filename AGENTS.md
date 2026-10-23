@@ -57,6 +57,16 @@ Treat every file as published, whatever the repository's visibility today.
   that touches the operating system only in `compiler/platform/`, so the compiler
   can later be built for the browser. Warnings are errors. Tests use doctest, which
   CMake downloads at a pinned version rather than keeping it in the repository.
+  The compiler is components: each header has a source beside it whose first include
+  is that header, so each header is shown to include what it uses itself. What's
+  worth compiling once, like the checker or a generator, is defined in its source,
+  and its header declares only what others call, so a test that calls `check` reads
+  a declaration rather than compiling the checker again. Components are in levels:
+  the language, then the generators, which never include one another, then
+  `generators/project.hpp`, then the driver's parts in `compiler/driver/`. A file
+  includes only components below its own, and only `main.cpp` and `wasm.cpp` include
+  all of `driver.hpp`. `tools/check-includes` holds the compiler to this, and gives
+  each component its level; a new component gets one there.
 - `packages/` holds the JavaScript packages, as Yarn workspaces: the libraries
   generated apps are built on, and `packages/compiler`, `@uione/compiler`, the
   compiler built for the browser by `tools/wasm/build` (Emscripten in Docker) and
