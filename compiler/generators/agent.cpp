@@ -144,7 +144,10 @@ namespace one::generators {
                 cmake.open("if(NOT UIONE)");
                 cmake.line("set(UIONE \"$ENV{HOME}/.local/share/uione/" + std::string(version) + "\")");
                 cmake.close("endif()");
+                cmake.line("# Added once, however many programs a build holds.");
+                cmake.open("if(NOT TARGET one_client)");
                 cmake.line("add_subdirectory(${UIONE}/client ${CMAKE_BINARY_DIR}/uione-client EXCLUDE_FROM_ALL)");
+                cmake.close("endif()");
                 cmake.line();
                 cmake.line("add_executable(" + name + " main.cpp)");
                 cmake.line("target_link_libraries(" + name + " PRIVATE one_client)");

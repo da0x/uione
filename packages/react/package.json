@@ -33,7 +33,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
+    "prepack": "node -e \"if(!require('fs').existsSync('dist')){console.error('dist is published as the checks built and tested it, never built again here; build it and run the checks first');process.exit(1)}\"",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

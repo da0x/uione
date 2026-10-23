@@ -32,7 +32,7 @@
   },
   "scripts": {
     "wasm": "node -e \"const fs=require('fs');for(const f of ['one.mjs','one.wasm']){const from='../../compiler/build-wasm/'+f;if(!fs.existsSync(from)){console.error('the browser build is missing; run tools/wasm/build first');process.exit(1)}fs.mkdirSync('dist',{recursive:true});fs.copyFileSync(from,'dist/'+f)}\"",
-    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
+    "prepack": "node -e \"if(!require('fs').existsSync('dist')){console.error('dist is published as the checks built and tested it, never built again here; build it and run the checks first');process.exit(1)}\"",
     "build": "tsc -p tsconfig.build.json && yarn wasm",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

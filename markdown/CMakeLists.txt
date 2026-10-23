@@ -18,8 +18,10 @@ add_library(one::markdown ALIAS one_markdown)
 target_include_directories(one_markdown INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_compile_features(one_markdown INTERFACE cxx_std_23)
 
-# md and its test, when it's built on its own rather than inside an app.
-if(PROJECT_IS_TOP_LEVEL)
+# md and its test, when it's built on its own rather than inside an app, or when a
+# build of everything asks for them.
+option(ONE_MARKDOWN_EXAMPLES "Build md and its test" ${PROJECT_IS_TOP_LEVEL})
+if(ONE_MARKDOWN_EXAMPLES)
 	add_executable(md src/main.cpp)
 	target_link_libraries(md PRIVATE one_markdown)
 	target_compile_options(md PRIVATE -Wall -Wextra -Wpedantic -Werror)

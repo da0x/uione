@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Renders the generated site in Node at each of its addresses, and checks each page
-// has what it should. It builds the app for the server first, so this tests the same
-// code the browser gets, not a copy.
+// has what it should. The app is built for the server first, from the same code the
+// browser gets, not a copy, and that build is what's rendered.
 //
-//   node tools/smoke-web.mjs      after one build site and yarn install
+//   node tools/smoke-web.mjs build   after one build site and yarn install
+//   node tools/smoke-web.mjs         renders what that built
 
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "vite";
@@ -20,13 +22,17 @@ const web = join(root, "site/build/web");
 // which only a bundler reads.
 // Built in development mode, so the app uses the emulators' settings and never a real
 // project's, even after a deploy has written .env.production next to it.
-await build({
-  root: web,
-  mode: "development",
-  logLevel: "warn",
-  build: { ssr: "src/app.tsx", outDir: "build-ssr" },
-  ssr: { external: ["@uione/react"], noExternal: ["@uione/radix"] },
-});
+if (process.argv[2] === "build") {
+  await build({
+    root: web,
+    mode: "development",
+    logLevel: "warn",
+    build: { ssr: "src/app.tsx", outDir: "build-ssr" },
+    ssr: { external: ["@uione/react"], noExternal: ["@uione/radix"] },
+  });
+  process.exit(0);
+}
+if (!existsSync(join(web, "build-ssr/app.js"))) throw new Error("the site isn't built for the server; run node tools/smoke-web.mjs build");
 
 const { createElement } = await import("react");
 const { renderToString } = await import("react-dom/server");

@@ -1,0 +1,91 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds uione's C++ as one build, so each library is compiled once for everything
+# that uses it, and what's tested is what was built: one::client and its tests, the
+# print shop's press, one::screens and its tests, Markdown and md, the desktop and
+# terminal toolkits with their examples and tests, and the desktop and terminal apps
+# one build wrote for the site, the gallery and the print shop, with the tracker
+# example's, written here from a copy given a project block that names both targets.
+# Everything is compiled with warnings as errors. Needs one build to have written
+# the site and the examples, what desktop/ and terminal/ are built with, and a g++
+# with C++26.
+#
+#   tools/build-native [directory] [client] [toolkits]
+#
+# The build is in build/native unless a directory is given. client is one::client,
+# its tests and the press alone, which need only C++23; toolkits is the rest. Both,
+# unless one is named. ONE_CLIENT_TLS chooses the client's TLS, as its build does.
+
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+one=${ONE:-$here/compiler/build/one}
+out=$here/build/native
+case "${1:-}" in
+	"" | client | toolkits) ;;
+	*) out=$1; shift ;;
+esac
+parts=${*:-client toolkits}
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
+
+source=$out/source
+mkdir -p "$source"
+# The client first, which every part uses, and the toolkits add only when a build
+# doesn't have it.
+{
+	echo "cmake_minimum_required(VERSION 3.28)"
+	echo "project(uione_native LANGUAGES C CXX)"
+	case " $parts " in *" client "*) echo "set(ONE_CLIENT_EXAMPLES ON)" ;; esac
+	echo "add_subdirectory($here/client client)"
+} > "$source/CMakeLists.txt"
+for part in $parts; do
+	case "$part" in
+		client)
+			[ -f "$here/examples/print_shop/build/agents/press/CMakeLists.txt" ] || { echo "build-native: run one build examples/print_shop first" >&2; exit 1; }
+			echo "add_subdirectory($here/examples/print_shop/build/agents/press press)" >> "$source/CMakeLists.txt"
+			;;
+		toolkits)
+			for app in site examples/gallery examples/print_shop; do
+				[ -d "$here/$app/build/desktop" ] || { echo "build-native: run one build $app first" >&2; exit 1; }
+			done
+			rm -rf "$out/tracker-source"
+			mkdir -p "$out/tracker-source"
+			cp "$here"/examples/tracker/*.one "$out/tracker-source/"
+			{ printf 'import one\n\nproject tracker {\n\ttarget web desktop terminal\n\tsignin google\n}\n\n'; cat "$here/examples/tracker/main.one"; } > "$out/tracker-source/main.one"
+			"$one" build "$out/tracker-source" --out "$out/tracker" >/dev/null
+			{
+				for library in markdown screens desktop terminal; do
+					echo "set(ONE_$(echo $library | tr a-z A-Z)_EXAMPLES ON)"
+				done
+				for library in markdown screens desktop terminal; do echo "add_subdirectory($here/$library $library)"; done
+				for target in desktop terminal; do
+					for app in site/build examples/gallery/build examples/print_shop/build; do
+						echo "add_subdirectory($here/$app/$target $(basename "$(dirname "$app")")-$target)"
+					done
+					echo "add_subdirectory($out/tracker/$target tracker-$target)"
+				done
+			} >> "$source/CMakeLists.txt"
+			;;
+		*) echo "build-native: $part is neither client nor toolkits" >&2; exit 1 ;;
+	esac
+done
+launcher=""
+command -v ccache >/dev/null && launcher=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+tls=""
+[ -n "${ONE_CLIENT_TLS:-}" ] && tls=-DONE_CLIENT_TLS=$ONE_CLIENT_TLS
+UIONE="$here" cmake -S "$source" -B "$out" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher $tls >/dev/null
+# Built again where the compiler itself crashed, as g++ now and then does, but never
+# past an error in what it compiled.
+log=$(mktemp)
+trap 'rm -f "$log"' EXIT
+attempt=1
+until cmake --build "$out" --parallel "${ONE_NATIVE_JOBS:-$(nproc)}" > "$log" 2>&1; do
+	if ! grep -q "internal compiler error" "$log" || [ $attempt -ge 4 ]; then
+		cat "$log" >&2
+		exit 1
+	fi
+	attempt=$((attempt + 1))
+done
+echo "ok: built $parts in $out"

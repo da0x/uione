@@ -29,10 +29,12 @@ target_link_libraries(one_client PUBLIC PkgConfig::TLS Threads::Threads)
 # GCC 16 wrongly says ember's HTTP code frees memory it didn't allocate, once inlined.
 target_compile_options(one_client PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 
-# Its tests, when it's built on its own: tests/run starts the tasks example's backend
-# on the emulators and runs them against it.
-if(PROJECT_IS_TOP_LEVEL)
-	add_executable(tests tests/tests.cpp)
-	target_link_libraries(tests PRIVATE one_client)
-	target_compile_options(tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
+# Its tests, when it's built on its own or a build of everything asks for them:
+# tests/run starts the tasks example's backend on the emulators and runs them against it.
+option(ONE_CLIENT_EXAMPLES "Build its tests" ${PROJECT_IS_TOP_LEVEL})
+if(ONE_CLIENT_EXAMPLES)
+	add_executable(one_client_tests tests/tests.cpp)
+	set_target_properties(one_client_tests PROPERTIES OUTPUT_NAME tests)
+	target_link_libraries(one_client_tests PRIVATE one_client)
+	target_compile_options(one_client_tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 endif()

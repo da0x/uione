@@ -40,7 +40,8 @@ Treat every file as published, whatever the repository's visibility today.
   `compiler/generators/native.hpp` on `one::screens` and held to
   `site/target/desktop` and `site/target/terminal`. Anything the `one` library can't do yet stops the build with
   "not supported yet" and the line it's on; every project in the repository builds.
-  `node tools/smoke-web.mjs` renders every page of the web app in Node, and
+  `node tools/smoke-web.mjs build` builds the web app for the server and
+  `node tools/smoke-web.mjs` renders every page of that build in Node, and
   `yarn workspace uione-rules-test test` tests the rules against the emulator.
   `compiler/build/one show <file>:<line>` (or a range, like `main.one:53-56`) prints
   the code those lines generate, in every output, like the assembly view of a block
@@ -51,7 +52,7 @@ Treat every file as published, whatever the repository's visibility today.
   `tools/gallery` runs `examples/gallery`, every control on every target, the same
   way, its web and desktop apps, or `tools/gallery terminal` in the terminal too;
   and `node tools/end-to-end.mjs` runs it end to end with no browser: the generated
-  backend, the generated rules, and the Firebase data source, checking that views
+  backend as `tools/build-backends` built it, the generated rules, and the Firebase data source, checking that views
   update live and that the rules keep each person's views to themselves. It follows
   decision 0003: snake_case, namespaces, headers under `language/`, and anything
   that touches the operating system only in `compiler/platform/`, so the compiler
@@ -125,9 +126,9 @@ Treat every file as published, whatever the repository's visibility today.
   whose header is pinned in `client/include/ember.hpp`, commands run by name, and what
   a person's roles allow. Its browser sign-in is the very code the compiler writes
   into an app's C++ client, held so by `cpp_tests.cpp`. `cmake -S client -B
-  client/build && cmake --build client/build`, then `client/tests/run
-  client/build/tests`, which runs the tasks example's backend on the emulators and
-  tests against it. POSIX for now; a Windows build adds its own sockets.
+  client/build && cmake --build client/build`, then, after `tools/build-backends`,
+  `client/tests/run client/build/tests`, which runs the tasks example's backend on
+  the emulators and tests against it. POSIX for now; a Windows build adds its own sockets.
 - `screens/` is `one::screens`, what a native app's screens are and do whatever draws
   them: sites, pages, the navigator, the data sources (`one::client`'s, and memory
   for tests), every component's spec, and the model each works out before it's
@@ -172,6 +173,15 @@ under a different one.
 - **Work lands on `main`, checked first** (decision 0007). Before a push, every step
   of the `checks` workflow passes from a clean clone. Commits are signed, `main` is
   never force-pushed, and messages carry no attribution lines.
+- **Built once, tested, released as tested** (decision 0014). The checks build each
+  thing once, then test that build, and a release publishes it. `tools/build-native`
+  builds all of uione's C++ as one build in `build/native`: the client, screens,
+  Markdown, both toolkits, their tests, the apps `one build` writes and the print
+  shop's press, each library compiled once. `tools/build-backends` builds each
+  generated backend into its `build/api/server`. A test runs what those built and
+  never builds for itself; a tool that needs a build says which to run when it's
+  missing. Each library's own tests are named for it (`one_screens_tests`), with
+  the file name they always had, so one build can hold them all.
 
 - **A release moves everything together.** `compiler/version.hpp`, the four
   `packages/*/package.json` and the site's expected `go.mod` and `package.json`
@@ -181,8 +191,10 @@ under a different one.
   page per line. The
   tags `v<version>`, `one/v<version>` and `infrastructure/v<version>` go on the
   pushed commit; `v<version>` runs `.github/workflows/release.yml`, which publishes
-  the compiler's builds and its container. The npm packages are published by hand
-  after `tools/wasm/build`, in the order react, radix, compiler, editor. Before a
+  the compiler as the checks built and tested it on that commit, and its container.
+  The npm packages are published by hand from the clone the checks built and tested,
+  in the order react, radix, compiler, editor; their `prepack` refuses to build
+  `dist` again. Before a
   release, `tools/google-addresses` refreshes the lists `one` uses to tell Firebase
   Hosting from a caller, since Google changes them now and then.
 

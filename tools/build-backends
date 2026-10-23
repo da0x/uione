@@ -1,0 +1,22 @@
+#!/bin/sh
+# Copyright 2026 Daher Alfawares
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Builds each backend one build wrote, the site's and each example's, once, into its
+# build/api/server, where the tests that run one start it, and the site's Pulumi
+# program, so what's tested is what was built.
+#
+#   tools/build-backends     after one build has written them
+
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+found=0
+for api in "$here"/site/build/api "$here"/examples/*/build/api; do
+	[ -f "$api/go.mod" ] || continue
+	found=$((found + 1))
+	(cd "$api" && go mod tidy && go build -o server .)
+	echo "ok: built ${api#"$here"/}/server"
+done
+[ "$found" -gt 0 ] || { echo "build-backends: no generated backends; run one build first" >&2; exit 1; }
+(cd "$here/site/build/infrastructure" && go mod tidy && go build ./...)
+echo "ok: built the site's Pulumi program"

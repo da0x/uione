@@ -24,21 +24,22 @@ if(NOT TARGET one_terminal_runtime)
 	add_subdirectory(${UIONE}/terminal ${CMAKE_BINARY_DIR}/uione-terminal EXCLUDE_FROM_ALL)
 endif()
 
-add_executable(uione src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/license.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
-target_link_libraries(uione PRIVATE one_terminal_runtime)
-target_compile_options(uione PRIVATE -Wno-free-nonheap-object)
+add_executable(uione_terminal src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/license.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
+set_target_properties(uione_terminal PROPERTIES OUTPUT_NAME uione)
+target_link_libraries(uione_terminal PRIVATE one_terminal_runtime)
+target_compile_options(uione_terminal PRIVATE -Wno-free-nonheap-object)
 
 # What it was built from, which its footer can show: the commit, and its repository.
 execute_process(COMMAND git rev-parse --short=7 HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 execute_process(COMMAND git remote get-url origin WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE repository OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 string(REGEX REPLACE "^git@([^:]+):" "https://\\1/" repository "${repository}")
 string(REGEX REPLACE "\\.git$" "" repository "${repository}")
-target_compile_definitions(uione PRIVATE UIONE_COMMIT="${commit}" UIONE_REPOSITORY="${repository}")
+target_compile_definitions(uione_terminal PRIVATE UIONE_COMMIT="${commit}" UIONE_REPOSITORY="${repository}")
 
 # Installing it: cmake --install out --prefix ~/.local puts it in bin as uione-terminal,
 # with its license.
 # The project's LICENSE goes with it, or it isn't installed or packaged at all.
-install(PROGRAMS $<TARGET_FILE:uione> DESTINATION bin RENAME uione-terminal)
+install(PROGRAMS $<TARGET_FILE:uione_terminal> DESTINATION bin RENAME uione-terminal)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE)
 	install(FILES packaging/LICENSE DESTINATION share/licenses/uione-terminal)
 else()

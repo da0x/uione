@@ -1,11 +1,12 @@
 # Copyright 2026 Daher Alfawares
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# Builds the compiler for each platform when a release is tagged, like v0.2.0, and
-# publishes it: the builds, the libraries the desktop and terminal apps it writes are
-# built on, and their SHA256SUMS on the GitHub release, which uione.io/install.sh
-# downloads, the container image on ghcr.io/da0x/uione, and the
-# image deploys are built in on ghcr.io/da0x/uione-builder.
+# Publishes a release when it's tagged, like v0.2.0: the compiler as the checks built
+# and tested it on that commit, for each platform, never built again here (decision
+# 0014), the libraries the desktop and terminal apps it writes are built on, and their
+# SHA256SUMS on the GitHub release, which uione.io/install.sh downloads, the container
+# image on ghcr.io/da0x/uione, and the image deploys are built in on
+# ghcr.io/da0x/uione-builder.
 
 name: release
 
@@ -17,56 +18,38 @@ permissions:
   contents: read
 
 jobs:
-  linux:
-    strategy:
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            machine: x86_64
-          - runner: ubuntu-24.04-arm
-            machine: aarch64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build one as a static binary
-        run: tools/release/linux
-      - name: Pack it
-        run: tools/release/pack compiler/build-release/one linux-${{ matrix.machine }} "${GITHUB_REF_NAME#v}" release
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-${{ matrix.machine }}
-          path: release/
-
-  macos:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build one
-        run: |
-          cmake -S compiler -B compiler/build-release -DONE_TESTS=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build compiler/build-release --target one --parallel
-          strip compiler/build-release/one
-      - name: Pack it
-        run: tools/release/pack compiler/build-release/one macos-arm64 "${GITHUB_REF_NAME#v}" release
-      - uses: actions/upload-artifact@v7
-        with:
-          name: macos-arm64
-          path: release/
-
   publish:
-    needs: [linux, macos]
-    # The Linux builds are enough to release; a Mac that didn't build is left out.
-    if: ${{ !cancelled() && needs.linux.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       packages: write
+      actions: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          path: release
-          merge-multiple: true
+
+      # The checks run on the commit once it's pushed to main, before it's tagged, so
+      # theirs are usually done; they're waited for when they aren't.
+      - name: Take the compiler the checks built and tested on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 180); do
+            run=$(gh run list --workflow checks.yml --commit "$GITHUB_SHA" --event push --limit 1 --json databaseId,status,conclusion --jq '.[0] // {}')
+            [ "$(echo "$run" | jq -r .status)" = completed ] && break
+            sleep 20
+          done
+          [ "$(echo "$run" | jq -r .conclusion)" = success ] || { echo "the checks on $GITHUB_SHA haven't passed: $run" >&2; exit 1; }
+          gh run download "$(echo "$run" | jq -r .databaseId)" --name linux-x86_64 --name linux-aarch64 --name macos-arm64 --dir downloaded
+          mkdir -p release
+          find downloaded -name 'one-*.tar.gz' -exec mv {} release/ \;
+          ls release
+
+      - name: Check it's the version being released
+        run: |
+          tar -xzf release/one-linux-x86_64.tar.gz -C "$RUNNER_TEMP" one
+          built=$("$RUNNER_TEMP/one" --version)
+          [ "$built" = "one ${GITHUB_REF_NAME#v}" ] || { echo "the build says '$built', but the release is ${GITHUB_REF_NAME#v}" >&2; exit 1; }
+
       - name: Pack the libraries the desktop and terminal apps are built on
         run: tools/release/libraries release
       - name: List the builds' checksums

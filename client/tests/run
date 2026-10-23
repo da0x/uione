@@ -2,23 +2,23 @@
 # Copyright 2026 Daher Alfawares
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# Runs one::client's tests against a real app: the tasks example, built by one, its
-# backend serving on the Firebase emulators (tools/emulators/run starts them), with
-# its rules loaded.
+# Runs one::client's tests against a real app: the tasks example's backend, as
+# tools/build-backends built it, serving on the Firebase emulators
+# (tools/emulators/run starts them), with its rules loaded.
 #
-#   client/tests/run client/build/tests
+#   client/tests/run build/native/client/tests
 
 set -eu
 root=$(cd "$(dirname "$0")/../.." && pwd)
 tests=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+api=$root/examples/tasks/build/api/server
+[ -x "$api" ] || { echo "client/tests/run: run one build examples/tasks and tools/build-backends first" >&2; exit 1; }
 work=$(mktemp -d)
 server=
 trap '[ -n "$server" ] && kill "$server" 2>/dev/null; rm -rf "$work"' EXIT
 
-"$root/compiler/build/one" build "$root/examples/tasks" >/dev/null
 node "$root/tools/emulators/rules.mjs" "$root/examples/tasks/build/firestore.rules" >/dev/null
-(cd "$root/examples/tasks/build/api" && go mod tidy >/dev/null 2>&1 && go build -o "$work/api" .)
-PORT=8097 FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 "$work/api" >"$work/api.log" 2>&1 &
+PORT=8097 FIRESTORE_EMULATOR_HOST=localhost:8080 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 "$api" >"$work/api.log" 2>&1 &
 server=$!
 for i in $(seq 1 100); do
 	curl -s -o /dev/null http://localhost:8097/health && break

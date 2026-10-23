@@ -29,8 +29,11 @@ target_include_directories(one_screens PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_
 target_link_libraries(one_screens PUBLIC one_client)
 target_compile_options(one_screens PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 
-if(PROJECT_IS_TOP_LEVEL)
-	add_executable(tests tests/tests.cpp)
-	target_link_libraries(tests PRIVATE one_screens)
-	target_compile_options(tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
+# Its tests, when it's built on its own or a build of everything asks for them.
+option(ONE_SCREENS_EXAMPLES "Build its tests" ${PROJECT_IS_TOP_LEVEL})
+if(ONE_SCREENS_EXAMPLES)
+	add_executable(one_screens_tests tests/tests.cpp)
+	set_target_properties(one_screens_tests PROPERTIES OUTPUT_NAME tests)
+	target_link_libraries(one_screens_tests PRIVATE one_screens)
+	target_compile_options(one_screens_tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 endif()

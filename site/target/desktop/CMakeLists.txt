@@ -24,21 +24,22 @@ if(NOT TARGET one_desktop_runtime)
 	add_subdirectory(${UIONE}/desktop ${CMAKE_BINARY_DIR}/uione-desktop EXCLUDE_FROM_ALL)
 endif()
 
-add_executable(uione src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/license.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
-target_link_libraries(uione PRIVATE one_desktop_runtime)
-target_compile_options(uione PRIVATE -Wno-free-nonheap-object)
+add_executable(uione_desktop src/main.cpp src/site.cpp src/screens/about.cpp src/screens/home.cpp src/screens/install.cpp src/screens/language.cpp src/screens/license.cpp src/screens/mission.cpp src/screens/releases.cpp src/screens/themes.cpp)
+set_target_properties(uione_desktop PROPERTIES OUTPUT_NAME uione)
+target_link_libraries(uione_desktop PRIVATE one_desktop_runtime)
+target_compile_options(uione_desktop PRIVATE -Wno-free-nonheap-object)
 
 # What it was built from, which its footer can show: the commit, and its repository.
 execute_process(COMMAND git rev-parse --short=7 HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 execute_process(COMMAND git remote get-url origin WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE repository OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 string(REGEX REPLACE "^git@([^:]+):" "https://\\1/" repository "${repository}")
 string(REGEX REPLACE "\\.git$" "" repository "${repository}")
-target_compile_definitions(uione PRIVATE UIONE_COMMIT="${commit}" UIONE_REPOSITORY="${repository}")
+target_compile_definitions(uione_desktop PRIVATE UIONE_COMMIT="${commit}" UIONE_REPOSITORY="${repository}")
 
 # Installing it: cmake --install out --prefix ~/.local puts it in bin as uione-desktop,
 # with its license, and what lists it among the system's apps, with its icon.
 # The project's LICENSE goes with it, or it isn't installed or packaged at all.
-install(PROGRAMS $<TARGET_FILE:uione> DESTINATION bin RENAME uione-desktop)
+install(PROGRAMS $<TARGET_FILE:uione_desktop> DESTINATION bin RENAME uione-desktop)
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE)
 	install(FILES packaging/LICENSE DESTINATION share/licenses/uione-desktop)
 else()

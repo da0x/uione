@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 # Every check, run on each push to main (decision 0007). The same steps pass locally,
-# from a clean clone, before a push.
+# from a clean clone, before a push. Each thing is built once and then tested, and
+# what's released is the compiler built and tested here (decision 0014): the release
+# workflow publishes this run's builds of it, never building it again.
 
 name: checks
 
@@ -15,10 +17,57 @@ permissions:
   contents: read
 
 jobs:
+  # The compiler as it's released, for each platform: built, then its tests run on that
+  # build, then packed. Every other job uses Linux x86_64's.
+  compiler:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - runner: macos-15
+            platform: macos-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build one as a static binary, and test that build
+        if: runner.os == 'Linux'
+        run: tools/release/linux
+
+      - name: Build one, and test that build
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S compiler -B compiler/build-release -DCMAKE_BUILD_TYPE=Release
+          cmake --build compiler/build-release --target one one_tests --parallel
+          compiler/build-release/one_tests
+          strip compiler/build-release/one
+
+      - name: Pack it
+        run: tools/release/pack compiler/build-release/one ${{ matrix.platform }} "$(compiler/build-release/one --version | cut -d' ' -f2)" release
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}
+          path: release/
+
   checks:
+    needs: compiler
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-x86_64
+          path: release
+
+      - name: Use the compiler built and tested above
+        run: |
+          mkdir -p compiler/build
+          tar -xzf release/one-linux-x86_64.tar.gz -C compiler/build one
 
       - name: Every source file carries its copyright and license
         run: tools/check-license
@@ -39,20 +88,6 @@ jobs:
       - name: Vim and VS Code highlight every example the same way
         run: node editors/test.mjs
 
-      - name: Build and test the compiler
-        run: |
-          command -v g++-14 || { sudo apt-get update && sudo apt-get install -y g++-14; }
-          CXX=g++-14 make -C compiler test
-
-      # The compiler built for the browser has to say exactly what the native one does.
-      - name: Build the compiler for the browser, and hold it to the native one
-        run: |
-          tools/wasm/build
-          node tools/wasm/test.mjs
-
-      - name: Every project in the repository checks without errors
-        run: compiler/build/one check examples/gallery examples/library examples/tasks examples/tracker site
-
       - uses: actions/setup-go@v7
         with:
           # infrastructure/ needs the newest Go of the modules here, and one/ runs on it too.
@@ -64,94 +99,94 @@ jobs:
       - name: Start the Firebase emulators
         run: tools/emulators/run
 
+      # Built once, here, and tested below: the compiler for the browser, what the
+      # compiler writes for the site and each example, their backends, one::client and
+      # its tests with the print shop's press, and the JavaScript packages and the site.
+      # The site's web app is a workspace, so it's generated before the install that
+      # checks the lockfile against it.
+      - name: Build the compiler for the browser
+        run: tools/wasm/build
+
+      - name: Write the site and the examples
+        run: |
+          for p in site examples/tasks examples/library examples/tracker examples/gallery examples/print_shop; do
+            compiler/build/one build $p
+          done
+
+      - name: Build the generated backends and the site's Pulumi program
+        run: tools/build-backends
+
+      # Each generated C++ client compiles against libember, with warnings as errors.
+      - name: Compile the generated C++ clients
+        run: |
+          command -v g++-14 || { sudo apt-get update && sudo apt-get install -y g++-14; }
+          CXX=g++-14 tools/check-cpp-clients
+
+      - name: Build one::client, its tests and the print shop's press
+        run: CXX=g++-14 ONE_CLIENT_TLS=openssl tools/build-native client
+
+      - name: Build the JavaScript packages and the site
+        run: |
+          yarn install --frozen-lockfile
+          for p in compiler editor react radix; do yarn workspace @uione/$p build; done
+          yarn workspace uione-web build
+          node tools/smoke-web.mjs build
+
+      # Tested: everything on what was built above.
+      # The compiler built for the browser has to say exactly what the native one does.
+      - name: Hold the compiler for the browser to the native one
+        run: node tools/wasm/test.mjs
+
+      - name: Every project in the repository checks without errors
+        run: compiler/build/one check examples/gallery examples/library examples/tasks examples/tracker site
+
       - name: Vet and test the one library against the emulators
         working-directory: one
         run: |
           go vet ./...
           test -z "$(gofmt -l .)"
-          go test -race ./...
+          go test -race -count=1 ./...
 
-      # The site's web app is a workspace, so it's generated before the install that
-      # checks the lockfile against it.
-      - name: Generate the site
-        run: compiler/build/one build site
-
-      # Each generated backend has to compile against the library, be vetted, and be
-      # formatted the way gofmt would write it. The examples are built too: tasks is
-      # the smallest project, library uses most of the language, and tracker has
-      # roles held within a project.
-      - name: Build the generated backends
+      # Each generated backend is vetted, and formatted the way gofmt would write it.
+      - name: Vet the generated backends
         run: |
-          compiler/build/one build examples/tasks
-          compiler/build/one build examples/library
-          compiler/build/one build examples/tracker
-          compiler/build/one build examples/gallery
-          compiler/build/one build examples/print_shop
           for api in site/build/api examples/tasks/build/api examples/library/build/api examples/tracker/build/api examples/gallery/build/api examples/print_shop/build/api; do
-            (cd "$api" && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
+            (cd "$api" && go vet ./... && test -z "$(gofmt -l .)")
           done
 
-      # Each generated C++ client compiles against libember, with warnings as errors.
-      - name: Compile the generated C++ clients
-        run: CXX=g++-14 tools/check-cpp-clients
+      - name: Vet and test the infrastructure library, and vet the site's Pulumi program
+        run: |
+          (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test -count=1 ./...)
+          (cd site/build/infrastructure && go vet ./... && test -z "$(gofmt -l .)")
 
       # one::client against the tasks example's backend, on the emulators started above.
-      - name: Build one::client, and test it against a running app
-        run: |
-          CXX=g++-14 cmake -S client -B client/build -DONE_CLIENT_TLS=openssl
-          cmake --build client/build --parallel
-          client/tests/run client/build/tests
+      - name: Test one::client against a running app
+        run: client/tests/run build/native/client/tests
 
-      - name: Vet and test the infrastructure library, and build the site's Pulumi program
+      - name: Type-check and test the JavaScript packages
         run: |
-          (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test ./...)
-          (cd site/build/infrastructure && go mod tidy && go build ./... && go vet ./... && test -z "$(gofmt -l .)")
-
-      - name: Install the JavaScript packages' dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Type-check, test and build @uione/compiler
-        run: |
-          yarn workspace @uione/compiler typecheck
-          yarn workspace @uione/compiler test
-          yarn workspace @uione/compiler build
-
-      - name: Type-check, test and build @uione/editor
-        run: |
-          yarn workspace @uione/editor typecheck
-          yarn workspace @uione/editor test
-          yarn workspace @uione/editor build
-
-      - name: Type-check, test and build @uione/react
-        run: |
-          yarn workspace @uione/react typecheck
-          yarn workspace @uione/react test
-          yarn workspace @uione/react build
-
-      - name: Type-check, build and test @uione/radix
-        run: |
-          yarn workspace @uione/radix typecheck
-          yarn workspace @uione/radix build
-          yarn workspace @uione/radix test
+          for p in compiler editor react radix; do
+            yarn workspace @uione/$p typecheck
+            yarn workspace @uione/$p test
+          done
 
       - name: Test the generated Firestore rules against the emulator
         run: yarn workspace uione-rules-test test
 
-      - name: Build the generated site, and render every page
-        run: |
-          yarn workspace uione-web build
-          node tools/smoke-web.mjs
+      - name: Render every page of the site
+        run: node tools/smoke-web.mjs
 
       - name: Run the site end to end against the emulators
         run: node tools/end-to-end.mjs
 
       - name: Run the print shop's agent end to end against the emulators
-        run: CXX=g++-14 ONE_CLIENT_TLS=openssl node tools/agent-end-to-end.mjs
+        run: node tools/agent-end-to-end.mjs
 
   # The desktop and terminal toolkits and Markdown, on Arch, whose g++ has the C++26
   # they're written in. The desktop's tests draw offscreen with Mesa's software Vulkan, as
   # the runners have no GPU, and compare with tests/golden.
   toolkits:
+    needs: compiler
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -160,33 +195,36 @@ jobs:
       - name: Install what they're built with
         run: |
           pacman -Syu --noconfirm --needed gcc cmake make pkgconf wayland wayland-protocols vulkan-headers \
-            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts botan
+            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts botan tar
 
-      - name: Build and test what native apps' screens are and do
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux-x86_64
+          path: release
+
+      # The compiler built and tested above, static, so it runs here as anywhere.
+      - name: Write the apps with the compiler built above
         run: |
-          cmake -S screens -B screens/build
-          cmake --build screens/build --parallel
-          screens/build/tests
+          mkdir -p compiler/build
+          tar -xzf release/one-linux-x86_64.tar.gz -C compiler/build one
+          for p in site examples/gallery examples/print_shop; do compiler/build/one build $p; done
 
-      # One build for each toolkit holds its tests and the apps one build writes, so
-      # the toolkit is compiled once for both.
-      - name: Compile the desktop and terminal toolkits and the apps one build writes
+      # One build holds the toolkits, Markdown, their tests and the apps one build writes,
+      # so each library is compiled once for all of them.
+      - name: Build the toolkits, Markdown, their tests and the desktop and terminal apps
         run: |
           pacman -S --noconfirm --needed ccache
-          cmake -S compiler -B compiler/build
-          cmake --build compiler/build --target one --parallel
-          tools/check-native-apps build
+          tools/build-native toolkits
+
+      - name: Test what native apps' screens are and do, and Markdown's layout
+        run: |
+          build/native/screens/tests
+          build/native/markdown/layout_test markdown/test/sample.md
 
       - name: Test the desktop toolkit and the runtime desktop apps run on
         run: |
-          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/desktop/uione/tests
-          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/desktop/uione/runtime_tests
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/native/desktop/tests
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/native/desktop/runtime_tests
 
       - name: Test the terminal toolkit and the runtime terminal apps run on
-        run: build/terminal/uione/runtime_tests
-
-      - name: Build Markdown and md, and test its layout
-        run: |
-          cmake -S markdown -B markdown/build
-          cmake --build markdown/build --parallel
-          markdown/build/layout_test markdown/test/sample.md
+        run: build/native/terminal/runtime_tests

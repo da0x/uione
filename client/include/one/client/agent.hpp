@@ -43,7 +43,7 @@ namespace one::client {
 
 	struct agent {
 		std::string name;
-		std::vector<agent_rule> rules;
+		std::vector<agent_rule> rules{};
 		std::size_t at_once = 4;  // how many it works at a time, unless ONE_AGENT_PARALLEL says
 		std::filesystem::path logs{};  // where each run's output is kept; ~/.local/state/<name> unless said
 	};

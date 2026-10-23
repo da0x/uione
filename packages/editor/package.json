@@ -27,7 +27,7 @@
   },
   "scripts": {
     "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
-    "prepack": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && yarn build",
+    "prepack": "node -e \"if(!require('fs').existsSync('dist')){console.error('dist is published as the checks built and tested it, never built again here; build it and run the checks first');process.exit(1)}\"",
     "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && cp src/styles.css dist/styles.css",
     "typecheck": "yarn grammar && tsc --noEmit",
     "test": "yarn grammar && vitest run"

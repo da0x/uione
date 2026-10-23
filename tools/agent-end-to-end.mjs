@@ -8,10 +8,14 @@
 // for another press to take.
 //
 //   tools/emulators/run && compiler/build/one build examples/print_shop
+//   tools/build-backends && tools/build-native client
 //   node tools/agent-end-to-end.mjs
+//
+// The backend and the press are those the build tools built, which is what's tested;
+// ONE_NATIVE names the native build, build/native unless it says.
 
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +28,8 @@ const port = 8098;
 const server = `http://localhost:${port}`;
 const work = mkdtempSync(join(tmpdir(), "uione-agent-"));
 const running = [];
+const backendBinary = join(shopFolder, "build/api/server");
+const pressBinary = join(process.env.ONE_NATIVE ?? join(root, "build/native"), "press/press");
 
 let step = 0;
 function pass(what) {
@@ -88,7 +94,7 @@ async function stored(collection, id) {
 }
 
 function agent(name, key, extra = {}) {
-  const child = spawn(join(work, "press-build/press"), [], {
+  const child = spawn(pressBinary, [], {
     cwd: shopFolder,
     env: {
       ...process.env,
@@ -109,26 +115,14 @@ function agent(name, key, extra = {}) {
 }
 
 try {
-  execFileSync(join(root, "compiler/build/one"), ["build", shopFolder], { stdio: "ignore" });
+  for (const built of [backendBinary, pressBinary]) if (!existsSync(built)) throw new Error(`${built} isn't built; run tools/build-backends and tools/build-native client`);
   execFileSync("node", [join(root, "tools/emulators/rules.mjs"), join(shopFolder, "build/firestore.rules")], { stdio: "ignore" });
-  const api = join(shopFolder, "build/api");
-  execFileSync("go", ["mod", "tidy"], { cwd: api, stdio: "ignore" });
-  execFileSync("go", ["build", "-o", join(work, "api"), "."], { cwd: api });
-  const backend = spawn(join(work, "api"), [], {
+  const backend = spawn(backendBinary, [], {
     env: { ...process.env, PORT: String(port), FIRESTORE_EMULATOR_HOST: emulators.firestore, FIREBASE_AUTH_EMULATOR_HOST: emulators.auth, GOOGLE_CLOUD_PROJECT: project },
     stdio: "ignore",
   });
   running.push(backend);
   await until(async () => (await fetch(`${server}/health`).catch(() => ({ ok: false }))).ok, "the backend answers");
-  const agentFolder = join(shopFolder, "build/agents/press");
-  // The client's TLS as CI builds it: OpenSSL where Botan 3 isn't packaged.
-  const tls = process.env.ONE_CLIENT_TLS ?? "botan";
-  execFileSync("cmake", ["-S", agentFolder, "-B", join(work, "press-build"), "-DCMAKE_BUILD_TYPE=Release", `-DONE_CLIENT_TLS=${tls}`], {
-    env: { ...process.env, UIONE: root },
-    stdio: "ignore",
-  });
-  execFileSync("cmake", ["--build", join(work, "press-build"), "-j2"], { stdio: "ignore" });
-  pass("one build writes the press, and it builds against uione's client");
 
   const foreman = await person("Foreman");
   const shop = `shop${Date.now()}`;

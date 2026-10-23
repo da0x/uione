@@ -184,7 +184,7 @@ TEST_CASE("a desktop app is installed and packaged with its .desktop file, icon 
     CHECK(find(generated, "packaging/org.uione.notes.svg") != nullptr);
     CHECK(entry->content.find("Exec=notes-desktop %u") != std::string::npos);
     CHECK(entry->content.find("Icon=org.uione.notes") != std::string::npos);
-    CHECK(cmake->content.find("install(PROGRAMS $<TARGET_FILE:notes> DESTINATION bin RENAME notes-desktop)") != std::string::npos);
+    CHECK(cmake->content.find("install(PROGRAMS $<TARGET_FILE:notes_desktop> DESTINATION bin RENAME notes-desktop)") != std::string::npos);
     CHECK(cmake->content.find("install(FILES packaging/LICENSE DESTINATION share/licenses/notes-desktop)") != std::string::npos);
     CHECK(cmake->content.find("set(CPACK_PACKAGE_FILE_NAME \"notes-desktop-${VERSION}-linux-${CMAKE_SYSTEM_PROCESSOR}\")") != std::string::npos);
     fs::remove(repository / "LICENSE");

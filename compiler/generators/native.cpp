@@ -1821,22 +1821,26 @@ namespace one::generators {
             sources += " src/site.cpp";
             for (const auto& stem : stems) sources += " src/screens/" + stem + ".cpp";
             for (const auto& component : component_sources_) sources += " src/components/" + component;
-            out.line("add_executable(" + name + " " + sources + ")");
-            out.line("target_link_libraries(" + name + " PRIVATE one_" + target_ + "_runtime)");
-            out.line("target_compile_options(" + name + " PRIVATE -Wno-free-nonheap-object)");
+            // Named for its target too, so one build can hold an app's desktop and terminal
+            // builds both, and the program is still the app's name.
+            const std::string executable = name + "_" + target_;
+            out.line("add_executable(" + executable + " " + sources + ")");
+            out.line("set_target_properties(" + executable + " PROPERTIES OUTPUT_NAME " + name + ")");
+            out.line("target_link_libraries(" + executable + " PRIVATE one_" + target_ + "_runtime)");
+            out.line("target_compile_options(" + executable + " PRIVATE -Wno-free-nonheap-object)");
             out.line();
             out.line("# What it was built from, which its footer can show: the commit, and its repository.");
             out.line("execute_process(COMMAND git rev-parse --short=7 HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE commit OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)");
             out.line("execute_process(COMMAND git remote get-url origin WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE repository OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)");
             out.line("string(REGEX REPLACE \"^git@([^:]+):\" \"https://\\\\1/\" repository \"${repository}\")");
             out.line("string(REGEX REPLACE \"\\\\.git$\" \"\" repository \"${repository}\")");
-            out.line("target_compile_definitions(" + name + " PRIVATE UIONE_COMMIT=\"${commit}\" UIONE_REPOSITORY=\"${repository}\")");
+            out.line("target_compile_definitions(" + executable + " PRIVATE UIONE_COMMIT=\"${commit}\" UIONE_REPOSITORY=\"${repository}\")");
             out.line();
             const std::string installed = installed_name();
             out.line("# Installing it: cmake --install out --prefix ~/.local puts it in bin as " + installed + ",");
             out.line("# with its license" + std::string(target_ == "desktop" ? ", and what lists it among the system's apps, with its icon." : "."));
             out.line("# The project's LICENSE goes with it, or it isn't installed or packaged at all.");
-            out.line("install(PROGRAMS $<TARGET_FILE:" + name + "> DESTINATION bin RENAME " + installed + ")");
+            out.line("install(PROGRAMS $<TARGET_FILE:" + executable + "> DESTINATION bin RENAME " + installed + ")");
             out.open("if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/packaging/LICENSE)");
             out.line("install(FILES packaging/LICENSE DESTINATION share/licenses/" + installed + ")");
             out.dedent();

@@ -6,12 +6,10 @@
 // left out. Each step waits for the change to arrive by itself, the way a screen
 // would, rather than asking for it again.
 //
-//   tools/emulators/run && compiler/build/one build site && yarn install
+//   tools/emulators/run && compiler/build/one build site && tools/build-backends && yarn install
 //   node tools/end-to-end.mjs
 
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initializeApp } from "firebase/app";
@@ -68,9 +66,8 @@ await fetch(`http://${emulators.firestore}/emulator/v1/projects/${project}/datab
 await fetch(`http://${emulators.auth}/emulator/v1/projects/${project}/accounts`, { method: "DELETE" });
 execFileSync("node", [join(root, "tools/emulators/rules.mjs"), join(root, "site/build/firestore.rules")], { stdio: "inherit" });
 
-const binary = join(mkdtempSync(join(tmpdir(), "uione-end-to-end-")), "api");
-execFileSync("go", ["build", "-o", binary, "."], { cwd: join(root, "site/build/api"), stdio: "inherit" });
-const server = spawn(binary, [], {
+// The backend as tools/build-backends built it, which is what's tested.
+const server = spawn(join(root, "site/build/api/server"), [], {
   env: {
     ...process.env,
     PORT: String(port),
