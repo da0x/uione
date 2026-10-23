@@ -6,7 +6,7 @@
 # when it's called Cracked.
 case "$1" in
 	Cracked) echo "the plate cracked" >&2; exit 1 ;;
-	Slow) sleep 30 ;;
+	Slow) sleep 10 ;;
 	*) sleep 1 ;;
 esac
 echo "etched $1"

@@ -166,20 +166,24 @@ try {
   const working = said(await stored("shop_plate", slow));
   if (!working.runner || !/^\d{4}-\d\d-\d\dT/.test(working.since)) throw new Error(`the press says which runner and since when: ${JSON.stringify(working)}`);
   pass(`the press says of what it holds: working, since ${working.since}, runner ${working.runner}`);
+  // While the lease runs out, which takes as long as it lasts, the rest is tried in a
+  // shop of its own, whose presses can't take this one's plate.
   first.kill("SIGKILL");
   agent("second", pressKey);
-  await until(async () => (await stored("shop_plate", slow)).stage === "etched", "another press takes it once the lease runs out", 120000);
-  if (said(await stored("shop_plate", slow)).status) throw new Error("what's moved on says nothing of who worked it");
-  pass("a press that stops lets go when its lease runs out, and another takes what it held");
+  const takenOver = until(async () => (await stored("shop_plate", slow)).stage === "etched", "another press takes it once the lease runs out", 120000);
+  takenOver.catch(() => {});
+  const other = `other${Date.now()}`;
+  await must(foreman, "shop::create", { slug: other, title: "Second Print" });
+  const otherPress = (await must(foreman, "service::create", { shop: other, title: "Press", role: key(other, "press_operator") })).id;
+  const { key: otherKey } = await must(foreman, "service::key", { id: otherPress });
 
   // Two presses, each working one plate at a time: four plates moved at once are
   // shared between them, each asking first when it's less busy.
-  for (const r of running.splice(2)) r.kill();
-  const left = agent("left", pressKey, { ONE_AGENT_PARALLEL: "1" });
-  const right = agent("right", pressKey, { ONE_AGENT_PARALLEL: "1" });
+  const left = agent("left", otherKey, { ONE_AGENT_PARALLEL: "1" });
+  const right = agent("right", otherKey, { ONE_AGENT_PARALLEL: "1" });
   await new Promise((resolve) => setTimeout(resolve, 2000));
   const batch = [];
-  for (const name of ["One", "Two", "Three", "Four"]) batch.push((await must(foreman, "plate::create", { shop, name })).id);
+  for (const name of ["One", "Two", "Three", "Four"]) batch.push((await must(foreman, "plate::create", { shop: other, name })).id);
   for (const id of batch) await must(foreman, "plate::move", { id, stage: "etching" });
   await until(async () => (await Promise.all(batch.map((id) => stored("shop_plate", id)))).every((p) => p.stage === "etched"), "both presses etch the four plates", 60000);
   const by = (press) => (press.said.match(/: running tools\/etch/g) ?? []).length;
@@ -190,12 +194,13 @@ try {
   // same key, four at a time each. Every one is etched, once, and nothing's left
   // held or saying it's working. BURST=n says how many; 20 unless said, as many as
   // one person may make at once before being asked to slow down.
-  for (const r of running.splice(2)) r.kill();
-  const presses = ["a", "b", "c"].map((name) => agent(`burst-${name}`, pressKey, { ONE_AGENT_PARALLEL: "4" }));
+  left.kill();
+  right.kill();
+  const presses = ["a", "b", "c"].map((name) => agent(`burst-${name}`, otherKey, { ONE_AGENT_PARALLEL: "4" }));
   await new Promise((resolve) => setTimeout(resolve, 2000));
   const count = Number(process.env.BURST ?? 20);
   const started = Date.now();
-  const burst = await Promise.all(Array.from({ length: count }, (_, i) => must(foreman, "plate::create", { shop, name: `Burst ${i + 1}` }).then((r) => r.id)));
+  const burst = await Promise.all(Array.from({ length: count }, (_, i) => must(foreman, "plate::create", { shop: other, name: `Burst ${i + 1}` }).then((r) => r.id)));
   await Promise.all(burst.map((id) => must(foreman, "plate::move", { id, stage: "etching" })));
   const made = Date.now() - started;
   await until(
@@ -218,6 +223,10 @@ try {
   if (unfinished.length) throw new Error(`nothing is left held or working: ${unfinished.length} are`);
   const slowed = presses.reduce((n, press) => n + (press.said.match(/slow down|couldn't keep it just now|couldn't say how it's going/g) ?? []).length, 0);
   pass(`a burst of ${count} plates, made and moved in ${(made / 1000).toFixed(1)}s, etched once each in ${(took / 1000).toFixed(1)}s by three presses (${runs.join(", ")}); asked to slow down ${slowed} times`);
+
+  await takenOver;
+  if (said(await stored("shop_plate", slow)).status) throw new Error("what's moved on says nothing of who worked it");
+  pass("a press that stops lets go when its lease runs out, and another takes what it held");
   console.log("all passed");
 } catch (e) {
   console.error(`FAIL  ${e.message}`);
