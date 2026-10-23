@@ -101,6 +101,22 @@ TEST_CASE("an upgrade replaces a version already recorded") {
     CHECK_FALSE(driver::record_version(none, "0.5.0"));
 }
 
+TEST_CASE("an upgrade records the version in the project's own block, not in one it extends") {
+    auto place = std::filesystem::temp_directory_path() / "uione-upgrade-extends";
+    std::filesystem::remove_all(place);
+    std::filesystem::create_directories(place / "base");
+    std::filesystem::create_directories(place / "cloud");
+    platform::write_file((place / "base/main.one").string(), "import one\n\nproject base {\n\tone  \"" + std::string(version) + "\"\n}\n");
+    platform::write_file((place / "cloud/main.one").string(), "import one\n\nproject cloud {\n\tone      \"0.4.0\"\n\textends  base\n}\n");
+    auto done = driver::upgrade((place / "cloud").string(), version);
+    CHECK(done.problems.empty());
+    CHECK(done.recorded);
+    REQUIRE(done.changed.size() == 1);
+    CHECK(done.changed.begin()->first.ends_with("cloud/main.one"));
+    CHECK(done.changed.begin()->second.find("\tone      \"" + std::string(version) + "\"\n") != std::string::npos);
+    std::filesystem::remove_all(place);
+}
+
 TEST_CASE("a project's version is read from its text, without parsing it") {
     // Written for a compiler whose language this one may not read.
     auto dir = project("uione-pinned", "project shop {\n\tone  \"0.3.0\"\n\tsome  future  syntax {\n}\n");

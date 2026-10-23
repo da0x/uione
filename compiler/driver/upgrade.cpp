@@ -469,7 +469,15 @@ namespace one::driver {
             text = align_settings(before, text);
             text = align_choices(before, text);
         }
-        out.recorded = record_version(files, version);
+        // Only its own files: those of a project it extends are that project's, and
+        // say the version that one is for.
+        auto own = platform::find_one_files({root});
+        sources mine;
+        for (const auto& path : own) {
+            if (files.contains(path)) mine[path] = files[path];
+        }
+        out.recorded = record_version(mine, version);
+        for (auto& [path, text] : mine) files[path] = std::move(text);
         language::diagnostics after;
         check_sources(files, after);
         if (!after.empty()) {
@@ -477,8 +485,6 @@ namespace one::driver {
             out.recorded = false;
             return out;
         }
-        // Only its own files: those of a project it extends are that project's.
-        auto own = platform::find_one_files({root});
         for (const auto& [path, text] : files) {
             if (original[path] != text && std::find(own.begin(), own.end(), path) != own.end()) out.changed[path] = text;
         }
