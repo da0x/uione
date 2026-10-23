@@ -115,8 +115,10 @@ if(ONE_DESKTOP_RUNTIME)
 
 endif()
 
-# Its examples and tests, when it's built on its own rather than inside an app.
-if(PROJECT_IS_TOP_LEVEL)
+# Its examples and tests, when it's built on its own rather than inside an app, or when
+# a build of apps asks for them, so the library is compiled once for both.
+option(ONE_DESKTOP_EXAMPLES "Build its examples and tests" ${PROJECT_IS_TOP_LEVEL})
+if(ONE_DESKTOP_EXAMPLES)
 add_executable(hello examples/hello.cpp)
 target_link_libraries(hello PRIVATE one_desktop)
 target_compile_options(hello PRIVATE -Wall -Wextra -Werror)

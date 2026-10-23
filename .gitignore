@@ -3,3 +3,4 @@ site/build/
 node_modules/
 packages/*/dist/
 examples/*/build/
+/build/

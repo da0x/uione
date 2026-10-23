@@ -23,7 +23,6 @@ target_include_directories(one_terminal PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT
 target_link_libraries(one_terminal PRIVATE PkgConfig::CURSES)
 target_compile_options(one_terminal PRIVATE -Wall -Wextra -Werror)
 
-# Its example, when it's built on its own rather than inside an app.
 # The runtime a terminal app uione writes runs on: one::screens' screens, drawn in
 # cells, with Markdown through one::markdown, from uione's screens/ and markdown/.
 option(ONE_TERMINAL_RUNTIME "Build one::terminal::runtime, which needs uione's screens/ and client/" ON)
@@ -41,7 +40,10 @@ if(ONE_TERMINAL_RUNTIME)
 	target_compile_options(one_terminal_runtime PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)
 endif()
 
-if(PROJECT_IS_TOP_LEVEL)
+# Its examples and tests, when it's built on its own rather than inside an app, or when
+# a build of apps asks for them, so the library is compiled once for both.
+option(ONE_TERMINAL_EXAMPLES "Build its examples and tests" ${PROJECT_IS_TOP_LEVEL})
+if(ONE_TERMINAL_EXAMPLES)
 	find_package(Threads REQUIRED)
 	if(ONE_TERMINAL_RUNTIME)
 		add_executable(runtime_tracker runtime/examples/tracker.cpp)

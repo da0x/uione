@@ -162,31 +162,28 @@ jobs:
           pacman -Syu --noconfirm --needed gcc cmake make pkgconf wayland wayland-protocols vulkan-headers \
             vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts botan
 
-      - name: Build and test the desktop toolkit and the runtime desktop apps run on
-        run: |
-          cmake -S desktop -B desktop/build
-          cmake --build desktop/build --parallel
-          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/tests
-          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json desktop/build/runtime_tests
-
       - name: Build and test what native apps' screens are and do
         run: |
           cmake -S screens -B screens/build
           cmake --build screens/build --parallel
           screens/build/tests
 
-      - name: Build and test the terminal toolkit and the runtime terminal apps run on
-        run: |
-          cmake -S terminal -B terminal/build
-          cmake --build terminal/build --parallel
-          terminal/build/runtime_tests
-
-      - name: Compile the desktop and terminal apps one build writes
+      # One build for each toolkit holds its tests and the apps one build writes, so
+      # the toolkit is compiled once for both.
+      - name: Compile the desktop and terminal toolkits and the apps one build writes
         run: |
           pacman -S --noconfirm --needed ccache
           cmake -S compiler -B compiler/build
           cmake --build compiler/build --target one --parallel
-          tools/check-native-apps
+          tools/check-native-apps build
+
+      - name: Test the desktop toolkit and the runtime desktop apps run on
+        run: |
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/desktop/uione/tests
+          VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json build/desktop/uione/runtime_tests
+
+      - name: Test the terminal toolkit and the runtime terminal apps run on
+        run: build/terminal/uione/runtime_tests
 
       - name: Build Markdown and md, and test its layout
         run: |

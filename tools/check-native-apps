@@ -7,12 +7,23 @@
 # targets, the gallery using everything a screen can say, and the tracker example's,
 # built from a copy given a project block that names them. Needs
 # what desktop/ and terminal/ are built with, and a g++ with C++26.
+#
+# Each target's build holds its toolkit's own examples and tests too, so the toolkit
+# is compiled once for all of them. Given a directory, the builds are kept there, in
+# desktop/ and terminal/, and the toolkits' tests are in each one's uione/ to run.
+#
+#   tools/check-native-apps [directory]
 
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 one=${ONE:-$here/compiler/build/one}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+out=$work
+if [ $# -gt 0 ]; then
+	mkdir -p "$1"
+	out=$(cd "$1" && pwd)
+fi
 
 "$one" build "$here/site" --out "$work/site" >/dev/null
 mkdir -p "$work/tracker-source"
@@ -22,8 +33,8 @@ cp "$here"/examples/tracker/*.one "$work/tracker-source/"
 "$one" build "$here/examples/gallery" --out "$work/gallery" >/dev/null
 "$one" build "$here/examples/print_shop" --out "$work/print_shop" >/dev/null
 
-# Each target's apps are built together, as one build that holds them all, so its
-# library is compiled once for the four.
+# Each target's apps are built together, as one build that holds them all and its
+# toolkit's tests, so the library is compiled once for the four and the tests.
 launcher=""
 command -v ccache >/dev/null && launcher=-DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 for target in desktop terminal; do
@@ -31,13 +42,15 @@ for target in desktop terminal; do
 	{
 		echo "cmake_minimum_required(VERSION 3.28)"
 		echo "project(native_apps LANGUAGES C CXX)"
+		echo "set(ONE_$(echo $target | tr a-z A-Z)_EXAMPLES ON)"
+		echo "add_subdirectory($here/$target uione)"
 		for app in site tracker gallery print_shop; do echo "add_subdirectory($work/$app/$target $app)"; done
 	} > "$work/all-$target/CMakeLists.txt"
-	UIONE="$here" cmake -S "$work/all-$target" -B "$work/all-$target/out" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher >/dev/null
+	UIONE="$here" cmake -S "$work/all-$target" -B "$out/$target" -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror" $launcher >/dev/null
 	# Built again where the compiler itself crashed, as g++ now and then does, but
 	# never past an error in what it compiled.
 	attempt=1
-	until cmake --build "$work/all-$target/out" --parallel 8 > "$work/build.log" 2>&1; do
+	until cmake --build "$out/$target" --parallel 8 > "$work/build.log" 2>&1; do
 		if ! grep -q "internal compiler error" "$work/build.log" || [ $attempt -ge 4 ]; then
 			cat "$work/build.log" >&2
 			exit 1
