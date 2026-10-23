@@ -1812,7 +1812,10 @@ namespace one::generators {
             out.open("if(NOT UIONE)");
             out.line("set(UIONE \"$ENV{HOME}/.local/share/uione/" + std::string(version) + "\")");
             out.close("endif()");
+            out.line("# Added once, however many apps a build holds.");
+            out.open("if(NOT TARGET one_" + target_ + "_runtime)");
             out.line("add_subdirectory(${UIONE}/" + target_ + " ${CMAKE_BINARY_DIR}/uione-" + target_ + " EXCLUDE_FROM_ALL)");
+            out.close("endif()");
             out.line();
             std::string sources = "src/main.cpp";
             sources += " src/site.cpp";
