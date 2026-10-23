@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <fstream>
 
 #include "check.hpp"
 #include "offscreen.hpp"
@@ -1199,5 +1200,12 @@ TEST("code without the license header its file starts with, icons on buttons and
 
 int main() {
 	use_time_zone("UTC");  // so what's drawn is the same wherever it's run
+	// Noto's fonts alone, so what Noto Sans hasn't, like ✓, comes from the same font
+	// wherever it's run, not from whichever other font a machine has installed.
+	auto fonts = std::filesystem::temp_directory_path() / "one-desktop-runtime-tests-fonts.conf";
+	std::ofstream(fonts) << "<?xml version=\"1.0\"?>\n<!DOCTYPE fontconfig SYSTEM \"urn:fontconfig:fonts.dtd\">\n"
+	                        "<fontconfig>\n\t<dir>/usr/share/fonts/noto</dir>\n\t<dir>/usr/share/fonts/truetype/noto</dir>\n"
+	                        "\t<cachedir prefix=\"xdg\">fontconfig</cachedir>\n</fontconfig>\n";
+	setenv("FONTCONFIG_FILE", fonts.c_str(), 1);
 	return check::run();
 }
