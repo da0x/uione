@@ -23,6 +23,8 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
 	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Item is anything a module holds: commands, views, roles, or other modules.
@@ -457,10 +459,15 @@ func (a *App) serveCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 // replyFailure answers with what went wrong: a Failure's own words and status, or,
-// for anything else, a plain apology, with the error logged.
+// for anything else, a plain apology, with the error logged. A transaction that
+// gave up waiting on others holding the same records, like many made at once by one
+// person counted on their day's count, is told to slow down, and asks again.
 func replyFailure(w http.ResponseWriter, a *App, doing string, err error) {
 	var failure *Failure
-	if errors.As(err, &failure) {
+	if status.Code(err) == codes.Aborted {
+		failure = slowDown("making changes", time.Second)
+	}
+	if failure != nil || errors.As(err, &failure) {
 		body := map[string]any{"error": failure.Message}
 		if failure.RetryAfter > 0 {
 			// In the body too, for programs whose HTTP client doesn't give them headers.
