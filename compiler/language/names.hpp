@@ -59,4 +59,11 @@ namespace one::language {
         return result;
     }
 
+    // A name in its namespace, like projects::issue; either alone when the other is empty.
+    inline std::string qualified(const std::string& ns, const std::string& name) {
+        if (ns.empty()) return name;
+        if (name.empty()) return ns;
+        return ns + "::" + name;
+    }
+
 } // namespace one::language

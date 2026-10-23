@@ -2,3 +2,275 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #include "generators/infrastructure.hpp"
+
+#include <algorithm>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "code/stream.hpp"
+#include "generators/output.hpp"
+#include "language/ast.hpp"
+#include "platform/files.hpp"
+#include "version.hpp"
+
+namespace one::generators {
+
+    static std::string hook_route(const std::vector<language::declaration>& declarations, std::string_view provider) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                if (auto route = hook_route(n->declarations, provider); !route.empty()) return route;
+            }
+            if (auto* w = std::get_if<language::webhook_declaration>(&d.node); w && w->provider == provider) return w->route;
+        }
+        return "";
+    }
+
+    // Whether a role is made for services: define role ... for services.
+    static bool has_services(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_services(n->declarations)) return true;
+            if (auto* r = std::get_if<language::define_role_declaration>(&d.node); r && r->services) return true;
+        }
+        return false;
+    }
+
+    // Whether a field anywhere holds a file, or a list of them.
+    static bool has_files(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_files(n->declarations)) return true;
+            if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
+                for (const auto& f : e->fields) {
+                    if (f.type && f.type->text() == "file") return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Whether a namespace has an entity, a command or a view: what the backend serves.
+    static bool has_backend(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_backend(n->declarations)) return true;
+            if (std::holds_alternative<language::entity_declaration>(d.node) || std::holds_alternative<language::command_declaration>(d.node) ||
+                std::holds_alternative<language::view_declaration>(d.node))
+                return true;
+        }
+        return false;
+    }
+
+    bool needs_backend(const std::vector<language::file>& files) {
+        for (const auto& f : files) {
+            if (has_backend(f.declarations) || has_services(f.declarations) || has_files(f.declarations)) return true;
+            if (!hook_route(f.declarations, "github").empty() || !hook_route(f.declarations, "stripe").empty()) return true;
+            for (const auto& d : f.declarations) {
+                auto* p = std::get_if<language::project_declaration>(&d.node);
+                if (p && std::any_of(p->settings.begin(), p->settings.end(), [](const auto& setting) { return setting.key == "signin"; })) return true;
+            }
+        }
+        return false;
+    }
+
+    std::optional<deploy_settings> deploy_settings_of(const std::vector<language::file>& files) {
+        for (const auto& f : files) {
+            for (const auto& d : f.declarations) {
+                auto* p = std::get_if<language::project_declaration>(&d.node);
+                if (!p) continue;
+                deploy_settings s;
+                s.name = p->name;
+                s.from = {f.path, d.where.line};
+                for (const auto& setting : p->settings) {
+                    if (setting.key == "domain") s.domain = setting.value, s.redirect = setting.to;
+                    if (setting.key == "firebase") s.firebase = setting.value;
+                    if (setting.key == "region") s.region = setting.value;
+                    if (setting.key == "redirect") s.redirects.emplace_back(setting.value, setting.to);
+                    if (setting.key == "signin") s.signs_in = true;
+                }
+                if (s.domain.empty() || s.firebase.empty() || s.region.empty()) return std::nullopt;
+                if (!p->environment.empty()) s.stack = s.firebase;
+                for (const auto& other : files) {
+                    if (s.github.empty()) s.github = hook_route(other.declarations, "github");
+                    if (s.stripe.empty()) s.stripe = hook_route(other.declarations, "stripe");
+                    s.services = s.services || has_services(other.declarations);
+                    s.files = s.files || has_files(other.declarations);
+                }
+                s.backend = needs_backend(files);
+                return s;
+            }
+        }
+        return std::nullopt;
+    }
+
+    namespace infrastructure_detail {
+
+        inline std::string quoted(const std::string& text) { return "\"" + text + "\""; }
+
+        // The folder name a project was generated from, like site/.
+        inline std::string source_name(const std::string& project_dir) {
+            namespace fs = std::filesystem;
+            std::string folder = fs::path(project_dir).lexically_normal().filename().string();
+            if (folder.empty()) folder = fs::path(project_dir).lexically_normal().parent_path().filename().string();
+            return folder + "/";
+        }
+
+        // The folder `name` of the repository the project is in, found by walking up
+        // from the project to a folder holding name/marker, as a path relative to `from`.
+        inline std::optional<std::string> nearby(const std::string& project_dir, const std::string& from, const std::string& name,
+                                                 const std::string& marker = "go.mod") {
+            namespace fs = std::filesystem;
+            if (auto libraries = platform::libraries_from(); libraries && fs::exists(fs::path(*libraries) / name / marker))
+                return platform::relative_import(from, (fs::path(*libraries) / name).string());
+            for (fs::path dir = fs::weakly_canonical(project_dir); !dir.empty(); dir = dir.parent_path()) {
+                if (fs::exists(dir / name / marker)) return platform::relative_import(from, (dir / name).string());
+                if (dir == dir.parent_path()) break;
+            }
+            return std::nullopt;
+        }
+
+    } // namespace infrastructure_detail
+
+    generated_infrastructure generate_infrastructure(const std::vector<language::file>& files,
+                                                     const std::string& project_dir, const std::string& out_dir) {
+        using code::stream;
+        using infrastructure_detail::quoted;
+        auto settings = deploy_settings_of(files);
+        if (!settings) return {};
+        const auto& s = *settings;
+        // Inside a clone of the uione repository, a deploy builds the library from it;
+        // anywhere else, from the release the compiler belongs to.
+        auto library = infrastructure_detail::nearby(project_dir, out_dir + "/infrastructure", "infrastructure");
+        std::string from = infrastructure_detail::source_name(project_dir);
+        std::string generated = "# Generated from " + from + " by one. Do not edit.";
+        std::vector<output_file> out;
+
+        {
+            stream y;
+            auto from_project = y.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            y.line(generated);
+            y.line();
+            y.line("name: " + s.name);
+            y.line("description: Where " + s.name + " runs, in Google Cloud.");
+            y.line("runtime: go");
+            y.open("config:");
+            y.line("gcp:project: " + s.firebase);
+            y.line("# Budgets are billed to a project, and with a person's credentials, rather than");
+            y.line("# a service account's, the provider has to be told which one.");
+            y.line("gcp:billingProject: " + s.firebase);
+            y.line("gcp:userProjectOverride: true");
+            out.push_back(file("infrastructure/Pulumi.yaml", y));
+        }
+        {
+            stream m("\t");
+            auto from_project = m.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            m.line("module " + s.domain + "/infrastructure");
+            m.line();
+            m.line("go 1.26");
+            m.line();
+            m.line("require github.com/da0x/uione/infrastructure v" + std::string(version));
+            if (library) {
+                m.line();
+                m.line("replace github.com/da0x/uione/infrastructure => " + *library);
+            }
+            out.push_back(file("infrastructure/go.mod", m));
+        }
+        {
+            stream g("\t");
+            auto from_project = g.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            g.generated_from(from);
+            g.line("// Everything " + s.name + " runs on. The deploy script next to infrastructure/ runs it.");
+            g.line("package main");
+            g.line();
+            g.line("import \"github.com/da0x/uione/infrastructure\"");
+            g.line();
+            g.open("func main() {");
+            g.open("infrastructure.Deploy(infrastructure.Project{");
+            g.line("Name:     " + quoted(s.name) + ",");
+            g.line("Domain:   " + quoted(s.domain) + ",");
+            g.line("Firebase: " + quoted(s.firebase) + ",");
+            g.line("Region:   " + quoted(s.region) + ",");
+            if (!s.github.empty()) g.line("GitHub:   " + quoted(s.github) + ",");
+            if (!s.stripe.empty()) g.line("Stripe:   " + quoted(s.stripe) + ",");
+            if (s.services) g.line("Services: true,");
+            if (s.signs_in) g.line("SignIn:   true,");
+            if (s.files) g.line("Files:    true,");
+            if (!s.redirect.empty()) g.line("Redirect: " + quoted(s.redirect) + ",");
+            if (!s.backend) g.line("Static:   true,");
+            g.close("})");
+            g.close("}");
+            out.push_back(file("infrastructure/main.go", g));
+        }
+        if (s.backend) {
+            stream d;
+            auto from_project = d.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            d.line(generated);
+            d.line("#");
+            d.line("# Builds the backend. When its go.mod points the one library at a folder, the");
+            d.line("# deploy puts that folder beside it, in one/, and the build uses it.");
+            d.line("FROM golang:1.26 AS build");
+            d.line("WORKDIR /src");
+            d.line("COPY . .");
+            d.line("WORKDIR /src/api");
+            d.line("RUN if [ -d ../one ]; then go mod edit -replace github.com/da0x/uione/one=../one; fi \\");
+            d.line("    && go mod tidy && CGO_ENABLED=0 go build -o /backend .");
+            d.line();
+            d.line("FROM gcr.io/distroless/static-debian12:nonroot");
+            d.line("COPY --from=build /backend /backend");
+            d.line("ENTRYPOINT [\"/backend\"]");
+            out.push_back(file("api/dockerfile", d));
+        }
+        {
+            // Hosting serves the app, and sends /api/** to the backend, so the app calls
+            // it at the same address in the cloud as it does locally through Vite.
+            stream j;
+            auto from_project = j.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            j.open("{");
+            j.open("\"hosting\": {");
+            j.line("\"public\": \"dist\",");
+            // Pages are checked for a newer version every time, so a deploy shows at once.
+            // What they load has a hash of its content in its name, so it's kept for good.
+            j.open("\"headers\": [");
+            j.line("{ \"source\": \"**\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"no-cache\" }] },");
+            j.line("{ \"source\": \"/assets/**\", \"headers\": [{ \"key\": \"Cache-Control\", \"value\": \"public, max-age=31536000, immutable\" }] }");
+            j.close("],");
+            // An address that has moved, like the installer, sends whoever asks for it on.
+            if (!s.redirects.empty()) {
+                j.open("\"redirects\": [");
+                for (std::size_t i = 0; i < s.redirects.size(); ++i) {
+                    j.line("{ \"source\": " + quoted(s.redirects[i].first) + ", \"destination\": " + quoted(s.redirects[i].second) +
+                           ", \"type\": 301 }" + (i + 1 < s.redirects.size() ? "," : ""));
+                }
+                j.close("],");
+            }
+            j.open("\"rewrites\": [");
+            if (s.backend) j.line("{ \"source\": \"/api/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
+            if (!s.github.empty() || !s.stripe.empty()) j.line("{ \"source\": \"/hooks/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
+            j.line("{ \"source\": \"**\", \"destination\": \"/index.html\" }");
+            j.close("]");
+            j.close("}");
+            j.close("}");
+            out.push_back(file("web/firebase.json", j));
+        }
+        {
+            stream sh;
+            auto from_project = sh.from(s.from.path, s.from.line);  // all of this is the project block's doing
+            sh.line("#!/bin/sh");
+            sh.line(generated);
+            sh.line("#");
+            sh.line("# Deploys " + s.name + ": everything in Google Cloud through Pulumi, then the web app");
+            sh.line("# to Firebase Hosting, through the infrastructure library's deployer. It asks");
+            sh.line("# before Pulumi changes anything, and it can be run from any folder. --yes deploys");
+            sh.line("# without asking, and --json reports each step as a line of JSON.");
+            sh.line();
+            sh.line("set -eu");
+            sh.line("here=$(cd \"$(dirname \"$0\")\" && pwd)");
+            sh.line();
+            sh.line("cd \"$here/infrastructure\"");
+            sh.line("go mod tidy");
+            sh.line("GOFLAGS=-mod=mod exec go run github.com/da0x/uione/infrastructure/deployer --stack " + s.stack + " --project " + s.firebase + " --build \"$here\" \"$@\"");
+            out.push_back(file("deploy", sh, true));
+        }
+        return {out, ""};
+    }
+
+} // namespace one::generators

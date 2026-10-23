@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "generators/cpp.hpp"
+#include "generators/cpp_browser.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"

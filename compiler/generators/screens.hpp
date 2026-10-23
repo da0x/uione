@@ -33,14 +33,13 @@
 #include "generators/roles.hpp"
 #include "language/ast.hpp"
 #include "language/names.hpp"
+#include "language/written.hpp"
 #include "platform/files.hpp"
 
 namespace one::generators::screens {
 
     inline std::string join(const std::string& ns, const std::string& name) {
-        if (ns.empty()) return name;
-        if (name.empty()) return ns;
-        return ns + "::" + name;
+        return language::qualified(ns, name);
     }
 
     // A readable label, the same way @uione/react makes one: created_at becomes
@@ -52,12 +51,7 @@ namespace one::generators::screens {
         return out;
     }
 
-    // The written name of a value, like book.title or waitlist::signups.
-    inline std::string text_of(const language::expression& e) {
-        if (auto* name = std::get_if<language::name_expression>(&e.node)) return name->name.text();
-        if (auto* member = std::get_if<language::member_expression>(&e.node)) return text_of(*member->object) + "." + member->member;
-        return "";
-    }
+    using language::text_of;
 
     // Whether a route has a parameter: /projects/:project has project.
     inline bool names_parameter(const std::string& route, const std::string& name) {

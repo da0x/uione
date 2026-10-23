@@ -8,9 +8,14 @@
 #include <filesystem>
 
 #include <doctest/doctest.h>
-#include "driver.hpp"
+#include "driver/check.hpp"
+#include "driver/outline.hpp"
+#include "driver/themes.hpp"
+#include "driver/upgrade.hpp"
+#include "language/parser.hpp"
 #include "platform/files.hpp"
 #include "toolchain.hpp"
+#include "version.hpp"
 
 using namespace one;
 

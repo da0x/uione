@@ -52,11 +52,15 @@ set(ONE_SOURCES
     language/diagnostics.cpp
     language/ast.cpp
     language/lexer.cpp
+    language/written.cpp
     language/parser.cpp
     language/extends.cpp
     language/targets.cpp
     language/lower.cpp
     language/checker.cpp
+    generators/output.cpp
+    generators/javascript.cpp
+    generators/native_names.cpp
     generators/cpp_browser.cpp
     generators/markdown.cpp
     generators/theme.cpp
@@ -71,6 +75,12 @@ set(ONE_SOURCES
     generators/rules.cpp
     generators/agent.cpp
     generators/project.cpp
+    driver/outline.cpp
+    driver/check.cpp
+    driver/upgrade.cpp
+    driver/editor.cpp
+    driver/themes.cpp
+    driver/build.cpp
     driver.cpp)
 add_library(one_compiler STATIC ${ONE_SOURCES})
 target_include_directories(one_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)

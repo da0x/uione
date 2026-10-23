@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "driver.hpp"
+#include "driver/build.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"

@@ -15,6 +15,7 @@
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 using namespace one;
 

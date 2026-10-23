@@ -15,6 +15,7 @@
 #include "generators/web.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
+#include "language/targets.hpp"
 #include "platform/files.hpp"
 
 using namespace one;

@@ -12,8 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "driver.hpp"
+#include "driver/check.hpp"
 #include "platform/files.hpp"
+#include "version.hpp"
 
 using namespace one;
 using driver::check_project;
