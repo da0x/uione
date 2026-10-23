@@ -38,21 +38,58 @@ add_library(md4c STATIC
     ${md4c_SOURCE_DIR}/src/entity.c)
 target_include_directories(md4c SYSTEM PUBLIC ${md4c_SOURCE_DIR}/src)
 
+# The compiler is components, each a header and a source beside it that includes it
+# first: the source compiling alone shows the header includes what it uses itself,
+# and what's worth compiling once is compiled there.
+set(ONE_SOURCES
+    version.cpp
+    toolchain.cpp
+    code/stream.cpp
+    platform/files.cpp
+    language/token.cpp
+    language/names.cpp
+    language/colors.cpp
+    language/diagnostics.cpp
+    language/ast.cpp
+    language/lexer.cpp
+    language/parser.cpp
+    language/extends.cpp
+    language/targets.cpp
+    language/lower.cpp
+    language/checker.cpp
+    generators/cpp_browser.cpp
+    generators/markdown.cpp
+    generators/theme.cpp
+    generators/roles.cpp
+    generators/screens.cpp
+    generators/web.cpp
+    generators/native.cpp
+    generators/api.cpp
+    generators/cpp.cpp
+    generators/infrastructure.cpp
+    generators/indexes.cpp
+    generators/rules.cpp
+    generators/agent.cpp
+    generators/project.cpp
+    driver.cpp)
+add_library(one_compiler STATIC ${ONE_SOURCES})
+target_include_directories(one_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
+target_link_libraries(one_compiler PUBLIC md4c PRIVATE one_warnings)
+
 add_executable(one main.cpp)
-target_include_directories(one PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
-target_link_libraries(one PRIVATE one_warnings md4c)
+target_link_libraries(one PRIVATE one_compiler one_warnings)
 
 # For the browser: the same compiler, called from JavaScript through wasm.cpp, with
 # a project's files in an in-memory file system. Built with Emscripten, through
 # tools/wasm/build.
 if(EMSCRIPTEN)
-    add_executable(one_wasm wasm.cpp)
-    target_include_directories(one_wasm PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
-    target_link_libraries(one_wasm PRIVATE one_warnings md4c)
-    set_target_properties(one_wasm PROPERTIES OUTPUT_NAME one SUFFIX .mjs)
     # The parser stops at a mistake by throwing, so exceptions have to work, and
-    # WebAssembly's own are the fastest and smallest way.
-    target_compile_options(one_wasm PRIVATE -fwasm-exceptions)
+    # WebAssembly's own are the fastest and smallest way. Every component is built
+    # for them, since one built without can't pass one on.
+    target_compile_options(one_compiler PUBLIC -fwasm-exceptions)
+    add_executable(one_wasm wasm.cpp)
+    target_link_libraries(one_wasm PRIVATE one_compiler one_warnings)
+    set_target_properties(one_wasm PROPERTIES OUTPUT_NAME one SUFFIX .mjs)
     target_link_options(one_wasm PRIVATE
         -fwasm-exceptions
         -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=load
@@ -102,9 +139,8 @@ if(ONE_TESTS)
         tests/targets_tests.cpp
         tests/screens_tests.cpp
         tests/extends_tests.cpp)
-    target_include_directories(one_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)
     target_include_directories(one_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR})
     target_compile_definitions(one_tests PRIVATE UIONE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
-    target_link_libraries(one_tests PRIVATE one_warnings md4c)
+    target_link_libraries(one_tests PRIVATE one_compiler one_warnings)
     add_test(NAME one_tests COMMAND one_tests)
 endif()
