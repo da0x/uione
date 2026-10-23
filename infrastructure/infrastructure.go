@@ -9,9 +9,9 @@
 // files, are build artifacts rather than resources, like a compiled binary.
 //
 // A few things can't be declared, and each project's README names them: linking
-// billing, turning on Google sign-in (which creates an OAuth client no resource can
-// manage), adding the site's domain to sign-in's authorized domains, and the DNS
-// records at the domain's registrar.
+// billing, which a project with no backend doesn't need, turning on Google sign-in
+// (which creates an OAuth client no resource can manage), adding the site's domain
+// to sign-in's authorized domains, and the DNS records at the domain's registrar.
 //
 // A project's first deploy expects a Firebase project without a Firestore database
 // yet. Creating the database in the console first, or publishing rules there, makes
@@ -112,6 +112,11 @@ type Project struct {
 	// as itself, for ten minutes at a time.
 	Files bool
 
+	// Whether the project has no backend: no entities, commands or views, and no one
+	// signs in, like a company's front page. It's then only the web app on Hosting,
+	// with no database, no Cloud Run and no budget, so it needs no billing account.
+	Static bool
+
 	// The folder `one build` wrote, holding api/, web/ and firestore.rules. It's the
 	// parent of the Pulumi program's folder unless it's set.
 	Build string
@@ -145,6 +150,14 @@ func Deploy(p Project) {
 	pulumi.Run(func(ctx *pulumi.Context) error { return Declare(ctx, p) })
 }
 
+// The APIs a project with no backend uses, none of which needs billing.
+var staticAPIs = []string{
+	"cloudresourcemanager.googleapis.com",
+	"firebase.googleapis.com",
+	"firebasehosting.googleapis.com",
+	"serviceusage.googleapis.com",
+}
+
 // Declare declares a project's resources. The settings that aren't in the .one
 // files are budget, the monthly amount in the billing account's currency, which is
 // 10 unless the program's config sets it, and Stripe's secrets, for a project that
@@ -161,6 +174,9 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	opt := func(deps ...pulumi.Resource) pulumi.ResourceOrInvokeOption { return pulumi.DependsOn(deps) }
 
 	needed := append([]string(nil), apis...)
+	if p.Static {
+		needed = append([]string(nil), staticAPIs...)
+	}
 	if p.GitHub != "" || p.Stripe != "" {
 		needed = append(needed, "secretmanager.googleapis.com")
 	}
@@ -202,143 +218,12 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	}
 	after := opt(append(enabled, fb)...)
 
-	// The database, and the rules that decide what a browser may read.
-	db, err := firestore.NewDatabase(ctx, "database", &firestore.DatabaseArgs{
-		Project:               project,
-		Name:                  pulumi.String("(default)"),
-		LocationId:            pulumi.String(p.Region),
-		Type:                  pulumi.String("FIRESTORE_NATIVE"),
-		DeleteProtectionState: pulumi.String("DELETE_PROTECTION_ENABLED"),
-		DeletionPolicy:        pulumi.String("ABANDON"),
-	}, after)
-	if err != nil {
-		return err
-	}
-	rules, err := os.ReadFile(filepath.Join(p.Build, "firestore.rules"))
-	if err != nil {
-		return fmt.Errorf("infrastructure: the rules aren't there; run one build first: %w", err)
-	}
-	ruleset, err := firebaserules.NewRuleset(ctx, "rules", &firebaserules.RulesetArgs{
-		Project: project,
-		Source: &firebaserules.RulesetSourceArgs{
-			Files: firebaserules.RulesetSourceFileArray{&firebaserules.RulesetSourceFileArgs{
-				Name:    pulumi.String("firestore.rules"),
-				Content: pulumi.String(string(rules)),
-			}},
-		},
-	}, opt(db))
-	if err != nil {
-		return err
-	}
-	if _, err := firebaserules.NewRelease(ctx, "rules", &firebaserules.ReleaseArgs{
-		Project:     project,
-		Name:        pulumi.String("cloud.firestore"),
-		RulesetName: pulumi.Sprintf("projects/%s/rulesets/%s", p.Firebase, ruleset.Name),
-	}, opt(ruleset)); err != nil {
-		return err
-	}
-
-	// The indexes the backend's newest-first lists ask for, as one build wrote them.
-	// Firestore builds each one after the deploy, and the backend reads those lists
-	// whole until it has. One no longer written is deleted.
-	if err := indexes(ctx, p, project, opt(db)); err != nil {
-		return err
-	}
-
-	// The backend: its image, built by Cloud Build, and the service that runs it.
-	image, err := backend(ctx, p, after)
-	if err != nil {
-		return err
-	}
-	runtime, err := serviceaccount.NewAccount(ctx, "runtime", &serviceaccount.AccountArgs{
-		Project:     project,
-		AccountId:   pulumi.String(p.Name + "-api"),
-		DisplayName: pulumi.String(p.Name + " backend"),
-	}, after)
-	if err != nil {
-		return err
-	}
-	// Commands read and write Firestore, and nothing else. Checking a sign-in token
-	// needs no role, since the keys that sign tokens are public.
-	if _, err := projects.NewIAMMember(ctx, "runtime-firestore", &projects.IAMMemberArgs{
-		Project: project,
-		Role:    pulumi.String("roles/datastore.user"),
-		Member:  pulumi.Sprintf("serviceAccount:%s", runtime.Email),
-	}); err != nil {
-		return err
-	}
-	// Signing a custom token, or a file's address, is asking Google to sign as the
-	// backend's own account, which it may do for itself and for no other account.
-	if signs {
-		if _, err := serviceaccount.NewIAMMember(ctx, "runtime-signs-tokens", &serviceaccount.IAMMemberArgs{
-			ServiceAccountId: runtime.Name,
-			Role:             pulumi.String("roles/iam.serviceAccountTokenCreator"),
-			Member:           pulumi.Sprintf("serviceAccount:%s", runtime.Email),
-		}); err != nil {
+	// The backend, and the database it keeps, for a project that has one.
+	var backendURL pulumi.StringOutput
+	if !p.Static {
+		if backendURL, err = declareBackend(ctx, p, project, settings, signs, after); err != nil {
 			return err
 		}
-	}
-	envs := cloudrunv2.ServiceTemplateContainerEnvArray{&cloudrunv2.ServiceTemplateContainerEnvArgs{
-		Name:  pulumi.String("GOOGLE_CLOUD_PROJECT"),
-		Value: project,
-	}}
-	backendNeeds := []pulumi.Resource{db}
-	if p.GitHub != "" {
-		env, access, err := githubSecret(ctx, p, project, runtime, after)
-		if err != nil {
-			return err
-		}
-		envs = append(envs, env)
-		backendNeeds = append(backendNeeds, access)
-	}
-	if p.Stripe != "" {
-		for _, name := range []string{"stripe_secret_key", "stripe_webhook_secret"} {
-			value, err := settings.TrySecret(name)
-			if err != nil {
-				// Until it's set, the backend refuses Stripe's webhook and its calls.
-				continue
-			}
-			env, access, err := keptSecret(ctx, project, runtime, after, strings.ReplaceAll(name, "_", "-"), strings.ToUpper(name), value)
-			if err != nil {
-				return err
-			}
-			envs = append(envs, env)
-			backendNeeds = append(backendNeeds, access)
-		}
-		ctx.Export("stripe_webhook_url", pulumi.Sprintf("https://%s%s", p.Domain, p.Stripe))
-	}
-	if p.Files {
-		env, access, err := filesBucket(ctx, p, project, runtime, after)
-		if err != nil {
-			return err
-		}
-		envs = append(envs, env)
-		backendNeeds = append(backendNeeds, access)
-	}
-	run, err := cloudrunv2.NewService(ctx, "backend", &cloudrunv2.ServiceArgs{
-		Project:  project,
-		Name:     pulumi.String(Service),
-		Location: pulumi.String(p.Region),
-		// Destroying the stack, or changing Region or Firebase (which replaces the
-		// service), needs this turned off first, in a deploy of its own.
-		DeletionProtection: pulumi.Bool(true),
-		// Anyone may call it, the same as locally: every command checks who's asking
-		// and whether they may, so a second gate in front would only duplicate that.
-		InvokerIamDisabled: pulumi.Bool(true),
-		Template: &cloudrunv2.ServiceTemplateArgs{
-			ServiceAccount: runtime.Email,
-			Scaling: &cloudrunv2.ServiceTemplateScalingArgs{
-				MinInstanceCount: pulumi.Int(0),
-				MaxInstanceCount: pulumi.Int(2),
-			},
-			Containers: cloudrunv2.ServiceTemplateContainerArray{&cloudrunv2.ServiceTemplateContainerArgs{
-				Image: image,
-				Envs:  envs,
-			}},
-		},
-	}, opt(backendNeeds...))
-	if err != nil {
-		return err
 	}
 
 	// The web app: its Firebase registration, the Hosting site, and the domain.
@@ -413,8 +298,178 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	// holds them would turn the project's Firebase Auth into Identity Platform, which
 	// is priced and run differently, and that isn't a side effect to have.
 
-	// A budget on the billing account the project is linked to, so a surprise shows
-	// up as an email rather than as a bill.
+	// Only a backend runs up a bill, so only a project with one needs billing.
+	if !p.Static {
+		if err := watchSpending(ctx, p, project, settings, after); err != nil {
+			return err
+		}
+	}
+
+	// What the web build needs, and what has to be set at the registrar.
+	ctx.Export("firebase_api_key", web.ApiKey())
+	ctx.Export("firebase_app_id", app.AppId)
+	ctx.Export("firebase_project_id", project)
+	ctx.Export("firebase_auth_domain", web.AuthDomain())
+	// Only once the Firebase project is linked to Google Analytics; empty before.
+	ctx.Export("firebase_measurement_id", web.MeasurementId())
+	if !p.Static {
+		ctx.Export("backend_url", backendURL)
+	}
+	ctx.Export("dns_records", dnsRecords)
+	ctx.Export("domain", pulumi.String(p.Domain))
+	return nil
+}
+
+// declareBackend declares the database, its rules and indexes, and the backend that
+// runs on Cloud Run, and says where the backend is served.
+func declareBackend(ctx *pulumi.Context, p Project, project pulumi.String, settings *config.Config, signs bool,
+	after pulumi.ResourceOrInvokeOption) (pulumi.StringOutput, error) {
+	opt := func(deps ...pulumi.Resource) pulumi.ResourceOrInvokeOption { return pulumi.DependsOn(deps) }
+
+	// The database, and the rules that decide what a browser may read.
+	db, err := firestore.NewDatabase(ctx, "database", &firestore.DatabaseArgs{
+		Project:               project,
+		Name:                  pulumi.String("(default)"),
+		LocationId:            pulumi.String(p.Region),
+		Type:                  pulumi.String("FIRESTORE_NATIVE"),
+		DeleteProtectionState: pulumi.String("DELETE_PROTECTION_ENABLED"),
+		DeletionPolicy:        pulumi.String("ABANDON"),
+	}, after)
+	if err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	rules, err := os.ReadFile(filepath.Join(p.Build, "firestore.rules"))
+	if err != nil {
+		return pulumi.StringOutput{}, fmt.Errorf("infrastructure: the rules aren't there; run one build first: %w", err)
+	}
+	ruleset, err := firebaserules.NewRuleset(ctx, "rules", &firebaserules.RulesetArgs{
+		Project: project,
+		Source: &firebaserules.RulesetSourceArgs{
+			Files: firebaserules.RulesetSourceFileArray{&firebaserules.RulesetSourceFileArgs{
+				Name:    pulumi.String("firestore.rules"),
+				Content: pulumi.String(string(rules)),
+			}},
+		},
+	}, opt(db))
+	if err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	if _, err := firebaserules.NewRelease(ctx, "rules", &firebaserules.ReleaseArgs{
+		Project:     project,
+		Name:        pulumi.String("cloud.firestore"),
+		RulesetName: pulumi.Sprintf("projects/%s/rulesets/%s", p.Firebase, ruleset.Name),
+	}, opt(ruleset)); err != nil {
+		return pulumi.StringOutput{}, err
+	}
+
+	// The indexes the backend's newest-first lists ask for, as one build wrote them.
+	// Firestore builds each one after the deploy, and the backend reads those lists
+	// whole until it has. One no longer written is deleted.
+	if err := indexes(ctx, p, project, opt(db)); err != nil {
+		return pulumi.StringOutput{}, err
+	}
+
+	// The backend: its image, built by Cloud Build, and the service that runs it.
+	image, err := backend(ctx, p, after)
+	if err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	runtime, err := serviceaccount.NewAccount(ctx, "runtime", &serviceaccount.AccountArgs{
+		Project:     project,
+		AccountId:   pulumi.String(p.Name + "-api"),
+		DisplayName: pulumi.String(p.Name + " backend"),
+	}, after)
+	if err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	// Commands read and write Firestore, and nothing else. Checking a sign-in token
+	// needs no role, since the keys that sign tokens are public.
+	if _, err := projects.NewIAMMember(ctx, "runtime-firestore", &projects.IAMMemberArgs{
+		Project: project,
+		Role:    pulumi.String("roles/datastore.user"),
+		Member:  pulumi.Sprintf("serviceAccount:%s", runtime.Email),
+	}); err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	// Signing a custom token, or a file's address, is asking Google to sign as the
+	// backend's own account, which it may do for itself and for no other account.
+	if signs {
+		if _, err := serviceaccount.NewIAMMember(ctx, "runtime-signs-tokens", &serviceaccount.IAMMemberArgs{
+			ServiceAccountId: runtime.Name,
+			Role:             pulumi.String("roles/iam.serviceAccountTokenCreator"),
+			Member:           pulumi.Sprintf("serviceAccount:%s", runtime.Email),
+		}); err != nil {
+			return pulumi.StringOutput{}, err
+		}
+	}
+	envs := cloudrunv2.ServiceTemplateContainerEnvArray{&cloudrunv2.ServiceTemplateContainerEnvArgs{
+		Name:  pulumi.String("GOOGLE_CLOUD_PROJECT"),
+		Value: project,
+	}}
+	backendNeeds := []pulumi.Resource{db}
+	if p.GitHub != "" {
+		env, access, err := githubSecret(ctx, p, project, runtime, after)
+		if err != nil {
+			return pulumi.StringOutput{}, err
+		}
+		envs = append(envs, env)
+		backendNeeds = append(backendNeeds, access)
+	}
+	if p.Stripe != "" {
+		for _, name := range []string{"stripe_secret_key", "stripe_webhook_secret"} {
+			value, err := settings.TrySecret(name)
+			if err != nil {
+				// Until it's set, the backend refuses Stripe's webhook and its calls.
+				continue
+			}
+			env, access, err := keptSecret(ctx, project, runtime, after, strings.ReplaceAll(name, "_", "-"), strings.ToUpper(name), value)
+			if err != nil {
+				return pulumi.StringOutput{}, err
+			}
+			envs = append(envs, env)
+			backendNeeds = append(backendNeeds, access)
+		}
+		ctx.Export("stripe_webhook_url", pulumi.Sprintf("https://%s%s", p.Domain, p.Stripe))
+	}
+	if p.Files {
+		env, access, err := filesBucket(ctx, p, project, runtime, after)
+		if err != nil {
+			return pulumi.StringOutput{}, err
+		}
+		envs = append(envs, env)
+		backendNeeds = append(backendNeeds, access)
+	}
+	run, err := cloudrunv2.NewService(ctx, "backend", &cloudrunv2.ServiceArgs{
+		Project:  project,
+		Name:     pulumi.String(Service),
+		Location: pulumi.String(p.Region),
+		// Destroying the stack, or changing Region or Firebase (which replaces the
+		// service), needs this turned off first, in a deploy of its own.
+		DeletionProtection: pulumi.Bool(true),
+		// Anyone may call it, the same as locally: every command checks who's asking
+		// and whether they may, so a second gate in front would only duplicate that.
+		InvokerIamDisabled: pulumi.Bool(true),
+		Template: &cloudrunv2.ServiceTemplateArgs{
+			ServiceAccount: runtime.Email,
+			Scaling: &cloudrunv2.ServiceTemplateScalingArgs{
+				MinInstanceCount: pulumi.Int(0),
+				MaxInstanceCount: pulumi.Int(2),
+			},
+			Containers: cloudrunv2.ServiceTemplateContainerArray{&cloudrunv2.ServiceTemplateContainerArgs{
+				Image: image,
+				Envs:  envs,
+			}},
+		},
+	}, opt(backendNeeds...))
+	if err != nil {
+		return pulumi.StringOutput{}, err
+	}
+	return run.Uri, nil
+}
+
+// watchSpending puts a budget on the billing account the project is linked to, so a
+// surprise shows up as an email rather than as a bill.
+func watchSpending(ctx *pulumi.Context, p Project, project pulumi.String, settings *config.Config, after pulumi.ResourceOrInvokeOption) error {
 	// The lookup reads billing through an API it has to wait for.
 	info := organizations.LookupProjectOutput(ctx, organizations.LookupProjectOutputArgs{ProjectId: project}, after)
 	account := info.BillingAccount().ApplyT(func(account string) (string, error) {
@@ -449,17 +504,6 @@ func Declare(ctx *pulumi.Context, p Project) error {
 	}, after); err != nil {
 		return err
 	}
-
-	// What the web build needs, and what has to be set at the registrar.
-	ctx.Export("firebase_api_key", web.ApiKey())
-	ctx.Export("firebase_app_id", app.AppId)
-	ctx.Export("firebase_project_id", project)
-	ctx.Export("firebase_auth_domain", web.AuthDomain())
-	// Only once the Firebase project is linked to Google Analytics; empty before.
-	ctx.Export("firebase_measurement_id", web.MeasurementId())
-	ctx.Export("backend_url", run.Uri)
-	ctx.Export("dns_records", dnsRecords)
-	ctx.Export("domain", pulumi.String(p.Domain))
 	return nil
 }
 
@@ -651,6 +695,8 @@ func (p Project) check() error {
 		return errors.New("infrastructure: the project has no region")
 	case p.GitHub != "" && !strings.HasPrefix(p.GitHub, "/"):
 		return fmt.Errorf("infrastructure: GitHub's webhook route %q has to start with /", p.GitHub)
+	case p.Static && (p.GitHub != "" || p.Stripe != "" || p.Services || p.SignIn || p.Files):
+		return errors.New("infrastructure: a project with no backend can't take webhooks, services, sign-in or files, which the backend handles")
 	}
 	return nil
 }

@@ -26,7 +26,7 @@ import (
 
 // Options say what to deploy, from the folder `one build` wrote.
 type Options struct {
-	Build string // the folder `one build` wrote, holding infrastructure/, api/ and web/
+	Build string // the folder `one build` wrote, holding infrastructure/, web/ and, for a project with a backend, api/
 	Stack string // the Pulumi stack, like production
 	// The Google Cloud project it deploys to. A new stack takes over the stack that
 	// already manages it, as after its environment is renamed.
@@ -109,9 +109,16 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 
 	infrastructure := filepath.Join(o.Build, "infrastructure")
 	web := filepath.Join(o.Build, "web")
+	// A project with no backend, like a company's front page, has no api/ to build.
+	api := filepath.Join(o.Build, "api")
+	dirs := []string{api, infrastructure}
+	backend := true
+	if _, err := os.Stat(api); errors.Is(err, os.ErrNotExist) {
+		dirs, backend = dirs[1:], false
+	}
 	var program Program
 	if err := step("tidy", func() error {
-		for _, dir := range []string{filepath.Join(o.Build, "api"), infrastructure} {
+		for _, dir := range dirs {
 			if err := tools.Run(ctx, dir, log, "go", "mod", "tidy"); err != nil {
 				return fmt.Errorf("go mod tidy in %s: %w", dir, err)
 			}
@@ -141,9 +148,9 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 	if project == "" {
 		project = configuredProject(infrastructure)
 	}
-	if tools.Rehearse != nil && project != "" {
+	if tools.Rehearse != nil && project != "" && backend {
 		if err := step("rehearse", func() error {
-			err := tools.Rehearse(ctx, filepath.Join(o.Build, "api"), project, log)
+			err := tools.Rehearse(ctx, api, project, log)
 			if errors.Is(err, ErrNoRehearsal) {
 				say("rehearse", "progress", err.Error())
 				return nil

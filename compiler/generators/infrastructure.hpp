@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -39,6 +40,7 @@ namespace one::generators {
         bool services = false;  // a role is made for services, whose tokens the backend signs
         bool signs_in = false;  // people sign in, so programs on their computers may too, with a token the backend signs
         bool files = false;  // a field holds a file, kept in a bucket of the project's
+        bool backend = true;  // there's a backend to run; without one, it's only the web app on Hosting
         std::string redirect;  // a second domain, like www.uione.io, that sends whoever opens it to domain
         std::vector<std::pair<std::string, std::string>> redirects;  // each address, and where it goes
     };
@@ -75,6 +77,32 @@ namespace one::generators {
         return false;
     }
 
+    // Whether a namespace has an entity, a command or a view: what the backend serves.
+    static bool has_backend(const std::vector<language::declaration>& declarations) {
+        for (const auto& d : declarations) {
+            if (auto* n = std::get_if<language::namespace_declaration>(&d.node); n && has_backend(n->declarations)) return true;
+            if (std::holds_alternative<language::entity_declaration>(d.node) || std::holds_alternative<language::command_declaration>(d.node) ||
+                std::holds_alternative<language::view_declaration>(d.node))
+                return true;
+        }
+        return false;
+    }
+
+    // Whether the project needs a backend. One with nothing for it to serve, where no
+    // one signs in, like a company's front page, is only its web app: no api/ is
+    // written, and its deploy needs no database, no Cloud Run and no billing.
+    inline bool needs_backend(const std::vector<language::file>& files) {
+        for (const auto& f : files) {
+            if (has_backend(f.declarations) || has_services(f.declarations) || has_files(f.declarations)) return true;
+            if (!hook_route(f.declarations, "github").empty() || !hook_route(f.declarations, "stripe").empty()) return true;
+            for (const auto& d : f.declarations) {
+                auto* p = std::get_if<language::project_declaration>(&d.node);
+                if (p && std::any_of(p->settings.begin(), p->settings.end(), [](const auto& setting) { return setting.key == "signin"; })) return true;
+            }
+        }
+        return false;
+    }
+
     // The project's deploy settings, when it has all of them.
     inline std::optional<deploy_settings> deploy_settings_of(const std::vector<language::file>& files) {
         for (const auto& f : files) {
@@ -99,6 +127,7 @@ namespace one::generators {
                     s.services = s.services || has_services(other.declarations);
                     s.files = s.files || has_files(other.declarations);
                 }
+                s.backend = needs_backend(files);
                 return s;
             }
         }
@@ -203,11 +232,12 @@ namespace one::generators {
             if (s.signs_in) g.line("SignIn:   true,");
             if (s.files) g.line("Files:    true,");
             if (!s.redirect.empty()) g.line("Redirect: " + quoted(s.redirect) + ",");
+            if (!s.backend) g.line("Static:   true,");
             g.close("})");
             g.close("}");
             out.push_back(file("infrastructure/main.go", g));
         }
-        {
+        if (s.backend) {
             stream d;
             auto from_project = d.from(s.from.path, s.from.line);  // all of this is the project block's doing
             d.line(generated);
@@ -250,7 +280,7 @@ namespace one::generators {
                 j.close("],");
             }
             j.open("\"rewrites\": [");
-            j.line("{ \"source\": \"/api/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
+            if (s.backend) j.line("{ \"source\": \"/api/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
             if (!s.github.empty() || !s.stripe.empty()) j.line("{ \"source\": \"/hooks/**\", \"run\": { \"serviceId\": \"api\", \"region\": " + quoted(s.region) + " } },");
             j.line("{ \"source\": \"**\", \"destination\": \"/index.html\" }");
             j.close("]");

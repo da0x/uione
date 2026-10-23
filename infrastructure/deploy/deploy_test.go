@@ -380,6 +380,27 @@ func TestABackendThatDoesntStartInRehearsalIsntDeployed(t *testing.T) {
 	}
 }
 
+func TestAProjectWithNoBackendDeploysOnlyItsSite(t *testing.T) {
+	dir := built(t)
+	if err := os.Remove(filepath.Join(dir, "api")); err != nil {
+		t.Fatal(err)
+	}
+	w := &world{outputs: outputs}
+	tools := w.tools()
+	tools.Rehearse = func(context.Context, string, string, io.Writer) error {
+		w.did = append(w.did, "rehearse")
+		return nil
+	}
+	if _, err := Run(context.Background(), Options{Build: dir, Stack: "production", Project: "ui-one"}, tools); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"infrastructure: go mod tidy", "open infrastructure production", "preview", "up",
+		"web: yarn install --non-interactive", "web: yarn build", "upload ui-one from web"}
+	if !reflect.DeepEqual(w.did, want) {
+		t.Errorf("the deploy did\n%v\nwant\n%v", w.did, want)
+	}
+}
+
 // Where there's no rehearsing, like with no Docker, the deploy says so and goes on;
 // the project is the one the Pulumi program deploys to when none is given.
 func TestARehearsalThatCantBeDoneIsSaidAndTheDeployGoesOn(t *testing.T) {

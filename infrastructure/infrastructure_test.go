@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -538,6 +539,50 @@ func TestTheBackendSignsTokensAsItselfOnlyWhenThereAreServicesOrPeopleSignIn(t *
 	for key := range m.resources {
 		if strings.Contains(key, "runtime-signs-tokens") {
 			t.Errorf("a project with neither declares %s", key)
+		}
+	}
+}
+
+func TestAProjectWithNoBackendIsOnlyItsSiteAndNeedsNoBilling(t *testing.T) {
+	// one build writes no rules and no backend for it, so there are none to read.
+	m, err := declareChanged(t, t.TempDir(), settings, "", func(p *Project) { p.Static = true; p.Redirect = "www.uione.io" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"gcp:cloudrunv2/", "gcp:firestore/", "gcp:firebaserules/", "gcp:billing/", "gcp:serviceaccount/", "gcp:storage/", "command:"} {
+		for key := range m.resources {
+			if strings.HasPrefix(key, kind) {
+				t.Errorf("a project with no backend declares %s", key)
+			}
+		}
+	}
+	for _, key := range []string{"gcp:firebase/webApp:WebApp::web", "gcp:firebase/hostingSite:HostingSite::site",
+		"gcp:firebase/hostingCustomDomain:HostingCustomDomain::domain", "gcp:firebase/hostingCustomDomain:HostingCustomDomain::redirect"} {
+		m.get(t, key)
+	}
+	var turnedOn []string
+	for key := range m.resources {
+		if api, ok := strings.CutPrefix(key, "gcp:projects/service:Service::"); ok {
+			turnedOn = append(turnedOn, api)
+		}
+	}
+	sort.Strings(turnedOn)
+	if strings.Join(turnedOn, " ") != strings.Join(staticAPIs, " ") {
+		t.Errorf("a project with no backend turns on %v", turnedOn)
+	}
+}
+
+func TestAProjectWithNoBackendTakesNothingABackendHandles(t *testing.T) {
+	for _, give := range []func(*Project){
+		func(p *Project) { p.SignIn = true },
+		func(p *Project) { p.Files = true },
+		func(p *Project) { p.Services = true },
+		func(p *Project) { p.GitHub = "/hooks/github" },
+		func(p *Project) { p.Stripe = "/hooks/stripe" },
+	} {
+		_, err := declareChanged(t, t.TempDir(), settings, "", func(p *Project) { p.Static = true; give(p) })
+		if err == nil || !strings.Contains(err.Error(), "no backend") {
+			t.Errorf("got %v", err)
 		}
 	}
 }

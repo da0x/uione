@@ -116,6 +116,13 @@ namespace {
                 return 1;
             }
         }
+        // A project with no backend, or none any more, has no api/, so a deploy doesn't
+        // build one left from before.
+        bool backend = std::ranges::any_of(built.files, [](const auto& file) { return file.path.starts_with("api/"); });
+        if (!built.files.empty() && !backend && !one::platform::remove_folder(out + "/api")) {
+            std::cerr << "one: can't remove " << out << "/api\n";
+            return 1;
+        }
         std::cout << "wrote " << built.files.size() << " files to " << out << "\n";
         return 0;
     }

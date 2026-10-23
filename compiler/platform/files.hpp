@@ -90,6 +90,13 @@ namespace one::platform {
         return !error;
     }
 
+    // Removes a folder and everything in it, if it's there. Returns false when it can't.
+    inline bool remove_folder(const std::string& path) {
+        std::error_code error;
+        std::filesystem::remove_all(path, error);
+        return !error;
+    }
+
     // The path from folder `from` to `to`, with forward slashes, starting with ./ or
     // ../ so it can be used as an import.
     inline std::string relative_import(const std::string& from, const std::string& to) {

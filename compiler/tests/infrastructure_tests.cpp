@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/infrastructure.hpp"
+#include "generators/project.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
 #include "platform/files.hpp"
@@ -214,5 +215,47 @@ TEST_CASE("a project with a file field gets a bucket for its files") {
     std::string without = source;
     without.replace(without.find("\t\tproof  file\n"), 14, "");
     CHECK(program_of(without).find("Files") == std::string::npos);
+    fs::remove_all(dir);
+}
+
+TEST_CASE("a project with nothing for a backend to do is only its web app") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::temp_directory_path() / "uione-front-page";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    std::string project = "import one\nproject p {\n\tfirebase \"p-1\"\n\tregion \"us-east4\"\n\tdomain \"p.io\"\n}\n";
+    std::string page = "screen \"P\" / {\n\ttext \"Hello.\"\n}\n";
+    auto generated_with = [&](const std::string& text) {
+        REQUIRE(platform::write_file((dir / "main.one").string(), text));
+        return generate_at(dir.string()).files;
+    };
+    auto files = generated_with(project + page);
+    const auto* program = find(files, "infrastructure/main.go");
+    REQUIRE(program != nullptr);
+    CHECK(program->content.find("\t\tStatic:   true,\n") != std::string::npos);
+    CHECK(find(files, "api/dockerfile") == nullptr);
+    const auto* hosting = find(files, "web/firebase.json");
+    REQUIRE(hosting != nullptr);
+    CHECK(hosting->content.find("/api/") == std::string::npos);
+
+    // The whole build writes no backend for it either.
+    language::diagnostics out;
+    std::vector<language::file> parsed;
+    parsed.push_back(language::parse((dir / "main.one").string(), project + page, out));
+    language::check(parsed, out);
+    auto whole = generators::generate_project(parsed, dir.string(), (dir / "build").string());
+    CHECK(std::none_of(whole.files.begin(), whole.files.end(), [](const auto& f) { return f.path.rfind("api/", 0) == 0; }));
+
+    // A view, or people signing in, needs one.
+    std::string view = "namespace notes {\n\tentity note {\n\t\ttitle  text\n\t}\n\tview notes public {\n\t\ttotal = count(note)\n\t}\n}\n";
+    std::string signs_in = project;
+    signs_in.replace(signs_in.find("}"), 1, "\tsignin google\n}");
+    for (const auto& text : {project + page + view, signs_in + page}) {
+        CAPTURE(text);
+        auto with = generated_with(text);
+        CHECK(find(with, "infrastructure/main.go")->content.find("Static") == std::string::npos);
+        CHECK(find(with, "api/dockerfile") != nullptr);
+        CHECK(find(with, "web/firebase.json")->content.find("/api/**") != std::string::npos);
+    }
     fs::remove_all(dir);
 }
