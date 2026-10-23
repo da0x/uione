@@ -12,7 +12,7 @@ build := build
 
 all:
 	cmake -S . -B $(build)
-	cmake --build $(build) --parallel
+	cmake --build $(build) --parallel $(shell nproc)
 
 test: all
 	ctest --test-dir $(build) --output-on-failure
