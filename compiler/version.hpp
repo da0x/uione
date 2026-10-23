@@ -10,6 +10,6 @@
 
 namespace one {
 
-    inline constexpr std::string_view version = "0.16.1";
+    inline constexpr std::string_view version = "0.17.0";
 
 } // namespace one
