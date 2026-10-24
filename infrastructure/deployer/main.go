@@ -4,10 +4,13 @@
 // deployer deploys a project that `one build` wrote, from its infrastructure folder.
 //
 //	go run github.com/da0x/uione/infrastructure/deployer [--stack production] [--yes] [--json]
+//	go run github.com/da0x/uione/infrastructure/deployer --rehearse
 //
 // It shows what Pulumi would change and asks before changing anything, unless
 // --yes. With --json, it prints one line of JSON per step on standard output, and
-// everything else on standard error, for a program to follow.
+// everything else on standard error, for a program to follow. With --rehearse, it
+// only starts the new backend on a copy of what the project stores, and changes
+// nothing.
 package main
 
 import (
@@ -34,6 +37,7 @@ func main() {
 	build := flags.String("build", "..", "the folder one build wrote")
 	yes := flags.Bool("yes", false, "deploy without asking")
 	asJSON := flags.Bool("json", false, "print progress as JSON lines")
+	rehearse := flags.Bool("rehearse", false, "only start the new backend on a copy of what's stored, changing nothing")
 	flags.Parse(os.Args[1:])
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -44,6 +48,13 @@ func main() {
 		fail(err)
 	}
 	o := deploy.Options{Build: dir, Stack: *stack, Project: *project, Log: os.Stdout}
+	if *rehearse {
+		if err := deploy.Rehearse(ctx, o, deploy.Real()); err != nil {
+			fail(err)
+		}
+		fmt.Println("The backend started on a copy of what's stored.")
+		return
+	}
 	if *asJSON {
 		o.Progress, o.Log = os.Stdout, os.Stderr
 	}

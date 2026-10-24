@@ -220,6 +220,34 @@ func Run(ctx context.Context, o Options, tools Tools) (string, error) {
 	return needed, nil
 }
 
+// Rehearse only rehearses: the backend, tidied as a deploy tidies it, started on a
+// copy of what the project stores, with nothing previewed, built or changed. A
+// release is tried this way on each project built on it before it's tagged, so
+// where it can't be done, as without Docker, that's an error and not passed over.
+// A project with no backend has nothing to rehearse.
+func Rehearse(ctx context.Context, o Options, tools Tools) error {
+	log := o.Log
+	if log == nil {
+		log = io.Discard
+	}
+	api := filepath.Join(o.Build, "api")
+	if _, err := os.Stat(api); errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintln(log, "rehearsal: there's no backend to rehearse")
+		return nil
+	}
+	project := o.Project
+	if project == "" {
+		project = configuredProject(filepath.Join(o.Build, "infrastructure"))
+	}
+	if project == "" {
+		return errors.New("deploy: there's no Google Cloud project to copy what's stored from")
+	}
+	if err := tools.Run(ctx, api, log, "go", "mod", "tidy"); err != nil {
+		return fmt.Errorf("go mod tidy in %s: %w", api, err)
+	}
+	return tools.Rehearse(ctx, api, project, log)
+}
+
 // The web app's settings, from what Pulumi made. A missing one stops the deploy
 // rather than build an app without it.
 func settings(outputs map[string]any) (string, error) {

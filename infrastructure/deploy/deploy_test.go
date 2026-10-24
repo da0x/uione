@@ -467,3 +467,34 @@ func TestARevisionsLogIsReadForWhatTheBackendSaid(t *testing.T) {
 		t.Errorf("a failure naming no revision was explained")
 	}
 }
+
+// Rehearsing alone tidies the backend and starts it on a copy of what's stored, and
+// previews, builds and changes nothing; where it can't be done, it says so.
+func TestRehearsingAloneChangesNothingAndCantBePassedOver(t *testing.T) {
+	w := &world{outputs: outputs}
+	tools := w.tools()
+	tools.Rehearse = func(_ context.Context, api, project string, _ io.Writer) error {
+		w.did = append(w.did, "rehearse "+filepath.Base(api)+" "+project)
+		return nil
+	}
+	if err := Rehearse(context.Background(), Options{Build: built(t), Project: "ui-one"}, tools); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"api: go mod tidy", "rehearse api ui-one"}; !reflect.DeepEqual(w.did, want) {
+		t.Errorf("did %q, not %q", w.did, want)
+	}
+
+	tools.Rehearse = func(context.Context, string, string, io.Writer) error {
+		return fmt.Errorf("%w: there's no Docker", ErrNoRehearsal)
+	}
+	if err := Rehearse(context.Background(), Options{Build: built(t), Project: "ui-one"}, tools); !errors.Is(err, ErrNoRehearsal) {
+		t.Errorf("without Docker, rehearsing alone gave %v", err)
+	}
+
+	front := built(t)
+	os.RemoveAll(filepath.Join(front, "api"))
+	w.did = nil
+	if err := Rehearse(context.Background(), Options{Build: front, Project: "ui-one"}, tools); err != nil || len(w.did) != 0 {
+		t.Errorf("a project with no backend gave %v and did %q", err, w.did)
+	}
+}
