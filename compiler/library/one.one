@@ -108,7 +108,7 @@ namespace one {
 	// What a project says about itself: where it runs, how people sign in, and how it
 	// looks. Each line is one of these, and only a list may be said more than once.
 	settings project {
-		// The uione it's built with, like "0.18.1", which one upgrade moves on.
+		// The uione it's built with, like "0.18.0", which one upgrade moves on.
 		one         version
 		// Another project this one is built on, like a hosted edition on an open-source
 		// app: a project beside it by name, like extends neotrac, or a folder by its
