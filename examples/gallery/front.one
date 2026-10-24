@@ -1,25 +1,45 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The front page, drawn as a landing design: a hero, what the gallery shows, and its
-// rooms. Then the menu every room's pages share, a header for their path.
+// The front page, drawn as a landing design: a hero, what the gallery shows, the
+// sentence it stands for, how to use it, and its rooms. Then the menu every room's pages share, a header for their path.
 
 namespace gallery at / {
 
-	screen "Gallery" / landing grid {
+	screen "Gallery" / landing constellation {
 		hero "Every control uione draws, on every target." {
+			overline "The uione gallery"
 			text "Each room of the gallery shows one family of controls: forms, tables,"
 				"boards, cards, words, timelines and grids. The same screens are drawn on"
 				"the web, on the desktop and in the terminal."
 			link #rooms "Open a room"
 			link namespace notes "Read the notes"
 		}
-		section "One definition, three apps" {
-			text "The screens are written once. Each target draws them with its own toolkit."
+		section "Written once, drawn three ways." {
+			overline "What it shows"
+			section "One definition, three apps" icon layers {
+				text "The screens are written once. Each target draws them with its own toolkit."
+				section "The web" {
+					text "React, drawn with the site's component set."
+				}
+				section "The desktop and the terminal" {
+					text "C++, drawn with uione's own toolkits."
+				}
+			}
+			section "Nothing left out" icon shield {
+				text "The gallery uses every element and setting a screen can say, so a target"
+					"that can't draw one is plain to see."
+			}
 		}
-		section "Nothing left out" {
-			text "The gallery uses every element and setting a screen can say, so a target"
-				"that can't draw one is plain to see."
+		statement "Every control, on every target, from the same few lines."
+		section "Find your way around." as steps {
+			overline "How to use it"
+			section "Open a room" {
+				text "Each room is one family of controls."
+			}
+			section "Try it everywhere" {
+				text "Run the gallery on the web, the desktop and the terminal, and compare."
+			}
 		}
 		section "Rooms" #rooms {
 			table rooms link /rooms/:room {

@@ -44,6 +44,16 @@ namespace one::terminal::runtime {
 		(all.push_back(terminal::view(std::forward<V>(each))), ...);
 		return hero(std::move(title), std::move(all));
 	}
+	// A front page's hero with a short line over its title.
+	terminal::view hero(section_title title, std::vector<terminal::view> inside);
+	template <std::convertible_to<terminal::view>... V>
+	terminal::view hero(section_title title, V&&... each) {
+		std::vector<terminal::view> all;
+		(all.push_back(terminal::view(std::forward<V>(each))), ...);
+		return hero(std::move(title), std::move(all));
+	}
+	// A front page's one sentence that stands for the site.
+	terminal::view statement(std::vector<part> parts);
 
 	terminal::view command(page& p, command_button b);
 	terminal::view confirm(page& p, std::string command, std::string question);

@@ -1448,7 +1448,8 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
               .empty());
     CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Settings\" icon settings\n}\n}\n").empty());
     CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message ==
-          "there's no icon flow; there are add, archive, delete, edit, follow, following, robot, settings and workflow");
+          "there's no icon flow; there are add, archive, building, chart, cloud, code, connect, database, delete, edit, follow, following, globe, layers, lock, "
+          "people, robot, settings, shield, spark and workflow");
 }
 
 TEST_CASE("a section is drawn in one of the library's colors") {
@@ -1606,17 +1607,45 @@ TEST_CASE("a domain can have a second, like www, that sends whoever opens it to 
 TEST_CASE("a landing page is drawn in one of uione's designs") {
     const std::string page = "screen \"Home\" / landing grid {\n\thero \"Fast.\" {\n\t\ttext \"Very.\"\n\t}\n\tsection \"One\" {\n\t\ttext \"A thing.\"\n\t}\n}\n";
     CHECK(check_source(page).empty());
-    for (const char* design : {"waveform", "studio", "aurora", "relay"}) {
+    for (const char* design : {"waveform", "studio", "aurora", "relay", "constellation"}) {
         std::string other = page;
         other.replace(other.find("grid"), 4, design);
         CHECK(check_source(other).empty());
     }
     std::string wrong = page;
     wrong.replace(wrong.find("grid"), 4, "neon");
-    CHECK(only_error(wrong).message == "landing is waveform, studio, aurora, grid or relay");
+    CHECK(only_error(wrong).message == "landing is waveform, studio, aurora, grid, relay or constellation");
     std::string both = page;
     both.replace(both.find("landing grid {\n"), 14, "landing grid {\n\tlayout two_columns\n");
     CHECK(only_error(both).message == "a landing page is laid out by its design, so it says no layout");
+}
+
+TEST_CASE("a front page says its statement, its titles' overlines, its sections' icons and its steps, and no other page does") {
+    const std::string page = "screen / landing constellation {\n\thero \"Fast.\" {\n\t\toverline \"Print\"\n\t\tlink #how \"How\"\n\t}\n"
+                             "\tsection \"Services\" {\n\t\toverline \"What we do\"\n\t\tsection \"Proofs\" icon shield {\n\t\t\ttext \"Checked.\"\n\t\t}\n\t}\n"
+                             "\tstatement \"Print that arrives on time.\"\n"
+                             "\tsection \"How\" #how as steps {\n\t\tsection \"Send\" {\n\t\t\ttext \"A file.\"\n\t\t}\n\t\tsection \"Approve\" {\n\t\t\ttext \"The proof.\"\n\t\t}\n\t}\n"
+                             "\tsection \"Talk\" {\n\t\tlink \"mailto:hello@example.com\" \"hello@example.com\"\n\t\tlink \"tel:+15555550100\" \"Call\"\n\t}\n}\n";
+    CHECK(check_source(page).empty());
+    auto changed = [&](const std::string& from, const std::string& to) {
+        std::string other = page;
+        other.replace(other.find(from), from.size(), to);
+        return only_error(other).message;
+    };
+    const std::string elsewhere = ", on a screen with a landing design, like screen / landing constellation { ... }";
+    CHECK(only_error("screen / {\n\tsection \"Services\" {\n\t\toverline \"What we do\"\n\t}\n}\n").message ==
+          "an overline is the short line over a hero's or a section's title, inside it" + elsewhere);
+    CHECK(only_error("screen / {\n\tstatement \"Fast.\"\n}\n").message == "a statement is a front page's one sentence, outside its hero and sections" + elsewhere);
+    CHECK(changed("\tstatement \"Print that arrives on time.\"\n", "\tstatement \"One.\"\n\tstatement \"Two.\"\n") ==
+          "a front page has one statement, the sentence that stands for the site");
+    CHECK(changed("\t\t\ttext \"Checked.\"", "\t\t\tstatement \"Checked.\"") == "a statement is a front page's one sentence, outside its hero and sections");
+    CHECK(changed("\t\toverline \"What we do\"\n", "\t\toverline \"What\"\n\t\toverline \"we do\"\n") == "a title has one overline over it");
+    CHECK(changed("\t\toverline \"Print\"", "\t\toverline \"{x.y}\"") == "an overline is plain words, as the title under it is");
+    CHECK(changed("icon shield", "icon dragon").starts_with("there's no icon dragon; there are add, archive, building"));
+    CHECK(changed("\"Fast.\" {", "\"Fast.\" icon shield {") == "an icon is drawn beside a front page's section's title");
+    CHECK(changed("\"Talk\" {", "\"Talk\" as steps {") == "a section as steps holds its steps, each a section, like section \"Plan\" { text \"...\" }");
+    CHECK(changed("\"mailto:hello@example.com\"", "\"mailto:hello\"") == "an email link is mailto: and the address, like \"mailto:hello@example.com\"");
+    CHECK(changed("\"tel:+15555550100\"", "\"tel:call-me\"") == "a phone link is tel: and the number, like \"tel:+15555550100\"");
 }
 
 TEST_CASE("a board's columns are the stages written in the code when it says no over, and its cards go along the workflow's steps") {

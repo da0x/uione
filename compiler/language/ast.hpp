@@ -656,11 +656,17 @@ namespace one::language {
         std::optional<std::string> anchor;
         std::string hue;  // section "Wiki" color violet: one of the library's hues, or none
         location hue_where;
+        std::optional<std::string> icon;  // section "Data" icon database: drawn beside its title
+        location icon_where;
+        bool steps = false;  // section "How we work" as steps: its sections are done in order
+        location steps_where;
         std::vector<screen_item> items;
     };
 
     struct content_text {
-        enum class kind { text, code, markdown };
+        // An overline is the short line over a hero's or a section's title; a statement,
+        // a front page's one sentence that stands for the site.
+        enum class kind { text, code, markdown, overline, statement };
         kind type = kind::text;
         std::string value;
         expression_ptr when;  // text "Implemented by {issue_page.implementer}" when issue_page.implementer != none

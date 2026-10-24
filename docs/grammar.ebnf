@@ -229,13 +229,16 @@ screen_place   ::= "under" ROUTE STRING END
                  | "layout" NAME END
 /* under /:project/boards/:board "{issue_page.board.title}": the page above it, though its
    address doesn't say so; layout two_columns: how its regions are laid out */
-/* landing waveform | studio | aurora | grid | relay: a front page drawn in one of uione's designs */
+/* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
-screen_item    ::= ("hero" | "section") STRING ANCHOR? ("color" NAME)? screen_block END
+screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
                  | ("main" | "side") screen_block END
                  | "heading" screen_block END
                  | "subtitle" STRING END
+                 /* the short line over a hero's or a section's title, and a front page's one sentence that stands for the site */
+                 | "overline" STRING END
+                 | "statement" STRING END
                  | "cards" qualified ("." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? cards_line* "}")? END
                  /* a run of numbers over time, or several side by side */
                  | "chart" qualified "." series ("when" expression)? END

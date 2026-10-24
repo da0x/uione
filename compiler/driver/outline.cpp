@@ -94,7 +94,11 @@ namespace one::driver {
                         for (const auto& inner : n.items) out.items.push_back(item_of(inner, known));
                     } else if constexpr (std::is_same_v<T, language::content_text>) {
                         using kind = language::content_text::kind;
-                        out.kind = n.type == kind::markdown ? "markdown" : n.type == kind::code ? "code" : "text";
+                        out.kind = n.type == kind::markdown    ? "markdown"
+                                 : n.type == kind::code        ? "code"
+                                 : n.type == kind::overline    ? "overline"
+                                 : n.type == kind::statement   ? "statement"
+                                                               : "text";
                         out.label = n.value;
                     } else if constexpr (std::is_same_v<T, language::content_link>) {
                         out.kind = "link";

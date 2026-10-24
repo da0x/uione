@@ -143,6 +143,7 @@ The language's own words, inside what a declaration says:
 - in a define agent: `for`, and `on … in … run … then … else`;
 - in a once: `each`, `where`;
 - on a screen: `heading`, `subtitle`, `table`, `grid`, `diagram`, `board`, `cards`, `form`, a button's `form`, `confirm`, `component`, `hero`, `section`, `text`,
+  and on a front page `overline`, `statement`, a section's `icon` and `as steps`,
   `code`, `link`, `menu`, `markdown`, `hint`, `reorder`, `move … along`, `track … over` in a table or a board, and `by … and … over` in a grid, `by … over` in a board;
 - in a project: the settings `one`'s library defines, below, and `at most … per`;
 - in a footer: `bar`, `columns`, and in a link, `build.release` and `build.source`.
@@ -1982,7 +1983,9 @@ form step::update "Save" {
   So can a link, `link /:project/boards/:board/workflow "Workflow" icon workflow`,
   and a button in a table's or a board's toolbar, `issue::create "New issue" icon
   add`. The icons are `add`, `archive`, `delete`, `edit`, `follow`, `following`,
-  `robot`, `settings` and `workflow`.
+  `robot`, `settings` and `workflow`, and, for what a front page offers too,
+  `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
+  `lock`, `people`, `shield` and `spark`.
 - A screen laid out in regions keeps its `heading` and `subtitle` outside them,
   under its title. Beside the page, in `side`, a `section` is a glance at
   something, with a smaller heading.
@@ -2122,9 +2125,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `landing grid` after a screen's address draws it as a front page, in one of
   uione's designs: `waveform`, a wave of bars under the hero; `studio`, the hero
   beside a player and its timeline; `aurora`, drifting light behind glass; `grid`,
-  a neon floor under the site's name, and a band of what it offers; or `relay`, a
+  a neon floor under the site's name, and a band of what it offers; `relay`, a
   board of work under the hero, what the site offers on its cards, where an
-  agent's card moves on a stage. The design takes the screen's `hero`, with its
+  agent's card moves on a stage; or `constellation`, the site's name in two tones
+  over a network of points drawn toward the pointer at night and a blueprint grid
+  by day, its cards rising into view as they're scrolled to. The design takes the screen's `hero`, with its
   words and links, the first link the one it's for; its sections of words alone, as
   what the site offers; and its other sections, like one with a form, as what it
   asks. Anything else, like a table, comes before the design, or, in `relay`, right
@@ -2139,6 +2144,45 @@ screen "Press" / landing grid {
 	}
 	section "You approve every proof" {
 		text "Nothing goes to press until you've seen it."
+	}
+}
+```
+- A front page says more, which only it says, and every design draws:
+  - `overline "What we do"`, inside a hero or a section, is the short line over its
+    title, in plain words.
+  - A section of sections is a group of what the site offers, its title over them,
+    and each of those can hold its own, like a group of services each with its
+    parts. `icon database` after a section's title draws one of the icons beside it.
+  - `statement "..."`, outside the hero and the sections, is the one sentence that
+    stands for the site, set large. A front page has one.
+  - `section "How we work" as steps` holds its steps, each a section, done one
+    after another, and they're numbered in order.
+  - A link can write an email, `link "mailto:hello@example.com" "Write to us"`, or
+    call, `link "tel:+15555550100" "Call us"`.
+
+```one
+screen / landing constellation {
+	hero "Print that arrives on time." {
+		overline "Print, proofs and shipping"
+		link #quote "Ask for a quote"
+	}
+	section "Everything a print job needs." {
+		overline "What we do"
+		section "Proofs" icon shield {
+			text "Nothing goes to press until you've seen it."
+		}
+		section "Shipping" icon globe {
+			text "Tracked, from the press to the door."
+		}
+	}
+	statement "Every job, on time, the way you approved it."
+	section "From file to door." as steps {
+		section "Send" { text "Upload your file." }
+		section "Approve" { text "Check the proof." }
+		section "Receive" { text "We print and ship it." }
+	}
+	section "Ask for a quote" #quote {
+		link "mailto:quotes@example.com" "quotes@example.com"
 	}
 }
 ```
@@ -2260,7 +2304,9 @@ issue::verify "Verify" when {
   with the project filled in from the page's own address. A link's `:parameter`
   always comes from the page it's on, so the page needs it too. To reach another
   namespace, name it: `link namespace docs "Read the docs"`, and another site, give
-  its address: `link "https://uione.io/signin" "Open the studio"`. A link to an address or a
+  its address: `link "https://uione.io/signin" "Open the studio"`. An email is
+  `link "mailto:hello@example.com" "Write to us"`, and a phone number `link
+  "tel:+15555550100" "Call us"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
 - `menu { link /:project/settings "General"  link /:project/settings/deployments

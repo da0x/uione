@@ -259,7 +259,12 @@ editors/fixtures/workflow.one	lease 30 minutes	minutes	keyword
 editors/fixtures/files.one	proof     file	file	type
 editors/fixtures/files.one	pictures  list of file	list	type
 editors/fixtures/files.one	pictures  list of file	file	type
-editors/fixtures/files.one	screen "Home" / landing grid {	landing	keyword
+editors/fixtures/files.one	screen "Home" / landing constellation {	landing	keyword
+editors/fixtures/files.one	overline "Print"	overline	keyword
+editors/fixtures/files.one	section "Proofs" icon shield {	icon	keyword
+editors/fixtures/files.one	statement "Print that arrives on time."	statement	keyword
+editors/fixtures/files.one	section "How" as steps {	as	keyword
+editors/fixtures/files.one	section "How" as steps {	steps	keyword
 editors/fixtures/stages.one	proofing  worked by proofreader	worked	keyword
 editors/fixtures/stages.one	proofing  worked by proofreader	by	keyword
 editors/fixtures/stages.one	proofing -> press	->	operator

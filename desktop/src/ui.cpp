@@ -724,6 +724,18 @@ namespace one::desktop {
 			color color_;
 		};
 
+		// One of the icons, alone, in a color: beside a front page's section's title.
+		class icon_element : public element {
+		public:
+			icon_element(std::string name, color tint, float size) : name_(std::move(name)), tint_(tint) { fixed_width = fixed_height = size; }
+			extent measure_content(float) override { return {0, 0}; }
+			void paint_content(canvas& c) override { draw_icon(c, name_, frame, tint_); }
+
+		private:
+			std::string name_;
+			color tint_;
+		};
+
 		class avatar_element : public element {
 		public:
 			avatar_element(const std::string& name, float size) {
@@ -896,6 +908,7 @@ namespace one::desktop {
 		return made<link_element>(std::move(words), std::move(go), std::move(style));
 	}
 	view edge(color c, float width) { return made<edge_element>(c, width); }
+	view icon(std::string name, color tint, float size) { return made<icon_element>(std::move(name), tint, size); }
 	view avatar(const std::string& name, float size) { return made<avatar_element>(name, size); }
 	view graph(std::vector<double> values, double top, float height, bool large) { return made<graph_element>(std::move(values), top, height, large); }
 	view divider() { return made<rule_element>(); }

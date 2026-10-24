@@ -7,11 +7,11 @@
 
 import { Children, createContext, isValidElement, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
-import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LinkProps, PipelineRow, TrackStep } from "./contract.js";
+import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
@@ -23,7 +23,9 @@ export function Hero({ title, children }: { title: string; children: ReactNode }
   return <ui.Hero title={title}>{children}</ui.Hero>;
 }
 
-export function Section({ title, id, hue, children }: { title: string; id?: string; hue?: Hue; children: ReactNode }) {
+// On a front page, a section can have an icon, and be read as steps; its design
+// draws them.
+export function Section({ title, id, hue, children }: { title: string; id?: string; hue?: Hue; icon?: string; steps?: boolean; children: ReactNode }) {
   const ui = useUI();
   return (
     <ui.Section title={title} id={id} {...(hue ? { hue } : {})}>
@@ -37,12 +39,24 @@ export function Text({ children }: { children: ReactNode }) {
   return <ui.Text>{children}</ui.Text>;
 }
 
+// The short line over a hero's or a section's title, and a front page's one sentence
+// that stands for the site: what a front page's design places, so they're drawn there.
+export function Overline({ children }: { children: ReactNode }) {
+  const ui = useUI();
+  return <ui.Text>{children}</ui.Text>;
+}
+
+export function Statement({ children }: { children: ReactNode }) {
+  const ui = useUI();
+  return <ui.Text>{children}</ui.Text>;
+}
+
 // An address's :parameters filled from the page it's on: /projects/:project/reports
 // on the page /projects/uione is /projects/uione/reports.
 function useFilled(): (to: string) => string {
   const params = useParams();
   return (to) =>
-    to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
+    !to.startsWith("/") ? to : to.replace(/:([A-Za-z_]\w*)/g, (written, name: string) => {
       const value = params[name];
       return value === undefined ? written : encodeURIComponent(value);
     });
@@ -59,45 +73,107 @@ export function Link({ to, icon, children }: { to: string; icon?: string; childr
   );
 }
 
-// A front page drawn in one of uione's designs: its hero, its sections of words
-// alone as what it offers, and its other sections, like one with a form, as what
-// it asks; anything else, like a table, comes first, as written, or where the
+// A front page drawn in one of uione's designs: its hero, with the short line over
+// its title; its sections of words, and of sections of words, as what it offers; its
+// statement; its sections as steps; and its other sections, like one with a form, as
+// what it asks. Anything else, like a table, comes first, as written, or where the
 // design puts it.
+type Part = ReactElement<{ title?: string; id?: string; icon?: string; steps?: boolean; children?: ReactNode }>;
+
+function elementsOf(children: ReactNode): Part[] {
+  return Children.toArray(children).filter((part): part is Part => isValidElement(part));
+}
+
+// What a section of words says: the short line over its title, its words, and the
+// sections it holds; or nothing, when it holds anything else.
+function offered(section: Part): LandingFeature | undefined {
+  let overline: ReactNode;
+  const text: ReactNode[] = [];
+  const features: LandingFeature[] = [];
+  for (const part of elementsOf(section.props.children)) {
+    if (part.type === Overline) overline = part.props.children;
+    else if (part.type === Text) text.push(part.props.children);
+    else if (part.type === Section && !part.props.steps) {
+      const inner = offered(part);
+      if (!inner) return undefined;
+      features.push(inner);
+    } else return undefined;
+  }
+  return { title: section.props.title ?? "", ...(overline !== undefined ? { overline } : {}), ...(section.props.icon ? { icon: section.props.icon } : {}), text, features };
+}
+
 export function Landing({ design, children }: { design: string; children?: ReactNode }) {
   const ui = useUI();
   const link = useLinks();
   const filled = useFilled();
   const site = useSite();
   let title = "";
+  let overline: ReactNode;
+  let statement: ReactNode;
   const text: ReactNode[] = [];
   const links: (LinkProps & { label: ReactNode })[] = [];
-  const features: { title: string; text: ReactNode }[] = [];
-  const asks: { title: string; id?: string; children: ReactNode }[] = [];
+  const features: LandingFeature[] = [];
+  const steps: LandingProps["steps"] = [];
+  const asks: LandingProps["asks"] = [];
   const before: ReactNode[] = [];
-  Children.forEach(children, (child) => {
-    if (!isValidElement<{ title?: string; id?: string; children?: ReactNode }>(child)) return;
+  for (const child of elementsOf(children)) {
     if (child.type === Hero) {
       title = child.props.title ?? "";
-      Children.forEach(child.props.children, (part) => {
-        if (!isValidElement<{ to?: string; children?: ReactNode }>(part)) return;
+      for (const part of elementsOf(child.props.children)) {
+        if (part.type === Overline) overline = part.props.children;
         if (part.type === Text) text.push(part.props.children);
-        if (part.type === Link) links.push({ ...link(filled(part.props.to ?? "/")), label: part.props.children });
-      });
-      return;
+        if (part.type === Link) {
+          const to = (part.props as { to?: string }).to ?? "/";
+          links.push({ ...link(filled(to)), label: part.props.children });
+        }
+      }
+      continue;
+    }
+    if (child.type === Statement) {
+      statement = child.props.children;
+      continue;
     }
     if (child.type === Section) {
-      const parts = Children.toArray(child.props.children);
-      const words = parts.every((part) => isValidElement(part) && part.type === Text);
-      if (words) {
-        features.push({ title: child.props.title ?? "", text: parts.map((part) => (isValidElement<{ children?: ReactNode }>(part) ? part.props.children : null)) });
-      } else {
-        asks.push({ title: child.props.title ?? "", id: child.props.id, children: child.props.children });
+      const parts = elementsOf(child.props.children);
+      const over = parts.find((part) => part.type === Overline)?.props.children;
+      const marked = over !== undefined ? { overline: over } : {};
+      const id = child.props.id !== undefined ? { id: child.props.id } : {};
+      if (child.props.steps) {
+        steps.push({
+          title: child.props.title ?? "",
+          ...id,
+          ...marked,
+          text: parts.filter((part) => part.type === Text).map((part) => part.props.children),
+          steps: parts.filter((part) => part.type === Section).map((part) => ({ title: part.props.title ?? "", text: elementsOf(part.props.children).filter((p) => p.type === Text).map((p) => p.props.children) })),
+        });
+        continue;
       }
-      return;
+      const feature = offered(child);
+      if (feature) {
+        features.push(feature);
+        continue;
+      }
+      asks.push({ title: child.props.title ?? "", ...id, ...marked, children: parts.filter((part) => part.type !== Overline) });
+      continue;
     }
     before.push(child);
-  });
-  return <ui.Landing design={design} name={site.name} icon={site.icon} title={title} text={text} links={links} features={features} asks={asks} before={before} />;
+  }
+  return (
+    <ui.Landing
+      design={design}
+      name={site.name}
+      icon={site.icon}
+      {...(overline !== undefined ? { overline } : {})}
+      title={title}
+      text={text}
+      links={links}
+      features={features}
+      {...(statement !== undefined ? { statement } : {})}
+      steps={steps}
+      asks={asks}
+      before={before}
+    />
+  );
 }
 
 export function Code({ lang, source }: { lang: string; source: string }) {

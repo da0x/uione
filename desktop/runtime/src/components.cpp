@@ -20,6 +20,15 @@ namespace one::desktop::runtime {
 
 		desktop::view quiet(std::string words) { return desktop::text(std::move(words), current_theme().quiet()); }
 
+		// The short line over a front page's title, small and in the accent.
+		desktop::view overline(std::string words) {
+			const auto& t = current_theme();
+			auto style = t.quiet();
+			style.weight = 600;
+			style.color = t.accent;
+			return desktop::text(std::move(words), style);
+		}
+
 		// What a view says while it isn't there to show.
 		std::optional<desktop::view> not_shown(const view_state& v) {
 			if (v.status == status::loading) return quiet("Loading…");
@@ -106,9 +115,27 @@ namespace one::desktop::runtime {
 		heading_style.size += 2;
 		if (!title.color.empty()) heading_style.color = section_color(title.color);
 		std::vector<desktop::view> parts;
-		parts.push_back(desktop::text(std::move(title.title), heading_style));
+		if (!title.overline.empty()) parts.push_back(overline(std::move(title.overline)));
+		// A step's number, and an icon, go before the title, in its row.
+		if (title.step > 0 || desktop::has_icon(title.icon)) {
+			std::vector<desktop::view> heading;
+			if (desktop::has_icon(title.icon)) heading.push_back(desktop::icon(title.icon, title.color.empty() ? t.accent : section_color(title.color), 20));
+			if (title.step > 0) {
+				auto number = heading_style;
+				number.color = t.accent;
+				heading.push_back(desktop::text((title.step < 10 ? "0" : "") + std::to_string(title.step), number));
+			}
+			heading.push_back(desktop::text(std::move(title.title), heading_style));
+			parts.push_back(desktop::row(std::move(heading)).spacing(10));
+		} else {
+			parts.push_back(desktop::text(std::move(title.title), heading_style));
+		}
 		for (auto& v : inside) parts.push_back(std::move(v));
 		return desktop::column(std::move(parts)).spacing(10).padding(edges(8, 0, 0, 0));
+	}
+
+	desktop::view statement(std::vector<part> parts) {
+		return desktop::text(said(parts), current_theme().heading(26)).padding(edges(16, 0));
 	}
 
 	desktop::view code(std::string, std::string source) {
@@ -144,9 +171,12 @@ namespace one::desktop::runtime {
 		return desktop::link(std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
 	}
 
-	desktop::view hero(std::string title, std::vector<desktop::view> inside) {
+	desktop::view hero(std::string title, std::vector<desktop::view> inside) { return hero(section_title{.title = std::move(title)}, std::move(inside)); }
+
+	desktop::view hero(section_title title, std::vector<desktop::view> inside) {
 		std::vector<desktop::view> parts;
-		parts.push_back(desktop::text(std::move(title), current_theme().heading(32)));
+		if (!title.overline.empty()) parts.push_back(overline(std::move(title.overline)));
+		parts.push_back(desktop::text(std::move(title.title), current_theme().heading(32)));
 		for (auto& v : inside) {
 			if (v.get()) parts.push_back(std::move(v));
 		}

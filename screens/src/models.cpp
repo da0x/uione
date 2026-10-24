@@ -397,7 +397,7 @@ namespace one::screens {
 		return out;
 	}
 
-	bool leaves(const std::string& to) { return to.starts_with("https://") || to.starts_with("http://") || to.starts_with("mailto:"); }
+	bool leaves(const std::string& to) { return to.starts_with("https://") || to.starts_with("http://") || to.starts_with("mailto:") || to.starts_with("tel:"); }
 
 	std::string address_of(page_base& p, const std::string& to) { return leaves(to) || to.find(':') == std::string::npos ? to : filled(to, p.params()); }
 

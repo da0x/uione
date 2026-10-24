@@ -6,8 +6,8 @@
 import { act, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, vi } from "vitest";
-import { App, Board, Canvas, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Section, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
-import type { MemorySource } from "../src/index.js";
+import { App, Board, Canvas, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Overline, Section, Statement, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import type { LandingProps, MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
 function renderScreen(source: MemorySource, body: () => ReactNode) {
@@ -839,6 +839,61 @@ describe("a landing page", () => {
     const headings = Array.from(page.querySelectorAll("h2")).map((h) => h.textContent);
     expect(headings).toEqual(["You approve every proof", "Ask for a quote"]);
     expect(document.getElementById("quote")?.querySelector("form")).toBeTruthy();
+  });
+});
+
+describe("a front page's design", () => {
+  it("is given its offerings as a tree, its overlines, its statement and its steps, and an email link as written", () => {
+    let given: LandingProps | undefined;
+    const Drawn = plain.Landing;
+    const ui = { ...plain, Landing: (p: LandingProps) => ((given = p), <Drawn {...p} />) };
+    const only = defineScreen({ title: "Test", route: "/" }, () => (
+      <Landing design="constellation">
+        <Hero title="Modern software.">
+          <Overline>Consulting</Overline>
+          <Link to="#talk">Talk to us</Link>
+        </Hero>
+        <Section title="Five pillars.">
+          <Overline>What we do</Overline>
+          <Text>Ten services.</Text>
+          <Section title="Data" icon="database">
+            <Text>Moved and put to work.</Text>
+            <Section title="Data Migration">
+              <Text>Moved safely.</Text>
+            </Section>
+          </Section>
+        </Section>
+        <Statement>We keep what your systems know.</Statement>
+        <Section title="How we work" steps>
+          <Overline>Our way</Overline>
+          <Section title="Understand">
+            <Text>We learn.</Text>
+          </Section>
+          <Section title="Move">
+            <Text>A piece at a time.</Text>
+          </Section>
+        </Section>
+        <Section title="Talk" id="talk">
+          <Overline>Contact</Overline>
+          <Link to="mailto:hello@example.com">hello@example.com</Link>
+        </Section>
+      </Landing>
+    ));
+    render(<App name="app" screens={[only]} ui={ui} data={memorySource()} location="/" />);
+    expect(given?.overline).toBe("Consulting");
+    expect(given?.features).toHaveLength(1);
+    const group = given!.features[0]!;
+    expect([group.title, group.overline, group.features[0]?.title, group.features[0]?.icon, group.features[0]?.features[0]?.title]).toEqual([
+      "Five pillars.",
+      "What we do",
+      "Data",
+      "database",
+      "Data Migration",
+    ]);
+    expect(given?.statement).toBe("We keep what your systems know.");
+    expect(given?.steps.map((s) => [s.title, s.overline, s.steps.map((step) => step.title)])).toEqual([["How we work", "Our way", ["Understand", "Move"]]]);
+    expect(given?.asks.map((a) => [a.title, a.id, a.overline])).toEqual([["Talk", "talk", "Contact"]]);
+    expect(screen.getByRole("link", { name: "hello@example.com" }).getAttribute("href")).toBe("mailto:hello@example.com");
   });
 });
 

@@ -13,8 +13,18 @@ namespace press {
 
 }
 
-screen "Home" / landing grid {
+screen "Home" / landing constellation {
 	hero "Fast." {
+		overline "Print"
 		text "Very."
+	}
+	section "Proofs" icon shield {
+		text "Checked."
+	}
+	statement "Print that arrives on time."
+	section "How" as steps {
+		section "Send" {
+			text "A file."
+		}
 	}
 }

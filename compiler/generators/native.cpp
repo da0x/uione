@@ -1054,6 +1054,7 @@ namespace one::generators {
         std::vector<page_set> pages_;
         std::set<std::string> page_includes_;  // the page sets the screen file being written shows
         bool shows_pages_ = false;              // whether the screen being written does, opening the first without :page
+        std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
 
         stream pages_file(const page_set& pages) const {
             namespace fs = std::filesystem;
@@ -1083,6 +1084,8 @@ namespace one::generators {
         }
 
         std::string text_item(screen_parts& parts, const std::string& ns, const language::content_text& text) {
+            if (text.type == language::content_text::kind::overline) return "";  // said with its hero's or section's title
+            if (text.type == language::content_text::kind::statement) return "statement(" + parts_of(parts, ns, text.value) + ")";
             if (text.type == language::content_text::kind::text) {
                 std::string shown = "text(" + parts_of(parts, ns, text.value) + ")";
                 if (text.when) return condition(parts, ns, *text.when) + " ? " + shown + " : view()";
@@ -1205,9 +1208,35 @@ namespace one::generators {
                         out.push_back({"menu(p, {" + links + "}, items(" + joined_items(rest) + "))", item.where.line});
                         return out;
                     }
+                    // A section as steps numbers its sections, one after another.
+                    if (block->steps) {
+                        int number = 0;
+                        for (const auto& inner : block->items) {
+                            auto* step = std::get_if<language::content_block>(&inner.node);
+                            if (step && step->type == kind::section) steps_[step] = ++number;
+                        }
+                    }
+                    // Its overline goes over its title, so it's said with it.
+                    std::string overline;
+                    for (const auto& inner : block->items) {
+                        auto* t = std::get_if<language::content_text>(&inner.node);
+                        if (t && t->type == language::content_text::kind::overline) overline = t->value;
+                    }
                     auto inside = items(parts, ns, block->items, screen);
-                    if (block->type == kind::hero) code = "hero(" + str(block->title) + (inside.empty() ? "" : ", " + joined_items(inside)) + ")";
-                    else code = "section({" + str(block->title) + (block->hue.empty() ? "" : ", " + str(block->hue)) + "}" + (inside.empty() ? "" : ", " + joined_items(inside)) + ")";
+                    auto step = steps_.find(block);
+                    std::string title = ".title = " + str(block->title);
+                    if (!block->hue.empty()) title += ", .color = " + str(block->hue);
+                    if (block->icon) title += ", .icon = " + str(*block->icon);
+                    if (step != steps_.end()) title += ", .step = " + std::to_string(step->second);
+                    if (!overline.empty()) title += ", .overline = " + str(overline);
+                    // A title and its color alone are said in order, as they always were.
+                    bool more = block->icon || step != steps_.end() || !overline.empty();
+                    std::string rest = inside.empty() ? "" : ", " + joined_items(inside);
+                    if (block->type == kind::hero) {
+                        code = "hero(" + (more ? "section_title{" + title + "}" : str(block->title)) + rest + ")";
+                    } else {
+                        code = "section({" + (more ? title : str(block->title) + (block->hue.empty() ? "" : ", " + str(block->hue))) + "}" + rest + ")";
+                    }
                     // One a link on the page names, like #projects, is brought into view when it's followed.
                     if (block->anchor) code = "anchored(p, " + str(*block->anchor) + ", " + code + ")";
                 } else if (auto* text = std::get_if<language::content_text>(&item.node)) {

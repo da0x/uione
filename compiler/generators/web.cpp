@@ -974,6 +974,8 @@ namespace one::generators {
                     parts.components.insert(tag);
                     std::string id = block->anchor ? " id=" + web_detail::js_string(*block->anchor) : "";
                     if (!block->hue.empty()) id += " hue=" + web_detail::js_string(block->hue);
+                    if (block->icon) id += " icon=" + web_detail::js_string(*block->icon);
+                    if (block->steps) id += " steps";
                     shown_while(out, parts, ns, item, [&] {
                         out.open("<" + tag + " title=" + web_detail::js_string(block->title) + id + ">");
                         ++in_block_;
@@ -1450,6 +1452,13 @@ namespace one::generators {
         }
 
         void content(stream& out, screen_parts& parts, const std::string& ns, const language::content_text& text) {
+            // The short line over a title, and a front page's one sentence, which its design places.
+            if (text.type == language::content_text::kind::overline || text.type == language::content_text::kind::statement) {
+                std::string tag = text.type == language::content_text::kind::overline ? "Overline" : "Statement";
+                parts.components.insert(tag);
+                out.line("<" + tag + ">" + live_text(parts, ns, text.value) + "</" + tag + ">");
+                return;
+            }
             if (text.type == language::content_text::kind::text) {
                 parts.components.insert("Text");
                 // Shown only while its when holds, like who implemented an issue, once someone has.

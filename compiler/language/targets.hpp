@@ -56,6 +56,10 @@ namespace one::language {
         drawn_by{"hero", "a hero", everywhere},
         drawn_by{"section", "a section", everywhere},
         drawn_by{"section.color", "a section's color", everywhere},
+        drawn_by{"section.icon", "a section's icon", everywhere},
+        drawn_by{"section.steps", "a section as steps", everywhere},
+        drawn_by{"overline", "an overline", everywhere},
+        drawn_by{"statement", "a statement", everywhere},
         drawn_by{"heading", "a heading", everywhere},
         drawn_by{"menu", "a menu", everywhere},
         drawn_by{"region", "a layout's region", everywhere},
@@ -204,9 +208,13 @@ namespace one::language {
                             case content_block::kind::heading: use("heading"); break;
                         }
                         if (!n.hue.empty()) use("section.color");
+                        if (n.icon) use("section.icon");
+                        if (n.steps) use("section.steps");
                         items(n.items, out);
                     } else if constexpr (std::is_same_v<T, content_text>) {
-                        if (n.subtitle) use("subtitle");
+                        if (n.type == content_text::kind::overline) use("overline");
+                        else if (n.type == content_text::kind::statement) use("statement");
+                        else if (n.subtitle) use("subtitle");
                         else if (n.type == content_text::kind::code) use("code");
                         else if (n.type == content_text::kind::markdown) use(n.value.starts_with("{") ? "markdown" : "markdown.pages");
                         else use("text");

@@ -1509,10 +1509,23 @@ namespace one::language {
                 // An anchor that happens to be six hex digits, like #facade, lexes as a color.
                 if (at(token_kind::anchor)) block.anchor = advance().text;
                 else if (at(token_kind::color)) block.anchor = advance().text.substr(1);
+                if (at_word("icon")) {
+                    advance();
+                    block.icon_where = peek().where;
+                    block.icon = expect(token_kind::identifier, "the icon it's drawn with, like database").text;
+                }
                 if (at_word("color")) {
                     advance();
                     block.hue_where = peek().where;
                     block.hue = expect(token_kind::identifier, "one of the library's hues, like color violet").text;
+                }
+                // section "How we work" as steps: its sections are done one after another.
+                if (at_word("as")) {
+                    advance();
+                    block.steps_where = peek().where;
+                    const token& look = expect(token_kind::identifier, "how its sections are read, like as steps");
+                    if (look.text != "steps") fail(look.where, "a section's sections are read as steps, or as a set, not as " + look.text);
+                    block.steps = true;
                 }
                 // section "Log" when issue_page.log != none: there only while it holds.
                 expression_ptr shown_when = nullptr;
@@ -1532,6 +1545,15 @@ namespace one::language {
                 content_text text;
                 text.type = content_text::kind::markdown;
                 text.subtitle = true;
+                text.value = advance().text;
+                end_line();
+                return {where, std::move(text)};
+            }
+            // overline "What we do": the short line over a hero's or a section's title.
+            // statement "...": a front page's one sentence that stands for the site.
+            if (string_follows && (at_word("overline") || at_word("statement"))) {
+                content_text text;
+                text.type = advance().text == "overline" ? content_text::kind::overline : content_text::kind::statement;
                 text.value = advance().text;
                 end_line();
                 return {where, std::move(text)};

@@ -41,10 +41,15 @@ namespace one::screens {
 	};
 
 	// A section: a title over what's in it, in one of the library's colors when it
-	// says, like violet: section({"More", "violet"}, text(...), ...).
+	// says, like violet: section({"More", "violet"}, text(...), ...). On a front page,
+	// a hero's or a section's title can have a short line over it, a section an icon
+	// beside it, and a step of a section as steps its number.
 	struct section_title {
 		std::string title;
 		std::string color = "";
+		std::string icon = "";
+		int step = 0;
+		std::string overline = "";
 	};
 
 	// A button that runs a command with fields, like Close issue. It isn't there for

@@ -137,14 +137,20 @@ namespace one::terminal::runtime {
 	}
 
 	// A panel titled in its border, as btop draws its parts, in the section's color.
+	// A step's number goes before its title in the border, and an overline over what's
+	// in it; a terminal has no icons to draw.
 	terminal::view section(section_title title, std::vector<terminal::view> inside) {
 		std::vector<terminal::view> parts;
+		if (!title.overline.empty()) parts.push_back(terminal::text(std::move(title.overline), dim()));
 		for (auto& v : inside) {
 			if (v.get()) parts.push_back(std::move(v));
 		}
 		color tint = title.color.empty() ? color::none : named(title.color);
-		return terminal::column(std::move(parts)).spacing(1).padding(0, 1).boxed(std::move(title.title), tint);
+		std::string titled = title.step > 0 ? std::to_string(title.step) + ". " + title.title : std::move(title.title);
+		return terminal::column(std::move(parts)).spacing(1).padding(0, 1).boxed(std::move(titled), tint);
 	}
+
+	terminal::view statement(std::vector<part> parts) { return terminal::text(said(parts), {.bold = true}); }
 
 	// The part of the page a link last brought into view, and how many times one has.
 	using anchor = std::pair<std::string, int>;
@@ -166,9 +172,12 @@ namespace one::terminal::runtime {
 		return terminal::link(std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
 	}
 
-	terminal::view hero(std::string title, std::vector<terminal::view> inside) {
+	terminal::view hero(std::string title, std::vector<terminal::view> inside) { return hero(section_title{.title = std::move(title)}, std::move(inside)); }
+
+	terminal::view hero(section_title title, std::vector<terminal::view> inside) {
 		std::vector<terminal::view> parts;
-		parts.push_back(terminal::text(std::move(title), {.bold = true}));
+		if (!title.overline.empty()) parts.push_back(terminal::text(std::move(title.overline), dim()));
+		parts.push_back(terminal::text(std::move(title.title), {.bold = true}));
 		for (auto& v : inside) {
 			if (v.get()) parts.push_back(std::move(v));
 		}

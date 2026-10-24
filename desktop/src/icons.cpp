@@ -1,7 +1,7 @@
 // Copyright 2026 Daher Alfawares
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The icons a button can be drawn as, the web's own: each its SVG on a 16 by 16
+// The icons a button or a front page's section can be drawn with, the web's own: each its SVG on a 16 by 16
 // grid, its paths, rectangles and circles stroked 1.5 wide with round ends and
 // joins, and filled where the web fills them, scaled to the size it's drawn at.
 
@@ -51,6 +51,30 @@ namespace one::desktop {
 			    {"archive", {box(1.5f, 2.5f, 13, 3, 1), path("M2.8 5.5v7a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1v-7M6.5 8.5h3")}},
 			    // A robot, for what programs do, like a project's agents.
 			    {"robot", {box(3, 5, 10, 8, 2), path("M8 5V3M6 9h.01M10 9h.01M6.5 11h3M1.5 8.5v2M14.5 8.5v2")}},
+			    // A building with its windows and door, what's built and run.
+			    {"building", {box(3, 1.5f, 10, 13, 1), path("M6 4.5h1M9 4.5h1M6 7.5h1M9 7.5h1M7 14.5v-3h2v3")}},
+			    // Three disks stacked, what's stored.
+			    {"database", {box(2.5f, 2, 11, 3.5f, 1.75f), box(2.5f, 6.25f, 11, 3.5f, 1.75f), box(2.5f, 10.5f, 11, 3.5f, 1.75f)}},
+			    // Angle brackets around a slash, what's written.
+			    {"code", {path("M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5M9.25 3l-2.5 10")}},
+			    // Two rings joined, what's connected.
+			    {"connect", {ring(4, 8, 2.5f), ring(12, 8, 2.5f), path("M6.5 8h3")}},
+			    // A shield with a check, what's kept safe.
+			    {"shield", {path("M8 1.5l5.5 2v4.5L8 14.5 2.5 8V3.5z"), path("M5.5 8l2 2 3-3.5")}},
+			    // A cloud, what runs in it.
+			    {"cloud", {path("M4.5 12.5a3 3 0 0 1 0-6a4 4 0 0 1 7.5-1a3.5 3.5 0 0 1 0 7z")}},
+			    // Bars over a line, what's measured.
+			    {"chart", {path("M2.5 13.5h11M4.5 11V8M8 11V4M11.5 11V6.5")}},
+			    // A four-pointed star, what's clever or new.
+			    {"spark", {path("M8 1.5l1.5 5 5 1.5-5 1.5L8 14.5 6.5 9.5l-5-1.5 5-1.5z")}},
+			    // Two people, the ones it's for.
+			    {"people", {ring(6, 5.5f, 2.25f), path("M1.5 13.5a4.5 4.5 0 0 1 9 0"), ring(11.5f, 6, 1.75f), path("M11 9.5a3.5 3.5 0 0 1 3.5 4")}},
+			    // A padlock, what's closed to others.
+			    {"lock", {box(3, 7, 10, 7, 1.5f), path("M5.5 7V5a2.5 2.5 0 0 1 5 0v2")}},
+			    // A globe, what reaches everywhere.
+			    {"globe", {ring(8, 8, 6.25f), path("M1.75 8h12.5M8 1.75a9 9 0 0 1 0 12.5a9 9 0 0 1 0-12.5")}},
+			    // Layers stacked, what's built on what.
+			    {"layers", {path("M8 2l6 3-6 3-6-3z"), path("M2 8l6 3 6-3M2 11l6 3 6-3")}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},

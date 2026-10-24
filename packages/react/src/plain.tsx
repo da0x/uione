@@ -142,35 +142,59 @@ export const plain: ComponentSet = {
 
   Labels: ({ items }) => <span>{items.join(", ")}</span>,
 
-  // Every design, plainly: the hero, what it offers, then what it asks.
-  Landing: ({ design, title, text, links, features, asks, before }) => (
-    <div data-landing={design}>
-      {before}
-      <section>
-        <h1>{title}</h1>
-        {text.map((words, i) => (
-          <p key={i}>{words}</p>
-        ))}
-        {links.map((l, i) => (
-          <a key={i} href={l.href} onClick={l.onClick}>
-            {l.label}
-          </a>
-        ))}
-      </section>
-      {features.map((f, i) => (
+  // Every design, plainly: the hero, what it offers, its statement, its steps, then
+  // what it asks.
+  Landing: ({ design, overline, title, text, links, features, statement, steps, asks, before }) => {
+    const offered = (list: typeof features, depth: number): ReactNode =>
+      list.map((f, i) => (
         <section key={i}>
-          <h2>{f.title}</h2>
-          <p>{f.text}</p>
+          {f.overline && <p>{f.overline}</p>}
+          {depth === 2 ? <h2>{f.title}</h2> : <h3>{f.title}</h3>}
+          {f.text && <p>{f.text}</p>}
+          {offered(f.features, depth + 1)}
         </section>
-      ))}
-      {asks.map((a, i) => (
-        <section key={i} id={a.id}>
-          <h2>{a.title}</h2>
-          {a.children}
+      ));
+    return (
+      <div data-landing={design}>
+        {before}
+        <section>
+          {overline && <p>{overline}</p>}
+          <h1>{title}</h1>
+          {text.map((words, i) => (
+            <p key={i}>{words}</p>
+          ))}
+          {links.map((l, i) => (
+            <a key={i} href={l.href} onClick={l.onClick}>
+              {l.label}
+            </a>
+          ))}
         </section>
-      ))}
-    </div>
-  ),
+        {offered(features, 2)}
+        {statement && <blockquote>{statement}</blockquote>}
+        {steps.map((s, i) => (
+          <section key={i} id={s.id}>
+            {s.overline && <p>{s.overline}</p>}
+            <h2>{s.title}</h2>
+            <ol>
+              {s.steps.map((step, at) => (
+                <li key={at}>
+                  <h3>{step.title}</h3>
+                  <p>{step.text}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
+        {asks.map((a, i) => (
+          <section key={i} id={a.id}>
+            {a.overline && <p>{a.overline}</p>}
+            <h2>{a.title}</h2>
+            {a.children}
+          </section>
+        ))}
+      </div>
+    );
+  },
 
   Files: ({ items }) => (
     <span>

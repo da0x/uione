@@ -313,6 +313,7 @@ namespace one::desktop {
 	};
 	view slider(state<std::string> value, number_range range);
 	view edge(color c, float width = 3);      // a bar down a row's side, like how urgent it is
+	view icon(std::string name, color tint, float size = 16);  // one of the icons, alone, like database
 	view avatar(const std::string& name, float size = 24);  // a person's first letter in a color of theirs
 	view divider();
 	view spacer();  // takes what's left in a row or column

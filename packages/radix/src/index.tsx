@@ -24,6 +24,7 @@ import { DisplaySettings } from "./accessibility.js";
 import { Sheet } from "./sheet.js";
 import { ThemeToggle } from "./theme.js";
 import { Landing } from "./landing.js";
+import { buttonIcons } from "./icons.js";
 import { Chart, Charts, Monitor, Progress } from "./charts.js";
 import type { CodeDisplay, NameStyle } from "./display.js";
 
@@ -218,68 +219,6 @@ function FilterChip({ label, onClear }: { label: string; onClear: () => void }) 
     </span>
   );
 }
-
-// The icons a button can be drawn as, its words naming it.
-const buttonIcons: Record<string, ReactNode> = {
-  edit: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M11.2 2.3a1.4 1.4 0 0 1 2 2L5.6 11.9 2.8 12.7l.8-2.8z" />
-      <path d="M10 3.5l2 2" />
-    </svg>
-  ),
-  add: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-      <path d="M8 3v10M3 8h10" />
-    </svg>
-  ),
-  follow: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 11.5V7.2a4 4 0 0 1 8 0v4.3l1.2 1.2H2.8z" />
-      <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" />
-    </svg>
-  ),
-  following: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 11.5V7.2a4 4 0 0 1 8 0v4.3l1.2 1.2H2.8z" />
-      <path d="M6.6 14a1.5 1.5 0 0 0 2.8 0" fill="none" />
-    </svg>
-  ),
-  // A cog: a ring with teeth, and its hole.
-  settings: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6.9 1.5h2.2l.4 1.8 1.2.7 1.8-.6 1.1 1.9-1.4 1.3v1.4l1.4 1.3-1.1 1.9-1.8-.6-1.2.7-.4 1.8H6.9l-.4-1.8-1.2-.7-1.8.6-1.1-1.9 1.4-1.3V7.3L2.4 6l1.1-1.9 1.8.6 1.2-.7z" />
-      <circle cx="8" cy="8" r="2" />
-    </svg>
-  ),
-  workflow: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
-      <rect x="1.5" y="2" width="4.5" height="4" rx="1" />
-      <rect x="10" y="10" width="4.5" height="4" rx="1" />
-      <path d="M6 4h2.5a1.5 1.5 0 0 1 1.5 1.5V10" strokeLinecap="round" />
-    </svg>
-  ),
-  // A bin with its lid.
-  delete: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M2.5 4.5h11M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5" />
-      <path d="M3.8 4.5l.7 8.6a1 1 0 0 0 1 .9h5a1 1 0 0 0 1-.9l.7-8.6M6.7 7v4.5M9.3 7v4.5" />
-    </svg>
-  ),
-  // A robot, for what programs do, like a project's agents.
-  robot: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="5" width="10" height="8" rx="2" />
-      <path d="M8 5V3M6 9h.01M10 9h.01M6.5 11h3M1.5 8.5v2M14.5 8.5v2" />
-    </svg>
-  ),
-  // A box with its lid, what's put away.
-  archive: (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="1.5" y="2.5" width="13" height="3" rx="1" />
-      <path d="M2.8 5.5v7a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1v-7M6.5 8.5h3" />
-    </svg>
-  ),
-};
 
 // The pictures a switch draws for what it switches between: rows for a table, and
 // columns of cards for a board.

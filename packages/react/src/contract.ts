@@ -525,18 +525,34 @@ export interface LabelsProps {
   items: string[];
 }
 
-// A front page in one of uione's designs: waveform, studio, aurora, grid or
-// relay. Its hero's title, words and links; its sections of words alone, as what it
-// offers; and the rest, like a section with a form, as what it asks of its reader.
+// One of what a front page offers: a section of words, with the short line over its
+// title, its icon, and what it holds in turn, like a group of services, each with its
+// own.
+export interface LandingFeature {
+  title: string;
+  overline?: ReactNode;
+  icon?: string; // one of the icons, like database
+  text: ReactNode;
+  features: LandingFeature[];
+}
+
+// A front page in one of uione's designs: waveform, studio, aurora, grid, relay or
+// constellation. Its hero's title, the short line over it, its words and its links;
+// its sections of words, as what it offers; its statement, the one sentence that
+// stands for the site; its sections as steps, done one after another; and the rest,
+// like a section with a form, as what it asks of its reader.
 export interface LandingProps {
   design: string;
   name: string; // the site's name
   icon?: string; // the address of its icon
+  overline?: ReactNode;
   title: string;
   text: ReactNode[];
   links: (LinkProps & { label: ReactNode })[];
-  features: { title: string; text: ReactNode }[];
-  asks: { title: string; id?: string; children: ReactNode }[];
+  features: LandingFeature[];
+  statement?: ReactNode;
+  steps: { title: string; id?: string; overline?: ReactNode; text: ReactNode; steps: { title: string; text: ReactNode }[] }[];
+  asks: { title: string; id?: string; overline?: ReactNode; children: ReactNode }[];
   before?: ReactNode; // what the screen has that isn't any of these, like a table: first, or where the design puts it
 }
 

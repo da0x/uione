@@ -754,7 +754,8 @@ describe("a front page in relay", () => {
       title="Print that arrives on time."
       text={["Orders, proofs and shipping for a print shop."]}
       links={[{ href: "/signin", label: "Sign in" }]}
-      features={[{ title: "You approve every proof", text: "Nothing goes to press unseen." }]}
+      features={[{ title: "You approve every proof", text: "Nothing goes to press unseen.", features: [] }]}
+      steps={[]}
       asks={[{ title: "Ask for a quote", id: "quote", children: <p>Leave your address.</p> }]}
       before={[<table key="orders" aria-label="Your orders" />]}
     />
@@ -786,5 +787,53 @@ describe("a front page in relay", () => {
     const text = readFileSync(resolve(process.cwd(), "dist/styles.css"), "utf8");
     expect(text).toMatch(/\.one-landing-carry\{animation:[^}]*1\.2s both one-landing-carry\}/);
     expect(text).toMatch(/prefers-reduced-motion:\s*reduce\)\{\.one-landing \[class\*=one-landing-\]\{animation:none\}/);
+  });
+});
+
+describe("a front page's new parts", () => {
+  const Landing = radix.Landing;
+  const page = (design: string) => (
+    <Landing
+      design={design}
+      name="xr soft"
+      overline="Software modernization"
+      title="Modern software, without stopping the business."
+      text={[]}
+      links={[{ href: "#talk", label: "Talk to us" }]}
+      features={[
+        {
+          title: "Five pillars.",
+          overline: "What we do",
+          text: "Ten services.",
+          features: [{ title: "Data", icon: "database", text: "Moved and put to work.", features: [{ title: "Data Migration", text: "Moved safely.", features: [] }] }],
+        },
+      ]}
+      statement="We keep what your systems know."
+      steps={[{ title: "One step at a time.", overline: "How we work", text: [], steps: [{ title: "Understand", text: "We learn." }, { title: "Move", text: "A piece at a time." }] }]}
+      asks={[{ title: "Start with a conversation.", id: "talk", overline: "Contact", children: <a href="mailto:hello@example.com">hello@example.com</a> }]}
+    />
+  );
+
+  it("are drawn by every design: the overlines, a group's title over its offerings, what an offering holds, the statement and the steps", () => {
+    for (const design of ["waveform", "studio", "aurora", "grid", "relay", "constellation"]) {
+      const { container, unmount } = render(page(design));
+      const said = container.textContent ?? "";
+      for (const words of ["Software modernization", "What we do", "Five pillars.", "Data Migration", "We keep what your systems know.", "How we work", "Understand", "Contact"]) {
+        expect([design, said.includes(words)]).toEqual([design, true]);
+      }
+      expect(container.querySelector("svg")).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("in constellation, names the site in two tones, lights its statement a word at a time, and numbers its steps", () => {
+    const { container } = render(page("constellation"));
+    expect(screen.getByRole("heading", { level: 1 }).getAttribute("aria-label")).toBe("xr soft");
+    expect(container.querySelector(".one-constellation-first")?.textContent).toBe("xr");
+    expect(container.querySelector(".one-constellation-rest")?.textContent).toBe("soft");
+    expect(container.querySelectorAll(".one-constellation-statement span")).toHaveLength(6);
+    expect(Array.from(container.querySelectorAll(".one-constellation-step-number")).map((n) => n.textContent)).toEqual(["01", "02"]);
+    expect(container.querySelector(".one-constellation-band")?.textContent).toContain("Data");
+    expect(document.getElementById("talk")?.querySelector("a")?.getAttribute("href")).toBe("mailto:hello@example.com");
   });
 });

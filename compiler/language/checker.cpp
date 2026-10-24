@@ -2616,8 +2616,18 @@ namespace one::language {
                 }
                 return;
             }
+            // An email to write, or a number to call: mailto:hello@example.com, tel:+15555550100.
+            if (link.target.starts_with("mailto:") || link.target.starts_with("tel:")) {
+                std::string_view rest = std::string_view(link.target).substr(link.target.find(':') + 1);
+                bool mail = link.target.starts_with("mailto:");
+                bool fits = !rest.empty() && rest.find_first_of("\" \\") == std::string_view::npos &&
+                            (mail ? rest.find('@') != std::string_view::npos && rest.find('@') > 0 && rest.find('@') + 1 < rest.size()
+                                  : rest.find_first_not_of("+0123456789-.") == std::string_view::npos);
+                if (!fits) error(where, mail ? "an email link is mailto: and the address, like \"mailto:hello@example.com\"" : "a phone link is tel: and the number, like \"tel:+15555550100\"");
+                return;
+            }
             if (!link.target.starts_with("/") && !link.target.starts_with("#")) {
-                error(where, "a link goes to an address, like /docs, a place on the page, like #top, or another site, like \"https://uione.io\"");
+                error(where, "a link goes to an address, like /docs, a place on the page, like #top, another site, like \"https://uione.io\", or an email, like \"mailto:hello@example.com\"");
                 return;
             }
             if (!link.target.starts_with("/")) return;
@@ -2669,10 +2679,11 @@ namespace one::language {
             // there are any, and each region one its layout has, once.
             // landing grid: a front page drawn in one of uione's designs, which lays it out.
             if (s.landing) {
-                static const std::set<std::string, std::less<>> designs{"waveform", "studio", "aurora", "grid", "relay"};
-                if (!designs.contains(*s.landing)) error(s.landing_where, "landing is waveform, studio, aurora, grid or relay");
+                static const std::set<std::string, std::less<>> designs{"waveform", "studio", "aurora", "grid", "relay", "constellation"};
+                if (!designs.contains(*s.landing)) error(s.landing_where, "landing is waveform, studio, aurora, grid, relay or constellation");
                 if (s.layout) error(s.layout_where, "a landing page is laid out by its design, so it says no layout");
             }
+            front_page(s.items, s.landing.has_value(), nullptr);
             std::string layout = s.layout ? *s.layout : layout_.empty() ? "single" : layout_;
             const std::vector<std::string>* regions = regions_of(layout);
             if (s.layout && !regions) error(s.layout_where, "layout is single or two_columns");
@@ -2706,6 +2717,49 @@ namespace one::language {
             // A title can show what the page does: screen "#{issue_page.number} {issue_page.title}".
             if (!s.title_is_name) verify_live_text(ns, s.title, full_route(ns, s.route), where);
             if (s.under) verify_under(ns, s);
+        }
+
+        // What only a front page says, which its design draws: a statement, its one
+        // sentence, outside its sections; an overline over a hero's or a section's
+        // title, inside it; a section's icon; and a section as steps, its sections done
+        // one after another.
+        void front_page(const std::vector<screen_item>& items, bool landing, const content_block* in) {
+            const std::string elsewhere = ", on a screen with a landing design, like screen / landing constellation { ... }";
+            int statements = 0;
+            int overlines = 0;
+            for (const auto& item : items) {
+                auto* text = std::get_if<content_text>(&item.node);
+                auto* block = std::get_if<content_block>(&item.node);
+                if (text && text->type == content_text::kind::statement) {
+                    if (!landing || in) error(item.where, "a statement is a front page's one sentence, outside its hero and sections" + (landing ? std::string() : elsewhere));
+                    else if (++statements > 1) error(item.where, "a front page has one statement, the sentence that stands for the site");
+                }
+                if (text && text->type == content_text::kind::overline) {
+                    bool over = in && (in->type == content_block::kind::hero || in->type == content_block::kind::section);
+                    if (!landing || !over) error(item.where, "an overline is the short line over a hero's or a section's title, inside it" + (landing ? std::string() : elsewhere));
+                    else if (++overlines > 1) error(item.where, "a title has one overline over it");
+                    if (text->value.find('{') != std::string::npos) error(item.where, "an overline is plain words, as the title under it is");
+                }
+                if (!block) continue;
+                bool section = block->type == content_block::kind::section;
+                if (block->icon) {
+                    if (!landing || !section) error(block->icon_where, "an icon is drawn beside a front page's section's title" + (landing ? std::string() : elsewhere));
+                    else icon(block->icon, block->icon_where);
+                }
+                if (block->steps) {
+                    if (!landing) {
+                        error(block->steps_where, "a section as steps is a front page's" + elsewhere);
+                    } else if (!section) {
+                        error(block->steps_where, "a section is read as steps, its sections done one after another, not a hero");
+                    } else if (!std::any_of(block->items.begin(), block->items.end(), [](const screen_item& i) {
+                                   auto* b = std::get_if<content_block>(&i.node);
+                                   return b && b->type == content_block::kind::section;
+                               })) {
+                        error(block->steps_where, "a section as steps holds its steps, each a section, like section \"Plan\" { text \"...\" }");
+                    }
+                }
+                front_page(block->items, landing, block);
+            }
         }
 
         // under /:project/boards/:board "{issue_page.board_title}": a page there, what
@@ -3102,10 +3156,13 @@ namespace one::language {
             }
         }
 
-        // The icons a button or a link can be drawn as; one they don't have would show
-        // nothing but its words, so a misspelled one is an error.
+        // The icons a button, a link or a front page's section can be drawn with; one
+        // they don't have would show nothing but its words, so a misspelled one is an
+        // error.
         void icon(const std::optional<std::string>& name, location where) {
-            static const std::set<std::string, std::less<>> known{"edit", "add", "follow", "following", "settings", "workflow", "delete", "archive", "robot"};
+            static const std::set<std::string, std::less<>> known{"edit",     "add",      "follow", "following", "settings", "workflow", "delete", "archive",
+                                                                  "robot",    "building", "database", "code",     "connect",  "shield",   "cloud",  "chart",
+                                                                  "spark",    "people",   "lock",     "globe",    "layers"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + "; there are " + join_words({known.begin(), known.end()}));
         }
 

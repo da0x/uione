@@ -58,6 +58,16 @@ namespace one::desktop::runtime {
 		(all.push_back(desktop::view(std::forward<V>(each))), ...);
 		return hero(std::move(title), std::move(all));
 	}
+	// A front page's hero with a short line over its title.
+	desktop::view hero(section_title title, std::vector<desktop::view> inside);
+	template <std::convertible_to<desktop::view>... V>
+	desktop::view hero(section_title title, V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return hero(std::move(title), std::move(all));
+	}
+	// A front page's one sentence that stands for the site.
+	desktop::view statement(std::vector<part> parts);
 
 	desktop::view command(page& p, command_button b);
 	desktop::view confirm(page& p, std::string command, std::string question);
