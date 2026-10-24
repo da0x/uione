@@ -70,7 +70,7 @@ func rehearse(ctx context.Context, api, project string, log io.Writer) error {
 	if err := build.Run(); err != nil {
 		return fmt.Errorf("building the backend: %w", err)
 	}
-	host, stop, err := emulator(ctx, work, log)
+	host, auth, stop, err := emulator(ctx, work, log)
 	if err != nil {
 		return err
 	}
@@ -80,26 +80,26 @@ func rehearse(ctx context.Context, api, project string, log io.Writer) error {
 		return fmt.Errorf("copying what %s stores: %w", project, err)
 	}
 	fmt.Fprintf(log, "rehearsal: %d records of %s copied to the emulator\n", copied, project)
-	return startOnce(ctx, backend, host, log)
+	return startOnce(ctx, backend, host, auth, log)
 }
 
-// emulator starts a Firestore emulator in Docker, building its image the first time,
-// and returns where it answers and how to stop it.
-func emulator(ctx context.Context, work string, log io.Writer) (string, func(), error) {
+// emulator starts the Firestore and Authentication emulators in Docker, building
+// their image the first time, and returns where each answers and how to stop them.
+func emulator(ctx context.Context, work string, log io.Writer) (string, string, func(), error) {
 	none := func() {}
 	dir := filepath.Join(work, "emulator")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", none, err
+		return "", "", none, err
 	}
 	sum := sha256.New()
 	for _, name := range []string{"dockerfile", "firebase.json"} {
 		data, err := rehearsalFiles.ReadFile("rehearsal/" + name)
 		if err != nil {
-			return "", none, err
+			return "", "", none, err
 		}
 		sum.Write(data)
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
-			return "", none, err
+			return "", "", none, err
 		}
 	}
 	image := "uione-rehearsal:" + hex.EncodeToString(sum.Sum(nil))[:12]
@@ -108,35 +108,52 @@ func emulator(ctx context.Context, work string, log io.Writer) (string, func(), 
 		build := exec.CommandContext(ctx, "docker", "build", "--quiet", "--tag", image, dir)
 		build.Stdout, build.Stderr = log, log
 		if err := build.Run(); err != nil {
-			return "", none, fmt.Errorf("building the emulator's image: %w", err)
+			return "", "", none, fmt.Errorf("building the emulator's image: %w", err)
 		}
 	}
-	out, err := exec.CommandContext(ctx, "docker", "run", "--detach", "--rm", "--publish", "127.0.0.1::8080", image).Output()
+	out, err := exec.CommandContext(ctx, "docker", "run", "--detach", "--rm", "--publish", "127.0.0.1::8080", "--publish", "127.0.0.1::9099", image).Output()
 	if err != nil {
-		return "", none, fmt.Errorf("starting the emulator: %w", err)
+		return "", "", none, fmt.Errorf("starting the emulator: %w", err)
 	}
 	id := strings.TrimSpace(string(out))
 	stop := func() { exec.Command("docker", "rm", "--force", id).Run() }
-	out, err = exec.CommandContext(ctx, "docker", "port", id, "8080/tcp").Output()
+	port := func(inside string) (string, error) {
+		out, err := exec.CommandContext(ctx, "docker", "port", id, inside+"/tcp").Output()
+		return strings.TrimSpace(strings.Split(string(out), "\n")[0]), err
+	}
+	host, err := port("8080")
 	if err != nil {
 		stop()
-		return "", none, fmt.Errorf("finding the emulator's port: %w", err)
+		return "", "", none, fmt.Errorf("finding the emulator's port: %w", err)
 	}
-	host := strings.TrimSpace(strings.Split(string(out), "\n")[0])
+	auth, err := port("9099")
+	if err != nil {
+		stop()
+		return "", "", none, fmt.Errorf("finding the emulator's port: %w", err)
+	}
 	for range 120 {
-		if response, err := http.Get("http://" + host); err == nil {
-			response.Body.Close()
-			return host, stop, nil
+		if answers(host) && answers(auth) {
+			return host, auth, stop, nil
 		}
 		select {
 		case <-ctx.Done():
 			stop()
-			return "", none, ctx.Err()
+			return "", "", none, ctx.Err()
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
 	stop()
-	return "", none, errors.New("the emulator didn't start in a minute")
+	return "", "", none, errors.New("the emulator didn't start in a minute")
+}
+
+// answers is whether an emulator at host answers yet.
+func answers(host string) bool {
+	response, err := http.Get("http://" + host)
+	if err != nil {
+		return false
+	}
+	response.Body.Close()
+	return true
 }
 
 // owner is what the emulator takes from the Admin SDK: a caller its rules don't stop.
@@ -199,7 +216,7 @@ func copyStored(ctx context.Context, project, host string) (int, error) {
 
 // startOnce starts the backend on the emulator and waits until it serves, or stops.
 // Stopped, it says what the backend said last, which says why.
-func startOnce(ctx context.Context, backend, host string, log io.Writer) error {
+func startOnce(ctx context.Context, backend, host, auth string, log io.Writer) error {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return err
@@ -214,7 +231,7 @@ func startOnce(ctx context.Context, backend, host string, log io.Writer) error {
 	run.Env = []string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "PORT=" + port,
 		"GOOGLE_CLOUD_PROJECT=" + rehearsalProject, "FIRESTORE_EMULATOR_HOST=" + host,
-		"FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9", "STORAGE_EMULATOR_HOST=127.0.0.1:9",
+		"FIREBASE_AUTH_EMULATOR_HOST=" + auth, "STORAGE_EMULATOR_HOST=127.0.0.1:9",
 	}
 	output, err := run.StdoutPipe()
 	if err != nil {
