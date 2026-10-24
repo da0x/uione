@@ -25,9 +25,9 @@ export const home = screen({ title: "uione", route: "/" }, () => {
         <Text>Every app is protected from abuse from its first deploy: each person, and anyone not signed in, is limited in how fast they may ask and how much they may make. One line changes a limit where a feature needs it.</Text>
       </Section>
       <Section title="Install">
-        <Text>uione 0.18.0 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh</Text>
+        <Text>uione 0.18.1 is out: the compiler for Linux and macOS, in a container, and its libraries for Go and npm. One command installs it: curl -fsSL https://uione.io/install.sh | sh</Text>
         <Link to="/install">Install</Link>
-        <Link to="/releases">What's new in 0.18.0</Link>
+        <Link to="/releases">What's new in 0.18.1</Link>
       </Section>
       <Section title="Free software">
         <Text>uione is free software under the AGPL. What the compiler generates belongs to you.</Text>

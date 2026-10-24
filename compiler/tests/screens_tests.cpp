@@ -34,7 +34,7 @@ namespace {
 
     const std::string shop = R"(import one
 project shop {
-	one  "0.18.0"
+	one  "0.18.1"
 }
 namespace shop {
 	entity shelf {
@@ -213,7 +213,7 @@ TEST_CASE("a form's fields have their kinds, and their choices from the field or
 TEST_CASE("a field pointing at another namespace's entity picks from a person's own list of them, by name") {
     auto files = parsed(R"(import one
 project clubs {
-	one  "0.18.0"
+	one  "0.18.1"
 }
 namespace clubs {
 	entity club {
