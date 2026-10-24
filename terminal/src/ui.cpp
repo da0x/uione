@@ -1434,12 +1434,12 @@ namespace one::terminal {
 		raw();  // Control's keys are the app's, as a field takes them
 		view_host host(std::move(build));
 		auto last_draw = std::chrono::steady_clock::now();
-		bool dirty = true;
+		bool dirty = true, resized = false;
 		while (!quitting_) {
 			if (auto pressed = read_key()) {
 				if (pressed->control && pressed->text == "c") break;
 				if (pressed->code == KEY_RESIZE) {
-					dirty = true;
+					resized = true;
 				} else if (!host.deliver(*pressed) && on_key && !on_key(*pressed) && pressed->is('q')) {
 					break;
 				}
@@ -1457,8 +1457,11 @@ namespace one::terminal {
 				host.bring_up_to_date(COLS, LINES);
 				canvas c(COLS, LINES);
 				host.draw(c);
-				// Every cell is drawn each frame, so the screen is written whole, as it is.
-				clearok(stdscr, TRUE);
+				// Every cell is drawn each frame, and curses sends the terminal only the
+				// cells that changed, so it doesn't flash. A resize leaves the terminal's
+				// own cells unknown, so then the screen is written whole.
+				if (resized) clearok(stdscr, TRUE);
+				resized = false;
 				c.show();
 				if (host.cursor) {
 					curs_set(1);
