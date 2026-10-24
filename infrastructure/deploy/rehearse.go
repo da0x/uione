@@ -164,19 +164,30 @@ func (owner) GetRequestMetadata(context.Context, ...string) (map[string]string, 
 }
 func (owner) RequireTransportSecurity() bool { return false }
 
-// copyStored copies every collection the project stores but its views, each up to
-// mostCopied records, into the emulator, and says how many records it copied.
-func copyStored(ctx context.Context, project, host string) (int, error) {
-	source, err := firestore.NewClient(ctx, project)
-	if err != nil {
-		return 0, err
-	}
-	defer source.Close()
-	target, err := firestore.NewClient(ctx, rehearsalProject,
+// storedIn opens what a project stores, which a rehearsal copies: its Firestore, or
+// in a test an emulator's.
+var storedIn = func(ctx context.Context, project string) (*firestore.Client, error) {
+	return firestore.NewClient(ctx, project)
+}
+
+// emulated opens an emulator's Firestore at host, as its owner.
+func emulated(ctx context.Context, project, host string) (*firestore.Client, error) {
+	return firestore.NewClient(ctx, project,
 		option.WithEndpoint(host),
 		option.WithoutAuthentication(),
 		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
 		option.WithGRPCDialOption(grpc.WithPerRPCCredentials(owner{})))
+}
+
+// copyStored copies every collection the project stores but its views, each up to
+// mostCopied records, into the emulator, and says how many records it copied.
+func copyStored(ctx context.Context, project, host string) (int, error) {
+	source, err := storedIn(ctx, project)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+	target, err := emulated(ctx, rehearsalProject, host)
 	if err != nil {
 		return 0, err
 	}

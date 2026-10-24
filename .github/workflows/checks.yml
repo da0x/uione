@@ -154,6 +154,8 @@ jobs:
             (cd "$api" && go vet ./... && test -z "$(gofmt -l .)")
           done
 
+      # Its tests include a real rehearsal: the tasks example's backend, built above,
+      # started on a copy of what the emulators store, as a deploy starts it.
       - name: Vet and test the infrastructure library, and vet the site's Pulumi program
         run: |
           (cd infrastructure && go vet ./... && test -z "$(gofmt -l .)" && go test -count=1 ./...)
