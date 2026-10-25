@@ -224,6 +224,16 @@ namespace one::local {
 		return {};
 	}
 
+	std::size_t folder::forget_files_but(const std::set<std::string>& named) {
+		std::size_t forgotten = 0;
+		std::error_code error;
+		for (const auto& entry : std::filesystem::directory_iterator(root_ / "files", error)) {
+			if (!entry.is_regular_file() || named.contains("files/" + entry.path().filename().string())) continue;
+			if (std::filesystem::remove(entry.path(), error)) ++forgotten;
+		}
+		return forgotten;
+	}
+
 	std::expected<std::string, std::string> folder::keep(const std::filesystem::path& file) {
 		std::ifstream in(file, std::ios::binary);
 		if (!in) return std::unexpected("can't read " + file.string());

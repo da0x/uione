@@ -19,6 +19,7 @@ pkg_check_modules(WAYLAND REQUIRED IMPORTED_TARGET wayland-client)
 pkg_check_modules(VULKAN REQUIRED IMPORTED_TARGET vulkan)
 pkg_check_modules(TEXT REQUIRED IMPORTED_TARGET harfbuzz freetype2 fontconfig)
 pkg_check_modules(KEYS REQUIRED IMPORTED_TARGET xkbcommon)
+pkg_check_modules(BUS REQUIRED IMPORTED_TARGET dbus-1)
 find_program(GLSLC glslc REQUIRED)
 pkg_get_variable(PROTOCOLS wayland-protocols pkgdatadir)
 pkg_get_variable(SCANNER wayland-scanner wayland_scanner)
@@ -81,6 +82,7 @@ add_library(one_desktop
 	src/field.cpp
 	src/gpu.cpp
 	src/offscreen.cpp
+	src/screenshot.cpp
 	src/picture.cpp
 	src/renderer.cpp
 	src/seat.cpp
@@ -95,7 +97,7 @@ add_dependencies(one_desktop one_desktop_shaders)
 target_include_directories(one_desktop
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../screens/include> $<INSTALL_INTERFACE:include>
 	PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/protocols)
-target_link_libraries(one_desktop PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS)
+target_link_libraries(one_desktop PRIVATE PkgConfig::WAYLAND PkgConfig::VULKAN PkgConfig::TEXT PkgConfig::KEYS PkgConfig::BUS)
 add_library(one::desktop ALIAS one_desktop)
 target_compile_options(one_desktop PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Werror --embed-dir=${CMAKE_CURRENT_BINARY_DIR}/shaders>)
 

@@ -197,7 +197,7 @@ jobs:
       - name: Install what they're built with
         run: |
           pacman -Syu --noconfirm --needed gcc cmake make pkgconf wayland wayland-protocols vulkan-headers \
-            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses noto-fonts botan tar
+            vulkan-icd-loader vulkan-swrast shaderc harfbuzz freetype2 fontconfig libxkbcommon dbus ncurses noto-fonts botan tar
 
       - uses: actions/download-artifact@v8
         with:

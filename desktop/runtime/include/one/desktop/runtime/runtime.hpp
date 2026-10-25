@@ -67,6 +67,11 @@ namespace one::desktop::runtime {
 	// shown. Nothing runs once the app has stopped.
 	void post(std::function<void()> task);
 
+	// Whether an address was handed to a copy of the app already running, as
+	// launching it again with one does when the first holds its data: that copy shows
+	// it in place of its page, and this one has nothing more to do.
+	bool hand_over(const std::string& site_id, const std::string& address);
+
 	// Runs a site in a window until it's closed: opens `address`, or the first
 	// screen's, and goes back with Esc. ONE_QUIT_STOPS_AGENTS=1 says the agents
 	// started with it stop when it closes, so it asks first while they're working.

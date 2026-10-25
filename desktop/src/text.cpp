@@ -31,7 +31,7 @@ namespace one::desktop::fonts {
 		struct library {
 			FT_Library freetype = nullptr;
 			FcConfig* config = nullptr;
-			std::mutex lock;
+			std::recursive_mutex lock;  // held by each thread that reads a face, laying text out or drawing it
 			std::map<std::string, std::unique_ptr<face>> faces;           // by file, index and size
 			std::map<std::string, std::pair<std::string, int>> matched;   // a style's file and index
 			std::map<std::pair<std::string, char32_t>, std::pair<std::string, int>> fallbacks;  // by style and character
@@ -155,6 +155,8 @@ namespace one::desktop::fonts {
 		return opened(l, it->second, first.pixel_size);
 	}
 
+	std::unique_lock<std::recursive_mutex> exclusively() { return std::unique_lock(fonts().lock); }
+
 	bool add(const std::string& file) {
 		library& l = fonts();
 		std::lock_guard hold(l.lock);
@@ -265,6 +267,8 @@ namespace one::desktop {
 	}  // namespace
 
 	text_layout lay_out(std::span<const text_span> spans, float width, double scale) {
+		// Faces are shared and not safe to shape with on two threads at once.
+		auto hold = fonts::exclusively();
 		text_layout out;
 		out.scale_ = scale;
 		float limit = width > 0 ? static_cast<float>(width * scale) : 0;

@@ -251,3 +251,48 @@ TEST("a number in a range is checked as its line says") {
 	source->run("x::dial::create", value(fields{{"volume", 35}}), [&](const one::screens::answer& a) { got = a; });
 	CHECK(got.has_value());
 }
+
+TEST("undo takes back each step, redo takes it again, and both are kept, so the folder opened again agrees") {
+	app a;
+	auto title = [&] { return a.source->entities().find("library::book", "SCI-0001") ? (*a.source->entities().find("library::book", "SCI-0001"))["title"].as_string() : "gone"; };
+	a.ok("library::book::create", book("Dune", "SCI-0001"));
+	a.ok("library::book::update", value(fields{{"id", "SCI-0001"}, {"title", "Dune Messiah"}}));
+	CHECK(title() == "Dune Messiah");
+	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::update"));
+	CHECK(title() == "Dune");
+	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::create"));
+	CHECK(title() == "gone");
+	CHECK(!a.run("one::undo", value::map()));  // nothing left to take back
+	a.ok("one::redo", value::map());
+	a.ok("one::redo", value::map());
+	CHECK(title() == "Dune Messiah");
+	CHECK(!a.run("one::redo", value::map()));
+	a.ok("one::undo", value::map());
+	a.source.reset();  // which lets go of the folder
+	auto reopened = local_source::open(*folder::open_at(a.s.at));
+	CHECK(reopened && (*(*reopened)->entities().find("library::book", "SCI-0001"))["title"].as_string() == "Dune");
+}
+
+TEST("a step joined to the one before is undone with it, one apart is never undone, and what it changed stays") {
+	app a;
+	auto field = [&](const char* id, const char* name) { return (*a.source->entities().find("library::book", id))[name].as_string(); };
+	a.ok("library::book::create", book("Dune", "SCI-0001"));
+	a.ok("library::book::create", book("Emma", "LIT-0002"));
+	a.ok("library::book::update", value(fields{{"id", "SCI-0001"}, {"title", "Dune Messiah"}}));
+	a.ok("library::book::update", value(fields{{"id", "LIT-0002"}, {"title", "Persuasion"}, {"one:history", "joined"}}));
+	a.ok("library::book::update", value(fields{{"id", "SCI-0001"}, {"summary", "Spice"}, {"one:history", "apart"}}));
+	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::update"));
+	CHECK(field("SCI-0001", "title") == "Dune");
+	CHECK(field("LIT-0002", "title") == "Emma");
+	CHECK(field("SCI-0001", "summary") == "Spice");  // changed apart, so it stays
+	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::create"));
+	CHECK(!a.source->entities().find("library::book", "LIT-0002"));
+}
+
+TEST("a step taken after an undo means there's nothing to redo") {
+	app a;
+	a.ok("library::book::create", book("Dune", "SCI-0001"));
+	a.ok("one::undo", value::map());
+	a.ok("library::book::create", book("Emma", "LIT-0002"));
+	CHECK(!a.run("one::redo", value::map()));
+}

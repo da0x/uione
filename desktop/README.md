@@ -4,7 +4,8 @@ uione's toolkit for desktop apps: modern C++ on Wayland, drawing with Vulkan.
 AGPL-3.0-only, as all of uione is.
 
 It's written in C++26 on the system's own libraries: Wayland, Vulkan, HarfBuzz,
-FreeType, fontconfig and xkbcommon. Nothing is downloaded while it builds.
+FreeType, fontconfig, xkbcommon and D-Bus, which asks the desktop's portals for
+things like a screenshot. Nothing is downloaded while it builds.
 
 ```cpp
 namespace ui = one::desktop;
@@ -31,7 +32,7 @@ desktop/build/tests    # layout, state, lists, and scenes drawn offscreen agains
 ```
 
 Building needs g++ 16, CMake, `wayland-protocols`, `vulkan-headers`, `shaderc`
-(for glslc), HarfBuzz, FreeType, fontconfig and xkbcommon. The tests draw on the GPU,
-or on Mesa's software Vulkan (lavapipe) where there's none.
+(for glslc), HarfBuzz, FreeType, fontconfig, xkbcommon and D-Bus. The tests draw on
+the GPU, or on Mesa's software Vulkan (lavapipe) where there's none.
 
 It began as libloom, whose history this directory keeps.

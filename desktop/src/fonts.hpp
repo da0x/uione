@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,10 @@ namespace one::desktop::fonts {
 		std::vector<std::uint8_t> coverage;
 	};
 	bitmap draw(const face& f, std::uint32_t glyph, float subpixel);
+
+	// The fonts held for this thread alone, while text is laid out with them, since a
+	// face isn't safe to read on two threads at once; drawing a glyph holds them too.
+	std::unique_lock<std::recursive_mutex> exclusively();
 
 	// A font file offered with the system's, and what was matched before forgotten,
 	// so the next style that asks for its family finds it. Whether it could be read.

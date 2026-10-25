@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 #include <algorithm>
+#include <functional>
 #include <random>
 
 #include "one/local/local.hpp"
@@ -24,6 +25,20 @@ namespace one::local {
 		}
 
 	}  // namespace
+
+	std::set<std::string> store::files_named() const {
+		std::set<std::string> named;
+		std::function<void(const value&)> look = [&](const value& v) {
+			if (v.is_string() && v.as_string().starts_with("files/")) named.insert(v.as_string());
+			if (v.is_array())
+				for (const auto& item : v.as_array()) look(item);
+			if (v.is_map())
+				for (const auto& [_, field] : v.as_map()) look(field);
+		};
+		for (const auto& [_, rows] : rows_)
+			for (const auto& [_, row] : rows) look(row);
+		return named;
+	}
 
 	const value* store::find(const std::string& entity, const std::string& id) const {
 		auto kind = rows_.find(entity);

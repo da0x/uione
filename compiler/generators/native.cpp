@@ -1652,6 +1652,10 @@ namespace one::generators {
             out.line("//");
             out.line("//   " + name + "            its first screen");
             out.line("//   " + name + " /address   the screen at an address, like /projects");
+            if (target_ == "desktop") {
+                out.line("//");
+                out.line("// While it's open, launching it again hands the address to the copy open.");
+            }
             out.line();
             out.line("#include <print>");
             out.line();
@@ -1669,6 +1673,10 @@ namespace one::generators {
             }
             out.line("auto kept = one::local::folder::open(" + str(name) + ");");
             out.open("if (!kept) {");
+            if (target_ == "desktop") {
+                out.line("// Held by a copy already open: it's handed the address instead.");
+                out.line("if (one::desktop::runtime::hand_over(" + str(app_id()) + ", count > 1 ? given[1] : \"/\")) return 0;");
+            }
             out.line("std::println(stderr, \"" + name + ": {}\", kept.error());");
             out.line("return 1;");
             out.close("}");

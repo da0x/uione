@@ -7,11 +7,19 @@
 
 #include "one/desktop/runtime/runtime.hpp"
 
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
+
 #include <atomic>
 #include <cstdlib>
+#include <cstring>
+#include <filesystem>
 #include <format>
 #include <functional>
 #include <optional>
+#include <thread>
 
 #include "one/desktop/runtime/components.hpp"
 
@@ -183,6 +191,87 @@ namespace one::desktop::runtime {
 		return desktop::column(std::move(parts));
 	}
 
+	namespace {
+
+		// Where a running copy of an app listens for addresses: a socket in this
+		// person's runtime folder, named for the app.
+		std::filesystem::path door_of(const std::string& site_id) {
+			const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR");
+			std::filesystem::path folder = runtime_dir && *runtime_dir ? std::filesystem::path(runtime_dir) : std::filesystem::temp_directory_path();
+			return folder / (site_id + ".door");
+		}
+
+		bool address_of(const std::filesystem::path& door, sockaddr_un& at) {
+			std::memset(&at, 0, sizeof at);
+			at.sun_family = AF_UNIX;
+			std::string where = door.string();
+			if (where.size() >= sizeof at.sun_path) return false;
+			std::memcpy(at.sun_path, where.c_str(), where.size() + 1);
+			return true;
+		}
+
+		// The door a running app listens at, each address handed to it opened in the
+		// current page's place on the app's own thread; closed, and its socket gone,
+		// when the app stops.
+		class door {
+		public:
+			door(const std::string& site_id, desktop::app& app, navigator& nav) : path_(door_of(site_id)) {
+				sockaddr_un at;
+				if (!address_of(path_, at)) return;
+				listening_ = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+				if (listening_ < 0) return;
+				// One left by a copy that stopped without closing it is taken over.
+				std::filesystem::remove(path_);
+				mode_t was = umask(0077);
+				bool bound = bind(listening_, reinterpret_cast<sockaddr*>(&at), sizeof at) == 0 && listen(listening_, 4) == 0;
+				umask(was);
+				if (!bound) {
+					::close(std::exchange(listening_, -1));
+					return;
+				}
+				accepting_ = std::thread([this, &app, &nav] {
+					for (;;) {
+						int knocked = accept4(listening_, nullptr, nullptr, SOCK_CLOEXEC);
+						if (knocked < 0) return;
+						std::string address;
+						char buffer[512];
+						for (ssize_t got; address.size() < 4096 && (got = read(knocked, buffer, sizeof buffer)) > 0;) address.append(buffer, static_cast<std::size_t>(got));
+						::close(knocked);
+						while (!address.empty() && (address.back() == '\n' || address.back() == '\r')) address.pop_back();
+						if (address.starts_with("/")) app.post([&nav, address] { nav.replace(address); });
+					}
+				});
+			}
+			~door() {
+				if (listening_ < 0) return;
+				shutdown(listening_, SHUT_RDWR);
+				if (accepting_.joinable()) accepting_.join();
+				::close(listening_);
+				std::filesystem::remove(path_);
+			}
+			door(const door&) = delete;
+			door& operator=(const door&) = delete;
+
+		private:
+			std::filesystem::path path_;
+			int listening_ = -1;
+			std::thread accepting_;
+		};
+
+	}  // namespace
+
+	bool hand_over(const std::string& site_id, const std::string& address) {
+		sockaddr_un at;
+		if (!address_of(door_of(site_id), at)) return false;
+		int knocking = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+		if (knocking < 0) return false;
+		bool handed = connect(knocking, reinterpret_cast<sockaddr*>(&at), sizeof at) == 0;
+		std::string line = address + "\n";
+		if (handed) handed = write(knocking, line.data(), line.size()) == static_cast<ssize_t>(line.size());
+		::close(knocking);
+		return handed;
+	}
+
 	void post(std::function<void()> task) {
 		if (desktop::app* app = posting_to.load()) app->post(std::move(task));
 	}
@@ -201,6 +290,7 @@ namespace one::desktop::runtime {
 		});
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
+		door handed_to(s.id, app, nav);
 		shown_in = &window;
 		window.show([&] {
 			auto shown = drawn(nav);

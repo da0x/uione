@@ -5,15 +5,18 @@
 // images in tests/golden. ONE_DESKTOP_GOLDEN=write draws them again; each is then looked at
 // before it's committed.
 
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <span>
+#include <thread>
 
 #include "check.hpp"
 #include "one/desktop/icons.hpp"
+#include "one/desktop/screenshot.hpp"
 #include "one/desktop/canvas.hpp"
 #include "one/desktop/editing.hpp"
 #include "one/desktop/state.hpp"
@@ -273,8 +276,8 @@ TEST("a picture copied is on the clipboard as a PNG to paste, and text copied af
 
 TEST("every icon a toolbar draws with draws something, its paths read whole") {
 	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close",
-	                         "paste", "save", "text", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit",
-	                         "stretch", "center", "color", "edges"}) {
+	                         "paste", "save", "undo", "redo", "text", "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold",
+	                         "smaller", "larger", "fill", "fit", "stretch", "center", "color", "edges"}) {
 		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
 		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 		std::size_t inked = 0;
@@ -303,6 +306,32 @@ TEST("a font an app brings, from its bytes, is offered with the system's, and te
 	CHECK(one::desktop::use_font(bytes));  // the second time finds the one written the first
 	CHECK(!one::desktop::use_font({}));
 	CHECK(one::desktop::lay_out(one::desktop::text_span{"After", body}, 0, 1).width() > 0);
+}
+
+TEST("a screenshot with no desktop to ask says so, rather than waiting or failing badly") {
+	const char* was = std::getenv("DBUS_SESSION_BUS_ADDRESS");
+	std::string kept = was ? was : "";
+	setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent/one-tests-bus", 1);
+	auto shot = one::desktop::screenshot();
+	if (was) setenv("DBUS_SESSION_BUS_ADDRESS", kept.c_str(), 1);
+	else unsetenv("DBUS_SESSION_BUS_ADDRESS");
+	CHECK(!shot);
+	if (!shot) CHECK(!shot.error().empty());
+}
+
+TEST("text is laid out alike on several threads at once") {
+	const float alone = one::desktop::lay_out(one::desktop::text_span{"Laid out together", body}, 0, 1).width();
+	std::atomic<int> differing = 0;
+	std::vector<std::thread> threads;
+	for (int t = 0; t < 4; ++t)
+		threads.emplace_back([&] {
+			for (int i = 0; i < 200; ++i)
+				if (one::desktop::lay_out(one::desktop::text_span{"Laid out together", body}, 0, 1 + (i % 3) * 0.5).width() <= 0 ||
+				    one::desktop::lay_out(one::desktop::text_span{"Laid out together", body}, 0, 1).width() != alone)
+					++differing;
+		});
+	for (auto& t : threads) t.join();
+	CHECK(differing == 0);
 }
 
 TEST("a color written in sRGB is kept in linear light") {

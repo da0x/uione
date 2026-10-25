@@ -258,3 +258,23 @@ TEST("a command's files are kept first, its field then naming them") {
 }
 
 int main() { return check::run(); }
+
+TEST("files nothing names any more are let go of when the folder opens, and those named stay") {
+	scratch s;
+	std::filesystem::create_directories(s.at);
+	std::ofstream(s.at / "kept.png") << "kept";
+	std::ofstream(s.at / "dropped.png") << "dropped";
+	std::string kept, dropped;
+	{
+		auto f = folder::open_at(s.at / "data");
+		CHECK(f.has_value());
+		if (!f) return;
+		kept = *f->keep(s.at / "kept.png");
+		dropped = *f->keep(s.at / "dropped.png");
+		CHECK(f->append({.command = "make", .at = "", .changes = {{.entity = "picture", .id = "a", .fields = value(std::map<std::string, value>{{"file", kept}})}}}).has_value());
+	}
+	auto opened = local_source::open(*folder::open_at(s.at / "data"));
+	CHECK(opened.has_value());
+	CHECK(std::filesystem::exists(s.at / "data" / kept));
+	CHECK(!std::filesystem::exists(s.at / "data" / dropped));
+}

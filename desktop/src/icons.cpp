@@ -92,7 +92,11 @@ namespace one::desktop {
 			    // every piece of work, fill the screen, and switch light and dark.
 			    {"paste", {box(3.5f, 3, 9, 11.5f, 1.5f), box(6, 1.5f, 4, 3, 0.75f), path("M6 8h4M6 10.5h4")}},
 			    {"save", {path("M8 2v8M4.5 6.5L8 10l3.5-3.5"), path("M2.5 10.5V14h11v-3.5")}},
+			    // Back a step and forward again: an arrow turning back on itself, in short strokes.
+			    {"undo", {path("M3 6L9.5 6 10.41 6.12 11.25 6.47 11.97 7.03 12.53 7.75 12.88 8.59 13 9.5 12.88 10.41 12.53 11.25 11.97 11.97 11.25 12.53 10.41 12.88 9.5 13 6 13M6 3L3 6 6 9")}},
+			    {"redo", {path("M13 6L6.5 6 5.59 6.12 4.75 6.47 4.03 7.03 3.47 7.75 3.12 8.59 3 9.5 3.12 10.41 3.47 11.25 4.03 11.97 4.75 12.53 5.59 12.88 6.5 13 10 13M10 3L13 6 10 9")}},
 			    {"text", {path("M3 3.5h10M8 3.5V13M6 13h4")}},
+			    {"screenshot", {box(1.5f, 4.5f, 13, 9.5f, 1.5f), ring(8, 9.25f, 2.6f), path("M5.5 4.5L6.75 2.5h2.5l1.25 2")}},
 			    {"picture", {box(2, 3, 12, 10, 1.5f), ring(5.5f, 6.5f, 1.2f), path("M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3")}},
 			    {"gallery", {box(2, 2, 5, 5, 1), box(9, 2, 5, 5, 1), box(2, 9, 5, 5, 1), box(9, 9, 5, 5, 1)}},
 			    {"fullscreen", {path("M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4")}},

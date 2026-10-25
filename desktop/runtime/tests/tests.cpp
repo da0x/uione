@@ -1215,3 +1215,7 @@ TEST("work handed back from another thread is dropped when no app is running to 
 	one::desktop::runtime::post([&ran] { ran = true; });
 	CHECK(!ran);
 }
+
+TEST("an address isn't handed over when no copy of the app is running to take it") {
+	CHECK(!one::desktop::runtime::hand_over("org.uione.tests.nobody-running", "/"));
+}

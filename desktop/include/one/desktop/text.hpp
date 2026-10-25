@@ -95,7 +95,8 @@ namespace one::desktop {
 	bool use_font(std::span<const std::uint8_t> bytes);
 
 	// Lays spans out within a width in logical pixels, breaking lines between words
-	// and at newlines; 0 means one line for each paragraph, however long.
+	// and at newlines; 0 means one line for each paragraph, however long. Safe from
+	// any thread, as drawing a picture with no window away from the window's is.
 	text_layout lay_out(std::span<const text_span> spans, float width, double scale);
 	inline text_layout lay_out(const text_span& span, float width, double scale) { return lay_out(std::span(&span, 1), width, scale); }
 

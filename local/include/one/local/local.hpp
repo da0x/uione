@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,6 +55,8 @@ namespace one::local {
 		// Each of an entity's rows, in the order of their ids.
 		std::vector<const value*> each(const std::string& entity) const;
 		void apply(const event& e);
+		// Every file a row names, files/<sha-256>, in any of its fields.
+		std::set<std::string> files_named() const;
 
 	private:
 		std::map<std::string, std::map<std::string, value>> rows_;
@@ -120,6 +123,9 @@ namespace one::local {
 		std::expected<std::string, std::string> keep(const std::filesystem::path& file);
 		// Where a file named that way is.
 		std::filesystem::path file(const std::string& kept) const { return root_ / kept; }
+		// Every kept file but those named let go of, as nothing names them any more;
+		// how many.
+		std::size_t forget_files_but(const std::set<std::string>& named);
 
 	private:
 		folder(std::filesystem::path root, int lock) : root_(std::move(root)), lock_(lock) {}
@@ -149,6 +155,14 @@ namespace one::local {
 		const local::folder& kept() const { return folder_; }
 
 		screens::listening listen(const std::string& view, const std::string& subject, std::function<void(const screens::view_state&)> told) override;
+		// Commands, and two of the source's own: one::undo takes back the last step
+		// taken while the app runs, and one::redo takes it again, each answering the
+		// command it undid or redid, and each kept as an event like any other. A step
+		// is a command, unless the command's fields say "one:history": "joined", which
+		// makes it part of the step before, as one action that runs several does; or
+		// "apart", which leaves it out of the history, as bookkeeping like a preview
+		// is. Undoing an update puts back only the fields it changed, so a change made
+		// apart since stays.
 		using screens::source::run;
 		void run(const std::string& command_name, const value& fields, std::function<void(const screens::answer&)> answered) override;
 		// Each file kept in the folder first, its field then holding files/<sha-256>.
@@ -165,11 +179,29 @@ namespace one::local {
 		screens::view_state build(const std::string& view, const std::string& subject) const;
 		void tell(listener& l);
 
+		// How to put one row back as it was: its fields that changed, their values
+		// before (null where a field wasn't there); or removed, when it was made; or all
+		// of it, when it was removed.
+		struct putting_back {
+			std::string entity, id;
+			enum { fields, removing, making } how = fields;
+			value was = value::map();
+		};
+		struct history_step {
+			std::string command;
+			std::vector<putting_back> back;
+		};
+		std::vector<putting_back> back_from(const std::vector<change>& changes) const;
+		std::vector<change> changes_for(const std::vector<putting_back>& back) const;
+		void tell_all();
+		void take_back(std::vector<history_step>& from, std::vector<history_step>& onto, const std::string& name, std::function<void(const screens::answer&)> answered);
+
 		local::folder folder_;
 		store store_;
 		std::map<std::string, command> commands_;
 		std::map<std::string, view> views_;
 		std::map<int, listener> listeners_;
+		std::vector<history_step> undoing_, redoing_;  // steps to take back, and taken back to take again
 		int next_ = 0;
 		std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 	};
