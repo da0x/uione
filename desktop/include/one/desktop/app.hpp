@@ -23,6 +23,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "one/desktop/input.hpp"
@@ -75,6 +76,15 @@ namespace one::desktop {
 		// Its size now, in logical pixels, and how many GPU pixels each is.
 		one::desktop::size size() const;
 		double scale() const;
+
+		// The screen it's on, in that screen's own pixels, like 2560 × 1440: how big a
+		// picture shown whole on it is. None until the compositor has said.
+		std::optional<one::desktop::size> screen() const;
+		// Asks the compositor to fill the screen with it, or to stop; fullscreen() is
+		// what the compositor last said it is. Its view is built again when that or
+		// its screen changes.
+		void fullscreen(bool on);
+		bool fullscreen() const;
 
 		void redraw();
 		void title(const std::string& text);

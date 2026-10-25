@@ -60,7 +60,26 @@ namespace one::desktop {
 		inline void wl_data_source_destroy(wl_data_source* held) { ::wl_data_source_destroy(held); }
 		inline void zwp_text_input_manager_v3_destroy(zwp_text_input_manager_v3* held) { ::zwp_text_input_manager_v3_destroy(held); }
 		inline void zwp_text_input_v3_destroy(zwp_text_input_v3* held) { ::zwp_text_input_v3_destroy(held); }
+		// An output is released from version 3 on, and destroyed before it.
+		inline void wl_output_gone(wl_output* held) {
+			if (wl_output_get_version(held) >= WL_OUTPUT_RELEASE_SINCE_VERSION) ::wl_output_release(held);
+			else ::wl_output_destroy(held);
+		}
 	}  // namespace released
+
+	// A screen the compositor has: its size in its own pixels as it's shown now,
+	// turned when it's on its side.
+	struct output {
+		app::state* owner = nullptr;
+		owned<wl_output, released::wl_output_gone> held;
+		std::uint32_t name = 0;  // the registry's, for when it's taken away
+		one::desktop::size mode{};
+		std::int32_t transform = WL_OUTPUT_TRANSFORM_NORMAL;
+		one::desktop::size pixels() const {
+			bool turned = transform % 2 == 1;  // 90 and 270, flipped or not
+			return turned ? one::desktop::size{mode.height, mode.width} : mode;
+		}
+	};
 
 	// The clipboard, through the seat's data device: what we offer, and what's offered.
 	struct clipboard {
@@ -138,6 +157,7 @@ namespace one::desktop {
 		owned<zwp_text_input_manager_v3, released::zwp_text_input_manager_v3_destroy> text_inputs;
 		std::optional<gpu::device> gpu;
 		std::optional<one::desktop::seat> input;
+		std::vector<std::unique_ptr<output>> outputs;
 		std::vector<std::unique_ptr<window>> windows;
 
 		std::mutex lock;
@@ -166,6 +186,8 @@ namespace one::desktop {
 		bool configured = false;
 		bool dirty = true;
 		bool closed = false;
+		wl_output* on = nullptr;  // the screen it's on, once the compositor says
+		bool full = false;        // fullscreen, as the compositor last configured it
 
 		// The view it shows: how it's built, what was built, and whether it needs
 		// building or placing again.

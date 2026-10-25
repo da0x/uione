@@ -14,6 +14,7 @@
 #include "one/desktop/editing.hpp"
 #include "one/desktop/state.hpp"
 #include "one/desktop/ui.hpp"
+#include "app_internal.hpp"
 #include "offscreen.hpp"
 #include "ui_internal.hpp"
 
@@ -70,6 +71,38 @@ namespace {
 	}
 
 }  // namespace
+
+TEST("a screen on its side is as tall as its mode is wide") {
+	one::desktop::output o;
+	o.mode = {2560, 1440};
+	CHECK((o.pixels() == one::desktop::size{2560, 1440}));
+	o.transform = WL_OUTPUT_TRANSFORM_90;
+	CHECK((o.pixels() == one::desktop::size{1440, 2560}));
+	o.transform = WL_OUTPUT_TRANSFORM_180;
+	CHECK((o.pixels() == one::desktop::size{2560, 1440}));
+	o.transform = WL_OUTPUT_TRANSFORM_FLIPPED_270;
+	CHECK((o.pixels() == one::desktop::size{1440, 2560}));
+}
+
+TEST("a drawing takes the space it's given, and paints there") {
+	one::desktop::rect told{};
+	auto drawn = one::desktop::offscreen::draw({200, 100}, 1, one::desktop::color::hex(0xffffff), [&](one::desktop::canvas& c) {
+		auto root = one::desktop::column(one::desktop::text("Above"), one::desktop::drawing([&](one::desktop::canvas& on, one::desktop::rect area) {
+			            told = area;
+			            on.box(area, {.fill = one::desktop::color::hex(0xff0000)});
+		            }).grow())
+		                .take();
+		root->place({0, 0, 200, 100});
+		root->paint(c);
+	});
+	CHECK(told.width == 200);
+	CHECK(told.y > 0);
+	CHECK(told.y + told.height == 100);
+	auto at = [&](int x, int y) { return &drawn.rgba[static_cast<std::size_t>((y * drawn.width + x) * 4)]; };
+	CHECK(at(100, 95)[0] == 255);
+	CHECK(at(100, 95)[1] == 0);
+	CHECK(at(100, 2)[1] != 0);  // the text above it isn't painted over
+}
 
 TEST("a color written in sRGB is kept in linear light") {
 	CHECK(one::desktop::color::hex(0xffffff).red == 1.f);

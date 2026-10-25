@@ -50,6 +50,7 @@ namespace one::terminal::runtime {
 			parts.push_back(s.footer(p));
 		}
 		(void)p.take_wide();  // a terminal is as wide as it is
+		(void)p.take_fill();  // and its page always fills it
 		return terminal::column(std::move(parts)).spacing(1).padding(1, 2);
 	}
 

@@ -37,6 +37,31 @@ namespace one::desktop {
 		    .ping = [](void*, xdg_wm_base* shell, std::uint32_t serial) { xdg_wm_base_pong(shell, serial); },
 		};
 
+		// Each window on a screen whose size changed builds its view again, so what it
+		// shows of the screen, like a board as big as it, follows.
+		void screen_changed(app::state& s, wl_output* changed) {
+			for (auto& w : s.windows) {
+				auto& ws = w->internals();
+				if (!ws.on || ws.on == changed) {
+					ws.needs_building = true;
+					ws.dirty = true;
+				}
+			}
+		}
+
+		const wl_output_listener output_listener{
+		    .geometry = [](void* data, wl_output*, std::int32_t, std::int32_t, std::int32_t, std::int32_t, std::int32_t, const char*, const char*,
+		                   std::int32_t transform) { as<output>(data)->transform = transform; },
+		    .mode =
+		        [](void* data, wl_output*, std::uint32_t flags, std::int32_t width, std::int32_t height, std::int32_t) {
+			        if (flags & WL_OUTPUT_MODE_CURRENT) as<output>(data)->mode = {width, height};
+		        },
+		    .done = [](void* data, wl_output* o) { screen_changed(*as<output>(data)->owner, o); },
+		    .scale = [](void*, wl_output*, std::int32_t) {},
+		    .name = [](void*, wl_output*, const char*) {},
+		    .description = [](void*, wl_output*, const char*) {},
+		};
+
 		const wl_registry_listener registry_listener{
 		    .global =
 		        [](void* data, wl_registry* registry, std::uint32_t name, const char* interface, std::uint32_t version) {
@@ -63,13 +88,30 @@ namespace one::desktop {
 			        } else if (is(zwp_text_input_manager_v3_interface)) {
 				        s->text_inputs = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(registry, name, &zwp_text_input_manager_v3_interface, 1));
 				        connect_text_input(*s);
+			        } else if (is(wl_output_interface)) {
+				        auto o = std::make_unique<output>();
+				        o->owner = s;
+				        o->name = name;
+				        o->held.reset(static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, std::min(version, 4u))));
+				        wl_output_add_listener(o->held.get(), &output_listener, o.get());
+				        s->outputs.push_back(std::move(o));
 			        } else if (is(wl_seat_interface) && !s->input) {
 				        bind_seat(*s, registry, name, version);
 				        connect_clipboard(*s);
 				        connect_text_input(*s);
 			        }
 		        },
-		    .global_remove = [](void*, wl_registry*, std::uint32_t) {},
+		    .global_remove =
+		        [](void* data, wl_registry*, std::uint32_t name) {
+			        auto* s = as<app::state>(data);
+			        auto gone = std::ranges::find_if(s->outputs, [&](const auto& o) { return o->name == name; });
+			        if (gone == s->outputs.end()) return;
+			        for (auto& w : s->windows)
+				        if (w->internals().on == (*gone)->held.get()) w->internals().on = nullptr;
+			        wl_output* held = (*gone)->held.get();
+			        s->outputs.erase(gone);
+			        screen_changed(*s, held);
+		        },
 		};
 
 		const wl_callback_listener frame_listener{
@@ -93,8 +135,18 @@ namespace one::desktop {
 		};
 
 		const xdg_toplevel_listener toplevel_listener{
-		    .configure = [](void* data, xdg_toplevel*, std::int32_t width, std::int32_t height,
-		                    wl_array*) { as<window::state>(data)->asked = {width, height}; },
+		    .configure =
+		        [](void* data, xdg_toplevel*, std::int32_t width, std::int32_t height, wl_array* states) {
+			        auto* w = as<window::state>(data);
+			        w->asked = {width, height};
+			        bool full = false;
+			        auto* at = static_cast<std::uint32_t*>(states->data);
+			        for (std::size_t i = 0; i < states->size / sizeof(std::uint32_t); ++i) full = full || at[i] == XDG_TOPLEVEL_STATE_FULLSCREEN;
+			        if (full != w->full) {
+				        w->full = full;
+				        w->needs_building = true;
+			        }
+		        },
 		    .close = [](void* data, xdg_toplevel*) { as<window::state>(data)->closed = true; },
 		    .configure_bounds = [](void*, xdg_toplevel*, std::int32_t, std::int32_t) {},
 		    .wm_capabilities = [](void*, xdg_toplevel*, wl_array*) {},
@@ -112,8 +164,19 @@ namespace one::desktop {
 		// Without fractional-scale, the surface says the whole-number scale it would
 		// like; a buffer that scale is then drawn without the viewport.
 		const wl_surface_listener surface_listener{
-		    .enter = [](void*, wl_surface*, wl_output*) {},
-		    .leave = [](void*, wl_surface*, wl_output*) {},
+		    .enter =
+		        [](void* data, wl_surface*, wl_output* o) {
+			        auto* w = as<window::state>(data);
+			        if (w->on == o) return;
+			        w->on = o;
+			        w->needs_building = true;
+			        w->dirty = true;
+		        },
+		    .leave =
+		        [](void* data, wl_surface*, wl_output* o) {
+			        auto* w = as<window::state>(data);
+			        if (w->on == o) w->on = nullptr;
+		        },
 		    .preferred_buffer_scale =
 		        [](void* data, wl_surface* surface, std::int32_t factor) {
 			        auto* w = as<window::state>(data);
@@ -146,6 +209,18 @@ namespace one::desktop {
 		state_->needs_building = true;
 		state_->dirty = true;
 	}
+	std::optional<one::desktop::size> window::screen() const {
+		const auto& outputs = state_->owner->outputs;
+		auto on = std::ranges::find_if(outputs, [&](const auto& o) { return o->held.get() == state_->on; });
+		if (on == outputs.end()) on = outputs.begin();
+		if (on == outputs.end() || (*on)->mode.width <= 0) return std::nullopt;
+		return (*on)->pixels();
+	}
+	void window::fullscreen(bool on) {
+		if (on) xdg_toplevel_set_fullscreen(state_->toplevel.get(), nullptr);
+		else xdg_toplevel_unset_fullscreen(state_->toplevel.get());
+	}
+	bool window::fullscreen() const { return state_->full; }
 	void window::rebuild() {
 		state_->needs_building = true;
 		state_->dirty = true;

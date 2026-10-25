@@ -167,6 +167,10 @@ namespace one::screens {
 		// Drawn across the screen, as a board is, rather than at a page's reading width.
 		void wide() { wide_ = true; }
 		bool take_wide() { return std::exchange(wide_, false); }
+		// The whole window, as a drawing app's workspace is: no bar, no title, no
+		// margin, only what the page is made of.
+		void fill() { fill_ = true; }
+		bool take_fill() { return std::exchange(fill_, false); }
 
 		// Something the page keeps while it's open, made the first time it's asked for,
 		// like what's typed in a form: the same each time the screen is built.
@@ -196,6 +200,7 @@ namespace one::screens {
 		std::map<std::string, std::unique_ptr<listened>> views_;
 		std::vector<part> title_;
 		bool wide_ = false;
+		bool fill_ = false;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;          // commands on their way, by name
 		state<std::map<std::string, std::string>> errors_;   // why each was last turned down

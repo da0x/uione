@@ -767,6 +767,18 @@ namespace one::desktop {
 
 		// A run of numbers over time, newest at the right, as btop draws one: a soft fill
 		// under a line in the accent, over a quiet floor and, when large, a grid.
+		class drawing_element : public element {
+		public:
+			explicit drawing_element(std::function<void(canvas&, rect)> paint) : paint_(std::move(paint)) { fills_across = true; }
+			extent measure_content(float) override { return {0, 0}; }
+			void paint_content(canvas& c) override {
+				if (paint_) paint_(c, frame);
+			}
+
+		private:
+			std::function<void(canvas&, rect)> paint_;
+		};
+
 		class graph_element : public element {
 		public:
 			graph_element(std::vector<double> values, double top, float height, bool large) : values_(std::move(values)), top_(top > 0 ? top : 1), large_(large) {
@@ -911,6 +923,7 @@ namespace one::desktop {
 	view icon(std::string name, color tint, float size) { return made<icon_element>(std::move(name), tint, size); }
 	view avatar(const std::string& name, float size) { return made<avatar_element>(name, size); }
 	view graph(std::vector<double> values, double top, float height, bool large) { return made<graph_element>(std::move(values), top, height, large); }
+	view drawing(std::function<void(canvas&, rect)> paint) { return made<drawing_element>(std::move(paint)); }
 	view divider() { return made<rule_element>(); }
 	view spacer() { return std::move(made<element>()).grow(1); }
 

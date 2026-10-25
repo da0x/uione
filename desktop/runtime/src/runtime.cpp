@@ -16,12 +16,17 @@
 
 namespace one::desktop::runtime {
 
-	desktop::view page_view(navigator& nav, page& p) {
+	desktop::view page_view(navigator& nav, page& p, bool* alone) {
 		const auto& t = current_theme();
 		const auto& s = nav.site();
 		const auto& shows = nav.shown(p);
 		desktop::view built = shows.build ? shows.build(p) : desktop::column();
 		auto around = p.take_around();
+		bool wide = p.take_wide();
+		// Filling the screen, or a page that fills the window, is only what it's made of.
+		bool only = p.take_fill() || fullscreen();
+		if (alone) *alone = only;
+		if (only) return built;
 		std::vector<desktop::view> parts;
 		for (auto& v : around.above) parts.push_back(std::move(v));
 		// A page called by the app's own name, like its front page, doesn't say it again under the bar.
@@ -54,7 +59,7 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::divider());
 			parts.push_back(s.footer(p));
 		}
-		if (p.take_wide()) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
+		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
 		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
 	}
 
@@ -63,6 +68,7 @@ namespace one::desktop::runtime {
 		// whether to, which stops them.
 		state<std::optional<std::vector<std::string>>> asking_to_close;
 		std::function<void()> close_now;
+		desktop::window* shown_in = nullptr;  // the window run shows the site in, while it runs
 	}  // namespace
 
 	bool may_close(navigator& nav, bool stops_agents) {
@@ -82,8 +88,18 @@ namespace one::desktop::runtime {
 			asking_to_close.set(std::nullopt);
 			return true;
 		}
+		if (e.is(keys::f11) && shown_in) {
+			shown_in->fullscreen(!shown_in->fullscreen());
+			return true;
+		}
 		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 		return false;
+	}
+
+	std::optional<desktop::size> screen_size() { return shown_in ? shown_in->screen() : std::nullopt; }
+	bool fullscreen() { return shown_in && shown_in->fullscreen(); }
+	void fullscreen(bool on) {
+		if (shown_in) shown_in->fullscreen(on);
 	}
 
 	desktop::view drawn(navigator& nav) {
@@ -91,6 +107,11 @@ namespace one::desktop::runtime {
 		const auto& s = nav.site();
 		(void)nav.changes();
 		page& here = nav.current();
+		// Keyed by where it is, so a page keeps nothing of the one before it.
+		std::string key = std::format("{}#{}", here.address(), nav.depth());
+		bool alone = false;
+		desktop::view shown = page_view(nav, here, &alone).key(key).grow();
+		if (alone) return shown;
 		auto brand = t.strong();
 		brand.color = t.accent;
 		brand.size = 17;
@@ -119,8 +140,6 @@ namespace one::desktop::runtime {
 			bar.push_back(desktop::text(who->name, t.quiet()));
 		}
 		auto top = desktop::row(std::move(bar)).spacing(14).align(align::center).padding(edges(10, 20)).background({.fill = t.surface});
-		// Keyed by where it is, so a page keeps nothing of the one before it.
-		std::string key = std::format("{}#{}", here.address(), nav.depth());
 		std::vector<desktop::view> parts;
 		parts.push_back(std::move(top));
 		parts.push_back(desktop::divider());
@@ -140,7 +159,7 @@ namespace one::desktop::runtime {
 			                                    .background({.fill = t.surface, .border = t.warning, .border_width = 1.5f, .radius = t.corners}))
 			                    .padding(edges(16, 32)));
 		}
-		parts.push_back(page_view(nav, here).key(key).grow());
+		parts.push_back(std::move(shown));
 		return desktop::column(std::move(parts));
 	}
 
@@ -155,6 +174,7 @@ namespace one::desktop::runtime {
 		});
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
+		shown_in = &window;
 		window.show([&] {
 			auto shown = drawn(nav);
 			std::string title = nav.current().title();
@@ -173,6 +193,7 @@ namespace one::desktop::runtime {
 		int ended = app.run();
 		asking_to_close.set(std::nullopt);
 		close_now = nullptr;
+		shown_in = nullptr;
 		return ended;
 	}
 

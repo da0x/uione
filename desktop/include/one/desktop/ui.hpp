@@ -259,6 +259,9 @@ namespace one::desktop {
 	// a line in the accent over a soft fill, across the width it's given, `height`
 	// tall; large ones have a grid.
 	view graph(std::vector<double> values, double top, float height, bool large = false);
+	// Painted by the app itself into all the space it's given, as a drawing app's
+	// workspace is: paint is told the canvas and where on it, each time it's drawn.
+	view drawing(std::function<void(canvas& c, rect area)> paint);
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
 	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
 	// shown under it while it's pointed at or has the keyboard. One with no such icon

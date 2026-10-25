@@ -12,7 +12,7 @@
 //     }};
 //
 // The navigator keeps the trail of pages opened, the window shows the last, and Esc
-// goes back. Everything here runs on the loop's thread.
+// goes back. F11 fills the screen with it. Everything here runs on the loop's thread.
 
 #pragma once
 
@@ -37,16 +37,26 @@ namespace one::desktop::runtime {
 
 	// The window's view: the bar across its top, and the page shown.
 	desktop::view drawn(navigator& nav);
-	// A page's own part: its title, what's around it, and what it's built of, scrolled.
-	desktop::view page_view(navigator& nav, page& p);
+	// A page's own part: its title, what's around it, and what it's built of, scrolled;
+	// or only what it's built of, when it fills the window or the app fills the
+	// screen, which alone then says.
+	desktop::view page_view(navigator& nav, page& p, bool* alone = nullptr);
 
 	// Whether the window may close now. When closing stops agents started with the
 	// app, it asks first while they're working on something, naming it, and closing
 	// again closes it.
 	bool may_close(navigator& nav, bool stops_agents);
 	// What a key does that nothing in the view took: Esc puts away the question
-	// about closing, or goes back.
+	// about closing, or goes back, and F11 fills the screen with the app, or stops.
 	bool key(navigator& nav, const key_event& e);
+
+	// The screen the app's window is on, in that screen's own pixels, and whether
+	// the app fills it, in which case a page is only what it's made of. Read in a
+	// view, they're current: the window builds its view again when either changes.
+	std::optional<desktop::size> screen_size();
+	bool fullscreen();
+	// Fills the screen with the app, or stops, as F11 does.
+	void fullscreen(bool on);
 
 	// Runs a site in a window until it's closed: opens `address`, or the first
 	// screen's, and goes back with Esc. ONE_QUIT_STOPS_AGENTS=1 says the agents
