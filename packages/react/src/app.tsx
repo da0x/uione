@@ -4,8 +4,8 @@
 // An app is a list of screens. Each screen knows its own title and route, so the
 // app can build the routes and the navigation without anyone writing them twice.
 
-import { Component, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
 import type { Analytics, Build, ComponentSet } from "./contract.js";
@@ -358,7 +358,29 @@ function Shell({
       current: matchPath(s.info.route, pathname) !== null,
       ...link(s.info.route.split("/:")[0] || "/"),
     }));
-  return (
+  // The screen is drawn into a place of its own, moved between the page and the whole
+  // window as it fills it or not, so filling never draws the screen afresh. On a
+  // server, which draws once and has no window, it's drawn in the page.
+  const [filled, setFilled] = useState(false);
+  const [host] = useState(() => (typeof document === "undefined" ? null : document.createElement("div")));
+  if (host) host.style.display = "contents";
+  const inner = (
+    <Filling.Provider value={setFilled}>
+      {auth?.person && badgeSpecs.map((badge, at) => <ReadBadge key={at} badge={badge} at={at} onRead={onRead} />)}
+      <HeadingSlot.Provider value={slot}>
+        <CrumbsSlot.Provider value={trail}>
+          <SubtitleSlot.Provider value={under}>
+            <SiteName.Provider value={name}>
+              <SiteIcon.Provider value={icon}>
+                <Confirmations>{children}</Confirmations>
+              </SiteIcon.Provider>
+            </SiteName.Provider>
+          </SubtitleSlot.Provider>
+        </CrumbsSlot.Provider>
+      </HeadingSlot.Provider>
+    </Filling.Provider>
+  );
+  const page = (content: ReactNode) => (
     <ui.Page
       name={name}
       icon={icon}
@@ -392,20 +414,38 @@ function Shell({
         )
       }
     >
-      {auth?.person && badgeSpecs.map((badge, at) => <ReadBadge key={at} badge={badge} at={at} onRead={onRead} />)}
-      <HeadingSlot.Provider value={slot}>
-        <CrumbsSlot.Provider value={trail}>
-          <SubtitleSlot.Provider value={under}>
-            <SiteName.Provider value={name}>
-              <SiteIcon.Provider value={icon}>
-                <Confirmations>{children}</Confirmations>
-              </SiteIcon.Provider>
-            </SiteName.Provider>
-          </SubtitleSlot.Provider>
-        </CrumbsSlot.Provider>
-      </HeadingSlot.Provider>
+      {content}
     </ui.Page>
   );
+  if (!host) return page(inner);
+  return (
+    <>
+      {filled ? <Holding host={host} style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column" }} /> : page(<Holding host={host} style={{ display: "contents" }} />)}
+      {createPortal(inner, host)}
+    </>
+  );
+}
+
+// Where the screen's place is put, in the page or over the whole window.
+function Holding({ host, style }: { host: HTMLElement; style: CSSProperties }) {
+  const at = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    at.current?.appendChild(host);
+  }, [host]);
+  return <div ref={at} style={style} />;
+}
+
+const Filling = createContext<(fills: boolean) => void>(() => {});
+
+// The whole window for the screen, as a drawing app's workspace has it: no bar,
+// title, margin or footer around it, only what it's made of, for as long as what
+// calls this is shown. The desktop's page.fill() is the same.
+export function useFill() {
+  const fill = useContext(Filling);
+  useLayoutEffect(() => {
+    fill(true);
+    return () => fill(false);
+  }, [fill]);
 }
 
 const HeadingSlot = createContext<HTMLElement | null>(null);

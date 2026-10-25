@@ -19,8 +19,9 @@ Node 20 or later.
 
 - `@uione/react`: `App`, `screen`, the screen components (`Table`, `Form`,
   `Command`, `Live`, `Markdown`, `Pages` and the rest), `useView`, `useCommand`,
-  `useAuth`, `useParam`, an in-memory data source for tests (`memorySource`), and
-  the component contract's types.
+  `useAuth`, `useParam`, `useFill` for a component that fills the window, an
+  in-memory data source for tests (`memorySource`), and the component contract's
+  types.
 - `@uione/react/plain`: `plain`, a component set that draws everything as
   unstyled, semantic HTML. Useful in tests and as a reference for writing one.
 - `@uione/react/firebase`: `firebaseSource`, a data source that reads views live

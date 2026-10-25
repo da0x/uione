@@ -104,8 +104,11 @@ Today every target draws every element and every kind of field. A landing design
 drawn as a plain screen on the desktop and in a terminal. A `component` is written by
 hand for each kind of app: `components/welcome_note.tsx` for the web, and
 `components/welcome_note.cpp` for the desktop and the terminal, a function of the page
-giving a view, written with the same parts the generated screens are. A project whose
-targets need a file that isn't there gets an error saying which.
+giving a view, written with the same parts the generated screens are. A component
+that's the whole app, like a drawing app's workspace, can fill the window, with
+nothing of the site's bar, title or margins around it: `p.fill()` on the desktop,
+and `useFill()` from `@uione/react` on the web. A project whose targets need a file
+that isn't there gets an error saying which.
 
 uione's gallery, `examples/gallery`, uses every element and every kind of field, and
 is built for every target, so it's where each is seen side by side. What a target
@@ -149,6 +152,18 @@ build/desktop/out --target package` makes the same as a download,
 prefix, its version named by `-DVERSION=…` or else the commit. The project's
 `LICENSE`, beside its `.one` files or above them in its repository, goes with it, and
 without one it isn't installed or packaged.
+
+`one run .` takes these steps for you, and says each before it's taken: it builds
+the project, then builds the first app the project targets and starts it, or the
+one `--target` names. A desktop or terminal app is configured and built with CMake,
+then started; the web app has its packages installed, with yarn, or npm when there's
+no yarn, and is served by Vite at the address it prints. Closing the app, or
+Ctrl+C, stops it, as it would if it had been started by hand.
+
+```sh
+one run .                  # the first target, like the desktop app
+one run . --target web     # the web app, at http://localhost:5173
+```
 
 The program is named after the project. It opens on the front page, or on the
 address it's given: `build/desktop/out/neotrac /tints/boards/website` opens that

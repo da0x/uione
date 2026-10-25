@@ -3,7 +3,8 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
-import { App, Crumbs, Form, Link, Text, accentOf, memorySource, screen as defineScreen, show, useParam, useTitle, useView } from "../src/index.js";
+import { useEffect, useState } from "react";
+import { App, Crumbs, Form, Link, Text, accentOf, memorySource, screen as defineScreen, show, useFill, useParam, useTitle, useView } from "../src/index.js";
 import type { Person, ViewState } from "../src/index.js";
 import { useConfirmContext } from "../src/app.js";
 import { withoutLicense } from "../src/components.js";
@@ -55,6 +56,46 @@ describe("an app built from screens", () => {
   it("says so when nothing is at the address", () => {
     renderAt("/nowhere");
     expect(screen.getByText("There's nothing at this address.")).toBeTruthy();
+  });
+});
+
+describe("a screen that fills the window", () => {
+  it("has nothing of the page around it while it fills it, and is drawn once, keeping what it holds", () => {
+    let drawn = 0;
+    function Fills() {
+      useFill();
+      return <Text>Only the workspace.</Text>;
+    }
+    function Workspace() {
+      const [filling, setFilling] = useState(true);
+      const [count, setCount] = useState(0);
+      useEffect(() => {
+        drawn++;
+      }, []);
+      return (
+        <>
+          {filling && <Fills />}
+          <button type="button" onClick={() => setCount(count + 1)}>
+            Counted {count}
+          </button>
+          <button type="button" onClick={() => setFilling(false)}>
+            Stop filling
+          </button>
+        </>
+      );
+    }
+    const studio = defineScreen({ title: "Studio", route: "/", nav: "Studio" }, () => <Workspace />);
+    render(<App name="uione" screens={[studio]} ui={plain} data={memorySource()} location="/" />);
+    expect(screen.getByText("Only the workspace.")).toBeTruthy();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Studio" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Counted 0" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop filling" }));
+    // The page is back around it, and it's the same screen, still counting.
+    expect(screen.getByRole("navigation")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Studio" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Counted 1" })).toBeTruthy();
+    expect(drawn).toBe(1);
   });
 });
 
