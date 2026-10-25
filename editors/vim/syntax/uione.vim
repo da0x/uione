@@ -115,7 +115,7 @@ syn match uioneDotted "\%(\w\)\@<=\.\h\w*"
 syn cluster uioneProjectItems contains=uioneAtMost,uioneSetting,uioneNamespace,uioneScope,uioneProjectBraces,uioneComment,uioneString,uioneDeclare,uioneConstant,uioneNumber,uioneOperator,uioneBuiltin
 syn region uioneProject matchgroup=uioneProjectBrace start="\%(^\s*project\s\+\h\w*\s*\)\@<={" end="}" contains=@uioneProjectItems
 syn region uioneProjectBraces matchgroup=uioneProjectBrace start="{" end="}" contained contains=@uioneProjectItems
-syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|target\|icon\|theme\|appearance\|accessibility\|layout\|serve\|redirect\|title\|one\|analytics\|extends\)\>" contained
+syn match  uioneSetting "^\s*\zs\<\%(domain\|firebase\|region\|ui\|signin\|target\|icon\|theme\|appearance\|accessibility\|layout\|serve\|redirect\|title\|one\|analytics\|extends\|storage\)\>" contained
 
 " link namespace projects "See the projects": the namespace a link opens.
 syn match uioneKeyword "\%(\<link\s\+\)\@<=namespace\>" nextgroup=uioneNamespaceName skipwhite

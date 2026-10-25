@@ -55,6 +55,7 @@ set(ONE_SOURCES
     language/written.cpp
     language/parser.cpp
     language/extends.cpp
+    language/storage.cpp
     language/targets.cpp
     language/lower.cpp
     language/checker.cpp
@@ -67,6 +68,7 @@ set(ONE_SOURCES
     generators/roles.cpp
     generators/screens.cpp
     generators/web.cpp
+    generators/local.cpp
     generators/native.cpp
     generators/api.cpp
     generators/cpp.cpp
@@ -148,7 +150,8 @@ if(ONE_TESTS)
         tests/define_tests.cpp
         tests/targets_tests.cpp
         tests/screens_tests.cpp
-        tests/extends_tests.cpp)
+        tests/extends_tests.cpp
+        tests/local_tests.cpp)
     target_include_directories(one_tests SYSTEM PRIVATE ${doctest_SOURCE_DIR})
     target_compile_definitions(one_tests PRIVATE UIONE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/..")
     # The tests' own code is built for building fast, not running fast; the compiler

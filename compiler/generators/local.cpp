@@ -1,0 +1,662 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+#include "generators/local.hpp"
+
+#include <algorithm>
+#include <filesystem>
+#include <map>
+#include <optional>
+#include <set>
+#include <string>
+#include <variant>
+#include <vector>
+
+#include "code/stream.hpp"
+#include "generators/native_names.hpp"
+#include "language/names.hpp"
+
+namespace one::generators {
+
+    namespace {
+
+        using stream = code::stream;
+        using native_detail::identifier;
+
+        std::string str(std::string_view text) { return native_detail::literal(text); }
+
+        // A piece of C++ an expression became, and whether it's a bool rather than a value.
+        struct piece {
+            std::string code;
+            bool boolean = false;
+        };
+
+        std::string as_value(const piece& p) { return p.boolean ? "value(" + p.code + ")" : p.code; }
+        std::string as_bool(const piece& p) { return p.boolean ? p.code : "truthy(" + p.code + ")"; }
+
+        struct namespace_parts {
+            std::string path;  // the file that declares it first
+            std::vector<std::pair<const language::entity_declaration*, std::string>> entities;
+            std::vector<std::pair<const language::command_declaration*, std::string>> commands;
+            std::vector<std::pair<const language::view_declaration*, std::string>> views;
+            std::map<const void*, int> lines;
+        };
+
+        class local_generator {
+        public:
+            explicit local_generator(const std::vector<language::file>& files) : files_(files) {}
+
+            generated_local generate() {
+                for (const auto& f : files_) collect(f.path, "", f.declarations);
+                generated_local out;
+                for (const auto& [ns, parts] : namespaces_) {
+                    if (parts.entities.empty() && parts.commands.empty() && parts.views.empty()) continue;
+                    if (ns.empty()) {
+                        unsupported(parts.path, {}, "entities, commands and views outside a namespace");
+                        continue;
+                    }
+                    ns_ = ns;
+                    parts_ = &parts;
+                    std::string install = "install_" + identifier(ns);
+                    out.files.push_back(file("src/local/" + identifier(ns) + ".cpp", namespace_file(parts, install)));
+                    out.installs.push_back(install);
+                }
+                out.errors = std::move(errors_);
+                if (!out.errors.empty()) out.files.clear();
+                return out;
+            }
+
+        private:
+            const std::vector<language::file>& files_;
+            std::map<std::string, namespace_parts> namespaces_;
+            std::map<std::string, std::vector<std::string>> form_fields_;  // what each command's forms ask for
+            language::diagnostics errors_;
+            std::string ns_;
+            const namespace_parts* parts_ = nullptr;
+            std::string path_;  // the file being read, for errors
+
+            void unsupported(const std::string& path, language::location where, const std::string& what) {
+                for (const auto& e : errors_)
+                    if (e.path == path && e.where.line == where.line) return;
+                errors_.push_back({path, where, "not supported yet in a project that says storage local: " + what});
+            }
+            void unsupported(language::location where, const std::string& what) { unsupported(path_, where, what); }
+
+            void collect(const std::string& path, const std::string& ns, const std::vector<language::declaration>& declarations) {
+                for (const auto& d : declarations) {
+                    if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) {
+                        collect(path, language::qualified(ns, n->name), n->declarations);
+                        continue;
+                    }
+                    auto& parts = namespaces_[ns];
+                    if (parts.path.empty()) parts.path = path;
+                    if (auto* e = std::get_if<language::entity_declaration>(&d.node)) {
+                        parts.entities.emplace_back(e, path);
+                        parts.lines[e] = d.where.line;
+                    } else if (auto* c = std::get_if<language::command_declaration>(&d.node)) {
+                        parts.commands.emplace_back(c, path);
+                        parts.lines[c] = d.where.line;
+                    } else if (auto* v = std::get_if<language::view_declaration>(&d.node)) {
+                        parts.views.emplace_back(v, path);
+                        parts.lines[v] = d.where.line;
+                    } else if (auto* fn = std::get_if<language::function_declaration>(&d.node)) {
+                        path_ = path;
+                        unsupported(d.where, "a function");
+                        (void)fn;
+                    } else if (auto* screen = std::get_if<language::screen_declaration>(&d.node)) {
+                        collect_forms(ns, screen->items);
+                    }
+                }
+            }
+
+            // The fields each command's forms ask for, which is what it may be sent.
+            void collect_forms(const std::string& ns, const std::vector<language::screen_item>& items) {
+                for (const auto& item : items) {
+                    if (auto* form = std::get_if<language::form_item>(&item.node)) {
+                        for (const auto& command : form->commands) {
+                            std::string full = command.parts.size() > 2 ? command.text() : language::qualified(ns, command.text());
+                            auto& fields = form_fields_[full];
+                            for (const auto& field : form->fields)
+                                if (std::ranges::find(fields, field.name) == fields.end()) fields.push_back(field.name);
+                        }
+                    } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                        collect_forms(ns, block->items);
+                    }
+                }
+            }
+
+            // names
+
+            std::string full(const std::string& name) const { return name.find("::") != std::string::npos ? name : language::qualified(ns_, name); }
+
+            const language::entity_declaration* entity(const std::string& name) const {
+                std::string wanted = full(name);
+                for (const auto& [ns, parts] : namespaces_)
+                    for (const auto& [e, _] : parts.entities)
+                        if (language::qualified(ns, e->name) == wanted) return e;
+                return nullptr;
+            }
+
+            static const language::field* field(const language::entity_declaration* e, const std::string& name) {
+                if (!e) return nullptr;
+                for (const auto& f : e->fields)
+                    if (f.name == name) return &f;
+                return nullptr;
+            }
+
+            // The entity a field points at, in full, or empty.
+            std::string refers(const language::field& f) const {
+                if (!f.type) return "";
+                std::string type = f.type->text();
+                return entity(type) ? full(type) : "";
+            }
+
+            // Whether a name is one of the choices any entity's fields offer.
+            bool is_choice(const std::string& name) const {
+                for (const auto& [ns, parts] : namespaces_)
+                    for (const auto& [e, _] : parts.entities)
+                        for (const auto& f : e->fields)
+                            if (std::ranges::find(f.choices, name) != f.choices.end()) return true;
+                return false;
+            }
+
+            // entities
+
+            std::optional<std::string> literal_value(const language::expression& e) {
+                if (auto* l = std::get_if<language::literal_expression>(&e.node)) {
+                    if (l->type == language::literal_expression::kind::string) return "value(" + str(l->value) + ")";
+                    if (l->type == language::literal_expression::kind::number) return "value(" + l->value + ")";
+                    return std::nullopt;
+                }
+                if (auto* n = std::get_if<language::name_expression>(&e.node)) {
+                    const auto& parts = n->name.parts;
+                    if (parts.size() == 2 && is_choice(parts[1])) return "value(" + str(parts[1]) + ")";
+                    if (parts.size() == 1 && parts[0] == "none") return "value()";
+                    if (parts.size() == 1 && (parts[0] == "true" || parts[0] == "false")) return "value(" + parts[0] + ")";
+                    if (parts.size() == 1 && is_choice(parts[0])) return "value(" + str(parts[0]) + ")";
+                }
+                return std::nullopt;
+            }
+
+            std::vector<std::string> entity_fields(const language::entity_declaration& e) {
+                std::vector<std::string> fields;
+                for (const auto& f : e.fields) {
+                    std::string says = ".name = " + str(f.name);
+                    bool serial = f.type && f.type->text() == "serial";
+                    // In the order package.hpp declares them, as designated initializers go.
+                    if (f.required) says += ", .required = true";
+                    if (f.key) says += ", .key = true";
+                    if (f.unique) says += ", .unique = true";
+                    if (!f.choices.empty()) says += ", .choices = " + native_detail::strings(f.choices);
+                    if (f.initial) {
+                        auto* n = std::get_if<language::name_expression>(&f.initial->node);
+                        if (n && n->name.text() == "now") {
+                            says += ", .now = true";
+                        } else if (auto v = literal_value(*f.initial)) {
+                            says += ", .initial = " + *v;
+                        } else {
+                            unsupported(f.where, "a field's start that isn't a value, a choice or now");
+                        }
+                    }
+                    if (serial) says += ", .serial = " + str(f.per.value_or(""));
+                    if (std::string to = refers(f); !to.empty()) says += ", .refers = " + str(to);
+                    if (f.after) says += ", .after = " + str(*f.after);
+                    if (f.list) says += ", .list = true";
+                    if (f.range) says += ", .range = field::numbers{" + f.range->from + ", " + f.range->to + ", " + f.range->by + "}";
+                    fields.push_back("{" + says + "}");
+                }
+                return fields;
+            }
+
+            // command bodies
+
+            struct scope {
+                const language::entity_declaration* own = nullptr;  // the command's entity, read as e
+                const language::entity_declaration* row = nullptr;  // in an each, the row's, read as row
+                std::set<std::string> inputs;
+            };
+
+            piece expression(const language::expression& e, const scope& s) {
+                if (auto v = literal_value(e)) return {*v};
+                if (auto* n = std::get_if<language::name_expression>(&e.node)) {
+                    const auto& parts = n->name.parts;
+                    if (parts.size() == 1) {
+                        const std::string& name = parts[0];
+                        if (name == "now") return {"value(c.now())"};
+                        if (s.inputs.contains(name)) return {"c.input(" + str(name) + ")"};
+                        if (s.row && (field(s.row, name) || name == "id")) return {"row[" + str(name) + "]"};
+                        if (field(s.own, name) || name == "id") return {"e[" + str(name) + "]"};
+                    }
+                    unsupported(e.where, "the name " + n->name.text() + " here");
+                    return {"value()"};
+                }
+                if (auto* m = std::get_if<language::member_expression>(&e.node)) {
+                    // A field of what a field points at: book.status.
+                    if (auto* object = std::get_if<language::name_expression>(&m->object->node); object && object->name.parts.size() == 1) {
+                        const std::string& through = object->name.parts[0];
+                        const language::entity_declaration* from = s.row && field(s.row, through) ? s.row : s.own;
+                        std::string held = from == s.row ? "row" : "e";
+                        if (const language::field* f = field(from, through); f && !refers(*f).empty()) {
+                            if (m->member == "id") return {held + "[" + str(through) + "]"};
+                            return {"c.at(" + str(refers(*f)) + ", " + held + "[" + str(through) + "])[" + str(m->member) + "]"};
+                        }
+                    }
+                    unsupported(e.where, "reading a field through more than one step");
+                    return {"value()"};
+                }
+                if (auto* u = std::get_if<language::unary_expression>(&e.node)) {
+                    piece inner = expression(*u->operand, s);
+                    if (u->op == language::token_kind::logical_not) return {"!" + as_bool(inner), true};
+                    if (u->op == language::token_kind::minus) return {"value(-" + as_value(inner) + ".as_double())"};
+                }
+                if (auto* b = std::get_if<language::binary_expression>(&e.node)) {
+                    piece l = expression(*b->left, s), r = expression(*b->right, s);
+                    using language::token_kind;
+                    switch (b->op) {
+                        case token_kind::equal: return {"same(" + as_value(l) + ", " + as_value(r) + ")", true};
+                        case token_kind::not_equal: return {"!same(" + as_value(l) + ", " + as_value(r) + ")", true};
+                        case token_kind::less: return {"compare(" + as_value(l) + ", " + as_value(r) + ") < 0", true};
+                        case token_kind::less_equal: return {"compare(" + as_value(l) + ", " + as_value(r) + ") <= 0", true};
+                        case token_kind::greater: return {"compare(" + as_value(l) + ", " + as_value(r) + ") > 0", true};
+                        case token_kind::greater_equal: return {"compare(" + as_value(l) + ", " + as_value(r) + ") >= 0", true};
+                        case token_kind::logical_and: return {"(" + as_bool(l) + " && " + as_bool(r) + ")", true};
+                        case token_kind::logical_or: return {"(" + as_bool(l) + " || " + as_bool(r) + ")", true};
+                        case token_kind::plus: return {"value(" + as_value(l) + ".as_double() + " + as_value(r) + ".as_double())"};
+                        case token_kind::minus: return {"value(" + as_value(l) + ".as_double() - " + as_value(r) + ".as_double())"};
+                        case token_kind::star: return {"value(" + as_value(l) + ".as_double() * " + as_value(r) + ".as_double())"};
+                        default: break;
+                    }
+                }
+                unsupported(e.where, "this kind of expression");
+                return {"value()"};
+            }
+
+            // The fields given in a create or dispatch, as a value.
+            std::string given(const std::vector<language::field_value>& values, const scope& s, std::string* id) {
+                std::string fields;
+                for (const auto& v : values) {
+                    std::string code = as_value(expression(*v.value, s));
+                    if (id && v.name == "id") {
+                        *id = code + ".as_string()";
+                        continue;
+                    }
+                    fields += (fields.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + code + "}";
+                }
+                return "value(fields{" + fields + "})";
+            }
+
+            void statements(stream& out, const std::string& path, const std::vector<language::statement>& body, scope& s) {
+                for (const auto& st : body) {
+                    auto from = out.from(path, st.where.line);
+                    std::visit(
+                        [&](const auto& n) {
+                            using kind = std::decay_t<decltype(n)>;
+                            if constexpr (std::is_same_v<kind, language::require_statement>) {
+                                out.line("if (!" + paren(as_bool(expression(*n.condition, s))) + ") return c.fail(" + str(n.message) + ");");
+                            } else if constexpr (std::is_same_v<kind, language::assign_statement>) {
+                                auto* target = std::get_if<language::name_expression>(&n.target->node);
+                                if (!target || target->name.parts.size() != 1) {
+                                    unsupported(st.where, "setting anything but a field");
+                                    return;
+                                }
+                                std::string held = s.row && field(s.row, target->name.parts[0]) ? "row" : "e";
+                                out.line(held + ".fields[" + str(target->name.parts[0]) + "] = " + as_value(expression(*n.value, s)) + ";");
+                            } else if constexpr (std::is_same_v<kind, language::clear_statement>) {
+                                for (const auto& f : n.fields) out.line("e.fields[" + str(f) + "] = value();");
+                            } else if constexpr (std::is_same_v<kind, language::if_statement>) {
+                                out.open("if (" + as_bool(expression(*n.condition, s)) + ") {");
+                                statements(out, path, n.then_body, s);
+                                if (!n.else_body.empty()) {
+                                    out.dedent();
+                                    out.open("} else {");
+                                    statements(out, path, n.else_body, s);
+                                }
+                                out.close("}");
+                            } else if constexpr (std::is_same_v<kind, language::create_statement>) {
+                                if (n.command) {
+                                    unsupported(st.where, "making something as another command makes it");
+                                    return;
+                                }
+                                out.line("if (auto made = c.create(" + str(full(n.entity)) + ", " + given(n.values, s, nullptr) + "); !made) return c.fail(made.error());");
+                            } else if constexpr (std::is_same_v<kind, language::dispatch_statement>) {
+                                const auto& parts = n.command.parts;
+                                if (parts.empty() || parts.back() != "update" || !n.lists.empty()) {
+                                    unsupported(st.where, "running a command other than an update from another");
+                                    return;
+                                }
+                                std::string target = n.command.text();
+                                target = target.substr(0, target.rfind("::"));
+                                std::string id;
+                                std::string fields = given(n.values, s, &id);
+                                if (id.empty()) {
+                                    unsupported(st.where, "an update that doesn't say which, with id = ...");
+                                    return;
+                                }
+                                out.line("if (auto done = c.update(" + str(full(target)) + ", " + id + ", " + fields + "); !done) return done;");
+                            } else if constexpr (std::is_same_v<kind, language::each_statement>) {
+                                const language::entity_declaration* over = entity(n.entity);
+                                if (!over || n.other) {
+                                    unsupported(st.where, "going through rows of another kind");
+                                    return;
+                                }
+                                scope inner = s;
+                                inner.row = over;
+                                out.open("for (value row : c.each(all(" + str(full(n.entity)) + "))) {");
+                                if (n.where) out.line("if (!" + paren(as_bool(expression(*n.where, inner))) + ") continue;");
+                                statements(out, path, n.body, inner);
+                                out.line("if (auto done = c.update(" + str(full(n.entity)) + ", row[\"id\"].as_string(), row); !done) return done;");
+                                out.close("}");
+                            } else if constexpr (std::is_same_v<kind, language::delete_statement>) {
+                                const language::entity_declaration* over = entity(n.entity);
+                                if (!over) {
+                                    unsupported(st.where, "deleting rows of another kind");
+                                    return;
+                                }
+                                scope inner = s;
+                                inner.row = over;
+                                out.open("for (value row : c.each(all(" + str(full(n.entity)) + "))) {");
+                                if (n.where) out.line("if (!" + paren(as_bool(expression(*n.where, inner))) + ") continue;");
+                                out.line("if (auto done = c.remove(" + str(full(n.entity)) + ", row[\"id\"].as_string()); !done) return done;");
+                                out.close("}");
+                            } else if constexpr (std::is_same_v<kind, language::input_statement> || std::is_same_v<kind, language::permission_statement> ||
+                                                 std::is_same_v<kind, language::changes_statement>) {
+                                // Said in the command's line: what it takes, and what it may be sent.
+                            } else {
+                                unsupported(st.where, "this statement");
+                            }
+                        },
+                        st.node);
+                }
+            }
+
+            static std::string paren(const std::string& code) { return code.starts_with("(") || code.starts_with("same(") || code.starts_with("truthy(") ? code : "(" + code + ")"; }
+
+            void command(stream& out, const language::command_declaration& c, const std::string& path, int line, bool last) {
+                path_ = path;
+                auto from = out.from(path, line);
+                const auto& parts = c.name.parts;
+                if (parts.size() != 2) {
+                    unsupported(c.name.where, "a command not named for its entity, like layer::place");
+                    return;
+                }
+                const language::entity_declaration* own = entity(parts[0]);
+                std::string on = full(parts[0]), action = parts[1];
+                std::string name = language::qualified(ns_, c.name.text());
+                std::string head = "command(" + str(name) + ")";
+                head += action == "create" ? ".creates(" + str(on) + ")" : action == "update" ? ".updates(" + str(on) + ")"
+                        : action == "delete" ? ".deletes(" + str(on) + ")" : ".on(" + str(on) + ")";
+                // What it may be sent: what its forms ask for and its changes name; a
+                // create takes every field, and an update with neither all but its keys.
+                std::vector<std::string> allowed;
+                if (auto forms = form_fields_.find(name); forms != form_fields_.end()) allowed = forms->second;
+                scope s{own, nullptr, {}};
+                for (const auto& st : c.body) {
+                    if (auto* changes = std::get_if<language::changes_statement>(&st.node)) {
+                        for (const auto& name : changes->fields)
+                            if (std::ranges::find(allowed, name) == allowed.end()) allowed.push_back(name);
+                    }
+                    if (auto* input = std::get_if<language::input_statement>(&st.node)) s.inputs.insert(input->name);
+                }
+                if (action != "create" && action != "delete" && !allowed.empty()) head += ".fields(" + native_detail::strings(allowed) + ")";
+                if (!s.inputs.empty()) head += ".takes(" + native_detail::strings(std::vector<std::string>(s.inputs.begin(), s.inputs.end())) + ")";
+                bool has_body = std::ranges::any_of(c.body, [](const language::statement& st) {
+                    return !std::holds_alternative<language::input_statement>(st.node) && !std::holds_alternative<language::permission_statement>(st.node) &&
+                           !std::holds_alternative<language::changes_statement>(st.node);
+                });
+                if (!has_body) {
+                    out.line(head + (last ? "" : ","));
+                    return;
+                }
+                out.open(head + ".does([](context& c, value& e) -> std::expected<void, std::string> {");
+                statements(out, path, c.body, s);
+                out.line("return c.done();");
+                out.close(std::string("})") + (last ? "" : ","));
+            }
+
+            // views
+
+            struct view_scope {
+                std::string per;   // the entity the view is per, by its own name
+                std::string each;  // in a value worked out for a row, the row's entity
+            };
+
+            // What a condition's side compares with, as package.hpp's compared.
+            std::optional<std::string> wanted(const language::expression& e, const view_scope& v) {
+                if (auto lit = literal_value(e)) return *lit;
+                if (auto* m = std::get_if<language::member_expression>(&e.node)) {
+                    if (auto* object = std::get_if<language::name_expression>(&m->object->node); object && object->name.parts.size() == 1) {
+                        const std::string& name = object->name.parts[0];
+                        if (!v.each.empty() && name == v.each && m->member == "id") return "row";
+                        if (!v.per.empty() && name == v.per) return m->member == "id" ? "subject" : "subject_field{" + str(m->member) + "}";
+                    }
+                }
+                return std::nullopt;
+            }
+
+            // The field of the rows a query picks that a side names: status, or loan.book.
+            std::optional<std::string> picked_field(const language::expression& e, const std::string& rows) {
+                if (auto* n = std::get_if<language::name_expression>(&e.node); n && n->name.parts.size() == 1) {
+                    if (field(entity(rows), n->name.parts[0])) return n->name.parts[0];
+                }
+                if (auto* m = std::get_if<language::member_expression>(&e.node)) {
+                    auto* object = std::get_if<language::name_expression>(&m->object->node);
+                    if (object && object->name.text() == rows.substr(rows.rfind(':') == std::string::npos ? 0 : rows.rfind(':') + 1)) return m->member;
+                    if (object && object->name.parts.size() == 1 && field(entity(rows), object->name.parts[0])) return object->name.parts[0] + "." + m->member;
+                }
+                return std::nullopt;
+            }
+
+            // A where condition as a query's conditions: comparisons joined by &&, and
+            // ways joined by ||.
+            std::string query(const std::string& rows, const language::expression* condition, const view_scope& v) {
+                std::string q = "all(" + str(full(rows)) + ")";
+                if (!condition) return q;
+                if (auto* b = std::get_if<language::binary_expression>(&condition->node)) {
+                    if (b->op == language::token_kind::logical_or) return query(rows, b->left.get(), v) + ".either(" + query(rows, b->right.get(), v) + ")";
+                }
+                return q + conditions(rows, *condition, v);
+            }
+
+            std::string conditions(const std::string& rows, const language::expression& e, const view_scope& v) {
+                auto* b = std::get_if<language::binary_expression>(&e.node);
+                if (b && b->op == language::token_kind::logical_and) return conditions(rows, *b->left, v) + conditions(rows, *b->right, v);
+                if (b && (b->op == language::token_kind::equal || b->op == language::token_kind::not_equal)) {
+                    auto f = picked_field(*b->left, rows);
+                    auto w = wanted(*b->right, v);
+                    if (!f || !w) {
+                        f = picked_field(*b->right, rows);
+                        w = wanted(*b->left, v);
+                    }
+                    if (f && w) return std::string(b->op == language::token_kind::equal ? ".where(" : ".except(") + str(*f) + ", " + *w + ")";
+                }
+                unsupported(e.where, "this condition in a view");
+                return "";
+            }
+
+            // A path from what a view is per, like board.stage.title, as the field it
+            // reads: stage.title. None when it doesn't start there.
+            static std::optional<std::string> rooted(const language::expression& e, const std::string& per) {
+                if (per.empty()) return std::nullopt;
+                auto* m = std::get_if<language::member_expression>(&e.node);
+                if (!m) return std::nullopt;
+                if (auto* n = std::get_if<language::name_expression>(&m->object->node))
+                    return n->name.parts.size() == 1 && n->name.parts[0] == per ? std::optional<std::string>(m->member) : std::nullopt;
+                if (auto inner = rooted(*m->object, per)) return *inner + "." + m->member;
+                return std::nullopt;
+            }
+
+            // What an each's source names: the entity its rows are.
+            std::optional<std::string> source(const language::view_each& each) {
+                if (auto* n = std::get_if<language::name_expression>(&each.source->node); n && entity(n->name.text())) return n->name.text();
+                return std::nullopt;
+            }
+
+            // A view's chain, a line each, with where each came from.
+            using chain = std::vector<std::pair<std::string, int>>;
+
+            void list(chain& out, const language::view_each& each, const view_scope& v) {
+                int at = each.where.line;
+                auto rows = source(each);
+                if (!rows || !each.within.empty() || each.changes || !each.lists.empty()) {
+                    unsupported(each.where, "this list in a view");
+                    return;
+                }
+                std::string q = query(*rows, each.condition.get(), v);
+                out.emplace_back(each.name ? ".list(" + str(*each.name) + ", " + q + ")" : ".each(" + q + ")", at);
+                std::vector<std::string> order;
+                for (const auto& o : each.order) {
+                    if (auto* n = std::get_if<language::name_expression>(&o->node); n && n->name.parts.size() == 1) {
+                        order.push_back(str(n->name.parts[0]));
+                    } else if (auto* u = std::get_if<language::unary_expression>(&o->node); u && u->op == language::token_kind::minus) {
+                        auto* inner = std::get_if<language::name_expression>(&u->operand->node);
+                        if (inner && inner->name.parts.size() == 1) order.push_back(str("-" + inner->name.parts[0]));
+                        else unsupported(o->where, "ordering by this");
+                    } else {
+                        unsupported(o->where, "ordering by this");
+                    }
+                }
+                if (!order.empty()) {
+                    std::string keys;
+                    for (const auto& k : order) keys += (keys.empty() ? "" : ", ") + std::string("by(") + k + ")";
+                    out.emplace_back(".order({" + keys + "})", at);
+                }
+                if (each.limit) out.emplace_back(".limit(" + std::to_string(*each.limit) + ")", at);
+                std::vector<std::string> fields;
+                std::vector<std::string> values;
+                for (const auto& r : each.rows) {
+                    if (!r.name) {
+                        if (auto f = picked_field(*r.value, *rows)) fields.push_back(*f);
+                        else unsupported(r.where, "this in a row");
+                        continue;
+                    }
+                    // name = first(other where ...).field: a field of the first that's found.
+                    auto* m = std::get_if<language::member_expression>(&r.value->node);
+                    auto* call = m ? std::get_if<language::call_expression>(&m->object->node) : nullptr;
+                    auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+                    auto* where = call && call->arguments.size() == 1 ? std::get_if<language::where_expression>(&call->arguments[0]->node) : nullptr;
+                    auto* other = where ? std::get_if<language::name_expression>(&where->source->node) : nullptr;
+                    if (callee && callee->name.text() == "first" && other && entity(other->name.text())) {
+                        view_scope inner = v;
+                        inner.each = *rows;
+                        values.push_back(".value(" + str(*r.name) + ", " + query(other->name.text(), where->condition.get(), inner) + ", " + str(m->member) + ")");
+                    } else {
+                        unsupported(r.where, "this value in a row");
+                    }
+                }
+                if (!fields.empty()) out.emplace_back(".fields(" + native_detail::strings(fields) + ")", at);
+                for (const auto& line : values) out.emplace_back(line, at);
+            }
+
+            void view(stream& out, const language::view_declaration& v, const std::string& path, int line, bool last) {
+                path_ = path;
+                view_scope s;
+                chain lines{{"view(" + str(full(v.name)) + ")", line}};
+                if (v.per) {
+                    if (!entity(*v.per)) unsupported(language::location{line, 1}, "a view per something that isn't an entity");
+                    s.per = *v.per;
+                    lines.emplace_back(".per(" + str(full(*v.per)) + ")", line);
+                }
+                for (const auto& value : v.values) {
+                    if (!value.name) {
+                        // A field of what the view is per, copied as it's named.
+                        std::string named;
+                        if (auto* n = std::get_if<language::name_expression>(&value.value->node); n && n->name.parts.size() == 1) named = n->name.parts[0];
+                        if (auto* m = std::get_if<language::member_expression>(&value.value->node)) {
+                            if (auto* o = std::get_if<language::name_expression>(&m->object->node); o && o->name.parts.size() == 1) named = o->name.parts[0] + "." + m->member;
+                        }
+                        if (named.empty() || s.per.empty()) unsupported(value.where, "this value in a view");
+                        else lines.emplace_back(".copy(" + str(named) + ", " + str(named) + ")", value.where.line);
+                        continue;
+                    }
+                    // A field of what it's per, said bare: name is board.name, stage.title
+                    // board.stage.title.
+                    if (auto through = rooted(*value.value, s.per)) {
+                        lines.emplace_back(".copy(" + str(*value.name) + ", " + str(*through) + ")", value.where.line);
+                        continue;
+                    }
+                    auto* call = std::get_if<language::call_expression>(&value.value->node);
+                    auto* callee = call ? std::get_if<language::name_expression>(&call->callee->node) : nullptr;
+                    if (callee && callee->name.text() == "count" && call->arguments.size() == 1) {
+                        const auto& argument = *call->arguments[0];
+                        if (auto* n = std::get_if<language::name_expression>(&argument.node); n && entity(n->name.text())) {
+                            lines.emplace_back(".count(" + str(*value.name) + ", " + query(n->name.text(), nullptr, s) + ")", value.where.line);
+                            continue;
+                        }
+                        if (auto* w = std::get_if<language::where_expression>(&argument.node)) {
+                            if (auto* n = std::get_if<language::name_expression>(&w->source->node); n && entity(n->name.text())) {
+                                lines.emplace_back(".count(" + str(*value.name) + ", " + query(n->name.text(), w->condition.get(), s) + ")", value.where.line);
+                                continue;
+                            }
+                        }
+                    }
+                    unsupported(value.where, "this value in a view");
+                }
+                for (const auto& each : v.each) list(lines, each, s);
+                if (!last) lines.back().first += ",";
+                for (std::size_t i = 0; i < lines.size(); ++i) {
+                    auto from = out.from(path, lines[i].second);
+                    if (i == 0 && lines.size() > 1) out.open(lines[i].first);
+                    else out.line(lines[i].first);
+                }
+                if (lines.size() > 1) out.dedent();
+            }
+
+            stream namespace_file(const namespace_parts& parts, const std::string& install) {
+                stream body("\t");
+                std::string package = identifier(ns_);
+                body.open("static const package " + package + "(" + str(ns_) + ",");
+                body.open("{");
+                for (std::size_t i = 0; i < parts.entities.size(); ++i) {
+                    auto [e, path] = parts.entities[i];
+                    auto from = body.from(path, parts.lines.at(e));
+                    path_ = path;
+                    body.open("entity(" + str(full(e->name)) + ", {");
+                    for (const auto& f : entity_fields(*e)) body.line(f + ",");
+                    body.close(std::string("})") + (i + 1 < parts.entities.size() ? "," : ""));
+                }
+                body.close("},");
+                body.open("{");
+                for (std::size_t i = 0; i < parts.commands.size(); ++i) {
+                    auto [c, path] = parts.commands[i];
+                    command(body, *c, path, parts.lines.at(c), i + 1 == parts.commands.size());
+                }
+                body.close("},");
+                body.open("{");
+                for (std::size_t i = 0; i < parts.views.size(); ++i) {
+                    auto [v, path] = parts.views[i];
+                    view(body, *v, path, parts.lines.at(v), i + 1 == parts.views.size());
+                }
+                body.close("});");
+                body.dedent();
+                body.line(package + ".install(source);");
+
+                stream out("\t");
+                out.generated_from(std::filesystem::path(parts.path).filename().string());
+                {
+                    auto fixed = out.fixed();
+                    out.line("#include <one/local/package.hpp>");
+                    out.line();
+                    out.open("namespace app {");
+                    out.line();
+                    out.line("using namespace one::local;");
+                    out.line("using fields = std::map<std::string, value>;");
+                    out.line();
+                    out.line("// " + ns_ + "'s entities, commands and views, kept on this machine.");
+                    out.open("void " + install + "(local_source& source) {");
+                }
+                out.embed(body);
+                {
+                    auto fixed = out.fixed();
+                    out.close("}");
+                    out.line();
+                    out.close("}  // namespace app");
+                }
+                return out;
+            }
+        };
+
+    }  // namespace
+
+    generated_local generate_local(const std::vector<language::file>& files) { return local_generator(files).generate(); }
+
+} // namespace one::generators

@@ -20,6 +20,13 @@ namespace one {
 		terminal  "Terminal"
 	}
 
+	// Where a project keeps its data: on Firebase with a Go service, or on the machine
+	// its app runs on, for one person, with nobody signing in.
+	enum storage {
+		firestore  "Firebase, with a Go service"
+		local      "On the machine the app runs on"
+	}
+
 	// A way people sign in.
 	enum signin {
 		google     "Google"
@@ -125,6 +132,8 @@ namespace one {
 		region      slug
 		// The component set it's drawn with.
 		ui          ui
+		// Where it keeps its data, on Firebase unless it says storage local.
+		storage     storage
 		// The ways people sign in, several to a line, like signin google github.
 		signin      list of signin
 		// The apps one build writes from the screens, several to a line, like target web

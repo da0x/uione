@@ -91,6 +91,13 @@ namespace one::local {
 		return 0;
 	}
 
+	bool same(const value& a, const value& b) {
+		if (nothing(a) || nothing(b)) return nothing(a) && nothing(b);
+		return alike(a, b);
+	}
+
+	bool truthy(const value& v) { return v.is_bool() ? v.boolean : !nothing(v); }
+
 	std::string label(const std::string& name) {
 		std::string words = name;
 		std::ranges::replace(words, '_', ' ');

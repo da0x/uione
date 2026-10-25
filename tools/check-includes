@@ -31,9 +31,10 @@ level() {
 		generators/cpp_browser|generators/markdown|generators/native_names) echo 0 ;;
 		toolchain|language/ast|language/diagnostics|generators/output|generators/javascript) echo 1 ;;
 		language/lexer|language/written|language/extends|language/targets) echo 2 ;;
+		language/storage) echo 3 ;;
 		language/parser) echo 3 ;;
 		language/lower|generators/roles|generators/theme) echo 4 ;;
-		language/checker|generators/screens) echo 5 ;;
+		language/checker|generators/screens|generators/local) echo 5 ;;
 		generators/web|generators/native|generators/api|generators/cpp|generators/infrastructure) echo 6 ;;
 		generators/indexes|generators/rules|generators/agent) echo 6 ;;
 		generators/project) echo 7 ;;

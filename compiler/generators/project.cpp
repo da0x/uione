@@ -10,19 +10,36 @@
 #include "generators/api.hpp"
 #include "generators/cpp.hpp"
 #include "generators/infrastructure.hpp"
+#include "generators/local.hpp"
 #include "generators/native.hpp"
 #include "generators/indexes.hpp"
 #include "generators/roles.hpp"
 #include "generators/rules.hpp"
 #include "generators/web.hpp"
+#include "language/storage.hpp"
 #include "language/targets.hpp"
 
 namespace one::generators {
 
     generated_project generate_project(std::vector<language::file>& files, const std::string& project_dir,
                                        const std::string& out_dir, const std::vector<std::string>& targets) {
-        for (auto& view : roles_of(files).files) files.push_back(std::move(view));
         generated_project out;
+        // A project that keeps its data on this machine is its native apps alone: its
+        // commands and views run inside them, with no service, rules or cloud (0015).
+        if (language::stores_locally(files)) {
+            auto local = generate_local(files);
+            out.errors = std::move(local.errors);
+            if (!out.errors.empty()) return out;
+            for (const char* native : {"desktop", "terminal"}) {
+                if (!language::listed(targets, native)) continue;
+                for (auto& f : generate_native(files, project_dir, native)) {
+                    f.path = std::string(native) + "/" + f.path;
+                    out.files.push_back(std::move(f));
+                }
+            }
+            return out;
+        }
+        for (auto& view : roles_of(files).files) files.push_back(std::move(view));
         auto api = generate_api(files, project_dir, out_dir + "/api");
         out.errors = api.errors;
         if (!out.errors.empty()) return out;

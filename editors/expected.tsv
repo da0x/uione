@@ -239,6 +239,7 @@ editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	#0b5cad	constant
 editors/fixtures/theme.one	accent   #0b5cad  dark #8cc4ff	dark	keyword
 editors/fixtures/theme.one	depth    flat	flat	keyword
 editors/fixtures/accessibility.one	accessibility  menu	accessibility	keyword
+editors/fixtures/storage.one	storage  local	storage	keyword
 editors/fixtures/roles.one	in project {	project	type
 editors/fixtures/roles.one	\t\tmember::create	member	namespace
 examples/tracker/main.one	\t\tissue::take	issue	namespace

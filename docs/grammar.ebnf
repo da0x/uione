@@ -59,7 +59,7 @@ setting        ::= setting_name (STRING | qualified+) END   /* a list may say se
                  | "redirect" STRING STRING END
                  | "domain" STRING STRING END     /* a second domain, like www, sends people to the first */
 setting_name   ::= "domain" | "firebase" | "region" | "ui" | "signin" | "target" | "icon" | "layout" | "serve"
-                 | "title" | "one" | "extends" | "analytics" | "theme" | "appearance" | "accessibility"
+                 | "title" | "one" | "extends" | "analytics" | "theme" | "appearance" | "accessibility" | "storage"
 
 /* A place the project runs: its own domain, Firebase project and region, which take
  * the place of the shared ones. `one build --for staging` builds for it. */

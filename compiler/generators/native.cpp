@@ -17,6 +17,7 @@
 #include <one/screens/palette.hpp>
 
 #include "code/stream.hpp"
+#include "generators/local.hpp"
 #include "generators/markdown.hpp"
 #include "generators/screens.hpp"
 #include "generators/theme.hpp"
@@ -47,6 +48,15 @@ namespace one::generators {
                 out.push_back(file("src/screens/" + stem + ".cpp", screen_file(f, found, stem)));
             }
             for (const auto& pages : pages_) out.push_back(file("src/pages/" + pages.name + ".hpp", pages_file(pages)));
+            // A project that keeps its data here runs its commands and views itself.
+            if (model_.project.local) {
+                auto local = generate_local(files_);
+                for (auto& f : local.files) {
+                    local_sources_.push_back(f.path);
+                    out.push_back(std::move(f));
+                }
+                installs_ = std::move(local.installs);
+            }
             for (auto& component : component_files()) out.push_back(std::move(component));
             out.push_back(file("src/site.cpp", site_file()));
             out.push_back(file("src/app.hpp", app_hpp(stems)));
@@ -1561,6 +1571,8 @@ namespace one::generators {
             return out;
         }
         const language::file* current_file_ = nullptr;
+        std::vector<std::string> local_sources_;  // src/local/<namespace>.cpp, for storage local
+        std::vector<std::string> installs_;       // and the function each gives its source with
         std::string files_path(const language::declaration&) const { return current_file_ ? current_file_->path : ""; }
 
         std::string runtime() const { return target_ == "desktop" ? "one::desktop::runtime" : "one::terminal::runtime"; }
@@ -1577,6 +1589,7 @@ namespace one::generators {
             } else {
                 out.line("#include <one/terminal/runtime/components.hpp>");
             }
+            if (model_.project.local) out.line("#include <one/local/local.hpp>");
             out.line();
             out.open("namespace app {");
             out.line();
@@ -1592,6 +1605,11 @@ namespace one::generators {
             out.line("// The badges beside the app's name, and its footer.");
             out.line("void site_parts(site& s);");
             for (const auto& stem : stems) out.line("void " + native_detail::identifier(stem + "_screens") + "(site& s);");
+            if (!installs_.empty()) {
+                out.line();
+                out.line("// The entities, commands and views each namespace keeps on this machine.");
+                for (const auto& install : installs_) out.line("void " + install + "(one::local::local_source& source);");
+            }
             if (!components_.empty()) {
                 out.line();
                 out.line("// The components the screens draw, written by hand in components/.");
@@ -1619,7 +1637,61 @@ namespace one::generators {
             return out;
         }
 
+        // The main of an app that keeps its data on this machine: its folder opened and
+        // held, what it kept read back, and its own commands and views given to the
+        // screens, with no server and nobody signing in.
+        stream local_main_cpp(const std::vector<std::string>& stems) const {
+            stream out("\t");
+            auto from = out.from(project_path_, project_ ? project_->where.line : 0);
+            out.generated_from(project_path_.empty() ? "the project" : std::filesystem::path(project_path_).filename().string());
+            std::string name = model_.project.name, title = model_.site_title();
+            out.line("// " + title + " as a " + target_ + " app, keeping its data on this machine, in");
+            out.line("// $XDG_DATA_HOME/" + name + ".");
+            out.line("//");
+            out.line("//   " + name + "            its first screen");
+            out.line("//   " + name + " /address   the screen at an address, like /projects");
+            out.line();
+            out.line("#include <print>");
+            out.line();
+            out.line("#include \"app.hpp\"");
+            out.line();
+            out.open("int main(int count, char** given) {");
+            if (target_ == "desktop") {
+                out.line("auto window_app = one::desktop::app::connect();");
+                out.open("if (!window_app) {");
+                out.line("std::println(stderr, \"" + name + ": {}\", window_app.error());");
+                out.line("return 1;");
+                out.close("}");
+            } else {
+                out.line("one::terminal::view_app window_app;");
+            }
+            out.line("auto kept = one::local::folder::open(" + str(name) + ");");
+            out.open("if (!kept) {");
+            out.line("std::println(stderr, \"" + name + ": {}\", kept.error());");
+            out.line("return 1;");
+            out.close("}");
+            out.line("auto source = one::local::local_source::open(std::move(*kept));");
+            out.open("if (!source) {");
+            out.line("std::println(stderr, \"" + name + ": {}\", source.error());");
+            out.line("return 1;");
+            out.close("}");
+            for (const auto& install : installs_) out.line("app::" + install + "(**source);");
+            out.line("app::site s{.name = " + str(title) + ", .id = " + str(app_id()) + "};");
+            if (target_ == "desktop") {
+                out.open("{");
+                for (const auto& line : theme_of()) out.line(line);
+                out.line("s.look = t;");
+                out.close("}");
+            }
+            out.line("app::site_parts(s);");
+            for (const auto& stem : stems) out.line("app::" + native_detail::identifier(stem + "_screens") + "(s);");
+            out.line("return app::run(s, " + std::string(target_ == "desktop" ? "*window_app" : "window_app") + ", **source, count > 1 ? given[1] : \"/\");");
+            out.close("}");
+            return out;
+        }
+
         stream main_cpp(const std::vector<std::string>& stems) const {
+            if (model_.project.local) return local_main_cpp(stems);
             stream out("\t");
             auto from = out.from(project_path_, project_ ? project_->where.line : 0);
             out.generated_from(project_path_.empty() ? "the project" : std::filesystem::path(project_path_).filename().string());
@@ -1845,17 +1917,24 @@ namespace one::generators {
             out.open("if(NOT TARGET one_" + target_ + "_runtime)");
             out.line("add_subdirectory(${UIONE}/" + target_ + " ${CMAKE_BINARY_DIR}/uione-" + target_ + " EXCLUDE_FROM_ALL)");
             out.close("endif()");
+            if (model_.project.local) {
+                out.line("# What keeps its data on this machine.");
+                out.open("if(NOT TARGET one_local)");
+                out.line("add_subdirectory(${UIONE}/local ${CMAKE_BINARY_DIR}/uione-local EXCLUDE_FROM_ALL)");
+                out.close("endif()");
+            }
             out.line();
             std::string sources = "src/main.cpp";
             sources += " src/site.cpp";
             for (const auto& stem : stems) sources += " src/screens/" + stem + ".cpp";
             for (const auto& component : component_sources_) sources += " src/components/" + component;
+            for (const auto& local : local_sources_) sources += " " + local;
             // Named for its target too, so one build can hold an app's desktop and terminal
             // builds both, and the program is still the app's name.
             const std::string executable = name + "_" + target_;
             out.line("add_executable(" + executable + " " + sources + ")");
             out.line("set_target_properties(" + executable + " PROPERTIES OUTPUT_NAME " + name + ")");
-            out.line("target_link_libraries(" + executable + " PRIVATE one_" + target_ + "_runtime)");
+            out.line("target_link_libraries(" + executable + " PRIVATE one_" + target_ + "_runtime" + (model_.project.local ? " one_local" : "") + ")");
             out.line("target_compile_options(" + executable + " PRIVATE -Wno-free-nonheap-object)");
             out.line();
             out.line("# What it was built from, which its footer can show: the commit, and its repository.");

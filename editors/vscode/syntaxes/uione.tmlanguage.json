@@ -602,7 +602,7 @@
           }
         },
         {
-          "match": "^\\s*(domain|firebase|region|ui|signin|target|icon|theme|appearance|accessibility|layout|serve|redirect|title|one|analytics|extends)\\b",
+          "match": "^\\s*(domain|firebase|region|ui|signin|target|icon|theme|appearance|accessibility|layout|serve|redirect|title|one|analytics|extends|storage)\\b",
           "captures": {
             "1": {
               "name": "keyword.other.uione"

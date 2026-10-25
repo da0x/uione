@@ -1,0 +1,12 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A project that keeps its data on the machine its app runs on, for the highlighting
+// test.
+
+import one
+
+project notes {
+	storage  local
+	target   desktop
+}

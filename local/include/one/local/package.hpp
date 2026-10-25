@@ -62,6 +62,10 @@ namespace one::local {
 	int compare(const value& a, const value& b);
 	// A field's name as a person reads it: due_at is "Due at".
 	std::string label(const std::string& name);
+	// == in a command's body: the same value, or both nothing when either is none.
+	bool same(const value& a, const value& b);
+	// A value as a condition: true, or anything but nothing and false.
+	bool truthy(const value& v);
 
 	// One field of an entity, as its .one line says it.
 	struct field {
@@ -164,6 +168,12 @@ namespace one::local {
 	public:
 		const std::string& now() const { return now_; }
 		std::optional<local::value> read(const std::string& entity, const std::string& id) const;
+		// What a field pointing at an entity points at, or nothing: book.status reads
+		// c.at("library::book", e["book"])["status"].
+		local::value at(const std::string& entity, const local::value& id) const {
+			auto found = read(entity, id.as_string());
+			return found ? *found : local::value();
+		}
 		std::vector<local::value> each(const query& rows) const;
 		std::expected<std::string, std::string> create(const std::string& entity, local::value fields);
 		std::expected<void, std::string> update(const std::string& entity, const std::string& id, const local::value& fields);

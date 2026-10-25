@@ -219,6 +219,7 @@ namespace one::generators::screens {
         std::string served;        // a folder served as it is
         code::source served_source;
         std::vector<std::string> targets;
+        bool local = false;        // storage local: its data kept on the machine its app runs on
     };
 
     class model {
@@ -1031,6 +1032,7 @@ namespace one::generators::screens {
                         if (s.key == "analytics") project.analytics = s.value == "google";
                         if (s.key == "accessibility") project.display = s.value == "menu";
                         if (s.key == "target") project.targets.push_back(s.value);
+                        if (s.key == "storage") project.local = s.value == "local";
                         if (s.key == "serve") {
                             std::string dir = std::filesystem::path(indexing_).parent_path().string();
                             project.served = platform::resolve(dir.empty() ? "." : dir, s.value);

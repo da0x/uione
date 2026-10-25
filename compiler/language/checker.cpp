@@ -26,6 +26,7 @@
 #include "language/lower.hpp"
 #include "language/parser.hpp"
 #include "language/names.hpp"
+#include "language/storage.hpp"
 #include "language/targets.hpp"
 #include "platform/files.hpp"
 
@@ -4814,6 +4815,7 @@ namespace one::language {
         lower(files, out);
         checker(out).check(files);
         check_targets(files, out);
+        check_storage(files, out);
         said_once(out, from);
     }
 
@@ -4822,6 +4824,7 @@ namespace one::language {
         lower(files, out);
         checker(out, &meant).check(files);
         check_targets(files, out);
+        check_storage(files, out);
         said_once(out, from);
     }
 
