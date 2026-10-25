@@ -20,6 +20,8 @@
 #pragma once
 
 #include <concepts>
+#include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -176,6 +178,17 @@ namespace one::desktop {
 	// Where it can be dropped: outlined while something it accepts is carried over it,
 	// dimmed while something it doesn't is carried at all; told what's dropped on it.
 	view drop_target(view content, std::function<bool(const std::string&)> accepts, std::function<void(const std::string&)> on_drop, box_style over, color dim);
+	// What's let go over a file target from another program: files on this machine, as
+	// a file manager drags them; a picture's own bytes, as a browser drags one; and
+	// addresses on the web, which aren't fetched, so a person can be told why.
+	struct dropped {
+		std::vector<std::filesystem::path> files;
+		std::vector<std::uint8_t> picture;
+		std::vector<std::string> elsewhere;
+	};
+	// Where files or a picture from another program can be let go: outlined while
+	// they're carried over it, and told what was let go and where in the window.
+	view file_target(view content, std::function<void(dropped what, point at)> on_drop, box_style over);
 
 	// A surface of things placed anywhere, in its own units, panned and zoomed: a thing
 	// dragged moves, dragged by its lower right corner resizes, and on_place is told
@@ -288,6 +301,11 @@ namespace one::desktop {
 	void copy_text(std::string text);
 	// What's on the clipboard as text, as pasting would give it; none when there's nothing.
 	std::optional<std::string> clipboard_text();
+	// A picture on the clipboard, as a browser or a screenshot copies one: its bytes,
+	// in its own format, to be decoded as a picture is; none when there's none.
+	std::optional<std::vector<std::uint8_t>> clipboard_picture();
+	// Files on the clipboard, as a file manager copies them; none when there are none.
+	std::vector<std::filesystem::path> clipboard_files();
 
 	// A box ticked or not, with what it says, flipped with a click, Space or Enter.
 	view toggle(state<bool> on, std::string label);

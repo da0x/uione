@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <span>
 
 #include "check.hpp"
 #include "one/desktop/canvas.hpp"
@@ -102,6 +103,109 @@ TEST("a drawing takes the space it's given, and paints there") {
 	CHECK(at(100, 95)[0] == 255);
 	CHECK(at(100, 95)[1] == 0);
 	CHECK(at(100, 2)[1] != 0);  // the text above it isn't painted over
+}
+
+namespace {
+
+	// Red, green, blue and white, a pixel each, left to right and top to bottom.
+	one::desktop::picture four_colors() {
+		return one::desktop::picture::of(2, 2, {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255});
+	}
+
+	// The same four colors, each a quarter of eight pixels by eight, so a crop to one
+	// quarter has an inside away from where smoothing meets its neighbors.
+	one::desktop::picture four_quarters() {
+		std::vector<std::uint8_t> rgba;
+		const std::uint8_t colors[4][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}, {255, 255, 255}};
+		for (int y = 0; y < 8; ++y)
+			for (int x = 0; x < 8; ++x) {
+				const auto& c = colors[(y / 4) * 2 + x / 4];
+				rgba.insert(rgba.end(), {c[0], c[1], c[2], 255});
+			}
+		return one::desktop::picture::of(8, 8, std::move(rgba));
+	}
+
+	const std::uint8_t* pixel(const one::desktop::offscreen::image& i, int x, int y) { return &i.rgba[static_cast<std::size_t>((y * i.width + x) * 4)]; }
+
+}  // namespace
+
+TEST("a picture written as a PNG reads back the same, and what isn't one says so") {
+	auto file = std::filesystem::temp_directory_path() / "one-desktop-picture.png";
+	CHECK(four_colors().write_png(file).has_value());
+	auto read = one::desktop::picture::read(file);
+	CHECK_SAYING(read.has_value(), read ? "" : read.error());
+	if (read) {
+		CHECK(read->width() == 2);
+		CHECK(read->height() == 2);
+		CHECK(read->rgba() == four_colors().rgba());
+	}
+	std::filesystem::remove(file);
+	std::string words = "hello";
+	auto not_one = one::desktop::picture::decode(std::span(reinterpret_cast<const std::uint8_t*>(words.data()), words.size()));
+	CHECK(!not_one.has_value());
+	CHECK(not_one.error().starts_with("That isn't a picture"));
+	CHECK(!one::desktop::picture::read("/nowhere/at/all.png").has_value());
+}
+
+TEST("a picture is drawn stretched to its area, cropped to a part, and partly showing") {
+	auto drawn = one::desktop::offscreen::draw({300, 100}, 1, one::desktop::color::hex(0xffffff), [](one::desktop::canvas& c) {
+		c.picture(four_colors(), {0, 0, 100, 100});
+		c.picture(four_quarters(), {100, 0, 100, 100}, {0, 0, 0.5f, 0.5f});
+		c.picture(four_quarters(), {200, 0, 100, 100}, {0, 0, 0.5f, 0.5f}, 0.5f);
+	});
+	auto near = [](const std::uint8_t* p, int r, int g, int b) { return std::abs(p[0] - r) <= 8 && std::abs(p[1] - g) <= 8 && std::abs(p[2] - b) <= 8; };
+	CHECK(near(pixel(drawn, 10, 10), 255, 0, 0));
+	CHECK(near(pixel(drawn, 90, 10), 0, 255, 0));
+	CHECK(near(pixel(drawn, 10, 90), 0, 0, 255));
+	CHECK(near(pixel(drawn, 90, 90), 255, 255, 255));
+	CHECK(near(pixel(drawn, 110, 10), 255, 0, 0));  // its top left quarter, filling the area
+	CHECK(near(pixel(drawn, 150, 50), 255, 0, 0));
+	CHECK(near(pixel(drawn, 180, 80), 255, 0, 0));
+	const std::uint8_t* half = pixel(drawn, 250, 50);  // half red over white, mixed in linear light
+	CHECK(half[0] > 245);
+	CHECK(half[1] > 150);
+	CHECK(half[1] < 205);
+}
+
+TEST("files dragged from a file manager are read from their addresses") {
+	auto paths = one::desktop::detail::paths_of(
+	    "# copied from a file manager\r\nfile:///home/maya/Pictures/beach%202019.jpg\r\nfile://localhost/tmp/a.png\r\nfile://other/x.png\r\nhttps://example.com/b.png\r\n");
+	CHECK(paths.size() == 2);
+	if (paths.size() != 2) return;
+	CHECK(paths[0] == std::filesystem::path("/home/maya/Pictures/beach 2019.jpg"));
+	CHECK(paths[1] == std::filesystem::path("/tmp/a.png"));
+	auto web = one::desktop::detail::elsewhere_of("https://example.com/b.png\r\nfile:///tmp/a.png\r\n");
+	CHECK(web.size() == 1);
+	CHECK(web.front() == "https://example.com/b.png");
+}
+
+TEST("files let go over a file target are given to it, with where, and nowhere else") {
+	std::vector<std::filesystem::path> given;
+	std::vector<std::uint8_t> picture;
+	one::desktop::point where{};
+	one::desktop::rect drawn_in{};
+	auto root = one::desktop::column(one::desktop::text("Above"), one::desktop::file_target(one::desktop::drawing([&](one::desktop::canvas&, one::desktop::rect area) { drawn_in = area; }),
+	                                                                                        [&](one::desktop::dropped what, one::desktop::point at) {
+		                                                                                        given = std::move(what.files);
+		                                                                                        picture = std::move(what.picture);
+		                                                                                        where = at;
+	                                                                                        },
+	                                                                                        {})
+	                                                                          .grow())
+	                .take();
+	(void)one::desktop::offscreen::draw({200, 100}, 1, one::desktop::color::hex(0xffffff), [&](one::desktop::canvas& c) {
+		root->place({0, 0, 200, 100});
+		root->paint(c);
+	});
+	CHECK(drawn_in.width == 200);
+	CHECK(drawn_in.y + drawn_in.height == 100);
+	one::desktop::detail::drop_files(*root, {10, 2}, {.files = {"/tmp/missed.png"}, .picture = {}, .elsewhere = {}});
+	CHECK(given.empty());
+	one::desktop::detail::drop_files(*root, {120, 90}, {.files = {"/tmp/a.png", "/tmp/b.png"}, .picture = {}, .elsewhere = {}});
+	CHECK(given.size() == 2);
+	CHECK(where.x == 120);
+	one::desktop::detail::drop_files(*root, {120, 90}, {.files = {}, .picture = {137, 80, 78, 71}, .elsewhere = {}});
+	CHECK(picture.size() == 4);  // a picture's own bytes, as a browser drags one
 }
 
 TEST("a color written in sRGB is kept in linear light") {

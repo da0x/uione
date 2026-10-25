@@ -27,6 +27,15 @@ namespace one::desktop {
 		alignas(4) constexpr unsigned char glyph_fragment[] = {
 #embed "glyph.frag.spv"
 		};
+		alignas(4) constexpr unsigned char picture_vertex[] = {
+#embed "picture.vert.spv"
+		};
+		alignas(4) constexpr unsigned char picture_fragment[] = {
+#embed "picture.frag.spv"
+		};
+
+		// How many pictures may be drawn from at once, each its own descriptor.
+		constexpr std::uint32_t most_pictures = 1024;
 
 		vk::raii::ShaderModule module(const vk::raii::Device& device, std::span<const unsigned char> code) {
 			return {device, vk::ShaderModuleCreateInfo{.codeSize = code.size(), .pCode = reinterpret_cast<const std::uint32_t*>(code.data())}};
@@ -140,6 +149,21 @@ namespace one::desktop {
 		                                                   .descriptorType = vk::DescriptorType::eCombinedImageSampler,
 		                                                   .pImageInfo = &image},
 		                            nullptr);
+
+		// Pictures: drawn with the glyphs' layout, a texture each, sampled smoothly and
+		// between their smaller copies when shown smaller.
+		picture_pipeline_ = pipeline(device, glyph_layout_, target, picture_vertex, picture_fragment, 4);
+		smooth_ = vk::raii::Sampler{device, vk::SamplerCreateInfo{.magFilter = vk::Filter::eLinear,
+		                                                          .minFilter = vk::Filter::eLinear,
+		                                                          .mipmapMode = vk::SamplerMipmapMode::eLinear,
+		                                                          .addressModeU = vk::SamplerAddressMode::eClampToEdge,
+		                                                          .addressModeV = vk::SamplerAddressMode::eClampToEdge,
+		                                                          .maxLod = vk::LodClampNone}};
+		vk::DescriptorPoolSize pictures{.type = vk::DescriptorType::eCombinedImageSampler, .descriptorCount = most_pictures};
+		picture_pool_ = vk::raii::DescriptorPool{device, vk::DescriptorPoolCreateInfo{.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+		                                                                             .maxSets = most_pictures,
+		                                                                             .poolSizeCount = 1,
+		                                                                             .pPoolSizes = &pictures}};
 	}
 
 	void renderer::ensure(gpu_buffer& b, vk::DeviceSize wanted, vk::BufferUsageFlags usage) {
@@ -163,15 +187,27 @@ namespace one::desktop {
 		slot_ = slot;
 		boxes_.clear();
 		glyphs_.clear();
+		pictures_.clear();
 		batches_.clear();
+		// A frame this slot drew before has finished, and so has every frame before it:
+		// what was last drawn earlier than that can go.
+		++frame_;
+		auto finished = [&](std::uint64_t used) { return used + gpu::surface::in_flight < frame_; };
+		std::erase_if(retired_, [&](const auto& r) { return finished(r.first); });
+		// A texture whose picture is gone, or that nothing has drawn in a long while.
+		for (auto it = textures_.begin(); it != textures_.end();) {
+			bool gone = it->second.of.expired() || frame_ - it->second.used > 600;
+			if (gone && finished(it->second.used)) it = textures_.erase(it);
+			else ++it;
+		}
 	}
 
-	void renderer::add(bool glyphs) {
-		auto count = static_cast<std::uint32_t>(glyphs ? glyphs_.size() : boxes_.size());
-		if (!batches_.empty() && batches_.back().glyphs == glyphs) {
+	void renderer::add(kind what, const texture* drawn) {
+		auto count = static_cast<std::uint32_t>(what == kind::glyphs ? glyphs_.size() : what == kind::pictures ? pictures_.size() : boxes_.size());
+		if (!batches_.empty() && batches_.back().what == what && batches_.back().drawn == drawn) {
 			++batches_.back().count;
 		} else {
-			batches_.push_back({glyphs, count - 1, 1});
+			batches_.push_back({what, count - 1, 1, drawn});
 		}
 	}
 
@@ -183,7 +219,7 @@ namespace one::desktop {
 		b.shape[0] = radius, b.shape[1] = border, b.shape[2] = blur;
 		put_clip(b.clip, clip);
 		boxes_.push_back(b);
-		add(false);
+		add(kind::boxes);
 	}
 
 	void renderer::line(point a, point b, float half_width, color tint, const rect& clip) {
@@ -197,7 +233,7 @@ namespace one::desktop {
 		l.shape[1] = half_width, l.shape[3] = 1;
 		put_clip(l.clip, clip);
 		boxes_.push_back(l);
-		add(false);
+		add(kind::boxes);
 	}
 
 	const renderer::placed& renderer::atlas_entry(const fonts::face* face, std::uint32_t id, int bin) {
@@ -236,15 +272,137 @@ namespace one::desktop {
 		put(g.tint, tint);
 		put_clip(g.clip, clip);
 		glyphs_.push_back(g);
-		add(true);
+		add(kind::glyphs);
+	}
+
+	renderer::texture* renderer::texture_of(const one::desktop::picture& p) {
+		auto shared = p.shared().lock();
+		const void* key = shared.get();
+		if (auto it = textures_.find(key); it != textures_.end()) {
+			if (it->second.of.lock() == shared) return &it->second;
+			// Another picture where one that's gone was: the old texture waits out the
+			// frames that may still be drawing it.
+			retired_.emplace_back(it->second.used, std::move(it->second));
+			textures_.erase(it);
+		}
+		const auto& device = gpu_.logical;
+		auto width = static_cast<std::uint32_t>(p.width()), height = static_cast<std::uint32_t>(p.height());
+		auto limit = gpu_.physical.getProperties().limits.maxImageDimension2D;
+		if (width == 0 || height == 0 || width > limit || height > limit) return nullptr;
+		if (textures_.size() >= most_pictures) return nullptr;
+		constexpr auto format = vk::Format::eR8G8B8A8Srgb;
+		auto features = gpu_.physical.getFormatProperties(format).optimalTilingFeatures;
+		bool shrinks = (features & vk::FormatFeatureFlagBits::eBlitSrc) && (features & vk::FormatFeatureFlagBits::eBlitDst) &&
+		               (features & vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
+		texture t;
+		t.of = shared;
+		t.width = width, t.height = height;
+		t.levels = shrinks ? static_cast<std::uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1 : 1;
+		t.image = vk::raii::Image{device, vk::ImageCreateInfo{.imageType = vk::ImageType::e2D,
+		                                                      .format = format,
+		                                                      .extent = {width, height, 1},
+		                                                      .mipLevels = t.levels,
+		                                                      .arrayLayers = 1,
+		                                                      .samples = vk::SampleCountFlagBits::e1,
+		                                                      .tiling = vk::ImageTiling::eOptimal,
+		                                                      .usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst |
+		                                                               vk::ImageUsageFlagBits::eTransferSrc}};
+		auto needs = t.image.getMemoryRequirements();
+		t.memory = vk::raii::DeviceMemory{device, vk::MemoryAllocateInfo{.allocationSize = needs.size,
+		                                                                 .memoryTypeIndex = gpu_.memory_type(needs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal)}};
+		t.image.bindMemory(*t.memory, 0);
+		t.view = vk::raii::ImageView{device, vk::ImageViewCreateInfo{.image = *t.image,
+		                                                            .viewType = vk::ImageViewType::e2D,
+		                                                            .format = format,
+		                                                            .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, t.levels, 0, 1}}};
+		auto sets = device.allocateDescriptorSets({.descriptorPool = *picture_pool_, .descriptorSetCount = 1, .pSetLayouts = &*atlas_set_layout_});
+		t.set = std::move(sets.front());
+		vk::DescriptorImageInfo image{.sampler = *smooth_, .imageView = *t.view, .imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal};
+		device.updateDescriptorSets(vk::WriteDescriptorSet{.dstSet = *t.set,
+		                                                   .dstBinding = 0,
+		                                                   .descriptorCount = 1,
+		                                                   .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+		                                                   .pImageInfo = &image},
+		                            nullptr);
+		texture* made = &textures_.emplace(key, std::move(t)).first->second;
+		waiting_.emplace_back(made, p);
+		return made;
+	}
+
+	void renderer::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, const rect& clip) {
+		texture* t = texture_of(p);
+		if (!t) return;
+		t->used = frame_;
+		glyph_instance g{};
+		put(g.bounds, area);
+		g.source[0] = from.x, g.source[1] = from.y, g.source[2] = from.right(), g.source[3] = from.bottom();
+		put(g.tint, color{1, 1, 1, std::clamp(opacity, 0.f, 1.f)});
+		put_clip(g.clip, clip);
+		pictures_.push_back(g);
+		add(kind::pictures, t);
+	}
+
+	// Each picture made this frame, filled: its pixels copied in, then each smaller
+	// copy made from the one before it, half as big, and all of it ready to sample.
+	void renderer::upload_pictures(const vk::raii::CommandBuffer& commands) {
+		if (waiting_.empty()) return;
+		auto& buffers = slots_[slot_];
+		std::size_t bytes = 0;
+		for (const auto& [t, p] : waiting_) bytes += p.rgba().size();
+		ensure(buffers.picture_staging, bytes, vk::BufferUsageFlagBits::eTransferSrc);
+		std::size_t offset = 0;
+		for (const auto& [t, p] : waiting_) {
+			std::memcpy(static_cast<std::uint8_t*>(buffers.picture_staging.mapped) + offset, p.rgba().data(), p.rgba().size());
+			auto barrier = [&](std::uint32_t level, std::uint32_t count, vk::ImageLayout from, vk::ImageLayout to, vk::PipelineStageFlags2 after,
+			                   vk::AccessFlags2 after_access, vk::PipelineStageFlags2 before, vk::AccessFlags2 before_access) {
+				vk::ImageMemoryBarrier2 b{.srcStageMask = after,
+				                          .srcAccessMask = after_access,
+				                          .dstStageMask = before,
+				                          .dstAccessMask = before_access,
+				                          .oldLayout = from,
+				                          .newLayout = to,
+				                          .image = *t->image,
+				                          .subresourceRange = {vk::ImageAspectFlagBits::eColor, level, count, 0, 1}};
+				commands.pipelineBarrier2(vk::DependencyInfo{.imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &b});
+			};
+			using stage = vk::PipelineStageFlagBits2;
+			using access = vk::AccessFlagBits2;
+			barrier(0, t->levels, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, stage::eNone, {}, stage::eTransfer, access::eTransferWrite);
+			commands.copyBufferToImage(*buffers.picture_staging.handle, *t->image, vk::ImageLayout::eTransferDstOptimal,
+			                           vk::BufferImageCopy{.bufferOffset = offset,
+			                                               .imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+			                                               .imageExtent = {t->width, t->height, 1}});
+			auto w = static_cast<std::int32_t>(t->width), h = static_cast<std::int32_t>(t->height);
+			for (std::uint32_t level = 1; level < t->levels; ++level) {
+				barrier(level - 1, 1, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal, stage::eTransfer, access::eTransferWrite,
+				        stage::eTransfer, access::eTransferRead);
+				std::int32_t half_w = std::max(1, w / 2), half_h = std::max(1, h / 2);
+				vk::ImageBlit blit{.srcSubresource = {vk::ImageAspectFlagBits::eColor, level - 1, 0, 1},
+				                   .srcOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{w, h, 1}},
+				                   .dstSubresource = {vk::ImageAspectFlagBits::eColor, level, 0, 1},
+				                   .dstOffsets = std::array{vk::Offset3D{0, 0, 0}, vk::Offset3D{half_w, half_h, 1}}};
+				commands.blitImage(*t->image, vk::ImageLayout::eTransferSrcOptimal, *t->image, vk::ImageLayout::eTransferDstOptimal, blit, vk::Filter::eLinear);
+				w = half_w, h = half_h;
+			}
+			if (t->levels > 1)
+				barrier(0, t->levels - 1, vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, stage::eTransfer, access::eTransferRead,
+				        stage::eFragmentShader, access::eShaderSampledRead);
+			barrier(t->levels - 1, 1, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, stage::eTransfer, access::eTransferWrite,
+			        stage::eFragmentShader, access::eShaderSampledRead);
+			offset += p.rgba().size();
+		}
+		waiting_.clear();
 	}
 
 	void renderer::upload(const vk::raii::CommandBuffer& commands) {
 		auto& buffers = slots_[slot_];
 		ensure(buffers.boxes, std::max<std::size_t>(1, boxes_.size()) * sizeof(box_instance), vk::BufferUsageFlagBits::eVertexBuffer);
 		ensure(buffers.glyphs, std::max<std::size_t>(1, glyphs_.size()) * sizeof(glyph_instance), vk::BufferUsageFlagBits::eVertexBuffer);
+		ensure(buffers.pictures, std::max<std::size_t>(1, pictures_.size()) * sizeof(glyph_instance), vk::BufferUsageFlagBits::eVertexBuffer);
 		std::memcpy(buffers.boxes.mapped, boxes_.data(), boxes_.size() * sizeof(box_instance));
 		std::memcpy(buffers.glyphs.mapped, glyphs_.data(), glyphs_.size() * sizeof(glyph_instance));
+		std::memcpy(buffers.pictures.mapped, pictures_.data(), pictures_.size() * sizeof(glyph_instance));
+		upload_pictures(commands);
 
 		vk::ImageSubresourceRange whole{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
 		auto barrier = [&](vk::ImageLayout from, vk::ImageLayout to, vk::PipelineStageFlags2 after, vk::AccessFlags2 after_access,
@@ -294,7 +452,12 @@ namespace one::desktop {
 		auto& buffers = slots_[slot_];
 		std::array viewport{static_cast<float>(pixels_.width), static_cast<float>(pixels_.height)};
 		for (const auto& b : batches_) {
-			if (b.glyphs) {
+			if (b.what == kind::pictures) {
+				commands.bindPipeline(vk::PipelineBindPoint::eGraphics, *picture_pipeline_);
+				commands.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *glyph_layout_, 0, *b.drawn->set, nullptr);
+				commands.pushConstants<float>(*glyph_layout_, vk::ShaderStageFlagBits::eVertex, 0, viewport);
+				commands.bindVertexBuffers(0, *buffers.pictures.handle, vk::DeviceSize{0});
+			} else if (b.what == kind::glyphs) {
 				commands.bindPipeline(vk::PipelineBindPoint::eGraphics, *glyph_pipeline_);
 				commands.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *glyph_layout_, 0, *atlas_set_, nullptr);
 				commands.pushConstants<float>(*glyph_layout_, vk::ShaderStageFlagBits::eVertex, 0, viewport);
@@ -375,6 +538,11 @@ namespace one::desktop {
 				renderer_.box({left, row, right - left, 1}, tint, {0, 0, 0, 0}, 0, 0, 0, clip);
 			}
 		}
+	}
+
+	void canvas::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity) {
+		if (!p) return;
+		renderer_.picture(p, in_pixels(area, scale()), from, opacity, clip_in_pixels(clips_, renderer_));
 	}
 
 	void canvas::text(const text_layout& laid, point at) {

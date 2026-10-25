@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // What a window draws with, in logical pixels: boxes with rounded corners, borders
-// and soft shadows, and laid-out text. Everything is drawn in the order it's asked
+// and soft shadows, laid-out text, and pictures. Everything is drawn in the order it's asked
 // for, each over what came before, and within the clip in force.
 
 #pragma once
@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "one/desktop/app.hpp"
+#include "one/desktop/picture.hpp"
 #include "one/desktop/text.hpp"
 
 namespace one::desktop {
@@ -55,6 +56,10 @@ namespace one::desktop {
 		void fill(const std::vector<point>& outline, one::desktop::color tint);
 		// Text laid out by one::desktop::lay_out, its first line's top at `at`.
 		void text(const text_layout& laid, point at);
+		// A picture in an area, stretched to it: all of it, or the part `from` names
+		// in fractions of its width and height, as a crop does; and as much of it
+		// showing as `opacity` says.
+		void picture(const one::desktop::picture& p, const rect& area, const rect& from = {0, 0, 1, 1}, float opacity = 1);
 
 		// Drawn once everything else is, over it, outside any clip: a button's name
 		// shown while it's pointed at.

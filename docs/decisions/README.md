@@ -21,6 +21,7 @@ relevant record before changing what it covers.
 | [0013](0013-everything-is-agpl.md) | Everything in uione is AGPL-3.0-only |
 | [0014](0014-built-once-tested-released.md) | Everything is built once, tested, and released as it was tested |
 | [0015](0015-an-app-may-keep-its-data-on-the-machine.md) | An app may keep all its data on the machine it runs on |
+| [0016](0016-pictures-are-read-by-a-pinned-stb.md) | Pictures are read and written by a pinned copy of stb |
 
 ## Writing one
 

@@ -47,7 +47,7 @@ endforeach()
 
 # The shaders, compiled to SPIR-V, which the renderer takes in with #embed.
 set(shader_outputs)
-foreach(shader box.vert box.frag glyph.vert glyph.frag)
+foreach(shader box.vert box.frag glyph.vert glyph.frag picture.vert picture.frag)
 	set(output ${CMAKE_CURRENT_BINARY_DIR}/shaders/${shader}.spv)
 	add_custom_command(OUTPUT ${output}
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/shaders
@@ -57,6 +57,19 @@ foreach(shader box.vert box.frag glyph.vert glyph.frag)
 endforeach()
 add_custom_target(one_desktop_shaders DEPENDS ${shader_outputs})
 set_source_files_properties(src/renderer.cpp PROPERTIES OBJECT_DEPENDS "${shader_outputs}")
+
+# stb_image and stb_image_write, pinned: another project's, kept as it was fetched, so
+# a changed copy stops the build rather than being compiled.
+foreach(pinned "stb_image.h=594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3"
+               "stb_image_write.h=cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05")
+	string(REPLACE "=" ";" pinned "${pinned}")
+	list(GET pinned 0 name)
+	list(GET pinned 1 expected)
+	file(SHA256 ${CMAKE_CURRENT_SOURCE_DIR}/src/stb/${name} found)
+	if(NOT found STREQUAL expected)
+		message(FATAL_ERROR "src/stb/${name} isn't the copy pinned at nothings/stb 003501f; its sha256 is ${found}")
+	endif()
+endforeach()
 
 add_library(one_desktop
 	src/app.cpp
@@ -68,6 +81,7 @@ add_library(one_desktop
 	src/field.cpp
 	src/gpu.cpp
 	src/offscreen.cpp
+	src/picture.cpp
 	src/renderer.cpp
 	src/seat.cpp
 	src/icons.cpp

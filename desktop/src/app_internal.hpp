@@ -89,7 +89,16 @@ namespace one::desktop {
 		std::string offered_type;                                        // the kind of text it's read as
 		wl_data_offer* coming = nullptr;                                 // an offer whose types are arriving
 		std::string coming_type;
+		std::string coming_picture, offered_picture;  // the kind of picture an offer has, PNG first
+		bool coming_files = false, offered_files = false;  // whether it has files, as a file manager offers them
 		owned<wl_data_device, released::wl_data_device_release> device;
+		// Files dragged from another program over one of our windows: the offer, the
+		// window, where they are in it, and the serial they came in with.
+		owned<wl_data_offer, released::wl_data_offer_destroy> dragged;
+		window::state* dragged_over = nullptr;
+		bool dragged_files = false;
+		std::string dragged_picture;  // the kind of picture it has, when it has one
+		point dragged_at;
 	};
 
 	// What an input method was last told of the field with the keyboard.

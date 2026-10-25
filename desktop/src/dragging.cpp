@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "one/desktop/ui.hpp"
+#include "ui_internal.hpp"
 
 namespace one::desktop {
 
@@ -36,6 +37,18 @@ namespace one::desktop {
 				} else if (frame.contains(held->at)) {
 					c.box(frame, over);
 				}
+			}
+		};
+
+		// Where files from another program may be let go.
+		class file_target_element : public element {
+		public:
+			std::function<void(dropped, point)> on_drop;
+			box_style over;
+
+			void paint_content(canvas& c) override {
+				element::paint_content(c);
+				if (const auto& at = detail::files_carried(); at && frame.contains(*at)) c.box(frame, over);
 			}
 		};
 
@@ -106,5 +119,32 @@ namespace one::desktop {
 		e->children.back()->parent = e.get();
 		return view(std::move(e));
 	}
+
+	view file_target(view content, std::function<void(dropped, point)> on_drop, box_style over) {
+		auto e = std::make_unique<file_target_element>();
+		e->on_drop = std::move(on_drop);
+		e->over = over;
+		e->children.push_back(std::move(content).take());
+		e->children.back()->parent = e.get();
+		return view(std::move(e));
+	}
+
+	namespace detail {
+
+		std::optional<point>& files_carried() {
+			static std::optional<point> at;
+			return at;
+		}
+
+		void drop_files(element& root, point at, dropped what) {
+			for (element* e = root.hit(at); e; e = e->parent) {
+				if (auto* target = dynamic_cast<file_target_element*>(e)) {
+					if (target->on_drop) target->on_drop(std::move(what), at);
+					return;
+				}
+			}
+		}
+
+	}  // namespace detail
 
 }  // namespace one::desktop

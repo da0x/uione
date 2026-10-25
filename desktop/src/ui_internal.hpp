@@ -6,8 +6,10 @@
 
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "one/desktop/ui.hpp"
 
@@ -16,6 +18,14 @@ namespace one::desktop::detail {
 	// The clipboard, as a field copies to it and pastes from it.
 	void copy_text(std::string text);
 	std::optional<std::string> pasted_text();
+
+	// Files dragged from another program: where they are in the window they're over,
+	// while they're carried; the paths a text/uri-list names; and handing those let go
+	// to the file target under where they were.
+	std::optional<point>& files_carried();
+	std::vector<std::filesystem::path> paths_of(const std::string& uri_list);
+	std::vector<std::string> elsewhere_of(const std::string& uri_list);  // the addresses that aren't files here
+	void drop_files(element& root, point at, dropped what);
 
 	// The scale and theme in use while a window builds, lays out and draws.
 	double& layout_scale();
