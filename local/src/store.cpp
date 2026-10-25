@@ -8,17 +8,16 @@
 
 namespace one::local {
 
-	namespace {
+	std::string made_up_id() {
+		static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		static std::mt19937 random{std::random_device{}()};
+		std::uniform_int_distribution<int> pick(0, sizeof alphabet - 2);
+		std::string id;
+		for (int i = 0; i < 20; ++i) id += alphabet[pick(random)];
+		return id;
+	}
 
-		// An id nobody chose, as Firestore makes them: twenty letters and digits.
-		std::string made_up_id() {
-			static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-			static std::mt19937 random{std::random_device{}()};
-			std::uniform_int_distribution<int> pick(0, sizeof alphabet - 2);
-			std::string id;
-			for (int i = 0; i < 20; ++i) id += alphabet[pick(random)];
-			return id;
-		}
+	namespace {
 
 		bool counts(const value& row, const std::string& within_field, const std::string& within) {
 			return within_field.empty() || row[within_field].as_string() == within;

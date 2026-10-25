@@ -21,6 +21,7 @@ add_library(one_local
 	src/events.cpp
 	src/folder.cpp
 	src/local_source.cpp
+	src/package.cpp
 	src/store.cpp)
 add_library(one::local ALIAS one_local)
 target_include_directories(one_local PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
@@ -30,7 +31,7 @@ target_compile_options(one_local PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap
 # Its tests, when it's built on its own or a build of everything asks for them.
 option(ONE_LOCAL_EXAMPLES "Build its tests" ${PROJECT_IS_TOP_LEVEL})
 if(ONE_LOCAL_EXAMPLES)
-	add_executable(one_local_tests tests/tests.cpp)
+	add_executable(one_local_tests tests/tests.cpp tests/package_tests.cpp)
 	set_target_properties(one_local_tests PROPERTIES OUTPUT_NAME tests)
 	target_link_libraries(one_local_tests PRIVATE one_local)
 	target_compile_options(one_local_tests PRIVATE -Wall -Wextra -Werror -Wno-free-nonheap-object)

@@ -44,6 +44,9 @@ namespace one::local {
 	std::string to_line(const event& e);
 	std::expected<event, std::string> from_line(std::string_view line);
 
+	// An id nobody chose, as Firestore makes them: twenty letters and digits.
+	std::string made_up_id();
+
 	// The entities as the events so far have left them, each holding its id.
 	class store {
 	public:
