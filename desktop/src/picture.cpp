@@ -3,6 +3,8 @@
 
 #include "one/desktop/picture.hpp"
 
+#include "offscreen.hpp"
+
 #include <algorithm>
 #include <climits>
 #include <fstream>
@@ -81,6 +83,11 @@ namespace one::desktop {
 		picture p;
 		p.pixels_ = std::make_shared<const pixels>(pixels{width, height, std::move(rgba)});
 		return p;
+	}
+
+	picture picture::drawn(int width, int height, const std::function<void(canvas&)>& paint) {
+		auto drawn = offscreen::draw({width, height}, 1, color{0, 0, 0, 0}, paint);
+		return of(drawn.width, drawn.height, std::move(drawn.rgba));
 	}
 
 	const std::vector<std::uint8_t>& picture::rgba() const {

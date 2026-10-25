@@ -7,6 +7,7 @@
 
 #include "one/desktop/runtime/runtime.hpp"
 
+#include <atomic>
 #include <cstdlib>
 #include <format>
 #include <functional>
@@ -70,6 +71,7 @@ namespace one::desktop::runtime {
 		std::function<void()> close_now;
 		desktop::window* shown_in = nullptr;  // the window run shows the site in, while it runs
 		const site* running = nullptr;        // and the site
+		std::atomic<desktop::app*> posting_to = nullptr;  // the app it runs in, for work other threads hand back
 		state<bool> dark_on{false};
 
 		// The site's own look, light or dark, as the switch says.
@@ -176,7 +178,12 @@ namespace one::desktop::runtime {
 		return desktop::column(std::move(parts));
 	}
 
+	void post(std::function<void()> task) {
+		if (desktop::app* app = posting_to.load()) app->post(std::move(task));
+	}
+
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
+		posting_to = &app;
 		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown
 		auto& window = app.open({.title = s.name, .id = s.id, .size = {1200, 800}});
 		running = &s;
@@ -210,6 +217,7 @@ namespace one::desktop::runtime {
 		close_now = nullptr;
 		shown_in = nullptr;
 		running = nullptr;
+		posting_to = nullptr;
 		return ended;
 	}
 

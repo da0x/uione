@@ -235,6 +235,22 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(!one::desktop::held().shift);  // no keyboard here
 }
 
+TEST("a picture drawn with no window holds what was drawn, a picture drawn into it too, and nothing where nothing was") {
+	std::vector<std::uint8_t> pixels;
+	for (int i = 0; i < 4; ++i) pixels.insert(pixels.end(), {0, 0, 255, 255});
+	auto blue = one::desktop::picture::of(2, 2, std::move(pixels));
+	auto drawn = one::desktop::picture::drawn(30, 10, [&](one::desktop::canvas& c) {
+		c.box({0, 0, 10, 10}, {.fill = one::desktop::color::hex(0xff0000)});
+		c.picture(blue, {10, 0, 10, 10});
+	});
+	CHECK(drawn.width() == 30);
+	CHECK(drawn.height() == 10);
+	auto at = [&](int x, int y, int channel) { return drawn.rgba()[(static_cast<std::size_t>(y) * 30 + x) * 4 + channel]; };
+	CHECK(at(5, 5, 0) == 255 && at(5, 5, 2) == 0 && at(5, 5, 3) == 255);
+	CHECK(at(15, 5, 0) == 0 && at(15, 5, 2) == 255 && at(15, 5, 3) == 255);
+	CHECK(at(25, 5, 3) == 0);
+}
+
 TEST("a color written in sRGB is kept in linear light") {
 	CHECK(one::desktop::color::hex(0xffffff).red == 1.f);
 	CHECK(one::desktop::color::hex(0x000000).green == 0.f);

@@ -61,6 +61,10 @@ namespace one::desktop::runtime {
 	// whose theme has no dark colors stays light.
 	bool dark();
 	void dark(bool on);
+	// Hands work from another thread to the window's, as a picture drawn in the
+	// background comes back to be shown; it runs soon after, and what it changes is
+	// shown. Nothing runs once the app has stopped.
+	void post(std::function<void()> task);
 
 	// Runs a site in a window until it's closed: opens `address`, or the first
 	// screen's, and goes back with Esc. ONE_QUIT_STOPS_AGENTS=1 says the agents

@@ -1209,3 +1209,9 @@ int main() {
 	setenv("FONTCONFIG_FILE", fonts.c_str(), 1);
 	return check::run();
 }
+
+TEST("work handed back from another thread is dropped when no app is running to take it") {
+	bool ran = false;
+	one::desktop::runtime::post([&ran] { ran = true; });
+	CHECK(!ran);
+}

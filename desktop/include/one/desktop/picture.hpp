@@ -14,12 +14,15 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
 namespace one::desktop {
+
+	class canvas;
 
 	class picture {
 	public:
@@ -36,6 +39,9 @@ namespace one::desktop {
 		static std::expected<picture, std::string> decode(std::span<const std::uint8_t> bytes);
 		// Pixels made by the app, `width` × `height`, four bytes each.
 		static picture of(int width, int height, std::vector<std::uint8_t> rgba);
+		// Drawn with no window, as a canvas in one is, `width` × `height` pixels on
+		// nothing: what a drawing app saves, or keeps as a small preview of its work.
+		static picture drawn(int width, int height, const std::function<void(canvas&)>& paint);
 
 		int width() const { return pixels_ ? pixels_->width : 0; }
 		int height() const { return pixels_ ? pixels_->height : 0; }
