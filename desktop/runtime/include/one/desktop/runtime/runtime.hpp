@@ -57,6 +57,10 @@ namespace one::desktop::runtime {
 	bool fullscreen();
 	// Fills the screen with the app, or stops, as F11 does.
 	void fullscreen(bool on);
+	// Whether the app is drawn dark, and switching it, kept for its next run. A site
+	// whose theme has no dark colors stays light.
+	bool dark();
+	void dark(bool on);
 
 	// Runs a site in a window until it's closed: opens `address`, or the first
 	// screen's, and goes back with Esc. ONE_QUIT_STOPS_AGENTS=1 says the agents

@@ -265,6 +265,7 @@ namespace one::screens {
 		std::string name;
 		std::string id = "org.uione.app";
 		Look look = {};
+		std::optional<Look> dark = {};  // how it looks dark, which a switch picks, when its theme says
 		std::vector<basic_screen<View>> screens = {};
 		std::vector<badge> badges = {};
 		std::function<View(basic_page<View>&)> footer = {};

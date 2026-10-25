@@ -70,6 +70,25 @@ int main(int count, char** given) {
 		t.raised = true;
 		s.look = t;
 	}
+	{
+		one::desktop::theme t = one::desktop::theme::harbor();
+		t.page = one::desktop::color::hex(0x0a101c);
+		t.surface = one::desktop::color::hex(0x111a2b);
+		t.sunken = one::desktop::color::hex(0x0d1524);
+		t.ink = one::desktop::color::hex(0xe6ebf3);
+		t.muted = one::desktop::color::hex(0x94a0b4);
+		t.line = one::desktop::color::hex(0x1f2a3d);
+		t.accent = one::desktop::color::hex(0x7ea6ff);
+		t.danger = one::desktop::color::hex(0xff7b72);
+		t.success = one::desktop::color::hex(0x3fb950);
+		t.warning = one::desktop::color::hex(0xd29922);
+		t.text_family = "IBM Plex Sans";
+		t.code_family = "IBM Plex Mono";
+		t.document_family = "Libre Caslon Text, serif";
+		t.corners = 10;
+		t.raised = true;
+		s.dark = t;
+	}
 	app::site_parts(s);
 	app::about_screens(s);
 	app::home_screens(s);

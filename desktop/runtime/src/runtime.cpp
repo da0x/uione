@@ -69,6 +69,11 @@ namespace one::desktop::runtime {
 		state<std::optional<std::vector<std::string>>> asking_to_close;
 		std::function<void()> close_now;
 		desktop::window* shown_in = nullptr;  // the window run shows the site in, while it runs
+		const site* running = nullptr;        // and the site
+		state<bool> dark_on{false};
+
+		// The site's own look, light or dark, as the switch says.
+		const desktop::theme& own_look() { return dark_on.peek() && running && running->dark ? *running->dark : running->look; }
 	}  // namespace
 
 	bool may_close(navigator& nav, bool stops_agents) {
@@ -98,6 +103,13 @@ namespace one::desktop::runtime {
 
 	std::optional<desktop::size> screen_size() { return shown_in ? shown_in->screen() : std::nullopt; }
 	bool fullscreen() { return shown_in && shown_in->fullscreen(); }
+	bool dark() { return dark_on.get(); }
+	void dark(bool on) {
+		if (!running || !running->dark) return;
+		dark_on.set(on);
+		screens::remembered::set("appearance", on ? "dark" : "light");
+		if (shown_in) shown_in->look(own_look());
+	}
 	void fullscreen(bool on) {
 		if (shown_in) shown_in->fullscreen(on);
 	}
@@ -135,6 +147,7 @@ namespace one::desktop::runtime {
 			bar.push_back(desktop::text(counted + " " + b.label, style).padding(edges(2, 8)).background({.fill = t.accent, .radius = 10}));
 		}
 		bar.push_back(desktop::spacer());
+		if (s.dark) bar.push_back(desktop::link(dark() ? "Light" : "Dark", [] { dark(!dark_on.peek()); }, t.quiet()));
 		if (auto who = here.reader(); who && !who->name.empty()) {
 			bar.push_back(desktop::avatar(who->name, 24));
 			bar.push_back(desktop::text(who->name, t.quiet()));
@@ -166,11 +179,13 @@ namespace one::desktop::runtime {
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
 		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown
 		auto& window = app.open({.title = s.name, .id = s.id, .size = {1200, 800}});
-		window.look(s.look);
-		window.background = s.look.page;
+		running = &s;
+		// Light or dark as it was last time, when its theme has both.
+		dark_on.set(s.dark && screens::remembered::get("appearance") == "dark");
+		window.look(own_look());
 		// A theme tried from a palette draws the whole window, and the app's own again after.
-		screens::tried_themes::on_tried([&window, own = s.look](const std::optional<palette::theme>& tried) {
-			window.look(tried ? drawn_in(*tried, own) : own);
+		screens::tried_themes::on_tried([&window](const std::optional<palette::theme>& tried) {
+			window.look(tried ? drawn_in(*tried, own_look()) : own_look());
 		});
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
@@ -194,6 +209,7 @@ namespace one::desktop::runtime {
 		asking_to_close.set(std::nullopt);
 		close_now = nullptr;
 		shown_in = nullptr;
+		running = nullptr;
 		return ended;
 	}
 

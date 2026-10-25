@@ -1620,14 +1620,16 @@ namespace one::generators {
             return out;
         }
 
-        // A theme's colors and fonts, as the desktop draws with them.
-        std::vector<std::string> theme_of() const {
+        // A theme's colors and fonts, as the desktop draws with them, light or dark.
+        std::vector<std::string> theme_of(bool dark = false) const {
             auto look = theme::resolve(files_, model_.project.theme.empty() ? "harbor" : model_.project.theme).value_or(theme::look{});
             std::vector<std::string> out{"one::desktop::theme t = one::desktop::theme::harbor();"};
             for (const auto& role : {"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"}) {
                 auto found = look.colors.find(role);
-                if (found == look.colors.end() || !found->second.first.starts_with("#") || found->second.first.size() != 7) continue;
-                out.push_back(std::string("t.") + role + " = one::desktop::color::hex(0x" + found->second.first.substr(1) + ");");
+                if (found == look.colors.end()) continue;
+                const std::string& hex = dark ? found->second.second : found->second.first;
+                if (!hex.starts_with("#") || hex.size() != 7) continue;
+                out.push_back(std::string("t.") + role + " = one::desktop::color::hex(0x" + hex.substr(1) + ");");
             }
             out.push_back("t.text_family = " + str(look.text) + ";");
             out.push_back("t.code_family = " + str(look.code) + ";");
@@ -1682,12 +1684,24 @@ namespace one::generators {
                 for (const auto& line : theme_of()) out.line(line);
                 out.line("s.look = t;");
                 out.close("}");
+                if (has_dark()) {
+                    out.open("{");
+                    for (const auto& line : theme_of(true)) out.line(line);
+                    out.line("s.dark = t;");
+                    out.close("}");
+                }
             }
             out.line("app::site_parts(s);");
             for (const auto& stem : stems) out.line("app::" + native_detail::identifier(stem + "_screens") + "(s);");
             out.line("return app::run(s, " + std::string(target_ == "desktop" ? "*window_app" : "window_app") + ", **source, count > 1 ? given[1] : \"/\");");
             out.close("}");
             return out;
+        }
+
+        // Whether the theme says how it looks dark, as uione's own do.
+        bool has_dark() const {
+            auto look = theme::resolve(files_, model_.project.theme.empty() ? "harbor" : model_.project.theme).value_or(theme::look{});
+            return std::ranges::any_of(look.colors, [](const auto& role) { return role.second.second.starts_with("#"); });
         }
 
         stream main_cpp(const std::vector<std::string>& stems) const {
@@ -1791,6 +1805,12 @@ namespace one::generators {
                 for (const auto& line : theme_of()) out.line(line);
                 out.line("s.look = t;");
                 out.close("}");
+                if (has_dark()) {
+                    out.open("{");
+                    for (const auto& line : theme_of(true)) out.line(line);
+                    out.line("s.dark = t;");
+                    out.close("}");
+                }
             } else {
                 // The theme's colors, which the terminal's are set to while it runs.
                 out.open("{");
