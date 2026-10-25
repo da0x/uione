@@ -272,8 +272,9 @@ TEST("a picture copied is on the clipboard as a PNG to paste, and text copied af
 }
 
 TEST("every icon a toolbar draws with draws something, its paths read whole") {
-	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close", "paste", "text", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger",
-	                         "fill", "fit", "stretch", "center", "color", "edges"}) {
+	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close",
+	                         "paste", "save", "text", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit",
+	                         "stretch", "center", "color", "edges"}) {
 		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
 		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 		std::size_t inked = 0;
@@ -624,13 +625,14 @@ TEST("fields: typed in with a word selected, empty with a placeholder, and sever
 	});
 }
 
-TEST("a toolbar: large tool buttons with their words, small ones, one on and one pointed at with its words under it") {
+TEST("a toolbar: large tool buttons with their words, small ones, one on and one pointed at with its words under it, and small ones of words alone") {
 	matches_golden("tools-1", {420, 120}, 1, [](one::desktop::canvas& c) {
 		one::desktop::detail::theme_in_use() = &tested_theme();
 		auto root = placed(one::desktop::row(one::desktop::tool_button("paste", "Paste", [] {}, {.large = true}),
 		                                     one::desktop::tool_button("text", "Text", [] {}, {.large = true}),
 		                                     one::desktop::tool_button("fill", "Fill", [] {}, {.on = true}), one::desktop::tool_button("fit", "Fit", [] {}),
-		                                     one::desktop::tool_button("bold", "Bold", [] {}), one::desktop::tool_button("moon", "Dark", [] {}))
+		                                     one::desktop::tool_button("bold", "Bold", [] {}), one::desktop::tool_button("moon", "Dark", [] {}),
+		                                     one::desktop::tool_button("", "1×", [] {}, {.on = true}), one::desktop::tool_button("", "1.5×", [] {}))
 		                       .spacing(4)
 		                       .align(one::desktop::align::center)
 		                       .padding(12),

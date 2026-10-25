@@ -597,6 +597,8 @@ namespace one::desktop {
 			extent measure_content(float) override {
 				const auto& laid = laid_out();
 				if (flat_ && tool_.large) return {std::max(44.f, small_words().width()), 24 + 4 + small_words().height()};
+				// A small one with no icon is its words, as a scale like 1.5× is.
+				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), std::max(18.f, small_words().height())};
 				if (flat_) return {18, 18};
 				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
 				if (!icon_.empty()) return {16, laid.height()};
@@ -651,6 +653,14 @@ namespace one::desktop {
 					draw_icon(c, icon_, {area.x + (area.width - 24) / 2, area.y, 24, 24}, ink);
 					const auto& words = small_words();
 					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + 28});
+					return;
+				}
+				if (icon_.empty()) {
+					text_style s = t.quiet();
+					s.color = ink;
+					s.weight = tool_.on ? 600 : 400;
+					auto words = lay_out({label_, s}, 0, detail::layout_scale());
+					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + (area.height - words.height()) / 2});
 					return;
 				}
 				draw_icon(c, icon_, {area.x + (area.width - 18) / 2, area.y + (area.height - 18) / 2, 18, 18}, ink);

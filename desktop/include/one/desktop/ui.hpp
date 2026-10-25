@@ -295,8 +295,9 @@ namespace one::desktop {
 	// is drawn with its words.
 	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary = false);
 	// A toolbar's button, flat until it's pointed at: large, its icon over its words,
-	// or small, its icon alone and its words shown under it while it's pointed at.
-	// One that's on, like Bold while words are bold, is tinted in the accent.
+	// or small, its icon alone and its words shown under it while it's pointed at, or
+	// its words alone when it has no icon, as a scale like 1.5× does. One that's on,
+	// like Bold while words are bold, is tinted in the accent.
 	struct tool_options {
 		bool large = false;
 		bool on = false;

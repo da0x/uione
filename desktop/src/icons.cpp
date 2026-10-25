@@ -88,9 +88,10 @@ namespace one::desktop {
 			    {"flip_vertical", {path("M1.5 8h13"), path("M4 6l8-3.5V6z"), path("M4 10l8 3.5V10z")}},
 			    {"check", {path("M3 8.5l3.2 3.2L13 4.8")}},
 			    {"close", {path("M4 4l8 8M12 4l-8 8")}},
-			    // What a drawing app's toolbar does: paste, add words or a picture, see every
-			    // piece of work, fill the screen, and switch light and dark.
+			    // What a drawing app's toolbar does: paste, save, add words or a picture, see
+			    // every piece of work, fill the screen, and switch light and dark.
 			    {"paste", {box(3.5f, 3, 9, 11.5f, 1.5f), box(6, 1.5f, 4, 3, 0.75f), path("M6 8h4M6 10.5h4")}},
+			    {"save", {path("M8 2v8M4.5 6.5L8 10l3.5-3.5"), path("M2.5 10.5V14h11v-3.5")}},
 			    {"text", {path("M3 3.5h10M8 3.5V13M6 13h4")}},
 			    {"picture", {box(2, 3, 12, 10, 1.5f), ring(5.5f, 6.5f, 1.2f), path("M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3")}},
 			    {"gallery", {box(2, 2, 5, 5, 1), box(9, 2, 5, 5, 1), box(2, 9, 5, 5, 1), box(9, 9, 5, 5, 1)}},
