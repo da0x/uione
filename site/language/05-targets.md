@@ -120,12 +120,12 @@ The installer puts uione's libraries for the desktop and terminal apps in
 `~/.local/share/uione/<version>`, beside the compiler, and the generated
 `CMakeLists.txt` finds them there. Building needs g++ 16, CMake and pkg-config, with,
 for the desktop, Wayland, `wayland-protocols`, Vulkan's headers and loader, `shaderc`,
-HarfBuzz, FreeType, fontconfig and xkbcommon, and for the terminal, ncurses. Both
+HarfBuzz, FreeType, fontconfig, xkbcommon and D-Bus, and for the terminal, ncurses. Both
 need Botan for TLS. On Arch:
 
 ```sh
 sudo pacman -S --needed gcc cmake pkgconf wayland wayland-protocols vulkan-headers \
-  vulkan-icd-loader shaderc harfbuzz freetype2 fontconfig libxkbcommon ncurses botan
+  vulkan-icd-loader shaderc harfbuzz freetype2 fontconfig libxkbcommon dbus ncurses botan
 ```
 
 Then build each app with CMake:

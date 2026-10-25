@@ -24,12 +24,23 @@ namespace one::generators {
     generated_project generate_project(std::vector<language::file>& files, const std::string& project_dir,
                                        const std::string& out_dir, const std::vector<std::string>& targets) {
         generated_project out;
-        // A project that keeps its data on this machine is its native apps alone: its
-        // commands and views run inside them, with no service, rules or cloud (0015).
+        // A project that keeps its data on this machine is its apps alone: its commands
+        // and views run inside them, with no service, rules or cloud (0015). The web
+        // app keeps it in the browser.
         if (language::stores_locally(files)) {
             auto local = generate_local(files);
             out.errors = std::move(local.errors);
             if (!out.errors.empty()) return out;
+            if (language::listed(targets, "web")) {
+                for (auto& f : generate_web(files, project_dir, out_dir + "/web")) {
+                    f.path = "web/" + f.path;
+                    out.files.push_back(std::move(f));
+                }
+                for (auto& f : local.web) {
+                    f.path = "web/" + f.path;
+                    out.files.push_back(std::move(f));
+                }
+            }
             for (const char* native : {"desktop", "terminal"}) {
                 if (!language::listed(targets, native)) continue;
                 for (auto& f : generate_native(files, project_dir, native)) {

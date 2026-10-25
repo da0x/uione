@@ -23,6 +23,10 @@
       "types": "./dist/firebase.d.ts",
       "import": "./dist/firebase.js"
     },
+    "./local": {
+      "types": "./dist/local.d.ts",
+      "import": "./dist/local.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

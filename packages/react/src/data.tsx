@@ -336,6 +336,9 @@ export function useAuth(): AuthState | undefined {
 // runner can serve many commands, like the actions on every row of a table.
 export interface Runner {
   run: (command: string, input?: CommandInput) => Promise<boolean>;
+  // Runs it too, and resolves to what it answered, like the step an undo took back;
+  // undefined when it failed.
+  reply: (command: string, input?: CommandInput) => Promise<CommandReply | undefined>;
   busy: (command: string) => boolean;
   error: (command: string) => string | undefined;
   // Forgets why a command last failed, once that no longer describes what's on screen.
@@ -355,18 +358,18 @@ export function useRunner(): Runner {
       return next;
     });
   }, []);
-  const run = useCallback(
-    async (command: string, input: CommandInput = {}) => {
+  const reply = useCallback(
+    async (command: string, input: CommandInput = {}): Promise<CommandReply | undefined> => {
       setRunning((current) => new Set(current).add(command));
       clear(command);
       try {
-        const reply = await source.run(command, input);
-        if (reply?.key) show(reply.key);
-        return true;
+        const reply = (await source.run(command, input)) ?? {};
+        if (reply.key) show(reply.key);
+        return reply;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setErrors((current) => ({ ...current, [command]: message }));
-        return false;
+        return undefined;
       } finally {
         setRunning((current) => {
           const next = new Set(current);
@@ -377,7 +380,8 @@ export function useRunner(): Runner {
     },
     [source, clear, show],
   );
-  return { run, busy: (command) => running.has(command), error: (command) => errors[command], clear };
+  const run = useCallback(async (command: string, input: CommandInput = {}) => (await reply(command, input)) !== undefined, [reply]);
+  return { run, reply, busy: (command) => running.has(command), error: (command) => errors[command], clear };
 }
 
 // Gives a program on this computer, like the app's command, a code that signs it in

@@ -356,6 +356,7 @@ TEST_CASE("what components share comes along with them") {
     fs::path dir = fs::path(root) / "compiler" / "build" / "shared-component-project";
     fs::remove_all(dir);
     fs::create_directories(dir / "components" / "parts");
+    fs::create_directories(dir / "components" / "fonts");
     fs::create_directories(dir / "components" / "node_modules" / "left");
     REQUIRE(platform::write_file((dir / "main.one").string(), "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"));
     REQUIRE(platform::write_file((dir / "components" / "workbench.tsx").string(), "import { shared } from \"./commits\";\nexport default function Workbench() { return null; }\n"));
@@ -363,6 +364,9 @@ TEST_CASE("what components share comes along with them") {
     REQUIRE(platform::write_file((dir / "components" / "parts" / "look.css").string(), ".a { color: red; }\n"));
     REQUIRE(platform::write_file((dir / "components" / "notes.txt").string(), "not code\n"));
     REQUIRE(platform::write_file((dir / "components" / "node_modules" / "left" / "index.ts").string(), "export {};\n"));
+    const std::string font("\0\1\0\0 a font\n\xff", 13);
+    REQUIRE(platform::write_file((dir / "components" / "fonts" / "Logo.ttf").string(), font));
+    REQUIRE(platform::write_file((dir / "components" / "fonts" / "Logo.woff2").string(), font));
     auto files = generate_at(dir.string());
     fs::remove_all(dir);
     const auto* shared = find(files, "src/components/commits.ts");
@@ -371,6 +375,12 @@ TEST_CASE("what components share comes along with them") {
     CHECK(find(files, "src/components/parts/look.css") != nullptr);
     CHECK(find(files, "src/components/notes.txt") == nullptr);
     CHECK(find(files, "src/components/node_modules/left/index.ts") == nullptr);
+    // The fonts its CSS names, byte for byte.
+    for (const char* name : {"src/components/fonts/Logo.ttf", "src/components/fonts/Logo.woff2"}) {
+        const auto* copied = find(files, name);
+        REQUIRE(copied != nullptr);
+        CHECK(copied->content == font);
+    }
     CHECK(find(files, "src/components/workbench.tsx") != nullptr);
 }
 

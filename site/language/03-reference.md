@@ -252,13 +252,14 @@ moved on to where it is now, and a project can have as many as it needs.
 
 `storage local` keeps a project's data on the machine its app runs on, for one
 person, rather than on Firebase with a Go service. Its commands and views run inside
-the desktop or terminal app, each command's event is kept in a log under
-`~/.local/share/<project>`, and every file a command is given is kept there once,
-named by its hash. Screens read views live, as they do from the cloud, and nothing
+the app, each command's event is kept in a log, and every file a command is given is
+kept once, named by its hash: under `~/.local/share/<project>` for the desktop and
+terminal apps, and in the browser's IndexedDB, in a database named for the project,
+for the web app. Screens read views live, as they do from the cloud, and nothing
 leaves the machine. Nobody signs in to such an app, so what needs a person or a
 server, like `signin`, `me`, roles, a view `per user`, webhooks and Stripe, is an
-error at its line, saying why. It names its target, `target desktop`; the web app,
-which will keep its data in the browser, comes later.
+error at its line, saying why. It names its targets, like `target desktop` or
+`target web desktop`.
 
 `target web desktop terminal` names the apps `one build` writes from the screens:
 the web site in `build/web`, and a desktop app and a terminal app drawn from the same

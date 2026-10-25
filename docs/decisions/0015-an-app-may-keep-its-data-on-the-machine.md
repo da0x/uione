@@ -46,12 +46,20 @@ holds what repeats: the log, the files, the entities, and `local_source`, which
 gives the screens the same `one::screens::source` they read from the cloud. Nothing
 interprets a `.one` file at runtime.
 
+**In the browser, everything is in an IndexedDB database named for the project**,
+with the same two parts: the log of events, each kept before the command answers,
+and each file, kept once by its SHA-256 and named `files/<sha-256>` as on the
+desktop. On load, the app reads the log through, as the desktop app does. The web
+generator writes the same description of each command and view, in TypeScript, on
+`@uione/react/local`, which is to the browser what `one::local` is to the desktop:
+`localSource` gives the screens the same data source they read from the cloud. So a
+local project may target the web, the desktop and the terminal, each keeping its
+own data where it runs.
+
 **What a local project can't say yet, the checker refuses**, naming the line and
 why: sign-in, roles and permissions other than `anyone`, `readers` and `public
 when`, views `per user`, Stripe, webhooks, services, and environments. Each comes
-back when local storage can do what it means. The browser keeps a local project's
-data in IndexedDB, as a later step; until then a local project may target the
-desktop and the terminal only.
+back when local storage can do what it means.
 
 **Nothing syncs.** A local project's data leaves the machine only when its person
 takes it, as a file.
@@ -65,8 +73,13 @@ The log only grows. Reading it on start is fast for the sizes expected; when it
 isn't, measured, the app writes a snapshot of its views beside it.
 
 Two copies of the app open on the same data would be two writers with no order
-between them, so the second refuses to open, by a lock on the folder, and says the
-first is already running.
+between them, so the second doesn't open, by a lock on the folder: it hands the
+address it was started with to the first, which goes there, and leaves. In the
+browser two tabs of the same local web app share one database, so they take turns
+instead: each catches up with what the others kept before it runs a command, under
+a Web Lock, and tells them through a BroadcastChannel when it keeps one, so each
+shows what the others did. Each tab's undo is its own. Files nothing names are let
+go of only by a tab that opens alone, since another's undo could name one again.
 
 0001 now reads "every app that doesn't say `storage local` runs on Firebase with a
 Go service".

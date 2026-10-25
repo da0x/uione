@@ -77,7 +77,10 @@ Treat every file as published, whatever the repository's visibility today.
   line becomes beside it; its tests run the browser build of the compiler. `packages/react` is `@uione/react`: the runtime and the component
   contract. `yarn install`, then `yarn workspace @uione/react test` (or `typecheck`,
   `build`). `@uione/react/firebase` is the data source a generated app uses: views
-  read live from Firestore, commands sent to the Go backend, and Google sign-in. Its
+  read live from Firestore, commands sent to the Go backend, and Google sign-in.
+  `@uione/react/local` is the one a project that says `storage local` uses on the
+  web: its commands and views run in the browser, on what the compiler writes from
+  the same description `one::local` runs on the desktop, kept in IndexedDB. Its
   rules for staying honest about a dropped connection are in `src/live.ts`, apart
   from Firebase, so the tests can break the connection on demand. A component set
   only draws; routing, data, commands and confirmations live in `@uione/react`, so

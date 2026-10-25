@@ -10,7 +10,9 @@
 // .one it came from (decision 0002).
 //
 // Screens read their views live from Firestore and send commands to the Go backend
-// that `one build` writes next to the app, through @uione/react/firebase.
+// that `one build` writes next to the app, through @uione/react/firebase; or, for a
+// project that says storage local, run them in the browser, through
+// @uione/react/local, on what generators/local.hpp writes.
 
 #pragma once
 

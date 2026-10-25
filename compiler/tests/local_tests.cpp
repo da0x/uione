@@ -118,11 +118,11 @@ TEST_CASE("a project keeps its data on its machine only when it says storage loc
 TEST_CASE("what a local project can't have says why, at its line") {
     auto said = messages(with(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n\tsignin   google\n"),
                               "\tcommand board::create\n", "\tcommand board::create\n\tcommand board::claim {\n\t\tname = me\n\t}\n\trole editor  board::create\n"));
-    CHECK(says(said, "6: the web app of a project that says storage local isn't built yet"));
     CHECK(says(said, "7: nobody signs in to a project that says storage local"));
     CHECK(says(said, "me, who's running a command, needs someone signed in"));
     CHECK(says(said, "a role needs someone signed in"));
-    CHECK(said.size() == 4);
+    CHECK(!says(said, "web"));  // its web app keeps its data in the browser
+    CHECK(said.size() == 3);
 }
 
 TEST_CASE("a local project says which app it's built for") {
@@ -229,5 +229,167 @@ TEST_CASE("one build writes a local project's native apps alone, with no service
     REQUIRE(main != whole.files.end());
     CHECK(main->content.find("one::local::folder::open(\"pinned\")") != std::string::npos);
     CHECK(main->content.find("app::install_pinned(**source);") != std::string::npos);
+    // A second launch hands its address to the copy holding the folder.
+    CHECK(main->content.find("if (one::desktop::runtime::hand_over(\"org.uione.pinned\", count > 1 ? given[1] : \"/\")) return 0;") != std::string::npos);
     CHECK(main->content.find("one::client") == std::string::npos);
+}
+
+TEST_CASE("a local view lists what the store keeps of every row, like when it last changed") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\t\t\torder by name\n\t\t\tname\n", "\t\t\torder by name\n\t\t\tname  created_at  updated_at\n"), out);
+    REQUIRE(out.empty());
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    CHECK(generated.files[0].content.find(R"(.fields({"name", "created_at", "updated_at"}))") != std::string::npos);
+}
+
+TEST_CASE("a local project's web app is given the same commands and views, on @uione/react/local") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n"), out);
+    REQUIRE(out.empty());
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.web.size() == 1);
+    CHECK(generated.web[0].path == "src/local.generated.ts");
+    CHECK(generated.web[0].content == R"(// Generated from main.one by one. Do not edit.
+
+import { all, by, command, compare, entity, failed, localPackage, number, row, same, subject, subjectField, text, truthy, view } from "@uione/react/local";
+
+// Each namespace's entities, commands and views, kept in this browser.
+export const packages = [
+  localPackage("pinned",
+    [
+      entity("pinned::board", [
+        { name: "name", required: true },
+      ]),
+      entity("pinned::layer", [
+        { name: "board", required: true, refers: "pinned::board" },
+        { name: "order", serial: "board" },
+        { name: "kind", choices: ["picture", "words"], initial: "picture" },
+        { name: "x", initial: 0 },
+        { name: "w", initial: 400 },
+      ])
+    ],
+    [
+      command("pinned::board::create").creates("pinned::board"),
+      command("pinned::layer::create").creates("pinned::layer"),
+      command("pinned::layer::place").on("pinned::layer").fields(["x", "w"]).does((c, e) => {
+        if (!(compare(e["w"], 0) > 0)) return c.fail("a layer has a size");
+        return c.done();
+      }),
+      command("pinned::layer::raise").on("pinned::layer").does((c, e) => {
+        if (!(!same(e["kind"], "words") || compare(e["w"], 0) > 0)) return c.fail("a layer has a size");
+        e["x"] = (number(e["x"]) + number(1));
+        return c.done();
+      })
+    ],
+    [
+      view("pinned::boards")
+        .each(all("pinned::board"))
+        .order([by("name")])
+        .fields(["name"]),
+      view("pinned::board_page")
+        .per("pinned::board")
+        .copy("name", "name")
+        .count("pictures", all("pinned::layer").where("board", subject).where("kind", "picture"))
+        .list("layers", all("pinned::layer").where("board", subject))
+        .order([by("-order")])
+        .fields(["x", "w", "kind"])
+    ]),
+];
+)");
+}
+
+TEST_CASE("a local body that changes other rows is written the same way in both") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand board::create\n", R"(	command board::create
+
+	command board::clear {
+		each layer where kind == kind::words {
+			dispatch layer::update { id = id  x = 0 }
+		}
+		dispatch board::update { id = id  name = "cleared" }
+	}
+
+	command board::update
+	command layer::update
+)"),
+                        out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CHECK(cpp.find(R"(for (value row : c.each(all("pinned::layer"))) {)") != std::string::npos);
+    CHECK(ts.find(R"(for (const row of c.each(all("pinned::layer"))) {)") != std::string::npos);
+    CHECK(cpp.find(R"(if (!same(row["kind"], value("words"))) continue;)") != std::string::npos);
+    CHECK(ts.find(R"(if (!same(row["kind"], "words")) continue;)") != std::string::npos);
+    CHECK(cpp.find(R"(if (auto done = c.update("pinned::layer", row["id"].as_string(), value(fields{{"x", value(0)}})); !done) return done;)") != std::string::npos);
+    CHECK(ts.find(R"({ const done = c.update("pinned::layer", text(row["id"]), { "x": 0 }); if (done) return done; })") != std::string::npos);
+    CHECK(cpp.find(R"(if (auto done = c.update("pinned::board", e["id"].as_string(), value(fields{{"name", value("cleared")}})); !done) return done;)") != std::string::npos);
+    CHECK(ts.find(R"({ const done = c.update("pinned::board", text(e["id"]), { "name": "cleared" }); if (done) return done; })") != std::string::npos);
+}
+
+TEST_CASE("a local each reads its where's right side as the command's, and leaves its rows as its dispatches left them") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand board::create\n", R"(	command board::create
+
+	command board::reset {
+		each layer where board == id || x == id {
+			dispatch layer::update { w = 400 }
+		}
+	}
+
+	command board::update
+	command layer::update
+)"),
+                        out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    // The board's id each time, not the layer's own.
+    CHECK(cpp.find(R"(if (!(same(row["board"], e["id"]) || same(row["x"], e["id"]))) continue;)") != std::string::npos);
+    CHECK(ts.find(R"(if (!(same(row["board"], e["id"]) || same(row["x"], e["id"]))) continue;)") != std::string::npos);
+    // A dispatch with no id acts on the row, and the row as it was read isn't written back over it.
+    CHECK(cpp.find(R"(if (auto done = c.update("pinned::layer", row["id"].as_string(), value(fields{{"w", value(400)}})); !done) return done;)") != std::string::npos);
+    CHECK(ts.find(R"({ const done = c.update("pinned::layer", text(row["id"]), { "w": 400 }); if (done) return done; })") != std::string::npos);
+    CHECK(cpp.find(R"(c.update("pinned::layer", row["id"].as_string(), row))") == std::string::npos);
+    CHECK(ts.find(R"(c.update("pinned::layer", text(row["id"]), row))") == std::string::npos);
+}
+
+TEST_CASE("one build writes a local project's web app on localSource, with no Firebase, service or sign-in") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\ttarget   desktop\n", "\ttarget   desktop web\n"), out);
+    REQUIRE(out.empty());
+    auto dir = std::filesystem::temp_directory_path() / "one-local-project";
+    auto whole = generators::generate_project(files, dir.string(), (dir / "build").string(), {"web", "desktop"});
+    for (const auto& e : whole.errors) FAIL_CHECK(language::format(e));
+    for (const auto& f : whole.files) {
+        CAPTURE(f.path);
+        CHECK((f.path.starts_with("web/") || f.path.starts_with("desktop/")));
+    }
+    auto content = [&](const std::string& path) {
+        auto found = std::ranges::find_if(whole.files, [&](const auto& f) { return f.path == path; });
+        REQUIRE(found != whole.files.end());
+        return found->content;
+    };
+    CHECK(content("web/src/local.generated.ts").find("localPackage(\"pinned\",") != std::string::npos);
+    CHECK(content("desktop/src/local/pinned.cpp").find("pinned.install(source);") != std::string::npos);
+    std::string app = content("web/src/app.tsx");
+    CHECK(app.find("import { localSource } from \"@uione/react/local\";") != std::string::npos);
+    CHECK(app.find("import { packages } from \"./local.generated\";") != std::string::npos);
+    CHECK(app.find("const data = localSource({ name: \"pinned\", packages });") != std::string::npos);
+    CHECK(app.find("authentication: false") != std::string::npos);
+    CHECK(app.find("firebase") == std::string::npos);
+    CHECK(content("web/package.json").find("firebase") == std::string::npos);
+    CHECK(content("web/vite.config.ts").find("/api") == std::string::npos);
 }

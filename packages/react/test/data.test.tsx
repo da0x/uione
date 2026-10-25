@@ -32,6 +32,7 @@ import {
   screen as defineScreen,
   useParam,
   usePeople,
+  useRunner,
   usePerson,
   useView,
 } from "../src/index.js";
@@ -213,6 +214,45 @@ describe("a key a command gives", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(source.runs.length).toBe(1));
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("what a command answers", () => {
+  function Undo() {
+    const runner = useRunner();
+    const [told, setTold] = useState("");
+    const press = async () => {
+      const answer = await runner.reply("one::undo");
+      setTold(answer ? `Undid ${answer.id}` : "Failed");
+    };
+    return (
+      <>
+        <button type="button" onClick={() => void press()}>
+          {told || "Undo"}
+        </button>
+        <p>{runner.error("one::undo")}</p>
+      </>
+    );
+  }
+
+  it("is given to whoever ran it, like the step an undo took back", async () => {
+    renderScreen(memorySource({ commands: { "one::undo": () => ({ id: "board::place" }) } }), () => <Undo />);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("button", { name: "Undid board::place" })).toBeTruthy();
+  });
+
+  it("is nothing when the command failed, and why is kept as for run", async () => {
+    const source = memorySource({
+      commands: {
+        "one::undo": () => {
+          throw new Error("There's nothing to undo.");
+        },
+      },
+    });
+    renderScreen(source, () => <Undo />);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("button", { name: "Failed" })).toBeTruthy();
+    expect(screen.getByText("There's nothing to undo.")).toBeTruthy();
   });
 });
 

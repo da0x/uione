@@ -31,8 +31,9 @@ namespace one::generators {
             bool boolean = false;
         };
 
-        std::string as_value(const piece& p) { return p.boolean ? "value(" + p.code + ")" : p.code; }
-        std::string as_bool(const piece& p) { return p.boolean ? p.code : "truthy(" + p.code + ")"; }
+        // What the package is written in: C++ on one::local for the native apps, or
+        // TypeScript on @uione/react/local for the web app. Both say the same lines.
+        enum class dialect { cpp, typescript };
 
         struct namespace_parts {
             std::string path;  // the file that declares it first
@@ -44,11 +45,13 @@ namespace one::generators {
 
         class local_generator {
         public:
-            explicit local_generator(const std::vector<language::file>& files) : files_(files) {}
+            local_generator(const std::vector<language::file>& files, dialect written) : files_(files), dialect_(written) {}
 
             generated_local generate() {
                 for (const auto& f : files_) collect(f.path, "", f.declarations);
                 generated_local out;
+                stream packages;  // every namespace's, for the web app's one file
+                std::string first_path;
                 for (const auto& [ns, parts] : namespaces_) {
                     if (parts.entities.empty() && parts.commands.empty() && parts.views.empty()) continue;
                     if (ns.empty()) {
@@ -57,10 +60,16 @@ namespace one::generators {
                     }
                     ns_ = ns;
                     parts_ = &parts;
+                    if (typescript()) {
+                        if (first_path.empty()) first_path = parts.path;
+                        package_body(packages, parts);
+                        continue;
+                    }
                     std::string install = "install_" + identifier(ns);
                     out.files.push_back(file("src/local/" + identifier(ns) + ".cpp", namespace_file(parts, install)));
                     out.installs.push_back(install);
                 }
+                if (typescript() && !first_path.empty()) out.files.push_back(file("src/local.generated.ts", typescript_file(packages, first_path)));
                 out.errors = std::move(errors_);
                 if (!out.errors.empty()) out.files.clear();
                 return out;
@@ -68,6 +77,7 @@ namespace one::generators {
 
         private:
             const std::vector<language::file>& files_;
+            dialect dialect_;
             std::map<std::string, namespace_parts> namespaces_;
             std::map<std::string, std::vector<std::string>> form_fields_;  // what each command's forms ask for
             language::diagnostics errors_;
@@ -125,6 +135,35 @@ namespace one::generators {
                 }
             }
 
+            // the two dialects, where they differ
+
+            bool typescript() const { return dialect_ == dialect::typescript; }
+            // A value from code that's a C++ literal or a sum; TypeScript's are values as they are.
+            std::string value_of(const std::string& code) const { return typescript() ? code : "value(" + code + ")"; }
+            std::string nothing_value() const { return typescript() ? "null" : "value()"; }
+            std::string number_of(const std::string& code) const { return typescript() ? "number(" + code + ")" : code + ".as_double()"; }
+            std::string text_of(const std::string& code) const { return typescript() ? "text(" + code + ")" : code + ".as_string()"; }
+            std::string sum(const std::string& code) const { return typescript() ? "(" + code + ")" : "value(" + code + ")"; }
+            std::string bracketed(const std::string& inside) const { return typescript() ? "[" + inside + "]" : "{" + inside + "}"; }
+            std::string strings(const std::vector<std::string>& all) const {
+                std::string inside;
+                for (const auto& s : all) inside += (inside.empty() ? "" : ", ") + str(s);
+                return bracketed(inside);
+            }
+            std::string set_field(const std::string& held, const std::string& name) const {
+                return typescript() ? held + "[" + str(name) + "]" : held + ".fields[" + str(name) + "]";
+            }
+            std::string as_value(const piece& p) const { return p.boolean ? value_of(p.code) : p.code; }
+            static std::string as_bool(const piece& p) { return p.boolean ? p.code : "truthy(" + p.code + ")"; }
+            // A step a body takes that can refuse, and the body refusing with it.
+            std::string or_refuse(const std::string& call, const std::string& name, bool made) const {
+                if (typescript()) return "{ const " + name + " = " + call + "; if (" + (made ? "failed(" + name + ")" : name) + ") return " + name + "; }";
+                return "if (auto " + name + " = " + call + "; !" + name + ") return " + (made ? "c.fail(" + name + ".error())" : name) + ";";
+            }
+            std::string for_each_row(const std::string& entity) const {
+                return std::string(typescript() ? "for (const row of" : "for (value row :") + " c.each(all(" + str(entity) + "))) {";
+            }
+
             // names
 
             std::string full(const std::string& name) const { return name.find("::") != std::string::npos ? name : language::qualified(ns_, name); }
@@ -164,16 +203,16 @@ namespace one::generators {
 
             std::optional<std::string> literal_value(const language::expression& e) {
                 if (auto* l = std::get_if<language::literal_expression>(&e.node)) {
-                    if (l->type == language::literal_expression::kind::string) return "value(" + str(l->value) + ")";
-                    if (l->type == language::literal_expression::kind::number) return "value(" + l->value + ")";
+                    if (l->type == language::literal_expression::kind::string) return value_of(str(l->value));
+                    if (l->type == language::literal_expression::kind::number) return value_of(l->value);
                     return std::nullopt;
                 }
                 if (auto* n = std::get_if<language::name_expression>(&e.node)) {
                     const auto& parts = n->name.parts;
-                    if (parts.size() == 2 && is_choice(parts[1])) return "value(" + str(parts[1]) + ")";
-                    if (parts.size() == 1 && parts[0] == "none") return "value()";
-                    if (parts.size() == 1 && (parts[0] == "true" || parts[0] == "false")) return "value(" + parts[0] + ")";
-                    if (parts.size() == 1 && is_choice(parts[0])) return "value(" + str(parts[0]) + ")";
+                    if (parts.size() == 2 && is_choice(parts[1])) return value_of(str(parts[1]));
+                    if (parts.size() == 1 && parts[0] == "none") return nothing_value();
+                    if (parts.size() == 1 && (parts[0] == "true" || parts[0] == "false")) return value_of(parts[0]);
+                    if (parts.size() == 1 && is_choice(parts[0])) return value_of(str(parts[0]));
                 }
                 return std::nullopt;
             }
@@ -181,29 +220,36 @@ namespace one::generators {
             std::vector<std::string> entity_fields(const language::entity_declaration& e) {
                 std::vector<std::string> fields;
                 for (const auto& f : e.fields) {
-                    std::string says = ".name = " + str(f.name);
+                    std::string says;
+                    auto say = [&](const std::string& name, const std::string& code) {
+                        says += (says.empty() ? "" : ", ") + (typescript() ? name + ": " : "." + name + " = ") + code;
+                    };
+                    say("name", str(f.name));
                     bool serial = f.type && f.type->text() == "serial";
                     // In the order package.hpp declares them, as designated initializers go.
-                    if (f.required) says += ", .required = true";
-                    if (f.key) says += ", .key = true";
-                    if (f.unique) says += ", .unique = true";
-                    if (!f.choices.empty()) says += ", .choices = " + native_detail::strings(f.choices);
+                    if (f.required) say("required", "true");
+                    if (f.key) say("key", "true");
+                    if (f.unique) say("unique", "true");
+                    if (!f.choices.empty()) say("choices", strings(f.choices));
                     if (f.initial) {
                         auto* n = std::get_if<language::name_expression>(&f.initial->node);
                         if (n && n->name.text() == "now") {
-                            says += ", .now = true";
+                            say("now", "true");
                         } else if (auto v = literal_value(*f.initial)) {
-                            says += ", .initial = " + *v;
+                            say("initial", *v);
                         } else {
                             unsupported(f.where, "a field's start that isn't a value, a choice or now");
                         }
                     }
-                    if (serial) says += ", .serial = " + str(f.per.value_or(""));
-                    if (std::string to = refers(f); !to.empty()) says += ", .refers = " + str(to);
-                    if (f.after) says += ", .after = " + str(*f.after);
-                    if (f.list) says += ", .list = true";
-                    if (f.range) says += ", .range = field::numbers{" + f.range->from + ", " + f.range->to + ", " + f.range->by + "}";
-                    fields.push_back("{" + says + "}");
+                    if (serial) say("serial", str(f.per.value_or("")));
+                    if (std::string to = refers(f); !to.empty()) say("refers", str(to));
+                    if (f.after) say("after", str(*f.after));
+                    if (f.list) say("list", "true");
+                    if (f.range) {
+                        say("range", typescript() ? "{ from: " + f.range->from + ", to: " + f.range->to + ", by: " + f.range->by + " }"
+                                                  : "field::numbers{" + f.range->from + ", " + f.range->to + ", " + f.range->by + "}");
+                    }
+                    fields.push_back(typescript() ? "{ " + says + " }" : "{" + says + "}");
                 }
                 return fields;
             }
@@ -222,13 +268,13 @@ namespace one::generators {
                     const auto& parts = n->name.parts;
                     if (parts.size() == 1) {
                         const std::string& name = parts[0];
-                        if (name == "now") return {"value(c.now())"};
+                        if (name == "now") return {value_of("c.now()")};
                         if (s.inputs.contains(name)) return {"c.input(" + str(name) + ")"};
                         if (s.row && (field(s.row, name) || name == "id")) return {"row[" + str(name) + "]"};
                         if (field(s.own, name) || name == "id") return {"e[" + str(name) + "]"};
                     }
                     unsupported(e.where, "the name " + n->name.text() + " here");
-                    return {"value()"};
+                    return {nothing_value()};
                 }
                 if (auto* m = std::get_if<language::member_expression>(&e.node)) {
                     // A field of what a field points at: book.status.
@@ -242,12 +288,12 @@ namespace one::generators {
                         }
                     }
                     unsupported(e.where, "reading a field through more than one step");
-                    return {"value()"};
+                    return {nothing_value()};
                 }
                 if (auto* u = std::get_if<language::unary_expression>(&e.node)) {
                     piece inner = expression(*u->operand, s);
-                    if (u->op == language::token_kind::logical_not) return {"!" + as_bool(inner), true};
-                    if (u->op == language::token_kind::minus) return {"value(-" + as_value(inner) + ".as_double())"};
+                    if (u->op == language::token_kind::logical_not) return {"!" + paren(as_bool(inner)), true};
+                    if (u->op == language::token_kind::minus) return {value_of("-" + number_of(as_value(inner)))};
                 }
                 if (auto* b = std::get_if<language::binary_expression>(&e.node)) {
                     piece l = expression(*b->left, s), r = expression(*b->right, s);
@@ -261,14 +307,25 @@ namespace one::generators {
                         case token_kind::greater_equal: return {"compare(" + as_value(l) + ", " + as_value(r) + ") >= 0", true};
                         case token_kind::logical_and: return {"(" + as_bool(l) + " && " + as_bool(r) + ")", true};
                         case token_kind::logical_or: return {"(" + as_bool(l) + " || " + as_bool(r) + ")", true};
-                        case token_kind::plus: return {"value(" + as_value(l) + ".as_double() + " + as_value(r) + ".as_double())"};
-                        case token_kind::minus: return {"value(" + as_value(l) + ".as_double() - " + as_value(r) + ".as_double())"};
-                        case token_kind::star: return {"value(" + as_value(l) + ".as_double() * " + as_value(r) + ".as_double())"};
+                        case token_kind::plus: return {sum(number_of(as_value(l)) + " + " + number_of(as_value(r)))};
+                        case token_kind::minus: return {sum(number_of(as_value(l)) + " - " + number_of(as_value(r)))};
+                        case token_kind::star: return {sum(number_of(as_value(l)) + " * " + number_of(as_value(r)))};
                         default: break;
                     }
                 }
                 unsupported(e.where, "this kind of expression");
-                return {"value()"};
+                return {nothing_value()};
+            }
+
+            // What an each or a delete picks, like project == id || owner == id: each
+            // left side is the row's field and each right side the command's, its own id.
+            piece picking(const language::expression& e, const scope& row, const scope& outer) {
+                if (auto* b = std::get_if<language::binary_expression>(&e.node)) {
+                    using language::token_kind;
+                    if (b->op == token_kind::logical_or) return {"(" + as_bool(picking(*b->left, row, outer)) + " || " + as_bool(picking(*b->right, row, outer)) + ")", true};
+                    if (b->op == token_kind::equal) return {"same(" + as_value(expression(*b->left, row)) + ", " + as_value(expression(*b->right, outer)) + ")", true};
+                }
+                return expression(e, row);
             }
 
             // The fields given in a create or dispatch, as a value.
@@ -277,11 +334,12 @@ namespace one::generators {
                 for (const auto& v : values) {
                     std::string code = as_value(expression(*v.value, s));
                     if (id && v.name == "id") {
-                        *id = code + ".as_string()";
+                        *id = text_of(code);
                         continue;
                     }
-                    fields += (fields.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + code + "}";
+                    fields += (fields.empty() ? "" : ", ") + (typescript() ? str(v.name) + ": " + code : "{" + str(v.name) + ", " + code + "}");
                 }
+                if (typescript()) return fields.empty() ? "{}" : "{ " + fields + " }";
                 return "value(fields{" + fields + "})";
             }
 
@@ -300,9 +358,9 @@ namespace one::generators {
                                     return;
                                 }
                                 std::string held = s.row && field(s.row, target->name.parts[0]) ? "row" : "e";
-                                out.line(held + ".fields[" + str(target->name.parts[0]) + "] = " + as_value(expression(*n.value, s)) + ";");
+                                out.line(set_field(held, target->name.parts[0]) + " = " + as_value(expression(*n.value, s)) + ";");
                             } else if constexpr (std::is_same_v<kind, language::clear_statement>) {
-                                for (const auto& f : n.fields) out.line("e.fields[" + str(f) + "] = value();");
+                                for (const auto& f : n.fields) out.line(set_field("e", f) + " = " + nothing_value() + ";");
                             } else if constexpr (std::is_same_v<kind, language::if_statement>) {
                                 out.open("if (" + as_bool(expression(*n.condition, s)) + ") {");
                                 statements(out, path, n.then_body, s);
@@ -317,7 +375,7 @@ namespace one::generators {
                                     unsupported(st.where, "making something as another command makes it");
                                     return;
                                 }
-                                out.line("if (auto made = c.create(" + str(full(n.entity)) + ", " + given(n.values, s, nullptr) + "); !made) return c.fail(made.error());");
+                                out.line(or_refuse("c.create(" + str(full(n.entity)) + ", " + given(n.values, s, nullptr) + ")", "made", true));
                             } else if constexpr (std::is_same_v<kind, language::dispatch_statement>) {
                                 const auto& parts = n.command.parts;
                                 if (parts.empty() || parts.back() != "update" || !n.lists.empty()) {
@@ -328,11 +386,12 @@ namespace one::generators {
                                 target = target.substr(0, target.rfind("::"));
                                 std::string id;
                                 std::string fields = given(n.values, s, &id);
+                                if (id.empty() && s.row) id = text_of("row[\"id\"]");  // the row an each picked
                                 if (id.empty()) {
                                     unsupported(st.where, "an update that doesn't say which, with id = ...");
                                     return;
                                 }
-                                out.line("if (auto done = c.update(" + str(full(target)) + ", " + id + ", " + fields + "); !done) return done;");
+                                out.line(or_refuse("c.update(" + str(full(target)) + ", " + id + ", " + fields + ")", "done", false));
                             } else if constexpr (std::is_same_v<kind, language::each_statement>) {
                                 const language::entity_declaration* over = entity(n.entity);
                                 if (!over || n.other) {
@@ -341,10 +400,9 @@ namespace one::generators {
                                 }
                                 scope inner = s;
                                 inner.row = over;
-                                out.open("for (value row : c.each(all(" + str(full(n.entity)) + "))) {");
-                                if (n.where) out.line("if (!" + paren(as_bool(expression(*n.where, inner))) + ") continue;");
+                                out.open(for_each_row(full(n.entity)));
+                                if (n.where) out.line("if (!" + paren(as_bool(picking(*n.where, inner, s))) + ") continue;");
                                 statements(out, path, n.body, inner);
-                                out.line("if (auto done = c.update(" + str(full(n.entity)) + ", row[\"id\"].as_string(), row); !done) return done;");
                                 out.close("}");
                             } else if constexpr (std::is_same_v<kind, language::delete_statement>) {
                                 const language::entity_declaration* over = entity(n.entity);
@@ -354,9 +412,9 @@ namespace one::generators {
                                 }
                                 scope inner = s;
                                 inner.row = over;
-                                out.open("for (value row : c.each(all(" + str(full(n.entity)) + "))) {");
-                                if (n.where) out.line("if (!" + paren(as_bool(expression(*n.where, inner))) + ") continue;");
-                                out.line("if (auto done = c.remove(" + str(full(n.entity)) + ", row[\"id\"].as_string()); !done) return done;");
+                                out.open(for_each_row(full(n.entity)));
+                                if (n.where) out.line("if (!" + paren(as_bool(picking(*n.where, inner, s))) + ") continue;");
+                                out.line(or_refuse("c.remove(" + str(full(n.entity)) + ", " + text_of("row[\"id\"]") + ")", "done", false));
                                 out.close("}");
                             } else if constexpr (std::is_same_v<kind, language::input_statement> || std::is_same_v<kind, language::permission_statement> ||
                                                  std::is_same_v<kind, language::changes_statement>) {
@@ -397,8 +455,8 @@ namespace one::generators {
                     }
                     if (auto* input = std::get_if<language::input_statement>(&st.node)) s.inputs.insert(input->name);
                 }
-                if (action != "create" && action != "delete" && !allowed.empty()) head += ".fields(" + native_detail::strings(allowed) + ")";
-                if (!s.inputs.empty()) head += ".takes(" + native_detail::strings(std::vector<std::string>(s.inputs.begin(), s.inputs.end())) + ")";
+                if (action != "create" && action != "delete" && !allowed.empty()) head += ".fields(" + strings(allowed) + ")";
+                if (!s.inputs.empty()) head += ".takes(" + strings(std::vector<std::string>(s.inputs.begin(), s.inputs.end())) + ")";
                 bool has_body = std::ranges::any_of(c.body, [](const language::statement& st) {
                     return !std::holds_alternative<language::input_statement>(st.node) && !std::holds_alternative<language::permission_statement>(st.node) &&
                            !std::holds_alternative<language::changes_statement>(st.node);
@@ -407,7 +465,7 @@ namespace one::generators {
                     out.line(head + (last ? "" : ","));
                     return;
                 }
-                out.open(head + ".does([](context& c, value& e) -> std::expected<void, std::string> {");
+                out.open(head + (typescript() ? ".does((c, e) => {" : ".does([](context& c, value& e) -> std::expected<void, std::string> {"));
                 statements(out, path, c.body, s);
                 out.line("return c.done();");
                 out.close(std::string("})") + (last ? "" : ","));
@@ -427,16 +485,22 @@ namespace one::generators {
                     if (auto* object = std::get_if<language::name_expression>(&m->object->node); object && object->name.parts.size() == 1) {
                         const std::string& name = object->name.parts[0];
                         if (!v.each.empty() && name == v.each && m->member == "id") return "row";
-                        if (!v.per.empty() && name == v.per) return m->member == "id" ? "subject" : "subject_field{" + str(m->member) + "}";
+                        if (!v.per.empty() && name == v.per) {
+                            if (m->member == "id") return "subject";
+                            return typescript() ? "subjectField(" + str(m->member) + ")" : "subject_field{" + str(m->member) + "}";
+                        }
                     }
                 }
                 return std::nullopt;
             }
 
             // The field of the rows a query picks that a side names: status, or loan.book.
+            // Every row has these, kept by the store as it's made and changed.
+            static bool kept_by_store(const std::string& name) { return name == "id" || name == "created_at" || name == "updated_at"; }
+
             std::optional<std::string> picked_field(const language::expression& e, const std::string& rows) {
                 if (auto* n = std::get_if<language::name_expression>(&e.node); n && n->name.parts.size() == 1) {
-                    if (field(entity(rows), n->name.parts[0])) return n->name.parts[0];
+                    if (field(entity(rows), n->name.parts[0]) || kept_by_store(n->name.parts[0])) return n->name.parts[0];
                 }
                 if (auto* m = std::get_if<language::member_expression>(&e.node)) {
                     auto* object = std::get_if<language::name_expression>(&m->object->node);
@@ -518,7 +582,7 @@ namespace one::generators {
                 if (!order.empty()) {
                     std::string keys;
                     for (const auto& k : order) keys += (keys.empty() ? "" : ", ") + std::string("by(") + k + ")";
-                    out.emplace_back(".order({" + keys + "})", at);
+                    out.emplace_back(".order(" + bracketed(keys) + ")", at);
                 }
                 if (each.limit) out.emplace_back(".limit(" + std::to_string(*each.limit) + ")", at);
                 std::vector<std::string> fields;
@@ -543,7 +607,7 @@ namespace one::generators {
                         unsupported(r.where, "this value in a row");
                     }
                 }
-                if (!fields.empty()) out.emplace_back(".fields(" + native_detail::strings(fields) + ")", at);
+                if (!fields.empty()) out.emplace_back(".fields(" + strings(fields) + ")", at);
                 for (const auto& line : values) out.emplace_back(line, at);
             }
 
@@ -601,34 +665,39 @@ namespace one::generators {
                 if (lines.size() > 1) out.dedent();
             }
 
-            stream namespace_file(const namespace_parts& parts, const std::string& install) {
-                stream body("\t");
-                std::string package = identifier(ns_);
-                body.open("static const package " + package + "(" + str(ns_) + ",");
-                body.open("{");
+            // A namespace's package: its entities, commands and views, in three lists.
+            void package_body(stream& body, const namespace_parts& parts) {
+                std::string open = typescript() ? "[" : "{", close = typescript() ? "]" : "}";
+                body.open(typescript() ? "localPackage(" + str(ns_) + "," : "static const package " + identifier(ns_) + "(" + str(ns_) + ",");
+                body.open(open);
                 for (std::size_t i = 0; i < parts.entities.size(); ++i) {
                     auto [e, path] = parts.entities[i];
                     auto from = body.from(path, parts.lines.at(e));
                     path_ = path;
-                    body.open("entity(" + str(full(e->name)) + ", {");
+                    body.open("entity(" + str(full(e->name)) + ", " + open);
                     for (const auto& f : entity_fields(*e)) body.line(f + ",");
-                    body.close(std::string("})") + (i + 1 < parts.entities.size() ? "," : ""));
+                    body.close(close + ")" + (i + 1 < parts.entities.size() ? "," : ""));
                 }
-                body.close("},");
-                body.open("{");
+                body.close(close + ",");
+                body.open(open);
                 for (std::size_t i = 0; i < parts.commands.size(); ++i) {
                     auto [c, path] = parts.commands[i];
                     command(body, *c, path, parts.lines.at(c), i + 1 == parts.commands.size());
                 }
-                body.close("},");
-                body.open("{");
+                body.close(close + ",");
+                body.open(open);
                 for (std::size_t i = 0; i < parts.views.size(); ++i) {
                     auto [v, path] = parts.views[i];
                     view(body, *v, path, parts.lines.at(v), i + 1 == parts.views.size());
                 }
-                body.close("});");
+                body.close(close + (typescript() ? ")," : ");"));
                 body.dedent();
-                body.line(package + ".install(source);");
+            }
+
+            stream namespace_file(const namespace_parts& parts, const std::string& install) {
+                stream body("\t");
+                package_body(body, parts);
+                body.line(identifier(ns_) + ".install(source);");
 
                 stream out("\t");
                 out.generated_from(std::filesystem::path(parts.path).filename().string());
@@ -653,10 +722,33 @@ namespace one::generators {
                 }
                 return out;
             }
+
+            // The web app's one file: every namespace's package, for its localSource.
+            static stream typescript_file(const stream& packages, const std::string& path) {
+                stream out;
+                out.generated_from(std::filesystem::path(path).filename().string());
+                {
+                    auto fixed = out.fixed();
+                    out.line("import { all, by, command, compare, entity, failed, localPackage, number, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
+                    out.line();
+                    out.line("// Each namespace's entities, commands and views, kept in this browser.");
+                    out.open("export const packages = [");
+                }
+                out.embed(packages);
+                {
+                    auto fixed = out.fixed();
+                    out.close("];");
+                }
+                return out;
+            }
         };
 
     }  // namespace
 
-    generated_local generate_local(const std::vector<language::file>& files) { return local_generator(files).generate(); }
+    generated_local generate_local(const std::vector<language::file>& files) {
+        generated_local out = local_generator(files, dialect::cpp).generate();
+        if (out.errors.empty()) out.web = local_generator(files, dialect::typescript).generate().files;
+        return out;
+    }
 
 } // namespace one::generators

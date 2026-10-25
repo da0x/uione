@@ -128,8 +128,6 @@ namespace one::language {
                                 for (const auto& s : n.settings) {
                                     if (s.key == "signin") out.push_back({path, s.where, "nobody signs in to a project that says storage local, which is for one person on their own machine; take signin out"});
                                     if (s.key == "firebase" || s.key == "region") refuse(s.where, "a Firebase project", needs::server);
-                                    if (s.key == "target" && s.value == "web")
-                                        out.push_back({path, s.where, "the web app of a project that says storage local isn't built yet; it will keep its data in the browser, and until then take web out of target"});
                                 }
                                 bool targeted = false;
                                 for (const auto& s : n.settings) targeted = targeted || s.key == "target";

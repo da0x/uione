@@ -25,6 +25,14 @@ Node 20 or later.
   unstyled, semantic HTML. Useful in tests and as a reference for writing one.
 - `@uione/react/firebase`: `firebaseSource`, a data source that reads views live
   from Firestore, sends commands to the app's backend, and signs in with Google.
+- `@uione/react/local`: `localSource`, the data source of an app whose project says
+  `storage local`. It runs the app's commands and builds its views in the browser,
+  keeps each command's event and each file in an IndexedDB database named for the
+  app, and undoes and redoes with `one::undo` and `one::redo`, each answering with
+  the command whose step it took, which `useRunner().reply` gives back. Tabs open
+  on the same app take turns and show what each other did. The entities,
+  commands and views it runs are described with `entity`, `command`, `view` and
+  `localPackage`, which is what the compiler writes.
 
 ## Example
 

@@ -22,6 +22,7 @@
 #include "generators/theme.hpp"
 #include "language/ast.hpp"
 #include "language/names.hpp"
+#include "language/storage.hpp"
 #include "platform/files.hpp"
 #include "version.hpp"
 
@@ -85,6 +86,7 @@ namespace one::generators {
 
         const std::vector<language::file>& files_;
         screens::model model_;  // what the screens mean, which this writes as React
+        bool local_ = language::stores_locally(files_);  // kept in the browser, with no Firebase (0015)
         std::string project_dir_;
         std::string out_dir_;
         std::string screen_title_;  // the screen being written's title, as written, like "#{issue_page.number} {issue_page.title}"
@@ -230,7 +232,8 @@ namespace one::generators {
             }
             // What the components share, like a module of hooks two of them import,
             // comes along too: every other .ts, .tsx and .css file in their folder and
-            // the folders inside it.
+            // the folders inside it, and the fonts they draw with, .ttf, .otf, .woff and
+            // .woff2, which their CSS names by where they sit beside it.
             std::set<std::string> copied;
             for (const auto& f : out) copied.insert(f.path);
             std::set<std::filesystem::path> folders;
@@ -244,7 +247,8 @@ namespace one::generators {
                         continue;
                     }
                     auto extension = it->path().extension().string();
-                    if (it->is_regular_file() && (extension == ".ts" || extension == ".tsx" || extension == ".css")) found.push_back(it->path());
+                    bool font = extension == ".ttf" || extension == ".otf" || extension == ".woff" || extension == ".woff2";
+                    if (it->is_regular_file() && (extension == ".ts" || extension == ".tsx" || extension == ".css" || font)) found.push_back(it->path());
                 }
                 std::sort(found.begin(), found.end());
                 for (const auto& file : found) {
@@ -2256,8 +2260,10 @@ namespace one::generators {
             out.close("},");
             // What every app needs, and what its hand-written components need besides.
             std::map<std::string, std::string> dependencies{
-                {"@uione/" + ui_, std::string(version)}, {"@uione/react", std::string(version)}, {"firebase", "^12.19.0"},
-                {"react", "^19.3.0"},                    {"react-dom", "^19.3.0"},                 {"react-router", "^7.18.4"}};
+                {"@uione/" + ui_, std::string(version)}, {"@uione/react", std::string(version)}, {"react", "^19.3.0"},
+                {"react-dom", "^19.3.0"},                {"react-router", "^7.18.4"}};
+            // An app that keeps its data in the browser has no Firebase.
+            if (!local_) dependencies.emplace("firebase", "^12.19.0");
             // uione's own packages are the compiler's version, whatever the components'
             // package.json says, since they're released together: an editor checking
             // with an older compiler would call what's new a mistake.
@@ -2358,10 +2364,10 @@ namespace one::generators {
             out.line("import react from \"@vitejs/plugin-react\";");
             out.line("import { defineConfig } from \"vite\";");
             out.line();
-            out.line("// Commands go to the Go backend, which listens on port 8081.");
+            if (!local_) out.line("// Commands go to the Go backend, which listens on port 8081.");
             out.open("export default defineConfig({");
             out.line("plugins: [react()],");
-            out.line("server: { proxy: { \"/api\": \"http://localhost:8081\" } },");
+            if (!local_) out.line("server: { proxy: { \"/api\": \"http://localhost:8081\" } },");
             // The compiler starts its worker from a file beside its own, which Vite's
             // prebundling for development would leave behind.
             if (dependencies_.contains("@uione/compiler")) out.line("optimizeDeps: { exclude: [\"@uione/compiler\"] },");
@@ -2397,33 +2403,9 @@ namespace one::generators {
             return out;
         }
 
-        stream app_tsx(const std::vector<screen_import>& screens) const {
-            stream out;
-            auto from = out.from(project_.path, project_.line);
-            out.generated_from(source_name());
-            out.line("import { App } from \"@uione/react\";");
-            {
-                // Each way of signing in is its own module, so the app has only the ones
-                // the project names, each named for what it does, so no screen's name
-                // takes it.
-                std::vector<std::string> imported;
-                for (const auto& method : authentication_) imported.push_back(method + " as " + web_detail::sign_in_with(method));
-                if (analytics_) imported.push_back("firebaseAnalytics");
-                imported.push_back("firebaseSource");
-                std::sort(imported.begin(), imported.end());
-                std::string list;
-                for (const auto& name : imported) list += (list.empty() ? "" : ", ") + name;
-                out.line("import { " + list + " } from \"@uione/react/firebase\";");
-            }
-            out.line("import { " + ui_ + " } from \"@uione/" + ui_ + "\";");
-            if (footer_) out.line("import { SiteFooter } from \"./footer\";");
-            std::string names;
-            for (const auto& screen : screens) {
-                auto from_screen = out.from(screen.from.path, screen.from.line);
-                out.line("import { " + screen.name + " } from " + web_detail::js_string(screen.module) + ";");
-                names += (names.empty() ? "" : ", ") + screen.name;
-            }
-            out.line();
+        // The app's data on Firebase: views read live from Firestore, commands sent to
+        // the Go backend, and the ways people sign in.
+        void firebase_data(stream& out) const {
             out.line("// Views are read live from Firestore, and commands go to the Go backend. While");
             out.line("// developing, both are the local emulators. A production build uses the real");
             out.line("// project, with the settings the deploy writes to .env.production.");
@@ -2459,6 +2441,45 @@ namespace one::generators {
                 out.line("// project linked to Google Analytics, which gives it a measurement ID.");
                 out.line("const analytics = !import.meta.env.DEV && cloud.config.measurementId ? firebaseAnalytics(cloud.config) : undefined;");
             }
+        }
+
+        stream app_tsx(const std::vector<screen_import>& screens) const {
+            stream out;
+            auto from = out.from(project_.path, project_.line);
+            out.generated_from(source_name());
+            out.line("import { App } from \"@uione/react\";");
+            if (local_) {
+                out.line("import { localSource } from \"@uione/react/local\";");
+            } else {
+                // Each way of signing in is its own module, so the app has only the ones
+                // the project names, each named for what it does, so no screen's name
+                // takes it.
+                std::vector<std::string> imported;
+                for (const auto& method : authentication_) imported.push_back(method + " as " + web_detail::sign_in_with(method));
+                if (analytics_) imported.push_back("firebaseAnalytics");
+                imported.push_back("firebaseSource");
+                std::sort(imported.begin(), imported.end());
+                std::string list;
+                for (const auto& name : imported) list += (list.empty() ? "" : ", ") + name;
+                out.line("import { " + list + " } from \"@uione/react/firebase\";");
+            }
+            out.line("import { " + ui_ + " } from \"@uione/" + ui_ + "\";");
+            if (local_) out.line("import { packages } from \"./local.generated\";");
+            if (footer_) out.line("import { SiteFooter } from \"./footer\";");
+            std::string names;
+            for (const auto& screen : screens) {
+                auto from_screen = out.from(screen.from.path, screen.from.line);
+                out.line("import { " + screen.name + " } from " + web_detail::js_string(screen.module) + ";");
+                names += (names.empty() ? "" : ", ") + screen.name;
+            }
+            out.line();
+            if (local_) {
+                out.line("// Everything is kept in this browser, in a database named for the app: commands");
+                out.line("// run here, and views are built here from what they did.");
+                out.line("const data = localSource({ name: " + web_detail::js_string(name_) + ", packages });");
+            } else {
+                firebase_data(out);
+            }
             out.line();
             std::string icon;
             if (!icon_.empty()) icon = ", icon: \"/icon.svg\"";
@@ -2490,7 +2511,7 @@ namespace one::generators {
                 for (const auto& address : model_.navigation(files_)) navigation += (navigation.empty() ? "" : ", ") + web_detail::js_string(address);
                 if (!navigation.empty()) footer += ", navigation: [" + navigation + "]";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") + " };");
+                         ", data" + offered + (analytics_ && !local_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") + " };");
             }
             out.line();
             out.open("export default function Site() {");
