@@ -20,6 +20,7 @@ relevant record before changing what it covers.
 | [0012](0012-programs-sign-in-through-the-browser.md) | Programs sign in as a person through their browser |
 | [0013](0013-everything-is-agpl.md) | Everything in uione is AGPL-3.0-only |
 | [0014](0014-built-once-tested-released.md) | Everything is built once, tested, and released as it was tested |
+| [0015](0015-an-app-may-keep-its-data-on-the-machine.md) | An app may keep all its data on the machine it runs on |
 
 ## Writing one
 

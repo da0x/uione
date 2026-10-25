@@ -218,9 +218,10 @@ jobs:
           pacman -S --noconfirm --needed ccache
           tools/build-native toolkits
 
-      - name: Test what native apps' screens are and do, and Markdown's layout
+      - name: Test what native apps' screens are and do, what a local app keeps, and Markdown's layout
         run: |
           build/native/screens/tests
+          build/native/local/tests
           build/native/markdown/layout_test markdown/test/sample.md
 
       - name: Test the desktop toolkit and the runtime desktop apps run on
