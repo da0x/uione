@@ -8,9 +8,14 @@
 #include <hb-ft.h>
 #include <hb.h>
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -148,6 +153,15 @@ namespace one::desktop::fonts {
 			it = l.fallbacks.emplace(key, where).first;
 		}
 		return opened(l, it->second, first.pixel_size);
+	}
+
+	bool add(const std::string& file) {
+		library& l = fonts();
+		std::lock_guard hold(l.lock);
+		if (!FcConfigAppFontAddFile(l.config, reinterpret_cast<const FcChar8*>(file.c_str()))) return false;
+		l.matched.clear();
+		l.fallbacks.clear();
+		return true;
 	}
 
 	bitmap draw(const face& f, std::uint32_t glyph, float subpixel) {
@@ -380,6 +394,34 @@ namespace one::desktop {
 			if (!best || std::abs(c.x - x) < std::abs(best->x - x)) best = &c;
 		}
 		return best ? best->at : 0;
+	}
+
+}  // namespace one::desktop
+
+namespace one::desktop {
+
+	bool use_font(std::span<const std::uint8_t> bytes) {
+		if (bytes.empty()) return false;
+		// Kept by what's in it, so each run finds the one written before, and only
+		// this person can change it.
+		std::string_view content(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+		const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR");
+		std::filesystem::path folder = runtime_dir && *runtime_dir ? std::filesystem::path(runtime_dir) : std::filesystem::temp_directory_path();
+		std::filesystem::path file = folder / std::format("one-font-{:016x}-{}", std::hash<std::string_view>{}(content), ::getuid());
+		std::error_code error;
+		if (std::filesystem::file_size(file, error) != bytes.size() || error) {
+			std::filesystem::path writing = file;
+			writing += std::format(".{}", ::getpid());
+			{
+				std::ofstream out(writing, std::ios::binary | std::ios::trunc);
+				out.write(content.data(), static_cast<std::streamsize>(content.size()));
+				if (!out) return false;
+			}
+			std::filesystem::permissions(writing, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write, error);
+			std::filesystem::rename(writing, file, error);
+			if (error) return false;
+		}
+		return fonts::add(file.string());
 	}
 
 }  // namespace one::desktop

@@ -129,6 +129,7 @@ namespace one::desktop {
 		carried = true;
 		focused = before.focused;
 		focused_by_default = before.focused_by_default;
+		focused_by_pointer = before.focused_by_pointer;
 		brought = before.brought;
 	}
 
@@ -582,18 +583,31 @@ namespace one::desktop {
 			    : label_(std::move(label)), pressed_(std::move(pressed)), primary_(primary), icon_(has_icon(icon) ? std::move(icon) : std::string()) {
 				padding = icon_.empty() ? edges(8, 16) : edges(8, 9);
 			}
+			// A toolbar's, flat, large or small.
+			button_element(std::string label, std::function<void()> pressed, std::string icon, tool_options tool)
+			    : button_element(std::move(label), std::move(pressed), false, std::move(icon)) {
+				tool_ = tool;
+				flat_ = true;
+				padding = tool.large ? edges(6, 8) : edges(7, 7);
+			}
 
 			bool focusable() const override { return true; }
 			one::desktop::cursor cursor() const override { return cursor::pointer; }
 
 			extent measure_content(float) override {
 				const auto& laid = laid_out();
+				if (flat_ && tool_.large) return {std::max(44.f, small_words().width()), 24 + 4 + small_words().height()};
+				if (flat_) return {18, 18};
 				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
 				if (!icon_.empty()) return {16, laid.height()};
 				return {laid.width(), laid.height()};
 			}
 			void paint_content(canvas& c) override {
 				const theme& t = current_theme();
+				if (flat_) {
+					paint_tool(c, t);
+					return;
+				}
 				if (!icon_.empty()) {
 					paint_icon(c, t);
 					return;
@@ -602,7 +616,7 @@ namespace one::desktop {
 				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
 				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
 				// The ring once the person moves to it, not where the window put the keyboard first.
-				if (focused && !focused_by_default) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
+				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
 				rect area = inner();
 				const auto& laid = laid_out();
 				c.text(laid, {area.x + (area.width - laid.width()) / 2, area.y + (area.height - laid.height()) / 2});
@@ -623,15 +637,27 @@ namespace one::desktop {
 			static color mixed(color a, color b, float by) {
 				return {a.red + (b.red - a.red) * by, a.green + (b.green - a.green) * by, a.blue + (b.blue - a.blue) * by, a.alpha};
 			}
-			// Its icon in place of its words, which show under it while it's pointed at.
-			void paint_icon(canvas& c, const theme& t) {
-				color fill = primary_ ? t.accent : t.surface;
-				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
-				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
-				if (focused && !focused_by_default) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
+			// Flat, tinted while it's on and shaded while it's pointed at: a large one's icon
+			// over its words, a small one's alone, its words under it while pointed at.
+			void paint_tool(canvas& c, const theme& t) {
+				float corners = std::min(t.corners, 6.f);
+				color tint = mixed(t.surface, t.accent, 0.16f);
+				if (tool_.on) c.box(frame, {.fill = hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
+				else if (hovered) c.box(frame, {.fill = t.sunken, .radius = corners});
+				if (shows_focus()) c.box(frame.inset(-2), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = corners + 2});
 				rect area = inner();
-				draw_icon(c, icon_, {area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, primary_ ? color::hex(0xffffff) : t.ink);
-				if (!hovered && !(focused && !focused_by_default)) return;
+				color ink = tool_.on ? t.accent : t.ink;
+				if (tool_.large) {
+					draw_icon(c, icon_, {area.x + (area.width - 24) / 2, area.y, 24, 24}, ink);
+					const auto& words = small_words();
+					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + 28});
+					return;
+				}
+				draw_icon(c, icon_, {area.x + (area.width - 18) / 2, area.y + (area.height - 18) / 2, 18, 18}, ink);
+				if (hovered) tooltip(c, t);
+			}
+			// Its words in a dark tag under it, over whatever's there.
+			void tooltip(canvas& c, const theme& t) {
 				text_style s = t.quiet();
 				s.color = t.page;
 				auto named = lay_out({label_, s}, 0, detail::layout_scale());
@@ -641,6 +667,26 @@ namespace one::desktop {
 					on.box(under, {.fill = behind, .radius = 6});
 					on.text(named, {under.x + 8, under.y + 4});
 				});
+			}
+			const text_layout& small_words() {
+				double scale = detail::layout_scale();
+				if (!small_ || scale != small_scale_) {
+					text_style s = current_theme().quiet();
+					s.color = current_theme().ink;
+					small_ = lay_out({label_, s}, 0, scale);
+					small_scale_ = scale;
+				}
+				return *small_;
+			}
+			// Its icon in place of its words, which show under it while it's pointed at.
+			void paint_icon(canvas& c, const theme& t) {
+				color fill = primary_ ? t.accent : t.surface;
+				if (hovered) fill = primary_ ? mixed(t.accent, t.ink, 0.15f) : t.sunken;
+				c.box(frame, {.fill = fill, .border = primary_ ? fill : t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
+				if (shows_focus()) c.box(frame.inset(-3), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = std::min(t.corners, 8.f) + 3});
+				rect area = inner();
+				draw_icon(c, icon_, {area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, primary_ ? color::hex(0xffffff) : t.ink);
+				if (hovered || (shows_focus())) tooltip(c, t);
 			}
 			const text_layout& laid_out() {
 				double scale = detail::layout_scale();
@@ -658,6 +704,10 @@ namespace one::desktop {
 			std::string icon_;
 			std::optional<text_layout> laid_;
 			double scale_ = 0;
+			bool flat_ = false;
+			tool_options tool_;
+			std::optional<text_layout> small_;
+			double small_scale_ = 0;
 		};
 
 		class link_element : public element {
@@ -674,7 +724,7 @@ namespace one::desktop {
 			void place_content(const rect& area) override { laid_out(area.width); }
 			void paint_content(canvas& c) override {
 				rect area = inner();
-				if (focused && !focused_by_default) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
+				if (shows_focus()) c.box(frame.inset(-2), {.border = current_theme().accent, .border_width = 1.5f, .radius = 3});
 				c.text(laid_out(area.width), {area.x, area.y});
 			}
 			bool handle_key(const key_event& e) override {
@@ -776,6 +826,9 @@ namespace one::desktop {
 			void paint_content(canvas& c) override {
 				if (paint_) paint_(c, frame);
 			}
+			// One that hears presses takes the keyboard when it's pressed, as a drawing
+			// app's canvas does, so keys go to it, not to a button pressed before.
+			bool focusable() const override { return static_cast<bool>(pointer_.on_press); }
 			bool press(point at, int clicks) override { return pointer_.on_press && pointer_.on_press(at, clicks); }
 			void drag(point at) override {
 				if (pointer_.on_drag) pointer_.on_drag(at);
@@ -933,6 +986,9 @@ namespace one::desktop {
 	}
 	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary) {
 		return made<button_element>(std::move(label), std::move(pressed), primary, std::move(icon));
+	}
+	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options) {
+		return made<button_element>(std::move(label), std::move(pressed), std::move(icon), options);
 	}
 	view link(std::string words, std::function<void()> go, std::optional<text_style> style) {
 		return made<link_element>(std::move(words), std::move(go), std::move(style));

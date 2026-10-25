@@ -1833,7 +1833,8 @@ namespace one::generators {
 
         // The components' files, copied into the app as they are: the project's own code.
         // What they share comes along too: every other .cpp and .hpp in their folder and
-        // the folders inside it.
+        // the folders inside it, and the fonts they draw with, .ttf and .otf, which they
+        // #embed so the app needs nothing beside it.
         std::vector<output_file> component_files() {
             std::vector<output_file> out;
             std::set<std::filesystem::path> folders;
@@ -1847,7 +1848,7 @@ namespace one::generators {
                         continue;
                     }
                     auto extension = it->path().extension().string();
-                    if (it->is_regular_file() && (extension == ".cpp" || extension == ".hpp")) found.push_back(it->path());
+                    if (it->is_regular_file() && (extension == ".cpp" || extension == ".hpp" || extension == ".ttf" || extension == ".otf")) found.push_back(it->path());
                 }
                 std::sort(found.begin(), found.end());
                 for (const auto& path : found) {

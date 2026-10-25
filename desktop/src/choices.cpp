@@ -103,7 +103,7 @@ namespace one::desktop {
 					rect circle{x, area.y + (area.height - dot) / 2, dot, dot};
 					c.box(circle, {.fill = t.surface, .border = picked ? t.accent : (hovered ? t.muted : t.line), .border_width = 1.5f, .radius = dot / 2});
 					if (picked) c.box(circle.inset(4), {.fill = t.accent, .radius = dot / 2 - 4});
-					if (focused && !focused_by_default && (picked || (now.empty() && i == 0))) {
+					if (shows_focus() && (picked || (now.empty() && i == 0))) {
 						c.box(circle.inset(-3), {.border = t.accent, .border_width = 1.5f, .radius = dot / 2 + 3});
 					}
 					const auto& laid = laid_out(i);
@@ -195,7 +195,7 @@ namespace one::desktop {
 				c.box({track.x, track.y, x - track.x, track.height}, {.fill = t.accent, .radius = 2});
 				rect handle{x - knob / 2, area.y + (area.height - knob) / 2, knob, knob};
 				c.box(handle, {.fill = t.surface, .border = t.accent, .border_width = 2, .radius = knob / 2});
-				if (focused && !focused_by_default) c.box(handle.inset(-3), {.border = t.accent, .border_width = 1.5f, .radius = knob / 2 + 3});
+				if (shows_focus()) c.box(handle.inset(-3), {.border = t.accent, .border_width = 1.5f, .radius = knob / 2 + 3});
 				c.text(laid, {area.right() - laid.width(), area.y + (area.height - laid.height()) / 2});
 			}
 			bool handle_key(const key_event& e) override {

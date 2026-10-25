@@ -58,7 +58,7 @@ namespace one::desktop {
 
 		void focus(window::state& w, element* chosen) {
 			if (!w.root) return;
-			each_element(*w.root, [](element& e) { e.focused = e.focused_by_default = false; });
+			each_element(*w.root, [](element& e) { e.focused = e.focused_by_default = e.focused_by_pointer = false; });
 			if (chosen) {
 				chosen->focused = true;
 				chosen->reveal(chosen->frame);
@@ -233,6 +233,7 @@ namespace one::desktop {
 		for (element* e = target; e; e = e->parent) {
 			if (e->focusable()) {
 				focus(w, e);
+				e->focused_by_pointer = true;
 				break;
 			}
 		}

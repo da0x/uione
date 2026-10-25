@@ -192,3 +192,28 @@ TEST_CASE("a desktop app is installed and packaged with its .desktop file, icon 
     CHECK(find(unlicensed, "packaging/LICENSE") == nullptr);
     fs::remove_all(repository);
 }
+
+TEST_CASE("a native component's fonts come along with it, byte for byte, to be embedded, and nothing else does") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "font-component-project";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "components" / "fonts");
+    REQUIRE(platform::write_file((dir / "main.one").string(), "screen \"Editor\" /edit {\n\tcomponent workbench\n}\n"));
+    REQUIRE(platform::write_file((dir / "components" / "workbench.cpp").string(), "// draws in the font beside it\n"));
+    const std::string font("\0\1\0\0 a font\n\xff", 13);
+    REQUIRE(platform::write_file((dir / "components" / "fonts" / "Logo.ttf").string(), font));
+    REQUIRE(platform::write_file((dir / "components" / "notes.txt").string(), "not code\n"));
+    language::diagnostics out;
+    std::vector<language::file> files;
+    for (const auto& path : platform::find_one_files({dir.string()})) files.push_back(language::parse(path, *platform::read_file(path), out));
+    language::check(files, out);
+    auto generated = generators::generate_native(files, dir.string(), "desktop");
+    fs::remove_all(dir);
+    const auto* copied = find(generated, "src/components/fonts/Logo.ttf");
+    REQUIRE(copied != nullptr);
+    CHECK(copied->content == font);
+    CHECK(find(generated, "src/components/notes.txt") == nullptr);
+    const auto* cmake = find(generated, "CMakeLists.txt");
+    REQUIRE(cmake != nullptr);
+    CHECK(cmake->content.find("Logo.ttf") == std::string::npos);
+}

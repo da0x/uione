@@ -89,6 +89,11 @@ namespace one::desktop {
 		std::vector<text_caret> carets_;
 	};
 
+	// A font the app brings with it, from its own bytes, as one compiled into the app
+	// is: offered with the system's, by the family it names itself, so a style that
+	// asks for that family draws in it. Whether it could be read.
+	bool use_font(std::span<const std::uint8_t> bytes);
+
 	// Lays spans out within a width in logical pixels, breaking lines between words
 	// and at newlines; 0 means one line for each paragraph, however long.
 	text_layout lay_out(std::span<const text_span> spans, float width, double scale);

@@ -3,8 +3,9 @@
 
 // The icons a button can be drawn as, the web's own, like edit, delete, follow,
 // archive and workflow; the ways a switch shows a list: table, board, whiteboard and
-// pipeline; and what a picture's toolbar does: crop, copy, raise, lower, check and
-// close.
+// pipeline; what a picture's toolbar does: crop, copy, rotate_left, rotate_right,
+// flip_horizontal, flip_vertical, raise, lower, check and close; and a drawing app's: paste, text, picture, gallery, fullscreen, sun, moon,
+// bold, smaller, larger, fill, fit, stretch, center, color and edges.
 
 #pragma once
 

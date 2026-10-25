@@ -9,15 +9,18 @@
 #include <cstdlib>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <span>
 
 #include "check.hpp"
+#include "one/desktop/icons.hpp"
 #include "one/desktop/canvas.hpp"
 #include "one/desktop/editing.hpp"
 #include "one/desktop/state.hpp"
 #include "one/desktop/ui.hpp"
 #include "app_internal.hpp"
 #include "offscreen.hpp"
+#include "fonts.hpp"
 #include "ui_internal.hpp"
 
 namespace {
@@ -233,6 +236,8 @@ TEST("a drawing hears a press it takes, the moves while it's held, and the relea
 	CHECK(root->hit({150, 50})->cursor() == one::desktop::cursor::crosshair);
 	CHECK(!root->hit({150, 50})->press({150, 50}, 2));  // a press it doesn't take
 	CHECK(!one::desktop::held().shift);  // no keyboard here
+	CHECK(found->focusable());  // it takes the keyboard when pressed
+	CHECK(!one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {}).take()->focusable());
 }
 
 TEST("a picture drawn with no window holds what was drawn, a picture drawn into it too, and nothing where nothing was") {
@@ -264,6 +269,39 @@ TEST("a picture copied is on the clipboard as a PNG to paste, and text copied af
 	one::desktop::copy_text("words");
 	CHECK(!one::desktop::clipboard_picture());
 	CHECK(one::desktop::clipboard_text() == "words");
+}
+
+TEST("every icon a toolbar draws with draws something, its paths read whole") {
+	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close", "paste", "text", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger",
+	                         "fill", "fit", "stretch", "center", "color", "edges"}) {
+		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
+		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
+		std::size_t inked = 0;
+		for (std::size_t i = 3; i < drawn.rgba().size(); i += 4) inked += drawn.rgba()[i] > 128;
+		CHECK_SAYING(inked > 20, "the icon " + name + " draws " + std::to_string(inked) + " pixels");
+	}
+}
+
+TEST("a focus ring shows once the keyboard moved to it, not after a click or where focus was put first") {
+	auto root = one::desktop::row(one::desktop::button("Save", [] {})).take();
+	auto& button = *root->children[0];
+	button.focused = true;
+	CHECK(button.shows_focus());
+	button.focused_by_pointer = true;
+	CHECK(!button.shows_focus());
+	button.focused_by_pointer = false;
+	button.focused_by_default = true;
+	CHECK(!button.shows_focus());
+}
+
+TEST("a font an app brings, from its bytes, is offered with the system's, and text still lays out") {
+	std::ifstream in(one::desktop::fonts::find(body, 15).file, std::ios::binary);
+	std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	CHECK(!bytes.empty());
+	CHECK(one::desktop::use_font(bytes));
+	CHECK(one::desktop::use_font(bytes));  // the second time finds the one written the first
+	CHECK(!one::desktop::use_font({}));
+	CHECK(one::desktop::lay_out(one::desktop::text_span{"After", body}, 0, 1).width() > 0);
 }
 
 TEST("a color written in sRGB is kept in linear light") {
@@ -583,6 +621,23 @@ TEST("fields: typed in with a word selected, empty with a placeholder, and sever
 		first.focused = true;
 		first.press({first.frame.x + 70, first.frame.y + 15}, 2);  // a double click on "desktop"
 		root->paint(c);
+	});
+}
+
+TEST("a toolbar: large tool buttons with their words, small ones, one on and one pointed at with its words under it") {
+	matches_golden("tools-1", {420, 120}, 1, [](one::desktop::canvas& c) {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		auto root = placed(one::desktop::row(one::desktop::tool_button("paste", "Paste", [] {}, {.large = true}),
+		                                     one::desktop::tool_button("text", "Text", [] {}, {.large = true}),
+		                                     one::desktop::tool_button("fill", "Fill", [] {}, {.on = true}), one::desktop::tool_button("fit", "Fit", [] {}),
+		                                     one::desktop::tool_button("bold", "Bold", [] {}), one::desktop::tool_button("moon", "Dark", [] {}))
+		                       .spacing(4)
+		                       .align(one::desktop::align::center)
+		                       .padding(12),
+		                   {0, 0, 420, 120});
+		root->children[3]->hovered = true;
+		root->paint(c);
+		c.finish();
 	});
 }
 

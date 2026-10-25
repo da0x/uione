@@ -99,6 +99,11 @@ namespace one::desktop::runtime {
 			shown_in->fullscreen(!shown_in->fullscreen());
 			return true;
 		}
+		// Esc leaves the screen filled before it goes back, as a browser's does.
+		if (e.is(keys::escape) && shown_in && shown_in->fullscreen()) {
+			shown_in->fullscreen(false);
+			return true;
+		}
 		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 		return false;
 	}

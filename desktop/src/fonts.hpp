@@ -42,4 +42,8 @@ namespace one::desktop::fonts {
 	};
 	bitmap draw(const face& f, std::uint32_t glyph, float subpixel);
 
+	// A font file offered with the system's, and what was matched before forgotten,
+	// so the next style that asks for its family finds it. Whether it could be read.
+	bool add(const std::string& file);
+
 }  // namespace one::desktop::fonts

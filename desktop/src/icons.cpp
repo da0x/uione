@@ -75,14 +75,41 @@ namespace one::desktop {
 			    {"globe", {ring(8, 8, 6.25f), path("M1.75 8h12.5M8 1.75a9 9 0 0 1 0 12.5a9 9 0 0 1 0-12.5")}},
 			    // Layers stacked, what's built on what.
 			    {"layers", {path("M8 2l6 3-6 3-6-3z"), path("M2 8l6 3 6-3M2 11l6 3 6-3")}},
-			    // What a picture's toolbar does to it: crop or copy it, raise or lower it among
-			    // others, and keep what was done, or don't.
+			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise
+			    // or lower it among others, and keep what was done, or don't.
 			    {"crop", {path("M4.5 1.5v10h10M1.5 4.5h10v10")}},
 			    {"copy", {box(5.5f, 5.5f, 9, 9, 1.5f), path("M10.5 5.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2.5")}},
 			    {"raise", {path("M8 14V5.5M4.5 9L8 5.5 11.5 9M3 2.5h10")}},
 			    {"lower", {path("M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10")}},
+			    // A circle drawn in short strokes, its arrow at the end it turns toward.
+			    {"rotate_left", {path("M3.5 5.9L2.98 7.15 2.8 8.5 2.98 9.85 3.5 11.1 4.32 12.18 5.4 13 6.65 13.52 8 13.7 9.35 13.52 10.6 13 11.68 12.18 12.5 11.1 13.02 9.85 13.2 8.5 13.02 7.15 12.5 5.9 11.68 4.82 10.6 4 9.35 3.48 8 3.3 6.65 3.48 5.4 4M9.1 4.4L5.4 4 6.9 .59")}},
+			    {"rotate_right", {path("M12.5 5.9L13.02 7.15 13.2 8.5 13.02 9.85 12.5 11.1 11.68 12.18 10.6 13 9.35 13.52 8 13.7 6.65 13.52 5.4 13 4.32 12.18 3.5 11.1 2.98 9.85 2.8 8.5 2.98 7.15 3.5 5.9 4.32 4.82 5.4 4 6.65 3.48 8 3.3 9.35 3.48 10.6 4M6.9 4.4L10.6 4 9.1 .59")}},
+			    {"flip_horizontal", {path("M8 1.5v13"), path("M6 4L2.5 12H6z"), path("M10 4l3.5 8H10z")}},
+			    {"flip_vertical", {path("M1.5 8h13"), path("M4 6l8-3.5V6z"), path("M4 10l8 3.5V10z")}},
 			    {"check", {path("M3 8.5l3.2 3.2L13 4.8")}},
 			    {"close", {path("M4 4l8 8M12 4l-8 8")}},
+			    // What a drawing app's toolbar does: paste, add words or a picture, see every
+			    // piece of work, fill the screen, and switch light and dark.
+			    {"paste", {box(3.5f, 3, 9, 11.5f, 1.5f), box(6, 1.5f, 4, 3, 0.75f), path("M6 8h4M6 10.5h4")}},
+			    {"text", {path("M3 3.5h10M8 3.5V13M6 13h4")}},
+			    {"picture", {box(2, 3, 12, 10, 1.5f), ring(5.5f, 6.5f, 1.2f), path("M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3")}},
+			    {"gallery", {box(2, 2, 5, 5, 1), box(9, 2, 5, 5, 1), box(2, 9, 5, 5, 1), box(9, 9, 5, 5, 1)}},
+			    {"fullscreen", {path("M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4")}},
+			    {"sun", {ring(8, 8, 3), path("M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06")}},
+			    {"moon", {path("M13.5 9.5A5.5 5.5 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z")}},
+			    // Words made bold, smaller or larger.
+			    {"bold", {path("M4.5 2.5h4.25a2.75 2.75 0 0 1 0 5.5H4.5zM4.5 8h5a3 3 0 0 1 0 6h-5z")}},
+			    {"smaller", {path("M1.5 13l3.5-9 3.5 9M2.9 10h4.2M10.5 8.5h4")}},
+			    {"larger", {path("M1.5 13l3.5-9 3.5 9M2.9 10h4.2M10.5 8.5h4M12.5 6.5v4")}},
+			    // How a picture sits in a frame: filling it, fitting in it, stretched to it, or
+			    // at its own size in the middle; and what fills around it: a color, or its
+			    // edges drawn out.
+			    {"fill", {box(1.5f, 3, 13, 10, 1), path("M3 4.5h10v7H3z", true)}},
+			    {"fit", {box(1.5f, 3, 13, 10, 1), path("M5.5 4.5h5v7h-5z", true)}},
+			    {"stretch", {box(1.5f, 3, 13, 10, 1), path("M4 8h8M6 6L4 8l2 2M10 6l2 2-2 2")}},
+			    {"center", {box(1.5f, 3, 13, 10, 1), path("M6 6.5h4v3H6z", true)}},
+			    {"color", {path("M8 1L11.96 7.65A4.6 4.6 0 1 1 4.04 7.65z")}},
+			    {"edges", {box(5, 5, 6, 6, 1), path("M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5")}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},

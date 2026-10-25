@@ -119,6 +119,10 @@ namespace one::desktop {
 
 		bool focused = false;
 		bool focused_by_default = false;  // given focus because nothing better took keys yet
+		bool focused_by_pointer = false;  // given focus by a click, rather than moved to with keys
+		// Whether its focus ring shows: only once the keyboard moved to it, as the web's
+		// :focus-visible, not after a click or where the window put the keyboard first.
+		bool shows_focus() const { return focused && !focused_by_default && !focused_by_pointer; }
 		bool carried = false;             // took over from an element of the view before, rather than new
 		bool hovered = false;
 
@@ -274,7 +278,8 @@ namespace one::desktop {
 	view graph(std::vector<double> values, double top, float height, bool large = false);
 	// What a drawing hears of the pointer, in the window's own coordinates: a press,
 	// with how many quickly, which it takes or not; while one it took is held, each
-	// move; and the release. cursor is what the pointer looks like where it is.
+	// move; and the release. cursor is what the pointer looks like where it is. One
+	// that hears presses takes the keyboard when pressed.
 	struct drawing_pointer {
 		std::function<bool(point at, int clicks)> on_press = {};
 		std::function<void(point at)> on_drag = {};
@@ -289,6 +294,14 @@ namespace one::desktop {
 	// shown under it while it's pointed at or has the keyboard. One with no such icon
 	// is drawn with its words.
 	view icon_button(std::string icon, std::string label, std::function<void()> pressed, bool primary = false);
+	// A toolbar's button, flat until it's pointed at: large, its icon over its words,
+	// or small, its icon alone and its words shown under it while it's pointed at.
+	// One that's on, like Bold while words are bold, is tinted in the accent.
+	struct tool_options {
+		bool large = false;
+		bool on = false;
+	};
+	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or
 	// focused, followed with a click or Enter.
 	view link(std::string words, std::function<void()> go, std::optional<text_style> style = {});

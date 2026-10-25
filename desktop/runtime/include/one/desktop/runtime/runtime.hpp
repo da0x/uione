@@ -47,7 +47,8 @@ namespace one::desktop::runtime {
 	// again closes it.
 	bool may_close(navigator& nav, bool stops_agents);
 	// What a key does that nothing in the view took: Esc puts away the question
-	// about closing, or goes back, and F11 fills the screen with the app, or stops.
+	// about closing, stops filling the screen, or goes back, and F11 fills the screen
+	// with the app, or stops.
 	bool key(navigator& nav, const key_event& e);
 
 	// The screen the app's window is on, in that screen's own pixels, and whether
