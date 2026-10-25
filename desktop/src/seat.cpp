@@ -36,6 +36,7 @@ namespace one::desktop {
 			            : c == cursor::grab     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB
 			            : c == cursor::grabbing ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING
 			            : c == cursor::resize_across ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE
+			            : c == cursor::resize_up_down ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_ROW_RESIZE
 			            : c == cursor::move     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_MOVE
 			            : c == cursor::resize_falling ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NWSE_RESIZE
 			            : c == cursor::resize_rising ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NESW_RESIZE

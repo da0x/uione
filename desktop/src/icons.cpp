@@ -75,6 +75,14 @@ namespace one::desktop {
 			    {"globe", {ring(8, 8, 6.25f), path("M1.75 8h12.5M8 1.75a9 9 0 0 1 0 12.5a9 9 0 0 1 0-12.5")}},
 			    // Layers stacked, what's built on what.
 			    {"layers", {path("M8 2l6 3-6 3-6-3z"), path("M2 8l6 3 6-3M2 11l6 3 6-3")}},
+			    // What a picture's toolbar does to it: crop or copy it, raise or lower it among
+			    // others, and keep what was done, or don't.
+			    {"crop", {path("M4.5 1.5v10h10M1.5 4.5h10v10")}},
+			    {"copy", {box(5.5f, 5.5f, 9, 9, 1.5f), path("M10.5 5.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2.5")}},
+			    {"raise", {path("M8 14V5.5M4.5 9L8 5.5 11.5 9M3 2.5h10")}},
+			    {"lower", {path("M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10")}},
+			    {"check", {path("M3 8.5l3.2 3.2L13 4.8")}},
+			    {"close", {path("M4 4l8 8M12 4l-8 8")}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},

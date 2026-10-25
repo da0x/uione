@@ -53,7 +53,7 @@ namespace one::desktop {
 
 	enum class align { start, center, end, stretch };
 
-	enum class cursor { normal, pointer, text, grab, grabbing, resize_across, move, resize_falling, resize_rising, crosshair };
+	enum class cursor { normal, pointer, text, grab, grabbing, resize_across, resize_up_down, move, resize_falling, resize_rising, crosshair };
 
 	// What an element typed into tells an input method, the way a language like
 	// Japanese is typed: the text around the caret and where the caret is; and what
@@ -308,6 +308,8 @@ namespace one::desktop {
 
 	// Puts text on the clipboard, as copying does.
 	void copy_text(std::string text);
+	// Puts a picture on the clipboard, as a PNG, for any program to paste.
+	void copy_picture(const picture& p);
 	// What's on the clipboard as text, as pasting would give it; none when there's nothing.
 	std::optional<std::string> clipboard_text();
 	// A picture on the clipboard, as a browser or a screenshot copies one: its bytes,

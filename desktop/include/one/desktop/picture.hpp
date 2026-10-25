@@ -48,8 +48,10 @@ namespace one::desktop {
 		const std::vector<std::uint8_t>& rgba() const;
 		explicit operator bool() const { return pixels_ != nullptr; }
 
-		// Written as a PNG, compressed.
+		// Written as a PNG, compressed: to a file, or as its bytes, as the clipboard
+		// offers a picture copied.
 		std::expected<void, std::string> write_png(const std::filesystem::path& file) const;
+		std::vector<std::uint8_t> png() const;
 
 		// What every copy shares, for whatever keeps something per picture, like a
 		// texture, to know the picture by and to see it's gone.

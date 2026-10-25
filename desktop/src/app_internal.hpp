@@ -85,6 +85,7 @@ namespace one::desktop {
 	struct clipboard {
 		owned<wl_data_source, released::wl_data_source_destroy> source;  // ours, while it's the clipboard
 		std::string copied;                                              // what it offers
+		bool copied_picture = false;                                     // whether that's a PNG, not text
 		owned<wl_data_offer, released::wl_data_offer_destroy> offered;   // another program's, while it's the clipboard
 		std::string offered_type;                                        // the kind of text it's read as
 		wl_data_offer* coming = nullptr;                                 // an offer whose types are arriving

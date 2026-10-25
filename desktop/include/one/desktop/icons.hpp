@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The icons a button can be drawn as, the web's own, like edit, delete, follow,
-// archive and workflow, and the ways a switch shows a list: table, board, whiteboard
-// and pipeline.
+// archive and workflow; the ways a switch shows a list: table, board, whiteboard and
+// pipeline; and what a picture's toolbar does: crop, copy, raise, lower, check and
+// close.
 
 #pragma once
 

@@ -23,6 +23,7 @@ namespace one::desktop {
 
 		app::state* owning = nullptr;
 		std::string kept_here;  // the clipboard when there's no compositor
+		std::optional<std::vector<std::uint8_t>> picture_kept_here;  // and a picture on it
 
 		constexpr const char* utf8 = "text/plain;charset=utf-8";
 
@@ -211,10 +212,30 @@ namespace one::desktop {
 	void copy_text(std::string text) { detail::copy_text(std::move(text)); }
 	std::optional<std::string> clipboard_text() { return detail::pasted_text(); }
 
+	void copy_picture(const picture& p) {
+		std::vector<std::uint8_t> png = p.png();
+		if (png.empty()) return;
+		if (!owning || !owning->input || !owning->input->clipboard.device) {
+			kept_here.clear();
+			picture_kept_here = std::move(png);
+			return;
+		}
+		auto& s = *owning->input;
+		auto& c = s.clipboard;
+		c.copied.assign(png.begin(), png.end());
+		c.copied_picture = true;
+		c.source = wl_data_device_manager_create_data_source(owning->data_devices);
+		wl_data_source_add_listener(c.source, &source_listener, nullptr);
+		wl_data_source_offer(c.source, "image/png");
+		wl_data_device_set_selection(c.device, c.source, s.input_serial);
+	}
+
 	std::optional<std::vector<std::uint8_t>> clipboard_picture() {
-		if (!owning || !owning->input || !owning->input->clipboard.device) return std::nullopt;
+		if (!owning || !owning->input || !owning->input->clipboard.device) return picture_kept_here;
 		auto& c = owning->input->clipboard;
-		if (c.source || !c.offered || c.offered_picture.empty()) return std::nullopt;
+		// Ours, which we'd otherwise wait on ourselves to send.
+		if (c.source) return c.copied_picture ? std::optional(std::vector<std::uint8_t>(c.copied.begin(), c.copied.end())) : std::nullopt;
+		if (!c.offered || c.offered_picture.empty()) return std::nullopt;
 		std::string bytes = receive(c.offered.get(), c.offered_picture);
 		if (bytes.empty()) return std::nullopt;
 		return std::vector<std::uint8_t>(bytes.begin(), bytes.end());
@@ -232,11 +253,13 @@ namespace one::desktop {
 		void copy_text(std::string text) {
 			if (!owning || !owning->input || !owning->input->clipboard.device) {
 				kept_here = std::move(text);
+				picture_kept_here.reset();
 				return;
 			}
 			auto& s = *owning->input;
 			auto& c = s.clipboard;
 			c.copied = std::move(text);
+			c.copied_picture = false;
 			c.source = wl_data_device_manager_create_data_source(owning->data_devices);
 			wl_data_source_add_listener(c.source, &source_listener, nullptr);
 			wl_data_source_offer(c.source, utf8);
@@ -246,9 +269,9 @@ namespace one::desktop {
 		}
 
 		std::optional<std::string> pasted_text() {
-			if (!owning || !owning->input || !owning->input->clipboard.device) return kept_here;
+			if (!owning || !owning->input || !owning->input->clipboard.device) return picture_kept_here ? std::nullopt : std::optional(kept_here);
 			auto& c = owning->input->clipboard;
-			if (c.source) return c.copied;  // ours, which we'd otherwise wait on ourselves to send
+			if (c.source) return c.copied_picture ? std::nullopt : std::optional(c.copied);  // ours, which we'd otherwise wait on ourselves to send
 			if (!c.offered || c.offered_type.empty()) return std::nullopt;
 			return receive(c.offered.get(), c.offered_type);
 		}

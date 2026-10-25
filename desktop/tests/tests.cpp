@@ -251,6 +251,21 @@ TEST("a picture drawn with no window holds what was drawn, a picture drawn into 
 	CHECK(at(25, 5, 3) == 0);
 }
 
+TEST("a picture copied is on the clipboard as a PNG to paste, and text copied after takes its place") {
+	std::vector<std::uint8_t> pixels;
+	for (int i = 0; i < 6; ++i) pixels.insert(pixels.end(), {200, 40, 10, 255});
+	one::desktop::copy_picture(one::desktop::picture::of(3, 2, std::move(pixels)));
+	auto pasted = one::desktop::clipboard_picture();
+	CHECK(pasted.has_value());
+	if (!pasted) return;
+	auto back = one::desktop::picture::decode(*pasted);
+	CHECK(back && back->width() == 3 && back->height() == 2 && back->rgba()[0] == 200);
+	CHECK(!one::desktop::clipboard_text());
+	one::desktop::copy_text("words");
+	CHECK(!one::desktop::clipboard_picture());
+	CHECK(one::desktop::clipboard_text() == "words");
+}
+
 TEST("a color written in sRGB is kept in linear light") {
 	CHECK(one::desktop::color::hex(0xffffff).red == 1.f);
 	CHECK(one::desktop::color::hex(0x000000).green == 0.f);

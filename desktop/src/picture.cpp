@@ -95,6 +95,17 @@ namespace one::desktop {
 		return pixels_ ? pixels_->rgba : none;
 	}
 
+	std::vector<std::uint8_t> picture::png() const {
+		std::vector<std::uint8_t> out;
+		if (!pixels_) return out;
+		auto append = [](void* to, void* data, int size) {
+			auto* bytes = static_cast<std::uint8_t*>(data);
+			static_cast<std::vector<std::uint8_t>*>(to)->insert(static_cast<std::vector<std::uint8_t>*>(to)->end(), bytes, bytes + size);
+		};
+		if (!stbi_write_png_to_func(append, &out, width(), height(), 4, pixels_->rgba.data(), width() * 4)) out.clear();
+		return out;
+	}
+
 	std::expected<void, std::string> picture::write_png(const std::filesystem::path& file) const {
 		if (!pixels_) return std::unexpected(std::string("There's no picture to write."));
 		if (!stbi_write_png(file.c_str(), width(), height(), 4, pixels_->rgba.data(), width() * 4))
