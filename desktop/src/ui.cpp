@@ -769,14 +769,32 @@ namespace one::desktop {
 		// under a line in the accent, over a quiet floor and, when large, a grid.
 		class drawing_element : public element {
 		public:
-			explicit drawing_element(std::function<void(canvas&, rect)> paint) : paint_(std::move(paint)) { fills_across = true; }
+			drawing_element(std::function<void(canvas&, rect)> paint, drawing_pointer pointer) : paint_(std::move(paint)), pointer_(std::move(pointer)) {
+				fills_across = true;
+			}
 			extent measure_content(float) override { return {0, 0}; }
 			void paint_content(canvas& c) override {
 				if (paint_) paint_(c, frame);
 			}
+			bool press(point at, int clicks) override { return pointer_.on_press && pointer_.on_press(at, clicks); }
+			void drag(point at) override {
+				if (pointer_.on_drag) pointer_.on_drag(at);
+			}
+			void release(point at, element*) override {
+				if (pointer_.on_release) pointer_.on_release(at);
+			}
+			// Where the pointer is, as it's found over this, for the cursor it shows there.
+			element* hit(point at) override {
+				element* found = element::hit(at);
+				if (found == this) over_ = at;
+				return found;
+			}
+			one::desktop::cursor cursor() const override { return pointer_.cursor ? pointer_.cursor(over_) : cursor::normal; }
 
 		private:
 			std::function<void(canvas&, rect)> paint_;
+			drawing_pointer pointer_;
+			point over_;
 		};
 
 		class graph_element : public element {
@@ -923,7 +941,7 @@ namespace one::desktop {
 	view icon(std::string name, color tint, float size) { return made<icon_element>(std::move(name), tint, size); }
 	view avatar(const std::string& name, float size) { return made<avatar_element>(name, size); }
 	view graph(std::vector<double> values, double top, float height, bool large) { return made<graph_element>(std::move(values), top, height, large); }
-	view drawing(std::function<void(canvas&, rect)> paint) { return made<drawing_element>(std::move(paint)); }
+	view drawing(std::function<void(canvas&, rect)> paint, drawing_pointer pointer) { return made<drawing_element>(std::move(paint), std::move(pointer)); }
 	view divider() { return made<rule_element>(); }
 	view spacer() { return std::move(made<element>()).grow(1); }
 

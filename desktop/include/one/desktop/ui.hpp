@@ -53,7 +53,7 @@ namespace one::desktop {
 
 	enum class align { start, center, end, stretch };
 
-	enum class cursor { normal, pointer, text, grab, grabbing, resize_across };
+	enum class cursor { normal, pointer, text, grab, grabbing, resize_across, move, resize_falling, resize_rising, crosshair };
 
 	// What an element typed into tells an input method, the way a language like
 	// Japanese is typed: the text around the caret and where the caret is; and what
@@ -272,9 +272,18 @@ namespace one::desktop {
 	// a line in the accent over a soft fill, across the width it's given, `height`
 	// tall; large ones have a grid.
 	view graph(std::vector<double> values, double top, float height, bool large = false);
+	// What a drawing hears of the pointer, in the window's own coordinates: a press,
+	// with how many quickly, which it takes or not; while one it took is held, each
+	// move; and the release. cursor is what the pointer looks like where it is.
+	struct drawing_pointer {
+		std::function<bool(point at, int clicks)> on_press = {};
+		std::function<void(point at)> on_drag = {};
+		std::function<void(point at)> on_release = {};
+		std::function<one::desktop::cursor(point at)> cursor = {};
+	};
 	// Painted by the app itself into all the space it's given, as a drawing app's
 	// workspace is: paint is told the canvas and where on it, each time it's drawn.
-	view drawing(std::function<void(canvas& c, rect area)> paint);
+	view drawing(std::function<void(canvas& c, rect area)> paint, drawing_pointer pointer = {});
 	view button(std::string label, std::function<void()> pressed, bool primary = false);
 	// Drawn as an icon, like edit or delete, as the web draws one; its words name it,
 	// shown under it while it's pointed at or has the keyboard. One with no such icon

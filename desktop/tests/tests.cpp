@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
+#include <format>
 #include <span>
 
 #include "check.hpp"
@@ -206,6 +207,32 @@ TEST("files let go over a file target are given to it, with where, and nowhere e
 	CHECK(where.x == 120);
 	one::desktop::detail::drop_files(*root, {120, 90}, {.files = {}, .picture = {137, 80, 78, 71}, .elsewhere = {}});
 	CHECK(picture.size() == 4);  // a picture's own bytes, as a browser drags one
+}
+
+TEST("a drawing hears a press it takes, the moves while it's held, and the release, and shows a cursor where the pointer is") {
+	std::vector<std::string> heard;
+	auto root = one::desktop::column(one::desktop::drawing([](one::desktop::canvas&, one::desktop::rect) {},
+	                                                       {.on_press =
+	                                                            [&](one::desktop::point at, int clicks) {
+		                                                            heard.push_back(std::format("press {} {} {}", at.x, at.y, clicks));
+		                                                            return at.x < 100;
+	                                                            },
+	                                                        .on_drag = [&](one::desktop::point at) { heard.push_back(std::format("drag {} {}", at.x, at.y)); },
+	                                                        .on_release = [&](one::desktop::point at) { heard.push_back(std::format("release {} {}", at.x, at.y)); },
+	                                                        .cursor = [](one::desktop::point at) { return at.x < 100 ? one::desktop::cursor::move : one::desktop::cursor::crosshair; }})
+	                                    .grow())
+	                .take();
+	root->place({0, 0, 200, 100});
+	one::desktop::element* found = root->hit({40, 50});
+	CHECK(found != root.get());
+	CHECK(found->cursor() == one::desktop::cursor::move);
+	CHECK(found->press({40, 50}, 1));
+	found->drag({60, 55});
+	found->release({70, 60}, found);
+	CHECK((heard == std::vector<std::string>{"press 40 50 1", "drag 60 55", "release 70 60"}));
+	CHECK(root->hit({150, 50})->cursor() == one::desktop::cursor::crosshair);
+	CHECK(!root->hit({150, 50})->press({150, 50}, 2));  // a press it doesn't take
+	CHECK(!one::desktop::held().shift);  // no keyboard here
 }
 
 TEST("a color written in sRGB is kept in linear light") {

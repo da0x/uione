@@ -36,6 +36,10 @@ namespace one::desktop {
 			            : c == cursor::grab     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRAB
 			            : c == cursor::grabbing ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_GRABBING
 			            : c == cursor::resize_across ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_COL_RESIZE
+			            : c == cursor::move     ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_MOVE
+			            : c == cursor::resize_falling ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NWSE_RESIZE
+			            : c == cursor::resize_rising ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_NESW_RESIZE
+			            : c == cursor::crosshair ? WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CROSSHAIR
 			                                    : WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT;
 			if (shape == s.shape) return;
 			s.shape = shape;
@@ -222,6 +226,13 @@ namespace one::desktop {
 		(void)!read(s.repeat_timer.get(), &times, sizeof times);
 		if (!s.repeating || !s.keyboard_in || !s.key_state) return;
 		for (std::uint64_t i = 0; i < std::min<std::uint64_t>(times, 4); ++i) deliver_key(*s.keyboard_in, event_for(s, s.repeating));
+	}
+
+	held_keys held() {
+		if (!owning || !owning->input || !owning->input->key_state) return {};
+		xkb_state* state = owning->input->key_state.get();
+		auto active = [&](const char* name) { return xkb_state_mod_name_is_active(state, name, XKB_STATE_MODS_EFFECTIVE) > 0; };
+		return {.shift = active(XKB_MOD_NAME_SHIFT), .control = active(XKB_MOD_NAME_CTRL), .alt = active(XKB_MOD_NAME_ALT)};
 	}
 
 }  // namespace one::desktop

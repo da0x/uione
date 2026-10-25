@@ -21,6 +21,13 @@ namespace one::desktop {
 		bool is(char c) const { return !control && !alt && !super && text.size() == 1 && text[0] == c; }
 	};
 
+	// The keys that change what others do, held now: Shift while resizing frees a
+	// picture's shape, say. None are held where there's no keyboard, as in tests.
+	struct held_keys {
+		bool shift = false, control = false, alt = false;
+	};
+	held_keys held();
+
 	namespace keys {
 		// XKB's symbols for the keys a view usually listens for.
 		inline constexpr std::uint32_t backspace = 0xff08, tab = 0xff09, enter = 0xff0d, escape = 0xff1b;
