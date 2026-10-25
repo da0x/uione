@@ -83,6 +83,7 @@ set(ONE_SOURCES
     driver/editor.cpp
     driver/themes.cpp
     driver/build.cpp
+    driver/run.cpp
     driver.cpp)
 add_library(one_compiler STATIC ${ONE_SOURCES})
 target_include_directories(one_compiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../screens/include)

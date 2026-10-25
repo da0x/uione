@@ -8,6 +8,10 @@
 //   one build <project> [--out <folder>]  check a project, then write its web app,
 //                                        backend and Firestore rules to <folder>, or
 //                                        <project>/build
+//   one run <project> [--target <target>] build a project, then build and start one of
+//                                        its apps: the web app served by Vite, or the
+//                                        desktop or terminal app; the first it targets
+//                                        unless --target names another
 //   one upgrade <project>                bring a project to this compiler: apply the
 //                                        fixes its mistakes come with, and record this
 //                                        version in its project block
@@ -25,6 +29,9 @@
 #include <optional>
 #include <vector>
 
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <one/screens/palette.hpp>
 
 #include "driver.hpp"
@@ -38,6 +45,7 @@ namespace {
     int usage() {
         std::cerr << "usage: one check <path>...\n"
                      "       one build <project> [--out <folder>] [--for <environment>] [--target <target>[,<target>...]]\n"
+                     "       one run <project> [--for <environment>] [--target <target>]\n"
                      "       one show <file>:<line>[-<line>]\n"
                      "       one upgrade <project>\n"
                      "       one theme [--seed <number>] [--scheme complementary|analogous|triadic|split_complementary|monochrome]\n"
@@ -88,7 +96,7 @@ namespace {
         return 0;
     }
 
-    int build(const std::string& project, std::string out, const std::string& environment, const std::string& targets) {
+    int build(const std::string& project, std::string out, const std::string& environment, const std::string& targets, one::driver::built* kept = nullptr) {
         if (out.empty()) out = project + "/build";
         // --target web,desktop: fewer of the project's targets, for this run.
         std::optional<std::vector<std::string>> only;
@@ -124,7 +132,67 @@ namespace {
             return 1;
         }
         std::cout << "wrote " << built.files.size() << " files to " << out << "\n";
+        if (kept) *kept = std::move(built);
         return 0;
+    }
+
+    // Whether a program is on the PATH.
+    bool installed(const std::string& program) {
+        const char* path = std::getenv("PATH");
+        for (std::string_view left = path ? path : ""; !left.empty();) {
+            std::size_t colon = std::min(left.find(':'), left.size());
+            std::filesystem::path folder(left.substr(0, colon));
+            if (!folder.empty() && access((folder / program).c_str(), X_OK) == 0) return true;
+            left.remove_prefix(std::min(colon + 1, left.size()));
+        }
+        return false;
+    }
+
+    // A step's command, as it would be typed, said before it runs.
+    void say(const one::driver::step& s) {
+        std::cerr << "one:";
+        if (s.folder != ".") std::cerr << " (in " << s.folder << ")";
+        for (const auto& word : s.command) std::cerr << " " << word;
+        std::cerr << "\n";
+    }
+
+    std::vector<char*> arguments(const one::driver::step& s) {
+        std::vector<char*> out;
+        for (const auto& word : s.command) out.push_back(const_cast<char*>(word.c_str()));
+        out.push_back(nullptr);
+        return out;
+    }
+
+    // Builds the project, then each step of running its app in turn, and then the app
+    // in this process's place, so closing it, or Ctrl+C, is closing the app.
+    int run(const std::string& project, const std::string& environment, const std::string& target) {
+        std::string out = project + "/build";
+        one::driver::built built;
+        if (int wrote = build(project, out, environment, target, &built); wrote != 0) return wrote;
+        auto plan = one::driver::plan_run(built, out, target, installed("yarn"));
+        if (!plan.refusal.empty()) {
+            std::cerr << "one: " << plan.refusal << "\n";
+            return 1;
+        }
+        for (const auto& s : plan.before) {
+            say(s);
+            pid_t child = fork();
+            if (child == 0) {
+                if (chdir(s.folder.c_str()) == 0) execvp(s.command[0].c_str(), arguments(s).data());
+                std::cerr << "one: couldn't run " << s.command[0] << "\n";
+                _exit(127);
+            }
+            int status = 0;
+            if (child < 0 || waitpid(child, &status, 0) < 0 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+                std::cerr << "one: " << s.command[0] << " failed, so the " << plan.target << " app wasn't started\n";
+                return 1;
+            }
+        }
+        say(plan.app);
+        std::cout.flush();
+        if (chdir(plan.app.folder.c_str()) == 0) execvp(plan.app.command[0].c_str(), arguments(plan.app).data());
+        std::cerr << "one: couldn't start " << plan.app.command[0] << "\n";
+        return 1;
     }
 
     int upgrade(const std::string& project) {
@@ -182,7 +250,7 @@ int main(int argc, char** argv) {
 
     // A project for another compiler is handed to it, before anything is read.
     std::vector<std::string> roots;
-    if (!args.empty() && (args[0] == "check" || args[0] == "build")) {
+    if (!args.empty() && (args[0] == "check" || args[0] == "build" || args[0] == "run")) {
         if (args[0] == "check") roots.assign(args.begin() + 1, args.end());
         else if (args.size() >= 2) roots.push_back(args[1]);
     } else if (args.size() == 2 && args[0] == "show") {
@@ -217,6 +285,15 @@ int main(int argc, char** argv) {
             value = args[i + 1];
         }
         return build(args[1], out, environment, targets);
+    }
+    if (args.size() >= 2 && args.size() % 2 == 0 && args[0] == "run") {
+        std::string environment, target;
+        for (std::size_t i = 2; i < args.size(); i += 2) {
+            std::string& value = args[i] == "--for" ? environment : target;
+            if ((args[i] != "--for" && args[i] != "--target") || !value.empty() || args[i + 1].empty()) return usage();
+            value = args[i + 1];
+        }
+        return run(args[1], environment, target);
     }
     if (args.size() == 2 && args[0] == "show") return show(args[1]);
     return usage();

@@ -22,6 +22,7 @@ namespace one::driver {
         std::vector<generators::output_file> files;
         std::string note;
         std::string environment;         // the one it's built for, when the project has them
+        std::vector<std::string> targets;  // the kinds of app it built, in the order the project says them
     };
 
     // Checks a project, and only when it's clean, generates everything it becomes,

@@ -11,5 +11,6 @@
 #include "driver/check.hpp"
 #include "driver/editor.hpp"
 #include "driver/outline.hpp"
+#include "driver/run.hpp"
 #include "driver/themes.hpp"
 #include "driver/upgrade.hpp"

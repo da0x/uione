@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "driver/build.hpp"
+#include "driver/run.hpp"
 #include "generators/screens.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
@@ -138,6 +139,39 @@ TEST_CASE("one build --target builds fewer of a project's targets, never others"
     CHECK(other.refusal == "--target names terminal, which this project doesn't build; its targets are web desktop");
     // Nothing of --target is left behind for the next build.
     CHECK(!language::building_targets().has_value());
+}
+
+TEST_CASE("one run starts the first app a project targets, or the one --target names, by the steps a person would take") {
+    auto dir = std::filesystem::temp_directory_path() / "uione-run";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir / "components");
+    platform::write_file((dir / "main.one").string(), project_with("desktop web"));
+    platform::write_file((dir / "components" / "banner.tsx").string(), "export default function Banner() { return null; }\n");
+    platform::write_file((dir / "components" / "banner.cpp").string(), "// drawn by hand\n");
+    std::string out = (dir / "build").string();
+    auto built = driver::build(dir.string(), out);
+    std::filesystem::remove_all(dir);
+    REQUIRE(built.refusal.empty());
+    CHECK(built.targets == std::vector<std::string>{"desktop", "web"});
+
+    auto desktop = driver::plan_run(built, out, "", true);
+    CHECK(desktop.refusal.empty());
+    CHECK(desktop.target == "desktop");
+    REQUIRE(desktop.before.size() == 2);
+    CHECK(desktop.before[0].command == std::vector<std::string>{"cmake", "-S", out + "/desktop", "-B", out + "/desktop/out"});
+    CHECK(desktop.before[1].command == std::vector<std::string>{"cmake", "--build", out + "/desktop/out"});
+    CHECK(desktop.app.command == std::vector<std::string>{out + "/desktop/out/shop"});
+
+    auto web = driver::plan_run(built, out, "web", true);
+    REQUIRE(web.before.size() == 1);
+    CHECK(web.before[0].command == std::vector<std::string>{"yarn", "install"});
+    CHECK(web.before[0].folder == out + "/web");
+    CHECK(web.app.command == std::vector<std::string>{"yarn", "dev"});
+    auto npm = driver::plan_run(built, out, "web", false);
+    CHECK(npm.before[0].command == std::vector<std::string>{"npm", "install"});
+    CHECK(npm.app.command == std::vector<std::string>{"npm", "run", "dev"});
+
+    CHECK(driver::plan_run(built, out, "terminal", true).refusal == "this project doesn't build terminal");
 }
 
 TEST_CASE("the gallery uses everything a screen can say, in every target, and what one can't draw yet is in its gaps") {

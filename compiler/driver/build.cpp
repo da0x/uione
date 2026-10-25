@@ -90,6 +90,8 @@ namespace one::driver {
             result.refusal = wrong;
             return result;
         }
+        result.targets = language::targets_of(files);
+        if (targets) std::erase_if(result.targets, [&](const std::string& t) { return !language::listed(*targets, t); });
         auto generated = generators::generate_project(files, project, out, targets ? *targets : language::targets_of(files));
         if (!generated.errors.empty()) {
             result.problems = std::move(generated.errors);

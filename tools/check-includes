@@ -41,8 +41,9 @@ level() {
 		driver/outline) echo 8 ;;
 		driver/check) echo 9 ;;
 		driver/upgrade|driver/editor|driver/themes|driver/build) echo 10 ;;
-		driver) echo 11 ;;
-		main|wasm) echo 12 ;;
+		driver/run) echo 11 ;;
+		driver) echo 12 ;;
+		main|wasm) echo 13 ;;
 		*) echo "" ;;
 	esac
 }
