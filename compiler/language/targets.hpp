@@ -81,6 +81,9 @@ namespace one::language {
         drawn_by{"collage.crop", "cropping a collage's picture", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
+        drawn_by{"collage.copy", "a collage copied as a picture", "web desktop"},
+        drawn_by{"collage.save", "a collage saved as a picture", "web desktop"},
+        drawn_by{"collage.preview", "a collage's preview", "web desktop"},
         drawn_by{"button.given", "a button's given values", everywhere},
         drawn_by{"button.on", "a button's on when", everywhere},
         drawn_by{"button.then", "a button's then open", everywhere},
@@ -112,6 +115,7 @@ namespace one::language {
         drawn_by{"cards.link", "cards' link", everywhere},
         drawn_by{"cards.tally", "cards' tally", everywhere},
         drawn_by{"cards.filter", "cards' filter", everywhere},
+        drawn_by{"cards.picture", "a picture on each card", "web desktop"},
         drawn_by{"chart", "chart", everywhere},
         drawn_by{"monitor", "monitor", everywhere},
         drawn_by{"details", "details", everywhere},
@@ -278,6 +282,7 @@ namespace one::language {
                         if (n.link) use("cards.link");
                         if (n.tally) use("cards.tally");
                         if (!n.filters.empty()) use("cards.filter");
+                        if (n.picture) use("cards.picture");
                     } else if constexpr (std::is_same_v<T, chart_item>) {
                         use("chart");
                     } else if constexpr (std::is_same_v<T, monitor_item>) {
@@ -344,9 +349,16 @@ namespace one::language {
                         if (n.write) use("collage.write");
                         if (n.crop) use("collage.crop");
                         if (n.paste_into) use("collage.paste");
+                        if (n.preview) use("collage.preview");
                     } else if constexpr (std::is_same_v<T, collage_button>) {
                         using kind = collage_button::kind;
-                        use(n.does == kind::crop ? "collage.crop" : n.does == kind::edit_words ? "collage.write" : n.does == kind::paste ? "collage.paste" : n.does == kind::screenshot ? "collage.screenshot" : "collage.add");
+                        use(n.does == kind::crop         ? "collage.crop"
+                            : n.does == kind::edit_words ? "collage.write"
+                            : n.does == kind::paste      ? "collage.paste"
+                            : n.does == kind::screenshot ? "collage.screenshot"
+                            : n.does == kind::copy       ? "collage.copy"
+                            : n.does == kind::save       ? "collage.save"
+                                                         : "collage.add");
                         if (!n.keys.empty()) use("key");
                     }
                 },

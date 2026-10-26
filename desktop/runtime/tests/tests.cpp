@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <thread>
 
 #include "check.hpp"
 #include "offscreen.hpp"
@@ -1368,6 +1369,61 @@ TEST("a picture coming into a collage with nothing on it covers it, and one comi
 	CHECK(second["y"].as_double() == 170);
 	CHECK(second["w"].as_double() == 900);
 	CHECK(second["depth"].as_double() == 1);
+}
+
+TEST("a collage is copied whole or a layer at a time, saved in the app's folder in Pictures, and keeps a preview of itself once changes settle") {
+	auto pictures = std::filesystem::temp_directory_path() / ("one-pictures-" + std::to_string(::getpid()));
+	std::filesystem::remove_all(pictures);
+	::setenv("XDG_PICTURES_DIR", pictures.c_str(), 1);
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"title", "Harbor at dusk"}, {"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "w1"}, {"words", "Harbor"}, {"size", 96}, {"x", 120}, {"y", 600}, {"w", 300}, {"h", 120}})}}}));
+	data.on("studio::poster::preview", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
+		                                                                         .fills = true, .key = "/ layer", .preview = "studio::poster::preview", .preview_into = "preview",
+		                                                                         .preview_wide = 320}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto& p = nav.current();
+	// The words picked and copied: a picture as big as they are.
+	p.pick("/ layer", "w1");
+	p.kept<std::string>("collage do / layer").set("copy picked");
+	(void)drawn(nav);
+	auto copied = one::desktop::clipboard_picture();
+	CHECK(copied.has_value());
+	if (copied) {
+		auto read = one::desktop::picture::decode(*copied);
+		CHECK(read.has_value());
+		if (read) CHECK(read->width() == 300);
+	}
+	// Saved: in the app's folder, named for it and the minute.
+	p.kept<std::string>("collage do / layer").set("save");
+	(void)drawn(nav);
+	std::filesystem::path folder = pictures / "pictures";  // no app is running to name it
+	for (int i = 0; i < 200 && (!std::filesystem::exists(folder) || std::filesystem::is_empty(folder)); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	bool saved = std::filesystem::exists(folder) && !std::filesystem::is_empty(folder);
+	CHECK(saved);
+	if (saved) CHECK(std::filesystem::directory_iterator(folder)->path().filename().string().starts_with("harbor-at-dusk-"));
+	// Once what it's drawn from has settled, as the timer it started says, its preview
+	// is sent, 320 wide, never a step undo takes back.
+	CHECK(data.runs().empty());
+	std::string waited = p.kept<std::string>("collage waiting / layer").peek();
+	CHECK(!waited.empty());
+	p.kept<std::string>("collage settled / layer").set(waited);
+	(void)drawn(nav);
+	CHECK(data.runs().size() == 1);
+	if (!data.runs().empty()) {
+		CHECK(data.runs().back().command == "studio::poster::preview");
+		CHECK(data.runs().back().fields["one:history"].as_string() == "apart");
+		CHECK(data.uploads().size() == 1);
+	}
+	::unsetenv("XDG_PICTURES_DIR");
+	std::filesystem::remove_all(pictures);
 }
 
 TEST("work handed back from another thread is dropped when no app is running to take it") {

@@ -338,6 +338,9 @@ export interface Card {
   tally?: { label: string; count: number; state?: "none" | "partial" | "done" | "failed" }[];
   noun?: string; // what it holds, counted, like issues
   filters: { label: string; link: LinkProps; hue?: Hue }[];
+  // A picture on top of it, all of it fitted in or filling its place; its address,
+  // none while it's found or when there's none.
+  picture?: { source?: string; fit: boolean };
 }
 
 // A run of numbers over time, newest at the right, as btop draws one: its title, its

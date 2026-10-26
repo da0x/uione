@@ -111,7 +111,116 @@ function edgeColorOf(path: string, p: CanvasImageSource & { width: number; heigh
   return color;
 }
 
-// What a collage's buttons ask of it, by what names it: crop, edit, add, paste or a screenshot.
+// What a background leaves around it on the board: its outermost pixels drawn out to
+// the edges, or its edge color.
+function paintAround(c: CanvasRenderingContext2D, path: string, shown: CanvasImageSource & { width: number; height: number }, board: Box, b: Box, around: string) {
+  const covers = b.x <= board.x && b.y <= board.y && b.x + b.w >= board.x + board.w && b.y + b.h >= board.y + board.h;
+  if (covers) return;
+  c.fillStyle = edgeColorOf(path, shown);
+  c.fillRect(board.x, board.y, board.w, board.h);
+  if (around === "color") return;
+  const sw = shown.width, sh = shown.height;
+  const strip = (sx: number, sy: number, sW: number, sH: number, dx: number, dy: number, dW: number, dH: number) => {
+    if (dW > 0 && dH > 0) c.drawImage(shown, sx, sy, sW, sH, dx, dy, dW, dH);
+  };
+  const left = b.x - board.x, right = board.x + board.w - (b.x + b.w), top = b.y - board.y, bottom = board.y + board.h - (b.y + b.h);
+  strip(0, 0, 1, sh, board.x, b.y, left + 1, b.h);
+  strip(sw - 1, 0, 1, sh, b.x + b.w - 1, b.y, right + 1, b.h);
+  strip(0, 0, sw, 1, b.x, board.y, b.w, top + 1);
+  strip(0, sh - 1, sw, 1, b.x, b.y + b.h - 1, b.w, bottom + 1);
+  strip(0, 0, 1, 1, board.x, board.y, left + 1, top + 1);
+  strip(sw - 1, 0, 1, 1, b.x + b.w - 1, board.y, right + 1, top + 1);
+  strip(0, sh - 1, 1, 1, board.x, b.y + b.h - 1, left + 1, bottom + 1);
+  strip(sw - 1, sh - 1, 1, 1, b.x + b.w - 1, b.y + b.h - 1, right + 1, bottom + 1);
+}
+
+// Words drawn at x, y, `size` pixels tall, over a soft shadow.
+function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: number, x: number, y: number) {
+  c.font = `${weightOf(l)} ${size}px ${wordsFamily}`;
+  c.textBaseline = "top";
+  const off = Math.max(1, size * 0.04);
+  said.split("\n").forEach((line, i) => {
+    c.fillStyle = "rgba(0, 0, 0, 0.45)";
+    c.fillText(line, x + off / 2, y + i * size * 1.2 + off);
+    c.fillStyle = colorOf(str(l["color"]), "#ffffff");
+    c.fillText(line, x, y + i * size * 1.2);
+  });
+}
+
+// The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
+// all of it, or only one layer, as big as that layer, cropped as it is. Pictures not
+// yet read are read first.
+async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, only?: string): Promise<HTMLCanvasElement> {
+  const read = async (path: string) => {
+    if (!pictures.has(path) || pictures.get(path) === "reading") {
+      pictureOf(path, address);
+      await new Promise<void>((done) => {
+        const check = () => (pictures.get(path) !== "reading" ? (readListeners.delete(check), done()) : undefined);
+        readListeners.add(check);
+        check();
+      });
+    }
+    const p = pictures.get(path);
+    return p instanceof ImageBitmap ? p : undefined;
+  };
+  const one = only ? layers.find((l) => l["id"] === only && !isBackground(layers, l)) : undefined;
+  const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
+  const made = document.createElement("canvas");
+  made.width = Math.max(1, Math.round(area.w * scale));
+  made.height = Math.max(1, Math.round(area.h * scale));
+  const c = made.getContext("2d")!;
+  const at = (b: Box): Box => ({ x: (b.x - area.x) * scale, y: (b.y - area.y) * scale, w: b.w * scale, h: b.h * scale });
+  const board = at({ x: 0, y: 0, w: W, h: H });
+  if (!only) {
+    c.fillStyle = "#fff";
+    c.fillRect(board.x, board.y, board.w, board.h);
+  }
+  for (const l of layers) {
+    if (only && l["id"] !== only) continue;
+    if (isWords(l)) {
+      const b = at(boxOf(l));
+      paintWords(c, l, str(l["words"]), num(l["size"]) * scale, b.x, b.y);
+      continue;
+    }
+    const path = str(l["picture"]);
+    const p = await read(path);
+    if (!p) continue;
+    const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
+    const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
+    if (isBackground(layers, l)) {
+      const b = at(backgroundAt(backdrop, shown.width, shown.height));
+      paintAround(c, path, shown, board, b, str(data["around"]));
+      c.drawImage(shown, b.x, b.y, b.w, b.h);
+    } else {
+      const b = at(boxOf(l)), cr = cropOf(l);
+      c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
+    }
+  }
+  return made;
+}
+
+// What a collage's preview is drawn from, apart from the preview itself.
+function fingerprint(data: Row, previewInto: string): string {
+  const plain = { ...data };
+  delete plain[previewInto];
+  const text = JSON.stringify(plain);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16);
+}
+
+// A name as a file's: lowercase words joined by hyphens.
+function fileNameOf(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "picture";
+}
+
+function minuteNow(): string {
+  const d = new Date(), two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
+}
+
+// What a collage's buttons ask of it, by what names it: crop, edit, add, paste, a
+// screenshot, a copy or a save.
 const asked = new Map<string, string>();
 const askListeners = new Set<() => void>();
 function ask(name: string, does: string) {
@@ -120,7 +229,7 @@ function ask(name: string, does: string) {
 }
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   // A screenshot is taken where the browser can share the screen, and only there.
@@ -179,6 +288,9 @@ export function Collage({
   remove,
   parent,
   name,
+  preview,
+  previewInto,
+  previewWide = 480,
   pasteInto,
   sizedWidth,
   sizedHeight,
@@ -201,6 +313,9 @@ export function Collage({
   remove?: string; // a layer deleted, like words written away to nothing
   parent?: string; // the field a layer names what the view is per by, like poster
   name?: string; // what its buttons, like crop and add words, name it by
+  preview?: string; // the command a small picture of it is sent to, once changes settle
+  previewInto?: string; // in this file field of what the view is per
+  previewWide?: number; // this many pixels wide
   pasteInto?: string; // a file dropped or pasted, made a picture by add, in this field
   sizedWidth?: string; // and where a picture's own size is kept
   sizedHeight?: string;
@@ -322,6 +437,32 @@ export function Collage({
       say({ text: "No screenshot was taken." });
     }
   };
+  // Its preview, drawn once changes have settled for a moment and nothing's being moved,
+  // cropped or written, and sent never to be undone. One already there when it's first
+  // shown is what it looks like now.
+  const drawnFrom = useRef<string | undefined>(undefined);
+  const now = preview && previewInto && view.status === "live" ? fingerprint(data, previewInto) : undefined;
+  if (now !== undefined && drawnFrom.current === undefined && (str(data[previewInto!]) !== "" || layers.length === 0)) drawnFrom.current = now;
+  useEffect(() => {
+    if (now === undefined || now === drawnFrom.current || !preview || !previewInto || !files || W <= 0 || H <= 0) return;
+    let waiting: ReturnType<typeof setTimeout>;
+    const settle = () => {
+      waiting = setTimeout(() => {
+        if (w.now || w.crop || w.editing) return settle();
+        drawnFrom.current = now;
+        void drawnWhole(layers, data, W, H, previewWide / W, address)
+          .then((made) => new Promise<Blob | null>((done) => made.toBlob(done, "image/png")))
+          .then(async (blob) => {
+            if (!blob) return;
+            const path = await files.upload(new File([blob], "preview.png", { type: "image/png" }), () => {});
+            await runner.reply(preview, { id: subject, [previewInto]: path, "one:history": "apart" });
+          });
+      }, 800);
+    };
+    settle();
+    return () => clearTimeout(waiting);
+  }, [now]);
+
   // Ctrl+V anywhere but where something's typed pastes on the collage.
   useEffect(() => {
     if (!pasteInto) return;
@@ -380,6 +521,32 @@ export function Collage({
       w.crop = { id: picked, whole: wholeOf(boxOf(chosen), cropOf(chosen)), kept: boxOf(chosen) };
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
+    } else if (asking.startsWith("copy") || asking.startsWith("save")) {
+      // Copied for another program to paste, or saved: all of it, or the picked layer.
+      const one = asking.endsWith("picked"), copying = asking.startsWith("copy");
+      if (one && !chosen) say({ text: "Pick a layer first." });
+      else if (layers.length === 0 || W <= 0 || H <= 0) say({ text: copying ? "There's nothing to copy yet." : "There's nothing to save yet." });
+      else {
+        const png = drawnWhole(layers, data, W, H, 1, address, one ? picked : undefined).then(
+          (made) => new Promise<Blob>((done, failed) => made.toBlob((b) => (b ? done(b) : failed(new Error("not drawn"))), "image/png")),
+        );
+        if (copying) {
+          navigator.clipboard
+            .write([new ClipboardItem({ "image/png": png })])
+            .then(() => say({ text: one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere." }))
+            .catch(() => say({ text: "This browser didn't let the page copy a picture.", problem: true }));
+        } else {
+          const title = str(data["title"]) || str(data["name"]) || "picture";
+          void png.then((blob) => {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = `${fileNameOf(one ? `${title} layer` : title)}-${minuteNow()}.png`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            say({ text: `Saved ${link.download} in your downloads.` });
+          });
+        }
+      }
     } else if (asking === "paste") {
       void pasteNow();
     } else if (asking === "screenshot") {
@@ -488,14 +655,7 @@ export function Collage({
           c.globalAlpha = 1;
         }
         const said = writing ? writing.words : str(l["words"]);
-        const lines = said.split("\n");
-        const off = Math.max(1, size * 0.04);
-        lines.forEach((line, i) => {
-          c.fillStyle = "rgba(0, 0, 0, 0.45)";
-          c.fillText(line, b.x + off / 2, b.y + i * size * 1.2 + off);
-          c.fillStyle = colorOf(str(l["color"]), "#ffffff");
-          c.fillText(line, b.x, b.y + i * size * 1.2);
-        });
+        paintWords(c, l, said, size, b.x, b.y);
         if (writing && !writing.fresh) {
           const before = said.slice(0, writing.caret).split("\n");
           const line = before.length - 1;
@@ -517,27 +677,7 @@ export function Collage({
             c.drawImage(shown, fx * shown.width, fy * shown.height, (w.crop.kept.w / w.crop.whole.w) * shown.width, (w.crop.kept.h / w.crop.whole.h) * shown.height, kept.x, kept.y, kept.w, kept.h);
             b = kept;
           } else if (isBackground(layers, l)) {
-            const covers = b.x <= board.x && b.y <= board.y && b.x + b.w >= board.x + bw && b.y + b.h >= board.y + bh;
-            if (!covers) {
-              c.fillStyle = edgeColorOf(path, shown);
-              c.fillRect(board.x, board.y, bw, bh);
-              if (str(data["around"]) !== "color") {
-                // Its outermost pixels drawn out to the edges.
-                const sw = shown.width, sh = shown.height;
-                const strip = (sx: number, sy: number, sW: number, sH: number, dx: number, dy: number, dW: number, dH: number) => {
-                  if (dW > 0 && dH > 0) c.drawImage(shown, sx, sy, sW, sH, dx, dy, dW, dH);
-                };
-                const left = b.x - board.x, right = board.x + bw - (b.x + b.w), top = b.y - board.y, bottom = board.y + bh - (b.y + b.h);
-                strip(0, 0, 1, sh, board.x, b.y, left + 1, b.h);
-                strip(sw - 1, 0, 1, sh, b.x + b.w - 1, b.y, right + 1, b.h);
-                strip(0, 0, sw, 1, b.x, board.y, b.w, top + 1);
-                strip(0, sh - 1, sw, 1, b.x, b.y + b.h - 1, b.w, bottom + 1);
-                strip(0, 0, 1, 1, board.x, board.y, left + 1, top + 1);
-                strip(sw - 1, 0, 1, 1, b.x + b.w - 1, board.y, right + 1, top + 1);
-                strip(0, sh - 1, 1, 1, board.x, b.y + b.h - 1, left + 1, bottom + 1);
-                strip(sw - 1, sh - 1, 1, 1, b.x + b.w - 1, b.y + b.h - 1, right + 1, bottom + 1);
-              }
-            }
+            paintAround(c, path, shown, board, b, str(data["around"]));
             c.drawImage(shown, b.x, b.y, b.w, b.h);
           } else {
             const cr = cropOf(l);

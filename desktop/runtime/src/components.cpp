@@ -234,6 +234,11 @@ namespace one::desktop::runtime {
 		for (const auto& card : cards_of(p, spec)) {
 			opens[card.id] = card.address;
 			std::vector<desktop::view> inside;
+			if (!spec.picture.empty()) {
+				for (const auto& row : rows_of(v, spec.list)) {
+					if (row["id"].as_string() == card.id) inside.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 180));
+				}
+			}
 			if (card.tags.empty()) {
 				inside.push_back(desktop::text(card.title, t.heading(18)));
 			} else {

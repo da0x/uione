@@ -1539,17 +1539,27 @@ namespace one::language {
                 end_line();
                 return {where, std::move(pick)};
             }
-            // crop "Crop", edit words "Edit", add words "Text": what the collage does.
+            // crop "Crop", edit words "Edit", add words "Text", copy layer as picture "Copy":
+            // what the collage does.
             bool alone = peek(1).kind != token_kind::scope && peek(1).kind != token_kind::identifier;
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) ||
+            bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
+                              peek(3).kind == token_kind::identifier && peek(3).text == "picture";
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) || as_picture ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words");
             if (collage_does) {
                 collage_button button;
                 std::string first = advance().text;
                 if (first == "edit" || first == "add") advance();
+                if (as_picture) {
+                    button.of_where = peek().where;
+                    button.of = advance().text;
+                    advance(), advance();
+                }
                 button.does = first == "crop"         ? collage_button::kind::crop
                               : first == "paste"      ? collage_button::kind::paste
                               : first == "screenshot" ? collage_button::kind::screenshot
+                              : first == "copy"       ? collage_button::kind::copy
+                              : first == "save"       ? collage_button::kind::save
                               : first == "edit"       ? collage_button::kind::edit_words
                                                       : collage_button::kind::add_words;
                 if (at(token_kind::string)) button.label = advance().text;
@@ -2114,6 +2124,18 @@ namespace one::language {
                             std::string down = expect(token_kind::identifier, "and its height's, like picture_height").text;
                             collage.sized = std::pair{across, down};
                         }
+                    } else if (at_word("keep") && peek(1).kind == token_kind::identifier && peek(1).text == "preview") {
+                        // keep preview poster::preview into preview 480 wide
+                        advance();
+                        advance();
+                        collage.preview_where = peek().where;
+                        collage.preview = parse_qualified_name("the command a preview is sent to, like poster::preview");
+                        if (!at_word("into")) fail_expecting("into and the field it's kept in, as in keep preview poster::preview into preview 480 wide");
+                        advance();
+                        collage.preview_into = expect(token_kind::identifier, "the field a preview's file goes in, like preview").text;
+                        collage.preview_wide = std::stoi(expect(token_kind::number, "how wide it's drawn, like 480 wide").text);
+                        if (!at_word("wide")) fail_expecting("wide, as in 480 wide");
+                        advance();
                     } else if (at_word("snap")) {
                         collage.snap_where = advance().where;
                         if (!at_word("to")) fail_expecting("to edges, as in snap to edges");
@@ -2393,6 +2415,15 @@ namespace one::language {
                             if (!at_word("empty")) fail_expecting("empty, as in hide when empty");
                             advance();
                             cards.hide_empty = true;
+                            end_line();
+                            continue;
+                        }
+                        // picture preview fit: a picture on top of each card.
+                        if (at_word("picture") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            cards.picture_where = peek().where;
+                            cards.picture = advance().text;
+                            if (at_word("fit") || at_word("fill")) cards.picture_sits = advance().text;
                             end_line();
                             continue;
                         }

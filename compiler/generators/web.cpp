@@ -136,6 +136,7 @@ namespace one::generators {
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::string collage_key_;        // what its collage buttons name its collage by
+        std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
             std::string view, list, entity;
@@ -326,13 +327,14 @@ namespace one::generators {
                 toggles_ = toggles_in(s->items);
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
+                collage_over_.reset();
                 for (const auto& item : s->items) {
                     if (auto* block = std::get_if<language::content_block>(&item.node)) {
                         for (const auto& inside : block->items) {
-                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage"));
+                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over;
                         }
                     }
-                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage"));
+                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over;
                 }
                 picks_.clear();
                 for (const auto* pick : picks_in(s->items)) {
@@ -1259,6 +1261,10 @@ namespace one::generators {
                     line += " name=" + web_detail::js_string(route_ + " " + (c->over ? *c->over : std::string("collage")));
                     if (c->paste_into) line += " pasteInto=" + web_detail::js_string(*c->paste_into);
                     if (c->sized) line += " sizedWidth=" + web_detail::js_string(c->sized->first) + " sizedHeight=" + web_detail::js_string(c->sized->second);
+                    if (c->preview) {
+                        line += " preview=" + web_detail::js_string(full_command(ns, *c->preview)) + " previewInto=" + web_detail::js_string(c->preview_into) +
+                                " previewWide={" + std::to_string(c->preview_wide) + "}";
+                    }
                     if (auto per = per_entity(view)) {
                         parts.params.insert(*per);
                         line += " subject={" + web_detail::js_name(*per + "_id") + "}";
@@ -1274,11 +1280,8 @@ namespace one::generators {
                     }
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.
-                    using kind = language::collage_button::kind;
                     parts.components.insert("CollageButton");
-                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
-                    std::string label = does->label ? *does->label
-                                        : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
+                    std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     shown_while(out, parts, ns, item, [&] {
                         out.line("<CollageButton collage=" + web_detail::js_string(collage_key_) + " does=" + web_detail::js_string(what) + " label=" + web_detail::js_string(label) +
                                  (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + " />");
@@ -2002,6 +2005,7 @@ namespace one::generators {
             std::string line = "<Cards view={" + view_variable(parts, full_view(ns, cards.view.text())) + "} list=" + web_detail::js_string(cards.list.value_or("rows")) +
                                " columns={{ " + columns + " }}";
             if (cards.hide_empty) line += " hideEmpty";
+            if (cards.picture) line += " picture=" + web_detail::js_string(*cards.picture) + (cards.picture_sits == "fit" ? " fit" : "");
             if (cards.link) {
                 std::string target = full_route(ns, *cards.link);
                 line += " link=" + web_detail::js_string(target);

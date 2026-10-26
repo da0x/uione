@@ -348,6 +348,9 @@ namespace one::screens {
 		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
 		std::string paste_into = "";         // what a file dropped or pasted is made, by add, a picture in this field
 		std::string sized_width = "", sized_height = "";  // and where a picture's own size is kept
+		std::string preview = "";            // the command a small picture of it is sent to, once changes settle
+		std::string preview_into = "";       // in this file field of what the view is per
+		int preview_wide = 480;              // this many pixels wide
 	};
 
 	// A list's rows as large cards, like a project's boards: each its title, what
@@ -379,6 +382,8 @@ namespace one::screens {
 		std::vector<card_filter> filters = {};
 		std::map<std::string, std::vector<option>> choices = {};  // its choice columns, each a tag beside a card's title, as it's shown
 		bool hide_empty = false;                                  // not there while it has no cards, or can't be read
+		std::string picture = "";                                 // a file field's picture on top of each card
+		bool fit = false;                                         // all of it fitted in, or filling its place
 	};
 
 	// A chart's run of numbers: by its field and a name in it, like stats.cpu; its

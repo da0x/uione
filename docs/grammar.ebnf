@@ -237,7 +237,9 @@ given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified | "slide" qualified
                   | "snap" "to" "edges" | "empty" STRING | "over" NAME screen_block
                   /* pictures dropped or pasted are made by add, their file in this field and their own size in those two */
-                  | "paste" "into" NAME ("sized" NAME NAME)?) END
+                  | "paste" "into" NAME ("sized" NAME NAME)?
+                  /* a small picture of it, drawn once changes settle, sent to a command on what the view is per */
+                  | "keep" "preview" qualified "into" NAME NUMBER "wide") END
 /* key ctrl+z: what runs a line too; any of ctrl, shift and alt, then a key, like f11 or delete */
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
@@ -248,8 +250,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* a picture made of layers, as big as two of the view's values say */
                  | "collage" qualified "." NAME ("size" NAME NAME)? "{" NEWLINE? collage_line* "}" END
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
-                    pastes what's on the clipboard, or adds a screenshot */
-                 | ("crop" | "edit" "words" | "add" "words" | "paste" | "screenshot") STRING? ("icon" NAME)? key* ("when" expression)? END
+                    pastes what's on the clipboard, adds a screenshot, or copies or saves it, or its picked layer, as a picture */
+                 | ("crop" | "edit" "words" | "add" "words" | "paste" | "screenshot" | ("copy" | "save") NAME "as" "picture") STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* a row of a view's list the screen holds, picked with a click, read by its name */
                  | "pick" NAME "from" qualified ("." NAME)? END
                  /* something on or off, read by its name, like side when layers */
@@ -299,7 +301,7 @@ pipeline_line  ::= (("lanes" | "path" | "status") "by" NAME | column+) END
 canvas_line    ::= ("place" qualified | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "kind" NAME | "grid" NUMBER ("from" NUMBER NUMBER)?
                     | "regions" "by" NAME | "move" qualified ("along" qualified "." NAME)? | "resize" qualified
                     | "paste" qualified "into" NAME | "picture" NAME | column+) END
-cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | column+) END
+cards_line     ::= ("tally" qualified "." NAME "by" NAME "and" NAME | "filter" STRING filter ("color" NAME)? | "picture" NAME ("fit" | "fill")? | column+) END
 series         ::= NAME ("." NAME)? STRING ("percent" | "bytes" | "rate")?
 monitor_line   ::= ("title" field_path | "status" field_path | "since" field_path | "doing" field_path
                    | "progress" field_path "of" field_path | "seen" field_path NUMBER | "chart" series) END

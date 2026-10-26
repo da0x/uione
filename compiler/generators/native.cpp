@@ -265,16 +265,14 @@ namespace one::generators {
             for (const auto& tool : c.tools) {
                 auto* does = std::get_if<language::collage_button>(&tool.node);
                 if (!does) continue;
-                using kind = language::collage_button::kind;
-                std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
-                std::string label = does->label ? *does->label
-                                    : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
+                std::string what = language::asked_of(*does, c.over), label = language::label_of(*does);
                 asks += (asks.empty() ? "" : ", ") + std::string("collage_ask{.key = ") + str(collage_key(c)) + ", .does = " + str(what) + ", .label = " + str(label) +
                         ", .icon = " + str(does->icon.value_or("")) + (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "}";
             }
             if (!asks.empty()) out += ", .asks = {" + asks + "}";
             if (c.paste_into) out += ", .paste_into = " + str(*c.paste_into);
             if (c.sized) out += ", .sized_width = " + str(c.sized->first) + ", .sized_height = " + str(c.sized->second);
+            if (c.preview) out += ", .preview = " + str(screens::full_command(ns, *c.preview)) + ", .preview_into = " + str(c.preview_into) + ", .preview_wide = " + std::to_string(c.preview_wide);
             return out + "})";
         }
 
@@ -994,6 +992,7 @@ namespace one::generators {
             }
             if (!choices.empty()) out += ", .choices = {" + choices + "}";
             if (c.hide_empty) out += ", .hide_empty = true";
+            if (c.picture) out += ", .picture = " + str(*c.picture) + (c.picture_sits == "fit" ? ", .fit = true" : "");
             return out + "})";
         }
 
@@ -1225,6 +1224,7 @@ namespace one::generators {
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
         bool workspace_ = false;      // the screen being written is laid out as a workspace
         std::string collage_key_;     // what its collage buttons name its collage by
+        std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -1493,10 +1493,7 @@ namespace one::generators {
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     code = collage(parts, ns, *c);
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
-                    using kind = language::collage_button::kind;
-                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
-                    std::string label = does->label ? *does->label
-                                        : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
+                    std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
                            (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "})";
                 } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {
@@ -1592,13 +1589,14 @@ namespace one::generators {
                 toggles_ = toggles_in(s->items);
                 at_end_said_ = false;
                 collage_key_ = route_ + " collage";
+                collage_over_.reset();
                 for (const auto& item : s->items) {
                     if (auto* block = std::get_if<language::content_block>(&item.node)) {
                         for (const auto& inside : block->items) {
-                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = collage_key(*c);
+                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = collage_key(*c), collage_over_ = c->over;
                         }
                     }
-                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = collage_key(*c);
+                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = collage_key(*c), collage_over_ = c->over;
                 }
                 workspace_ = (s->layout ? *s->layout : model_.project.layout) == "workspace";
                 picks_.clear();

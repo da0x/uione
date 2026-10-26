@@ -501,6 +501,7 @@ export const plain: ComponentSet = {
     <div aria-busy={status === "loading"}>
       {cards.map((card) => (
         <article key={card.id}>
+          {card.picture?.source && <img src={card.picture.source} alt="" />}
           <h2>{card.link ? <a {...card.link}>{card.title}</a> : card.title}</h2>
           {card.tags && card.tags.length > 0 && <p>{card.tags.join(", ")}</p>}
           {card.details.map((detail, i) => (

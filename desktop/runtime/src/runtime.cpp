@@ -135,6 +135,7 @@ namespace one::desktop::runtime {
 
 	std::optional<desktop::size> screen_size() { return shown_in ? shown_in->screen() : std::nullopt; }
 	bool fullscreen() { return shown_in && shown_in->fullscreen(); }
+	std::string app_name() { return running ? running->name : ""; }
 	bool dark() { return dark_on.get(); }
 	void dark(bool on) {
 		if (!running || !running->dark) return;

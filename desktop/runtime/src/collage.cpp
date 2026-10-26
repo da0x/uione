@@ -14,6 +14,7 @@
 // collage model, the web's too.
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <format>
 #include <map>
@@ -26,6 +27,8 @@
 
 #include <fstream>
 #include <thread>
+
+#include <ember.hpp>
 
 #include "one/desktop/runtime/components.hpp"
 #include "one/desktop/screenshot.hpp"
@@ -413,7 +416,120 @@ namespace one::desktop::runtime {
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
 		}
 
+		// The collage drawn on nothing, `scale` times its own size, as it's kept: all of
+		// it, or only one layer, as big as that layer, cropped as it is.
+		desktop::picture drawn_whole(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
+			model::box area{0, 0, width, height};
+			for (const auto& l : layers.as_array()) {
+				if (!only.empty() && l["id"].as_string() == only && !is_background(layers, l)) area = box_of(l);
+			}
+			int w = std::max(1, static_cast<int>(std::lround(area.w * scale))), h = std::max(1, static_cast<int>(std::lround(area.h * scale)));
+			return desktop::picture::drawn(w, h, [&](desktop::canvas& c) {
+				auto at = [&](const model::box& b) {
+					return desktop::rect{static_cast<float>((b.x - area.x) * scale), static_cast<float>((b.y - area.y) * scale), static_cast<float>(b.w * scale), static_cast<float>(b.h * scale)};
+				};
+				desktop::rect board = at({0, 0, width, height});
+				if (only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
+				for (const auto& layer : layers.as_array()) {
+					if (!only.empty() && layer["id"].as_string() != only) continue;
+					if (is_words(layer)) {
+						desktop::rect on = at(box_of(layer));
+						paint_words(c, layer, layer["words"].as_string(), layer["size"].as_double() * scale, {on.x, on.y});
+						continue;
+					}
+					const desktop::picture* shown = layer_picture(p, layer);
+					if (!shown) continue;
+					if (is_background(layers, layer)) {
+						desktop::rect on = at(model::background_at(backdrop_of(data, width, height), shown->width(), shown->height()));
+						paint_around(c, board, on, layer["picture"].as_string(), *shown, data["around"].as_string());
+						c.picture(*shown, on, {0, 0, 1, 1});
+					} else {
+						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
+					}
+				}
+			});
+		}
+
+		// Where saved pictures go: the app's own folder in the Pictures folder the desktop
+		// names, or ~/Pictures.
+		std::filesystem::path saving_folder() {
+			const char* home = std::getenv("HOME");
+			std::filesystem::path pictures = std::filesystem::path(home && *home ? home : "/tmp") / "Pictures";
+			if (const char* named = std::getenv("XDG_PICTURES_DIR"); named && *named) pictures = named;
+			else {
+				const char* config = std::getenv("XDG_CONFIG_HOME");
+				std::filesystem::path dirs = (config && *config ? std::filesystem::path(config) : std::filesystem::path(home ? home : "") / ".config") / "user-dirs.dirs";
+				std::ifstream in(dirs);
+				for (std::string line; std::getline(in, line);) {
+					if (!line.starts_with("XDG_PICTURES_DIR=\"")) continue;
+					std::string named = line.substr(18, line.rfind('"') - 18);
+					if (named.starts_with("$HOME")) named = std::string(home ? home : "") + named.substr(5);
+					if (!named.empty()) pictures = named;
+				}
+			}
+			std::string app = app_name();
+			return pictures / (app.empty() ? "pictures" : app);
+		}
+
+		// A name as a file's: lowercase words joined by hyphens.
+		std::string file_name_of(const std::string& name) {
+			std::string out;
+			for (unsigned char ch : name) {
+				if (std::isalnum(ch)) out += static_cast<char>(std::tolower(ch));
+				else if (!out.empty() && out.back() != '-') out += '-';
+			}
+			while (!out.empty() && out.back() == '-') out.pop_back();
+			return out.empty() ? "picture" : out;
+		}
+
+		// A picture saved as a PNG in the app's folder in Pictures, named for what the
+		// view calls it and the minute, never over one saved before, written away from
+		// the window; where it went is said once it's there.
+		void save(page& p, const desktop::picture& drawn, const std::string& name) {
+			std::filesystem::path folder = saving_folder();
+			std::string stem = std::format("{}-{:%Y-%m-%d-%H%M}", file_name_of(name),
+			                               std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())));
+			std::filesystem::path file = folder / (stem + ".png");
+			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.png", stem, n);
+			p.told().set("Saving…");
+			std::thread([told = p.told(), problem = p.problem(), drawn, folder, file] {
+				std::error_code error;
+				std::filesystem::create_directories(folder, error);
+				auto written = drawn.write_png(file);
+				post([told, problem, file, written] {
+					if (written) told.set(std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string()));
+					else told.set(""), problem.set(written.error());
+				});
+			}).detach();
+		}
+
+		// What a collage's preview is drawn from, apart from the preview itself.
+		std::string fingerprint(const value& data, const std::string& preview_into) {
+			value plain = data;
+			plain.fields.erase(preview_into);
+			return std::format("{:016x}", std::hash<std::string>{}(ember::to_json(plain)));
+		}
+
 	}  // namespace
+
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
+		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
+		const desktop::picture* shown = file ? picture_kept(*file) : nullptr;
+		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
+			       const auto& t = current_theme();
+			       c.box(area, {.fill = t.sunken});
+			       if (!shown || area.width <= 0 || area.height <= 0) return;
+			       float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
+			       float s = fit ? std::min(area.width / pw, area.height / ph) : std::max(area.width / pw, area.height / ph);
+			       if (fit) {
+				       c.picture(*shown, {area.x + (area.width - pw * s) / 2, area.y + (area.height - ph * s) / 2, pw * s, ph * s});
+			       } else {
+				       float fw = area.width / (pw * s), fh = area.height / (ph * s);
+				       c.picture(*shown, area, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
+			       }
+		       })
+		    .height(height);
+	}
 
 	desktop::view collage_button(page& p, collage_ask ask) {
 		auto asked = p.kept<std::string>("collage do " + ask.key);
@@ -439,6 +555,29 @@ namespace one::desktop::runtime {
 		std::optional<value> chosen;
 		for (const auto& l : layers.as_array()) {
 			if (l["id"].as_string() == picked) chosen = l;
+		}
+		// Its preview, drawn once changes have settled for a moment and nothing's being
+		// moved, cropped or written, and sent never to be undone. One already there when
+		// it's first shown is what it looks like now.
+		if (!spec.preview.empty() && !spec.subject.empty() && width > 0 && height > 0) {
+			std::string now = fingerprint(data, spec.preview_into);
+			auto drawn_from = p.kept<std::string>("collage preview of " + spec.key);
+			auto settled = p.kept<std::string>("collage settled " + spec.key), waiting = p.kept<std::string>("collage waiting " + spec.key);
+			if (drawn_from.peek().empty() && (!data[spec.preview_into].as_string().empty() || layers.as_array().empty())) drawn_from.set(now);
+			bool still = w->now.what == gesture::none && !w->crop && !w->editing;
+			if (now != drawn_from.peek() && still && settled.peek() == now) {
+				drawn_from.set(now);
+				auto small = drawn_whole(p, data, layers, width, height, spec.preview_wide / width);
+				std::filesystem::path file = kept_for_now(small.png());
+				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
+				      [file](const answer&) { std::filesystem::remove(file); }, true);
+			} else if (now != drawn_from.peek() && waiting.peek() != now) {
+				waiting.set(now);
+				std::thread([settled, now] {
+					std::this_thread::sleep_for(std::chrono::milliseconds(800));
+					post([settled, now] { settled.set(now); });
+				}).detach();
+			}
 		}
 		// A crop or words are only of the picked layer; picking another puts them away.
 		if (w->crop && w->crop->id != picked) w->crop.reset();
@@ -473,6 +612,21 @@ namespace one::desktop::runtime {
 						shot.set(taken->string());
 					});
 				}).detach();
+			} else if (does == "copy" || does == "copy picked" || does == "save" || does == "save picked") {
+				// Copied for another program to paste, or saved: all of it, or the picked layer.
+				bool one = does.ends_with("picked"), copying = does.starts_with("copy");
+				if (one && !chosen) p.told().set("Pick a layer first.");
+				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
+				else {
+					auto drawn = drawn_whole(p, data, layers, width, height, 1, one ? picked : "");
+					if (copying) {
+						desktop::copy_picture(drawn);
+						p.told().set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
+					} else {
+						std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
+						save(p, drawn, one ? name + " layer" : name.empty() ? app_name() : name);
+					}
+				}
 			} else if (does == "add" && !spec.add.empty()) {
 				// Words in the middle, a twelfth of its height, all chosen so the first key
 				// typed replaces them, on top of the rest.

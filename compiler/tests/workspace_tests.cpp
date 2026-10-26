@@ -347,3 +347,75 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CHECK(native.find(R"(.paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height"})") != std::string::npos);
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
 }
+
+TEST_CASE("a collage is copied or saved as a picture, all of it or its picked layer, and keeps a small picture of itself on what its view is per") {
+    std::string kept = project + collaged;
+    kept.replace(kept.find("\t\tslide_y  number  = 0.5\n"), 0, "\t\tpreview  file\n");
+    kept.replace(kept.find("\tcommand poster::create\n"), 0, "\tcommand poster::preview {\n\t\tchanges preview\n\t\tapart from undo\n\t}\n");
+    auto on_screen = [&](const std::string& body) { return kept + "\n\tscreen \"Poster\" /posters/:poster {\n" + body + "\t}\n}\n"; };
+    const std::string fine = R"(		pick layer from poster_page.layers
+		copy poster_page as picture "Copy" icon copy
+		save poster_page as picture "Save" icon save key ctrl+s
+		collage poster_page.layers size width height {
+			keep preview poster::preview into preview 480 wide
+			over layer {
+				copy layer as picture "Copy" icon copy
+			}
+		}
+)";
+    CHECK(messages(on_screen(fine)).empty());
+    std::string said = on_screen(R"(		save posters as picture
+		collage poster_page.layers size width height {
+			keep preview layer::place into title 8 wide
+		}
+)");
+    auto lines = messages(said);
+    CHECK(lines == std::vector<std::string>{"53: posters isn't a collage on this screen, or its pick; a picture is made of one, like poster_page",
+                                            "55: a collage's preview is kept on poster, so by a command on it, like poster::preview",
+                                            "55: poster.title holds its preview, so it's a file", "55: a preview is from 16 to 4096 wide"});
+    auto files = built(on_screen(fine));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<CollageButton collage="/posters/:poster layer" does="save" label="Save" icon="save" keys={["ctrl+s"]} />)") != std::string::npos);
+    CHECK(web.find(R"(<CollageButton collage="/posters/:poster layer" does="copy picked" label="Copy" icon="copy" />)") != std::string::npos);
+    CHECK(web.find(R"(preview="studio::poster::preview" previewInto="preview" previewWide={480})") != std::string::npos);
+    CHECK(native.find(R"(collage_ask{.key = "/posters/:poster layer", .does = "copy picked", .label = "Copy", .icon = "copy"})") != std::string::npos);
+    CHECK(native.find(R"(.preview = "studio::poster::preview", .preview_into = "preview", .preview_wide = 480})") != std::string::npos);
+}
+
+TEST_CASE("cards show a file each row holds as a picture on top, fitted in or filling its place") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title    text  required
+		preview  file
+	}
+
+	view posters {
+		each poster {
+			title  preview
+		}
+	}
+
+	screen "Gallery" / {
+		cards posters {
+			picture preview fit
+			title
+		}
+		cards posters {
+			picture title
+			title
+		}
+	}
+}
+)";
+    CHECK(messages(source) == std::vector<std::string>{"26: poster.title is shown as a picture, so it's a file"});
+    std::string fine = source;
+    fine.erase(fine.find("\t\tcards posters {\n\t\t\tpicture title"), std::string("\t\tcards posters {\n\t\t\tpicture title\n\t\t\ttitle\n\t\t}\n").size());
+    CHECK(messages(fine).empty());
+    auto files = built(fine);
+    CAPTURE(files["web/src/screens/main.tsx"]);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(<Cards view={posters} list="rows" columns={{ title: "Title" }} picture="preview" fit)") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.picture = "preview", .fit = true})") != std::string::npos);
+}

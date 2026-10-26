@@ -26,6 +26,7 @@ namespace studio at / {
 		around      enum    edges | color = around::edges
 		slide_x     number  = 0.5
 		slide_y     number  = 0.5
+		preview     file
 	}
 
 	// What a poster is made of: pictures and words, lowest first.
@@ -50,6 +51,12 @@ namespace studio at / {
 	command poster::create
 	command poster::update
 	command poster::delete
+
+	// A small picture of it, kept as it changes, which undo never takes back.
+	command poster::preview {
+		changes preview
+		apart from undo
+	}
 
 	command poster::slide {
 		changes slide_x slide_y
@@ -83,7 +90,7 @@ namespace studio at / {
 	view posters {
 		each poster {
 			order by created_at descending
-			title  color  views
+			title  color  views  preview
 		}
 	}
 
@@ -102,6 +109,7 @@ namespace studio at / {
 			undo "Undo" icon undo key ctrl+z
 			redo "Redo" icon redo key ctrl+y key ctrl+shift+z
 			text "Posters"
+			link /gallery "Gallery" icon gallery key g
 		}
 		toolbar {
 			group "Poster" {
@@ -134,6 +142,15 @@ namespace studio at / {
 	}
 
 	// A poster's layers, placed and slid where they look right.
+	// Every poster as it looks, from the preview it keeps of itself.
+	screen "Gallery" /gallery {
+		link / "Posters" icon gallery key escape
+		cards posters link /posters/:poster {
+			picture preview fit
+			title
+		}
+	}
+
 	screen "Poster" /posters/:poster {
 		layout workspace
 		pick layer from poster_page.layers
@@ -148,6 +165,10 @@ namespace studio at / {
 				add words "Text" icon text key t
 				screenshot "Screenshot" icon screenshot
 			}
+			group "Picture" {
+				copy poster_page as picture "Copy" icon copy key ctrl+shift+c
+				save poster_page as picture "Save" icon save key ctrl+s
+			}
 		}
 		main {
 			collage poster_page.layers size width height {
@@ -159,10 +180,12 @@ namespace studio at / {
 				slide poster::slide
 				snap to edges
 				paste into picture sized picture_width picture_height
+				keep preview poster::preview into preview 480 wide
 				empty "Add a picture or some words to start"
 				over layer {
 					crop "Crop" icon crop key c
 					edit words "Edit" icon edit key enter
+					copy layer as picture "Copy" icon copy
 					layer::delete "Delete" icon delete key delete
 				}
 			}

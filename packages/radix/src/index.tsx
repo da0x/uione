@@ -930,6 +930,11 @@ export const radix: ComponentSet = {
         const total = card.tally?.reduce((n, part) => n + part.count, 0) ?? 0;
         return (
           <article key={card.id} className="flex flex-col gap-3 rounded-box border border-line bg-surface p-4 shadow-panel">
+            {card.picture && (
+              <div className="-mx-4 -mt-4 aspect-video overflow-hidden rounded-t-box bg-sunken">
+                {card.picture.source && <img src={card.picture.source} alt="" className={`h-full w-full ${card.picture.fit ? "object-contain" : "object-cover"}`} />}
+              </div>
+            )}
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-lg leading-snug font-semibold">
                 {card.link ? (

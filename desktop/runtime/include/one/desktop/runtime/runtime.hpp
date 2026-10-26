@@ -59,6 +59,9 @@ namespace one::desktop::runtime {
 	// given every key before anything else, while the page last built says so.
 	void typing(std::function<bool(const key_event&)> taking);
 	bool fullscreen();
+	// The app's name, as its site says, like studio: what the folder its saved
+	// pictures go in is named. Empty while no app is running.
+	std::string app_name();
 	// Fills the screen with the app, or stops, as F11 does.
 	void fullscreen(bool on);
 	// Whether the app is drawn dark, and switching it, kept for its next run. A site

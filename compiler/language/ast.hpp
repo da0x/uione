@@ -841,6 +841,13 @@ namespace one::language {
         std::optional<std::string> paste_into;
         location paste_where;
         std::optional<std::pair<std::string, std::string>> sized;
+        // keep preview poster::preview into preview 480 wide: a small picture of it, drawn
+        // once changes settle and sent to a command on what the view is per, never a
+        // step undo takes back.
+        std::optional<qualified_name> preview;
+        std::string preview_into;
+        int preview_wide = 480;
+        location preview_where;
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
@@ -852,13 +859,48 @@ namespace one::language {
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
     // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
     struct collage_button {
-        enum class kind { crop, edit_words, add_words, paste, screenshot };
+        enum class kind { crop, edit_words, add_words, paste, screenshot, copy, save };
         kind does = kind::crop;
+        // copy layer as picture, save poster_page as picture: the picked layer, or all of it.
+        std::optional<std::string> of;
+        location of_where;
         std::optional<std::string> label;
         std::optional<std::string> icon;
         location icon_where;
         std::vector<key_chord> keys;
     };
+
+    // What a collage button asks of its collage, as the runtimes name it, and the words
+    // it's drawn with when it says none. Copied or saved, it's the picked layer when it
+    // names the collage's pick, over.
+    inline std::string asked_of(const collage_button& b, const std::optional<std::string>& over) {
+        using kind = collage_button::kind;
+        bool picked = b.of && over && *b.of == *over;
+        switch (b.does) {
+            case kind::crop: return "crop";
+            case kind::edit_words: return "edit";
+            case kind::add_words: return "add";
+            case kind::paste: return "paste";
+            case kind::screenshot: return "screenshot";
+            case kind::copy: return picked ? "copy picked" : "copy";
+            case kind::save: return picked ? "save picked" : "save";
+        }
+        return "";
+    }
+    inline std::string label_of(const collage_button& b) {
+        using kind = collage_button::kind;
+        if (b.label) return *b.label;
+        switch (b.does) {
+            case kind::crop: return "Crop";
+            case kind::edit_words: return "Edit";
+            case kind::add_words: return "Text";
+            case kind::paste: return "Paste";
+            case kind::screenshot: return "Screenshot";
+            case kind::copy: return "Copy";
+            case kind::save: return "Save";
+        }
+        return "";
+    }
 
     // pick layer from poster_page.layers: a row of a view's list the screen holds, picked
     // with a click on a table or a collage of it, read by its name, layer.size, and
@@ -1022,6 +1064,11 @@ namespace one::language {
         location tally_where;
         std::vector<cards_filter> filters;
         bool hide_empty = false;  // hide when empty: not there while it has no cards, or can't be read
+        // picture preview fit: a file field's picture on top of each card, all of it
+        // fitted in, or filling it.
+        std::optional<std::string> picture;
+        std::string picture_sits = "fill";
+        location picture_where;
     };
 
     // chart agent_page.stats.cpu "CPU" percent: a run of numbers, newest last, drawn

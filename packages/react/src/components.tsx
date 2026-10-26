@@ -2437,6 +2437,8 @@ export function Cards({
   tally,
   filters = [],
   hideEmpty = false,
+  picture,
+  fit = false,
 }: {
   view: ViewState;
   list: string;
@@ -2451,13 +2453,25 @@ export function Cards({
   tally?: Tally;
   filters?: { label: string; query: Record<string, string>; hue?: Hue }[];
   hideEmpty?: boolean; // not there at all while it has no cards, or can't be read, like a project's private boards
+  picture?: string; // a file each row holds, shown on top of its card
+  fit?: boolean; // all of it fitted in, or filling its place
 }) {
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
+  const store = useFiles();
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
   const rows = rowsOf(view.data?.[list]);
+  // Where each card's picture is read from, asked once for each file.
+  const [addresses, setAddresses] = useState<Record<string, string>>({});
+  const held = picture ? rows.map((row) => row[picture]).filter((path): path is string => typeof path === "string" && path !== "") : [];
+  useEffect(() => {
+    for (const path of held) {
+      if (addresses[path] || !store) continue;
+      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+    }
+  }, [held.join("\n")]);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {
@@ -2497,6 +2511,7 @@ export function Cards({
           tally: sum(row),
           noun: tally?.noun,
           filters: to ? filters.map((f) => ({ label: f.label, link: links(`${to}?${new URLSearchParams({ is: f.label, ...f.query }).toString()}`), ...(f.hue ? { hue: f.hue } : {}) })) : [],
+          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit } } : {}),
         };
       })}
     />

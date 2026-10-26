@@ -149,6 +149,9 @@ namespace one::desktop::runtime {
 	desktop::view collage(page& p, collage_spec spec);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
 	desktop::view collage_button(page& p, collage_ask ask);
+	// A file's picture, `height` tall, all of it fitted in, or filling its place, on the
+	// sunken color while there's none, as a card's is drawn.
+	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.

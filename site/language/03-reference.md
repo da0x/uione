@@ -2021,7 +2021,9 @@ form step::update "Save" {
   said as its choice is: Public, Private. A view of one list is shown whole, as a
   table's is: `cards all link /:project { name  summary }`. `hide when empty` leaves the cards out while
   there are none, or while the reader can't read them, like a project's private
-  boards to someone outside it.
+  boards to someone outside it. `picture preview fit` shows a file each row holds as
+  a picture on top of its card, all of it fitted in, or, with `fill` or nothing
+  said, filling its place. A terminal draws no pictures, so it can't show one.
 - `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
   at the right, as btop draws one: a line over a soft fill in the accent, its title,
   its latest value, and the top of its scale. Its numbers are a field of the view, or
@@ -2149,10 +2151,23 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     dragged from another site, so it says to save it first; it shows the screenshot
     button only where the browser can share the screen. A terminal can't be dropped
     on, so its paste button asks for the picture's path, and it takes no screenshots.
+  - `keep preview poster::preview into preview 480 wide`: a small picture of it, 480
+    pixels wide, drawn once changes have settled for a moment and nothing's being
+    moved, cropped or written, and sent to a command on what the view is per, its
+    file in that field, never a step undo takes back. One already there when the
+    collage is first shown is taken as what it looks like now. Cards show it with
+    `picture preview fit`.
   - `empty "Add a picture to start"`: said while it has no layers.
   - `over layer { ... }`: buttons drawn just above the picked layer, or below it when
     there's no room, for the screen's `pick layer from poster_page.layers`, like
     `layer::delete "Delete" icon delete key delete`.
+  - `copy poster_page as picture "Copy" icon copy` copies the collage, drawn at its
+    own size, for any program to paste; `copy layer as picture`, naming the pick over
+    it, copies only the picked layer, as big as it is. `save poster_page as picture
+    "Save" icon save key ctrl+s` saves it as a PNG named for the view's `title`, or
+    `name`, and the minute. The desktop app saves in its own folder in the Pictures
+    folder, never over a picture saved before, and says where; a web page downloads
+    it. A web page copies a picture only when the browser lets it.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
   as the classic deploy screen did: a lane for each kind of card, its kind said by
   `lanes by labels`, in the order their stages come, and in it a row for each card,

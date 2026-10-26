@@ -3530,7 +3530,15 @@ namespace one::language {
                     keys(does->keys);
                     using kind = collage_button::kind;
                     bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot;
-                    bool can = std::ranges::any_of(collages_, [&](const collage_item* c) {
+                    if (does->of) {
+                        // Copied or saved: the collage's view, all of it, or its pick, one layer.
+                        bool named = std::ranges::any_of(collages_, [&](const collage_item* c) { return c->view.text() == *does->of || (c->over && *c->over == *does->of); });
+                        if (!named) {
+                            std::string like = collages_.empty() ? "" : ", like " + collages_.front()->view.text() + (collages_.front()->over ? " or " + *collages_.front()->over : "");
+                            error(does->of_where, *does->of + " isn't a collage on this screen, or its pick; a picture is made of one" + like);
+                        }
+                    }
+                    bool can = does->of.has_value() || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste_into.has_value() : c->add.has_value();
                     });
                     if (!can) {
@@ -3899,6 +3907,20 @@ namespace one::language {
                     }
                 }
             }
+            // A preview is kept on what the view is per, by a command on it, in a file field.
+            if (collage.preview) {
+                verify_command_use(ns, *collage.preview);
+                const entity_declaration* on = find_command(ns, *collage.preview);
+                const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, collage.view.where}) : nullptr;
+                if (!per) {
+                    error(collage.preview_where, "a collage's preview is kept on what the view " + collage.view.text() + " is per, and it isn't per anything");
+                } else {
+                    if (on && on != per) error(collage.preview_where, "a collage's preview is kept on " + per->name + ", so by a command on it, like " + per->name + "::preview");
+                    const field* f = find_field(*per, collage.preview_into);
+                    if (!f || !f->type || f->type->text() != "file") error(collage.preview_where, per->name + "." + collage.preview_into + " holds its preview, so it's a file");
+                }
+                if (collage.preview_wide < 16 || collage.preview_wide > 4096) error(collage.preview_where, "a preview is from 16 to 4096 wide");
+            }
             if (collage.over) {
                 auto picked = picks_.find(*collage.over);
                 if (picked == picks_.end() || picked->second != layers) {
@@ -4071,6 +4093,13 @@ namespace one::language {
             }
             if (cards.link && !routes_.contains(full_route(ns, *cards.link))) {
                 error(cards.link_where, "there's no screen at " + full_route(ns, *cards.link) + " for these cards to open");
+            }
+            // A picture on each card is a file each row holds.
+            if (cards.picture) {
+                const entity_declaration* entity = listed_entity(ns, *rows);
+                const field* f = entity ? find_field(*entity, *cards.picture) : nullptr;
+                if (entity && (!f || !f->type || f->type->text() != "file" || f->list)) error(cards.picture_where, entity->name + "." + *cards.picture + " is shown as a picture, so it's a file");
+                else if (!in_rows(*rows, *cards.picture)) error(cards.picture_where, "view " + cards.view.text() + " has no " + *cards.picture + (cards.list ? " in its " + *cards.list : "") + "; add it to the list's block");
             }
             if (cards.tally) {
                 if (const view_each* counted = named_list(ns, *cards.tally, cards.tally_list, route)) {
