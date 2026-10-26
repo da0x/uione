@@ -3528,11 +3528,13 @@ namespace one::language {
                     // What it asks of the screen's collage, which says how it's kept.
                     icon(does->icon, does->icon_where);
                     keys(does->keys);
+                    using kind = collage_button::kind;
+                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot;
                     bool can = std::ranges::any_of(collages_, [&](const collage_item* c) {
-                        return does->does == collage_button::kind::crop ? c->crop.has_value() : does->does == collage_button::kind::edit_words ? c->write.has_value() : c->add.has_value();
+                        return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste_into.has_value() : c->add.has_value();
                     });
                     if (!can) {
-                        std::string needs = does->does == collage_button::kind::crop ? "crop layer::crop" : does->does == collage_button::kind::edit_words ? "write layer::write" : "add layer::create";
+                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : takes_pictures ? "paste into picture" : "add layer::create";
                         error(item.where, "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* pipeline = std::get_if<pipeline_item>(&item.node)) {
@@ -3883,6 +3885,18 @@ namespace one::language {
                 if (view && (!view->per || (on && on->name != *view->per))) {
                     error(collage.slide->where, "a collage's background slides as the view " + collage.view.text() + " says, so by a command on what the view is per" +
                                                     (view->per ? ", like " + *view->per + "::slide" : ", and it isn't per anything"));
+                }
+            }
+            // Pasted pictures are made by its add, the file in a file field of the layer's.
+            if (collage.paste_into) {
+                if (!collage.add) error(collage.paste_where, "pasted pictures are made by the collage's add, so it says one too, like add " + layer->name + "::create");
+                const field* f = find_field(*layer, *collage.paste_into);
+                if (!f || !f->type || f->type->text() != "file") error(collage.paste_where, layer->name + "." + *collage.paste_into + " holds what's pasted, so it's a file");
+                if (collage.sized) {
+                    for (const auto& name : {collage.sized->first, collage.sized->second}) {
+                        const field* n = find_field(*layer, name);
+                        if (!n || !n->type || n->type->text() != "number") error(collage.paste_where, layer->name + "." + name + " keeps a picture's own size, so it's a number");
+                    }
                 }
             }
             if (collage.over) {

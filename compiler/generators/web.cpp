@@ -1257,6 +1257,8 @@ namespace one::generators {
                         }
                     }
                     line += " name=" + web_detail::js_string(route_ + " " + (c->over ? *c->over : std::string("collage")));
+                    if (c->paste_into) line += " pasteInto=" + web_detail::js_string(*c->paste_into);
+                    if (c->sized) line += " sizedWidth=" + web_detail::js_string(c->sized->first) + " sizedHeight=" + web_detail::js_string(c->sized->second);
                     if (auto per = per_entity(view)) {
                         parts.params.insert(*per);
                         line += " subject={" + web_detail::js_name(*per + "_id") + "}";
@@ -1274,8 +1276,9 @@ namespace one::generators {
                     // What it asks of the screen's collage, by what names it.
                     using kind = language::collage_button::kind;
                     parts.components.insert("CollageButton");
-                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : "add";
-                    std::string label = does->label ? *does->label : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : "Text";
+                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
+                    std::string label = does->label ? *does->label
+                                        : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
                     shown_while(out, parts, ns, item, [&] {
                         out.line("<CollageButton collage=" + web_detail::js_string(collage_key_) + " does=" + web_detail::js_string(what) + " label=" + web_detail::js_string(label) +
                                  (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + " />");

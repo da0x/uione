@@ -305,3 +305,6 @@ examples/studio/main.one	slide poster::slide	slide	keyword
 examples/studio/main.one	add words "Text" icon text key t	words	keyword
 examples/studio/main.one	crop "Crop" icon crop key c	crop	keyword
 examples/studio/main.one	write layer::write	write	keyword
+examples/studio/main.one	paste into picture sized picture_width picture_height	sized	keyword
+examples/studio/main.one	paste into picture sized picture_width picture_height	paste	keyword
+examples/studio/main.one	screenshot "Screenshot" icon screenshot	screenshot	keyword

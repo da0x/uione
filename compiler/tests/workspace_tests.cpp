@@ -236,6 +236,8 @@ namespace {
 		poster   poster  required
 		depth    number  = 0
 		picture  file
+		picture_width   number  = 0
+		picture_height  number  = 0
 		x        number  = 0
 		y        number  = 0
 		w        number  = 400
@@ -249,6 +251,7 @@ namespace {
 	command layer::place {
 		changes x y w h
 	}
+	command layer::create
 	command layer::delete
 
 	view poster_page per poster {
@@ -284,12 +287,12 @@ TEST_CASE("a collage is a view's list as layers, as big as two of its values, pl
 				text "Not a button"
 			}
 		}
-)")) == std::vector<std::string>{"45: view poster_page has no wide, which says how big the collage is; add it to the view",
-                                   "45: view poster_page has no tall, which says how big the collage is; add it to the view",
-                                   "46: a collage's layers are layers, so place names a command on layer, like layer::place",
-                                   "47: a collage's background slides as the view poster_page says, so by a command on what the view is per, like poster::slide",
-                                   "48: over names the screen's pick of these layers, like pick layer from poster_page.layers",
-                                   "49: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\""});
+)")) == std::vector<std::string>{"48: view poster_page has no wide, which says how big the collage is; add it to the view",
+                                   "48: view poster_page has no tall, which says how big the collage is; add it to the view",
+                                   "49: a collage's layers are layers, so place names a command on layer, like layer::place",
+                                   "50: a collage's background slides as the view poster_page says, so by a command on what the view is per, like poster::slide",
+                                   "51: over names the screen's pick of these layers, like pick layer from poster_page.layers",
+                                   "52: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\""});
     auto files = built(collage_screen(fine));
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];
@@ -302,3 +305,45 @@ TEST_CASE("a collage is a view's list as layers, as big as two of its values, pl
           std::string::npos);
 }
 
+
+TEST_CASE("pictures dropped, pasted or taken from the screen are made by a collage's add, kept in a file field, their own size in two numbers") {
+    const std::string fine = R"(		toolbar {
+			group "Insert" {
+				paste "Paste" icon paste key ctrl+shift+v
+				screenshot "Screenshot" icon screenshot
+			}
+		}
+		main {
+			collage poster_page.layers size width height {
+				add layer::create
+				paste into picture sized picture_width picture_height
+			}
+		}
+)";
+    CHECK(messages(collage_screen("\t\tlayout workspace\n" + fine)).empty());
+    CHECK(messages(collage_screen(R"(		layout workspace
+		toolbar {
+			group "Insert" {
+				paste "Paste"
+				crop "Crop"
+			}
+		}
+		main {
+			collage poster_page.layers size width height {
+				paste into title sized x title
+			}
+		}
+)")) == std::vector<std::string>{"52: this screen has no collage that says crop layer::crop for this button to use",
+                                   "57: pasted pictures are made by the collage's add, so it says one too, like add layer::create",
+                                   "57: layer.title holds what's pasted, so it's a file",
+                                   "57: layer.title keeps a picture's own size, so it's a number"});
+    auto files = built(collage_screen("\t\tlayout workspace\n" + fine));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<CollageButton collage="/posters/:poster collage" does="paste" label="Paste" icon="paste" keys={["ctrl+shift+v"]} />)") != std::string::npos);
+    CHECK(web.find(R"(pasteInto="picture" sizedWidth="picture_width" sizedHeight="picture_height")") != std::string::npos);
+    CHECK(native.find(R"(.paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height"})") != std::string::npos);
+    CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
+}

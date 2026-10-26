@@ -1328,6 +1328,48 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
 }
 
+TEST("a picture coming into a collage with nothing on it covers it, and one coming in after is its own size, fitted, in the middle") {
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
+		                                                                         .fills = true, .add = "studio::layer::create", .parent = "poster", .key = "/ layer",
+		                                                                         .paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto& p = nav.current();
+	// A screenshot handed back, as the thread that took it does: 900 by 560.
+	std::string taken = (golden_folder / "collage.png").string();
+	p.kept<std::string>("collage screenshot / layer").set(taken);
+	(void)drawn(nav);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const value& first = data.runs().back().fields;
+	CHECK(data.runs().back().command == "studio::layer::create");
+	CHECK(first["w"].as_double() == 1600);
+	CHECK(first["h"].as_double() == 900);
+	CHECK(first["poster"].as_string() == "p1");
+	CHECK(first["picture_width"].as_double() == 900);
+	CHECK(first["picture_height"].as_double() == 560);
+	CHECK(data.uploads() == std::vector<std::string>{taken});
+	// Once there's something on it, the next is as big as it is, in the middle, on top.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900}, {"layers", list{value(fields{{"id", "l1"}, {"depth", 0}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}})}}}));
+	p.kept<std::string>("collage screenshot / layer").set(taken);
+	(void)drawn(nav);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() < 2) return;
+	const value& second = data.runs().back().fields;
+	CHECK(second["x"].as_double() == 350);
+	CHECK(second["y"].as_double() == 170);
+	CHECK(second["w"].as_double() == 900);
+	CHECK(second["depth"].as_double() == 1);
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

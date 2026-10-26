@@ -266,12 +266,15 @@ namespace one::generators {
                 auto* does = std::get_if<language::collage_button>(&tool.node);
                 if (!does) continue;
                 using kind = language::collage_button::kind;
-                std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : "add";
-                std::string label = does->label ? *does->label : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : "Text";
+                std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
+                std::string label = does->label ? *does->label
+                                    : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
                 asks += (asks.empty() ? "" : ", ") + std::string("collage_ask{.key = ") + str(collage_key(c)) + ", .does = " + str(what) + ", .label = " + str(label) +
                         ", .icon = " + str(does->icon.value_or("")) + (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "}";
             }
             if (!asks.empty()) out += ", .asks = {" + asks + "}";
+            if (c.paste_into) out += ", .paste_into = " + str(*c.paste_into);
+            if (c.sized) out += ", .sized_width = " + str(c.sized->first) + ", .sized_height = " + str(c.sized->second);
             return out + "})";
         }
 
@@ -1491,8 +1494,9 @@ namespace one::generators {
                     code = collage(parts, ns, *c);
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     using kind = language::collage_button::kind;
-                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : "add";
-                    std::string label = does->label ? *does->label : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : "Text";
+                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : does->does == kind::paste ? "paste" : does->does == kind::screenshot ? "screenshot" : "add";
+                    std::string label = does->label ? *does->label
+                                        : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : does->does == kind::paste ? "Paste" : does->does == kind::screenshot ? "Screenshot" : "Text";
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
                            (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "})";
                 } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {

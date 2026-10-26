@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <format>
 #include <map>
 
@@ -124,7 +125,7 @@ namespace one::terminal::runtime {
 	terminal::view full_screen(page&, std::string, std::string, std::vector<std::string>) { return {}; }
 
 	terminal::view collage_button(page& p, collage_ask ask) {
-		if (ask.does == "crop") return {};
+		if (ask.does == "crop" || ask.does == "screenshot") return {};
 		auto asked = p.kept<std::string>("collage do " + ask.key);
 		auto press = [asked, does = ask.does] { asked.set(does); };
 		for (const auto& k : ask.keys) p.on_key(k, press);
@@ -138,12 +139,16 @@ namespace one::terminal::runtime {
 		std::string chosen = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		// Words being written: a line to type them in, kept with Enter.
 		auto writing = p.kept<std::string>("collage writing " + spec.key);
+		auto pasting = p.kept<bool>("collage pasting " + spec.key);
+		auto path = p.kept<std::string>("collage path " + spec.key);
 		auto typed = p.kept<std::string>("collage words " + spec.key);
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
 			double width = v.data[spec.width].as_double(), height = v.data[spec.height].as_double();
-			if (does == "edit" && !spec.write.empty()) {
+			if (does == "paste" && !spec.paste_into.empty()) {
+				pasting.set(true);
+			} else if (does == "edit" && !spec.write.empty()) {
 				for (const auto& l : layers) {
 					if (l["id"].as_string() == chosen && l["picture"].as_string().empty()) writing.set(chosen), typed.set(l["words"].as_string());
 				}
@@ -159,7 +164,6 @@ namespace one::terminal::runtime {
 				});
 			}
 		}
-		if (layers.empty()) return terminal::text(spec.empty.empty() ? "Nothing here yet." : spec.empty, dim());
 		std::vector<terminal::list_row> rows;
 		int pictures = 0;
 		for (std::size_t i = 0; i < layers.size(); ++i) {
@@ -197,11 +201,27 @@ namespace one::terminal::runtime {
 			}
 		}
 		std::vector<terminal::view> parts;
-		parts.push_back(terminal::list(std::move(rows), std::move(options)));
+		if (layers.empty()) parts.push_back(terminal::text(spec.empty.empty() ? "Nothing here yet." : spec.empty, dim()));
+		else parts.push_back(terminal::list(std::move(rows), std::move(options)));
 		if (!spec.pick.empty() && !p.picked_id(spec.pick).empty()) {
 			std::vector<terminal::view> over;
 			for (const auto& b : spec.over) over.push_back(command(p, b));
 			parts.push_back(along(std::move(over)));
+		}
+		// A picture pasted by its path, as a terminal can't be dropped on: the first covers
+		// the collage, the rest go in the middle as big as the collage allows.
+		if (pasting.get()) {
+			double width = v.data[spec.width].as_double(), height = v.data[spec.height].as_double();
+			parts.push_back(terminal::field(path, {.placeholder = "The picture's path, like ~/Pictures/harbor.png", .on_submit = [&p, spec, pasting, path, layers, width, height] {
+				value made = layers.empty() ? value(std::map<std::string, value>{{"x", 0}, {"y", 0}, {"w", width}, {"h", height}})
+				                            : value(std::map<std::string, value>{{"x", width / 4}, {"y", height / 4}, {"w", width / 2}, {"h", height / 2}});
+				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+				if (!layers.empty() && !layers.back()["depth"].is_null()) made.fields["depth"] = value(layers.back()["depth"].as_double() + 1);
+				std::string file = path.peek();
+				if (const char* home = std::getenv("HOME"); file.starts_with("~/") && home) file = home + file.substr(1);
+				p.run(spec.add, made, attached_files{{spec.paste_into, {file}}}, [](const answer&) {}, false);
+				pasting.set(false), path.set("");
+			}}));
 		}
 		if (!writing.get().empty()) {
 			parts.push_back(terminal::field(typed, {.on_submit = [&p, spec, writing, typed, layers] {

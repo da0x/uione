@@ -346,6 +346,8 @@ namespace one::screens {
 		std::string parent = "";  // the field a layer names what the view is per by, like poster
 		std::string key = "";     // what its buttons, like crop and add words, name it by
 		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
+		std::string paste_into = "";         // what a file dropped or pasted is made, by add, a picture in this field
+		std::string sized_width = "", sized_height = "";  // and where a picture's own size is kept
 	};
 
 	// A list's rows as large cards, like a project's boards: each its title, what

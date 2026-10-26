@@ -33,6 +33,8 @@ namespace studio at / {
 		poster   poster  required
 		depth    number  = 0
 		picture  file
+		picture_width   number  = 0
+		picture_height  number  = 0
 		crop_x   number  = 0
 		crop_y   number  = 0
 		crop_w   number  = 1
@@ -142,7 +144,9 @@ namespace studio at / {
 		}
 		toolbar {
 			group "Insert" {
+				paste "Paste" icon paste
 				add words "Text" icon text key t
+				screenshot "Screenshot" icon screenshot
 			}
 		}
 		main {
@@ -154,6 +158,7 @@ namespace studio at / {
 				delete layer::delete
 				slide poster::slide
 				snap to edges
+				paste into picture sized picture_width picture_height
 				empty "Add a picture or some words to start"
 				over layer {
 					crop "Crop" icon crop key c

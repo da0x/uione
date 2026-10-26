@@ -2137,6 +2137,18 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     typed replaces them. They're made with the field naming what the view is per, like
     `poster`, and a `depth` above the top layer's, when its layers have one.
   - `delete layer::delete`: words written away to nothing are deleted.
+  - `paste into picture sized picture_width picture_height`: pictures dropped on it,
+    or pasted with Control+V, are made layers by its `add`, each file uploaded into
+    that field and its own size sent in the other two. The first on a collage with
+    nothing on it covers it; the rest are as big as they are, smaller where they
+    wouldn't fit, centered where they were let go, each a little further along, and
+    all of them are one step to undo. Words pasted are made words in the middle. A
+    `paste "Paste" icon paste` button pastes what's on the clipboard, and
+    `screenshot "Screenshot" icon screenshot` adds a picture of the screen. A web page
+    reads the clipboard only when the browser lets it, and can't read a picture
+    dragged from another site, so it says to save it first; it shows the screenshot
+    button only where the browser can share the screen. A terminal can't be dropped
+    on, so its paste button asks for the picture's path, and it takes no screenshots.
   - `empty "Add a picture to start"`: said while it has no layers.
   - `over layer { ... }`: buttons drawn just above the picked layer, or below it when
     there's no room, for the screen's `pick layer from poster_page.layers`, like

@@ -836,6 +836,11 @@ namespace one::language {
         std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
         std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept
         std::optional<qualified_name> remove;  // delete layer::delete: words written away to nothing, gone
+        // paste into picture sized picture_width picture_height: files dropped or pasted
+        // made pictures by its add, the file in that field and its own size in those.
+        std::optional<std::string> paste_into;
+        location paste_where;
+        std::optional<std::pair<std::string, std::string>> sized;
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
@@ -847,7 +852,7 @@ namespace one::language {
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
     // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
     struct collage_button {
-        enum class kind { crop, edit_words, add_words };
+        enum class kind { crop, edit_words, add_words, paste, screenshot };
         kind does = kind::crop;
         std::optional<std::string> label;
         std::optional<std::string> icon;

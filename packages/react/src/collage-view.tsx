@@ -20,6 +20,7 @@ import type { Backdrop, Box, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
+import { useSaying } from "./said.js";
 import { OverLayer, hintOf, setPicked, useKeys, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
@@ -110,7 +111,7 @@ function edgeColorOf(path: string, p: CanvasImageSource & { width: number; heigh
   return color;
 }
 
-// What a collage's buttons ask of it, by what names it: crop, edit or add.
+// What a collage's buttons ask of it, by what names it: crop, edit, add, paste or a screenshot.
 const asked = new Map<string, string>();
 const askListeners = new Set<() => void>();
 function ask(name: string, does: string) {
@@ -119,9 +120,11 @@ function ask(name: string, does: string) {
 }
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
+  // A screenshot is taken where the browser can share the screen, and only there.
+  if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
   useKeys(keys, () => ask(collage, does));
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
@@ -176,6 +179,9 @@ export function Collage({
   remove,
   parent,
   name,
+  pasteInto,
+  sizedWidth,
+  sizedHeight,
   children,
 }: {
   view: ViewState;
@@ -195,6 +201,9 @@ export function Collage({
   remove?: string; // a layer deleted, like words written away to nothing
   parent?: string; // the field a layer names what the view is per by, like poster
   name?: string; // what its buttons, like crop and add words, name it by
+  pasteInto?: string; // a file dropped or pasted, made a picture by add, in this field
+  sizedWidth?: string; // and where a picture's own size is kept
+  sizedHeight?: string;
   children?: ReactNode; // the buttons over the picked layer
 }) {
   const files = useFiles();
@@ -206,6 +215,7 @@ export function Collage({
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
   const [full, setFull] = useState(() => typeof document !== "undefined" && document.fullscreenElement !== null);
+  const [dropping, setDropping] = useState(false);
 
   const data = view.status === "live" ? ((view.data ?? {}) as Row) : {};
   const layers = (data[list] as Row[] | undefined) ?? [];
@@ -225,6 +235,113 @@ export function Collage({
       document.removeEventListener("fullscreenchange", screen);
     };
   }, []);
+
+  const { say } = useSaying();
+  // Pictures dropped or pasted: the first on a collage with nothing on it covers it, and
+  // the rest are as big as they are, smaller where they wouldn't fit, centered where
+  // they were let go, each a little further along; all one step to undo.
+  const addPictures = async (given: File[], on?: Point) => {
+    if (!add || !pasteInto || !files) return;
+    const top = layers[layers.length - 1];
+    let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
+    let covered = layers.length > 0, at = 0, first = true;
+    for (const file of given) {
+      let size: { w: number; h: number };
+      try {
+        const bitmap = await createImageBitmap(file);
+        size = { w: bitmap.width, h: bitmap.height };
+        bitmap.close();
+      } catch {
+        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
+        continue;
+      }
+      let b: Box;
+      if (!covered) {
+        b = { x: 0, y: 0, w: W, h: H };
+        covered = true;
+      } else {
+        const s = Math.min(1, W / size.w, H / size.h);
+        const cx = on ? on.x : W / 2, cy = on ? on.y : H / 2;
+        b = { x: cx - (size.w * s) / 2 + 40 * at, y: cy - (size.h * s) / 2 + 40 * at, w: size.w * s, h: size.h * s };
+        at++;
+      }
+      const path = await files.upload(file, () => {});
+      const made: Record<string, unknown> = { [pasteInto]: path, x: b.x, y: b.y, w: b.w, h: b.h };
+      if (parent) made[parent] = subject;
+      if (depth !== undefined) made["depth"] = depth++;
+      if (sizedWidth && sizedHeight) (made[sizedWidth] = size.w), (made[sizedHeight] = size.h);
+      if (!first) made["one:history"] = "joined";
+      first = false;
+      await runner.reply(add, made);
+    }
+  };
+  // Words pasted: a layer of them in the middle, a twelfth of its height.
+  const addWords = (words: string) => {
+    if (!add) return;
+    const size = Math.max(8, Math.round(H / 12));
+    const m = measured(words, size, 700);
+    const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
+    if (parent) made[parent] = subject;
+    const top = layers[layers.length - 1];
+    if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
+    void runner.reply(add, made);
+  };
+  // What's on the clipboard, pasted: pictures, or words.
+  const pasteNow = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      const pictures: File[] = [];
+      for (const item of items) {
+        const kind = item.types.find((t) => t.startsWith("image/"));
+        if (kind) pictures.push(new File([await item.getType(kind)], `Pasted.${kind.slice(6)}`, { type: kind }));
+      }
+      if (pictures.length > 0) return void (await addPictures(pictures));
+      const words = await navigator.clipboard.readText();
+      if (words.trim()) return addWords(words);
+      say({ text: "There's nothing to paste. Copy a picture or some words first." });
+    } catch {
+      say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+    }
+  };
+  // The screen as the browser shares it, one frame of it, added like any picture.
+  const screenshot = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const video = document.createElement("video");
+      video.muted = true;
+      video.srcObject = stream;
+      await video.play();
+      const frame = document.createElement("canvas");
+      frame.width = video.videoWidth;
+      frame.height = video.videoHeight;
+      frame.getContext("2d")!.drawImage(video, 0, 0);
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = await new Promise<Blob | null>((done) => frame.toBlob(done, "image/png"));
+      if (blob) await addPictures([new File([blob], "Screenshot.png", { type: "image/png" })]);
+    } catch {
+      say({ text: "No screenshot was taken." });
+    }
+  };
+  // Ctrl+V anywhere but where something's typed pastes on the collage.
+  useEffect(() => {
+    if (!pasteInto) return;
+    const pasted = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      const given = [...(e.clipboardData?.files ?? [])];
+      if (given.length > 0) {
+        e.preventDefault();
+        return void addPictures(given);
+      }
+      const words = e.clipboardData?.getData("text/plain") ?? "";
+      if (words.trim()) {
+        e.preventDefault();
+        addWords(words);
+      }
+    };
+    document.addEventListener("paste", pasted);
+    return () => document.removeEventListener("paste", pasted);
+  });
 
   // A crop or words are only of the picked layer; picking another puts them away.
   if (w.crop && w.crop.id !== picked) w.crop = undefined;
@@ -263,6 +380,10 @@ export function Collage({
       w.crop = { id: picked, whole: wholeOf(boxOf(chosen), cropOf(chosen)), kept: boxOf(chosen) };
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
+    } else if (asking === "paste") {
+      void pasteNow();
+    } else if (asking === "screenshot") {
+      void screenshot();
     } else if (asking === "add" && add) {
       // Words in the middle, a twelfth of its height, all chosen so the first key
       // typed replaces them, on top of the rest.
@@ -747,7 +868,35 @@ export function Collage({
   const overAt = frame && !full && !w.editing && (children || w.crop) ? { left: frame.x + frame.w / 2, top: frame.y - 12 } : undefined;
   const below = overAt !== undefined && overAt.top < 52;
   return (
-    <div className="one-collage" style={{ position: "relative", flex: 1, minHeight: fills ? 0 : 560, width: "100%", height: fills ? "100%" : 560 }}>
+    <div
+      className="one-collage"
+      style={{ position: "relative", flex: 1, minHeight: fills ? 0 : 560, width: "100%", height: fills ? "100%" : 560, outline: dropping ? "3px solid var(--color-accent, #2457d6)" : "none", outlineOffset: -3 }}
+      onDragOver={
+        pasteInto
+          ? (e) => {
+              e.preventDefault();
+              setDropping(true);
+            }
+          : undefined
+      }
+      onDragLeave={() => setDropping(false)}
+      onDrop={
+        pasteInto
+          ? (e) => {
+              e.preventDefault();
+              setDropping(false);
+              const given = [...e.dataTransfer.files];
+              if (given.length === 0) {
+                if (e.dataTransfer.getData("text/uri-list")) say({ text: "That picture is on the web. Save it first, then drop it here." });
+                return;
+              }
+              const p = at(e);
+              const on = w.scale > 0 && inside(w.board, p) ? { x: (p.x - w.board.x) / w.scale, y: (p.y - w.board.y) / w.scale } : undefined;
+              void addPictures(given, on);
+            }
+          : undefined
+      }
+    >
       <canvas
         ref={canvasRef}
         role="img"

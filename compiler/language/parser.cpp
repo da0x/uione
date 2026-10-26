@@ -1540,13 +1540,18 @@ namespace one::language {
                 return {where, std::move(pick)};
             }
             // crop "Crop", edit words "Edit", add words "Text": what the collage does.
-            bool collage_does = (at_word("crop") && peek(1).kind != token_kind::scope && peek(1).kind != token_kind::identifier) ||
+            bool alone = peek(1).kind != token_kind::scope && peek(1).kind != token_kind::identifier;
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words");
             if (collage_does) {
                 collage_button button;
                 std::string first = advance().text;
-                if (first != "crop") advance();
-                button.does = first == "crop" ? collage_button::kind::crop : first == "edit" ? collage_button::kind::edit_words : collage_button::kind::add_words;
+                if (first == "edit" || first == "add") advance();
+                button.does = first == "crop"         ? collage_button::kind::crop
+                              : first == "paste"      ? collage_button::kind::paste
+                              : first == "screenshot" ? collage_button::kind::screenshot
+                              : first == "edit"       ? collage_button::kind::edit_words
+                                                      : collage_button::kind::add_words;
                 if (at(token_kind::string)) button.label = advance().text;
                 parse_icon(button.icon, button.icon_where);
                 parse_keys(button.keys);
@@ -2098,6 +2103,17 @@ namespace one::language {
                     } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.remove = parse_qualified_name("the command that deletes a layer, like layer::delete");
+                    } else if (at_word("paste") && peek(1).kind == token_kind::identifier && peek(1).text == "into") {
+                        advance();
+                        advance();
+                        collage.paste_where = peek().where;
+                        collage.paste_into = expect(token_kind::identifier, "the field a pasted picture's file goes in, like picture").text;
+                        if (at_word("sized")) {
+                            advance();
+                            std::string across = expect(token_kind::identifier, "the field a picture's own width goes in, like picture_width").text;
+                            std::string down = expect(token_kind::identifier, "and its height's, like picture_height").text;
+                            collage.sized = std::pair{across, down};
+                        }
                     } else if (at_word("snap")) {
                         collage.snap_where = advance().where;
                         if (!at_word("to")) fail_expecting("to edges, as in snap to edges");

@@ -661,6 +661,38 @@ TEST("a switch's pick is remembered for its page between runs of the app") {
 }
 
 // person.service != true: whoever isn't a service, a person said as one or never said.
+TEST("a picture is pasted on a collage by its path, as a terminal can't be dropped on, even before there's anything on it") {
+	auto home = std::filesystem::temp_directory_path() / ("one-home-" + std::to_string(::getpid()));
+	std::filesystem::create_directories(home);
+	std::ofstream(home / "harbor.png") << "a picture";
+	std::string was = std::getenv("HOME") ? std::getenv("HOME") : "";
+	::setenv("HOME", home.c_str(), 1);
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
+	site s{.name = "studio"};
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
+		                                              .add = "studio::layer::create", .parent = "poster", .key = "/ layer", .paste_into = "picture"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().kept<std::string>("collage do / layer").set("paste");
+	screen_at t(nav, 80, 12);
+	CHECK_SAYING(t.text().find("The picture's path") != std::string::npos, t.text());
+	t.press(key(terminal::keys::tab));
+	t.type("~/harbor.png");
+	t.press(key(terminal::keys::newline));
+	CHECK(data.runs().size() == 1);
+	if (!data.runs().empty()) {
+		CHECK(data.runs().back().fields["w"].as_double() == 1600);
+		CHECK(data.runs().back().fields["poster"].as_string() == "p1");
+	}
+	CHECK(data.uploads() == std::vector<std::string>{(home / "harbor.png").string()});
+	::setenv("HOME", was.c_str(), 1);
+	std::filesystem::remove_all(home);
+}
+
 TEST("a filter keeps the rows that don't hold a value, by a field read through what they point at") {
 	auto row = [](fields f) { return value(f); };
 	std::vector<std::pair<std::string, std::string>> people{{"person.service!", "true"}};

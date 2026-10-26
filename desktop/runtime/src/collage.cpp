@@ -22,7 +22,13 @@
 
 #include <one/screens/collage.hpp>
 
+#include <unistd.h>
+
+#include <fstream>
+#include <thread>
+
 #include "one/desktop/runtime/components.hpp"
+#include "one/desktop/screenshot.hpp"
 
 namespace one::desktop::runtime {
 
@@ -338,6 +344,75 @@ namespace one::desktop::runtime {
 			return true;
 		}
 
+		// Where a picture's bytes are kept until they're sent: this person's own runtime
+		// folder, readable by them alone.
+		std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes) {
+			static int made = 0;
+			const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR");
+			std::filesystem::path folder = runtime_dir && *runtime_dir ? std::filesystem::path(runtime_dir) : std::filesystem::temp_directory_path();
+			std::filesystem::path file = folder / std::format("one-picture-{}-{}", ::getpid(), ++made);
+			std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+			std::filesystem::permissions(file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+			return file;
+		}
+
+		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
+		// and the rest are as big as they are, smaller where they wouldn't fit, centered
+		// where they were let go, each a little further along; all one step to undo.
+		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
+		                  std::optional<model::point> on) {
+			if (spec.add.empty() || spec.paste_into.empty()) return;
+			const auto& all = layers.as_array();
+			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
+			bool first = true, covered = !all.empty();
+			int at = 0;
+			for (const auto& file : files) {
+				auto read = desktop::picture::read(file);
+				if (!read || !*read) {
+					p.told().set(std::format("{} isn't a picture this can read.", file.filename().string()));
+					continue;
+				}
+				double pw = read->width(), ph = read->height();
+				model::box b;
+				if (!covered) {
+					b = {0, 0, width, height};
+					covered = true;
+				} else {
+					double s = std::min({1.0, width / pw, height / ph});
+					double cx = on ? on->x : width / 2, cy = on ? on->y : height / 2;
+					b = {cx - pw * s / 2 + 40.0 * at, cy - ph * s / 2 + 40.0 * at, pw * s, ph * s};
+					++at;
+				}
+				value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
+				if (!spec.sized_width.empty()) made.fields[spec.sized_width] = value(pw), made.fields[spec.sized_height] = value(ph);
+				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
+				p.run(spec.add, made, attached_files{{spec.paste_into, {file.string()}}}, [](const answer&) {}, false);
+			}
+		}
+
+		// Words pasted: a layer of them in the middle, a twelfth of its height.
+		void add_words(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::string& words) {
+			if (spec.add.empty()) return;
+			double size = std::max(8.0, std::round(height / 12));
+			auto [mw, mh] = measured(words, size, 700);
+			value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
+			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+			const auto& all = layers.as_array();
+			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
+			p.run(spec.add, made);
+		}
+
+		// What's on the clipboard, pasted: files a file manager copied, or a picture, as
+		// pictures; or words.
+		void paste(page& p, const collage_spec& spec, const value& layers, double width, double height) {
+			if (auto files = desktop::clipboard_files(); !files.empty()) add_pictures(p, spec, layers, width, height, files, std::nullopt);
+			else if (auto bytes = desktop::clipboard_picture()) add_pictures(p, spec, layers, width, height, {kept_for_now(*bytes)}, std::nullopt);
+			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) add_words(p, spec, layers, width, height, *words);
+			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
+		}
+
 	}  // namespace
 
 	desktop::view collage_button(page& p, collage_ask ask) {
@@ -368,6 +443,12 @@ namespace one::desktop::runtime {
 		// A crop or words are only of the picked layer; picking another puts them away.
 		if (w->crop && w->crop->id != picked) w->crop.reset();
 		if (w->editing && w->editing->id != picked) finish_writing(p, *w, layers, spec);
+		// A screenshot taken, added like any picture.
+		if (auto shot = p.kept<std::string>("collage screenshot " + spec.key); !shot.peek().empty()) {
+			std::filesystem::path taken = shot.peek();
+			shot.set("");
+			add_pictures(p, spec, layers, width, height, {taken}, std::nullopt);
+		}
 		// What its buttons asked of it: a crop begun, words written, or words added.
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
 			std::string does = asked.peek();
@@ -377,6 +458,21 @@ namespace one::desktop::runtime {
 				w->crop = placed::crop_edit{picked, model::whole_of(b, crop_of(*chosen)), b};
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
+			} else if (does == "paste") {
+				paste(p, spec, layers, width, height);
+			} else if (does == "screenshot" && !spec.paste_into.empty()) {
+				// The desktop's own screenshot, which waits on the person, away from the
+				// window's thread; added like any picture once it's taken.
+				// It's handed back through states, which outlive the page if it's left first.
+				p.told().set("Taking a screenshot…");
+				std::thread([told = p.told(), shot = p.kept<std::string>("collage screenshot " + spec.key)] {
+					auto taken = desktop::screenshot();
+					post([told, shot, taken] {
+						if (!taken) return told.set(taken.error());
+						told.set("");
+						shot.set(taken->string());
+					});
+				}).detach();
 			} else if (does == "add" && !spec.add.empty()) {
 				// Words in the middle, a twelfth of its height, all chosen so the first key
 				// typed replaces them, on top of the rest.
@@ -764,8 +860,25 @@ namespace one::desktop::runtime {
 			        return desktop::cursor::normal;
 		        },
 		};
-		if (!spec.fills) return desktop::drawing(std::move(paint), std::move(pointer)).height(560);
-		return desktop::drawing(std::move(paint), std::move(pointer)).grow();
+		desktop::view drawn = desktop::drawing(std::move(paint), std::move(pointer));
+		// Files dropped on it, or a browser's picture, are pictures where they're let go.
+		if (!spec.paste_into.empty()) {
+			drawn = desktop::file_target(
+			    std::move(drawn),
+			    [&p, w, spec, layers, width, height](desktop::dropped what, desktop::point at) {
+				    std::optional<model::point> on;
+				    if (w->scale > 0 && w->board.contains(at)) on = w->on_collage(at);
+				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
+				    if (what.files.empty() && !what.elsewhere.empty()) {
+					    p.told().set("That picture is on the web. Save it first, then drop it here.");
+					    return;
+				    }
+				    add_pictures(p, spec, layers, width, height, what.files, on);
+			    },
+			    {.border = current_theme().accent, .border_width = 3});
+		}
+		if (!spec.fills) return std::move(drawn).height(560);
+		return std::move(drawn).grow();
 	}
 
 }  // namespace one::desktop::runtime
