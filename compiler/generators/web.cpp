@@ -299,7 +299,7 @@ namespace one::generators {
             std::set<std::string> toggles;  // the toggles its whens read, like layers
             std::set<std::string> picks;    // the picks it reads, like layer
             // It shows something its address says after its own, like a tab, a page of
-            // rows, or a board rather than a table: /neotrac/boards/main/board/in_progress.
+            // rows, or a board rather than a table: /tracker/boards/main/board/in_progress.
             bool shown_in_path = false;
         };
 

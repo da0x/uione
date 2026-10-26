@@ -5,7 +5,7 @@ How the desktop and terminal apps uione writes reach their app, as
 
 - **Signing in:** through the person's browser (PKCE, the code coming back to
   127.0.0.1), with a refresh token kept from before, or with a service's key.
-- **Views:** read live by name, `projects::issue_page` for `neotrac-42`, through
+- **Views:** read live by name, `projects::issue_page` for `tracker-42`, through
   libember, whose header is pinned in `include/ember.hpp` (0.1.1).
 - **Commands:** run by name, `projects::comment::create`, with their fields as JSON;
   a refusal says what the app said.

@@ -70,7 +70,7 @@ describe("a monitor", () => {
         },
       },
     });
-    render(<App name="neotrac" screens={[page]} ui={plain} data={data} location="/agents" />);
+    render(<App name="tracker" screens={[page]} ui={plain} data={data} location="/agents" />);
     const tiles = screen.getAllByRole("article");
     expect(tiles[0]!.textContent).toContain("Working");
     expect(tiles[0]!.textContent).toContain("#12 Uploading");

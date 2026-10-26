@@ -6,7 +6,7 @@
 // saying where you are, and work handed in from other threads, as a live view's
 // changes are.
 //
-//     one::terminal::app app({.name = "neotrac"});
+//     one::terminal::app app({.name = "tracker"});
 //     return app.run(std::make_unique<home>());
 //
 // Enter opens what a screen offers, Esc or Backspace goes back, q quits. The header
@@ -73,7 +73,7 @@ namespace one::terminal {
 		virtual ~screen() = default;
 		virtual void draw(int top, int height) = 0;
 		virtual std::unique_ptr<screen> key(int pressed) = 0;
-		virtual std::string address() const = 0;  // where it is, for the top bar, like /neotrac/boards/main
+		virtual std::string address() const = 0;  // where it is, for the top bar, like /tracker/boards/main
 		// Whether h and ← are its own, as a board's are for moving between columns;
 		// otherwise they go back.
 		virtual bool takes_left() const { return false; }

@@ -6,7 +6,7 @@ component set draws, and some is the author's, since only they know what their w
 and pictures mean. This page says which is which.
 
 Every release is checked with axe-core against WCAG 2.0, 2.1 and 2.2, A and AA, on
-neotrac's screens in light, dark and with more contrast. An automated check finds
+the screens of a whole app built with it, in light, dark and with more contrast. An automated check finds
 about a third of what WCAG asks, so the rest is checked by hand, with the keyboard
 alone, at 200% text, and in Windows' contrast themes.
 

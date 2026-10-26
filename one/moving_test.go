@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// A storeroom, as neotrac's boards are: shelves named from their titles, bays on a
+// A storeroom, as tracker's boards are: shelves named from their titles, bays on a
 // shelf named from theirs, hops from bay to bay, and crates on a shelf in a bay,
 // numbered per shelf. A shelf starts its crates in one of its bays.
 type Shelf struct {

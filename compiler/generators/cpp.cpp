@@ -600,7 +600,7 @@ namespace one::generators {
             out.line();
             out.line("// Where the app is: its address, and, for the emulators, where they listen.");
             out.open("struct options {");
-            out.line("std::string server{};          // like https://neotrac.org");
+            out.line("std::string server{};          // like https://example.org");
             out.line("std::string project{};         // its Firebase project; asked of the server when empty");
             out.line("std::string api_key{};         // asked of the server with the project when empty");
             out.line("std::string firestore_host{};  // the Firestore emulator, like localhost:8080");

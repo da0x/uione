@@ -60,14 +60,14 @@ TEST("a field is read by the name a view stores it under, or through its maps") 
 
 TEST("roles allow a command within the place a row of them is for") {
 	value roles(fields{{"rows", value(std::vector<value>{
-	                                 value(fields{{"project", "neotrac"}, {"role", "neotrac-maintainer"}, {"role.may", value(std::vector<value>{"issue::move", "board::create"})}}),
+	                                 value(fields{{"project", "tracker"}, {"role", "tracker-maintainer"}, {"role.may", value(std::vector<value>{"issue::move", "board::create"})}}),
 	                                 value(fields{{"project", "other"}, {"role", "other-contributor"}, {"role.may", value(std::vector<value>{"issue::create"})}}),
 	                             })}});
-	CHECK(one::client::allows(roles, "project", "neotrac", "issue::move"));
-	CHECK(!one::client::allows(roles, "project", "neotrac", "issue::create"));  // only in the other project
+	CHECK(one::client::allows(roles, "project", "tracker", "issue::move"));
+	CHECK(!one::client::allows(roles, "project", "tracker", "issue::create"));  // only in the other project
 	CHECK(!one::client::allows(roles, "project", "", "issue::move"));
-	CHECK(one::client::holds(roles, "project", "neotrac", {"neotrac-maintainer"}));
-	CHECK(!one::client::holds(roles, "project", "other", {"neotrac-maintainer"}));
+	CHECK(one::client::holds(roles, "project", "tracker", {"tracker-maintainer"}));
+	CHECK(!one::client::holds(roles, "project", "other", {"tracker-maintainer"}));
 }
 
 TEST("a sign-in is kept readable by its owner alone, and refused when others can read it") {

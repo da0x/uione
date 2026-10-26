@@ -149,13 +149,13 @@ func (h *harness) stored(collection, id string) map[string]any {
 func TestHandWrittenCodeRunsAfterACommandAndAnswersARoute(t *testing.T) {
 	h := start(t)
 	_, token := h.signUp("ada@example.com")
-	id := h.mustRun("builds/build/create", token, map[string]any{"project": "neotrac"})
+	id := h.mustRun("builds/build/create", token, map[string]any{"project": "tracker"})
 
 	// After ran with the saved build, and started it as the backend itself.
 	started.Lock()
 	last := started.builds[len(started.builds)-1]
 	started.Unlock()
-	if last.ID != id || last.Project != "neotrac" || last.Status != "queued" {
+	if last.ID != id || last.Project != "tracker" || last.Status != "queued" {
 		t.Fatalf("After was given %+v", last)
 	}
 	stored := h.stored("builds_build", id)

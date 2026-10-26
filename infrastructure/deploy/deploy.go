@@ -311,7 +311,7 @@ func commitOf(dir string) string {
 }
 
 // repositoryOf is where a build's commits can be read on the web, like
-// https://github.com/da0x/neotrac: UIONE_REPOSITORY when the deploy names it, or the
+// https://github.com/someone/tracker: UIONE_REPOSITORY when the deploy names it, or the
 // folder's origin as git says, written as a web address, or none.
 func repositoryOf(dir string) string {
 	repository := os.Getenv("UIONE_REPOSITORY")
@@ -325,8 +325,8 @@ func repositoryOf(dir string) string {
 	return webAddress(repository)
 }
 
-// webAddress writes a GitHub remote, git@github.com:da0x/neotrac.git or its https
-// form, as the page it's at, https://github.com/da0x/neotrac; another isn't linked.
+// webAddress writes a GitHub remote, git@github.com:someone/tracker.git or its https
+// form, as the page it's at, https://github.com/someone/tracker; another isn't linked.
 func webAddress(remote string) string {
 	remote = strings.TrimSuffix(strings.TrimSuffix(remote, "/"), ".git")
 	if path, ok := strings.CutPrefix(remote, "git@github.com:"); ok {

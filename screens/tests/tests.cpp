@@ -307,7 +307,7 @@ TEST("a pipeline puts each card in its kind's lane, its kind's stages done up to
 		{"stages", value(list{stage("to_do", "To do", {}, "inactive"), stage("npm", "Publishing to npm", {"packages"}, "working"), stage("published", "Published", {"packages"}, "done"),
 		                      stage("checking", "Checking", {"websites"}, "working"), stage("live", "Live", {"websites"}, "done"), stage("failed", "Failed", {}, "failed")})},
 		{"issues", value(list{value(fields{{"id", "a-1"}, {"title", "compiler"}, {"stage", "npm"}, {"labels", value(list{"packages"})}}),
-		                      value(fields{{"id", "a-2"}, {"title", "neotrac"}, {"stage", "failed"}, {"labels", value(list{"websites"})}, {"data", value(fields{{"at", "Checking"}, {"note", "not pushed"}})}}),
+		                      value(fields{{"id", "a-2"}, {"title", "tracker"}, {"stage", "failed"}, {"labels", value(list{"websites"})}, {"data", value(fields{{"at", "Checking"}, {"note", "not pushed"}})}}),
 		                      value(fields{{"id", "a-3"}, {"title", "react"}, {"stage", "published"}, {"labels", value(list{"packages"})}})})}}));
 	auto board = p.view("tracker::board_page", "atlas");
 	auto m = pipeline_of(p, {.view = board, .list = "issues", .by = "stage", .over = board, .over_list = "stages", .columns = {{"title", "Title"}}, .status_by = "status"});

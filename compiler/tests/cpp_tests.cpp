@@ -161,11 +161,11 @@ TEST_CASE("an app's C++ client compiles, and makes the ids the app makes") {
 int main() {
 	using tasks::key;
 	const char* made[] = {
-		"neotrac-42", "neotrac-main-to_do", "engine-x%2D1", "x-y-z",
+		"tracker-42", "tracker-main-to_do", "engine-x%2D1", "x-y-z",
 		"a%20b-c%2Fd", "%C3%BC-%C3%A9@:+$&=~._", "p-q%3Br%2Cs%3Ft", "crew-uid123-crew%2Dcaptain",
 	};
 	std::string ours[] = {
-		key({"neotrac", "42"}), key({"neotrac", "main", "to_do"}), key({"engine", "x-1"}), key({"x-y", "z"}),
+		key({"tracker", "42"}), key({"tracker", "main", "to_do"}), key({"engine", "x-1"}), key({"x-y", "z"}),
 		key({"a b", "c/d"}), key({"\xC3\xBC", "\xC3\xA9@:+$&=~._"}), key({"p", "q;r,s?t"}), key({"crew", "uid123", "crew-captain"}),
 	};
 	int wrong = 0;

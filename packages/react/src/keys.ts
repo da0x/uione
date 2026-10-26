@@ -4,8 +4,8 @@
 // The id of an entity whose key has several parts, like a project keyed by its
 // owner and its name, made exactly as the one library makes it: each part escaped
 // as a path segment, a dash in any part but the first escaped too, and the parts
-// joined by dashes. So da0x and neotrac are da0x-neotrac, and an address can name
-// a project by its parts, /da0x/neotrac, rather than by its id.
+// joined by dashes. So someone and tracker are someone-tracker, and an address can name
+// a project by its parts, /someone/tracker, rather than by its id.
 
 // Go's url.PathEscape, which leaves $&+:=@ as they are and escapes !'()*.
 function pathEscape(value: string): string {

@@ -1332,7 +1332,7 @@ namespace ember {
 
     // A document as it was at one consistent moment.
     struct snapshot {
-        std::string path;  // like views/projects::issue_page:neotrac-42
+        std::string path;  // like views/projects::issue_page:tracker-42
         bool exists = false;
         bool from_cache = false;  // told from what's known while the connection is down
         value data = value::map();  // its fields

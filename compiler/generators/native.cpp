@@ -84,7 +84,7 @@ namespace one::generators {
         const std::vector<language::file>& files_;
         screens::model model_;
         std::string project_dir_, target_;
-        std::string domain_;  // where the app is served, like neotrac.org
+        std::string domain_;  // where the app is served, like example.org
         const language::declaration* project_ = nullptr;
         std::string project_path_;
         const std::vector<language::field> no_fields_;
@@ -2187,7 +2187,7 @@ namespace one::generators {
         std::vector<std::string> component_sources_;  // each .cpp copied, inside src/components
 
         std::string app_id() const { return "org.uione." + model_.project.name; }
-        // What the app's installed as: its project's name and its kind, like neotrac-desktop,
+        // What the app's installed as: its project's name and its kind, like tracker-desktop,
         // so the desktop and terminal apps, and a project's own command, live side by side.
         std::string installed_name() const { return model_.project.name + "-" + target_; }
 

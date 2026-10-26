@@ -328,9 +328,9 @@ describe("when something fails, the person is told", () => {
   });
 
   it("knows who holds a role where, once their roles arrive", () => {
-    const roles = { status: "live" as const, data: { rows: [{ id: "a", project: "uione", role: "maintainer" }, { id: "b", project: "neotrac", role: "reporter" }] } };
+    const roles = { status: "live" as const, data: { rows: [{ id: "a", project: "uione", role: "maintainer" }, { id: "b", project: "tracker", role: "reporter" }] } };
     expect(holds(roles, "project", "uione", ["maintainer"])).toBe(true);
-    expect(holds(roles, "project", "neotrac", ["maintainer"])).toBe(false);
+    expect(holds(roles, "project", "tracker", ["maintainer"])).toBe(false);
     expect(holds(roles, "project", "elsewhere", ["maintainer", "reporter"])).toBe(false);
     expect(holds({ status: "loading", data: undefined }, "project", "uione", ["maintainer"])).toBe(false);
     expect(holds(roles, "project", undefined, ["maintainer"])).toBe(false);
@@ -503,13 +503,13 @@ describe("a web address in a table", () => {
   });
 
   it("keeps a short address whole, and a long one's host and end", () => {
-    expect(shortAddress("https://neotrac.org/")).toBe("neotrac.org");
+    expect(shortAddress("https://example.org/")).toBe("example.org");
     expect(shortAddress("https://example.com/a/very/long/path/that/goes/on/and/on/to/the/end.html")).toBe("example.com/…/on/and/on/to/the/end.html");
     // A build's log: its project, after the ?, isn't shown, and its id is too long to.
     expect(shortAddress("https://console.cloud.google.com/cloud-build/builds;region=us-east4/7877c18a-a4d3-4c35-a91d-79ba1b2859e5?project=39906949747")).toBe(
       "console.cloud.google.com/…",
     );
-    expect(shortAddress("https://neotrac.org/projects?sort=name#top")).toBe("neotrac.org/projects");
+    expect(shortAddress("https://example.org/projects?sort=name#top")).toBe("example.org/projects");
   });
 });
 
@@ -685,7 +685,7 @@ describe("a view whose data isn't what a table expects", () => {
 
 describe("choices", () => {
   it("are picked from a list in a form, and shown by their labels in a table", () => {
-    const source = memorySource({ views: { "studio::all": { rows: [{ id: "a", name: "neotrac", license: "apache_2_0" }] } } });
+    const source = memorySource({ views: { "studio::all": { rows: [{ id: "a", name: "tracker", license: "apache_2_0" }] } } });
     renderScreen(source, () => (
       <>
         <Table view={useView("studio::all")} columns={{ name: "Name", license: "License" }} choices={{ license: { mit: "MIT", apache_2_0: "Apache-2.0" } }} />
@@ -1154,7 +1154,7 @@ describe("a site's foot", () => {
         ui={plain}
         data={memorySource()}
         location="/"
-        build={{ version: "0.7.1", commit: "d9d95fd0aaaa", repository: "https://github.com/da0x/neotrac" }}
+        build={{ version: "0.7.1", commit: "d9d95fd0aaaa", repository: "https://github.com/someone/tracker" }}
         footer={{ layout: "bar", content: Foot }}
       />,
     );
@@ -1162,7 +1162,7 @@ describe("a site's foot", () => {
     expect(foot.textContent?.replaceAll(" ↗", "")).toBe(`© ${new Date().getFullYear()} Ada Lovelace` + "uione 0.7.1" + "d9d95fd");
     expect(screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href")).toBe("https://www.linkedin.com/in/ada");
     expect(screen.getByRole("link", { name: "uione 0.7.1" }).getAttribute("href")).toBe("https://github.com/da0x/uione/releases/tag/v0.7.1");
-    expect(screen.getByRole("link", { name: "d9d95fd" }).getAttribute("href")).toBe("https://github.com/da0x/neotrac/commit/d9d95fd0aaaa");
+    expect(screen.getByRole("link", { name: "d9d95fd" }).getAttribute("href")).toBe("https://github.com/someone/tracker/commit/d9d95fd0aaaa");
   });
 
   it("links no commit where it can't be read, and shows none where it isn't known", () => {
@@ -1214,11 +1214,11 @@ describe("something that moved", () => {
 
 describe("a find box", () => {
   function Wiki() {
-    const page = useView("projects::project_page", "neotrac");
+    const page = useView("projects::project_page", "tracker");
     return (
       <Find
         label="Search this project"
-        sources={[{ view: page, list: "pages", label: "Wiki", by: ["title", "body"], search: { view: "projects::project_page", subject: "neotrac" } }]}
+        sources={[{ view: page, list: "pages", label: "Wiki", by: ["title", "body"], search: { view: "projects::project_page", subject: "tracker" } }]}
       />
     );
   }
@@ -1227,18 +1227,18 @@ describe("a find box", () => {
     const asked: string[] = [];
     const source = memorySource({
       views: {
-        "projects::project_page:neotrac": {
+        "projects::project_page:tracker": {
           pages: [
-            { id: "neotrac-deploying", title: "Deploying" },
-            { id: "neotrac-releases", title: "Releases" },
+            { id: "tracker-deploying", title: "Deploying" },
+            { id: "tracker-releases", title: "Releases" },
           ],
         },
       },
       search: async (view, subject, list, words) => {
         asked.push(`${view}:${subject}:${list}:${words}`);
         return [
-          { id: "neotrac-releases", title: "Releases" },
-          { id: "neotrac-signing", title: "Signing" },
+          { id: "tracker-releases", title: "Releases" },
+          { id: "tracker-signing", title: "Signing" },
         ];
       },
     });
@@ -1250,7 +1250,7 @@ describe("a find box", () => {
     // Once asked, what it found joins what's there, each once.
     await waitFor(() => expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem")).toHaveLength(2));
     expect(within(screen.getByLabelText("Wiki")).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Releases", "Signing"]);
-    expect(asked).toEqual(["projects::project_page:neotrac:pages:releases"]);
+    expect(asked).toEqual(["projects::project_page:tracker:pages:releases"]);
   });
 });
 

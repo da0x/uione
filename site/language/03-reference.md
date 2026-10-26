@@ -202,7 +202,7 @@ namespace one {
 	}
 
 	settings project {
-		// Where it's served, like "neotrac.org".
+		// Where it's served, like "example.org".
 		domain      domain
 		// The ways people sign in, several to a line, like signin google github.
 		signin      list of signin
@@ -314,9 +314,9 @@ text black or white, quieter text, links and the rest at 7:1, and lines at 3:1. 
 menu changes how the page is drawn, and nothing else: it isn't an overlay, and it
 doesn't stand in for a screen reader or a magnifier.
 
-`extends neotrac` builds the project on another one: a hosted edition, say, on an
+`extends tracker` builds the project on another one: a hosted edition, say, on an
 open-source app kept in a repository of its own. A name is a project's folder beside
-this one's, and a path in quotes is anywhere, `extends "../neotrac"`. The other
+this one's, and a path in quotes is anywhere, `extends "../tracker"`. The other
 project's files are this project's too, checked and built together, and a file one of
 them names, like `markdown "license/*.md"`, is still found beside it. This project
 adds what it likes: namespaces, entities, screens, roles, and screens in a namespace
@@ -377,8 +377,8 @@ navigation group of the screens inside it, so `screen "Shelf" /shelf` inside
 is at the root.
 
 `namespace studio at /` puts the namespace's screens somewhere else, here at the
-site's root, so its `/:owner/:project` screen is at `/da0x/neotrac` rather than
-`/studio/da0x/neotrac`. A namespace written in several files says where it is in
+site's root, so its `/:owner/:project` screen is at `/someone/tracker` rather than
+`/studio/someone/tracker`. A namespace written in several files says where it is in
 one of them, and every file's screens are there.
 
 `::` reaches into a namespace or an entity: `waitlist::signup::create`,
@@ -485,7 +485,7 @@ entity loan {
   values are joined by dashes, so the third loan of that book is `HIS-0142-3`.
   A key is never changed once the entity is made. An address can name an entity
   by its key's parts rather than its id: a project keyed `owner slug` is at
-  `/:owner/:project`, so `/da0x/neotrac`, with a parameter named after each part
+  `/:owner/:project`, so `/someone/tracker`, with a parameter named after each part
   but the last, and the last named after the entity.
 - Making an entity whose key is already taken updates it, which suits a waitlist
   where signing up twice is still one signup. `unique key` refuses the second one
@@ -1841,7 +1841,7 @@ screen "Book" /books/:book {
   `member.name` and `member.picture`. A column like `member.picture` alone shows
   just the picture.
 - A route's last parameter can take the rest of the address, slashes and all:
-  `screen "Code" /:project/code/:file*` is at `/neotrac/code/components/chart.tsx`,
+  `screen "Code" /:project/code/:file*` is at `/tracker/code/components/chart.tsx`,
   where `useParam("file")` is `components/chart.tsx`. Going from one such address to
   another keeps the page as it is, the way an editor keeps its place moving between
   files.
@@ -1863,7 +1863,7 @@ screen "Book" /books/:book {
   yellow, plain, cyan and blue. A board's block and a details block can say `tint by`
   too.
 - What a page shows is in its path, after its own, so a link shows the same: a
-  table's tab, like `/neotrac/boards/main/in_progress`, a table and board's switch,
+  table's tab, like `/tracker/boards/main/in_progress`, a table and board's switch,
   `/board`, which stage a board shows on a phone, the same part as the tab, and a
   page of rows, `/page/2`, in any order, a default left out. Only what's typed to
   find something is a query: a table's search, `?search=old`, and a `find` box's,
@@ -1995,7 +1995,7 @@ form step::update "Save" {
   remembered. The board takes the table's search and toolbar when it has none.
 - A screen whose address goes on from another's, like `/:project/boards/:board`
   from `/:project`, shows the trail of pages above it, each by its title and
-  linked, above its own title: Projects › neotrac › Product.
+  linked, above its own title: Projects › tracker › Product.
 - `under /:project/boards/:board "{issue_page.board_title}"`, a line of a screen's
   own, puts it under a page its address doesn't name:
   its trail is that page's, then that page, called as it says, with what its

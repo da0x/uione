@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// A lodge is Stripe's customer here, as an organization is in neotrac.
+// A lodge is Stripe's customer here, as an organization is in tracker.
 type lodge struct {
 	Record
 	Name string `firestore:"name" one:"required"`

@@ -1083,7 +1083,7 @@ TEST_CASE("a link opens a screen that's there") {
     CHECK(check_source(home("namespace projects")).empty());
     CHECK(check_source(home("namespace projects::archive")).empty());
     CHECK(check_source(home("/projects/archive")).empty());
-    CHECK(check_source(home("/projects/neotrac")).empty());  // :project stands for any one part
+    CHECK(check_source(home("/projects/tracker")).empty());  // :project stands for any one part
     CHECK(check_source(home("#top")).empty());
     // A screen of markdown pages is at its namespace's address too.
     CHECK(check_source("namespace guide {\nscreen guide /:page {\n\tmarkdown \"guide/*.md\"\n}\n}\n"
@@ -1096,8 +1096,8 @@ TEST_CASE("a link opens a screen that's there") {
     auto e = only_error(home("/project"));
     CHECK(e.message == "there's no screen at /project for this link to open");
     CHECK(e.where.line == 17);
-    CHECK(only_error(home("/projects/neotrac/people")).message ==
-          "there's no screen at /projects/neotrac/people for this link to open");
+    CHECK(only_error(home("/projects/tracker/people")).message ==
+          "there's no screen at /projects/tracker/people for this link to open");
 }
 
 TEST_CASE("a menu holds links to screens that are there") {
@@ -1515,7 +1515,7 @@ TEST_CASE("a footer says who a site is by, and what it was built from, with a sc
     CHECK(check_source(code + "footer {\n\ttext \"© {year} [Ada Lovelace](https://www.linkedin.com/in/ada)\"\n"
                               "\tlink build.release \"uione {build.version}\"\n\tlink build.source \"{build.commit}\"\n}\n")
               .empty());
-    CHECK(check_source(code + "footer columns {\n\tsection \"Project\" {\n\t\tlink \"https://github.com/da0x/neotrac\" \"Source\"\n\t}\n}\n").empty());
+    CHECK(check_source(code + "footer columns {\n\tsection \"Project\" {\n\t\tlink \"https://github.com/someone/tracker\" \"Source\"\n\t}\n}\n").empty());
     CHECK(only_error(code + "footer {\n\tlink build.tag \"uione\"\n}\n").message ==
           "a link to what the site was built from is build.release, its uione release's notes, or build.source, its commit");
     CHECK(only_error(code + "footer {\n\ttext \"{build.date}\"\n}\n").message ==

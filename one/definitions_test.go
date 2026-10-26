@@ -73,7 +73,7 @@ func studioWithCards() one.Item {
 func TestANewViewPerEntityHasADocumentForEachOneStoredAlready(t *testing.T) {
 	h := start(t)
 	_, token := h.signUp("ada@example.com")
-	id := h.mustRun("studio/project/create", token, map[string]any{"name": "neotrac"})
+	id := h.mustRun("studio/project/create", token, map[string]any{"name": "tracker"})
 
 	// The project was made before there was a card for it; the next backend makes
 	// its card when it starts, rather than when the project next changes.
@@ -82,7 +82,7 @@ func TestANewViewPerEntityHasADocumentForEachOneStoredAlready(t *testing.T) {
 		t.Fatal(err)
 	}
 	next.Close()
-	if card := h.view("studio::card:" + id); card["name"] != "neotrac" {
+	if card := h.view("studio::card:" + id); card["name"] != "tracker" {
 		t.Fatalf("the new view's document for a project already there is %v", card)
 	}
 }

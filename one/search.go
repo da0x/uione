@@ -99,7 +99,7 @@ func (s *schema) searched() bool {
 	return slices.ContainsFunc(s.fields, func(f field) bool { return f.searched })
 }
 
-// serveSearch answers GET /api/search?view=projects::project_page&id=neotrac&list=pages&words=deploy,
+// serveSearch answers GET /api/search?view=projects::project_page&id=tracker&list=pages&words=deploy,
 // with the newest of the view's list's rows holding every word, as the list shows
 // them, for whoever may read the view.
 func (a *App) serveSearch(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,7 @@
 #pragma once
 
 // A project that extends another, like a hosted edition built on an open-source app:
-// `extends neotrac` in its project block. Its files and the other's are one project,
+// `extends tracker` in its project block. Its files and the other's are one project,
 // checked and built together; its project block says what it is, and takes from the
 // other's whatever it doesn't say itself.
 
@@ -20,8 +20,8 @@
 namespace one::language {
 
     // The folder a project extends, from the folder its project block is in: a name
-    // is a project beside it, like extends neotrac; a quoted path is where it says,
-    // like extends "../neotrac".
+    // is a project beside it, like extends tracker; a quoted path is where it says,
+    // like extends "../tracker".
     inline std::string extended_folder(const std::string& dir, const setting& s) {
         std::string from = dir.empty() ? "." : dir;
         return platform::resolve(from, s.is_string ? s.value : "../" + s.value);

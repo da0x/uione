@@ -1,4 +1,4 @@
- neotrac
+ tracker
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
   Releases
@@ -10,13 +10,13 @@
 
   Websites  1
 
-  › neotrac                       ✓ To do › ✓ Checking › ✗ Deploying › ○ Live
+  › tracker                       ✓ To do › ✓ Checking › ✗ Deploying › ○ Live
         the deploy failed
 
   Local apps  1
 
-  › neotrac desktop app           ● To do › ○ Building app › ○ Installed
-        waiting on neotrac
+  › tracker desktop app           ● To do › ○ Building app › ○ Installed
+        waiting on tracker
 
 
 

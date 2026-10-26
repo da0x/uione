@@ -408,7 +408,7 @@ describe("a card's progress", () => {
           stages: [{ id: "ark-deploying", title: "Deploying" }, { id: "ark-live", title: "Live" }],
           issues: [
             { id: "ark-1", title: "studio", stage: "ark-deploying", held_by: "deployer", held_until: later, data: { step: 2, steps: 5 } },
-            { id: "ark-2", title: "neotrac", stage: "ark-live", data: { step: 4, steps: 5 } },
+            { id: "ark-2", title: "tracker", stage: "ark-live", data: { step: 4, steps: 5 } },
           ],
         },
       },
@@ -465,8 +465,8 @@ describe("a link to another site", () => {
   it("opens in a new tab and carries the link-external mark; one of the app's own doesn't", () => {
     const { container } = render(
       <>
-        <radix.Link href="https://github.com/da0x/neotrac" external>
-          da0x/neotrac
+        <radix.Link href="https://github.com/someone/tracker" external>
+          someone/tracker
         </radix.Link>
         <radix.Link href="/da0x">da0x</radix.Link>
       </>,
@@ -610,7 +610,7 @@ describe("icons", () => {
   it("draws a link as an icon, still named by its words", () => {
     const Link = radix.Link;
     render(
-      <Link href="/neotrac/boards/main/workflow" icon="workflow">
+      <Link href="/tracker/boards/main/workflow" icon="workflow">
         Workflow
       </Link>,
     );

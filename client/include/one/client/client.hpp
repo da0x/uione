@@ -7,12 +7,12 @@
 // name, live, through libember; it runs commands by name, as JSON; and it says what
 // the person's roles allow.
 //
-//     one::client::session app({.server = "https://neotrac.org"}, &loop);
+//     one::client::session app({.server = "https://example.org"}, &loop);
 //     app.sign_in_with_refresh_token(kept->refresh_token);
-//     auto listening = app.listen("projects::issue_page", "neotrac-42", [](const ember::snapshot& s) {
+//     auto listening = app.listen("projects::issue_page", "tracker-42", [](const ember::snapshot& s) {
 //         std::println("{}", one::client::text(one::client::field(s.data, "title")));
 //     });
-//     app.run("projects::comment::create", ember::value(std::map<std::string, ember::value>{{"issue", "neotrac-42"}, {"body", "Seen."}}));
+//     app.run("projects::comment::create", ember::value(std::map<std::string, ember::value>{{"issue", "tracker-42"}, {"body", "Seen."}}));
 //
 // Views and commands are named as the .one files name them, so what a generated
 // screen reads and runs is written plainly, and the names are checked by the
@@ -35,7 +35,7 @@
 namespace one::client {
 
 	struct options {
-		std::string server{};          // like https://neotrac.org
+		std::string server{};          // like https://example.org
 		std::string project{};         // its Firebase project; asked of the server when empty
 		std::string api_key{};         // asked of the server with the project when empty
 		std::string firestore_host{};  // the Firestore emulator, like localhost:8080

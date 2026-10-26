@@ -56,9 +56,9 @@ func TestIssuesAreNumberedWithinTheirProject(t *testing.T) {
 	ids := []string{
 		h.mustRun("tracker/issue/create", token, map[string]any{"project": "uione", "title": "Keys"}),
 		h.mustRun("tracker/issue/create", token, map[string]any{"project": "uione", "title": "Serials", "number": 99.0}),
-		h.mustRun("tracker/issue/create", token, map[string]any{"project": "neotrac", "title": "Skeleton"}),
+		h.mustRun("tracker/issue/create", token, map[string]any{"project": "tracker", "title": "Skeleton"}),
 	}
-	if want := []string{"uione-1", "uione-2", "neotrac-1"}; !slices.Equal(ids, want) {
+	if want := []string{"uione-1", "uione-2", "tracker-1"}; !slices.Equal(ids, want) {
 		t.Fatalf("the issues are %v, want %v", ids, want)
 	}
 	if got := h.issue("uione-2")["number"]; got != 2.0 {
@@ -108,7 +108,7 @@ func TestAnUpdateChangesNeitherTheKeyNorTheNumber(t *testing.T) {
 	h := start(t)
 	_, token := h.signUp("ada@example.com")
 	id := h.mustRun("tracker/issue/create", token, map[string]any{"project": "uione", "title": "Keys"})
-	h.mustRun("tracker/issue/update", token, map[string]any{"id": id, "project": "neotrac", "number": 7.0, "title": "Keys, joined"})
+	h.mustRun("tracker/issue/update", token, map[string]any{"id": id, "project": "tracker", "number": 7.0, "title": "Keys, joined"})
 	issue := h.issue(id)
 	if issue["project"] != "uione" || issue["number"] != 1.0 || issue["title"] != "Keys, joined" {
 		t.Errorf("after the update the issue is %v", issue)

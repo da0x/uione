@@ -59,7 +59,7 @@ namespace one::desktop {
 	// What a window is opened with.
 	struct window_options {
 		std::string title = "uione";
-		std::string id = "";  // the app's id the compositor groups its windows by, like org.neotrac.desktop
+		std::string id = "";  // the app's id the compositor groups its windows by, like org.example.tracker
 		one::desktop::size size = {900, 640};
 	};
 

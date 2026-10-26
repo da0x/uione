@@ -49,7 +49,7 @@ export interface PageProps {
 export interface Build {
   version: string; // like 0.18.0
   commit?: string; // like d9d95fd0...
-  repository?: string; // where the commit can be read, like https://github.com/da0x/neotrac
+  repository?: string; // where the commit can be read, like https://github.com/someone/tracker
 }
 
 // Where what a site was built from can be read: its uione release's notes on GitHub,
@@ -422,7 +422,7 @@ export interface BoardCard {
   progress?: { step: number; steps: number }; // how far it is in its stage, as its holder says, like 2 of 5
 }
 
-// Where a page is among the pages above it, like Projects › neotrac › Product:
+// Where a page is among the pages above it, like Projects › tracker › Product:
 // each of those linked, and the page itself last.
 export interface CrumbsProps {
   items: { label: string; link: LinkProps }[];

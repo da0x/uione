@@ -679,6 +679,6 @@ func (s *schema) data(v reflect.Value) map[string]any {
 	return out
 }
 
-// slugPattern is a name like my-app or neotrac: lowercase letters and digits,
+// slugPattern is a name like my-app or tracker: lowercase letters and digits,
 // joined by single dashes, at most 100 characters.
 var slugPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9]|-[a-z0-9]){0,99}$`)

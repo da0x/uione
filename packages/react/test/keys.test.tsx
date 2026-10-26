@@ -5,7 +5,7 @@ import { keyOf, partsOf } from "../src/keys.js";
 
 // What the one library makes of each, from Go's url.PathEscape.
 const made: [string[], string][] = [
-  [["da0x", "neotrac"], "da0x-neotrac"],
+  [["someone", "tracker"], "someone-tracker"],
   [["engine", "x-1"], "engine-x%2D1"],
   [["my-name", "neo-trac"], "my-name-neo%2Dtrac"],
   [["a b", "c/d"], "a%20b-c%2Fd"],
@@ -24,7 +24,7 @@ describe("ids made from a key's parts", () => {
 
   it("aren't made while a part is missing", () => {
     expect(keyOf(["da0x", undefined])).toBeUndefined();
-    expect(keyOf(["", "neotrac"])).toBeUndefined();
-    expect(partsOf("neotrac", 2)).toBeUndefined();
+    expect(keyOf(["", "tracker"])).toBeUndefined();
+    expect(partsOf("tracker", 2)).toBeUndefined();
   });
 });

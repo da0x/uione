@@ -257,7 +257,7 @@ namespace one::language {
 
 
     // A place the project runs, with what's its own there: environment staging {
-    // domain "staging.neotrac.org" ... }.
+    // domain "staging.example.org" ... }.
     struct environment_block {
         std::string name;
         location where;

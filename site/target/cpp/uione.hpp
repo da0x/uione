@@ -467,7 +467,7 @@ namespace uione {
 
 	// Where the app is: its address, and, for the emulators, where they listen.
 	struct options {
-		std::string server{};          // like https://neotrac.org
+		std::string server{};          // like https://example.org
 		std::string project{};         // its Firebase project; asked of the server when empty
 		std::string api_key{};         // asked of the server with the project when empty
 		std::string firestore_host{};  // the Firestore emulator, like localhost:8080

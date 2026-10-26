@@ -115,7 +115,7 @@ describe("the pages above a page", () => {
     render(<App name="uione" screens={[home, owner, project, theme, boards, board]} ui={plain} data={memorySource()} location={location} />);
 
   it("leave out the pages with no title of their own, as their headings do", () => {
-    at("/da0x/neotrac/boards/main");
+    at("/someone/tracker/boards/main");
     const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(Array.from(trail.querySelectorAll("li")).map((li) => li.textContent?.replace("›", "").trim())).toEqual(["Boards", "Main"]);
   });
@@ -137,14 +137,14 @@ describe("the pages above a page", () => {
     const issue = defineScreen({ title: "Issue 12", route: "/:project/issues/:issue" }, () => (
       <Crumbs items={[{ to: "/:project/boards/:board", title: ["Features"], fill: { board: [{ status: "live", data: { board: "features" } } as ViewState, "board", 1] } }]} />
     ));
-    render(<App name="neotrac" screens={[home, shownBoard, issue]} ui={plain} data={memorySource()} location="/uione/boards/features/pipeline/milestone/0_15_0" />);
+    render(<App name="tracker" screens={[home, shownBoard, issue]} ui={plain} data={memorySource()} location="/uione/boards/features/pipeline/milestone/0_15_0" />);
     fireEvent.click(screen.getByRole("link", { name: "Issue 12" }));
     const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(trail.querySelector("a")?.getAttribute("href")).toBe("/uione/boards/features/pipeline/milestone/0_15_0");
   });
 
   it("aren't shown on a page with no title of its own", () => {
-    at("/da0x/neotrac/theme");
+    at("/someone/tracker/theme");
     expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
   });
 });
@@ -379,16 +379,16 @@ describe("titles made from what a page shows", () => {
     expect(document.title).toBe("#12 Tabs are too wide · tracker");
   });
 
-  it("keeps its heading when what it shows reads like the app's name, like a project called neotrac", () => {
+  it("keeps its heading when what it shows reads like the app's name, like a project called tracker", () => {
     const source = memorySource();
     const project = defineScreen({ title: "", route: "/:project" }, () => {
       const page = useView("tracker::project_page", useParam("project"));
       useTitle([[page, "name"]]);
       return <Text>body</Text>;
     });
-    render(<App name="neotrac" screens={[project]} ui={plain} data={source} location="/neotrac" />);
-    act(() => source.set("tracker::project_page", { name: "neotrac" }, "neotrac"));
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("neotrac");
+    render(<App name="tracker" screens={[project]} ui={plain} data={source} location="/tracker" />);
+    act(() => source.set("tracker::project_page", { name: "tracker" }, "tracker"));
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("tracker");
   });
 
   it("has no heading of its own when the screen is titled with just the app's name, like its home page", () => {
@@ -418,8 +418,8 @@ describe("signing a program on this computer in", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
     const source = memorySource({ person: { uid: "ada", name: "Ada" }, commands: { authorize: () => ({ code: "the-code" }) } });
-    render(<App name="neotrac" screens={[home]} ui={plain} data={source} location={asked} />);
-    expect(screen.getByText(/The neotrac command on this computer is asking to act as you, Ada/)).toBeTruthy();
+    render(<App name="tracker" screens={[home]} ui={plain} data={source} location={asked} />);
+    expect(screen.getByText(/The tracker command on this computer is asking to act as you, Ada/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Authorize" }));
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("http://127.0.0.1:50123/?code=the-code&state=a-state-of-the-program"));
     expect(source.runs).toEqual([{ command: "authorize", input: { challenge } }]);
@@ -428,23 +428,23 @@ describe("signing a program on this computer in", () => {
   it("tells the program it was turned down", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
-    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={asked} />);
+    render(<App name="tracker" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={asked} />);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(assign).toHaveBeenCalledWith("http://127.0.0.1:50123/?error=denied&state=a-state-of-the-program");
   });
 
   it("asks someone signed out to sign in first", () => {
-    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: null })} location={asked} />);
-    expect(screen.getByText(/Sign in to let the neotrac command on this computer act as you/)).toBeTruthy();
+    render(<App name="tracker" screens={[home]} ui={plain} data={memorySource({ person: null })} location={asked} />);
+    expect(screen.getByText(/Sign in to let the tracker command on this computer act as you/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Authorize" })).toBeNull();
   });
 
   it("refuses a link that isn't complete, or names no port of this computer", () => {
-    const { unmount } = render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={`/authorize?port=80&state=a-state-of-the-program&challenge=${challenge}`} />);
+    const { unmount } = render(<App name="tracker" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location={`/authorize?port=80&state=a-state-of-the-program&challenge=${challenge}`} />);
     expect(screen.getByText("This sign-in link isn't complete. Run the program's login again.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Authorize" })).toBeNull();
     unmount();
-    render(<App name="neotrac" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location="/authorize?done=yes" />);
+    render(<App name="tracker" screens={[home]} ui={plain} data={memorySource({ person: { uid: "ada", name: "Ada" } })} location="/authorize?done=yes" />);
     expect(screen.getByText(/You're signed in on your computer/)).toBeTruthy();
   });
 });

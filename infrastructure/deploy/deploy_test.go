@@ -216,15 +216,15 @@ func TestADomainFirebaseHasntWorkedOutYetIsAskedAboutAgain(t *testing.T) {
 // only that one is taken over by a renamed environment's new stack.
 func TestAStackManagesTheProjectWhoseFirebaseItHolds(t *testing.T) {
 	state := []byte(`{"resources":[{"type":"pulumi:pulumi:Stack","id":""},` +
-		`{"type":"gcp:firebase/project:Project","id":"projects/neotrac"},` +
-		`{"type":"gcp:firestore/database:Database","id":"projects/neotrac-staging/databases/(default)"}]}`)
-	if !manages(state, "neotrac") {
-		t.Error("a stack holding projects/neotrac doesn't manage neotrac")
+		`{"type":"gcp:firebase/project:Project","id":"projects/tracker"},` +
+		`{"type":"gcp:firestore/database:Database","id":"projects/tracker-staging/databases/(default)"}]}`)
+	if !manages(state, "tracker") {
+		t.Error("a stack holding projects/tracker doesn't manage tracker")
 	}
-	if manages(state, "neotrac-staging") {
+	if manages(state, "tracker-staging") {
 		t.Error("a stack is said to manage a project it only mentions")
 	}
-	if manages([]byte(`not json`), "neotrac") {
+	if manages([]byte(`not json`), "tracker") {
 		t.Error("a state that can't be read manages a project")
 	}
 }
@@ -261,10 +261,10 @@ func TestANewStackTakesOverTheOneManagingItsProject(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	made("neotrac", "neotrac")
-	made("staging", "neotrac-staging")
+	made("tracker", "tracker")
+	made("staging", "tracker-staging")
 
-	if err := adopt(ctx, dir, "production", "neotrac"); err != nil {
+	if err := adopt(ctx, dir, "production", "tracker"); err != nil {
 		t.Fatal(err)
 	}
 	ws, _ := auto.NewLocalWorkspace(ctx, auto.WorkDir(dir))
@@ -278,19 +278,19 @@ func TestANewStackTakesOverTheOneManagingItsProject(t *testing.T) {
 	}
 	sort.Strings(names)
 	if strings.Join(names, " ") != "production staging" {
-		t.Errorf("after taking over neotrac's stack, the stacks are %v", names)
+		t.Errorf("after taking over tracker's stack, the stacks are %v", names)
 	}
 	state, err := ws.ExportStack(ctx, "production")
-	if err != nil || !manages(state.Deployment, "neotrac") {
+	if err != nil || !manages(state.Deployment, "tracker") {
 		t.Errorf("the new stack doesn't hold what the old one did: %v", err)
 	}
 
 	// A stack that's there already is used as it is, and a second claim is refused.
-	if err := adopt(ctx, dir, "production", "neotrac"); err != nil {
+	if err := adopt(ctx, dir, "production", "tracker"); err != nil {
 		t.Errorf("deploying an existing stack again: %v", err)
 	}
-	made("copy", "neotrac")
-	if err := adopt(ctx, dir, "live", "neotrac"); err == nil || !strings.Contains(err.Error(), "can't be told which") {
+	made("copy", "tracker")
+	if err := adopt(ctx, dir, "live", "tracker"); err == nil || !strings.Contains(err.Error(), "can't be told which") {
 		t.Errorf("two stacks managing one project gave %v", err)
 	}
 }
@@ -335,20 +335,20 @@ func TestTheCommitIsTheDeploysOrGits(t *testing.T) {
 // origin, written as its GitHub page; a remote elsewhere isn't linked.
 func TestTheRepositoryIsItsGitHubPage(t *testing.T) {
 	for remote, want := range map[string]string{
-		"git@github.com:da0x/neotrac.git":       "https://github.com/da0x/neotrac",
-		"https://github.com/da0x/neotrac.git":   "https://github.com/da0x/neotrac",
-		"https://github.com/da0x/neotrac/":      "https://github.com/da0x/neotrac",
-		"ssh://git@github.com/da0x/neotrac.git": "https://github.com/da0x/neotrac",
-		"https://gitlab.com/da0x/neotrac.git":   "",
+		"git@github.com:someone/tracker.git":       "https://github.com/someone/tracker",
+		"https://github.com/someone/tracker.git":   "https://github.com/someone/tracker",
+		"https://github.com/someone/tracker/":      "https://github.com/someone/tracker",
+		"ssh://git@github.com/someone/tracker.git": "https://github.com/someone/tracker",
+		"https://gitlab.com/someone/tracker.git":   "",
 		"https://github.com/da0x":               "",
-		"/home/da/neotrac":                      "",
+		"/home/da/tracker":                      "",
 	} {
 		if got := webAddress(remote); got != want {
 			t.Errorf("%s is %q, not %q", remote, got, want)
 		}
 	}
-	t.Setenv("UIONE_REPOSITORY", "git@github.com:da0x/neotrac.git")
-	if got := repositoryOf(t.TempDir()); got != "https://github.com/da0x/neotrac" {
+	t.Setenv("UIONE_REPOSITORY", "git@github.com:someone/tracker.git")
+	if got := repositoryOf(t.TempDir()); got != "https://github.com/someone/tracker" {
 		t.Errorf("named by the deploy, the repository is %q", got)
 	}
 	t.Setenv("UIONE_REPOSITORY", "")

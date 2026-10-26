@@ -6,7 +6,7 @@
 
 ## Context
 
-A person runs an app's command, like `neotrac`, on their own computer, and it should
+A person runs an app's command, like `tracker`, on their own computer, and it should
 act as them. Asking them to paste a token, or to type a code at GitHub, is clumsy,
 and GitHub's device flow needs a setting turned on by hand in each app's OAuth app,
 with no API, and works for GitHub accounts only.
@@ -35,7 +35,7 @@ server:
 
 ## Consequences
 
-- `neotrac login` opens the browser, and nothing has to be set up by hand.
+- `tracker login` opens the browser, and nothing has to be set up by hand.
 - It works with every way an app lets people sign in, not only GitHub.
 - A program on another machine, over SSH, can't be reached by the browser; it signs
   in with a service's key, or the port is forwarded.

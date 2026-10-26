@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// The headers below are as neotrac.org's backend received them, sent once through the
+// The headers below are as example.org's backend received them, sent once through the
 // site and once straight to Cloud Run, with and without a made-up address.
 func TestWhereARequestCameFromIsWhatGoogleSaid(t *testing.T) {
 	for _, c := range []struct {

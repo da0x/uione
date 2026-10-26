@@ -34,7 +34,7 @@ describe("content", () => {
     const project = defineScreen({ title: "Project", route: "/projects/:project" }, () => (
       <Link to="/projects/:project/reports">Reports</Link>
     ));
-    render(<App name="neotrac" screens={[project]} ui={plain} data={memorySource()} location="/projects/my%20app" />);
+    render(<App name="tracker" screens={[project]} ui={plain} data={memorySource()} location="/projects/my%20app" />);
     expect(screen.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/projects/my%20app/reports");
   });
 
@@ -50,10 +50,10 @@ describe("content", () => {
       );
     }
     const code = defineScreen({ title: "Code", route: "/:project/code/:file*" }, () => <Code />);
-    render(<App name="studio" screens={[code]} ui={plain} data={memorySource()} location="/neotrac/code/issues.one" />);
-    expect(screen.getByText("file issues.one of neotrac")).toBeTruthy();
+    render(<App name="studio" screens={[code]} ui={plain} data={memorySource()} location="/tracker/code/issues.one" />);
+    expect(screen.getByText("file issues.one of tracker")).toBeTruthy();
     fireEvent.click(screen.getByRole("link", { name: "Chart" }));
-    expect(screen.getByText("file components/chart.tsx of neotrac")).toBeTruthy();
+    expect(screen.getByText("file components/chart.tsx of tracker")).toBeTruthy();
     expect(mounted).toBe(1);
   });
 

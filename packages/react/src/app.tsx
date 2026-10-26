@@ -22,7 +22,7 @@ export interface ScreenInfo {
   route: string;
   nav?: string; // the label in the navigation; a screen without one isn't listed
   // It shows something its address says after its own path, like a tab or a board
-  // rather than a table: /neotrac/boards/main/board/in_progress.
+  // rather than a table: /tracker/boards/main/board/in_progress.
   shown?: boolean;
 }
 

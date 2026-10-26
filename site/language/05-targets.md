@@ -6,7 +6,7 @@ read the same views and run the same commands on the same backend, so what's sav
 one shows up in the others as it's saved, without a refresh.
 
 ```one
-project neotrac {
+project tracker {
 	target  web desktop terminal
 }
 ```
@@ -16,64 +16,39 @@ of the targets for one run, never others.
 
 ## One screen, three apps
 
-[neotrac](https://neotrac.org)'s board is one screen in its `boards.one`:
+The gallery's board, in `examples/gallery/boards.one`, is one screen:
 
 ```one
-screen "{board_page.title}" /:project/boards/:board {
-	heading {
-		board::follow "Follow" icon follow when !(board_page.followers has me)
-		board::unfollow "Stop following" icon following when board_page.followers has me
-		issue::create "New issue" icon add form "Open issue" {
-			title  body  assignees  milestone  priority  labels  attachments
-		}
-		link /:project/boards/:board/closed "Closed" icon archive
-		link /:project/boards/:board/workflow "Workflow" icon workflow
-		board::update "Edit board" icon edit form "Save" {
-			title
-		}
-		board::delete "Delete board" icon delete form "Delete it for good" {
-			typed "Its issues are deleted with it. Type its title to confirm"
-		}
-	}
-	table board_page.issues by stage over board_page.stages link /:project/:issue {
-		track milestone over board_page.milestones {
-			due "Due"
-		}
-		search title labels stage.title priority
+screen "Boards" /rooms/:room/boards {
+	board room_page.pieces by stage over room_page.stages link /rooms/:room/pieces/:piece {
+		move piece::move along room_page.steps
+		search title labels
 		reorder position
-		page 25
-		tint by priority
-		number
-		title
-		labels
-		assignees
-		author "Opened by"
-	}
-	board board_page.issues by stage over board_page.stages link /:project/:issue {
-		move issue::move along board_page.steps
-		reorder position
-		tint by priority
+		tint by condition
+		track milestone over room_page.milestones {
+			due "Opens"
+		}
 		title
 		number  labels  assignees
 	}
-	link /:project "All boards"
 }
 ```
 
-A table and a board of the same issues are two ways of showing them, so every app
-offers both, and these pictures show the board. Each opens full size.
+A room's pieces are cards in a column for each stage, moved along the room's steps,
+found by their title and labels, edged in their condition's color, and picked by
+milestone. Each picture opens full size.
 
 On the web, in a browser:
 
-[![neotrac's Website board in a browser: its buttons beside the title, and the issues in three columns, To do, In progress and Done, each card edged in its priority's color](/targets/web.png)](/targets/web.png)
+[![The gallery's board in a browser: the room's pages beside it, its milestone, a search, and the pieces in three columns, Arrived, Hung and Stored, each card edged in its condition's color](/targets/web.png)](/targets/web.png)
 
 On the desktop, in a window of its own:
 
-[![The same board in neotrac's desktop app: the same title and buttons, Table and Board to pick from, and the same three columns of cards](/targets/desktop.png)](/targets/desktop.png)
+[![The same board in the gallery's desktop app: the same pages, milestone and search, and the same three columns of cards](/targets/desktop.png)](/targets/desktop.png)
 
 In a terminal:
 
-[![The same board in neotrac's terminal app: the title and buttons on one line, and each stage's issues listed under it, edged in their priority's color, with the keys at the bottom](/targets/terminal.png)](/targets/terminal.png)
+[![The same board in the gallery's terminal app: the pages as links on one line, and each stage's pieces listed under it, edged in their condition's color, with the keys at the bottom](/targets/terminal.png)](/targets/terminal.png)
 
 ## What each target writes
 
@@ -94,10 +69,10 @@ because what a table, a form or a board does is in the toolkit, as it's in
 Each target says, in the compiler, which screen elements and kinds of form field it
 draws, so `one check` knows before anything's built. A screen using one a target
 doesn't draw is an error on its line, for that target. Were the terminal app unable
-to move a board's cards, neotrac's board would be:
+to move a board's cards, the gallery's board would be:
 
 ```
-boards.one:110:3: error: a board's move … along isn't drawn by the terminal app yet; take terminal out of target, or build with --target web,desktop
+boards.one:13:4: error: a board's move … along isn't drawn by the terminal app yet; take terminal out of target, or build with --target web,desktop
 ```
 
 The web and the desktop draw every element and every kind of field. A terminal draws
@@ -144,18 +119,18 @@ Then build each app with CMake:
 one build .
 cmake -S build/desktop -B build/desktop/out
 cmake --build build/desktop/out
-build/desktop/out/neotrac
+build/desktop/out/tracker
 
 cmake -S build/terminal -B build/terminal/out
 cmake --build build/terminal/out
-build/terminal/out/neotrac
+build/terminal/out/tracker
 ```
 
 `cmake --install build/desktop/out --prefix ~/.local` installs it as the project's name
-and its kind, like `neotrac-desktop`, with its license, and for a desktop app what
+and its kind, like `tracker-desktop`, with its license, and for a desktop app what
 lists it among the system's apps, with the project's icon. `cmake --build
 build/desktop/out --target package` makes the same as a download,
-`neotrac-desktop-<version>-linux-<machine>.tar.gz`, unpacked with `tar -xzf` into a
+`tracker-desktop-<version>-linux-<machine>.tar.gz`, unpacked with `tar -xzf` into a
 prefix, its version named by `-DVERSION=…` or else the commit. The project's
 `LICENSE`, beside its `.one` files or above them in its repository, goes with it, and
 without one it isn't installed or packaged.
@@ -173,7 +148,7 @@ one run . --target web     # the web app, at http://localhost:5173
 ```
 
 The program is named after the project. It opens on the front page, or on the
-address it's given: `build/desktop/out/neotrac /tints/boards/website` opens that
+address it's given: `build/desktop/out/tracker /tints/boards/website` opens that
 board. Both are built and tested on Linux.
 
 Each app reads its views live from the project's `domain`, or from `ONE_SERVER` when

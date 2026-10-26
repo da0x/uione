@@ -184,7 +184,7 @@ TEST("keys open a row, type into a form and send it, and Esc goes back") {
 namespace {
 
 	site with_board() {
-		site s{.name = "neotrac"};
+		site s{.name = "tracker"};
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", "atlas-main");
 			                     auto roles = p.view("projects::member_roles");
@@ -219,7 +219,7 @@ namespace {
 	}
 
 	site with_pipeline() {
-		site s{.name = "neotrac"};
+		site s{.name = "tracker"};
 		s.screens.push_back({"Releases", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", "atlas-releases");
 			                     return items(pipeline_board(p, {.view = board_page,
@@ -249,12 +249,12 @@ namespace {
 		                                     stage("live", "Live", {"websites"}, "done"), stage("building", "Building app", {"local apps"}, "working"),
 		                                     stage("installed", "Installed", {"local apps"}, "done"), stage("failed", "Failed", {}, "failed")}},
 		                      {"issues", list{card("a-1", "@uione/compiler", "published", "packages"), card("a-2", "@uione/react", "served", "packages"),
-		                                      card("a-3", "neotrac", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
-		                                      card("a-4", "neotrac desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on neotrac"}})}})}}}));
+		                                      card("a-3", "tracker", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
+		                                      card("a-4", "tracker desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on tracker"}})}})}}}));
 	}
 
 	site with_canvas() {
-		site s{.name = "neotrac"};
+		site s{.name = "tracker"};
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", "atlas-main");
 			                     return items(canvas_board(p, {.view = board_page,
@@ -273,7 +273,7 @@ namespace {
 	}
 
 	site with_whiteboard() {
-		site s{.name = "neotrac"};
+		site s{.name = "tracker"};
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", "atlas-main");
 			                     return items(canvas_board(p, {.view = board_page,
@@ -353,7 +353,7 @@ TEST("a board chimes for a card that arrives, not for those a pick on its track 
 		                    {"issues", list{issue("atlas-1", "compiler", "s3", "m13"), issue("atlas-2", "editor", "s3", "m13"), issue("atlas-3", "site", site_at, "m14")}}});
 	};
 	data.set("projects::board_page", "atlas-main", page_with("s1"));
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Board", "/:project/boards/:board", "", [](page& p) {
 		                     auto board_page = p.view("projects::board_page", "atlas-main");
 		                     return items(board(p, {.view = board_page, .list = "issues", .by = "stage", .over = board_page, .over_list = "stages",
@@ -395,14 +395,14 @@ TEST("a switch's track is drawn once above it, the same whichever way the list i
 	         value(fields{{"stages", list{stage("s1", "To do", "inactive"), stage("s3", "Published", "success"), stage("s9", "Failed", "failed")}},
 	                      {"milestones", list{value(fields{{"id", "m13"}, {"title", "0.13.2"}}), value(fields{{"id", "m14"}, {"title", "0.14.0"}}), value(fields{{"id", "m15"}, {"title", "0.14.1"}})}},
 	                      {"issues", list{issue("atlas-1", "compiler 0.13.2", "s3", "m13"), issue("atlas-2", "compiler 0.14.0", "s3", "m14"),
-	                                      issue("atlas-3", "neotrac 0.14.0", "s9", "m14"), issue("atlas-4", "compiler 0.14.1", "s1", "m15")}}}));
+	                                      issue("atlas-3", "tracker 0.14.0", "s9", "m14"), issue("atlas-4", "compiler 0.14.1", "s1", "m15")}}}));
 	std::string id = "projects::board_page.issues";
 	auto shared = [&](state<view_state> v) {
 		auto t = track_spec{"milestone", v, "milestones"};
 		t.key = "switched:" + id, t.above = true;
 		return t;
 	};
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Releases", "/:project/boards/:board", "", [=](page& p) {
 		                     auto board_page = p.view("projects::board_page", "atlas-releases");
 		                     auto above = shared(board_page);
@@ -462,7 +462,7 @@ TEST("a track that's picked last keeps to its last record until another is picke
 		t.picked_last = true;
 		return t;
 	};
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Releases", "/:project/boards/:board", "", [=](page& p) {
 		                     auto board_page = p.view("projects::board_page", "atlas-releases");
 		                     return items(table(p, {.view = board_page, .list = "issues", .columns = {{"title", "Title"}}, .track = newest(board_page)}));
@@ -538,7 +538,7 @@ TEST("a whiteboard in a terminal: its stages as columns, a card moved across int
 
 TEST("a switch opens on the view it's told to start on, until the person picks another") {
 	memory_source data;
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 		                     return items(switched(p, "projects::board_page.issues", "Show issues as", {"Table", "Board", "Pipeline"}, 2, terminal::text("the table"),
 		                                           terminal::text("the board"), terminal::text("the pipeline")));
@@ -572,7 +572,7 @@ namespace {
 	}
 
 	site with_agents() {
-		site s{.name = "neotrac"};
+		site s{.name = "tracker"};
 		s.screens.push_back({"Agents", "/:project/agents", "", [](page& p) {
 			                     auto agents = p.view("projects::agents", "atlas");
 			                     return items(monitor(p, {.view = agents, .list = "agents", .status = "status", .doing = "doing", .since = "since", .step = "step", .steps = "steps",
@@ -635,7 +635,7 @@ TEST("a switch's pick is remembered for its page between runs of the app") {
 	auto folder = std::filesystem::temp_directory_path() / ("one-remembered-" + std::to_string(::getpid()));
 	std::filesystem::remove_all(folder);
 	::setenv("XDG_STATE_HOME", folder.c_str(), 1);
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 		                     return items(switched(p, "projects::board_page.issues", "Show issues as", {"Table", "Board", "Pipeline"}, 0, terminal::text("the table"),
 		                                           terminal::text("the board"), terminal::text("the pipeline")));

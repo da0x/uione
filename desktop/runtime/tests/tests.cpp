@@ -150,7 +150,7 @@ TEST("a page opens by its address, with what its parameters said, and goes back"
 
 TEST("an address opens the screen most particular to it, a part named outright before a parameter") {
 	memory_source data;
-	site s{.name = "neotrac"};
+	site s{.name = "tracker"};
 	s.screens.push_back({"Issue", "/:project/:issue"});
 	s.screens.push_back({"Settings", "/:project/settings"});
 	s.screens.push_back({"Docs", "/docs/:page?"});
@@ -433,7 +433,7 @@ namespace {
 	}
 
 	site with_pipeline() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Releases", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
@@ -449,7 +449,7 @@ namespace {
 	}
 
 	site with_canvas() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
@@ -473,7 +473,7 @@ namespace {
 	}
 
 	site with_board() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 			                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
@@ -618,8 +618,8 @@ TEST("a pipeline: a lane for each kind, each card's stages along its row, done, 
 	                                     stage("live", "Live", {"websites"}, "done"), stage("building", "Building app", {"local apps"}, "working"),
 	                                     stage("installed", "Installed", {"local apps"}, "done"), stage("failed", "Failed", {}, "failed")}},
 	                      {"issues", list{card("a-1", "@uione/compiler", "published", "packages"), card("a-2", "@uione/react", "served", "packages"),
-	                                      card("a-3", "neotrac", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
-	                                      card("a-4", "neotrac desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on neotrac"}})}})}}}));
+	                                      card("a-3", "tracker", "failed", "websites", {{"data", value(fields{{"at", "Deploying"}, {"note", "the deploy failed"}})}}),
+	                                      card("a-4", "tracker desktop app", "to_do", "local apps", {{"data", value(fields{{"status", "waiting"}, {"note", "waiting on tracker"}})}})}}}));
 	auto s = with_pipeline();
 	navigator nav(s, data);
 	nav.open("/atlas/boards/releases");
@@ -632,7 +632,7 @@ TEST("a whiteboard: its stages as columns, a card let go in the next moving ther
 	data.on("projects::issue::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
 	data.on("projects::issue::move", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
 	data.on("projects::stage::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
-	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 		                     auto board_page = p.view("projects::board_page", p.param("project") + "-" + p.param("board"));
@@ -741,7 +741,7 @@ namespace {
 	}
 
 	site with_agents() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Agents", "/:project/agents", "", [](page& p) {
 			                     auto agents = p.view("projects::agents", "atlas");
@@ -838,7 +838,7 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	                      {"issues", list{value(fields{{"board", "atlas-main"}, {"stage", "s1"}, {"stage.title", "To do"}, {"stage.position", 1}}),
 	                                      value(fields{{"board", "atlas-main"}, {"stage", "s2"}, {"stage.title", "Doing"}, {"stage.position", 2}}),
 	                                      value(fields{{"board", "atlas-main"}, {"stage", "s1"}, {"stage.title", "To do"}, {"stage.position", 1}})}}}));
-	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Atlas", "/:project", "", [](page& p) {
 		                     auto project = p.view("projects::project_page", p.param("project"));
@@ -858,7 +858,7 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 namespace {
 
 	site with_issue() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"", "/:project/:issue", "", [](page& p) {
 			                     auto issue = p.view("projects::issue_page", p.param("issue"));
@@ -956,7 +956,7 @@ TEST("an issue in two columns, its buttons beside its title, a form's and a link
 namespace {
 
 	site with_table() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Issues", "/:project/issues", "", [](page& p) {
 			                     auto project = p.view("projects::project_page", p.param("project"));
@@ -1046,7 +1046,7 @@ TEST("what a view holds is copied as Markdown: values, written fields under thei
 namespace {
 
 	site with_workflow() {
-		site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 		s.look = tested_theme();
 		s.screens.push_back({"Workflow", "/:project/boards/:board/workflow", "", [](page& p) {
 			                     auto board = p.view("projects::board_page", "atlas-main");
@@ -1112,17 +1112,17 @@ TEST("a front page: a hero, links within the app and out of it, a badge beside t
 	memory_source data;
 	data.sign_in(person{"maya", "Maya Garcia"});
 	data.set("projects::news", "maya", value(fields{{"unread", 3}}));
-	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.badges = {{"projects::news", "unread", "new"}};
-	s.footer = [](page& p) { return items(text({words("neotrac is open source.")}), link(p, "Source", "https://github.com/da0x/neotrac")); };
-	s.screens.push_back({"neotrac", "/", "", [](page& p) {
+	s.footer = [](page& p) { return items(text({words("tracker is open source.")}), link(p, "Source", "https://github.com/someone/tracker")); };
+	s.screens.push_back({"tracker", "/", "", [](page& p) {
 		                     return items(hero("Boards where people and agents move the same issues", text({words("Each project sets its own stages and who may move what.")}),
-		                                       actions(link(p, "Browse public projects", "/projects"), link(p, "Why neotrac", "/docs/why"))));
+		                                       actions(link(p, "Browse public projects", "/projects"), link(p, "Why tracker", "/docs/why"))));
 	                     }});
 	s.screens.push_back({"Docs", "/docs/:page?", "", [](page& p) {
 		                     return items(pages(p, "/docs", {{"start", "Getting started", "Make a project, then a board.\n\n- Name it\n- Add stages"},
-		                                                     {"why", "Why neotrac", "Every change is **kept**, so anyone can read how work got done."}}));
+		                                                     {"why", "Why tracker", "Every change is **kept**, so anyone can read how work got done."}}));
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");
@@ -1145,7 +1145,7 @@ TEST("a board's cards are put in order with Alt and the arrows, and kept to a mi
 		if (refuse) return std::unexpected(std::string("no"));
 		return f["id"].as_string();
 	});
-	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Main", "/:project/boards/:board", "", [](page& p) {
 		                     auto board_page = p.view("projects::board_page", "atlas-main");
@@ -1192,7 +1192,7 @@ TEST("a board's cards are put in order with Alt and the arrows, and kept to a mi
 TEST("code without the license header its file starts with, icons on buttons and links, and a tinted detail") {
 	memory_source data;
 	data.set("projects::issue_page", "atlas-12", value(fields{{"priority", "critical"}, {"stage.title", "To do"}}));
-	site s{.name = "neotrac", .id = "org.uione.runtime-tests"};
+	site s{.name = "tracker", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Example", "/example", "", [](page& p) {
 		                     auto issue = p.view("projects::issue_page", "atlas-12");

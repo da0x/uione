@@ -530,7 +530,7 @@ describe("a switch's track", () => {
           issues: [
             { id: "i1", title: "compiler 0.13.2", stage: "s3", milestone: "m13" },
             { id: "i2", title: "compiler 0.14.0", stage: "s3", milestone: "m14" },
-            { id: "i3", title: "neotrac 0.14.0", stage: "s9", milestone: "m14" },
+            { id: "i3", title: "tracker 0.14.0", stage: "s9", milestone: "m14" },
             { id: "i4", title: "compiler 0.14.1", stage: "s1", milestone: "m15" },
           ],
         },

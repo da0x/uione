@@ -602,7 +602,7 @@ function caughtUp(pathname: string, search: string) {
   if (pending && pending.path === pathname && pending.search === search) pending = undefined;
 }
 
-// What a page shows, said in its path after its own, like /neotrac/boards/main/board:
+// What a page shows, said in its path after its own, like /tracker/boards/main/board:
 // the part of it that's one of these options, or the fallback when none is. Setting
 // it writes that part, or takes it out for the fallback, keeping the others, and
 // replaces the address rather than adding a step to go back through.
@@ -1435,7 +1435,7 @@ function useTrack(track: TrackSpec | undefined, rows: Row[], noun: string, onPic
     if (statuses.every((status) => status === "success")) return { is: "success", words: "Succeeded" };
     return undefined;
   };
-  // A record is named in the path by what sets it apart, like beta of neotrac-beta.
+  // A record is named in the path by what sets it apart, like beta of tracker-beta.
   const ids = records.map((record) => record.id);
   const start = ids.length > 1 ? sharedStart(ids) : (ids[0] ?? "").slice(0, (ids[0] ?? "").lastIndexOf("-") + 1);
   const named = part && part !== every ? records.find((record) => record.id.slice(start.length) === part)?.id : undefined;

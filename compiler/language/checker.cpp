@@ -1130,7 +1130,7 @@ namespace one::language {
                         error(s.where, s.key + " " + value + " is too light to read as a link on a white page (" + shown + ":1, and it needs 4.5:1); choose a darker one");
                     }
                 } else if (type == "base_project" && !std::filesystem::is_directory(extended_folder(dir, s))) {
-                    error(s.where, "there's no project " + value + " to extend; a name is a project's folder beside this one's, like extends neotrac, and a path is in quotes, like extends \"../neotrac\"");
+                    error(s.where, "there's no project " + value + " to extend; a name is a project's folder beside this one's, like extends tracker, and a path is in quotes, like extends \"../tracker\"");
                 } else if (type == "folder" && !std::filesystem::is_directory(platform::resolve(dir.empty() ? "." : dir, value))) {
                     error(s.where, "there's no folder " + value + " to " + s.key + "; it's looked for next to this .one file");
                 } else if (type == "file" && !platform::read_file(platform::resolve(dir.empty() ? "." : dir, value))) {
