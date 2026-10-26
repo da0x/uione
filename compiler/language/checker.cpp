@@ -567,6 +567,12 @@ namespace one::language {
                 }
             }
             if (t.depth && *t.depth != "flat" && *t.depth != "raised") error(t.depth_where, "depth is flat or raised");
+            // A font the app brings is a TrueType or OpenType file beside this one.
+            for (const auto& [family, file] : t.font_files) {
+                const std::string dir = path_.substr(0, path_.find_last_of('/') == std::string::npos ? 0 : path_.find_last_of('/'));
+                if (!file.ends_with(".ttf") && !file.ends_with(".otf")) error(t.font_files_where, "a font is brought from a .ttf or .otf file, like \"fonts/" + family + ".ttf\"");
+                else if (!platform::read_file(platform::resolve(dir.empty() ? "." : dir, file))) error(t.font_files_where, "there's no font file " + file + " beside this one");
+            }
             if (!t.from.empty() && !find_theme(t.from)) {
                 error(t.from_where, "there's no theme " + t.from + " to start from");
                 return;
@@ -3443,6 +3449,7 @@ namespace one::language {
                         std::string by = b && filter_field(*b->left) ? written(*b->left) : "";
                         if (!by.empty() && !in_rows(by)) error(table->only_where, "the table keeps only rows by " + by + ", which its rows don't have");
                     }
+                    if (table->picture && list) verify_picture(ns, *list, table->view, table->list, *table->picture, table->picture_where);
                     // reorder position: rows dragged into order, which an update sets.
                     if (table->reorder && list) verify_reorder(ns, *list, *table->reorder, table->reorder_where, "table", "rows");
                     // download "audit.csv": a file's name, saved where downloads go.
@@ -3934,6 +3941,10 @@ namespace one::language {
                         const field* n = find_field(*layer, name);
                         if (!n || !n->type || n->type->text() != "number") error(collage.paste_where, layer->name + "." + name + " keeps a picture's own size, so it's a number");
                     }
+                    // A picture whose own size isn't kept yet, like one from before, has it filled in.
+                    if (!find_command(ns, qualified_name{{layer->name, "update"}, collage.paste_where})) {
+                        error(collage.paste_where, "a picture's own size, when it isn't kept yet, is filled in by " + layer->name + "::update, which isn't declared " + in_namespace(ns));
+                    }
                 }
             }
             // A preview is kept on what the view is per, by a command on it, in a file field.
@@ -4112,6 +4123,15 @@ namespace one::language {
             }
         }
 
+        // picture preview fit, in cards or a table: a file each row holds.
+        void verify_picture(const std::string& ns, const view_each& rows, const qualified_name& view, const std::optional<std::string>& list, const std::string& picture,
+                            location where) {
+            const entity_declaration* entity = listed_entity(ns, rows);
+            const field* f = entity ? find_field(*entity, picture) : nullptr;
+            if (entity && (!f || !f->type || f->type->text() != "file" || f->list)) error(where, entity->name + "." + picture + " is shown as a picture, so it's a file");
+            else if (!in_rows(rows, picture)) error(where, "view " + view.text() + " has no " + picture + (list ? " in its " + *list : "") + "; add it to the list's block");
+        }
+
         void verify_cards(const std::string& ns, const cards_item& cards, const std::string& route) {
             const view_each* rows = named_list(ns, cards.view, cards.list.value_or(""), route);
             if (!rows) return;
@@ -4124,12 +4144,7 @@ namespace one::language {
                 error(cards.link_where, "there's no screen at " + full_route(ns, *cards.link) + " for these cards to open");
             }
             // A picture on each card is a file each row holds.
-            if (cards.picture) {
-                const entity_declaration* entity = listed_entity(ns, *rows);
-                const field* f = entity ? find_field(*entity, *cards.picture) : nullptr;
-                if (entity && (!f || !f->type || f->type->text() != "file" || f->list)) error(cards.picture_where, entity->name + "." + *cards.picture + " is shown as a picture, so it's a file");
-                else if (!in_rows(*rows, *cards.picture)) error(cards.picture_where, "view " + cards.view.text() + " has no " + *cards.picture + (cards.list ? " in its " + *cards.list : "") + "; add it to the list's block");
-            }
+            if (cards.picture) verify_picture(ns, *rows, cards.view, cards.list, *cards.picture, cards.picture_where);
             if (cards.tally) {
                 if (const view_each* counted = named_list(ns, *cards.tally, cards.tally_list, route)) {
                     for (const auto& field : {cards.tally_by, cards.tally_and}) {

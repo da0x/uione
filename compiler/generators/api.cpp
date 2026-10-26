@@ -1975,7 +1975,7 @@ namespace one::generators {
                     {language::token_kind::greater, ">"}, {language::token_kind::less_equal, "<="}, {language::token_kind::greater_equal, ">="},
                     {language::token_kind::logical_and, "&&"}, {language::token_kind::logical_or, "||"}, {language::token_kind::plus, "+"},
                     {language::token_kind::minus, "-"}, {language::token_kind::star, "*"},
-                    {language::token_kind::slash, "/"}};
+                    {language::token_kind::slash, "/"}, {language::token_kind::remainder, "%"}};
                 // roles has role::member: whether a list holds a value.
                 if (b->op == language::token_kind::has) {
                     auto left = resolve(e, *b->left, me);
@@ -2000,6 +2000,8 @@ namespace one::generators {
                         if (it->second == "<=") return "!" + *l + ".After(" + *r + ")";
                         if (it->second == ">=") return "!" + *l + ".Before(" + *r + ")";
                     }
+                    // As a clock counts, never below none: -1 % 4 is 3.
+                    if (it->second == "%") return "one.Remainder(" + *l + ", " + *r + ")";
                     return *l + " " + it->second + " " + *r;
                 }
             }

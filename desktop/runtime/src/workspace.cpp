@@ -106,6 +106,18 @@ namespace one::desktop::runtime {
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
 			if (auto v = taken(across); v.get()) {
+				// Filling the window, its bar says the app's name and switches light and
+				// dark, as the site's would.
+				if (std::string_view(across) == "bar") {
+					auto mark = t.heading(20);
+					mark.line_height = 1.1f;
+					std::vector<desktop::view> bar;
+					if (std::string name = app_name(); !name.empty()) bar.push_back(desktop::text(std::move(name), mark).padding(edges(0, 8, 0, 0)));
+					bar.push_back(std::move(v));
+					bar.push_back(desktop::spacer());
+					if (offers_dark()) bar.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
+					v = desktop::row(std::move(bar)).spacing(6).align(align::center);
+				}
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
 				parts.push_back(desktop::divider());
 			}

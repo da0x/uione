@@ -200,6 +200,7 @@ namespace one::language {
                 case '+': return make(token_kind::plus, "+", where, begin);
                 case '-': return make(token_kind::minus, "-", where, begin);
                 case '*': return make(token_kind::star, "*", where, begin);
+                case '%': return make(token_kind::remainder, "%", where, begin);
                 case ':':
                     if (current() == ':') { step(); return make(token_kind::scope, "::", where, begin); }
                     break;

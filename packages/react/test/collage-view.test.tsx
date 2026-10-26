@@ -3,10 +3,11 @@
 
 // Things coming into a collage: pictures dropped on it, the first covering it and the
 // rest at their own size where they were let go, all one step to undo; words pasted.
-// And going out: a small picture of it kept once changes settle.
+// And going out: a small picture of it kept once changes settle, shown on cards and
+// in tables.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, Collage, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Cards, Collage, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -39,6 +40,31 @@ describe("things coming into a collage", () => {
     expect(first!["one:history"]).toBeUndefined();
     expect(second).toMatchObject({ x: 0, y: 0, w: 200, h: 100, "one:history": "joined" });
     expect(source.uploads.map((u) => u.file.name)).toEqual(["a.png", "b.png"]);
+  });
+
+  it("fills in the own size of a picture kept before it was, as it's turned, never to be undone", async () => {
+    globalThis.fetch = (async () => new Response(new Blob(["a"]))) as typeof fetch;
+    const source = memorySource({ files: true, commands: { "studio::layer::update": () => ({ id: "l" }) } });
+    source.set("studio::poster_page", {
+      width: 200,
+      height: 100,
+      layers: [
+        { id: "l1", picture: "uploads/a.png", picture_width: 0, picture_height: 0, x: 0, y: 0, w: 200, h: 100 },
+        { id: "l2", picture: "uploads/b.png", picture_width: 0, picture_height: 0, turns: 1, x: 0, y: 0, w: 50, h: 100 },
+        { id: "l3", picture: "uploads/c.png", picture_width: 30, picture_height: 20, x: 0, y: 0, w: 30, h: 20 },
+      ],
+    }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return <Collage view={page} list="layers" subject="p1" pasteInto="picture" sizedWidth="picture_width" sizedHeight="picture_height" update="studio::layer::update" />;
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    expect(source.runs.map((r) => r.input)).toEqual([
+      { id: "l1", picture_width: 400, picture_height: 200, "one:history": "apart" },
+      { id: "l2", picture_width: 200, picture_height: 400, "one:history": "apart" },
+    ]);
   });
 
   it("puts words pasted in the middle, a twelfth of its height", async () => {
@@ -98,5 +124,20 @@ describe("cards with a picture", () => {
     const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
     await waitFor(() => expect(drawn.container.querySelectorAll("img").length).toBe(1));
     expect(drawn.container.querySelector("img")!.getAttribute("src")).toContain("harbor.png");
+  });
+});
+
+describe("a table with a picture", () => {
+  it("shows each row's file small, before its cells, and leaves a row without one blank", async () => {
+    const source = memorySource({ files: true });
+    source.set("studio::posters", { rows: [{ id: "p1", title: "Harbor", preview: "uploads/harbor.png" }, { id: "p2", title: "Blank" }] });
+    function Posters() {
+      return <Table view={useView("studio::posters")} columns={{ title: "Title" }} picture="preview" fit />;
+    }
+    const only = defineScreen({ title: "Posters", route: "/" }, () => <Posters />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelectorAll("tbody img").length).toBe(1));
+    expect(drawn.container.querySelector("tbody img")!.getAttribute("src")).toContain("harbor.png");
+    expect(drawn.container.querySelectorAll("tbody tr")[1]!.querySelectorAll("td").length).toBe(2);
   });
 });

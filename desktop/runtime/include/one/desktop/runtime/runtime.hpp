@@ -68,6 +68,7 @@ namespace one::desktop::runtime {
 	// whose theme has no dark colors stays light.
 	bool dark();
 	void dark(bool on);
+	bool offers_dark();  // whether its theme has dark colors to switch to
 	// Hands work from another thread to the window's, as a picture drawn in the
 	// background comes back to be shown; it runs soon after, and what it changes is
 	// shown. Nothing runs once the app has stopped.

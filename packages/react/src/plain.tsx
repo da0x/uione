@@ -142,10 +142,11 @@ export const plain: ComponentSet = {
     </span>
   ),
 
-  Layout: ({ regions }) => (
+  Layout: ({ name, regions, site }) => (
     <>
-      {Object.entries(regions).map(([name, content]) => (
-        <div key={name} data-region={name}>
+      {Object.entries(regions).map(([region, content]) => (
+        <div key={region} data-region={region}>
+          {name === "workspace" && region === "bar" && site && <strong>{site} </strong>}
           {content}
         </div>
       ))}
@@ -354,6 +355,7 @@ export const plain: ComponentSet = {
 
   Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered, empty }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
+    const pictured = rows.some((row) => row.picture);
     return (
       <>
         {filtered && (
@@ -394,6 +396,11 @@ export const plain: ComponentSet = {
                   <span style={hidden}>Order</span>
                 </th>
               )}
+              {pictured && (
+                <th>
+                  <span style={hidden}>Picture</span>
+                </th>
+              )}
               {columns.map((column) => (
                 <th key={column}>{column}</th>
               ))}
@@ -423,6 +430,7 @@ export const plain: ComponentSet = {
                     </button>
                   </td>
                 )}
+                {pictured && <td>{row.picture?.source && <img src={row.picture.source} alt="" width={40} height={40} style={{ objectFit: row.picture.fit ? "contain" : "cover" }} />}</td>}
                 {row.cells.map((cell, i) => (
                   <td key={i}>{i === 0 && row.link ? <a {...row.link}>{cell}</a> : cell}</td>
                 ))}

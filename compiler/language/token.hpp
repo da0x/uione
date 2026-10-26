@@ -39,6 +39,7 @@ namespace one::language {
         minus,
         star,
         slash,          // / between two values: written as a route, made by the parser
+        remainder,      // %, what's left over, as a clock counts: (turns + 3) % 4
         has,            // labels has bug: written as a word, made by the parser
         pipe,           // | between choices
         newline,
@@ -90,6 +91,7 @@ namespace one::language {
             case token_kind::plus:          return "'+'";
             case token_kind::minus:         return "'-'";
             case token_kind::star:          return "'*'";
+            case token_kind::remainder:     return "'%'";
             case token_kind::slash:         return "'/'";
             case token_kind::has:           return "'has'";
             case token_kind::pipe:          return "'|'";

@@ -6,6 +6,7 @@ package one
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"strings"
@@ -640,6 +641,15 @@ func alike(x, y any) bool {
 
 // Has says whether a list holds a value, like the roles that may take a step
 // holding a project's contributor role.
+// Remainder is what's left of x over y, as a clock counts, never below none:
+// Remainder(-1, 4) is 3. Over none, it's none.
+func Remainder(x, y float64) float64 {
+	if y == 0 {
+		return 0
+	}
+	return x - y*math.Floor(x/y)
+}
+
 func Has(list []string, value string) bool {
 	for _, item := range list {
 		if item == value {

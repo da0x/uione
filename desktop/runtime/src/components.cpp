@@ -157,6 +157,11 @@ namespace one::desktop::runtime {
 
 	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
 		for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
+		// In a toolbar's group, a tool, as its buttons are.
+		if (auto small = p.in_group()) {
+			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", *small ? hint_of(words, keys) : words, [&p, address = address_of(p, to)] { p.open(address); },
+			                            {.large = !*small});
+		}
 		// One of the web's icons is a quiet button drawn as just that, as on the web.
 		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
 			return desktop::icon_button(icon, std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
@@ -262,6 +267,17 @@ namespace one::desktop::runtime {
 			shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
 		}
 		if (shown.empty()) return spec.hide_empty ? desktop::view() : quiet("Nothing here yet.");
+		// Cards with pictures are a gallery, side by side as many as fit, as on the web.
+		if (!spec.picture.empty()) {
+			std::vector<desktop::view> tiles;
+			for (auto& card : shown) {
+				std::string address = opens[card.key];
+				tiles.push_back(std::move(card.shown).width(280).on_click([&p, address] {
+					if (!address.empty()) p.open(address);
+				}));
+			}
+			return desktop::flow(std::move(tiles)).spacing(16);
+		}
 		return desktop::list(std::move(shown), [&p, opens](const std::string& id) {
 			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
 		});

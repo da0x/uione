@@ -65,6 +65,8 @@ namespace studio at / {
 
 	command layer::create
 	command layer::delete
+	// A picture's own size filled in, for one kept before its size was.
+	command layer::update
 	command layer::place {
 		changes x y w h
 		require w > 0 && h > 0  "a layer has a size"
@@ -129,6 +131,7 @@ namespace studio at / {
 		}
 		main {
 			table posters {
+				picture preview fit
 				title
 				empty "Make a poster, and it's listed here."
 			}

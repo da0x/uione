@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 
 #include <one/screens/collage.hpp>
 
@@ -556,6 +557,18 @@ namespace one::desktop::runtime {
 		for (const auto& l : layers.as_array()) {
 			if (l["id"].as_string() == picked) chosen = l;
 		}
+		// A picture whose own size isn't kept yet, like one kept before its size was, has
+		// it filled in from the picture as it's turned, once, never a step undo takes back.
+		if (!spec.update.empty() && !spec.sized_width.empty()) {
+			auto asked = p.kept<std::shared_ptr<std::set<std::string>>>("collage sized " + spec.key, std::make_shared<std::set<std::string>>()).peek();
+			for (const auto& l : layers.as_array()) {
+				if (!l.fields.contains(spec.sized_width) || l[spec.sized_width].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
+				const desktop::picture* shown = l["picture"].as_string().empty() ? nullptr : layer_picture(p, l);
+				if (!shown) continue;
+				asked->insert(l["id"].as_string());
+				p.run(spec.update, value(fields{{"id", l["id"]}, {spec.sized_width, shown->width()}, {spec.sized_height, shown->height()}, {"one:history", "apart"}}));
+			}
+		}
 		// Its preview, drawn once changes have settled for a moment and nothing's being
 		// moved, cropped or written, and sent never to be undone. One already there when
 		// it's first shown is what it looks like now.
@@ -623,8 +636,10 @@ namespace one::desktop::runtime {
 						desktop::copy_picture(drawn);
 						p.told().set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
 					} else {
+						// Named for what the view calls it, or for the app when it calls it nothing.
 						std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
-						save(p, drawn, one ? name + " layer" : name.empty() ? app_name() : name);
+						if (name.empty()) name = app_name();
+						save(p, drawn, one ? name + " layer" : name);
 					}
 				}
 			} else if (does == "add" && !spec.add.empty()) {

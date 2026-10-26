@@ -70,6 +70,10 @@ namespace one::generators {
                 if (!model_.project.icon.empty()) {
                     if (auto svg = platform::read_file(model_.project.icon)) out.push_back(copied("packaging/" + app_id() + ".svg", *svg, model_.project.icon));
                 }
+                // Fonts the theme brings, #embedded so the app needs nothing beside it.
+                for (const auto& [family, path] : theme_look().font_files) {
+                    if (auto bytes = platform::read_file(path)) out.push_back(copied("fonts/" + path.substr(path.find_last_of('/') + 1), *bytes, path));
+                }
             }
             return out;
         }
@@ -188,6 +192,7 @@ namespace one::generators {
                 case token_kind::minus: return "worked('-', " + left + ", " + right + ")";
                 case token_kind::star: return "worked('*', " + left + ", " + right + ")";
                 case token_kind::slash: return "worked('/', " + left + ", " + right + ")";
+                case token_kind::remainder: return "worked('%', " + left + ", " + right + ")";
                 case token_kind::logical_and: return "(" + left + " && " + right + ")";
                 default: return "(" + left + " || " + right + ")";
             }
@@ -310,6 +315,7 @@ namespace one::generators {
             if (!asks.empty()) out += ", .asks = {" + asks + "}";
             if (c.paste_into) out += ", .paste_into = " + str(*c.paste_into);
             if (c.sized) out += ", .sized_width = " + str(c.sized->first) + ", .sized_height = " + str(c.sized->second);
+            if (const language::entity_declaration* layer = model_.listed(ns, c.view.text(), c.list); layer && c.sized) out += ", .update = " + str(screens::join(ns, layer->name + "::update"));
             if (c.preview) out += ", .preview = " + str(screens::full_command(ns, *c.preview)) + ", .preview_into = " + str(c.preview_into) + ", .preview_wide = " + std::to_string(c.preview_wide);
             return out + "})";
         }
@@ -732,6 +738,7 @@ namespace one::generators {
             for (const auto& [name, of] : picks_) {
                 if (of.view == screens::full_view(ns, t.view.text()) && of.list == (t.list ? *t.list : "rows")) out += ", .pick = " + str(route_ + " " + name);
             }
+            if (t.picture) out += ", .picture = " + str(*t.picture) + (t.picture_sits == "fit" ? ", .fit = true" : "");
             return out + "})";
         }
 
@@ -1899,8 +1906,23 @@ namespace one::generators {
         }
 
         // A theme's colors and fonts, as the desktop draws with them, light or dark.
+        theme::look theme_look() const { return theme::resolve(files_, model_.project.theme.empty() ? "harbor" : model_.project.theme).value_or(theme::look{}); }
+
+        // Fonts the theme brings, each its file's bytes, offered before anything's drawn.
+        void brought_fonts(stream& out) const {
+            for (const auto& [family, path] : theme_look().font_files) {
+                out.open("{");
+                out.line("// " + family + ".");
+                out.open("static const unsigned char font[] = {");
+                out.line("#embed \"../fonts/" + path.substr(path.find_last_of('/') + 1) + "\"");
+                out.close("};");
+                out.line("one::desktop::use_font(font);");
+                out.close("}");
+            }
+        }
+
         std::vector<std::string> theme_of(bool dark = false) const {
-            auto look = theme::resolve(files_, model_.project.theme.empty() ? "harbor" : model_.project.theme).value_or(theme::look{});
+            auto look = theme_look();
             std::vector<std::string> out{"one::desktop::theme t = one::desktop::theme::harbor();"};
             for (const auto& role : {"page", "surface", "sunken", "ink", "muted", "line", "accent", "danger", "success", "warning"}) {
                 auto found = look.colors.find(role);
@@ -1910,6 +1932,7 @@ namespace one::generators {
                 out.push_back(std::string("t.") + role + " = one::desktop::color::hex(0x" + hex.substr(1) + ");");
             }
             out.push_back("t.text_family = " + str(look.text) + ";");
+            if (!look.heading.empty()) out.push_back("t.heading_family = " + str(look.heading) + ";");
             out.push_back("t.code_family = " + str(look.code) + ";");
             out.push_back("t.document_family = " + str(look.document + ", serif") + ";");
             out.push_back("t.corners = " + std::to_string(look.corners) + ";");
@@ -1966,6 +1989,7 @@ namespace one::generators {
             for (const auto& install : installs_) out.line("app::" + install + "(**source);");
             out.line("app::site s{.name = " + str(title) + ", .id = " + str(app_id()) + "};");
             if (target_ == "desktop") {
+                brought_fonts(out);
                 out.open("{");
                 for (const auto& line : theme_of()) out.line(line);
                 out.line("s.look = t;");
@@ -2087,6 +2111,7 @@ namespace one::generators {
             out.line("one::screens::client_source source(session, deliver.to);");
             out.line("app::site s{.name = " + str(title) + ", .id = " + str("org.uione." + name) + "};");
             if (target_ == "desktop") {
+                brought_fonts(out);
                 out.open("{");
                 for (const auto& line : theme_of()) out.line(line);
                 out.line("s.look = t;");

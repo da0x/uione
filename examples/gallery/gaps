@@ -5,7 +5,7 @@
 # element as compiler/language/targets.hpp names it, a line each. The gallery's test
 # fails while this differs from what's so, so it only ever gets shorter; a new
 # target starts with everything here and is done when none of its lines are left.
-# A terminal draws no pictures, so it can't show one on a card, crop one in place,
+# A terminal draws no pictures, so it can't show one on a card or a table's row, crop one in place,
 # or copy, save or keep a picture of a collage, and it has no screen of its own to
 # take a screenshot of.
 terminal cards.picture
@@ -14,3 +14,4 @@ terminal collage.crop
 terminal collage.preview
 terminal collage.save
 terminal collage.screenshot
+terminal table.picture

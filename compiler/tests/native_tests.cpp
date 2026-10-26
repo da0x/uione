@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/native.hpp"
+#include "generators/web.hpp"
 #include "language/checker.hpp"
 #include <filesystem>
 
@@ -216,4 +217,50 @@ TEST_CASE("a native component's fonts come along with it, byte for byte, to be e
     const auto* cmake = find(generated, "CMakeLists.txt");
     REQUIRE(cmake != nullptr);
     CHECK(cmake->content.find("Logo.ttf") == std::string::npos);
+}
+
+TEST_CASE("a theme's font brought from a file is embedded in the desktop app and served beside the site, and its headings are set in it") {
+    namespace fs = std::filesystem;
+    fs::path dir = fs::path(root) / "compiler" / "build" / "theme-font-project";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "fonts");
+    const std::string font("\0\1\0\0 a font\n\xff", 13);
+    REQUIRE(platform::write_file((dir / "fonts" / "Fraunces.ttf").string(), font));
+    REQUIRE(platform::write_file((dir / "main.one").string(), "import one\n\nproject notes {\n\ttarget  desktop web\n\ttheme   sea\n}\n\n"
+                                                             "define theme sea \"Sea\" from harbor {\n\theading  \"Fraunces\" from \"fonts/Fraunces.ttf\"\n}\n\n"
+                                                             "screen \"Notes\" / {\n\ttext \"Hello\"\n}\n"));
+    auto read = [&] {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        for (const auto& path : platform::find_one_files({dir.string()})) files.push_back(language::parse(path, *platform::read_file(path), out));
+        language::check(files, out);
+        return std::pair{std::move(files), std::move(out)};
+    };
+    auto [files, out] = read();
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto desktop = generators::generate_native(files, dir.string(), "desktop");
+    const auto* embedded = find(desktop, "fonts/Fraunces.ttf");
+    REQUIRE(embedded != nullptr);
+    CHECK(embedded->content == font);
+    const auto* main = find(desktop, "src/main.cpp");
+    REQUIRE(main != nullptr);
+    CAPTURE(main->content);
+    CHECK(main->content.find("#embed \"../fonts/Fraunces.ttf\"") != std::string::npos);
+    CHECK(main->content.find("one::desktop::use_font(font);") != std::string::npos);
+    CHECK(main->content.find("t.heading_family = \"Fraunces\";") != std::string::npos);
+    auto web = generators::generate_web(files, dir.string(), (dir / "build" / "web").string());
+    const auto* served = find(web, "public/fonts/Fraunces.ttf");
+    REQUIRE(served != nullptr);
+    CHECK(served->content == font);
+    const auto* css = find(web, "src/theme.css");
+    const auto* index = find(web, "index.html");
+    REQUIRE(css != nullptr);
+    REQUIRE(index != nullptr);
+    CHECK(css->content.find("@font-face {\n  font-family: \"Fraunces\";\n  src: url(\"/fonts/Fraunces.ttf\");") != std::string::npos);
+    CHECK(index->content.find("Fraunces") == std::string::npos);
+    fs::remove(dir / "fonts" / "Fraunces.ttf");
+    auto [missing, said] = read();
+    REQUIRE(said.size() == 1);
+    CHECK(said[0].message == "there's no font file fonts/Fraunces.ttf beside this one");
+    fs::remove_all(dir);
 }

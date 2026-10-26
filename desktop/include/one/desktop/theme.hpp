@@ -25,6 +25,7 @@ namespace one::desktop {
 		color success = color::hex(0x1a7f37);
 		color warning = color::hex(0x9a6700);
 		std::string text_family = "IBM Plex Sans";
+		std::string heading_family = "";  // headings' own, or the text's when none
 		std::string code_family = "IBM Plex Mono";
 		std::string document_family = "Libre Caslon Text, serif";  // pages set as documents, like a license
 		float corners = 10;
@@ -37,7 +38,7 @@ namespace one::desktop {
 		text_style body() const { return {.family = text_family, .size = text_size, .color = ink}; }
 		text_style quiet() const { return {.family = text_family, .size = text_size - 2, .color = muted}; }
 		text_style strong() const { return {.family = text_family, .size = text_size, .weight = 600, .color = ink}; }
-		text_style heading(float size = 22) const { return {.family = text_family, .size = size, .weight = 600, .color = ink, .line_height = 1.3f}; }
+		text_style heading(float size = 22) const { return {.family = heading_family.empty() ? text_family : heading_family, .size = size, .weight = 600, .color = ink, .line_height = 1.3f}; }
 		text_style code() const { return {.family = code_family, .size = text_size - 1, .color = ink}; }
 	};
 

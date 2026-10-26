@@ -603,6 +603,13 @@ export const radix: ComponentSet = {
     // A cell's room above and below, and a phone's entry's, by how close rows sit.
     const room = density === "compact" ? "py-0.5" : "py-1";
     const entry = density === "compact" ? "py-1.5" : "py-2.5";
+    const pictured = rows.some((row) => row.picture);
+    // A row's small picture, before its cells.
+    const thumb = (row: (typeof rows)[number]) => (
+      <span className="block size-10 shrink-0 overflow-hidden rounded-control bg-sunken">
+        {row.picture?.source && <img src={row.picture.source} alt="" className={`h-full w-full ${row.picture.fit ? "object-contain" : "object-cover"}`} />}
+      </span>
+    );
     return (
     <div data-hue={hue} className="overflow-x-auto rounded-box border border-line bg-surface shadow-panel">
       {/* Its rows by a choice, like Open and Closed, each with how many there are,
@@ -681,6 +688,7 @@ export const radix: ComponentSet = {
                     ⠿
                   </button>
                 )}
+                {pictured && thumb(row)}
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="leading-snug">
                     {numbered(columns, lead) && !blank(row.cells[0]) && <span className="mr-1.5 text-muted tabular-nums">#{row.cells[0]}</span>}
@@ -735,6 +743,11 @@ export const radix: ComponentSet = {
             {reorder && (
               <th className="w-0 py-1.5 pl-2">
                 <span className="sr-only">Order</span>
+              </th>
+            )}
+            {pictured && (
+              <th className="w-0 py-1.5 pl-2">
+                <span className="sr-only">Picture</span>
               </th>
             )}
             {columns.map((column) => (
@@ -812,6 +825,7 @@ export const radix: ComponentSet = {
                   </button>
                 </td>
               )}
+              {pictured && <td className={`w-0 pl-2 ${room}`}>{thumb(row)}</td>}
               {row.cells.map((cell, i) => (
                 <td key={i} className={`px-3 ${room}`}>
                   {i === 0 && row.link ? (
@@ -1940,10 +1954,22 @@ export const radix: ComponentSet = {
   // it on a wide screen and after it on a phone. Any other layout is one column.
   // A workspace, filling the window: its bar along the top, its toolbar under it,
   // the work beside what's at its side, and a status line along the bottom.
-  Layout: ({ name, regions }) =>
+  Layout: ({ name, regions, site }) =>
     name === "workspace" ? (
       <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
-        {regions.bar && <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">{regions.bar}</div>}
+        {regions.bar && (
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
+            {site && (
+              <span className="mr-2 text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+                {site}
+              </span>
+            )}
+            {regions.bar}
+            <span className="ml-auto">
+              <ThemeToggle />
+            </span>
+          </div>
+        )}
         {regions.toolbar && (
           <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
             {regions.toolbar}

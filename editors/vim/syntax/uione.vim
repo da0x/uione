@@ -78,7 +78,7 @@ syn match uioneConstant "\<\u\w*\>"
 syn match uioneNumber   "\<\d\+\%(\.\d\+\)\=\>"
 " #2457d6: a color, as a theme gives one.
 syn match uioneConstant "#\x\{6}\>"
-syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*<>=!|]"
+syn match uioneOperator "==\|!=\|<=\|>=\|&&\|||\|[-+*%<>=!|]"
 
 " An entity's block: each line is a field, its name first, then its type, built in
 " or another entity, so `project  project  required  key` is a field named project

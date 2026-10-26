@@ -1211,12 +1211,13 @@ int main() {
 	return check::run();
 }
 
-TEST("a workspace: its bar, a toolbar of groups whose tools have keys, a side shown while a toggle's on, and a status line saying what was undone") {
+TEST("a workspace: its bar, starting with the app's name and ending with light and dark, a toolbar of groups whose tools have keys, a side shown while a toggle's on, and a status line saying what was undone") {
 	memory_source data;
 	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return "p1"; });
 	data.on("one::undo", [](const value&, memory_source&) -> answer { return "studio::poster::place"; });
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
+	s.dark = tested_theme();
 	s.screens.push_back({"Studio", "/", "", [](page& p) {
 		                     return workspace(p, region{"bar", along(history(p, false, "Undo", "undo", {"ctrl+z"}), history(p, true, "Redo", "redo", {"ctrl+y"}), text({words("Posters")}))},
 		                                      region{"toolbar", along(group(p, "Poster", false, false, [&] { return tools(command(p, {.command = "studio::poster::create", .label = "New", .icon = "add", .keys = {"ctrl+n"}})); }),
@@ -1329,6 +1330,43 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
 }
 
+TEST("a collage fills in the own size of a picture kept before it was, as it's turned, once, never a step undo takes back") {
+	// Pictures kept beside the goldens, as a folder of the app's keeps them.
+	struct kept_here : memory_source {
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
+	} data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"picture", "collage.png"}, {"picture_width", 0}, {"picture_height", 0}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "collage.png"}, {"picture_width", 0}, {"picture_height", 0}, {"turns", 1}, {"x", 0}, {"y", 0}, {"w", 56}, {"h", 90}}),
+	                                      value(fields{{"id", "l3"}, {"picture", "collage.png"}, {"picture_width", 90}, {"picture_height", 56}, {"x", 0}, {"y", 0}, {"w", 90}, {"h", 56}})}}}));
+	data.on("studio::layer::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .subject = "p1", .fills = true,
+		                                                                         .key = "/ collage", .paste_into = "picture", .sized_width = "picture_width",
+		                                                                         .sized_height = "picture_height", .update = "studio::layer::update"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	for (int i = 0; i < 200 && data.runs().size() < 2; ++i) {
+		(void)drawn(nav);
+		if (data.runs().size() < 2) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	(void)drawn(nav);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() != 2) return;
+	CHECK(data.runs()[0].command == "studio::layer::update");
+	CHECK(data.runs()[0].fields["id"].as_string() == "l1");
+	CHECK(data.runs()[0].fields["picture_width"].as_double() == 900);
+	CHECK(data.runs()[0].fields["picture_height"].as_double() == 560);
+	CHECK(data.runs()[0].fields["one:history"].as_string() == "apart");
+	CHECK(data.runs()[1].fields["id"].as_string() == "l2");
+	CHECK(data.runs()[1].fields["picture_width"].as_double() == 560);
+	CHECK(data.runs()[1].fields["picture_height"].as_double() == 900);
+}
+
 TEST("a picture coming into a collage with nothing on it covers it, and one coming in after is its own size, fitted, in the middle") {
 	memory_source data;
 	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
@@ -1404,7 +1442,7 @@ TEST("a collage is copied whole or a layer at a time, saved in the app's folder 
 	// Saved: in the app's folder, named for it and the minute.
 	p.kept<std::string>("collage do / layer").set("save");
 	(void)drawn(nav);
-	std::filesystem::path folder = pictures / "pictures";  // no app is running to name it
+	std::filesystem::path folder = pictures / "studio";
 	for (int i = 0; i < 200 && (!std::filesystem::exists(folder) || std::filesystem::is_empty(folder)); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	bool saved = std::filesystem::exists(folder) && !std::filesystem::is_empty(folder);
 	CHECK(saved);

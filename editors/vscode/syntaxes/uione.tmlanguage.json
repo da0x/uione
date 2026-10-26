@@ -417,7 +417,7 @@
       ]
     },
     "operators": {
-      "match": "==|!=|<=|>=|&&|\\|\\||[-+*<>=!|]",
+      "match": "==|!=|<=|>=|&&|\\|\\||[-+*%<>=!|]",
       "name": "keyword.operator.uione"
     },
     "namespaces": {

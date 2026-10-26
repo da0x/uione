@@ -10,6 +10,7 @@ namespace board {
 		title     text
 		notes     markdown  searchable
 		position  number
+		cover     file
 	}
 
 	entity arrow {
@@ -37,6 +38,11 @@ namespace board {
 	}
 
 	command column::update
+
+	// Moved a place along, coming round again after the fourth.
+	command column::shift {
+		position = (was position + 1) % 4
+	}
 
 	command card::move {
 		changes column
@@ -68,6 +74,7 @@ namespace board {
 			on open dispatch glance::create
 		}
 		table columns.columns {
+			picture cover fit
 			reorder position
 			hide when empty
 			title

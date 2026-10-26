@@ -351,6 +351,26 @@ TEST_CASE("a / between two values divides, while a / alone after a screen's name
     CHECK(cpp.find(R"(e.fields["w"] = value(e["w"].as_double() / value(2).as_double());)") != std::string::npos);
 }
 
+TEST_CASE("a % leaves what's over as a clock counts, and was reads what the command's entity held before it") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand layer::raise {", "\tcommand layer::turn {\n\t\tx = (was x + 3) % 4\n\t\tw = was x\n\t}\n\n\tcommand layer::raise {"), out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    // -1 % 4 is 3, so a turn left three times over is a turn right.
+    CHECK(cpp.find(R"(e.fields["x"] = value(value(c.at("pinned::layer", e["id"])["x"].as_double() + value(3).as_double()).as_double() - value(4).as_double() * std::floor(value(c.at("pinned::layer", e["id"])["x"].as_double() + value(3).as_double()).as_double() / value(4).as_double()));)") != std::string::npos);
+    CHECK(ts.find(R"(e["x"] = (number((number(c.at("pinned::layer", e["id"])["x"]) + number(3))) - number(4) * Math.floor(number((number(c.at("pinned::layer", e["id"])["x"]) + number(3))) / number(4)));)") != std::string::npos);
+    // What it held, not what the line before made it.
+    CHECK(cpp.find(R"(e.fields["w"] = c.at("pinned::layer", e["id"])["x"];)") != std::string::npos);
+    CHECK(ts.find(R"(e["w"] = c.at("pinned::layer", e["id"])["x"];)") != std::string::npos);
+}
+
 TEST_CASE("a local each reads its where's right side as the command's, and leaves its rows as its dispatches left them") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tcommand board::create\n", R"(	command board::create

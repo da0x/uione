@@ -137,6 +137,7 @@ namespace one::desktop::runtime {
 	bool fullscreen() { return shown_in && shown_in->fullscreen(); }
 	std::string app_name() { return running ? running->name : ""; }
 	bool dark() { return dark_on.get(); }
+	bool offers_dark() { return running && running->dark; }
 	void dark(bool on) {
 		if (!running || !running->dark) return;
 		dark_on.set(on);
@@ -150,6 +151,7 @@ namespace one::desktop::runtime {
 	desktop::view drawn(navigator& nav) {
 		const auto& t = current_theme();
 		const auto& s = nav.site();
+		running = &s;
 		(void)nav.changes();
 		page& here = nav.current();
 		// Keyed by where it is, so a page keeps nothing of the one before it.

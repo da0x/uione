@@ -176,6 +176,7 @@ namespace one::desktop::runtime {
 		}
 		std::vector<desktop::view> labels;
 		if (spec.tint) labels.push_back(desktop::spacer().grow(0).width(3));
+		if (!spec.picture.empty()) labels.push_back(desktop::spacer().grow(0).width(40));
 		for (const auto& c : spec.columns) labels.push_back(sized(desktop::text(c.label, quieter()), c.field));
 		if (acting_width > 0) labels.push_back(desktop::spacer().grow(0).width(acting_width));
 		parts.push_back(desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)));
@@ -189,6 +190,8 @@ namespace one::desktop::runtime {
 				auto tone = tone_color(tone_of(row, spec.tint));
 				cells.push_back(tone ? desktop::edge(*tone) : desktop::spacer().grow(0).width(3));
 			}
+			// A small picture of its file, before its cells.
+			if (!spec.picture.empty()) cells.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 40).width(40).grow(0));
 			for (std::size_t c = 0; c < spec.columns.size(); ++c) {
 				const auto& column = spec.columns[c].field;
 				// What a row opens is said in the table's color, when it has one, by its first column.

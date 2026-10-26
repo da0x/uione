@@ -68,7 +68,16 @@ export function Link({ to, icon, keys, children }: { to: string; icon?: string; 
   const link = useLinks();
   const filled = useFilled()(to);
   const navigate = useNavigate();
+  const tool = useTool();
   useKeys(keys, () => void navigate(filled));
+  // In a toolbar's group, a tool, as its buttons are.
+  if (tool) {
+    return (
+      <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
+        {children}
+      </ui.Button>
+    );
+  }
   return (
     <ui.Link {...link(filled)} icon={icon}>
       {children}
@@ -340,9 +349,11 @@ export function Region({ children }: { name: string; children?: ReactNode }) {
 }
 
 // A screen laid out in regions, gathered from the Regions inside it by name. A
-// workspace fills the window, with nothing of the site around it.
+// workspace fills the window, with nothing of the site around it, so its bar says
+// the app's name and switches light and dark, as the site's would.
 export function Layout({ name, children }: { name: string; children?: ReactNode }) {
   const ui = useUI();
+  const site = useSite();
   useFill(name === "workspace");
   // Filling the screen, a workspace is only its work, like a picture on a wall.
   const full = useSyncExternalStore(
@@ -351,7 +362,7 @@ export function Layout({ name, children }: { name: string; children?: ReactNode 
       document.addEventListener("fullscreenchange", changed);
       return () => document.removeEventListener("fullscreenchange", changed);
     },
-    () => typeof document !== "undefined" && document.fullscreenElement !== null,
+    () => typeof document !== "undefined" && Boolean(document.fullscreenElement),
     () => false,
   );
   const regions: Record<string, ReactNode> = {};
@@ -360,7 +371,7 @@ export function Layout({ name, children }: { name: string; children?: ReactNode 
       regions[child.props.name] = child.props.children;
     }
   });
-  return <ui.Layout name={name} regions={regions} />;
+  return <ui.Layout name={name} regions={regions} site={site.name} />;
 }
 
 // Buttons one after another, in a row.
@@ -1475,10 +1486,14 @@ export function Table({
   more,
   pick,
   empty,
+  picture,
+  fit = false,
 }: {
   view: ViewState;
   pick?: string; // the screen's pick of this list, by name: a row's click picks it
   empty?: string; // what it says while it has no rows
+  picture?: string; // a file each row holds, shown small before its cells
+  fit?: boolean; // all of it fitted in, or filling its place
   more?: () => void; // asks for the next page of rows, for a list read a page at a time, like everyone's
   list?: string; // which of the view's lists, like comments
   columns: Record<string, string>;
@@ -1510,6 +1525,7 @@ export function Table({
   const links = useLinks();
   const params = useParams();
   const pickedId = usePickedId(pick ?? "");
+  const addresses = useAddresses(rowsOf(view.data?.[list]), picture);
   // What's typed in the search box, over the fields it searches, as they're shown,
   // the tab that's open and the page it's on, kept in the address under the list's
   // name, like issues.tab=done, so a link shows the same.
@@ -1633,6 +1649,7 @@ export function Table({
           cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people })),
           tone: toneOf(row, tint),
           ...(pick ? { picked: row.id === pickedId, onPick: () => pickRow(pick, row.id) } : {}),
+          ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit } } : {}),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
             disabled: runner.busy(a.name),
@@ -2420,6 +2437,21 @@ export interface Tally {
   noun?: string; // what's counted, like issues
 }
 
+// Where each row's picture is read from, a file it holds in a field, asked once for
+// each file.
+function useAddresses(rows: Row[], field: string | undefined): Record<string, string> {
+  const store = useFiles();
+  const [addresses, setAddresses] = useState<Record<string, string>>({});
+  const held = field ? rows.map((row) => row[field]).filter((path): path is string => typeof path === "string" && path !== "") : [];
+  useEffect(() => {
+    for (const path of held) {
+      if (addresses[path] || !store) continue;
+      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
+    }
+  }, [held.join("\n")]);
+  return addresses;
+}
+
 // A list's rows as large cards, like a project's boards: each its title and link,
 // what else it shows, a tally of what it holds, and links that open it filtered,
 // like Opened by me.
@@ -2459,19 +2491,10 @@ export function Cards({
   const ui = useUI();
   const links = useLinks();
   const params = useParams();
-  const store = useFiles();
   const [title, ...rest] = Object.keys(columns);
   const counted = tally ? rowsOf(tally.view.data?.[tally.list]) : [];
   const rows = rowsOf(view.data?.[list]);
-  // Where each card's picture is read from, asked once for each file.
-  const [addresses, setAddresses] = useState<Record<string, string>>({});
-  const held = picture ? rows.map((row) => row[picture]).filter((path): path is string => typeof path === "string" && path !== "") : [];
-  useEffect(() => {
-    for (const path of held) {
-      if (addresses[path] || !store) continue;
-      store.address(path).then((address) => setAddresses((now) => ({ ...now, [path]: address })), () => {});
-    }
-  }, [held.join("\n")]);
+  const addresses = useAddresses(rows, picture);
   // Hidden when empty is hidden until there's something to show, not drawn while it loads.
   if (hideEmpty && (view.status !== "live" || rows.length === 0)) return null;
   const sum = (card: Row) => {

@@ -1280,6 +1280,12 @@ namespace one::language {
                 if (word.text == "text" || word.text == "heading" || word.text == "code" || word.text == "document") {
                     std::string font = expect(token_kind::string, "a font, like \"IBM Plex Sans\"").text;
                     (word.text == "text" ? theme.text : word.text == "heading" ? theme.heading : word.text == "code" ? theme.code : theme.document) = font;
+                    // from "fonts/Fraunces.ttf": the file the app brings it in.
+                    if (at_word("from") && peek(1).kind == token_kind::string) {
+                        advance();
+                        theme.font_files_where = peek().where;
+                        theme.font_files[font] = advance().text;
+                    }
                     if (word.text == "code" && at_word("ground")) {
                         advance();
                         theme_color ground{"ground", word.where, "", "", {}, {}};
@@ -1833,6 +1839,15 @@ namespace one::language {
                             advance();
                             table.download_where = peek().where;
                             table.download = advance().text;
+                            end_line();
+                            continue;
+                        }
+                        // picture picture fit: a small picture of each row's file, before its cells.
+                        if (at_word("picture") && peek(1).kind == token_kind::identifier) {
+                            advance();
+                            table.picture_where = peek().where;
+                            table.picture = advance().text;
+                            if (at_word("fit") || at_word("fill")) table.picture_sits = advance().text;
                             end_line();
                             continue;
                         }
@@ -3138,7 +3153,7 @@ namespace one::language {
         }
 
         // expressions, loosest first: || then && then == != then < > <= >= then + -
-        // then * and /, then ! and unary -, then calls and members, then plain values.
+        // then * / and %, then ! and unary -, then calls and members, then plain values.
 
         static int precedence(token_kind kind) {
             switch (kind) {
@@ -3153,7 +3168,8 @@ namespace one::language {
                 case token_kind::plus:
                 case token_kind::minus:         return 5;
                 case token_kind::star:
-                case token_kind::slash:         return 6;
+                case token_kind::slash:
+                case token_kind::remainder:     return 6;
                 default:                        return 0;
             }
         }

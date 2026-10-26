@@ -112,8 +112,10 @@ text "Tell the project's maintainers about a problem privately."
 
 Numbers are written as they are, `20` or `1.5`. Values are compared with `==`, `!=`,
 `<`, `<=`, `>` and `>=`, joined with `&&` (and) and `||` (or), and turned around with
-`!`. `+`, `-` and `*` work them out, `=` gives a field a value, and `has` asks
-whether a list holds something: `where labels has label.id`.
+`!`. `+`, `-`, `*` and `/` work them out, and `%` leaves what's over as a clock
+counts, never below none: `(turns + 3) % 4` is 2 when turns is 3, and 3 when it's
+0. `=` gives a field a value, and `has` asks whether a list holds something: `where
+labels has label.id`.
 
 ## Built-in values
 
@@ -727,7 +729,9 @@ command loan::checkin {
   if the backend stops before then, it's finished when the backend next starts.
   A key made from another field, a serial, and one that points at what it's
   within can't be named.
-- `was issue.stage` is what a field held before the command changed it.
+- `was issue.stage` is what a field held before the command changed it. In a
+  body, `was x` is what it held before the command's first line, so lines can
+  trade values between fields: `w = was h` and `h = was w` turn a box on its side.
 - `exists(step where from == was issue.stage && to == issue.stage)` asks whether
   there's one, in a `require`. Inside it, the entity's own fields are named
   plainly, and the command's entity by its name. `held(roles)` there asks whether
@@ -1741,6 +1745,9 @@ project shop {
   changes only what it says. A theme that starts from none says every color.
 - `text`, `heading` and `code` are fonts, from Google Fonts unless they're the IBM
   Plex the component set brings. Headings are in the text's font unless it says.
+  `heading "Fraunces" from "fonts/Fraunces.ttf"` brings a font with the app, from a
+  .ttf or .otf file beside the file declaring the theme: the desktop app has it
+  built in, and the site serves it itself, so neither asks anyone else for it.
   `document` is the font of pages set as documents, Libre Caslon Text unless it
   says, loaded only when a page is one; it's asked for in roman, italic and bold.
   `ground` is the background code sits on, light and dark, in place of a code
@@ -1891,6 +1898,10 @@ screen "Book" /books/:book {
   while the table is sorted by a column or searched. In a board, `reorder position`
   puts each column's cards in order the same way: a card is dragged up or down its
   column, or moved with Alt+↑ and Alt+↓.
+- `picture preview fit` shows a file each row holds as a small picture before its
+  cells, all of it fitted in, or, with `fill` or nothing said, filling its place. A
+  row without one leaves the place blank. A terminal draws no pictures, so it can't
+  show one.
 - `table project_page.issues by status` sorts the rows into tabs, one for each of
   a choice's values, like Open and Closed, each with how many rows it has. The
   first choice is shown first, and the table needs the choice as a column.
@@ -2151,6 +2162,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     dragged from another site, so it says to save it first; it shows the screenshot
     button only where the browser can share the screen. A terminal can't be dropped
     on, so its paste button asks for the picture's path, and it takes no screenshots.
+    A picture whose own size isn't kept yet, like one kept before the fields were,
+    has it filled in from the picture as it's turned, by the layer's `update`, never
+    a step undo takes back.
   - `keep preview poster::preview into preview 480 wide`: a small picture of it, 480
     pixels wide, drawn once changes have settled for a moment and nothing's being
     moved, cropped or written, and sent to a command on what the view is per, its
@@ -2217,9 +2231,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   nothing of the site around it: `bar { ... }` along the top, `toolbar { ... }` under
   it, `main { ... }` for the work, `side when layers { ... }` beside it while a
   toggle's on, and `status { ... }` along the bottom. Any region may say `when`, as
-  `side` does there.
+  `side` does there. With the site's bar out of sight, a workspace's `bar` starts
+  with the app's name, in the theme's heading font, and ends with the switch
+  between light and dark, as the site's bar would.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
-  buttons and a line after it. Its buttons are tools: an icon over its words, or,
+  buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, two rows of
   them, its words said when it's pointed at. `group "View" at end` sits at the
   toolbar's far end.

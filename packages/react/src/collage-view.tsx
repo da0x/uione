@@ -21,6 +21,7 @@ import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
+import { useSite } from "./app.js";
 import { OverLayer, hintOf, setPicked, useKeys, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
@@ -57,7 +58,7 @@ const readListeners = new Set<() => void>();
 
 function pictureOf(path: string, address: ((path: string) => Promise<string>) | undefined): ImageBitmap | undefined {
   const kept = pictures.get(path);
-  if (kept instanceof ImageBitmap) return kept;
+  if (kept !== undefined && kept !== "reading" && kept !== "failed") return kept;
   if (kept || !address || typeof createImageBitmap !== "function") return undefined;
   pictures.set(path, "reading");
   void address(path)
@@ -161,7 +162,7 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
       });
     }
     const p = pictures.get(path);
-    return p instanceof ImageBitmap ? p : undefined;
+    return p !== "reading" && p !== "failed" ? p : undefined;
   };
   const one = only ? layers.find((l) => l["id"] === only && !isBackground(layers, l)) : undefined;
   const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
@@ -294,6 +295,7 @@ export function Collage({
   pasteInto,
   sizedWidth,
   sizedHeight,
+  update,
   children,
 }: {
   view: ViewState;
@@ -319,6 +321,7 @@ export function Collage({
   pasteInto?: string; // a file dropped or pasted, made a picture by add, in this field
   sizedWidth?: string; // and where a picture's own size is kept
   sizedHeight?: string;
+  update?: string; // the command a picture's own size is filled in by, when it isn't kept yet
   children?: ReactNode; // the buttons over the picked layer
 }) {
   const files = useFiles();
@@ -329,7 +332,7 @@ export function Collage({
   const [, setRead] = useState(0);
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
-  const [full, setFull] = useState(() => typeof document !== "undefined" && document.fullscreenElement !== null);
+  const [full, setFull] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
   const [dropping, setDropping] = useState(false);
 
   const data = view.status === "live" ? ((view.data ?? {}) as Row) : {};
@@ -343,7 +346,7 @@ export function Collage({
   useEffect(() => {
     const changed = () => setRead((n) => n + 1);
     readListeners.add(changed);
-    const screen = () => setFull(document.fullscreenElement !== null);
+    const screen = () => setFull(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", screen);
     return () => {
       readListeners.delete(changed);
@@ -352,6 +355,22 @@ export function Collage({
   }, []);
 
   const { say } = useSaying();
+  const site = useSite();
+  // A picture whose own size isn't kept yet, like one kept before its size was, has
+  // it filled in from the picture as it's turned, once, never a step undo takes back.
+  const sizedAsked = useRef(new Set<string>());
+  useEffect(() => {
+    if (!update || !sizedWidth || !sizedHeight) return;
+    for (const l of layers) {
+      const id = str(l["id"]);
+      if (!(sizedWidth in l) || num(l[sizedWidth]) > 0 || !str(l["picture"]) || sizedAsked.current.has(id)) continue;
+      const p = pictureOf(str(l["picture"]), address);
+      if (!p) continue;
+      sizedAsked.current.add(id);
+      const sideways = (((num(l["turns"]) % 4) + 4) % 4) % 2 === 1;
+      void runner.reply(update, { id, [sizedWidth]: sideways ? p.height : p.width, [sizedHeight]: sideways ? p.width : p.height, "one:history": "apart" });
+    }
+  });
   // Pictures dropped or pasted: the first on a collage with nothing on it covers it, and
   // the rest are as big as they are, smaller where they wouldn't fit, centered where
   // they were let go, each a little further along; all one step to undo.
@@ -536,7 +555,8 @@ export function Collage({
             .then(() => say({ text: one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere." }))
             .catch(() => say({ text: "This browser didn't let the page copy a picture.", problem: true }));
         } else {
-          const title = str(data["title"]) || str(data["name"]) || "picture";
+          // Named for what the view calls it, or for the app when it calls it nothing.
+          const title = str(data["title"]) || str(data["name"]) || site.name;
           void png.then((blob) => {
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);

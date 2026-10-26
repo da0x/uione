@@ -52,6 +52,20 @@ describe("a workspace", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeTruthy();
   });
 
+  it("starts its bar with the app's name, as the site's bar would", async () => {
+    renderScreen(memorySource(), () => (
+      <Layout name="workspace">
+        <Region name="bar">
+          <History label="Undo" />
+        </Region>
+        <Region name="main">
+          <p>The posters</p>
+        </Region>
+      </Layout>
+    ));
+    await waitFor(() => expect(document.querySelector("[data-region=bar]")?.textContent).toBe("studio Undo"));
+  });
+
   it("remembers a toggle, which the screen reads by its name, and shows a region while it's on", () => {
     function Panel() {
       const on = useToggled("/ list");

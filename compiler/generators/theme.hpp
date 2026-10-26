@@ -30,6 +30,7 @@ namespace one::generators::theme {
         int corners = 10;
         std::string depth = "raised";
         std::string base;  // the built-in theme it starts from, whose shades its sections take
+        std::map<std::string, std::string> font_files;  // fonts the app brings, by family: the file's path
     };
 
     // The theme of that name, with what it's from, from the project's files or uione's

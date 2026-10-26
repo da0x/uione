@@ -253,7 +253,7 @@ namespace {
 	}
 	command layer::create
 	command layer::delete
-
+	command layer::update
 	view poster_page per poster {
 		title  width  height  slide_x  slide_y
 		layers = each layer in poster {
@@ -343,8 +343,12 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CAPTURE(web);
     CAPTURE(native);
     CHECK(web.find(R"(<CollageButton collage="/posters/:poster collage" does="paste" label="Paste" icon="paste" keys={["ctrl+shift+v"]} />)") != std::string::npos);
-    CHECK(web.find(R"(pasteInto="picture" sizedWidth="picture_width" sizedHeight="picture_height")") != std::string::npos);
-    CHECK(native.find(R"(.paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height"})") != std::string::npos);
+    // One whose own size isn't kept yet has it filled in by the layer's update.
+    CHECK(web.find(R"(pasteInto="picture" sizedWidth="picture_width" sizedHeight="picture_height" update="studio::layer::update")") != std::string::npos);
+    CHECK(native.find(R"(.paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height", .update = "studio::layer::update"})") != std::string::npos);
+    std::string unsized = collage_screen("\t\tlayout workspace\n" + fine);
+    unsized.erase(unsized.find("\tcommand layer::update\n"), std::string("\tcommand layer::update\n").size());
+    CHECK(messages(unsized) == std::vector<std::string>{"57: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
 }
 
@@ -418,6 +422,47 @@ TEST_CASE("cards show a file each row holds as a picture on top, fitted in or fi
     CAPTURE(files["web/src/screens/main.tsx"]);
     CHECK(files["web/src/screens/main.tsx"].find(R"(<Cards view={posters} list="rows" columns={{ title: "Title" }} picture="preview" fit)") != std::string::npos);
     CHECK(files["desktop/src/screens/main.cpp"].find(R"(.picture = "preview", .fit = true})") != std::string::npos);
+}
+
+TEST_CASE("a table shows a file each row holds as a small picture before its cells, and % leaves what's over as a clock counts") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title    text  required
+		preview  file
+	}
+
+	view posters {
+		each poster {
+			title  preview
+		}
+	}
+
+	screen "Posters" / {
+		table posters {
+			picture preview fit
+			title
+		}
+		table posters {
+			picture title
+			title
+		}
+		text "An even screen" when screen.width % 2 == 0
+	}
+}
+)";
+    CHECK(messages(source) == std::vector<std::string>{"26: poster.title is shown as a picture, so it's a file"});
+    std::string fine = source;
+    fine.erase(fine.find("\t\ttable posters {\n\t\t\tpicture title"), std::string("\t\ttable posters {\n\t\t\tpicture title\n\t\t\ttitle\n\t\t}\n").size());
+    CHECK(messages(fine).empty());
+    auto files = built(fine);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"( picture="preview" fit)") != std::string::npos);
+    CHECK(native.find(R"(.picture = "preview", .fit = true})") != std::string::npos);
+    CHECK(web.find(R"({(((Number(screenSize().width) - Number(2) * Math.floor(Number(screenSize().width) / Number(2))) === 0)) && <Text>An even screen</Text>})") != std::string::npos);
+    CHECK(native.find(R"((same(worked('%', value(screen_width()), value(2)), value(0))) ? text({words("An even screen")}) : view())") != std::string::npos);
 }
 
 TEST_CASE("on open, a screen opens the first row a condition holds for, or runs a command, the first of its lines that applies") {

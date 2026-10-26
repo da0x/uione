@@ -8,6 +8,7 @@
 #pragma once
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <algorithm>
 #include <optional>
@@ -498,6 +499,10 @@ namespace one::language {
         location from_where;
         std::vector<theme_color> colors;
         std::optional<std::string> text, heading, code, document;  // fonts
+        // heading "Fraunces" from "fonts/Fraunces.ttf": a font the app brings with it, by
+        // its family, from a file beside the one declaring the theme.
+        std::map<std::string, std::string> font_files;
+        location font_files_where;
         std::optional<theme_color> ground;              // the code editor's background
         std::optional<int> corners;
         location corners_where;
@@ -742,6 +747,10 @@ namespace one::language {
         bool hide_empty = false;             // hide when empty: not there at all while it has no rows
         std::optional<std::string> empty;    // empty "Add a picture to start": what it says while it has no rows
         location reorder_where;
+        // picture picture fit: a small picture of a file each row holds, before its cells.
+        std::optional<std::string> picture;
+        std::string picture_sits = "fill";
+        location picture_where;
         // download "audit.csv": a button that saves every row it keeps, in a file of
         // that name, as comma-separated values.
         std::optional<std::string> download;

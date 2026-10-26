@@ -126,6 +126,8 @@ export interface TimelineProps {
 export interface LayoutProps {
   name: string;
   regions: Record<string, ReactNode>;
+  // The app's own name, which a workspace's bar starts with, as a site's bar does.
+  site?: string;
 }
 
 // Buttons that sit together in a row, like Edit and Close issue.
@@ -202,6 +204,9 @@ export interface TableRow {
   // drawn as it, and onPick picks this one.
   picked?: boolean;
   onPick?: () => void;
+  // A small picture before its cells, all of it fitted in or filling its place; its
+  // address, none while it's found or when the row has none.
+  picture?: { source?: string; fit: boolean };
 }
 
 export interface TableProps {

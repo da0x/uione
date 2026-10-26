@@ -290,6 +290,16 @@ namespace one::generators {
                     unsupported(e.where, "reading a field through more than one step");
                     return {nothing_value()};
                 }
+                // was crop_y: what the command's own entity held before it, as it's kept.
+                if (auto* call = std::get_if<language::call_expression>(&e.node)) {
+                    auto* callee = std::get_if<language::name_expression>(&call->callee->node);
+                    auto* named = call->arguments.size() == 1 ? std::get_if<language::name_expression>(&call->arguments[0]->node) : nullptr;
+                    if (callee && callee->name.text() == "was" && named && named->name.parts.size() == 1 && s.own && field(s.own, named->name.parts[0])) {
+                        return {"c.at(" + str(full(s.own->name)) + ", e[" + str("id") + "])[" + str(named->name.parts[0]) + "]"};
+                    }
+                    unsupported(e.where, "this call in a command");
+                    return {nothing_value()};
+                }
                 if (auto* u = std::get_if<language::unary_expression>(&e.node)) {
                     piece inner = expression(*u->operand, s);
                     if (u->op == language::token_kind::logical_not) return {"!" + paren(as_bool(inner)), true};
@@ -311,6 +321,11 @@ namespace one::generators {
                         case token_kind::minus: return {sum(number_of(as_value(l)) + " - " + number_of(as_value(r)))};
                         case token_kind::star: return {sum(number_of(as_value(l)) + " * " + number_of(as_value(r)))};
                         case token_kind::slash: return {sum(number_of(as_value(l)) + " / " + number_of(as_value(r)))};
+                        // As a clock counts, never below none: -1 % 4 is 3.
+                        case token_kind::remainder: {
+                            std::string x = number_of(as_value(l)), y = number_of(as_value(r));
+                            return {sum(x + " - " + y + " * " + (typescript() ? "Math.floor(" : "std::floor(") + x + " / " + y + ")")};
+                        }
                         default: break;
                     }
                 }

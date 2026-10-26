@@ -97,6 +97,7 @@ namespace one::language {
         drawn_by{"table.sort", "a table's sort", everywhere},
         drawn_by{"table.page", "a table's pages", everywhere},
         drawn_by{"table.reorder", "reordering a table", everywhere},
+        drawn_by{"table.picture", "a picture on each table row", "web desktop"},
         drawn_by{"table.hide", "a table's hide when empty", everywhere},
         drawn_by{"table.only", "a table's only", everywhere},
         drawn_by{"table.color", "a table's color", everywhere},
@@ -259,6 +260,7 @@ namespace one::language {
                         if (n.sort) use("table.sort");
                         if (n.page) use("table.page");
                         if (n.reorder) use("table.reorder");
+                        if (n.picture) use("table.picture");
                         if (n.hide_empty) use("table.hide");
                         if (n.empty) use("table.empty");
                         if (n.only) use("table.only");

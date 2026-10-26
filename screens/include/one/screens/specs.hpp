@@ -313,6 +313,8 @@ namespace one::screens {
 		std::string empty = "Nothing here yet.";
 		std::string download = "";  // a button saving every row it keeps in a file of this name, like audit.csv
 		std::string pick = "";      // the screen's pick of its rows, by name: a row's click picks it
+		std::string picture = "";   // a file field's small picture before each row's cells
+		bool fit = false;           // all of it fitted in, or filling its place
 	};
 
 	// crop "Crop", edit words "Edit" and add words "Text": what's asked of the screen's
@@ -360,6 +362,7 @@ namespace one::screens {
 		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
 		std::string paste_into = "";         // what a file dropped or pasted is made, by add, a picture in this field
 		std::string sized_width = "", sized_height = "";  // and where a picture's own size is kept
+		std::string update = "";  // the command a picture's own size is filled in by, when it isn't kept yet
 		std::string preview = "";            // the command a small picture of it is sent to, once changes settle
 		std::string preview_into = "";       // in this file field of what the view is per
 		int preview_wide = 480;              // this many pixels wide

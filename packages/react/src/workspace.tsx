@@ -182,7 +182,7 @@ export function History({ redo = false, label, icon, keys }: { redo?: boolean; l
 // full screen
 
 function fullNow(): boolean {
-  return typeof document !== "undefined" && document.fullscreenElement !== null;
+  return typeof document !== "undefined" && Boolean(document.fullscreenElement);
 }
 
 export function FullScreen({ label = "Full screen", icon, keys }: { label?: string; icon?: string; keys?: string[] }) {

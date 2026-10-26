@@ -209,7 +209,8 @@ agent_line     ::= "on" NAME "in" NAME "run" STRING "then" NAME ("else" NAME)? E
  * fonts, corners and depth; from another, it changes only what it says. */
 define_theme   ::= "define" "theme" NAME STRING ("from" NAME)? "{" NEWLINE? theme_line* "}" END
 theme_line     ::= ( NAME COLOR ("dark" COLOR)?
-                   | ("text" | "heading" | "document") STRING
+                   /* heading "Fraunces" from "fonts/Fraunces.ttf": a font the app brings, from a file beside this one */
+                   | ("text" | "heading" | "document") STRING ("from" STRING)?
                    | "code" STRING ("ground" COLOR ("dark" COLOR)?)?
                    | "corners" WHOLE
                    | "depth" ("flat" | "raised") ) END
@@ -334,7 +335,7 @@ conjunction    ::= equality ("&&" equality)*
 equality       ::= comparison (("==" | "!=" | "has") comparison)*
 comparison     ::= sum (("<" | ">" | "<=" | ">=") sum)*
 sum            ::= product (("+" | "-") product)*
-product        ::= unary (("*" | "/") unary)*   /* a / alone between two values divides */
+product        ::= unary (("*" | "/" | "%") unary)*   /* a / alone between two values divides; % leaves what's over, as a clock counts */
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?
@@ -361,6 +362,8 @@ track          ::= "track" NAME "over" qualified "." NAME ("{" NEWLINE? (("hide"
 table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? ("icon" NAME)? END
                  | "reorder" NAME END
+                 /* a small picture of a file each row holds, before its cells */
+                 | "picture" NAME ("fit" | "fill")? END
                  | "hide" "when" "empty" END
                  | "empty" STRING END
                  | "download" STRING END

@@ -66,6 +66,16 @@ namespace one::generators {
             out.push_back(file("src/app.tsx", app_tsx(screens)));
             for (const auto& pages : pages_) out.push_back(file("src/pages/" + pages.name + ".generated.ts", pages_module(pages)));
             if (!icon_.empty()) out.push_back(file("public/icon.svg", icon_svg()));
+            // Fonts the theme brings, served beside the site.
+            for (const auto& [family, path] : look().font_files) {
+                auto bytes = platform::read_file(path);
+                if (!bytes) continue;
+                output_file f{"public/fonts/" + path.substr(path.find_last_of('/') + 1), *bytes, false, {}};
+                std::size_t lines = static_cast<std::size_t>(std::count(f.content.begin(), f.content.end(), '\n'));
+                if (!f.content.empty() && f.content.back() != '\n') ++lines;
+                f.sources.assign(lines, code::source{path, 1});
+                out.push_back(std::move(f));
+            }
             // Served as they are: Vite copies public/ into the site unchanged.
             if (!served_.empty()) {
                 for (const auto& name : platform::files_under(served_)) {
@@ -793,6 +803,11 @@ namespace one::generators {
                     return "(ordered(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " ordered(" + condition_of(parts, ns, *binary->right, read) + "))";
                 }
                 // A value worked out, like layer.size * 1.1.
+                // As a clock counts, never below none: -1 % 4 is 3.
+                if (binary->op == token_kind::remainder) {
+                    std::string l = "Number(" + condition_of(parts, ns, *binary->left, read) + ")", r = "Number(" + condition_of(parts, ns, *binary->right, read) + ")";
+                    return "(" + l + " - " + r + " * Math.floor(" + l + " / " + r + "))";
+                }
                 if (binary->op == token_kind::plus || binary->op == token_kind::minus || binary->op == token_kind::star || binary->op == token_kind::slash) {
                     std::string op = binary->op == token_kind::plus ? "+" : binary->op == token_kind::minus ? "-" : binary->op == token_kind::star ? "*" : "/";
                     return "(Number(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " Number(" + condition_of(parts, ns, *binary->right, read) + "))";
@@ -1269,6 +1284,7 @@ namespace one::generators {
                     line += " name=" + web_detail::js_string(route_ + " " + (c->over ? *c->over : std::string("collage")));
                     if (c->paste_into) line += " pasteInto=" + web_detail::js_string(*c->paste_into);
                     if (c->sized) line += " sizedWidth=" + web_detail::js_string(c->sized->first) + " sizedHeight=" + web_detail::js_string(c->sized->second);
+                    if (const language::entity_declaration* layer = listed(ns, c->view.text(), c->list); layer && c->sized) line += " update=" + web_detail::js_string(web_detail::join(ns, layer->name + "::update"));
                     if (c->preview) {
                         line += " preview=" + web_detail::js_string(full_command(ns, *c->preview)) + " previewInto=" + web_detail::js_string(c->preview_into) +
                                 " previewWide={" + std::to_string(c->preview_wide) + "}";
@@ -2333,6 +2349,7 @@ namespace one::generators {
             if (!table.hue.empty()) line += " hue=" + web_detail::js_string(table.hue);
             if (table.hide_empty) line += " hideEmpty";
             if (table.empty) line += " empty=" + web_detail::js_string(*table.empty);
+            if (table.picture) line += " picture=" + web_detail::js_string(*table.picture) + (table.picture_sits == "fit" ? " fit" : "");
             // A row picked with a click, when the screen picks one of this list.
             for (const auto& [name, of] : picks_) {
                 if (of.view == view && of.list == (table.list ? *table.list : "rows")) line += " pick=" + web_detail::js_string(route_ + " " + name);
