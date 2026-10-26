@@ -17,7 +17,7 @@ project studio {
 namespace studio at / {
 
 	entity poster {
-		title       text    required
+		title       text
 		color       enum    ink | paper | sky = color::paper
 		views       number  = 0
 		width       number  = 1600
@@ -114,7 +114,7 @@ namespace studio at / {
 		}
 		toolbar {
 			group "Poster" {
-				poster::create "New" icon add key ctrl+n { title = "Untitled" } then open /posters/:poster
+				poster::create "New" icon add key ctrl+n { width = screen.width  height = screen.height } then open /posters/:poster
 				poster::delete "Delete" icon delete key delete
 			}
 			group "Color" small {
@@ -142,12 +142,11 @@ namespace studio at / {
 		}
 	}
 
-	// A poster's layers, placed and slid where they look right.
 	// Straight into work: the newest poster with nothing on it yet, as big as this
 	// screen, or a new one.
 	screen "New poster" /new {
 		on open open /posters/:poster for posters where poster.first_layer == none && poster.width == screen.width && poster.height == screen.height
-		on open poster::create { title = "Untitled"  width = screen.width  height = screen.height } then open /posters/:poster
+		on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster
 	}
 
 	// Every poster as it looks, from the preview it keeps of itself.

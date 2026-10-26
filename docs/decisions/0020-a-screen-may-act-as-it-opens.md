@@ -20,7 +20,7 @@ component written by hand twice, once for the desktop and once for the web.
 ```one
 screen "New poster" /new {
 	on open open /posters/:poster for posters where poster.first_layer == none && poster.width == screen.width
-	on open poster::create { title = "Untitled"  width = screen.width } then open /posters/:poster
+	on open poster::create { width = screen.width } then open /posters/:poster
 }
 ```
 

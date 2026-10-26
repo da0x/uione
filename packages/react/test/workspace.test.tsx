@@ -133,7 +133,7 @@ describe("a workspace", () => {
     function Where() {
       return <p>At {useLocation().pathname}</p>;
     }
-    const studio = defineScreen({ title: "Studio", route: "/" }, () => <Command name="studio::poster::create" label="New" given={{ title: "Untitled" }} thenOpen="/posters/:poster" />);
+    const studio = defineScreen({ title: "Studio", route: "/" }, () => <Command name="studio::poster::create" label="New" given={{ width: 1920 }} thenOpen="/posters/:poster" />);
     const poster = defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Where />);
     render(<App name="studio" screens={[studio, poster]} ui={plain} data={source} location="/" />);
     fireEvent.click(screen.getByRole("button", { name: "New" }));
@@ -152,7 +152,7 @@ describe("a workspace", () => {
           ready={posters.status === "live"}
           lines={[
             { open: "/posters/:poster", rows, where: (row) => row["width"] === 1920 },
-            { run: { name: "studio::poster::create", given: { title: "Untitled" }, thenOpen: "/posters/:poster" } },
+            { run: { name: "studio::poster::create", given: { width: 1920 }, thenOpen: "/posters/:poster" } },
           ]}
         />
       );
@@ -169,6 +169,6 @@ describe("a workspace", () => {
     none.set("studio::posters", { rows: [] });
     render(<App name="studio" screens={[opening, poster]} ui={plain} data={none} location="/" />);
     await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
-    expect(none.runs).toEqual([{ command: "studio::poster::create", input: { title: "Untitled" } }]);
+    expect(none.runs).toEqual([{ command: "studio::poster::create", input: { width: 1920 } }]);
   });
 });

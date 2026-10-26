@@ -3873,7 +3873,7 @@ namespace one::language {
         void verify_on_open(const std::string& ns, const on_open_item& opening, location where, const std::string& route) {
             if (!opening.route) {
                 if (opening.run.size() != 1 || !std::holds_alternative<button_item>(opening.run.front().node)) {
-                    error(where, "on open runs a command, like poster::create { title = \"Untitled\" } then open /posters/:poster, or opens a row, like open /posters/:poster for posters");
+                    error(where, "on open runs a command, like poster::create { width = screen.width } then open /posters/:poster, or opens a row, like open /posters/:poster for posters");
                     return;
                 }
                 screen_items(ns, opening.run, route);
