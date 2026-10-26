@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <sstream>
 
 #include "one/local/local.hpp"
 
@@ -33,11 +34,43 @@ namespace one::local {
 		return source;
 	}
 
+	namespace {
+
+		// When something was made or last changed, kept as RFC 3339 text so times are in
+		// order as text, handed to screens as a time, as a server's are.
+		void times_as_times(value& v) {
+			if (v.is_array()) {
+				for (auto& item : v.items) times_as_times(item);
+				return;
+			}
+			if (!v.is_map()) return;
+			for (auto& [name, field] : v.fields) {
+				if ((name == "created_at" || name == "updated_at") && field.is_string()) {
+					std::istringstream in(field.as_string());
+					std::chrono::sys_time<std::chrono::nanoseconds> at;
+					in >> std::chrono::parse("%FT%TZ", at);
+					if (in.fail()) continue;
+					auto since = at.time_since_epoch();
+					auto whole = std::chrono::floor<std::chrono::seconds>(since);
+					value t;
+					t.type = value::kind::time;
+					t.time.seconds = whole.count();
+					t.time.nanos = static_cast<std::int32_t>((since - whole).count());
+					field = std::move(t);
+				} else {
+					times_as_times(field);
+				}
+			}
+		}
+
+	}  // namespace
+
 	screens::view_state local_source::build(const std::string& view, const std::string& subject) const {
 		auto found = views_.find(view);
 		if (found == views_.end()) return {screens::status::failed, value::map(), "there's no view " + view};
 		std::optional<value> built = found->second(store_, subject);
 		if (!built) return {screens::status::missing, value::map(), ""};
+		times_as_times(*built);
 		return {screens::status::ready, std::move(*built), ""};
 	}
 

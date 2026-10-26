@@ -158,7 +158,7 @@ namespace one::desktop::runtime {
 		// Each row keeps the same room for its actions, so its columns line up with the others'.
 		float acting_width = 0;
 		for (const auto& a : spec.actions) {
-			if (a.allowed) acting_width += 24 + 9 * static_cast<float>(a.label.size());
+			if (a.allowed) acting_width += !a.icon.empty() && desktop::has_icon(a.icon) ? 34 : 24 + 9 * static_cast<float>(a.label.size());
 		}
 		column_widths sized;
 		for (const auto& c : spec.columns) {
@@ -174,11 +174,14 @@ namespace one::desktop::runtime {
 				if (sized.growing.empty() || sized.widest[c.field] > sized.widest[sized.growing]) sized.growing = c.field;
 			}
 		}
+		// Rows put in order have a way up and a way down on each, as well as Alt and the arrows.
+		constexpr float moving_width = 2 * 28 + 2;
 		std::vector<desktop::view> labels;
 		if (spec.tint) labels.push_back(desktop::spacer().grow(0).width(3));
 		if (!spec.picture.empty()) labels.push_back(desktop::spacer().grow(0).width(40));
 		for (const auto& c : spec.columns) labels.push_back(sized(desktop::text(c.label, quieter()), c.field));
 		if (acting_width > 0) labels.push_back(desktop::spacer().grow(0).width(acting_width));
+		if (model.arranging) labels.push_back(desktop::spacer().grow(0).width(moving_width));
 		parts.push_back(desktop::row(std::move(labels)).spacing(12).padding(edges(0, 8)));
 		std::vector<desktop::list_row> shown;
 		std::map<std::string, value> by_id;
@@ -208,14 +211,25 @@ namespace one::desktop::runtime {
 				if (!a.allowed || (a.when && !a.when(row))) continue;
 				std::string opens = id + "|" + a.command;
 				bool asks = !a.form.empty();
-				buttons.push_back(desktop::button(p.running(a.command) ? a.label + "…" : a.label, [&p, command = a.command, id, asks, acting = model.acting, opens] {
+				auto press = [&p, command = a.command, id, asks, acting = model.acting, opens] {
 					if (asks) acting.set(acting.peek() == opens ? "" : opens);
 					else p.run(command, value(std::map<std::string, value>{{"id", id}}));
-				}));
+				};
+				// With an icon, drawn as it, its words said when it's pointed at.
+				if (!a.icon.empty() && desktop::has_icon(a.icon)) buttons.push_back(desktop::tool_button(a.icon, a.label, std::move(press)));
+				else buttons.push_back(desktop::button(p.running(a.command) ? a.label + "…" : a.label, std::move(press)));
 			}
 			if (acting_width > 0) {
 				buttons.insert(buttons.begin(), desktop::spacer());
 				cells.push_back(desktop::row(std::move(buttons)).spacing(6).width(acting_width));
+			}
+			if (model.arranging) {
+				std::size_t at = static_cast<std::size_t>(&row - model.rows.data());
+				std::vector<desktop::view> moving;
+				moving.push_back(at > 0 ? desktop::tool_button("raise", "Move up", [&p, key = model.key, reorder = *spec.reorder, around = model.rows, id] { move_row(p, key, reorder, around, id, -1); })
+				                        : desktop::spacer().grow(0).width(28));
+				if (at + 1 < model.rows.size()) moving.push_back(desktop::tool_button("lower", "Move down", [&p, key = model.key, reorder = *spec.reorder, around = model.rows, id] { move_row(p, key, reorder, around, id, 1); }));
+				cells.push_back(desktop::row(std::move(moving)).spacing(2).width(moving_width));
 			}
 			std::vector<desktop::view> inside;
 			inside.push_back(desktop::row(std::move(cells)).spacing(12).align(align::center));

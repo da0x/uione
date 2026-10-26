@@ -3289,7 +3289,7 @@ namespace one::language {
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
-                "center", "color", "edges"};
+                "center", "color", "edges", "blend"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 

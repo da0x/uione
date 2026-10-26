@@ -167,6 +167,19 @@ interface Listener {
   last: string; // what it was told last, as JSON, so it's told only of a change
 }
 
+// When something was made or last changed, kept as RFC 3339 text so times are in
+// order as text, handed to screens as a time, as a server's are.
+function timesAsTimes(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(timesAsTimes);
+  if (v === null || typeof v !== "object" || v instanceof Date) return v;
+  const out: Record<string, unknown> = {};
+  for (const [name, field] of Object.entries(v as Record<string, unknown>)) {
+    const at = (name === "created_at" || name === "updated_at") && typeof field === "string" ? Date.parse(field) : NaN;
+    out[name] = Number.isNaN(at) ? timesAsTimes(field) : new Date(at);
+  }
+  return out;
+}
+
 // The source. Commands run one at a time, in the order they're asked: each sees what
 // the one before it left. Besides its own commands it has two: one::undo takes back
 // the last step taken while the page is open, and one::redo takes it again, each
@@ -209,7 +222,7 @@ export function localSource(options: LocalOptions): LocalSource {
     const build = views.get(view);
     if (!build) return { status: "denied", data: undefined };
     // What a view is per that's gone reads as a document that isn't there.
-    return { status: "live", data: build(rows, subject) ?? {} };
+    return { status: "live", data: timesAsTimes(build(rows, subject) ?? {}) as Row };
   };
 
   const tell = (l: Listener) => {

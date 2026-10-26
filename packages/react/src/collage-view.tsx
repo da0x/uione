@@ -15,7 +15,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { backgroundAt, cornerAt, cropEdgesAt, cropped, moved, resized, slid, slideRange, slides, snapLines, wholeOf } from "./collage.js";
+import { backgroundAt, cornerAt, cropEdgesAt, cropped, harmonicFill, moved, resized, slid, slideRange, slides, snapLines, wholeOf } from "./collage.js";
 import type { Backdrop, Box, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
@@ -209,6 +209,57 @@ function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: num
 // The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
 // all of it, or only one layer, as big as that layer, cropped as it is. Pictures not
 // yet read are read first.
+// With around blend, the space no picture covers, filled from every picture's edges
+// (harmonic fill): its pictures drawn small, each gap settled between the colors
+// around it, and the result drawn as big as the collage, smooth as it is. Worked out
+// again only when what it's drawn from changes, once every picture has been read.
+const blends = new Map<string, HTMLCanvasElement>();
+function blendOf(layers: Row[], data: Row, W: number, H: number, address: ((path: string) => Promise<string>) | undefined): HTMLCanvasElement | undefined {
+  if (str(data["around"]) !== "blend" || W <= 0 || H <= 0) return undefined;
+  const key = JSON.stringify([layers, data["background"], data["zoom"], data["slide_x"], data["slide_y"], W, H]);
+  const known = blends.get(key);
+  if (known) return known;
+  const gw = 320, gh = Math.max(1, Math.round((320 * H) / W)), s = gw / W;
+  const small = document.createElement("canvas");
+  small.width = gw;
+  small.height = gh;
+  const c = small.getContext("2d", { willReadFrequently: true });
+  if (!c) return undefined;
+  const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
+  for (const l of layers) {
+    if (isWords(l)) continue;
+    const path = str(l["picture"]);
+    const p = pictureOf(path, address);
+    if (!p) return undefined; // not read yet: blended once it is
+    const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
+    if (isBackground(layers, l)) {
+      const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
+      const b = backgroundAt(backdrop, kept.width, kept.height);
+      c.drawImage(kept, b.x * s, b.y * s, b.w * s, b.h * s);
+    } else {
+      const b = boxOf(l), cr = cropOf(l);
+      c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x * s, b.y * s, b.w * s, b.h * s);
+    }
+  }
+  const pixels = c.getImageData(0, 0, gw, gh);
+  const cells = gw * gh, colors = new Float64Array(cells * 3), covered: boolean[] = new Array(cells);
+  for (let i = 0; i < cells; i++) {
+    // Only a cell a picture covers whole is its color; one its edge crosses is part
+    // picture, part nothing, and would leave a seam of the two.
+    covered[i] = pixels.data[i * 4 + 3]! >= 250;
+    for (let k = 0; k < 3; k++) colors[i * 3 + k] = pixels.data[i * 4 + k]!;
+  }
+  const filled = harmonicFill(gw, gh, colors, covered);
+  for (let i = 0; i < cells; i++) {
+    for (let k = 0; k < 3; k++) pixels.data[i * 4 + k] = Math.max(0, Math.min(255, Math.round(filled[i * 3 + k]!)));
+    pixels.data[i * 4 + 3] = 255;
+  }
+  c.putImageData(pixels, 0, 0);
+  if (blends.size > 16) blends.clear();
+  blends.set(key, small);
+  return small;
+}
+
 async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, only?: string): Promise<HTMLCanvasElement> {
   const read = async (path: string) => {
     if (!pictures.has(path) || pictures.get(path) === "reading") {
@@ -234,6 +285,10 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, board.w, board.h);
   }
+  // Every picture read first, so what fills between them is worked out from them all.
+  for (const l of layers) if (!isWords(l)) await read(str(l["picture"]));
+  const blend = only ? undefined : blendOf(layers, data, W, H, address);
+  if (blend) c.drawImage(blend, board.x, board.y, board.w, board.h);
   for (const l of layers) {
     if (only && l["id"] !== only) continue;
     if (isWords(l)) {
@@ -249,7 +304,7 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     if (isBackground(layers, l)) {
       const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
       const b = at(backgroundAt(backdrop, kept.width, kept.height));
-      paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
+      if (!blend) paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
       c.drawImage(kept, b.x, b.y, b.w, b.h);
     } else {
       const b = at(boxOf(l)), cr = cropOf(l);
@@ -726,6 +781,8 @@ export function Collage({
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, bw, bh);
     c.restore();
+    const blend = blendOf(layers, data, W, H, address);
+    if (blend) c.drawImage(blend, board.x, board.y, bw, bh);
     let framed: Box | undefined;
     c.save();
     c.beginPath();
@@ -772,7 +829,7 @@ export function Collage({
           } else if (isBackground(layers, l)) {
             // Only what its crop keeps, what's around it filled from that part's edges.
             const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
-            paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
+            if (!blend) paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
             c.drawImage(kept, b.x, b.y, b.w, b.h);
           } else {
             const cr = cropOf(l);
@@ -975,7 +1032,9 @@ export function Collage({
       }
       return;
     }
-    if (!inside(w.board, p) || layers.length === 0 || isWords(layers[0]!)) {
+    // On the background with nothing over it, it's picked; anywhere else, on the space
+    // around it or off the collage, nothing is.
+    if (!inside(w.board, p) || layers.length === 0 || isWords(layers[0]!) || !inside(onBoard(whereIs(layers[0]!)), p)) {
       pickRow("");
       return;
     }

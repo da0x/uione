@@ -166,10 +166,10 @@ TEST_CASE("one run starts the first app a project targets, or the one --target n
     REQUIRE(web.before.size() == 1);
     CHECK(web.before[0].command == std::vector<std::string>{"yarn", "install"});
     CHECK(web.before[0].folder == out + "/web");
-    CHECK(web.app.command == std::vector<std::string>{"yarn", "dev"});
+    CHECK(web.app.command == std::vector<std::string>{"yarn", "dev", "--force"});
     auto npm = driver::plan_run(built, out, "web", false);
     CHECK(npm.before[0].command == std::vector<std::string>{"npm", "install"});
-    CHECK(npm.app.command == std::vector<std::string>{"npm", "run", "dev"});
+    CHECK(npm.app.command == std::vector<std::string>{"npm", "run", "dev", "--", "--force"});
 
     CHECK(driver::plan_run(built, out, "terminal", true).refusal == "this project doesn't build terminal");
 }

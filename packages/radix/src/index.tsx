@@ -724,9 +724,10 @@ export const radix: ComponentSet = {
                         disabled={a.disabled}
                         onClick={a.onClick}
                         aria-label={typeof row.cells[lead] === "string" && row.cells[lead] ? `${a.label} ${row.cells[lead]}` : undefined}
+                        title={a.icon && buttonIcons[a.icon] ? a.label : undefined}
                         className="font-medium text-accent hover:underline disabled:opacity-50"
                       >
-                        {a.label}
+                        {a.icon && buttonIcons[a.icon] ? <span aria-label={a.label}>{buttonIcons[a.icon]}</span> : a.label}
                       </button>
                     ))}
                   </div>
@@ -847,9 +848,10 @@ export const radix: ComponentSet = {
                       onClick={a.onClick}
                       // Named for its row too, like Rename Open, among the same button on every row.
                       aria-label={typeof row.cells[0] === "string" && row.cells[0] ? `${a.label} ${row.cells[0]}` : undefined}
+                      title={a.icon && buttonIcons[a.icon] ? a.label : undefined}
                       className="ml-3 font-medium text-accent hover:underline disabled:opacity-50"
                     >
-                      {a.label}
+                      {a.icon && buttonIcons[a.icon] ? <span aria-label={a.label}>{buttonIcons[a.icon]}</span> : a.label}
                     </button>
                   ))}
                 </td>
@@ -1963,14 +1965,15 @@ export const radix: ComponentSet = {
     name === "workspace" ? (
       <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
         {regions.bar && (
-          <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">
-            {site && (
-              <span className="mr-2 text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
-                {site}
-              </span>
-            )}
-            {regions.bar}
-            <span className="ml-auto">
+          // The app's name in the middle, in the theme's heading font, as a window's
+          // title is; the bar's lines at the start and light and dark at the end, each
+          // side as wide as the other so the name stays centered.
+          <div className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line bg-surface px-3">
+            <div className="flex min-w-0 items-center gap-2">{regions.bar}</div>
+            <span className="text-lg leading-none font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+              {site}
+            </span>
+            <span className="flex justify-end">
               <ThemeToggle />
             </span>
           </div>

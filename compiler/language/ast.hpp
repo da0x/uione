@@ -1425,7 +1425,7 @@ namespace one::language {
             {"crop_x", "number"}, {"crop_y", "number"}, {"crop_w", "number"}, {"crop_h", "number"},
             {"turns", "number"}, {"mirrored", "number"},
             {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"},
-            {"background", "fit fill stretch center", true}, {"around", "edges color", true}, {"zoom", "number", true},
+            {"background", "fit fill stretch center", true}, {"around", "edges color blend", true}, {"zoom", "number", true},
             {"slide_x", "number", true}, {"slide_y", "number", true},
         };
         return all;

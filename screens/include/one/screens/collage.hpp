@@ -101,4 +101,11 @@ namespace one::screens::collage {
 	// a corner; 0 inside it, to move it; or -1 outside.
 	int crop_edges_at(box r, point at, double handle);
 
+	// A picture's gaps, the cells not `covered`, filled from what's around them
+	// (harmonic fill): each settles to the average of its neighbors, so the colors at
+	// every edge blend across the gap, like a film stretched between them. `colors` is
+	// three channels a cell, row by row; the covered ones stay as they are. Worked out
+	// on smaller grids first, then each larger one, so it settles in a few passes.
+	std::vector<double> harmonic_fill(int width, int height, std::vector<double> colors, const std::vector<bool>& covered);
+
 } // namespace one::screens::collage

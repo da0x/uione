@@ -692,6 +692,7 @@ namespace one::generators {
                             action += ", .form = " + fields_of(parts, ns, *asks);
                             if (asks->submit) action += ", .submit = " + str(*asks->submit);
                         }
+                        if (column.icon) action += ", .icon = " + str(*column.icon);
                         actions += (actions.empty() ? "" : ", ") + action + "}";
                         continue;
                     }

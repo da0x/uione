@@ -115,6 +115,7 @@ namespace one::desktop {
 			    {"center", {box(1.5f, 3, 13, 10, 1), path("M6 6.5h4v3H6z", true)}},
 			    {"color", {path("M8 1L11.96 7.65A4.6 4.6 0 1 1 4.04 7.65z")}},
 			    {"edges", {box(5, 5, 6, 6, 1), path("M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5")}},
+			    {"blend", {ring(5.5f, 8, 4), ring(10.5f, 8, 4)}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},

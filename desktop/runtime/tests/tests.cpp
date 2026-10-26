@@ -1219,7 +1219,7 @@ int main() {
 	return check::run();
 }
 
-TEST("a workspace: its bar, starting with the app's name and ending with light and dark, a toolbar of groups whose tools have keys, a side shown while a toggle's on, and a status line saying what was undone") {
+TEST("a workspace: its bar, the app's name in its middle and light and dark at its end, a toolbar of groups whose tools have keys, a side shown while a toggle's on, and a status line saying what was undone") {
 	memory_source data;
 	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return "p1"; });
 	data.on("one::undo", [](const value&, memory_source&) -> answer { return "studio::poster::place"; });
@@ -1386,6 +1386,42 @@ TEST("a background cropped sits by the part it keeps, what's around it filled fr
 	navigator nav(s, data);
 	nav.open("/");
 	matches_golden("collage-background-cropped", {900, 560}, [&] { return drawn(nav); });
+}
+
+TEST("around blend fills the space no picture covers from every picture's edges, each color flowing into the next") {
+	// Pictures of one color each, kept in a folder of the test's own.
+	std::filesystem::path folder = std::filesystem::temp_directory_path() / "uione-blend-test";
+	std::filesystem::create_directories(folder);
+	auto solid = [&](const std::string& name, int w, int h, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+		for (std::size_t i = 0; i < pixels.size(); i += 4) pixels[i] = r, pixels[i + 1] = g, pixels[i + 2] = b, pixels[i + 3] = 255;
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	solid("red.png", 30, 90, 220, 40, 40);
+	solid("blue.png", 30, 90, 40, 80, 220);
+	solid("green.png", 200, 200, 60, 180, 90);
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// A small background in the middle, a picture at each side, and the space between
+	// them blended.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900}, {"background", "center"}, {"around", "blend"},
+	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "green.png"}, {"x", 0}, {"y", 0}, {"w", 200}, {"h", 200}}),
+	                                      value(fields{{"id", "l1"}, {"picture", "red.png"}, {"x", 0}, {"y", 0}, {"w", 300}, {"h", 900}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "blue.png"}, {"x", 1300}, {"y", 0}, {"w", 300}, {"h", 900}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
+	std::filesystem::remove_all(folder);
 }
 
 TEST("a collage fills in the own size of a picture kept before it was, as it's turned, once, never a step undo takes back, in whichever fields keep it") {

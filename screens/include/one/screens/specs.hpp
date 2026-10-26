@@ -286,6 +286,7 @@ namespace one::screens {
 		std::function<bool(const value& row)> when = {};  // only the rows it holds for
 		std::vector<form_field> form = {};
 		std::string submit = "";
+		std::string icon = "";  // delete "Remove" icon delete: drawn as that, its words said when pointed at
 	};
 	template <class View>
 	struct basic_table_spec {

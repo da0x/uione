@@ -23,7 +23,7 @@ namespace studio at / {
 		width       number  = 1600
 		height      number  = 900
 		background  enum    fit | fill | stretch | center = background::fill
-		around      enum    edges | color = around::edges
+		around      enum    edges | color | blend = around::edges
 		slide_x     number  = 0.5
 		slide_y     number  = 0.5
 		preview     file

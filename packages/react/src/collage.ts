@@ -226,3 +226,74 @@ export function cropEdgesAt(r: Box, at: Point, handle: number): number {
   else if (Math.abs(at.y - (r.y + r.h)) <= handle) edges |= 8;
   return edges || contains(r, at) ? edges : -1;
 }
+
+// A picture's gaps, the cells not `covered`, filled from what's around them (harmonic
+// fill): each settles to the average of its neighbors, so the colors at every edge
+// blend across the gap, like a film stretched between them. `colors` is three
+// channels a cell, row by row; the covered ones stay as they are. Worked out on
+// smaller grids first, then each larger one, so it settles in a few passes.
+export function harmonicFill(width: number, height: number, given: ArrayLike<number>, covered: ArrayLike<boolean>): Float64Array {
+  const colors = Float64Array.from(given);
+  const cell = (x: number, y: number) => y * width + x;
+  if (width <= 0 || height <= 0 || !Array.prototype.some.call(covered, (c: boolean) => c)) return colors;
+  // Each gap starts from a grid half as big, or from the average of what's covered.
+  if (width > 2 && height > 2) {
+    const cw = Math.floor((width + 1) / 2), ch = Math.floor((height + 1) / 2);
+    const small = new Float64Array(cw * ch * 3);
+    const held: boolean[] = new Array(cw * ch).fill(false);
+    for (let y = 0; y < ch; y++) {
+      for (let x = 0; x < cw; x++) {
+        const sum = [0, 0, 0];
+        let count = 0;
+        for (let fy = y * 2; fy < Math.min(height, y * 2 + 2); fy++) {
+          for (let fx = x * 2; fx < Math.min(width, x * 2 + 2); fx++) {
+            if (!covered[cell(fx, fy)]) continue;
+            for (let c = 0; c < 3; c++) sum[c]! += colors[cell(fx, fy) * 3 + c]!;
+            count++;
+          }
+        }
+        const at = y * cw + x;
+        held[at] = count > 0;
+        for (let c = 0; c < 3; c++) small[at * 3 + c] = count > 0 ? sum[c]! / count : 0;
+      }
+    }
+    const filled = harmonicFill(cw, ch, small, held);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (covered[cell(x, y)]) continue;
+        const from = (Math.floor(y / 2) * cw + Math.floor(x / 2)) * 3;
+        for (let c = 0; c < 3; c++) colors[cell(x, y) * 3 + c] = filled[from + c]!;
+      }
+    }
+  } else {
+    const sum = [0, 0, 0];
+    let count = 0;
+    for (let i = 0; i < covered.length; i++) {
+      if (!covered[i]) continue;
+      for (let c = 0; c < 3; c++) sum[c]! += colors[i * 3 + c]!;
+      count++;
+    }
+    for (let i = 0; i < covered.length; i++) {
+      if (!covered[i]) for (let c = 0; c < 3; c++) colors[i * 3 + c] = sum[c]! / count;
+    }
+  }
+  // Then each gap is the average of its neighbors, row by row, again and again.
+  const passes = width > 2 && height > 2 ? 40 : 200;
+  for (let pass = 0; pass < passes; pass++) {
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (covered[cell(x, y)]) continue;
+        const sum = [0, 0, 0];
+        let count = 0;
+        const add = (nx: number, ny: number) => {
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+          for (let c = 0; c < 3; c++) sum[c]! += colors[cell(nx, ny) * 3 + c]!;
+          count++;
+        };
+        add(x - 1, y), add(x + 1, y), add(x, y - 1), add(x, y + 1);
+        for (let c = 0; c < 3; c++) colors[cell(x, y) * 3 + c] = sum[c]! / count;
+      }
+    }
+  }
+  return colors;
+}

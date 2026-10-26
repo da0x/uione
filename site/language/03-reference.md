@@ -1892,7 +1892,8 @@ screen "Book" /books/:book {
   and terminal apps save it where downloads go, beside any file already there,
   and say where. The name ends in `.csv`, with no folder.
 - `reorder position` lets the rows be dragged into order, or moved with Alt+↑ and
-  Alt+↓ on a row's handle, for whoever may update them. A drop gives the row a
+  Alt+↓ on a row's handle, for whoever may update them; in the desktop app, each row
+  has a Move up and a Move down button instead of a handle to drag. A drop gives the row a
   position between its new neighbors', so only it changes. The list is ordered by
   that field, and the entity's `update` may set it. It works within a tab or a page
   too, where a row's neighbors are still its neighbors in the whole list, but not
@@ -2129,7 +2130,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   background: it sits as the view's `background` says, `fit`, `fill`, `stretch` or
   `center`, zoomed by `zoom` and slid by `slide_x` and `slide_y`, and what it leaves
   around it is its edges drawn out, or, with `around` set to `color`, its edge
-  color. A click picks a layer, the background when it's on nothing else, and Esc
+  color. With `around` set to `blend`, the space no picture covers is filled from
+  every picture's edges, not just the background's, each settling between the
+  colors around it (a harmonic fill), so two pictures with a gap between them flow
+  into each other across it. A click picks a layer, the background when it's on nothing else, and Esc
   lets it go.
   - `place layer::place`: a picked layer is moved, or resized by a corner with its
     shape kept unless Shift is held, and the command is sent its `x y w h`; the arrows
@@ -2257,9 +2261,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   nothing of the site around it: `bar { ... }` along the top, `toolbar { ... }` under
   it, `main { ... }` for the work, `side when layers { ... }` beside it while a
   toggle's on, and `status { ... }` along the bottom. Any region may say `when`, as
-  `side` does there. With the site's bar out of sight, a workspace's `bar` starts
-  with the app's name, in the theme's heading font, and ends with the switch
-  between light and dark, as the site's bar would.
+  `side` does there. With the site's bar out of sight, a workspace's `bar` has the
+  app's name in the middle, in the theme's heading font, as a window's title is,
+  its own lines at the start, and the switch between light and dark at the end.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
   buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, two rows of

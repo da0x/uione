@@ -502,6 +502,22 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		} else if (what == "crop_edges_at") {
 			auto got = c::crop_edges_at(box_of(k["box"]), {n(k["at"], 0), n(k["at"], 1)}, k["handle"].as_double());
 			check::verify(got == k["edges"].as_integer(), "crop_edges_at", note);
+		} else if (what == "harmonic_fill") {
+			int w = static_cast<int>(n(k["size"], 0)), h = static_cast<int>(n(k["size"], 1));
+			std::vector<double> colors(static_cast<std::size_t>(w) * h * 3, 0);
+			std::vector<bool> covered(static_cast<std::size_t>(w) * h, false);
+			for (const auto& c : k["covered"].as_array()) {
+				std::size_t at = static_cast<std::size_t>(n(c, 1)) * w + static_cast<std::size_t>(n(c, 0));
+				covered[at] = true;
+				for (std::size_t i = 0; i < 3; ++i) colors[at * 3 + i] = n(c, 2 + i);
+			}
+			auto got = c::harmonic_fill(w, h, colors, covered);
+			for (const auto& e : k["expect"].as_array()) {
+				std::size_t at = static_cast<std::size_t>(n(e, 1)) * w + static_cast<std::size_t>(n(e, 0));
+				bool close = true;
+				for (std::size_t i = 0; i < 3; ++i) close = close && std::abs(got[at * 3 + i] - n(e, 2 + i)) <= k["close"].as_double();
+				check::verify(close, "harmonic_fill", std::format("{} at {}, {}: {} {} {}", note, n(e, 0), n(e, 1), got[at * 3], got[at * 3 + 1], got[at * 3 + 2]));
+			}
 		} else {
 			check::verify(false, "a case of something known", note);
 		}

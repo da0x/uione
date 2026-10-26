@@ -108,16 +108,22 @@ namespace one::desktop::runtime {
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
 			if (auto v = taken(across); v.get()) {
-				// Filling the window, its bar says the app's name and switches light and
-				// dark, as the site's would.
+				// Filling the window, its bar says the app's name in the middle, in the theme's
+				// heading font, as a window's title is, and switches light and dark at its end,
+				// as the site's would: its lines and the switch each on a side as wide as the
+				// other, so the name stays centered.
 				if (std::string_view(across) == "bar") {
 					auto mark = t.heading(20);
 					mark.line_height = 1.1f;
+					std::vector<desktop::view> start, end;
+					start.push_back(std::move(v));
+					start.push_back(desktop::spacer());
+					end.push_back(desktop::spacer());
+					if (offers_dark()) end.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
 					std::vector<desktop::view> bar;
-					if (std::string name = app_name(); !name.empty()) bar.push_back(desktop::text(std::move(name), mark).padding(edges(0, 8, 0, 0)));
-					bar.push_back(std::move(v));
-					bar.push_back(desktop::spacer());
-					if (offers_dark()) bar.push_back(desktop::tool_button(dark() ? "sun" : "moon", dark() ? "Light" : "Dark", [] { dark(!dark()); }));
+					bar.push_back(desktop::row(std::move(start)).spacing(6).align(align::center).width(0).grow());
+					if (std::string name = app_name(); !name.empty()) bar.push_back(desktop::text(std::move(name), mark));
+					bar.push_back(desktop::row(std::move(end)).spacing(6).align(align::center).width(0).grow());
 					v = desktop::row(std::move(bar)).spacing(6).align(align::center);
 				}
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
@@ -125,7 +131,12 @@ namespace one::desktop::runtime {
 			}
 		}
 		std::vector<desktop::view> middle;
-		middle.push_back(taken("main").padding(edges(12, 12)).grow());
+		// Work that fills its place, like a collage, is as big as it; anything else, like
+		// a gallery of cards, scrolls when there's more of it than there's room for.
+		auto main = taken("main");
+		bool fills = main.get() && std::ranges::any_of(main.get()->children, [](const auto& c) { return c && c->grow > 0; });
+		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(12, 12)).grow());
+		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12))).grow());
 		if (auto side = taken("side"); side.get()) middle.push_back(desktop::scroll(std::move(side).padding(edges(12, 12))).width(288).grow(0).background({.fill = t.surface}));
 		parts.push_back(desktop::row(std::move(middle)).align(align::stretch).grow());
 		if (auto status = taken("status"); status.get()) {

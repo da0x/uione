@@ -139,7 +139,9 @@ without one it isn't installed or packaged.
 the project, then builds the first app the project targets and starts it, or the
 one `--target` names. A desktop or terminal app is configured and built with CMake,
 then started; the web app has its packages installed, with yarn, or npm when there's
-no yarn, and is served by Vite at the address it prints. Closing the app, or
+no yarn, and is served by Vite at the address it prints, with Vite's own copy of the
+packages made again each time, so a uione library changed since the last run is the
+one served. Closing the app, or
 Ctrl+C, stops it, as it would if it had been started by hand.
 
 ```sh

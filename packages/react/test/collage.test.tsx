@@ -7,12 +7,14 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { backgroundAt, cornerAt, cropEdgesAt, cropped, moved, resized, sitting, slid, slides, snapLines, wholeOf } from "../src/collage.js";
+import { backgroundAt, cornerAt, cropEdgesAt, cropped, harmonicFill, moved, resized, sitting, slid, slides, snapLines, wholeOf } from "../src/collage.js";
 import type { Backdrop, Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
 interface Case {
   what: string;
+  covered?: Numbers[]; // harmonic_fill: x, y and three channels of each covered cell
+  expect?: Numbers[];
   sits?: string;
   size?: Numbers;
   zoom?: number;
@@ -116,6 +118,21 @@ describe("where a collage's layers go", () => {
       case "crop_edges_at":
         expect(cropEdgesAt(boxOf(k.box!), { x: k.at![0]!, y: k.at![1]! }, k.handle!)).toBe(k.edges);
         break;
+      case "harmonic_fill": {
+        const [w, h] = k.size as [number, number];
+        const colors = new Array<number>(w * h * 3).fill(0), covered = new Array<boolean>(w * h).fill(false);
+        for (const c of k.covered!) {
+          const at = c[1]! * w + c[0]!;
+          covered[at] = true;
+          for (let i = 0; i < 3; i++) colors[at * 3 + i] = c[2 + i]!;
+        }
+        const got = harmonicFill(w, h, colors, covered);
+        for (const e of k.expect!) {
+          const at = e[1]! * w + e[0]!;
+          for (let i = 0; i < 3; i++) expect(Math.abs(got[at * 3 + i]! - e[2 + i]!)).toBeLessThanOrEqual(k.close!);
+        }
+        break;
+      }
       default:
         throw new Error(`there's no case of ${k.what}`);
     }

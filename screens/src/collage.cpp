@@ -191,4 +191,69 @@ namespace one::screens::collage {
 		return edges || r.contains(at) ? edges : -1;
 	}
 
+	std::vector<double> harmonic_fill(int width, int height, std::vector<double> colors, const std::vector<bool>& covered) {
+		auto cell = [&](int x, int y) { return static_cast<std::size_t>(y) * static_cast<std::size_t>(width) + static_cast<std::size_t>(x); };
+		if (width <= 0 || height <= 0 || std::ranges::none_of(covered, [](bool c) { return c; })) return colors;
+		// Each gap starts from a grid half as big, or from the average of what's covered.
+		if (width > 2 && height > 2) {
+			int cw = (width + 1) / 2, ch = (height + 1) / 2;
+			std::vector<double> small(static_cast<std::size_t>(cw) * ch * 3, 0);
+			std::vector<bool> held(static_cast<std::size_t>(cw) * ch, false);
+			for (int y = 0; y < ch; ++y) {
+				for (int x = 0; x < cw; ++x) {
+					double sum[3] = {0, 0, 0};
+					int count = 0;
+					for (int fy = y * 2; fy < std::min(height, y * 2 + 2); ++fy) {
+						for (int fx = x * 2; fx < std::min(width, x * 2 + 2); ++fx) {
+							if (!covered[cell(fx, fy)]) continue;
+							for (int c = 0; c < 3; ++c) sum[c] += colors[cell(fx, fy) * 3 + c];
+							++count;
+						}
+					}
+					std::size_t at = static_cast<std::size_t>(y) * cw + x;
+					held[at] = count > 0;
+					for (int c = 0; c < 3; ++c) small[at * 3 + c] = count > 0 ? sum[c] / count : 0;
+				}
+			}
+			small = harmonic_fill(cw, ch, std::move(small), held);
+			for (int y = 0; y < height; ++y) {
+				for (int x = 0; x < width; ++x) {
+					if (covered[cell(x, y)]) continue;
+					std::size_t from = (static_cast<std::size_t>(y / 2) * cw + x / 2) * 3;
+					for (int c = 0; c < 3; ++c) colors[cell(x, y) * 3 + c] = small[from + c];
+				}
+			}
+		} else {
+			double sum[3] = {0, 0, 0};
+			int count = 0;
+			for (std::size_t i = 0; i < covered.size(); ++i) {
+				if (!covered[i]) continue;
+				for (int c = 0; c < 3; ++c) sum[c] += colors[i * 3 + c];
+				++count;
+			}
+			for (std::size_t i = 0; i < covered.size(); ++i) {
+				if (!covered[i]) for (int c = 0; c < 3; ++c) colors[i * 3 + c] = sum[c] / count;
+			}
+		}
+		// Then each gap is the average of its neighbors, row by row, again and again.
+		int passes = width > 2 && height > 2 ? 40 : 200;
+		for (int pass = 0; pass < passes; ++pass) {
+			for (int y = 0; y < height; ++y) {
+				for (int x = 0; x < width; ++x) {
+					if (covered[cell(x, y)]) continue;
+					double sum[3] = {0, 0, 0};
+					int count = 0;
+					auto add = [&](int nx, int ny) {
+						if (nx < 0 || ny < 0 || nx >= width || ny >= height) return;
+						for (int c = 0; c < 3; ++c) sum[c] += colors[cell(nx, ny) * 3 + c];
+						++count;
+					};
+					add(x - 1, y), add(x + 1, y), add(x, y - 1), add(x, y + 1);
+					for (int c = 0; c < 3; ++c) colors[cell(x, y) * 3 + c] = sum[c] / count;
+				}
+			}
+		}
+		return colors;
+	}
+
 } // namespace one::screens::collage

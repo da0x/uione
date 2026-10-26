@@ -305,6 +305,12 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5" />
     </svg>
   ),
+  blend: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="5.5" cy="8" r="4" />
+      <circle cx="10.5" cy="8" r="4" />
+    </svg>
+  ),
   picture: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="2" y="3" width="12" height="10" rx="1.5" />

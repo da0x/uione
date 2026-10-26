@@ -2270,9 +2270,10 @@ namespace one::generators {
                         std::string action = web_detail::js_string(*command);
                         // A form for it on the screen asks first, opened from the row.
                         const language::form_item* asks = form_for(ns, screen, *command);
-                        if (column.label || !allowed.empty() || column.when || asks) {
+                        if (column.label || !allowed.empty() || column.when || asks || column.icon) {
                             action = "{ name: " + action;
                             if (column.label) action += ", label: " + web_detail::js_string(*column.label);
+                            if (column.icon) action += ", icon: " + web_detail::js_string(*column.icon);
                             // allowed={holds(...)} as a property: allowed: holds(...)
                             if (!allowed.empty()) action += ", allowed: " + allowed.substr(10, allowed.size() - 11);
                             if (column.when) action += ", when: (row) => " + row_condition(parts, *column.when);

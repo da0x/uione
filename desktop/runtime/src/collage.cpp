@@ -462,6 +462,51 @@ namespace one::desktop::runtime {
 
 		// The collage drawn on nothing, `scale` times its own size, as it's kept: all of
 		// it, or only one layer, as big as that layer, cropped as it is.
+		// With around blend, the space no picture covers, filled from every picture's edges
+		// (harmonic fill): its pictures drawn small, each gap settled between the colors
+		// around it, and the result drawn as big as the collage, smooth as it is. Worked
+		// out again only when what it's drawn from changes.
+		const desktop::picture* blended(page& p, const value& data, const value& layers, double width, double height) {
+			if (data["around"].as_string() != "blend" || width <= 0 || height <= 0) return nullptr;
+			static std::map<std::string, desktop::picture> made;
+			std::string key = std::format("{:016x}", std::hash<std::string>{}(ember::to_json(layers) + ember::to_json(data["background"]) + ember::to_json(data["zoom"]) +
+			                                                                   ember::to_json(data["slide_x"]) + ember::to_json(data["slide_y"]) + std::format(" {} {}", width, height)));
+			if (auto found = made.find(key); found != made.end()) return &found->second;
+			int gw = 320, gh = std::max(1, static_cast<int>(std::lround(320 * height / width)));
+			double s = gw / width;
+			auto small = desktop::picture::drawn(gw, gh, [&](desktop::canvas& c) {
+				auto at = [&](const model::box& b) { return desktop::rect{static_cast<float>(b.x * s), static_cast<float>(b.y * s), static_cast<float>(b.w * s), static_cast<float>(b.h * s)}; };
+				for (const auto& layer : layers.as_array()) {
+					if (is_words(layer)) continue;
+					if (is_background(layers, layer)) {
+						if (const desktop::picture* kept = background_picture(p, layer)) {
+							c.picture(*kept, at(model::background_at(backdrop_of(data, width, height), kept->width(), kept->height())), {0, 0, 1, 1});
+						}
+					} else if (const desktop::picture* shown = layer_picture(p, layer)) {
+						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
+					}
+				}
+			});
+			const auto& rgba = small.rgba();
+			std::size_t cells = static_cast<std::size_t>(gw) * gh;
+			if (rgba.size() < cells * 4) return nullptr;
+			std::vector<double> colors(cells * 3);
+			std::vector<bool> covered(cells);
+			for (std::size_t i = 0; i < cells; ++i) {
+				// Only a cell a picture covers whole is its color; one its edge crosses is
+				// part picture, part nothing, and would leave a seam of the two.
+				covered[i] = rgba[i * 4 + 3] >= 250;
+				for (std::size_t c = 0; c < 3; ++c) colors[i * 3 + c] = rgba[i * 4 + c];
+			}
+			colors = model::harmonic_fill(gw, gh, std::move(colors), covered);
+			std::vector<std::uint8_t> filled(cells * 4, 255);
+			for (std::size_t i = 0; i < cells; ++i) {
+				for (std::size_t c = 0; c < 3; ++c) filled[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(std::lround(colors[i * 3 + c]), 0L, 255L));
+			}
+			if (made.size() > 16) made.clear();
+			return &made.emplace(key, desktop::picture::of(gw, gh, std::move(filled))).first->second;
+		}
+
 		// What drawing it whole needs, gathered on the window's thread: its pictures, read
 		// and turned, and the font its words are in, so it's drawn away from that thread.
 		struct whole {
@@ -469,10 +514,11 @@ namespace one::desktop::runtime {
 			double width = 0, height = 0, scale = 1;
 			std::string only, family;
 			std::map<std::string, const desktop::picture*> pictures;  // each layer's, by its id
+			const desktop::picture* blend = nullptr;                   // what fills the space no picture covers, with around blend
 		};
 
 		whole gathered(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
-			whole all{data, layers, width, height, scale, only, current_theme().text_family, {}};
+			whole all{data, layers, width, height, scale, only, current_theme().text_family, {}, only.empty() ? blended(p, data, layers, width, height) : nullptr};
 			for (const auto& l : layers.as_array()) {
 				if (!is_words(l)) all.pictures[l["id"].as_string()] = is_background(layers, l) ? background_picture(p, l) : layer_picture(p, l);
 			}
@@ -493,6 +539,7 @@ namespace one::desktop::runtime {
 				};
 				desktop::rect board = at({0, 0, width, height});
 				if (all.only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
+				if (all.blend) c.picture(*all.blend, board, {0, 0, 1, 1});
 				for (const auto& layer : layers.as_array()) {
 					if (!all.only.empty() && layer["id"].as_string() != all.only) continue;
 					if (is_words(layer)) {
@@ -505,7 +552,7 @@ namespace one::desktop::runtime {
 					if (!shown) continue;
 					if (is_background(layers, layer)) {
 						desktop::rect on = at(model::background_at(backdrop_of(all.data, width, height), shown->width(), shown->height()));
-						paint_around(c, board, on, edge_key(layer), *shown, all.data["around"].as_string());
+						if (!all.blend) paint_around(c, board, on, edge_key(layer), *shown, all.data["around"].as_string());
 						c.picture(*shown, on, {0, 0, 1, 1});
 					} else {
 						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
@@ -802,6 +849,8 @@ namespace one::desktop::runtime {
 				c.shadow(board, 0, 14, shade, {0, 2});
 			}
 			c.box(board, {.fill = desktop::color::hex(0xffffff)});
+			const desktop::picture* blend = blended(p, data, layers, width, height);
+			if (blend) c.picture(*blend, board, {0, 0, 1, 1});
 			std::optional<desktop::rect> framed;
 			bool framed_background = false, framed_words = false, chosen_picture = false;
 			{
@@ -844,13 +893,13 @@ namespace one::desktop::runtime {
 						// Only what its crop keeps, sitting by its rules, what's around it filled
 						// from that part's edges.
 						if (const desktop::picture* kept = background_picture(p, layer)) {
-							paint_around(c, board, on, edge_key(layer), *kept, data["around"].as_string());
+							if (!blend) paint_around(c, board, on, edge_key(layer), *kept, data["around"].as_string());
 							c.picture(*kept, on, {0, 0, 1, 1});
 						}
 					} else if (shown) {
 						c.picture(*shown, on, as_rect(crop_of(layer)));
 					}
-					if (id == picked && !full) framed = on, framed_background = background, chosen_picture = !background;
+					if (id == picked && !full) framed = on, framed_background = background, chosen_picture = true;
 				}
 			}
 			// The lines a moved layer snapped to, across the whole collage.
@@ -1012,10 +1061,12 @@ namespace one::desktop::runtime {
 				        }
 				        return true;
 			        }
-			        // On the collage with nothing over it, the background is picked, and slides
-			        // where it can; off it, nothing is.
-			        bool on_board = w->board.contains(at);
-			        if (!on_board || all.empty() || is_words(all.front())) {
+			        // On the background with nothing over it, the background is picked, and slides
+			        // where it can; anywhere else, on the space around it or off the collage,
+			        // nothing is.
+			        bool on_background = w->board.contains(at) && !all.empty() && !is_words(all.front()) &&
+			                             as_rect(w->on_board(where_is(p, data, layers, all.front(), width, height, *w))).contains(at);
+			        if (!on_background) {
 				        if (!spec.pick.empty()) p.pick(spec.pick, "");
 				        return false;
 			        }

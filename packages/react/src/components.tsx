@@ -1259,6 +1259,7 @@ function rowLink(route: string, row: Row, params: Readonly<Record<string, string
 export interface RowAction {
   name: string;
   label?: string;
+  icon?: string; // delete "Remove" icon delete: drawn as that, its words said when pointed at
   allowed?: boolean; // whether the person reading may run it
   when?: (row: Record<string, unknown>) => boolean; // the rows it's on, like those that aren't the reader's own
   // A form it asks with first, opened in a dialog and started from the row, like a
@@ -1662,6 +1663,7 @@ export function Table({
           ...(picture ? { picture: { source: addresses[String(row[picture] ?? "")], fit } } : {}),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
+            ...(a.icon ? { icon: a.icon } : {}),
             disabled: runner.busy(a.name),
             onClick: () => (a.form ? setAsking({ action: a, row }) : void runner.run(a.name, { id: row.id }, row)),
           })),

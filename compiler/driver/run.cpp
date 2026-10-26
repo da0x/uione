@@ -33,7 +33,9 @@ namespace one::driver {
         std::string folder = out + "/" + plan.target;
         if (plan.target == "web") {
             plan.before.push_back({{yarn ? "yarn" : "npm", "install"}, folder});
-            plan.app = {yarn ? std::vector<std::string>{"yarn", "dev"} : std::vector<std::string>{"npm", "run", "dev"}, folder};
+            // Served with Vite's own copy of the packages made again, so a uione library
+            // changed since the last run, like a checkout's, is what's served.
+            plan.app = {yarn ? std::vector<std::string>{"yarn", "dev", "--force"} : std::vector<std::string>{"npm", "run", "dev", "--", "--force"}, folder};
             return plan;
         }
         if (plan.target == "desktop" || plan.target == "terminal") {

@@ -192,6 +192,7 @@ export interface RowAction {
   label: string;
   onClick: () => void;
   disabled: boolean;
+  icon?: string; // drawn as that icon, its label said when pointed at
 }
 
 export interface TableRow {
