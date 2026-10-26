@@ -124,8 +124,10 @@ namespace one::screens {
 		// A view, or a view per something, like the issue this page's address names.
 		state<view_state> view(const std::string& name, const std::string& subject = "");
 
-		// Opens another page by its address, after this one.
+		// Opens another page by its address, after this one; or in this one's place, so
+		// going back doesn't come here, as a screen's on open does.
 		void open(const std::string& address);
+		void open_instead(const std::string& address);
 		// Runs a command, telling `after` what it answered; while it's on its way,
 		// running() says so, and what turned it down is its error() and, unless what
 		// ran it says so itself, as a form does, the page's problem().
@@ -354,6 +356,7 @@ namespace one::screens {
 		std::unique_ptr<page_base> page_at(const std::string& address);
 		std::vector<std::string> routes_;
 		std::vector<std::unique_ptr<page_base>> trail_;
+		std::unique_ptr<page_base> retired_;  // the page last replaced, kept until the next
 		state<int> changed_ = 0;
 		std::map<std::string, std::pair<state<view_state>, listening>> views_;
 	};

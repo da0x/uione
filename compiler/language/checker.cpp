@@ -2924,6 +2924,11 @@ namespace one::language {
                     through = inner->object.get();
                 }
                 auto* object = std::get_if<name_expression>(&through->node);
+                // screen.width: how big the screen the app is shown on is, in its own pixels.
+                if (object && object->name.text() == "screen" && !picks_.contains("screen")) {
+                    if (value != "width" && value != "height") error(e.where, "the screen is measured by screen.width and screen.height");
+                    return;
+                }
                 // layer.size: a field of the row picked.
                 if (object && picks_.contains(object->name.text())) {
                     const view_each* list = picks_.at(object->name.text());
@@ -3545,6 +3550,8 @@ namespace one::language {
                         std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : takes_pictures ? "paste into picture" : "add layer::create";
                         error(item.where, "this screen has no collage that says " + needs + " for this button to use");
                     }
+                } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
+                    verify_on_open(ns, *opening, item.where, route);
                 } else if (auto* pipeline = std::get_if<pipeline_item>(&item.node)) {
                     verify_pipeline(ns, *pipeline, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
@@ -3861,6 +3868,28 @@ namespace one::language {
         // its layers a list of rows placed by x y w h, moved by a command on their
         // entity, its background slid by one on what the view is per, and buttons over
         // the layer the screen picked.
+        // on open: a row of a view opened, the condition reading it by what it's of, as a
+        // pick is read; or a command run, as its button would.
+        void verify_on_open(const std::string& ns, const on_open_item& opening, location where, const std::string& route) {
+            if (!opening.route) {
+                if (opening.run.size() != 1 || !std::holds_alternative<button_item>(opening.run.front().node)) {
+                    error(where, "on open runs a command, like poster::create { title = \"Untitled\" } then open /posters/:poster, or opens a row, like open /posters/:poster for posters");
+                    return;
+                }
+                screen_items(ns, opening.run, route);
+                return;
+            }
+            if (!routes_.contains(full_route(ns, *opening.route))) error(opening.route_where, "there's no screen at " + full_route(ns, *opening.route) + " to open");
+            const view_each* rows = named_list(ns, opening.view, opening.list.value_or(""), route);
+            if (!rows || !opening.where) return;
+            const entity_declaration* of = listed_entity(ns, *rows);
+            if (!of) return;
+            auto was = picks_;
+            picks_[of->name] = rows;
+            verify_condition(ns, *opening.where, route);
+            picks_ = std::move(was);
+        }
+
         void verify_collage(const std::string& ns, const collage_item& collage, const std::string& route) {
             const view_each* layers = named_list(ns, collage.view, collage.list, route);
             if (!layers) return;

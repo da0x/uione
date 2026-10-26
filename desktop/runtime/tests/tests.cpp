@@ -1426,6 +1426,34 @@ TEST("a collage is copied whole or a layer at a time, saved in the app's folder 
 	std::filesystem::remove_all(pictures);
 }
 
+TEST("on open, a screen opens the first row its condition holds for in its place, or else runs a command and opens what it made") {
+	memory_source data;
+	data.set("studio::posters", "", value(fields{{"rows", list{value(fields{{"id", "p1"}, {"width", 1280}}), value(fields{{"id", "p2"}, {"width", 1920}})}}}));
+	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return std::string("p9"); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Home", "/", "", [](page&) { return items(one::desktop::text("Home")); }});
+	s.screens.push_back({"New", "/new", "", [](page& p) {
+		                     auto posters = p.view("studio::posters");
+		                     return items(on_open(p, ready(posters), {opening{.open = "/posters/:poster", .view = posters, .where = [](const value& row) { return row["width"].as_double() == 1920; }},
+		                                                              opening{.run = command_button{.command = "studio::poster::create", .label = "Create", .then_open = "/posters/:poster"}}}));
+	                     }});
+	s.screens.push_back({"Poster", "/posters/:poster", "", [](page& p) { return items(one::desktop::text("Poster " + p.param("poster"))); }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.open("/new");
+	(void)drawn(nav);
+	CHECK(nav.current().address() == "/posters/p2");
+	CHECK(nav.depth() == 2);  // in the new screen's place, so going back goes home
+	// None fits: one's made, and opened.
+	data.set("studio::posters", "", value(fields{{"rows", list{}}}));
+	nav.open("/new");
+	(void)drawn(nav);
+	(void)drawn(nav);
+	CHECK(data.runs().size() == 1);
+	CHECK(nav.current().address() == "/posters/p9");
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

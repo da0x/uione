@@ -149,6 +149,12 @@ namespace one::desktop::runtime {
 	desktop::view collage(page& p, collage_spec spec);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
 	desktop::view collage_button(page& p, collage_ask ask);
+	// on open: what the screen does as it's opened, and "Opening…" while it decides.
+	desktop::view on_open(page& p, bool ready, std::vector<opening> lines);
+	// The screen the app is shown on, in its own pixels: screen.width and screen.height,
+	// or a common one's while it isn't known.
+	double screen_width();
+	double screen_height();
 	// A file's picture, `height` tall, all of it fitted in, or filling its place, on the
 	// sunken color while there's none, as a card's is drawn.
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height);

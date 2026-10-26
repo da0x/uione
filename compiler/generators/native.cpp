@@ -215,6 +215,10 @@ namespace one::generators {
                 }
                 auto* view = std::get_if<language::name_expression>(&object->node);
                 if (!view) return "value()";
+                // poster.width, in an on open line's where: the row it's asking about.
+                if (row_named_ && view->name.text() == *row_named_) return "field_of(row, " + str(field) + ")";
+                // screen.width: the screen's, in its own pixels.
+                if (view->name.text() == "screen" && !picks_.contains("screen")) return field == "width" ? "value(screen_width())" : "value(screen_height())";
                 // layer.size: the picked row's.
                 if (picks_.contains(view->name.text())) return "field_of(" + picked(parts, view->name.text()) + ", " + str(field) + ")";
                 std::string variable = view_variable(parts, screens::full_view(ns, view->name.text()));
@@ -222,6 +226,40 @@ namespace one::generators {
                 return "at(" + variable + ", " + str(field) + ")";
             }
             return plain_value(e, "value()");
+        }
+
+        // on open: each line an opening, a row opened or a command run, decided once every
+        // view they read is there.
+        std::string on_open(screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& list) {
+            std::set<std::string> read;
+            std::string lines;
+            for (const auto& item : list) {
+                auto* o = std::get_if<language::on_open_item>(&item.node);
+                if (!o) continue;
+                std::string line;
+                if (o->route) {
+                    std::string variable = view_variable(parts, screens::full_view(ns, o->view.text()));
+                    read.insert(variable);
+                    line = ".open = " + str(model_.full_route(ns, *o->route)) + ", .view = " + variable + ", .list = " + str(o->list.value_or(""));
+                    if (o->where) {
+                        const language::entity_declaration* of = model_.listed(ns, o->view.text(), o->list);
+                        row_named_ = of ? of->name : std::string("row");
+                        line += ", .where = [&](const value& row) { return " + condition_of(parts, ns, *o->where, read) + "; }";
+                        row_named_.reset();
+                    }
+                } else if (auto* b = std::get_if<language::button_item>(&o->run.front().node)) {
+                    std::string made = command_of(parts, ns, *b);  // command(p, {...})
+                    line = ".run = command_button" + made.substr(std::string("command(p, ").size(), made.size() - std::string("command(p, ").size() - 1);
+                    if (b->when) (void)condition_of(parts, ns, *b->when, read);
+                    for (const auto& v : b->given) (void)condition_of(parts, ns, *v.value, read);
+                }
+                // A command's own when is its button's, in its spec.
+                if (o->route && item.when) line += ", .when = " + condition_of(parts, ns, *item.when, read);
+                lines += (lines.empty() ? "" : ", ") + std::string("opening{") + line + "}";
+            }
+            std::string ready;
+            for (const auto& variable : read) ready += (ready.empty() ? "" : " && ") + std::string("ready(") + variable + ")";
+            return "on_open(p, " + (ready.empty() ? std::string("true") : ready) + ", {" + lines + "})";
         }
 
         // collage poster_page.layers size width height { ... }: its spec, with the buttons
@@ -1223,6 +1261,7 @@ namespace one::generators {
         std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
         bool workspace_ = false;      // the screen being written is laid out as a workspace
+        std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
@@ -1506,6 +1545,14 @@ namespace one::generators {
                     code = "messages(p)";
                 } else if (auto* f = std::get_if<language::full_screen_item>(&item.node)) {
                     code = "full_screen(p, " + str(f->label.value_or("")) + ", " + str(f->icon.value_or("")) + ", " + (f->keys.empty() ? "{}" : keys_of(f->keys)) + ")";
+                } else if (std::holds_alternative<language::on_open_item>(item.node)) {
+                    // A screen's on open lines, said together where the first is, tried in order.
+                    bool first_one = std::none_of(list.begin() + static_cast<std::ptrdiff_t>(first), list.begin() + static_cast<std::ptrdiff_t>(at),
+                                                  [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
+                    if (!first_one) continue;
+                    code = on_open(parts, ns, list);
+                    out.push_back({code, item.where.line});
+                    continue;
                 }
                 if (code.empty()) continue;
                 // Drawn by a function of its own, as GCC sees a temporary in either arm of

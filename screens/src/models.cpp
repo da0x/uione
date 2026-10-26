@@ -432,6 +432,31 @@ namespace one::screens {
 		return command_model{busy ? b.label + "…" : b.label, busy, std::move(fields)};
 	}
 
+	bool opening_now(page_base& p, bool ready, const std::vector<opening>& lines) {
+		auto opened = p.kept<bool>("opened");
+		if (opened.peek()) return false;
+		if (!ready) return true;
+		opened.set(true);
+		for (const auto& line : lines) {
+			if (!line.when) continue;
+			if (line.run) {
+				auto shown = command_of(p, *line.run);
+				if (!shown) continue;
+				std::string then = line.run->then_open;
+				p.run(line.run->command, shown->fields, [&p, then](const answer& made) {
+					if (made && !then.empty()) p.open_instead(then.substr(0, then.rfind(':')) + *made);
+				});
+				return false;
+			}
+			for (const auto& row : rows_of(*line.view, line.list)) {
+				if (line.where && !line.where(row)) continue;
+				p.open_instead(line.open.substr(0, line.open.rfind(':')) + row["id"].as_string());
+				return false;
+			}
+		}
+		return false;
+	}
+
 	steps_model steps_of(page_base& p, const steps_spec& spec) {
 		steps_model out;
 		const view_state& current = *spec.current;

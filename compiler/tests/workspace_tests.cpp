@@ -419,3 +419,48 @@ TEST_CASE("cards show a file each row holds as a picture on top, fitted in or fi
     CHECK(files["web/src/screens/main.tsx"].find(R"(<Cards view={posters} list="rows" columns={{ title: "Title" }} picture="preview" fit)") != std::string::npos);
     CHECK(files["desktop/src/screens/main.cpp"].find(R"(.picture = "preview", .fit = true})") != std::string::npos);
 }
+
+TEST_CASE("on open, a screen opens the first row a condition holds for, or runs a command, the first of its lines that applies") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title   text    required
+		width   number  = 1600
+		height  number  = 900
+	}
+
+	command poster::create
+
+	view posters {
+		each poster {
+			title  width
+		}
+	}
+
+	screen "New" / {
+		on open open /posters/:poster for posters where poster.width == screen.width && poster.depth == 1
+		on open open /nowhere/:poster for posters where poster.width == screen.size
+		on open poster::create { title = "Untitled"  width = screen.width } then open /posters/:poster
+		on open text "Not a command"
+	}
+
+	screen "Poster" /posters/:poster {
+		text "A poster"
+	}
+}
+)";
+    CHECK(messages(source) == std::vector<std::string>{"24: a picked poster's row has no depth; add it to the list's block", "25: there's no screen at /nowhere/:poster to open",
+                                                       "25: the screen is measured by screen.width and screen.height",
+                                                       "27: on open runs a command, like poster::create { title = \"Untitled\" } then open /posters/:poster, or opens a row, like open /posters/:poster for posters"});
+    std::string fine = source;
+    for (const char* wrong : {" && poster.depth == 1", "\t\ton open open /nowhere/:poster for posters where poster.width == screen.size\n", "\t\ton open text \"Not a command\"\n"}) {
+        fine.erase(fine.find(wrong), std::string(wrong).size());
+    }
+    CHECK(messages(fine).empty());
+    auto files = built(fine);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<OnOpen ready={posters.status === "live"} lines={[{ open: "/posters/:poster", rows: (posters.data?.["rows"] as Record<string, unknown>[] | undefined) ?? [], where: (row: Record<string, unknown>) => ((row["width"] ?? null) === screenSize().width) }, { run: { name: "studio::poster::create", given: { "title": "Untitled", "width": screenSize().width }, thenOpen: "/posters/:poster" } }]} />)") != std::string::npos);
+    CHECK(native.find(R"(on_open(p, ready(posters), {opening{.open = "/posters/:poster", .view = posters, .list = "", .where = [&](const value& row) { return same(field_of(row, "width"), value(screen_width())); }}, opening{.run = command_button{.command = "studio::poster::create", .label = "Create", .fields = value(std::map<std::string, value>{{"title", value("Untitled")}, {"width", value(screen_width())}}), .then_open = "/posters/:poster"}}}))") != std::string::npos);
+}

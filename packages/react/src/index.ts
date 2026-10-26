@@ -7,6 +7,8 @@ export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, use
 export { FullScreen, Group, History, Messages, Toggle, hintOf, keyShown, setPicked, setToggled, useKeys, usePicked, usePickedId, useTool, useToggled } from "./workspace.js";
 export { useSaying } from "./said.js";
 export { Collage, CollageButton } from "./collage-view.js";
+export { OnOpen, screenSize } from "./opening.js";
+export type { OpeningLine } from "./opening.js";
 export type { Said, Saying } from "./said.js";
 export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Badge } from "./app.js";
 

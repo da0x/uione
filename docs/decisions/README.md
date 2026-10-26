@@ -25,6 +25,7 @@ relevant record before changing what it covers.
 | [0017](0017-a-screen-keeps-what-is-picked.md) | A screen keeps what's picked, and nothing else |
 | [0018](0018-undo-is-for-local-storage-for-now.md) | Undo and redo are for local storage, for now |
 | [0019](0019-a-collage-is-a-document.md) | A collage is a picture made of layers, not a canvas |
+| [0020](0020-a-screen-may-act-as-it-opens.md) | A screen may act as it's opened |
 
 ## Writing one
 

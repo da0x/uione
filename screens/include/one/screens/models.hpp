@@ -97,6 +97,9 @@ namespace one::screens {
 		value fields;
 	};
 	std::optional<command_model> command_of(page_base& p, const command_button& b);
+	// What a screen does as it's opened, once a visit, the first of its lines that
+	// applies, decided once every view they read is there: whether it's still deciding.
+	bool opening_now(page_base& p, bool ready, const std::vector<opening>& lines);
 
 	// The steps something can take from where it is: a button for each the reader's
 	// roles may take, or words saying there are none for them.

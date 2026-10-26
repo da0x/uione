@@ -2258,6 +2258,18 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `then open /posters/:poster` after a button that makes something opens it, its id
   in the route's last parameter: `poster::create "New" { title = "Untitled" } then
   open /posters/:poster`.
+- `on open` lines say what a screen does as it's opened, so an app can open straight
+  into work (decision 0020). `on open open /posters/:poster for posters where
+  poster.first_layer == none` opens the first row of the view's list the condition
+  holds for, the row named by what it's of, as a pick is read. `on open
+  poster::create { title = "Untitled" } then open /posters/:poster` runs a command,
+  as its button would. They're tried in order, and only the first that applies is
+  done, once a visit, once every view they read is there; "Opening…" shows until
+  then. What's opened takes the screen's place, so going back doesn't open it again.
+- `screen.width` and `screen.height` are the screen the app is shown on, in its own
+  pixels, wherever a value or a condition is read: `poster::create { width =
+  screen.width  height = screen.height }`. A terminal has no screen of its own to
+  measure, so it reads 1920 by 1080.
 - `empty "Make a poster, and it's listed here."` in a table says that while it has no
   rows.
 - `landing grid` after a screen's address draws it as a front page, in one of

@@ -90,7 +90,8 @@ namespace studio at / {
 	view posters {
 		each poster {
 			order by created_at descending
-			title  color  views  preview
+			title  color  views  preview  width  height
+			first_layer = first(layer where layer.poster == poster.id).id
 		}
 	}
 
@@ -142,9 +143,17 @@ namespace studio at / {
 	}
 
 	// A poster's layers, placed and slid where they look right.
+	// Straight into work: the newest poster with nothing on it yet, as big as this
+	// screen, or a new one.
+	screen "New poster" /new {
+		on open open /posters/:poster for posters where poster.first_layer == none && poster.width == screen.width && poster.height == screen.height
+		on open poster::create { title = "Untitled"  width = screen.width  height = screen.height } then open /posters/:poster
+	}
+
 	// Every poster as it looks, from the preview it keeps of itself.
 	screen "Gallery" /gallery {
 		link / "Posters" icon gallery key escape
+		link /new "New poster" icon add key n
 		cards posters link /posters/:poster {
 			picture preview fit
 			title

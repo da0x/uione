@@ -870,6 +870,20 @@ namespace one::language {
         std::vector<key_chord> keys;
     };
 
+    // on open open /posters/:poster for posters where poster.first_layer == none, or on open
+    // poster::create { ... } then open /posters/:poster: what a screen does each time it's
+    // opened, the first of its lines that applies (decision 0020). One opens the first
+    // row of a view's list the condition holds for, the row named by what it's of; the
+    // other runs a command, as its button would.
+    struct on_open_item {
+        std::optional<std::string> route;
+        location route_where;
+        qualified_name view;
+        std::optional<std::string> list;
+        expression_ptr where;
+        std::vector<screen_item> run;  // the command line it runs, when it doesn't open a row
+    };
+
     // What a collage button asks of its collage, as the runtimes name it, and the words
     // it's drawn with when it says none. Copied or saved, it's the picked layer when it
     // names the collage's pick, over.
@@ -1199,7 +1213,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

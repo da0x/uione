@@ -1570,6 +1570,35 @@ namespace one::language {
                 end_line();
                 return item;
             }
+            // on open open /posters/:poster for posters where ..., or on open poster::create ...:
+            // what the screen does as it's opened.
+            if (at_word("on") && peek(1).kind == token_kind::identifier && peek(1).text == "open") {
+                advance();
+                advance();
+                on_open_item opening;
+                if (at_word("open") && peek(1).kind == token_kind::route) {
+                    advance();
+                    opening.route_where = peek().where;
+                    opening.route = advance().text;
+                    if (!at_word("for")) fail_expecting("for and the view whose first row it opens, as in open /posters/:poster for posters");
+                    advance();
+                    opening.view = parse_qualified_name("the view whose first row it opens, like posters");
+                    if (at(token_kind::dot)) {
+                        advance();
+                        opening.list = expect(token_kind::identifier, "the view's list, like rows").text;
+                    }
+                    if (at_word("where")) {
+                        advance();
+                        opening.where = parse_expression();
+                    }
+                    screen_item item{where, std::move(opening)};
+                    item.when = shown_while();
+                    end_line();
+                    return item;
+                }
+                opening.run.push_back(parse_screen_item());
+                return {where, std::move(opening)};
+            }
             // toggle layers "Layers" icon layers key l: something on or off, read by its name.
             if (at_word("toggle") && peek(1).kind == token_kind::identifier) {
                 advance();

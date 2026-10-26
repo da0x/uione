@@ -111,6 +111,12 @@ namespace one::terminal::runtime {
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage; a
 	// terminal can't crop a picture it can't show, so it doesn't offer to.
 	terminal::view collage_button(page& p, collage_ask ask);
+	// on open: what the screen does as it's opened, and "Opening…" while it decides.
+	terminal::view on_open(page& p, bool ready, std::vector<opening> lines);
+	// A terminal has no screen of its own to measure, so screen.width and
+	// screen.height are a common one's.
+	double screen_width();
+	double screen_height();
 	// A terminal has no window to fill, so full screen draws nothing.
 	terminal::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys);
 	// Whether a key pressed is a chord, like ctrl+z.

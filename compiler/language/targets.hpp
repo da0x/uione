@@ -71,6 +71,7 @@ namespace one::language {
         drawn_by{"full_screen", "full screen", everywhere},
         drawn_by{"key", "a key", everywhere},
         drawn_by{"pick", "a pick", everywhere},
+        drawn_by{"on_open", "what a screen does as it's opened", everywhere},
         drawn_by{"collage", "a collage", everywhere},
         drawn_by{"collage.place", "placing a collage's layers", everywhere},
         drawn_by{"collage.slide", "sliding a collage's background", everywhere},
@@ -350,6 +351,9 @@ namespace one::language {
                         if (n.crop) use("collage.crop");
                         if (n.paste_into) use("collage.paste");
                         if (n.preview) use("collage.preview");
+                    } else if constexpr (std::is_same_v<T, on_open_item>) {
+                        use("on_open");
+                        for (const auto& inner : n.run) item(inner, out);
                     } else if constexpr (std::is_same_v<T, collage_button>) {
                         using kind = collage_button::kind;
                         use(n.does == kind::crop         ? "collage.crop"

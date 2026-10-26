@@ -442,6 +442,7 @@ namespace one::screens {
 	}
 
 	void page_base::open(const std::string& address) { opener_(address); }
+	void page_base::open_instead(const std::string& address) { replacer_(address); }
 
 	void page_base::answer_asked(bool yes) {
 		auto was = asked_.peek();
@@ -639,6 +640,9 @@ namespace one::screens {
 	bool navigator_base::replace(const std::string& address) {
 		auto p = page_at(address);
 		if (!p) return false;
+		// The page it replaces is kept until the next, as it may be that page's own build
+		// replacing it, like a screen's on open.
+		retired_ = std::move(trail_.back());
 		trail_.back() = std::move(p);
 		changed_.set(changed_.peek() + 1);
 		return true;

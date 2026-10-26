@@ -124,6 +124,14 @@ namespace one::terminal::runtime {
 
 	terminal::view full_screen(page&, std::string, std::string, std::vector<std::string>) { return {}; }
 
+	terminal::view on_open(page& p, bool ready, std::vector<opening> lines) {
+		if (!opening_now(p, ready, lines)) return {};
+		return terminal::text("Opening…", dim());
+	}
+
+	double screen_width() { return 1920; }
+	double screen_height() { return 1080; }
+
 	terminal::view collage_button(page& p, collage_ask ask) {
 		// What needs pictures drawn, or a screen of its own, isn't here.
 		if (ask.does == "crop" || ask.does == "screenshot" || ask.does.starts_with("copy") || ask.does.starts_with("save")) return {};

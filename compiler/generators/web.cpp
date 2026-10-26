@@ -135,6 +135,7 @@ namespace one::generators {
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
         bool workspace_ = false;         // the screen being written is laid out as a workspace
+        std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -811,6 +812,13 @@ namespace one::generators {
                 }
                 auto* view = std::get_if<language::name_expression>(&object->node);
                 if (!view) return "false";
+                // poster.width, in an on open line's where: the row it's asking about.
+                if (row_named_ && view->name.text() == *row_named_) return "(row[" + web_detail::js_string(value) + "] ?? null)";
+                // screen.width: the screen's, in its own pixels.
+                if (view->name.text() == "screen" && !picks_.contains("screen")) {
+                    parts.components.insert("screenSize");
+                    return "screenSize()." + std::string(value == "width" ? "width" : "height");
+                }
                 // layer.size: the picked row's.
                 if (picks_.contains(view->name.text())) return "(" + picked(parts, view->name.text()) + "?.[" + web_detail::js_string(value) + "] ?? null)";
                 std::string variable = view_variable(parts, full_view(ns, view->name.text()));
@@ -1278,6 +1286,11 @@ namespace one::generators {
                         in_group_ = was;
                         out.close("</Collage>");
                     }
+                } else if (std::holds_alternative<language::on_open_item>(item.node)) {
+                    // A screen's on open lines, said together where the first is, tried in order.
+                    bool first_one = std::none_of(items.begin() + static_cast<std::ptrdiff_t>(first), items.begin() + static_cast<std::ptrdiff_t>(at),
+                                                  [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
+                    if (first_one) on_open(out, parts, ns, items);
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.
                     parts.components.insert("CollageButton");
@@ -1525,6 +1538,50 @@ namespace one::generators {
         }
 
         // A pick the screen reads, as the variable holding its row.
+        // on open: each line an opening, a row opened or a command run, decided once every
+        // view they read is live.
+        void on_open(stream& out, screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& items) {
+            parts.components.insert("OnOpen");
+            std::set<std::string> read;
+            std::string lines;
+            for (const auto& item : items) {
+                auto* o = std::get_if<language::on_open_item>(&item.node);
+                if (!o) continue;
+                std::string line;
+                if (o->route) {
+                    std::string variable = view_variable(parts, full_view(ns, o->view.text()));
+                    read.insert(variable);
+                    line = "open: " + web_detail::js_string(full_route(ns, *o->route)) + ", rows: (" + variable + ".data?.[" + web_detail::js_string(o->list.value_or("rows")) +
+                           "] as Record<string, unknown>[] | undefined) ?? []";
+                    if (o->where) {
+                        const language::entity_declaration* of = listed(ns, o->view.text(), o->list);
+                        row_named_ = of ? of->name : std::string("row");
+                        line += ", where: (row: Record<string, unknown>) => " + condition_of(parts, ns, *o->where, read);
+                        row_named_.reset();
+                    }
+                    if (item.when) line += ", when: " + condition_of(parts, ns, *item.when, read);
+                } else if (auto* b = std::get_if<language::button_item>(&o->run.front().node)) {
+                    std::string command = full_command(ns, b->command);
+                    std::string run = "name: " + web_detail::js_string(command);
+                    const language::entity_declaration* entity = entity_of_command(command);
+                    if (entity && command.substr(command.rfind("::") + 2) != "create" && names_parameter(route_, entity->name) && entity_named(ns, entity->name)) {
+                        parts.params.insert(entity->name);
+                        run += ", id: " + web_detail::js_name(entity->name + "_id");
+                    }
+                    std::string given;
+                    for (const auto& v : b->given) given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + condition_of(parts, ns, *v.value, read);
+                    if (!given.empty()) run += ", given: { " + given + " }";
+                    if (b->then_open) run += ", thenOpen: " + web_detail::js_string(full_route(ns, *b->then_open));
+                    line = "run: { " + run + " }";
+                    if (b->when) line += ", when: " + condition_of(parts, ns, *b->when, read);
+                }
+                lines += (lines.empty() ? "" : ", ") + std::string("{ ") + line + " }";
+            }
+            std::string ready;
+            for (const auto& variable : read) ready += (ready.empty() ? "" : " && ") + variable + ".status === \"live\"";
+            out.line("<OnOpen ready={" + (ready.empty() ? std::string("true") : ready) + "} lines={[" + lines + "]} />");
+        }
+
         std::string picked(screen_parts& parts, const std::string& name) {
             parts.picks.insert(name);
             view_variable(parts, picks_.at(name).view);

@@ -183,6 +183,21 @@ namespace one::desktop::runtime {
 		return desktop::text(std::move(told), t.quiet());
 	}
 
+	desktop::view on_open(page& p, bool ready, std::vector<opening> lines) {
+		if (!opening_now(p, ready, lines)) return {};
+		return desktop::text("Opening…", current_theme().quiet());
+	}
+
+	double screen_width() {
+		auto s = screen_size();
+		return s && s->width > 0 ? s->width : 1920;
+	}
+
+	double screen_height() {
+		auto s = screen_size();
+		return s && s->height > 0 ? s->height : 1080;
+	}
+
 	desktop::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys) {
 		auto flip = [] { fullscreen(!fullscreen()); };
 		for (const auto& k : keys) p.on_key(k, flip);
