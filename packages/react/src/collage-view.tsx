@@ -125,6 +125,29 @@ function orientedOf(path: string, p: ImageBitmap, turns: number, mirrored: boole
   return made;
 }
 
+// A background as it's shown: turned and mirrored, then only the part its crop keeps,
+// so it sits, and fills what's around it, by that part alone.
+const croppedOnes = new Map<string, HTMLCanvasElement>();
+function backgroundOf(key: string, shown: CanvasImageSource & { width: number; height: number }, cr: Box): CanvasImageSource & { width: number; height: number } {
+  if (cr.x <= 0 && cr.y <= 0 && cr.w >= 1 && cr.h >= 1) return shown;
+  const named = `${key} ${cr.x} ${cr.y} ${cr.w} ${cr.h}`;
+  let made = croppedOnes.get(named);
+  if (!made) {
+    made = document.createElement("canvas");
+    made.width = Math.max(1, Math.round(cr.w * shown.width));
+    made.height = Math.max(1, Math.round(cr.h * shown.height));
+    made.getContext("2d")?.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, 0, 0, made.width, made.height);
+    croppedOnes.set(named, made);
+  }
+  return made;
+}
+
+// What names a background's edges: its picture as turned, and its crop.
+const edgeKeyOf = (l: Row) => {
+  const cr = cropOf(l);
+  return `${str(l["picture"])} ${num(l["turns"])} ${num(l["mirrored"])} ${cr.x} ${cr.y} ${cr.w} ${cr.h}`;
+};
+
 function edgeColorOf(path: string, p: CanvasImageSource & { width: number; height: number }): string {
   const known = edges.get(path);
   if (known) return known;
@@ -224,9 +247,10 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
     const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
     if (isBackground(layers, l)) {
-      const b = at(backgroundAt(backdrop, shown.width, shown.height));
-      paintAround(c, path, shown, board, b, str(data["around"]));
-      c.drawImage(shown, b.x, b.y, b.w, b.h);
+      const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
+      const b = at(backgroundAt(backdrop, kept.width, kept.height));
+      paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
+      c.drawImage(kept, b.x, b.y, b.w, b.h);
     } else {
       const b = at(boxOf(l)), cr = cropOf(l);
       c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
@@ -322,7 +346,7 @@ interface Placed {
   going?: { id: string; box: Box };
   lines: Lines;
   guide?: Guided;
-  crop?: { id: string; whole: Box; kept: Box };
+  crop?: { id: string; whole: Box; kept: Box; background?: boolean }; // a background sits again by its rules once kept
   editing?: { id: string; words: string; caret: number; fresh: boolean };
 }
 
@@ -572,8 +596,8 @@ export function Collage({
   useEffect(() => {
     if (!asking || !name) return;
     asked.delete(name);
-    if (asking === "crop" && chosen && !isWords(chosen) && !isBackground(layers, chosen) && crop) {
-      w.crop = { id: picked, whole: wholeOf(boxOf(chosen), cropOf(chosen)), kept: boxOf(chosen) };
+    if (asking === "crop" && chosen && !isWords(chosen) && crop) {
+      w.crop = cropBegun(chosen);
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
     } else if (asking.startsWith("copy") || asking.startsWith("save")) {
@@ -639,8 +663,9 @@ export function Collage({
     if (isBackground(layers, l)) {
       const p = pictureOf(str(l["picture"]), address);
       if (p) {
-        const sideways = num(l["turns"]) % 2 === 1;
-        b = backgroundAt(backdrop, sideways ? p.height : p.width, sideways ? p.width : p.height);
+        // It sits by the part its crop keeps.
+        const sideways = num(l["turns"]) % 2 === 1, cr = cropOf(l);
+        b = backgroundAt(backdrop, (sideways ? p.height : p.width) * cr.w, (sideways ? p.width : p.height) * cr.h);
       }
     }
     const g = w.going;
@@ -655,6 +680,13 @@ export function Collage({
       b = { x: b.x, y: b.y, w: m.w, h: m.h };
     }
     return b;
+  };
+  // A crop begun on a picture where it is: the background where it sits, the rest
+  // where they say, and the whole picture behind it.
+  const cropBegun = (l: Row): NonNullable<Placed["crop"]> => {
+    const background = isBackground(layers, l);
+    const kept = background ? whereIs(l) : boxOf(l);
+    return { id: str(l["id"]), whole: wholeOf(kept, cropOf(l)), kept, background };
   };
   const onBoard = (b: Box): Box => ({ x: w.board.x + b.x * w.scale, y: w.board.y + b.y * w.scale, w: b.w * w.scale, h: b.h * w.scale });
 
@@ -738,8 +770,10 @@ export function Collage({
             c.drawImage(shown, fx * shown.width, fy * shown.height, (w.crop.kept.w / w.crop.whole.w) * shown.width, (w.crop.kept.h / w.crop.whole.h) * shown.height, kept.x, kept.y, kept.w, kept.h);
             b = kept;
           } else if (isBackground(layers, l)) {
-            paintAround(c, path, shown, board, b, str(data["around"]));
-            c.drawImage(shown, b.x, b.y, b.w, b.h);
+            // Only what its crop keeps, what's around it filled from that part's edges.
+            const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
+            paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
+            c.drawImage(kept, b.x, b.y, b.w, b.h);
           } else {
             const cr = cropOf(l);
             c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
@@ -866,7 +900,7 @@ export function Collage({
     const e = w.crop;
     if (!e || !crop) return;
     w.crop = undefined;
-    w.going = { id: e.id, box: e.kept };
+    if (!e.background) w.going = { id: e.id, box: e.kept };
     void send(crop, {
       id: e.id,
       crop_x: (e.kept.x - e.whole.x) / e.whole.w,
@@ -930,7 +964,7 @@ export function Collage({
       pickRow(id);
       if (e.detail >= 2) {
         if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
-        else if (!isWords(l) && crop) w.crop = { id, whole: wholeOf(boxOf(l), cropOf(l)), kept: boxOf(l) };
+        else if (!isWords(l) && crop) w.crop = cropBegun(l);
         redraw((n) => n + 1);
         return;
       }
@@ -947,6 +981,12 @@ export function Collage({
     }
     const bottom = layers[0]!;
     pickRow(str(bottom["id"]));
+    // Pressed twice, it's cropped where it sits, as any picture is.
+    if (e.detail >= 2 && crop) {
+      w.crop = cropBegun(bottom);
+      redraw((n) => n + 1);
+      return;
+    }
     const b = whereIs(bottom);
     if (slide && slides(backdrop, b)) {
       w.now = { what: "sliding", id: str(bottom["id"]), from: b, at: p, corner: 0, across: slideRange(W, b.w), down: slideRange(H, b.h), edges: 0 };

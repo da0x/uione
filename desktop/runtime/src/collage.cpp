@@ -121,6 +121,36 @@ namespace one::desktop::runtime {
 			return &found->second;
 		}
 
+		// A background as it's shown: turned and mirrored, then only the part its crop
+		// keeps, so it sits, and fills what's around it, by that part alone.
+		const desktop::picture* background_picture(page& p, const value& layer) {
+			const desktop::picture* turned = layer_picture(p, layer);
+			model::box crop = crop_of(layer);
+			if (!turned || (crop.x <= 0 && crop.y <= 0 && crop.w >= 1 && crop.h >= 1)) return turned;
+			static std::map<std::string, desktop::picture> made;
+			std::string key = std::format("{} {} {} {} {} {} {}", layer["picture"].as_string(), layer["turns"].as_double(), layer["mirrored"].as_double(), crop.x, crop.y, crop.w, crop.h);
+			std::lock_guard hold(reading);
+			auto found = made.find(key);
+			if (found == made.end()) {
+				int pw = turned->width(), ph = turned->height();
+				int x = std::clamp(static_cast<int>(std::lround(crop.x * pw)), 0, pw - 1), y = std::clamp(static_cast<int>(std::lround(crop.y * ph)), 0, ph - 1);
+				int w = std::clamp(static_cast<int>(std::lround(crop.w * pw)), 1, pw - x), h = std::clamp(static_cast<int>(std::lround(crop.h * ph)), 1, ph - y);
+				std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+				const auto& rgba = turned->rgba();
+				for (int row = 0; row < h; ++row) {
+					std::copy_n(rgba.begin() + ((static_cast<std::ptrdiff_t>(y + row) * pw + x) * 4), w * 4, pixels.begin() + static_cast<std::ptrdiff_t>(row) * w * 4);
+				}
+				found = made.emplace(key, desktop::picture::of(w, h, std::move(pixels))).first;
+			}
+			return &found->second;
+		}
+
+		// What names a background's edge color: its picture and its crop.
+		std::string edge_key(const value& layer) {
+			model::box crop = crop_of(layer);
+			return std::format("{} {} {} {} {}", layer["picture"].as_string(), crop.x, crop.y, crop.w, crop.h);
+		}
+
 		// A background's edge color: the average of its outermost pixels, once.
 		desktop::color edge_color(const std::string& kept, const desktop::picture& p) {
 			static std::map<std::string, desktop::color> made;
@@ -219,6 +249,7 @@ namespace one::desktop::runtime {
 			struct crop_edit {
 				std::string id;
 				model::box whole, kept;
+				bool background = false;  // which sits again by its rules once kept, wherever its crop was
 			};
 			std::optional<crop_edit> crop;
 			struct writing {
@@ -244,7 +275,7 @@ namespace one::desktop::runtime {
 		model::box where_is(page& p, const value& v, const value& layers, const value& layer, double width, double height, placed& w) {
 			model::box b = box_of(layer);
 			if (is_background(layers, layer)) {
-				if (const desktop::picture* shown = layer_picture(p, layer)) b = model::background_at(backdrop_of(v, width, height), shown->width(), shown->height());
+				if (const desktop::picture* shown = background_picture(p, layer)) b = model::background_at(backdrop_of(v, width, height), shown->width(), shown->height());
 			}
 			if (auto& g = w.going; g && g->first == layer["id"].as_string()) {
 				auto near = [](double a, double z) { return std::abs(a - z) < 0.01; };
@@ -253,6 +284,14 @@ namespace one::desktop::runtime {
 				else b = g->second;
 			}
 			return b;
+		}
+
+		// A crop begun on a picture where it is: the background where it sits, the rest
+		// where they say, and the whole picture behind it.
+		placed::crop_edit crop_begun(page& p, const value& data, const value& layers, const value& layer, double width, double height, placed& w) {
+			bool background = is_background(layers, layer);
+			model::box b = background ? where_is(p, data, layers, layer, width, height, w) : box_of(layer);
+			return {layer["id"].as_string(), model::whole_of(b, crop_of(layer)), b, background};
 		}
 
 		// The lines a layer snaps to: the collage's edges and middle, and every other layer's.
@@ -292,7 +331,7 @@ namespace one::desktop::runtime {
 			if (!w.crop) return;
 			const auto& e = *w.crop;
 			model::box crop{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
-			w.going = std::pair{e.id, e.kept};
+			if (!e.background) w.going = std::pair{e.id, e.kept};
 			p.run(spec.crop, collage_fields_of(value(fields{{"id", e.id}, {"crop_x", crop.x}, {"crop_y", crop.y}, {"crop_w", crop.w}, {"crop_h", crop.h},
 			                                                {"x", e.kept.x}, {"y", e.kept.y}, {"w", e.kept.w}, {"h", e.kept.h}}),
 			                                   spec.fields));
@@ -435,7 +474,7 @@ namespace one::desktop::runtime {
 		whole gathered(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
 			whole all{data, layers, width, height, scale, only, current_theme().text_family, {}};
 			for (const auto& l : layers.as_array()) {
-				if (!is_words(l)) all.pictures[l["id"].as_string()] = layer_picture(p, l);
+				if (!is_words(l)) all.pictures[l["id"].as_string()] = is_background(layers, l) ? background_picture(p, l) : layer_picture(p, l);
 			}
 			return all;
 		}
@@ -466,7 +505,7 @@ namespace one::desktop::runtime {
 					if (!shown) continue;
 					if (is_background(layers, layer)) {
 						desktop::rect on = at(model::background_at(backdrop_of(all.data, width, height), shown->width(), shown->height()));
-						paint_around(c, board, on, layer["picture"].as_string(), *shown, all.data["around"].as_string());
+						paint_around(c, board, on, edge_key(layer), *shown, all.data["around"].as_string());
 						c.picture(*shown, on, {0, 0, 1, 1});
 					} else {
 						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
@@ -606,7 +645,8 @@ namespace one::desktop::runtime {
 			auto settled = p.kept<std::string>("collage settled " + spec.key), waiting = p.kept<std::string>("collage waiting " + spec.key);
 			if (drawn_from.peek().empty() && (!data[spec.preview_into].as_string().empty() || layers.as_array().empty())) drawn_from.set(now);
 			bool still = w->now.what == gesture::none && !w->crop && !w->editing;
-			if (now != drawn_from.peek() && still && settled.peek() == now) {
+			// Read so the timer's settling draws it, as it's set from away from here.
+			if (now != drawn_from.peek() && still && settled.get() == now) {
 				drawn_from.set(now);
 				auto small = drawn_whole(gathered(p, data, layers, width, height, spec.preview_wide / width));
 				std::filesystem::path file = kept_for_now(small.png());
@@ -624,18 +664,18 @@ namespace one::desktop::runtime {
 		if (w->crop && w->crop->id != picked) w->crop.reset();
 		if (w->editing && w->editing->id != picked) finish_writing(p, *w, layers, spec);
 		// A screenshot taken, added like any picture.
-		if (auto shot = p.kept<std::string>("collage screenshot " + spec.key); !shot.peek().empty()) {
+		// Read so a screenshot handed back, or a button's ask, is acted on at once.
+		if (auto shot = p.kept<std::string>("collage screenshot " + spec.key); !shot.get().empty()) {
 			std::filesystem::path taken = shot.peek();
 			shot.set("");
 			add_pictures(p, spec, layers, width, height, {taken}, std::nullopt);
 		}
 		// What its buttons asked of it: a crop begun, words written, or words added.
-		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
+		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
-			if (does == "crop" && chosen && !is_words(*chosen) && !is_background(layers, *chosen) && !spec.crop.empty()) {
-				model::box b = box_of(*chosen);
-				w->crop = placed::crop_edit{picked, model::whole_of(b, crop_of(*chosen)), b};
+			if (does == "crop" && chosen && !is_words(*chosen) && !spec.crop.empty()) {
+				w->crop = crop_begun(p, data, layers, *chosen, width, height, *w);
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
 			} else if (does == "paste") {
@@ -724,7 +764,7 @@ namespace one::desktop::runtime {
 		if (chosen && !w->crop && !w->editing) {
 			auto asked = p.kept<std::string>("collage do " + spec.key);
 			for (const auto& a : spec.asks) {
-				bool fits = a.does == "crop" ? !is_words(*chosen) && !is_background(layers, *chosen) : a.does == "edit" ? is_words(*chosen) : true;
+				bool fits = a.does == "crop" ? !is_words(*chosen) : a.does == "edit" ? is_words(*chosen) : true;
 				if (!fits) continue;
 				for (const auto& k : a.keys) p.on_key(k, [asked, does = a.does] { asked.set(does); });
 			}
@@ -800,9 +840,15 @@ namespace one::desktop::runtime {
 						model::box from{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
 						on = as_rect(w->on_board(e.kept));
 						c.picture(*shown, on, as_rect(from));
+					} else if (background) {
+						// Only what its crop keeps, sitting by its rules, what's around it filled
+						// from that part's edges.
+						if (const desktop::picture* kept = background_picture(p, layer)) {
+							paint_around(c, board, on, edge_key(layer), *kept, data["around"].as_string());
+							c.picture(*kept, on, {0, 0, 1, 1});
+						}
 					} else if (shown) {
-						if (background) paint_around(c, board, on, layer["picture"].as_string(), *shown, data["around"].as_string());
-						c.picture(*shown, on, background ? desktop::rect{0, 0, 1, 1} : as_rect(crop_of(layer)));
+						c.picture(*shown, on, as_rect(crop_of(layer)));
 					}
 					if (id == picked && !full) framed = on, framed_background = background, chosen_picture = !background;
 				}
@@ -889,7 +935,7 @@ namespace one::desktop::runtime {
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != picked) continue;
 					        for (const auto& a : spec.asks) {
-						        bool fits = a.does == "crop" ? !is_words(l) && !is_background(layers, l) : a.does == "edit" ? is_words(l) : true;
+						        bool fits = a.does == "crop" ? !is_words(l) : a.does == "edit" ? is_words(l) : true;
 						        if (fits) fitting.push_back(a.does);
 					        }
 				        }
@@ -957,7 +1003,7 @@ namespace one::desktop::runtime {
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        if (clicks >= 2) {
 					        if (is_words(all[i]) && !spec.write.empty()) w->editing = placed::writing{id, all[i]["words"].as_string(), false};
-					        else if (!is_words(all[i]) && !spec.crop.empty()) w->crop = placed::crop_edit{id, model::whole_of(box_of(all[i]), crop_of(all[i])), box_of(all[i])};
+					        else if (!is_words(all[i]) && !spec.crop.empty()) w->crop = crop_begun(p, data, layers, all[i], width, height, *w);
 					        return true;
 				        }
 				        if (!spec.place.empty()) {
@@ -975,6 +1021,11 @@ namespace one::desktop::runtime {
 			        }
 			        std::string id = all.front()["id"].as_string();
 			        if (!spec.pick.empty()) p.pick(spec.pick, id);
+			        // Pressed twice, it's cropped where it sits, as any picture is.
+			        if (clicks >= 2 && !spec.crop.empty()) {
+				        w->crop = crop_begun(p, data, layers, all.front(), width, height, *w);
+				        return true;
+			        }
 			        model::box b = where_is(p, data, layers, all.front(), width, height, *w);
 			        if (!spec.slide.empty() && model::slides(backdrop_of(data, width, height), b)) {
 				        w->now = {.what = gesture::sliding, .id = id, .from = b, .at = at, .corner = 0, .across = model::slide_range(width, b.w), .down = model::slide_range(height, b.h),

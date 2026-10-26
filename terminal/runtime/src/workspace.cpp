@@ -155,7 +155,8 @@ namespace one::terminal::runtime {
 		auto pasting = p.kept<bool>("collage pasting " + spec.key);
 		auto path = p.kept<std::string>("collage path " + spec.key);
 		auto typed = p.kept<std::string>("collage words " + spec.key);
-		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
+		// Read so a button's ask is acted on at once.
+		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
 			double width = data[spec.width].as_double(), height = data[spec.height].as_double();

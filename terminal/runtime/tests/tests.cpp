@@ -125,6 +125,21 @@ namespace {
 
 }  // namespace
 
+TEST("what a build changes, like a screen opening another in its place, is built again next") {
+	one::screens::state<int> step;
+	// Drawn as it was read, then changed, as a screen draws itself before opening another.
+	terminal::view_host host([step] {
+		int now = step.get();
+		if (now == 0) step.set(1);
+		return terminal::text(now == 0 ? "first" : "opened instead");
+	});
+	host.bring_up_to_date(20, 1);
+	host.bring_up_to_date(20, 1);
+	terminal::canvas c(20, 1);
+	host.draw(c);
+	CHECK(c.text().starts_with("opened instead"));
+}
+
 TEST("a project's page in a terminal: the bar, the trail above, its title, details, issues and a form") {
 	memory_source data;
 	fill(data);
@@ -669,6 +684,25 @@ TEST("a switch's pick is remembered for its page between runs of the app") {
 }
 
 // person.service != true: whoever isn't a service, a person said as one or never said.
+TEST("a collage acts on what its buttons ask as they're pressed, with nothing else drawing it again") {
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
+	site s{.name = "studio"};
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts,
+		                                              .pick = "/ layer", .subject = "p1", .add = "studio::layer::create", .parent = "poster", .key = "/ layer"}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	screen_at shown(nav, 80, 12);
+	(void)shown.text();
+	// Text pressed: only the ask changes, and the collage adds words.
+	nav.current().kept<std::string>("collage do / layer").set("add");
+	(void)shown.text();
+	CHECK(data.runs().size() == 1);
+}
+
 TEST("a picture is pasted on a collage by its path, as a terminal can't be dropped on, even before there's anything on it") {
 	auto home = std::filesystem::temp_directory_path() / ("one-home-" + std::to_string(::getpid()));
 	std::filesystem::create_directories(home);

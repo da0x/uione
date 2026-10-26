@@ -139,6 +139,18 @@ describe("a crop and words, in place", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "s1", crop_w: 1, crop_h: 1, x: 100, y: 100, w: 300, h: 300 } });
   });
 
+  it("crops the background too, where it sits, kept with Enter", async () => {
+    const source = memorySource({ commands: { "studio::layer::crop": (input) => ({ id: String(input["id"]) }) } });
+    const drawn = renderPoster(source);
+    await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
+    act(() => setPicked("/ layer", "b0"));
+    fireEvent.click(drawn.getByRole("button", { name: "Crop" }));
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "b0", crop_w: 1, crop_h: 1 } });
+  });
+
   it("writes the picked words where they are, what's typed after them, kept with Enter as big as they now are", async () => {
     const source = memorySource({ commands: { "studio::layer::write": (input) => ({ id: String(input["id"]) }) } });
     const drawn = renderPoster(source);

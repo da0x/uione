@@ -1282,6 +1282,9 @@ namespace one::terminal {
 				self->needs_building_ = true;
 				self->dirty_ = true;
 			};
+			// Built now; something the build changes, like a screen opening another in its
+			// place as it opens, builds it again.
+			needs_building_ = false;
 			std::unique_ptr<element> built;
 			{
 				screens::detail::reading noting(reader);
@@ -1290,7 +1293,6 @@ namespace one::terminal {
 			reading_ = std::move(reader);
 			if (built && root_) reconcile(*built, *root_);
 			root_ = std::move(built);
-			needs_building_ = false;
 			dirty_ = true;
 			element* had = root_ ? focused_in(*root_) : nullptr;
 			if (root_ && (!had || had->focused_by_default)) {

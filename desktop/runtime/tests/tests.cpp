@@ -1311,7 +1311,7 @@ TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is
 	matches_golden("collage", {900, 560}, [&] { return drawn(nav); });
 }
 
-TEST("a collage crops its picked picture in place, kept with Enter, and words picked are written where they are, kept with Enter") {
+TEST("a collage crops its picked picture in place, the background too, kept with Enter, and words picked are written where they are, kept with Enter") {
 	memory_source data;
 	data.set("studio::poster_page", "p1",
 	         value(fields{{"width", 1600}, {"height", 900},
@@ -1341,6 +1341,19 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	CHECK(data.runs().back().command == "studio::layer::crop");
 	CHECK(data.runs().back().fields["crop_w"].as_double() == 1);
 	CHECK(data.runs().back().fields["x"].as_double() == 100);
+	// The background too, cropped where it sits: all of it, kept with Enter.
+	std::size_t before = data.runs().size();
+	p.pick("/ layer", "b0");
+	p.kept<std::string>("collage do / layer").set("crop");
+	(void)drawn(nav);
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .control = false}));
+	CHECK(data.runs().size() == before + 1);
+	if (data.runs().size() == before + 1) {
+		CHECK(data.runs().back().fields["id"].as_string() == "b0");
+		CHECK(data.runs().back().fields["crop_w"].as_double() == 1);
+		CHECK(data.runs().back().fields["crop_h"].as_double() == 1);
+	}
 	// The words picked and written: what's typed goes after them, Enter keeps them, and
 	// they're sent as big as they now are.
 	p.pick("/ layer", "w1");
@@ -1352,6 +1365,27 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	CHECK(data.runs().back().command == "studio::layer::write");
 	CHECK(data.runs().back().fields["words"].as_string() == "Harbor!");
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
+}
+
+TEST("a background cropped sits by the part it keeps, what's around it filled from that part's edges") {
+	struct kept_here : memory_source {
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
+	} data;
+	// The left half of a picture as wide as the collage, fitted: as tall as it is, and
+	// what's either side of it drawn out from its edges.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900}, {"background", "fit"}, {"around", "edges"},
+	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "collage.png"}, {"crop_x", 0}, {"crop_y", 0}, {"crop_w", 0.5}, {"crop_h", 1},
+	                                                   {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("collage-background-cropped", {900, 560}, [&] { return drawn(nav); });
 }
 
 TEST("a collage fills in the own size of a picture kept before it was, as it's turned, once, never a step undo takes back, in whichever fields keep it") {

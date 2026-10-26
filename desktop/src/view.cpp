@@ -125,6 +125,9 @@ namespace one::desktop {
 				self->needs_building = true;
 				self->redraw();
 			};
+			// Built now; something the build changes, like a screen opening another in its
+			// place as it opens, builds it again.
+			w.needs_building = false;
 			std::unique_ptr<element> built;
 			{
 				detail::reading noting(reader);
@@ -139,7 +142,6 @@ namespace one::desktop {
 			w.root = std::move(built);
 			w.pressed = w.dragging = nullptr;
 			if (dragged && dragged_kind) w.pressed = w.dragging = at_path(w.root.get(), *dragged, *dragged_kind);
-			w.needs_building = false;
 			w.needs_placing = true;
 			// Something to type into from the start: what asks for it, or a list, or the
 			// first that takes keys. Focus given that way moves on when something better

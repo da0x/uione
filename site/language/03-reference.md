@@ -2146,7 +2146,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     what's kept, its edges and corners trimming it, a drag inside moving it, and one on
     the rest of the picture shifting it under the crop. Enter, a click elsewhere or the
     check keeps it, sending the command its `crop_x crop_y crop_w crop_h` and its new
-    `x y w h`; Esc puts it away. A terminal draws no pictures, so it doesn't crop.
+    `x y w h`; Esc puts it away. The background is cropped where it sits, and then sits
+    by the part it keeps, as its `background` says, what's around it filled from that
+    part's edges. A terminal draws no pictures, so it doesn't crop.
   - `write layer::write`: words are written where they are, as a press twice on them
     or an `edit words "Edit" icon edit key enter` button begins, with a caret moved by
     a click, the arrows, Home and End, and Shift+Enter for a new line; Enter, Esc or a
