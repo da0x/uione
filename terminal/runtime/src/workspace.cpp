@@ -123,10 +123,42 @@ namespace one::terminal::runtime {
 
 	terminal::view full_screen(page&, std::string, std::string, std::vector<std::string>) { return {}; }
 
+	terminal::view collage_button(page& p, collage_ask ask) {
+		if (ask.does == "crop") return {};
+		auto asked = p.kept<std::string>("collage do " + ask.key);
+		auto press = [asked, does = ask.does] { asked.set(does); };
+		for (const auto& k : ask.keys) p.on_key(k, press);
+		return terminal::button(ask.label, std::move(press));
+	}
+
 	terminal::view collage(page& p, collage_spec spec) {
 		const view_state& v = *spec.view;
 		if (v.status == status::loading) return terminal::text("Loading…", dim());
 		const auto& layers = v.data[spec.list].as_array();
+		std::string chosen = spec.pick.empty() ? "" : p.picked_id(spec.pick);
+		// Words being written: a line to type them in, kept with Enter.
+		auto writing = p.kept<std::string>("collage writing " + spec.key);
+		auto typed = p.kept<std::string>("collage words " + spec.key);
+		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
+			std::string does = asked.peek();
+			asked.set("");
+			double width = v.data[spec.width].as_double(), height = v.data[spec.height].as_double();
+			if (does == "edit" && !spec.write.empty()) {
+				for (const auto& l : layers) {
+					if (l["id"].as_string() == chosen && l["picture"].as_string().empty()) writing.set(chosen), typed.set(l["words"].as_string());
+				}
+			} else if (does == "add" && !spec.add.empty()) {
+				double size = std::max(8.0, height / 12);
+				value made = value(std::map<std::string, value>{{"words", "Your text"}, {"size", size}, {"x", width / 3}, {"y", (height - size) / 2}, {"w", width / 3}, {"h", size * 1.2}});
+				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+				if (!layers.empty() && !layers.back()["depth"].is_null()) made.fields["depth"] = value(layers.back()["depth"].as_double() + 1);
+				p.run(spec.add, made, [&p, pick = spec.pick, writing, typed](const answer& a) {
+					if (!a) return;
+					if (!pick.empty()) p.pick(pick, *a);
+					writing.set(*a), typed.set("Your text");
+				});
+			}
+		}
 		if (layers.empty()) return terminal::text(spec.empty.empty() ? "Nothing here yet." : spec.empty, dim());
 		std::vector<terminal::list_row> rows;
 		int pictures = 0;
@@ -170,6 +202,16 @@ namespace one::terminal::runtime {
 			std::vector<terminal::view> over;
 			for (const auto& b : spec.over) over.push_back(command(p, b));
 			parts.push_back(along(std::move(over)));
+		}
+		if (!writing.get().empty()) {
+			parts.push_back(terminal::field(typed, {.on_submit = [&p, spec, writing, typed, layers] {
+				for (const auto& l : layers) {
+					if (l["id"].as_string() != writing.peek()) continue;
+					if (typed.peek().find_first_not_of(" \t") == std::string::npos && !spec.remove.empty()) p.run(spec.remove, value(std::map<std::string, value>{{"id", l["id"]}}));
+					else p.run(spec.write, value(std::map<std::string, value>{{"id", l["id"]}, {"words", typed.peek()}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", l["w"]}, {"h", l["h"]}}));
+				}
+				writing.set("");
+			}}));
 		}
 		return terminal::column(std::move(parts)).spacing(1);
 	}

@@ -2120,6 +2120,23 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   - `snap to edges`: what's dragged is drawn to the collage's edges and middle, and
     every other layer's, and evenly into a corner, with a line where it snaps, unless
     Alt is held.
+  - `crop layer::crop`: a picked picture is cropped in place, as a press twice on it
+    or a `crop "Crop" icon crop key c` button begins: the whole picture faint around
+    what's kept, its edges and corners trimming it, a drag inside moving it, and one on
+    the rest of the picture shifting it under the crop. Enter, a click elsewhere or the
+    check keeps it, sending the command its `crop_x crop_y crop_w crop_h` and its new
+    `x y w h`; Esc puts it away. A terminal draws no pictures, so it doesn't crop.
+  - `write layer::write`: words are written where they are, as a press twice on them
+    or an `edit words "Edit" icon edit key enter` button begins, with a caret moved by
+    a click, the arrows, Home and End, and Shift+Enter for a new line; Enter, Esc or a
+    click elsewhere keeps them, sending their `words`, `size` and their `x y w h` as big
+    as they've been measured. Words resized by a corner get larger or smaller letters,
+    sent the same way.
+  - `add layer::create`: `add words "Text" icon text key t` makes words in the middle,
+    a twelfth of its height, on top of the rest, picked and all chosen so the first key
+    typed replaces them. They're made with the field naming what the view is per, like
+    `poster`, and a `depth` above the top layer's, when its layers have one.
+  - `delete layer::delete`: words written away to nothing are deleted.
   - `empty "Add a picture to start"`: said while it has no layers.
   - `over layer { ... }`: buttons drawn just above the picked layer, or below it when
     there's no room, for the screen's `pick layer from poster_page.layers`, like

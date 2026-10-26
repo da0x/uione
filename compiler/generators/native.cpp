@@ -240,17 +240,43 @@ namespace one::generators {
                 std::string over;
                 for (const auto& tool : c.tools) {
                     auto* b = std::get_if<language::button_item>(&tool.node);
-                    if (!b) continue;
+                    if (!b) continue;  // what asks the collage itself goes in its asks
                     std::string made = command_of(parts, ns, *b);  // command(p, {...})
                     std::string spec = made.substr(std::string("command(p, ").size(), made.size() - std::string("command(p, ").size() - 1);
                     over += (over.empty() ? "" : ", ") + std::string("command_button") + spec;
                 }
                 out += ", .over = {" + over + "}";
             }
-            if (auto per = model_.per_entity(view)) out += ", .subject = " + id_of(parts, *per);
+            auto per = model_.per_entity(view);
+            if (per) out += ", .subject = " + id_of(parts, *per);
             if (workspace_) out += ", .fills = true";
+            if (c.add) out += ", .add = " + str(screens::full_command(ns, *c.add));
+            if (c.crop) out += ", .crop = " + str(screens::full_command(ns, *c.crop));
+            if (c.write) out += ", .write = " + str(screens::full_command(ns, *c.write));
+            if (c.remove) out += ", .remove = " + str(screens::full_command(ns, *c.remove));
+            // The field a new layer names what the view is per by, like poster.
+            if (const language::entity_declaration* layer = model_.listed(ns, c.view.text(), c.list); layer && per) {
+                for (const auto& f : layer->fields) {
+                    if (f.type && f.type->text() == *per) out += ", .parent = " + str(f.name);
+                }
+            }
+            out += ", .key = " + str(collage_key(c));
+            std::string asks;
+            for (const auto& tool : c.tools) {
+                auto* does = std::get_if<language::collage_button>(&tool.node);
+                if (!does) continue;
+                using kind = language::collage_button::kind;
+                std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : "add";
+                std::string label = does->label ? *does->label : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : "Text";
+                asks += (asks.empty() ? "" : ", ") + std::string("collage_ask{.key = ") + str(collage_key(c)) + ", .does = " + str(what) + ", .label = " + str(label) +
+                        ", .icon = " + str(does->icon.value_or("")) + (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "}";
+            }
+            if (!asks.empty()) out += ", .asks = {" + asks + "}";
             return out + "})";
         }
+
+        // What a collage and its buttons name it by: its pick, or the screen's address.
+        std::string collage_key(const language::collage_item& c) const { return route_ + " " + (c.over ? *c.over : std::string("collage")); }
 
         // The picks anywhere in a screen.
         static std::vector<const language::pick_item*> picks_in(const std::vector<language::screen_item>& items) {
@@ -1195,6 +1221,7 @@ namespace one::generators {
         std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
         bool workspace_ = false;      // the screen being written is laid out as a workspace
+        std::string collage_key_;     // what its collage buttons name its collage by
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -1462,6 +1489,12 @@ namespace one::generators {
                     code = command_of(parts, ns, *b);
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     code = collage(parts, ns, *c);
+                } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
+                    using kind = language::collage_button::kind;
+                    std::string what = does->does == kind::crop ? "crop" : does->does == kind::edit_words ? "edit" : "add";
+                    std::string label = does->label ? *does->label : does->does == kind::crop ? "Crop" : does->does == kind::edit_words ? "Edit" : "Text";
+                    code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
+                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "})";
                 } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {
                     code = "toggle(p, " + str(route_ + " " + t->name) + ", " + str(t->label ? *t->label : screens::label(t->name)) + ", " + str(t->icon.value_or("")) + ", " +
                            (t->keys.empty() ? "{}" : keys_of(t->keys)) + ")";
@@ -1554,6 +1587,15 @@ namespace one::generators {
                 route_ = model_.full_route(ns, s->route);
                 toggles_ = toggles_in(s->items);
                 at_end_said_ = false;
+                collage_key_ = route_ + " collage";
+                for (const auto& item : s->items) {
+                    if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                        for (const auto& inside : block->items) {
+                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = collage_key(*c);
+                        }
+                    }
+                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = collage_key(*c);
+                }
                 workspace_ = (s->layout ? *s->layout : model_.project.layout) == "workspace";
                 picks_.clear();
                 for (const auto* pick : picks_in(s->items)) {

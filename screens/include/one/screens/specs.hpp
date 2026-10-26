@@ -315,6 +315,13 @@ namespace one::screens {
 		std::string pick = "";      // the screen's pick of its rows, by name: a row's click picks it
 	};
 
+	// crop "Crop", edit words "Edit" and add words "Text": what's asked of the screen's
+	// collage, by what names it, carried out as it's next built.
+	struct collage_ask {
+		std::string key, does, label, icon;
+		std::vector<std::string> keys = {};
+	};
+
 	// A picture made of layers, as big as two of the view's values say, in its own
 	// pixels (decision 0019): its rows, lowest first, each placed by x y w h and drawn
 	// from picture, crop_x crop_y crop_w crop_h, turns, mirrored, words, size, color
@@ -332,6 +339,13 @@ namespace one::screens {
 		std::vector<command_button> over = {};  // buttons above the picked layer
 		std::string subject = "";               // the id of what the view is per, which slides its background
 		bool fills = false;                     // in a workspace, as big as its region; elsewhere 560 tall
+		std::string add = "";     // the command that makes a layer, sent `parent` = subject
+		std::string crop = "";    // and the one a picture cropped is sent to, its crop and its place
+		std::string write = "";   // words written, or resized: their words, size and place
+		std::string remove = "";  // a layer deleted, like words written away to nothing
+		std::string parent = "";  // the field a layer names what the view is per by, like poster
+		std::string key = "";     // what its buttons, like crop and add words, name it by
+		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
 	};
 
 	// A list's rows as large cards, like a project's boards: each its title, what

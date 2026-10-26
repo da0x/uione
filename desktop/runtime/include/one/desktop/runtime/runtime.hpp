@@ -55,6 +55,9 @@ namespace one::desktop::runtime {
 	// the app fills it, in which case a page is only what it's made of. Read in a
 	// view, they're current: the window builds its view again when either changes.
 	std::optional<desktop::size> screen_size();
+	// What's being typed into that isn't a field, like words written on a collage:
+	// given every key before anything else, while the page last built says so.
+	void typing(std::function<bool(const key_event&)> taking);
 	bool fullscreen();
 	// Fills the screen with the app, or stops, as F11 does.
 	void fullscreen(bool on);

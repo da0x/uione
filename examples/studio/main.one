@@ -33,6 +33,10 @@ namespace studio at / {
 		poster   poster  required
 		depth    number  = 0
 		picture  file
+		crop_x   number  = 0
+		crop_y   number  = 0
+		crop_w   number  = 1
+		crop_h   number  = 1
 		words    text
 		size     number  = 64
 		x        number  = 0
@@ -57,6 +61,16 @@ namespace studio at / {
 		require w > 0 && h > 0  "a layer has a size"
 	}
 
+	command layer::crop {
+		changes crop_x crop_y crop_w crop_h x y w h
+		require crop_w > 0 && crop_h > 0  "a crop keeps some of the picture"
+	}
+
+	command layer::write {
+		changes words size x y w h
+		require size > 0  "words have a size"
+	}
+
 	// Opened once more: counted, but never a step undo takes back.
 	command poster::view {
 		changes views
@@ -75,7 +89,7 @@ namespace studio at / {
 		title  color  width  height  background  around  slide_x  slide_y
 		layers = each layer in poster {
 			order by depth
-			picture  words  size  x  y  w  h
+			picture  crop_x  crop_y  crop_w  crop_h  words  size  depth  x  y  w  h
 		}
 	}
 
@@ -126,13 +140,24 @@ namespace studio at / {
 			text "{poster_page.title}"
 			poster::view "Counted" on when poster_page.title != none
 		}
+		toolbar {
+			group "Insert" {
+				add words "Text" icon text key t
+			}
+		}
 		main {
 			collage poster_page.layers size width height {
+				add layer::create
 				place layer::place
+				crop layer::crop
+				write layer::write
+				delete layer::delete
 				slide poster::slide
 				snap to edges
 				empty "Add a picture or some words to start"
 				over layer {
+					crop "Crop" icon crop key c
+					edit words "Edit" icon edit key enter
 					layer::delete "Delete" icon delete key delete
 				}
 			}

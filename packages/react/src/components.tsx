@@ -344,9 +344,21 @@ export function Region({ children }: { name: string; children?: ReactNode }) {
 export function Layout({ name, children }: { name: string; children?: ReactNode }) {
   const ui = useUI();
   useFill(name === "workspace");
+  // Filling the screen, a workspace is only its work, like a picture on a wall.
+  const full = useSyncExternalStore(
+    (changed) => {
+      if (typeof document === "undefined") return () => {};
+      document.addEventListener("fullscreenchange", changed);
+      return () => document.removeEventListener("fullscreenchange", changed);
+    },
+    () => typeof document !== "undefined" && document.fullscreenElement !== null,
+    () => false,
+  );
   const regions: Record<string, ReactNode> = {};
   Children.forEach(children, (child) => {
-    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region) regions[child.props.name] = child.props.children;
+    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || child.props.name === "main")) {
+      regions[child.props.name] = child.props.children;
+    }
   });
   return <ui.Layout name={name} regions={regions} />;
 }

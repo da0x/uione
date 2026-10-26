@@ -1285,6 +1285,49 @@ TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is
 	matches_golden("collage", {900, 560}, [&] { return drawn(nav); });
 }
 
+TEST("a collage crops its picked picture in place, kept with Enter, and words picked are written where they are, kept with Enter") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "files/dusk"}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}}),
+	                                      value(fields{{"id", "s1"}, {"picture", "files/sun"}, {"x", 100}, {"y", 100}, {"w", 300}, {"h", 300}}),
+	                                      value(fields{{"id", "w1"}, {"words", "Harbor"}, {"size", 96}, {"x", 120}, {"y", 600}, {"w", 300}, {"h", 120}})}}}));
+	data.on("studio::layer::crop", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	data.on("studio::layer::write", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .place = "studio::layer::place",
+		                                                                         .pick = "/ layer", .fills = true, .crop = "studio::layer::crop", .write = "studio::layer::write",
+		                                                                         .key = "/ layer"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto& p = nav.current();
+	// The sun picked and asked to be cropped, then kept with Enter: all of it, where it was.
+	p.pick("/ layer", "s1");
+	p.kept<std::string>("collage do / layer").set("crop");
+	(void)drawn(nav);
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .control = false}));
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "studio::layer::crop");
+	CHECK(data.runs().back().fields["crop_w"].as_double() == 1);
+	CHECK(data.runs().back().fields["x"].as_double() == 100);
+	// The words picked and written: what's typed goes after them, Enter keeps them, and
+	// they're sent as big as they now are.
+	p.pick("/ layer", "w1");
+	p.kept<std::string>("collage do / layer").set("edit");
+	(void)drawn(nav);
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = '!', .text = "!", .control = false}));
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = "", .control = false}));
+	CHECK(data.runs().back().command == "studio::layer::write");
+	CHECK(data.runs().back().fields["words"].as_string() == "Harbor!");
+	CHECK(data.runs().back().fields["w"].as_double() > 200);
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

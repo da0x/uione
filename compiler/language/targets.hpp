@@ -76,6 +76,9 @@ namespace one::language {
         drawn_by{"collage.slide", "sliding a collage's background", everywhere},
         drawn_by{"collage.snap", "snapping a collage's layers", everywhere},
         drawn_by{"collage.over", "buttons over a collage's picked layer", everywhere},
+        drawn_by{"collage.add", "adding words to a collage", everywhere},
+        drawn_by{"collage.write", "words written on a collage", everywhere},
+        drawn_by{"collage.crop", "cropping a collage's picture", "web desktop"},
         drawn_by{"button.given", "a button's given values", everywhere},
         drawn_by{"button.on", "a button's on when", everywhere},
         drawn_by{"button.then", "a button's then open", everywhere},
@@ -335,6 +338,12 @@ namespace one::language {
                         if (n.slide) use("collage.slide");
                         if (n.snap) use("collage.snap");
                         if (n.over) use("collage.over");
+                        if (n.add) use("collage.add");
+                        if (n.write) use("collage.write");
+                        if (n.crop) use("collage.crop");
+                    } else if constexpr (std::is_same_v<T, collage_button>) {
+                        use(n.does == collage_button::kind::crop ? "collage.crop" : n.does == collage_button::kind::edit_words ? "collage.write" : "collage.add");
+                        if (!n.keys.empty()) use("key");
                     }
                 },
                 i.node);

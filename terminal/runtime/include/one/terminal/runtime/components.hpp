@@ -108,6 +108,9 @@ namespace one::terminal::runtime {
 	// a picture by its place and words by what they say; Enter picks one, and the
 	// buttons over it follow.
 	terminal::view collage(page& p, collage_spec spec);
+	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage; a
+	// terminal can't crop a picture it can't show, so it doesn't offer to.
+	terminal::view collage_button(page& p, collage_ask ask);
 	// A terminal has no window to fill, so full screen draws nothing.
 	terminal::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys);
 	// Whether a key pressed is a chord, like ctrl+z.

@@ -147,6 +147,8 @@ namespace one::desktop::runtime {
 	desktop::view board(page& p, board_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
 	desktop::view collage(page& p, collage_spec spec);
+	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
+	desktop::view collage_button(page& p, collage_ask ask);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.

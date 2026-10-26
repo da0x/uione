@@ -286,19 +286,19 @@ TEST_CASE("a collage is a view's list as layers, as big as two of its values, pl
 		}
 )")) == std::vector<std::string>{"45: view poster_page has no wide, which says how big the collage is; add it to the view",
                                    "45: view poster_page has no tall, which says how big the collage is; add it to the view",
-                                   "46: a collage's layers are layers, so they're placed by a command on layer, like layer::place",
+                                   "46: a collage's layers are layers, so place names a command on layer, like layer::place",
                                    "47: a collage's background slides as the view poster_page says, so by a command on what the view is per, like poster::slide",
                                    "48: over names the screen's pick of these layers, like pick layer from poster_page.layers",
-                                   "49: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete"});
+                                   "49: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\""});
     auto files = built(collage_screen(fine));
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];
     CAPTURE(web);
     CAPTURE(native);
-    CHECK(web.find(R"(<Collage view={posterPage} list="layers" place="studio::layer::place" slide="studio::poster::slide" snap empty="Add a picture to start" pick="/posters/:poster layer" subject={posterId}>)") !=
+    CHECK(web.find(R"(<Collage view={posterPage} list="layers" place="studio::layer::place" slide="studio::poster::slide" snap empty="Add a picture to start" pick="/posters/:poster layer" parent="poster" name="/posters/:poster layer" subject={posterId}>)") !=
           std::string::npos);
     CHECK(web.find(R"(<Command name="studio::layer::delete" id={pickedLayer?.id as string | undefined} label="Delete" icon="delete" keys={["delete"]} when={pickedLayer !== null} />)") != std::string::npos);
-    CHECK(native.find(R"(collage(p, {.view = poster_page, .list = "layers", .place = "studio::layer::place", .slide = "studio::poster::slide", .snap = true, .empty = "Add a picture to start", .pick = "/posters/:poster layer", .over = {command_button{.command = "studio::layer::delete", .label = "Delete", .id = picked_layer["id"].as_string(), .when = !none(picked_layer), .icon = "delete", .keys = std::vector<std::string>{"delete"}}}, .subject = poster_id})") !=
+    CHECK(native.find(R"(collage(p, {.view = poster_page, .list = "layers", .place = "studio::layer::place", .slide = "studio::poster::slide", .snap = true, .empty = "Add a picture to start", .pick = "/posters/:poster layer", .over = {command_button{.command = "studio::layer::delete", .label = "Delete", .id = picked_layer["id"].as_string(), .when = !none(picked_layer), .icon = "delete", .keys = std::vector<std::string>{"delete"}}}, .subject = poster_id, .parent = "poster", .key = "/posters/:poster layer"})") !=
           std::string::npos);
 }
 

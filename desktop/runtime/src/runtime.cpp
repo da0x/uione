@@ -30,6 +30,7 @@ namespace one::desktop::runtime {
 		const auto& s = nav.site();
 		const auto& shows = nav.shown(p);
 		p.forget_keys();
+		typing({});
 		desktop::view built = shows.build ? shows.build(p) : desktop::column();
 		auto around = p.take_around();
 		bool wide = p.take_wide();
@@ -99,7 +100,14 @@ namespace one::desktop::runtime {
 		return false;
 	}
 
+	namespace {
+		std::function<bool(const key_event&)> typed_into;
+	}  // namespace
+
+	void typing(std::function<bool(const key_event&)> taking) { typed_into = std::move(taking); }
+
 	bool key(navigator& nav, const key_event& e) {
+		if (typed_into && typed_into(e)) return true;
 		if (e.is(keys::escape) && asking_to_close.peek()) {
 			asking_to_close.set(std::nullopt);
 			return true;

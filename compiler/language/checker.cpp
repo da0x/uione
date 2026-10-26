@@ -199,6 +199,7 @@ namespace one::language {
         std::string layout_;  // the project's layout for its screens, when it says one
         std::set<std::string> toggles_;  // the toggles of the screen being checked, read by its whens
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
+        std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
@@ -2748,6 +2749,14 @@ namespace one::language {
                 }
             };
             picks(s.items);
+            collages_.clear();
+            std::function<void(const std::vector<screen_item>&)> collages = [&](const std::vector<screen_item>& inside) {
+                for (const auto& item : inside) {
+                    if (auto* c = std::get_if<collage_item>(&item.node)) collages_.push_back(c);
+                    if (auto* block = std::get_if<content_block>(&item.node)) collages(block->items);
+                }
+            };
+            collages(s.items);
             screen_ = &s.items;
             screen_items(ns, s.items, full_route(ns, s.route));
             screen_ = nullptr;
@@ -3515,6 +3524,17 @@ namespace one::language {
                     verify_canvas(ns, *canvas, route);
                 } else if (auto* collage = std::get_if<collage_item>(&item.node)) {
                     verify_collage(ns, *collage, route);
+                } else if (auto* does = std::get_if<collage_button>(&item.node)) {
+                    // What it asks of the screen's collage, which says how it's kept.
+                    icon(does->icon, does->icon_where);
+                    keys(does->keys);
+                    bool can = std::ranges::any_of(collages_, [&](const collage_item* c) {
+                        return does->does == collage_button::kind::crop ? c->crop.has_value() : does->does == collage_button::kind::edit_words ? c->write.has_value() : c->add.has_value();
+                    });
+                    if (!can) {
+                        std::string needs = does->does == collage_button::kind::crop ? "crop layer::crop" : does->does == collage_button::kind::edit_words ? "write layer::write" : "add layer::create";
+                        error(item.where, "this screen has no collage that says " + needs + " for this button to use");
+                    }
                 } else if (auto* pipeline = std::get_if<pipeline_item>(&item.node)) {
                     verify_pipeline(ns, *pipeline, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
@@ -3847,10 +3867,15 @@ namespace one::language {
                 else if (!f->type || f->type->text() != "number" || f->list) error(collage.list_where, layer->name + "." + name + " keeps where a layer is, so it's a number");
                 else if (!in_rows(*layers, name)) error(collage.list_where, "view " + collage.view.text() + " has no " + name + " in its " + collage.list + "; add it to the list's block");
             }
-            if (collage.place) {
-                verify_command_use(ns, *collage.place);
-                const entity_declaration* on = find_command(ns, *collage.place);
-                if (on && on != layer) error(collage.place->where, "a collage's layers are " + layer->name + "s, so they're placed by a command on " + layer->name + ", like " + layer->name + "::place");
+            // Placed, cropped, written and made by commands on what its layers are.
+            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}}) {
+                if (!*command) continue;
+                verify_command_use(ns, **command);
+                const entity_declaration* on = find_command(ns, **command);
+                if (on && on != layer) {
+                    std::string line = like == std::string("create") ? "add" : like;
+                    error((*command)->where, "a collage's layers are " + layer->name + "s, so " + line + " names a command on " + layer->name + ", like " + layer->name + "::" + like);
+                }
             }
             if (collage.slide) {
                 verify_command_use(ns, *collage.slide);
@@ -3866,7 +3891,9 @@ namespace one::language {
                     error(collage.over_where, "over names the screen's pick of these layers, like pick " + *collage.over + " from " + collage.view.text() + "." + collage.list);
                 }
                 for (const auto& tool : collage.tools) {
-                    if (!std::holds_alternative<button_item>(tool.node)) error(tool.where, "what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete");
+                    if (!std::holds_alternative<button_item>(tool.node) && !std::holds_alternative<collage_button>(tool.node)) {
+                        error(tool.where, "what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\"");
+                    }
                 }
                 screen_items(ns, collage.tools, route);
             }

@@ -8,17 +8,19 @@
 // mirrored as each layer says, and words drawn over a soft shadow. A click picks a
 // layer, framed with its corners and the buttons over it; a picked layer is moved, or
 // resized by a corner with its shape kept unless Shift is held, snapped unless Alt
-// is, and the background slid where it can. Where everything goes is collage.ts, the
-// model the desktop's is held to as well. It's drawn on a canvas, the same in every
-// component set.
+// is, and the background slid where it can. A picture is cropped in place, its whole
+// picture faint around what's kept, and words are written where they are, with a
+// caret, and resized by their size. Where everything goes is collage.ts, the model the
+// desktop's is held to as well. It's drawn on a canvas, the same in every component set.
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { backgroundAt, cornerAt, moved, resized, slid, slideRange, slides, snapLines } from "./collage.js";
+import { backgroundAt, cornerAt, cropEdgesAt, cropped, moved, resized, slid, slideRange, slides, snapLines, wholeOf } from "./collage.js";
 import type { Backdrop, Box, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
-import { OverLayer, setPicked, useKeys, usePickedId } from "./workspace.js";
+import { useUI } from "./ui.js";
+import { OverLayer, hintOf, setPicked, useKeys, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -30,7 +32,20 @@ const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0
 const isWords = (l: Row) => str(l["picture"]) === "";
 const isBackground = (layers: Row[], l: Row) => layers.length > 0 && !isWords(l) && layers[0]!["id"] === l["id"];
 const colorOf = (written: string, otherwise: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : otherwise);
+const weightOf = (l: Row) => num(l["weight"], 700);
+const inside = (b: Box, p: Point) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 const wordsFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, Cantarell, Ubuntu, sans-serif';
+
+// How big words are, in the collage's pixels: as wide as their widest line, each line
+// a little more than their size.
+let measurer: CanvasRenderingContext2D | null | undefined;
+function measured(words: string, size: number, weight: number): { w: number; h: number } {
+  measurer ??= typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+  const lines = (words || " ").split("\n");
+  if (!measurer) return { w: Math.max(1, size * 0.6 * Math.max(...lines.map((l) => l.length))), h: Math.max(1, size * 1.2 * lines.length) };
+  measurer.font = `${weight} ${size}px ${wordsFamily}`;
+  return { w: Math.max(1, ...lines.map((l) => measurer!.measureText(l).width)), h: Math.max(1, size * 1.2 * lines.length) };
+}
 
 // Each picture read once, by what names it, and what's drawn from it: turned and
 // mirrored as a layer says, and its edge color.
@@ -54,7 +69,7 @@ function pictureOf(path: string, address: ((path: string) => Promise<string>) | 
   return undefined;
 }
 
-function orientedOf(path: string, p: ImageBitmap, turns: number, mirrored: boolean): CanvasImageSource {
+function orientedOf(path: string, p: ImageBitmap, turns: number, mirrored: boolean): CanvasImageSource & { width: number; height: number } {
   if (turns === 0 && !mirrored) return p;
   const key = `${path} ${turns} ${mirrored}`;
   let made = orientedOnes.get(key);
@@ -95,20 +110,43 @@ function edgeColorOf(path: string, p: CanvasImageSource & { width: number; heigh
   return color;
 }
 
+// What a collage's buttons ask of it, by what names it: crop, edit or add.
+const asked = new Map<string, string>();
+const askListeners = new Set<() => void>();
+function ask(name: string, does: string) {
+  asked.set(name, does);
+  askListeners.forEach((changed) => changed());
+}
+
+// crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add"; label: string; icon?: string; keys?: string[] }) {
+  const ui = useUI();
+  const tool = useTool() ?? "small";
+  useKeys(keys, () => ask(collage, does));
+  return (
+    <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
+      {label}
+    </ui.Button>
+  );
+}
+
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "sliding";
+  what: "moving" | "resizing" | "sliding" | "cropping" | "shifting";
   id: string;
   from: Box;
   at: Point;
   corner: number;
   across: [number, number];
   down: [number, number];
+  edges: number;
+  keptFrom?: Box;
 }
 
 // Where the collage was last drawn, how much smaller than itself, what the pointer is
-// doing, where a layer is going or was let go, and the lines it snaps to. Kept apart
-// from React's state, so a drag repaints the canvas alone.
+// doing, where a layer is going or was let go, the lines it snaps to, a crop being
+// made, and words being written. Kept apart from React's state, so a drag repaints
+// the canvas alone.
 interface Placed {
   board: Box;
   scale: number;
@@ -116,6 +154,8 @@ interface Placed {
   going?: { id: string; box: Box };
   lines: Lines;
   guide?: Guided;
+  crop?: { id: string; whole: Box; kept: Box };
+  editing?: { id: string; words: string; caret: number; fresh: boolean };
 }
 
 export function Collage({
@@ -130,6 +170,12 @@ export function Collage({
   pick,
   subject,
   fills = false,
+  add,
+  crop,
+  write,
+  remove,
+  parent,
+  name,
   children,
 }: {
   view: ViewState;
@@ -143,15 +189,21 @@ export function Collage({
   pick?: string; // the screen's pick of its layers
   subject?: string; // the id of what the view is per, which its background slides on
   fills?: boolean; // in a workspace, as big as its region; elsewhere 560 tall
+  add?: string; // the command that makes a layer, sent `parent` = subject
+  crop?: string; // the one a picture cropped is sent to, its crop and its place
+  write?: string; // words written, or resized: their words, size and place
+  remove?: string; // a layer deleted, like words written away to nothing
+  parent?: string; // the field a layer names what the view is per by, like poster
+  name?: string; // what its buttons, like crop and add words, name it by
   children?: ReactNode; // the buttons over the picked layer
 }) {
   const files = useFiles();
   const runner = useRunner();
   const picked = usePickedId(pick ?? "") ?? "";
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const holder = useRef<HTMLDivElement>(null);
   const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] } });
   const [, setRead] = useState(0);
+  const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
   const [full, setFull] = useState(() => typeof document !== "undefined" && document.fullscreenElement !== null);
 
@@ -160,6 +212,8 @@ export function Collage({
   const W = num(data[width]), H = num(data[height]);
   const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
   const address = files ? (path: string) => files.address(path) : undefined;
+  const chosen = layers.find((l) => l["id"] === picked);
+  const w = placed.current;
 
   useEffect(() => {
     const changed = () => setRead((n) => n + 1);
@@ -172,8 +226,65 @@ export function Collage({
     };
   }, []);
 
-  // Where each layer is on the collage: the background where it sits, the rest as they
-  // say, and one being moved or let go where it's going.
+  // A crop or words are only of the picked layer; picking another puts them away.
+  if (w.crop && w.crop.id !== picked) w.crop = undefined;
+
+  // Words written kept, as big as they now are; written away to nothing, gone.
+  const finishWriting = () => {
+    const e = w.editing;
+    if (!e) return;
+    w.editing = undefined;
+    const l = layers.find((r) => r["id"] === e.id);
+    if (!l) return;
+    if (!e.words.trim()) {
+      if (remove) void runner.reply(remove, { id: e.id });
+      if (pick) setPicked(pick, undefined);
+      return;
+    }
+    if (e.words === str(l["words"]) || !write) return;
+    const m = measured(e.words, num(l["size"]), weightOf(l));
+    void runner.reply(write, { id: e.id, words: e.words, size: l["size"], x: l["x"], y: l["y"], w: m.w, h: m.h });
+  };
+  if (w.editing && w.editing.id !== picked) finishWriting();
+
+  // What its buttons asked of it: a crop begun, words written, or words added.
+  const asking = useSyncExternalStore(
+    (changed) => {
+      askListeners.add(changed);
+      return () => askListeners.delete(changed);
+    },
+    () => (name ? asked.get(name) : undefined),
+    () => undefined,
+  );
+  useEffect(() => {
+    if (!asking || !name) return;
+    asked.delete(name);
+    if (asking === "crop" && chosen && !isWords(chosen) && !isBackground(layers, chosen) && crop) {
+      w.crop = { id: picked, whole: wholeOf(boxOf(chosen), cropOf(chosen)), kept: boxOf(chosen) };
+    } else if (asking === "edit" && chosen && isWords(chosen) && write) {
+      w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
+    } else if (asking === "add" && add) {
+      // Words in the middle, a twelfth of its height, all chosen so the first key
+      // typed replaces them, on top of the rest.
+      const size = Math.max(8, Math.round(H / 12));
+      const words = "Your text";
+      const m = measured(words, size, 700);
+      const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
+      if (parent) made[parent] = subject;
+      const top = layers[layers.length - 1];
+      if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
+      void runner.reply(add, made).then((reply) => {
+        if (!reply?.id) return;
+        if (pick) setPicked(pick, reply.id);
+        w.editing = { id: reply.id, words, caret: words.length, fresh: true };
+        redraw((n) => n + 1);
+      });
+    }
+    redraw((n) => n + 1);
+  });
+
+  // Where each layer is on the collage: the background where it sits, words as big
+  // as they are, the rest as they say, and one being moved or let go where it's going.
   const whereIs = (l: Row): Box => {
     let b = boxOf(l);
     if (isBackground(layers, l)) {
@@ -183,18 +294,20 @@ export function Collage({
         b = backgroundAt(backdrop, sideways ? p.height : p.width, sideways ? p.width : p.height);
       }
     }
-    const g = placed.current.going;
+    const g = w.going;
     if (g && g.id === l["id"]) {
       const near = (a: number, z: number) => Math.abs(a - z) < 0.01;
-      if (near(b.x, g.box.x) && near(b.y, g.box.y) && near(b.w, g.box.w) && near(b.h, g.box.h) && !placed.current.now) placed.current.going = undefined;
+      if (near(b.x, g.box.x) && near(b.y, g.box.y) && near(b.w, g.box.w) && near(b.h, g.box.h) && !w.now) w.going = undefined;
       else b = g.box;
+    }
+    if (isWords(l) && !(w.going && w.going.id === l["id"] && w.now)) {
+      const writing = w.editing?.id === l["id"];
+      const m = measured(writing ? w.editing!.words : str(l["words"]), num(l["size"]), weightOf(l));
+      b = { x: b.x, y: b.y, w: m.w, h: m.h };
     }
     return b;
   };
-  const onBoard = (b: Box): Box => {
-    const w = placed.current;
-    return { x: w.board.x + b.x * w.scale, y: w.board.y + b.y * w.scale, w: b.w * w.scale, h: b.h * w.scale };
-  };
+  const onBoard = (b: Box): Box => ({ x: w.board.x + b.x * w.scale, y: w.board.y + b.y * w.scale, w: b.w * w.scale, h: b.h * w.scale });
 
   const paint = () => {
     const canvas = canvasRef.current;
@@ -221,31 +334,40 @@ export function Collage({
     if (scale <= 0) return;
     const bw = W * scale, bh = H * scale;
     const board = { x: (cw - bw) / 2, y: (ch - bh) / 2, w: bw, h: bh };
-    placed.current.board = board;
-    placed.current.scale = scale;
+    w.board = board;
+    w.scale = scale;
+    c.save();
     if (!full) {
-      c.save();
       c.shadowColor = "rgba(0, 0, 0, 0.18)";
       c.shadowBlur = 14;
       c.shadowOffsetY = 2;
-      c.fillStyle = "#fff";
-      c.fillRect(board.x, board.y, bw, bh);
-      c.restore();
     }
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, bw, bh);
+    c.restore();
     let framed: Box | undefined;
     c.save();
     c.beginPath();
     c.rect(board.x, board.y, bw, bh);
     c.clip();
     for (const l of layers) {
-      const b = onBoard(whereIs(l));
+      let b = onBoard(whereIs(l));
       if (isWords(l)) {
-        const size = num(l["size"]) * scale;
-        c.font = `${num(l["weight"], 700)} ${size}px ${wordsFamily}`;
+        // Being written: as typed so far, with its caret, all of it marked while the
+        // first key would replace it; being resized, its letters as large.
+        const writing = w.editing?.id === l["id"] ? w.editing : undefined;
+        const kept = measured(str(l["words"]), num(l["size"]), weightOf(l));
+        const size = num(l["size"]) * (w.going?.id === l["id"] && w.now && kept.h > 0 ? b.h / w.scale / kept.h : 1) * scale;
+        c.font = `${weightOf(l)} ${size}px ${wordsFamily}`;
         c.textBaseline = "top";
-        const lines = str(l["words"]).split("\n");
+        if (writing?.fresh) {
+          c.fillStyle = accent;
+          c.globalAlpha = 0.35;
+          c.fillRect(b.x, b.y, b.w, b.h);
+          c.globalAlpha = 1;
+        }
+        const said = writing ? writing.words : str(l["words"]);
+        const lines = said.split("\n");
         const off = Math.max(1, size * 0.04);
         lines.forEach((line, i) => {
           c.fillStyle = "rgba(0, 0, 0, 0.45)";
@@ -253,12 +375,27 @@ export function Collage({
           c.fillStyle = colorOf(str(l["color"]), "#ffffff");
           c.fillText(line, b.x, b.y + i * size * 1.2);
         });
+        if (writing && !writing.fresh) {
+          const before = said.slice(0, writing.caret).split("\n");
+          const line = before.length - 1;
+          c.fillStyle = accent;
+          c.fillRect(b.x + c.measureText(before[line]!).width, b.y + line * size * 1.2, 2, size * 1.2);
+        }
       } else {
         const path = str(l["picture"]);
         const p = pictureOf(path, address);
         if (p) {
-          const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0) as CanvasImageSource & { width: number; height: number };
-          if (isBackground(layers, l)) {
+          const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
+          if (w.crop && w.crop.id === l["id"]) {
+            // Being cropped: the whole picture faint, what's kept as it will be.
+            const whole = onBoard(w.crop.whole), kept = onBoard(w.crop.kept);
+            c.globalAlpha = 0.35;
+            c.drawImage(shown, whole.x, whole.y, whole.w, whole.h);
+            c.globalAlpha = 1;
+            const fx = (w.crop.kept.x - w.crop.whole.x) / w.crop.whole.w, fy = (w.crop.kept.y - w.crop.whole.y) / w.crop.whole.h;
+            c.drawImage(shown, fx * shown.width, fy * shown.height, (w.crop.kept.w / w.crop.whole.w) * shown.width, (w.crop.kept.h / w.crop.whole.h) * shown.height, kept.x, kept.y, kept.w, kept.h);
+            b = kept;
+          } else if (isBackground(layers, l)) {
             const covers = b.x <= board.x && b.y <= board.y && b.x + b.w >= board.x + bw && b.y + b.h >= board.y + bh;
             if (!covers) {
               c.fillStyle = edgeColorOf(path, shown);
@@ -282,8 +419,8 @@ export function Collage({
             }
             c.drawImage(shown, b.x, b.y, b.w, b.h);
           } else {
-            const crop = cropOf(l);
-            c.drawImage(shown, crop.x * shown.width, crop.y * shown.height, crop.w * shown.width, crop.h * shown.height, b.x, b.y, b.w, b.h);
+            const cr = cropOf(l);
+            c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
           }
         }
       }
@@ -291,8 +428,8 @@ export function Collage({
     }
     c.restore();
     // The lines a moved layer snapped to, across the whole collage.
-    const guide = placed.current.guide;
-    if (placed.current.now && guide) {
+    const guide = w.guide;
+    if (w.now && guide && w.now.what !== "cropping" && w.now.what !== "shifting") {
       c.strokeStyle = c.fillStyle = accent;
       if (guide.corner) {
         c.lineWidth = 1.5;
@@ -312,23 +449,22 @@ export function Collage({
       c.fillText(empty, board.x + bw / 2, board.y + bh / 2);
       c.textAlign = "start";
     }
-    // The picked layer's frame and corners, over everything.
+    // The picked layer's frame and corners, over everything, a crop's edges too.
     if (framed) {
       c.strokeStyle = accent;
       c.lineWidth = 2;
       c.strokeRect(framed.x, framed.y, framed.w, framed.h);
-      const pickedRow = layers.find((l) => l["id"] === picked);
-      if (pickedRow && !isBackground(layers, pickedRow) && !isWords(pickedRow) && place) {
-        for (const [x, y] of [
-          [framed.x, framed.y],
-          [framed.x + framed.w, framed.y],
-          [framed.x + framed.w, framed.y + framed.h],
-          [framed.x, framed.y + framed.h],
-        ]) {
-          c.fillStyle = "#fff";
-          c.fillRect(x! - handle / 2, y! - handle / 2, handle, handle);
-          c.strokeRect(x! - handle / 2, y! - handle / 2, handle, handle);
-        }
+      const corners = w.crop ? true : chosen && isWords(chosen) ? Boolean(write) : chosen && !isBackground(layers, chosen) && Boolean(place);
+      const points: [number, number][] = [];
+      if (corners && !w.editing) points.push([framed.x, framed.y], [framed.x + framed.w, framed.y], [framed.x + framed.w, framed.y + framed.h], [framed.x, framed.y + framed.h]);
+      if (w.crop) {
+        const mx = framed.x + framed.w / 2, my = framed.y + framed.h / 2;
+        points.push([mx, framed.y], [framed.x + framed.w, my], [mx, framed.y + framed.h], [framed.x, my]);
+      }
+      for (const [x, y] of points) {
+        c.fillStyle = "#fff";
+        c.fillRect(x - handle / 2, y - handle / 2, handle, handle);
+        c.strokeRect(x - handle / 2, y - handle / 2, handle, handle);
       }
     }
     setFrame((was) => (was && framed && was.x === framed.x && was.y === framed.y && was.w === framed.w && was.h === framed.h ? was : framed));
@@ -343,6 +479,42 @@ export function Collage({
     return () => watching.disconnect();
   });
 
+  // Words being written take every key: Enter or Esc keeps them, Shift+Enter starts a
+  // new line, the arrows, Home and End move the caret, and the rest is typed.
+  useEffect(() => {
+    if (!w.editing) return;
+    const down = (k: KeyboardEvent) => {
+      const e = w.editing;
+      if (!e) return;
+      k.preventDefault();
+      k.stopPropagation();
+      if (k.key === "Escape" || (k.key === "Enter" && !k.shiftKey)) {
+        finishWriting();
+        redraw((n) => n + 1);
+        return;
+      }
+      const typed = k.key.length === 1 && !k.ctrlKey && !k.metaKey && !k.altKey;
+      const newLine = k.key === "Enter" && k.shiftKey;
+      if (e.fresh && (typed || newLine || k.key === "Backspace" || k.key === "Delete")) (e.words = ""), (e.caret = 0), (e.fresh = false);
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(k.key)) e.fresh = false;
+      const chars = [...e.words];
+      let at = [...e.words.slice(0, e.caret)].length;
+      if (newLine) chars.splice(at++, 0, "\n");
+      else if (k.key === "Backspace" && at > 0) chars.splice(--at, 1);
+      else if (k.key === "Delete" && at < chars.length) chars.splice(at, 1);
+      else if (k.key === "ArrowLeft" && at > 0) at--;
+      else if (k.key === "ArrowRight" && at < chars.length) at++;
+      else if (k.key === "Home") while (at > 0 && chars[at - 1] !== "\n") at--;
+      else if (k.key === "End") while (at < chars.length && chars[at] !== "\n") at++;
+      else if (typed) chars.splice(at++, 0, k.key);
+      e.words = chars.join("");
+      e.caret = chars.slice(0, at).join("").length;
+      paint();
+    };
+    window.addEventListener("keydown", down, true);
+    return () => window.removeEventListener("keydown", down, true);
+  });
+
   const at = (e: { clientX: number; clientY: number }): Point => {
     const r = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -354,8 +526,9 @@ export function Collage({
       layers.filter((l) => l["id"] !== moving).map((l) => whereIs(l)),
     );
   const goingTo = (p: Point, e: { altKey: boolean; shiftKey: boolean }): Box => {
-    const w = placed.current, g = w.now!;
+    const g = w.now!;
     const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale, close = 8 / w.scale;
+    if (g.what === "cropping" && w.crop) return cropped(g.from, g.edges, dx, dy, w.crop.whole);
     const snaps = snap && !e.altKey;
     const to =
       g.what === "moving"
@@ -367,43 +540,86 @@ export function Collage({
     return to.at;
   };
   const pickRow = (id: string) => pick && setPicked(pick, id || undefined);
+  const keepCrop = () => {
+    const e = w.crop;
+    if (!e || !crop) return;
+    w.crop = undefined;
+    w.going = { id: e.id, box: e.kept };
+    void runner.reply(crop, {
+      id: e.id,
+      crop_x: (e.kept.x - e.whole.x) / e.whole.w,
+      crop_y: (e.kept.y - e.whole.y) / e.whole.h,
+      crop_w: e.kept.w / e.whole.w,
+      crop_h: e.kept.h / e.whole.h,
+      x: e.kept.x,
+      y: e.kept.y,
+      w: e.kept.w,
+      h: e.kept.h,
+    });
+    redraw((n) => n + 1);
+  };
 
   const press = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (full) {
       void document.exitFullscreen();
       return;
     }
-    const w = placed.current;
     if (w.scale <= 0) return;
     const p = at(e);
-    const pickedRow = layers.find((l) => l["id"] === picked);
-    if (pickedRow && place && !isBackground(layers, pickedRow) && !isWords(pickedRow)) {
-      const b = whereIs(pickedRow);
+    // Words being written are kept by a press anywhere but on them.
+    if (w.editing) {
+      const l = layers.find((r) => r["id"] === w.editing!.id);
+      if (l && inside(onBoard(whereIs(l)), p)) return;
+      finishWriting();
+    }
+    // Cropping: its edges and corners trim it, inside moves it, the rest of the
+    // picture shifts with it, and a press anywhere else keeps it.
+    if (w.crop) {
+      const edgesAt = cropEdgesAt(onBoard(w.crop.kept), p, handle);
+      if (edgesAt < 0 && inside(onBoard(w.crop.whole), p)) {
+        w.now = { what: "shifting", id: w.crop.id, from: w.crop.whole, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: 0, keptFrom: w.crop.kept };
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+      if (edgesAt < 0) return keepCrop();
+      w.now = { what: "cropping", id: w.crop.id, from: w.crop.kept, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: edgesAt };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+    // A corner of the picked layer resizes it: a picture with its shape kept, words by their size.
+    if (chosen && !isBackground(layers, chosen) && (isWords(chosen) ? write : place)) {
+      const b = whereIs(chosen);
       const corner = cornerAt(onBoard(b), p, handle);
       if (corner >= 0) {
-        w.now = { what: "resizing", id: picked, from: b, at: p, corner, across: [0, 0], down: [0, 0] };
+        w.now = { what: "resizing", id: picked, from: b, at: p, corner, across: [0, 0], down: [0, 0], edges: 0 };
         w.lines = linesFor(picked);
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
     }
+    // The top layer under the pointer, never the background, is picked and moves;
+    // pressed twice, a picture is cropped and words written.
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i]!;
       if (i === 0 && !isWords(l)) break;
       const b = whereIs(l);
-      const on = onBoard(b);
-      if (p.x < on.x || p.x > on.x + on.w || p.y < on.y || p.y > on.y + on.h) continue;
+      if (!inside(onBoard(b), p)) continue;
       const id = str(l["id"]);
       pickRow(id);
+      if (e.detail >= 2) {
+        if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
+        else if (!isWords(l) && crop) w.crop = { id, whole: wholeOf(boxOf(l), cropOf(l)), kept: boxOf(l) };
+        redraw((n) => n + 1);
+        return;
+      }
       if (place) {
-        w.now = { what: "moving", id, from: b, at: p, corner: 0, across: [0, 0], down: [0, 0] };
+        w.now = { what: "moving", id, from: b, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: 0 };
         w.lines = linesFor(id);
         e.currentTarget.setPointerCapture(e.pointerId);
       }
       return;
     }
-    const inside = p.x >= w.board.x && p.x <= w.board.x + w.board.w && p.y >= w.board.y && p.y <= w.board.y + w.board.h;
-    if (!inside || layers.length === 0 || isWords(layers[0]!)) {
+    if (!inside(w.board, p) || layers.length === 0 || isWords(layers[0]!)) {
       pickRow("");
       return;
     }
@@ -411,20 +627,33 @@ export function Collage({
     pickRow(str(bottom["id"]));
     const b = whereIs(bottom);
     if (slide && slides(backdrop, b)) {
-      w.now = { what: "sliding", id: str(bottom["id"]), from: b, at: p, corner: 0, across: slideRange(W, b.w), down: slideRange(H, b.h) };
+      w.now = { what: "sliding", id: str(bottom["id"]), from: b, at: p, corner: 0, across: slideRange(W, b.w), down: slideRange(H, b.h), edges: 0 };
       e.currentTarget.setPointerCapture(e.pointerId);
     }
   };
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const w = placed.current;
-    if (!w.now) return;
-    w.going = { id: w.now.id, box: goingTo(at(e), e) };
+    const g = w.now;
+    if (!g) return;
+    const p = at(e);
+    if (g.what === "shifting" && w.crop) {
+      const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale;
+      w.crop.whole = { ...g.from, x: g.from.x + dx, y: g.from.y + dy };
+      w.crop.kept = { ...g.keptFrom!, x: g.keptFrom!.x + dx, y: g.keptFrom!.y + dy };
+    } else if (g.what === "cropping" && w.crop) {
+      w.crop.kept = goingTo(p, e);
+    } else {
+      w.going = { id: g.id, box: goingTo(p, e) };
+    }
     paint();
   };
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const w = placed.current;
     const g = w.now;
     if (!g) return;
+    if (g.what === "shifting" || g.what === "cropping") {
+      move(e);
+      w.now = undefined;
+      return;
+    }
     const to = goingTo(at(e), e);
     w.now = undefined;
     w.guide = undefined;
@@ -441,60 +670,91 @@ export function Collage({
         paint();
       }
     };
+    const l = layers.find((r) => r["id"] === g.id);
     if (g.what === "sliding") {
       const fraction = (v: number, [least, most]: [number, number]) => (most > least ? (v - least) / (most - least) : 0.5);
       void runner.reply(slide!, { id: subject, slide_x: fraction(to.x, g.across), slide_y: fraction(to.y, g.down) }).then(back);
+    } else if (l && isWords(l) && g.what === "resizing" && g.from.h > 0 && write) {
+      // Words resized are larger or smaller words, not stretched ones.
+      const size = num(l["size"]) * (to.h / g.from.h);
+      const m = measured(str(l["words"]), size, weightOf(l));
+      void runner.reply(write, { id: g.id, words: l["words"], size, x: to.x, y: to.y, w: m.w, h: m.h }).then(back);
     } else {
       void runner.reply(place!, { id: g.id, x: to.x, y: to.y, w: to.w, h: to.h }).then(back);
     }
     paint();
   };
   const cursorAt = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const w = placed.current;
     if (w.now) return;
     const p = at(e);
     let cursor = "default";
-    const pickedRow = layers.find((l) => l["id"] === picked);
-    const corner = pickedRow && place && !isBackground(layers, pickedRow) && !isWords(pickedRow) ? cornerAt(onBoard(whereIs(pickedRow)), p, handle) : -1;
-    if (corner === 0 || corner === 2) cursor = "nwse-resize";
-    else if (corner === 1 || corner === 3) cursor = "nesw-resize";
-    else if (layers.some((l, i) => (i > 0 || isWords(l)) && ((on) => p.x >= on.x && p.x <= on.x + on.w && p.y >= on.y && p.y <= on.y + on.h)(onBoard(whereIs(l))))) cursor = place ? "move" : "pointer";
-    else if (slide && layers.length > 0 && !isWords(layers[0]!) && slides(backdrop, whereIs(layers[0]!))) cursor = "grab";
+    if (w.crop) {
+      const edgesAt = cropEdgesAt(onBoard(w.crop.kept), p, handle);
+      cursor =
+        edgesAt < 0
+          ? inside(onBoard(w.crop.whole), p)
+            ? "grab"
+            : "default"
+          : edgesAt === 0
+            ? "move"
+            : edgesAt === 3 || edgesAt === 12
+              ? "nwse-resize"
+              : edgesAt === 6 || edgesAt === 9
+                ? "nesw-resize"
+                : edgesAt & 5
+                  ? "ew-resize"
+                  : "ns-resize";
+    } else if (w.editing) cursor = "text";
+    else {
+      const corner = chosen && !isBackground(layers, chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
+      if (corner === 0 || corner === 2) cursor = "nwse-resize";
+      else if (corner === 1 || corner === 3) cursor = "nesw-resize";
+      else if (layers.some((l, i) => (i > 0 || isWords(l)) && inside(onBoard(whereIs(l)), p))) cursor = place ? "move" : "pointer";
+      else if (slide && layers.length > 0 && !isWords(layers[0]!) && slides(backdrop, whereIs(layers[0]!))) cursor = "grab";
+    }
     e.currentTarget.style.cursor = cursor;
   };
 
-  // Esc lets the picked layer go; the arrows nudge it, by ten with Shift.
-  useKeys(picked ? ["escape"] : undefined, () => pickRow(""));
+  // A crop is kept with Enter and put away with Esc; otherwise Esc lets the picked
+  // layer go, and the arrows nudge it, by ten with Shift.
+  const busy = Boolean(w.crop || w.editing);
+  useKeys(w.crop ? ["enter"] : undefined, keepCrop);
+  useKeys(w.crop ? ["escape"] : undefined, () => {
+    w.crop = undefined;
+    redraw((n) => n + 1);
+  });
+  useKeys(picked && !busy ? ["escape"] : undefined, () => pickRow(""));
   const nudge = (dx: number, dy: number) => {
-    const l = layers.find((r) => r["id"] === picked);
-    if (!l || !place || isBackground(layers, l)) return;
-    const b = boxOf(l);
+    if (!chosen || !place || isBackground(layers, chosen)) return;
+    const b = boxOf(chosen);
     const to = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
-    placed.current.going = { id: picked, box: to };
+    w.going = { id: picked, box: to };
     void runner.reply(place, { id: picked, ...to });
     paint();
   };
-  useKeys(picked && place ? ["left"] : undefined, () => nudge(-1, 0));
-  useKeys(picked && place ? ["right"] : undefined, () => nudge(1, 0));
-  useKeys(picked && place ? ["up"] : undefined, () => nudge(0, -1));
-  useKeys(picked && place ? ["down"] : undefined, () => nudge(0, 1));
-  useKeys(picked && place ? ["shift+left"] : undefined, () => nudge(-10, 0));
-  useKeys(picked && place ? ["shift+right"] : undefined, () => nudge(10, 0));
-  useKeys(picked && place ? ["shift+up"] : undefined, () => nudge(0, -10));
-  useKeys(picked && place ? ["shift+down"] : undefined, () => nudge(0, 10));
+  const nudging = picked && place && !busy;
+  useKeys(nudging ? ["left"] : undefined, () => nudge(-1, 0));
+  useKeys(nudging ? ["right"] : undefined, () => nudge(1, 0));
+  useKeys(nudging ? ["up"] : undefined, () => nudge(0, -1));
+  useKeys(nudging ? ["down"] : undefined, () => nudge(0, 1));
+  useKeys(nudging ? ["shift+left"] : undefined, () => nudge(-10, 0));
+  useKeys(nudging ? ["shift+right"] : undefined, () => nudge(10, 0));
+  useKeys(nudging ? ["shift+up"] : undefined, () => nudge(0, -10));
+  useKeys(nudging ? ["shift+down"] : undefined, () => nudge(0, 10));
 
-  // The buttons over the picked layer, just above it, or below when there's no room.
-  const overAt = frame && children && !full ? { left: frame.x + frame.w / 2, top: frame.y - 12 } : undefined;
+  // The buttons over the picked layer, just above it, or below when there's no room;
+  // while cropping, keep and put away.
+  const overAt = frame && !full && !w.editing && (children || w.crop) ? { left: frame.x + frame.w / 2, top: frame.y - 12 } : undefined;
   const below = overAt !== undefined && overAt.top < 52;
   return (
-    <div ref={holder} className="one-collage" style={{ position: "relative", flex: 1, minHeight: fills ? 0 : 560, width: "100%", height: fills ? "100%" : 560 }}>
+    <div className="one-collage" style={{ position: "relative", flex: 1, minHeight: fills ? 0 : 560, width: "100%", height: fills ? "100%" : 560 }}>
       <canvas
         ref={canvasRef}
         role="img"
         aria-label="A picture made of layers"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none" }}
         onPointerDown={press}
-        onPointerMove={(e) => (placed.current.now ? move(e) : cursorAt(e))}
+        onPointerMove={(e) => (w.now ? move(e) : cursorAt(e))}
         onPointerUp={release}
         onPointerCancel={release}
       />
@@ -516,9 +776,36 @@ export function Collage({
             boxShadow: "0 2px 12px rgba(0, 0, 0, 0.22)",
           }}
         >
-          <OverLayer.Provider value>{children}</OverLayer.Provider>
+          <OverLayer.Provider value>
+            {w.crop ? (
+              <CropTools
+                keep={keepCrop}
+                away={() => {
+                  w.crop = undefined;
+                  redraw((n) => n + 1);
+                }}
+              />
+            ) : (
+              children
+            )}
+          </OverLayer.Provider>
         </div>
       )}
     </div>
+  );
+}
+
+// While cropping: keep it, or put it away.
+function CropTools({ keep, away }: { keep: () => void; away: () => void }) {
+  const ui = useUI();
+  return (
+    <>
+      <ui.Button kind="secondary" icon="check" tool="small" hint="Keep (Enter)" onClick={keep}>
+        Keep
+      </ui.Button>
+      <ui.Button kind="secondary" icon="close" tool="small" hint="Put away (Esc)" onClick={away}>
+        Put away
+      </ui.Button>
+    </>
   );
 }

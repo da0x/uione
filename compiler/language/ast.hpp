@@ -832,12 +832,27 @@ namespace one::language {
         location size_where;
         std::optional<qualified_name> place;  // place layer::place: a layer moved or resized, kept
         std::optional<qualified_name> slide;  // slide poster::slide: the background slid, kept
+        std::optional<qualified_name> add;    // add layer::create: what makes new layers, like words added
+        std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
+        std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept
+        std::optional<qualified_name> remove;  // delete layer::delete: words written away to nothing, gone
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer
         location over_where;
         std::vector<screen_item> tools;
+    };
+
+    // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
+    // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
+    struct collage_button {
+        enum class kind { crop, edit_words, add_words };
+        kind does = kind::crop;
+        std::optional<std::string> label;
+        std::optional<std::string> icon;
+        location icon_where;
+        std::vector<key_chord> keys;
     };
 
     // pick layer from poster_page.layers: a row of a view's list the screen holds, picked
@@ -1132,7 +1147,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

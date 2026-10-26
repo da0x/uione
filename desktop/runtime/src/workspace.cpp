@@ -101,6 +101,8 @@ namespace one::desktop::runtime {
 			auto found = by.find(name);
 			return found == by.end() ? desktop::view() : std::move(found->second);
 		};
+		// Filling the screen, it's only its work, like a picture on a wall.
+		if (fullscreen()) return taken("main").grow();
 		std::vector<desktop::view> parts;
 		for (const char* across : {"bar", "toolbar"}) {
 			if (auto v = taken(across); v.get()) {

@@ -1539,6 +1539,22 @@ namespace one::language {
                 end_line();
                 return {where, std::move(pick)};
             }
+            // crop "Crop", edit words "Edit", add words "Text": what the collage does.
+            bool collage_does = (at_word("crop") && peek(1).kind != token_kind::scope && peek(1).kind != token_kind::identifier) ||
+                                ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words");
+            if (collage_does) {
+                collage_button button;
+                std::string first = advance().text;
+                if (first != "crop") advance();
+                button.does = first == "crop" ? collage_button::kind::crop : first == "edit" ? collage_button::kind::edit_words : collage_button::kind::add_words;
+                if (at(token_kind::string)) button.label = advance().text;
+                parse_icon(button.icon, button.icon_where);
+                parse_keys(button.keys);
+                screen_item item{where, std::move(button)};
+                item.when = shown_while();
+                end_line();
+                return item;
+            }
             // toggle layers "Layers" icon layers key l: something on or off, read by its name.
             if (at_word("toggle") && peek(1).kind == token_kind::identifier) {
                 advance();
@@ -2070,6 +2086,18 @@ namespace one::language {
                     } else if (at_word("slide") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.slide = parse_qualified_name("the command the background slid is sent to, like poster::slide");
+                    } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.add = parse_qualified_name("the command that makes its layers, like layer::create");
+                    } else if (at_word("crop") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.crop = parse_qualified_name("the command a picture cropped is sent to, like layer::crop");
+                    } else if (at_word("write") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.write = parse_qualified_name("the command words written are sent to, like layer::write");
+                    } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.remove = parse_qualified_name("the command that deletes a layer, like layer::delete");
                     } else if (at_word("snap")) {
                         collage.snap_where = advance().where;
                         if (!at_word("to")) fail_expecting("to edges, as in snap to edges");
@@ -2086,7 +2114,7 @@ namespace one::language {
                         collage.over = advance().text;
                         collage.tools = parse_screen_block();
                     } else {
-                        fail_expecting("what a collage does, like place layer::place, slide poster::slide, snap to edges, empty \"...\" or over layer { ... }");
+                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, slide poster::slide, snap to edges, empty \"...\" or over layer { ... }");
                     }
                     end_line();
                 }
