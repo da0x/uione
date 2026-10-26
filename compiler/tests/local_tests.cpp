@@ -254,7 +254,7 @@ TEST_CASE("a local project's web app is given the same commands and views, on @u
     CHECK(generated.web[0].path == "src/local.generated.ts");
     CHECK(generated.web[0].content == R"(// Generated from main.one by one. Do not edit.
 
-import { all, by, command, compare, entity, failed, localPackage, number, row, same, subject, subjectField, text, truthy, view } from "@uione/react/local";
+import { all, by, command, compare, divided, entity, failed, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from "@uione/react/local";
 
 // Each namespace's entities, commands and views, kept in this browser.
 export const packages = [
@@ -346,9 +346,9 @@ TEST_CASE("a / between two values divides, while a / alone after a screen's name
     CAPTURE(cpp);
     CAPTURE(ts);
     // Tighter than +, as * is.
-    CHECK(cpp.find(R"(e.fields["x"] = value(e["x"].as_double() + value(e["w"].as_double() / value(4).as_double()).as_double());)") != std::string::npos);
-    CHECK(ts.find(R"(e["x"] = (number(e["x"]) + number((number(e["w"]) / number(4))));)") != std::string::npos);
-    CHECK(cpp.find(R"(e.fields["w"] = value(e["w"].as_double() / value(2).as_double());)") != std::string::npos);
+    CHECK(cpp.find(R"(e.fields["x"] = value(e["x"].as_double() + value(one::local::divided(e["w"].as_double(), value(4).as_double())).as_double());)") != std::string::npos);
+    CHECK(ts.find(R"(e["x"] = (number(e["x"]) + number((divided(number(e["w"]), number(4)))));)") != std::string::npos);
+    CHECK(cpp.find(R"(e.fields["w"] = value(one::local::divided(e["w"].as_double(), value(2).as_double()));)") != std::string::npos);
 }
 
 TEST_CASE("a % leaves what's over as a clock counts, and was reads what the command's entity held before it") {
@@ -364,8 +364,8 @@ TEST_CASE("a % leaves what's over as a clock counts, and was reads what the comm
     CAPTURE(cpp);
     CAPTURE(ts);
     // -1 % 4 is 3, so a turn left three times over is a turn right.
-    CHECK(cpp.find(R"(e.fields["x"] = value(value(c.at("pinned::layer", e["id"])["x"].as_double() + value(3).as_double()).as_double() - value(4).as_double() * std::floor(value(c.at("pinned::layer", e["id"])["x"].as_double() + value(3).as_double()).as_double() / value(4).as_double()));)") != std::string::npos);
-    CHECK(ts.find(R"(e["x"] = (number((number(c.at("pinned::layer", e["id"])["x"]) + number(3))) - number(4) * Math.floor(number((number(c.at("pinned::layer", e["id"])["x"]) + number(3))) / number(4)));)") != std::string::npos);
+    CHECK(cpp.find(R"(e.fields["x"] = value(one::local::remainder(value(c.at("pinned::layer", e["id"])["x"].as_double() + value(3).as_double()).as_double(), value(4).as_double()));)") != std::string::npos);
+    CHECK(ts.find(R"(e["x"] = (remainder(number((number(c.at("pinned::layer", e["id"])["x"]) + number(3))), number(4)));)") != std::string::npos);
     // What it held, not what the line before made it.
     CHECK(cpp.find(R"(e.fields["w"] = c.at("pinned::layer", e["id"])["x"];)") != std::string::npos);
     CHECK(ts.find(R"(e["w"] = c.at("pinned::layer", e["id"])["x"];)") != std::string::npos);

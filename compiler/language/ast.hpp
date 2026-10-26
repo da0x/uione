@@ -376,6 +376,7 @@ namespace one::language {
         qualified_name name;
         bool has_body = false;
         bool apart = false;  // apart from undo: kept, but never a step undo takes back (decision 0018)
+        location apart_where;
         std::vector<statement> body;
         std::optional<language::at_most> at_most;
         std::vector<command_extension> extended;
@@ -886,6 +887,13 @@ namespace one::language {
     // opened, the first of its lines that applies (decision 0020). One opens the first
     // row of a view's list the condition holds for, the row named by what it's of; the
     // other runs a command, as its button would.
+    // picture poster.preview fit: the file a view's value, or a field of what's picked,
+    // holds, as wide as its place, all of it fitted in or filling it.
+    struct picture_item {
+        expression_ptr source;
+        bool fit = false;
+    };
+
     struct on_open_item {
         std::optional<std::string> route;
         location route_where;
@@ -1224,7 +1232,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

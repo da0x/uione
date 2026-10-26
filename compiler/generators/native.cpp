@@ -1541,6 +1541,10 @@ namespace one::generators {
                     code = command_of(parts, ns, *b);
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     code = collage(parts, ns, *c);
+                } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
+                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    std::set<std::string> read;
+                    code = "picture_of(p, " + condition_of(parts, ns, *picture->source, read) + ".as_string(), " + (picture->fit ? "true" : "false") + ", 320)";
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
@@ -1720,10 +1724,13 @@ namespace one::generators {
                 if (regions.empty()) {
                     for (auto& w : items(parts, ns, s->items, s->items)) shown.push_back(std::move(w));
                 } else {
-                    // A subtitle goes under the title, outside the regions.
+                    // A subtitle goes under the title, outside the regions, and what's done as
+                    // the screen opens is its own, outside them too, said once for all its lines.
+                    bool opening = false;
                     for (std::size_t at = 0; at < s->items.size(); ++at) {
                         auto* t = std::get_if<language::content_text>(&s->items[at].node);
-                        if (t && t->subtitle) {
+                        bool opens = std::holds_alternative<language::on_open_item>(s->items[at].node) && !std::exchange(opening, true);
+                        if ((t && t->subtitle) || opens) {
                             for (auto& w : items(parts, ns, s->items, s->items, at, 1)) shown.push_back(std::move(w));
                         }
                     }

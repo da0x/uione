@@ -100,19 +100,26 @@ to move a board's cards, neotrac's board would be:
 boards.one:110:3: error: a board's move … along isn't drawn by the terminal app yet; take terminal out of target, or build with --target web,desktop
 ```
 
-Today every target draws every element and every kind of field. A landing design is
-drawn as a plain screen on the desktop and in a terminal. A `component` is written by
-hand for each kind of app: `components/welcome_note.tsx` for the web, and
-`components/welcome_note.cpp` for the desktop and the terminal, a function of the page
-giving a view, written with the same parts the generated screens are. A component
-that's the whole app, like a drawing app's workspace, can fill the window, with
-nothing of the site's bar, title or margins around it: `p.fill()` on the desktop,
-and `useFill()` from `@uione/react` on the web. A project whose targets need a file
-that isn't there gets an error saying which.
+The web and the desktop draw every element and every kind of field. A terminal draws
+no pictures and has no screen of its own, so it can't show a picture on a card or a
+table's row, crop a collage's picture, copy, save or keep a picture of a collage, or
+take a screenshot; everything else it draws in its own way, a collage as a list of
+its layers. A landing design is drawn as a plain screen on the desktop and in a
+terminal.
+
+A drawing app's whole window is a screen like any other: `layout workspace` fills it
+with a bar, a toolbar, the work, what's beside it and a status line, on every target.
+A `component` is for what the language can't say yet, written by hand for each kind
+of app: `components/welcome_note.tsx` for the web, and `components/welcome_note.cpp`
+for the desktop and the terminal, a function of the page giving a view, written with
+the same parts the generated screens are. One that's the whole app can fill the
+window, with nothing of the site's bar, title or margins around it: `p.fill()` on the
+desktop, and `useFill()` from `@uione/react` on the web. A project whose targets need
+a file that isn't there gets an error saying which.
 
 uione's gallery, `examples/gallery`, uses every element and every kind of field, and
 is built for every target, so it's where each is seen side by side. What a target
-can't draw yet would be listed in its `gaps` file, which its test holds to what's so;
+can't draw yet is listed in its `gaps` file, which its test holds to what's so;
 a new target starts with everything there, and is done when it's empty.
 `tools/gallery` in a checkout of uione runs it on your machine, with the Firebase
 emulators, someone signed in and a room of pieces to look at.

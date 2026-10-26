@@ -163,8 +163,10 @@ namespace one::desktop::runtime {
 
 		// Words as a layer has them, at `size` in the window, over a soft dark shadow so
 		// they read on most photos, white unless they say.
-		desktop::text_style words_style(double size, int weight, desktop::color color) {
-			return {.size = static_cast<float>(size), .weight = weight, .color = color, .line_height = 1.2f};
+		// Words are in the theme's text font, as the web draws them, which an app can bring;
+		// one drawn away from the window's thread is told it.
+		desktop::text_style words_style(double size, int weight, desktop::color color, const std::string& family = current_theme().text_family) {
+			return {.family = family, .size = static_cast<float>(size), .weight = weight, .color = color, .line_height = 1.2f};
 		}
 		int weight_of(const value& layer) { return layer["weight"].is_null() ? 700 : static_cast<int>(layer["weight"].as_double()); }
 
@@ -175,14 +177,15 @@ namespace one::desktop::runtime {
 		}
 
 		// Words drawn at `at` in the window, and where the caret stands among them.
-		desktop::rect paint_words(desktop::canvas& c, const value& layer, const std::string& said, double size, desktop::point at, std::size_t caret = std::string::npos) {
+		desktop::rect paint_words(desktop::canvas& c, const value& layer, const std::string& said, double size, desktop::point at, std::size_t caret = std::string::npos,
+		                          const std::string& family = current_theme().text_family) {
 			int weight = weight_of(layer);
 			std::string words = said.empty() ? " " : said;
 			desktop::color shade = desktop::color::hex(0x000000);
 			shade.alpha = 0.45f;
 			float off = std::max(1.f, static_cast<float>(size) * 0.04f);
-			c.text(desktop::lay_out(desktop::text_span{words, words_style(size, weight, shade)}, unwrapped, c.scale()), {at.x + off / 2, at.y + off});
-			auto laid = desktop::lay_out(desktop::text_span{words, words_style(size, weight, color_of(layer["color"].as_string(), desktop::color::hex(0xffffff)))}, unwrapped, c.scale());
+			c.text(desktop::lay_out(desktop::text_span{words, words_style(size, weight, shade, family)}, unwrapped, c.scale()), {at.x + off / 2, at.y + off});
+			auto laid = desktop::lay_out(desktop::text_span{words, words_style(size, weight, color_of(layer["color"].as_string(), desktop::color::hex(0xffffff)), family)}, unwrapped, c.scale());
 			c.text(laid, at);
 			auto end = laid.caret(std::min(caret, said.size()));
 			float line = static_cast<float>(size) * 1.2f;
@@ -420,10 +423,29 @@ namespace one::desktop::runtime {
 
 		// The collage drawn on nothing, `scale` times its own size, as it's kept: all of
 		// it, or only one layer, as big as that layer, cropped as it is.
-		desktop::picture drawn_whole(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
+		// What drawing it whole needs, gathered on the window's thread: its pictures, read
+		// and turned, and the font its words are in, so it's drawn away from that thread.
+		struct whole {
+			value data, layers;
+			double width = 0, height = 0, scale = 1;
+			std::string only, family;
+			std::map<std::string, const desktop::picture*> pictures;  // each layer's, by its id
+		};
+
+		whole gathered(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
+			whole all{data, layers, width, height, scale, only, current_theme().text_family, {}};
+			for (const auto& l : layers.as_array()) {
+				if (!is_words(l)) all.pictures[l["id"].as_string()] = layer_picture(p, l);
+			}
+			return all;
+		}
+
+		desktop::picture drawn_whole(const whole& all) {
+			const value& layers = all.layers;
+			double width = all.width, height = all.height, scale = all.scale;
 			model::box area{0, 0, width, height};
 			for (const auto& l : layers.as_array()) {
-				if (!only.empty() && l["id"].as_string() == only && !is_background(layers, l)) area = box_of(l);
+				if (!all.only.empty() && l["id"].as_string() == all.only && !is_background(layers, l)) area = box_of(l);
 			}
 			int w = std::max(1, static_cast<int>(std::lround(area.w * scale))), h = std::max(1, static_cast<int>(std::lround(area.h * scale)));
 			return desktop::picture::drawn(w, h, [&](desktop::canvas& c) {
@@ -431,19 +453,20 @@ namespace one::desktop::runtime {
 					return desktop::rect{static_cast<float>((b.x - area.x) * scale), static_cast<float>((b.y - area.y) * scale), static_cast<float>(b.w * scale), static_cast<float>(b.h * scale)};
 				};
 				desktop::rect board = at({0, 0, width, height});
-				if (only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
+				if (all.only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
 				for (const auto& layer : layers.as_array()) {
-					if (!only.empty() && layer["id"].as_string() != only) continue;
+					if (!all.only.empty() && layer["id"].as_string() != all.only) continue;
 					if (is_words(layer)) {
 						desktop::rect on = at(box_of(layer));
-						paint_words(c, layer, layer["words"].as_string(), layer["size"].as_double() * scale, {on.x, on.y});
+						paint_words(c, layer, layer["words"].as_string(), layer["size"].as_double() * scale, {on.x, on.y}, std::string::npos, all.family);
 						continue;
 					}
-					const desktop::picture* shown = layer_picture(p, layer);
+					auto found = all.pictures.find(layer["id"].as_string());
+					const desktop::picture* shown = found == all.pictures.end() ? nullptr : found->second;
 					if (!shown) continue;
 					if (is_background(layers, layer)) {
-						desktop::rect on = at(model::background_at(backdrop_of(data, width, height), shown->width(), shown->height()));
-						paint_around(c, board, on, layer["picture"].as_string(), *shown, data["around"].as_string());
+						desktop::rect on = at(model::background_at(backdrop_of(all.data, width, height), shown->width(), shown->height()));
+						paint_around(c, board, on, layer["picture"].as_string(), *shown, all.data["around"].as_string());
 						c.picture(*shown, on, {0, 0, 1, 1});
 					} else {
 						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
@@ -487,20 +510,23 @@ namespace one::desktop::runtime {
 		// A picture saved as a PNG in the app's folder in Pictures, named for what the
 		// view calls it and the minute, never over one saved before, written away from
 		// the window; where it went is said once it's there.
-		void save(page& p, const desktop::picture& drawn, const std::string& name) {
+		// Saved where pictures are, drawn and written away from the window's thread.
+		void save(page& p, whole all, const std::string& name) {
 			std::filesystem::path folder = saving_folder();
 			std::string stem = std::format("{}-{:%Y-%m-%d-%H%M}", file_name_of(name),
 			                               std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())));
 			std::filesystem::path file = folder / (stem + ".png");
 			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.png", stem, n);
 			p.told().set("Saving…");
-			std::thread([told = p.told(), problem = p.problem(), drawn, folder, file] {
+			std::thread([told = p.told(), problem = p.problem(), about = p.kept<std::pair<std::string, std::string>>("said of a file"), all = std::move(all), folder, file] {
 				std::error_code error;
 				std::filesystem::create_directories(folder, error);
-				auto written = drawn.write_png(file);
-				post([told, problem, file, written] {
-					if (written) told.set(std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string()));
-					else told.set(""), problem.set(written.error());
+				auto written = drawn_whole(all).write_png(file);
+				post([told, problem, about, file, written] {
+					if (!written) return told.set(""), problem.set(written.error());
+					std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
+					about.set({said, file.string()});
+					told.set(said);
 				});
 			}).detach();
 		}
@@ -582,7 +608,7 @@ namespace one::desktop::runtime {
 			bool still = w->now.what == gesture::none && !w->crop && !w->editing;
 			if (now != drawn_from.peek() && still && settled.peek() == now) {
 				drawn_from.set(now);
-				auto small = drawn_whole(p, data, layers, width, height, spec.preview_wide / width);
+				auto small = drawn_whole(gathered(p, data, layers, width, height, spec.preview_wide / width));
 				std::filesystem::path file = kept_for_now(small.png());
 				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
 				      [file](const answer&) { std::filesystem::remove(file); }, true);
@@ -633,15 +659,22 @@ namespace one::desktop::runtime {
 				if (one && !chosen) p.told().set("Pick a layer first.");
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else {
-					auto drawn = drawn_whole(p, data, layers, width, height, 1, one ? picked : "");
+					auto all = gathered(p, data, layers, width, height, 1, one ? picked : "");
 					if (copying) {
-						desktop::copy_picture(drawn);
-						p.told().set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
+						// Drawn away from the window's thread, and put on the clipboard back on it.
+						p.told().set("Copying…");
+						std::thread([told = p.told(), all = std::move(all), one] {
+							auto drawn = drawn_whole(all);
+							post([told, drawn, one] {
+								desktop::copy_picture(drawn);
+								told.set(one ? "Copied the layer. Paste it anywhere." : "Copied the picture. Paste it anywhere.");
+							});
+						}).detach();
 					} else {
 						// Named for what the view calls it, or for the app when it calls it nothing.
 						std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
 						if (name.empty()) name = app_name();
-						save(p, drawn, one ? name + " layer" : name);
+						save(p, std::move(all), one ? name + " layer" : name);
 					}
 				}
 			} else if (does == "add" && !spec.add.empty() && spec.fields.contains("words")) {

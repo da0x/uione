@@ -320,12 +320,10 @@ namespace one::generators {
                         case token_kind::plus: return {sum(number_of(as_value(l)) + " + " + number_of(as_value(r)))};
                         case token_kind::minus: return {sum(number_of(as_value(l)) + " - " + number_of(as_value(r)))};
                         case token_kind::star: return {sum(number_of(as_value(l)) + " * " + number_of(as_value(r)))};
-                        case token_kind::slash: return {sum(number_of(as_value(l)) + " / " + number_of(as_value(r)))};
-                        // As a clock counts, never below none: -1 % 4 is 3.
-                        case token_kind::remainder: {
-                            std::string x = number_of(as_value(l)), y = number_of(as_value(r));
-                            return {sum(x + " - " + y + " * " + (typescript() ? "Math.floor(" : "std::floor(") + x + " / " + y + ")")};
-                        }
+                        // Divided, or what's left over, as every target works them out; in C++, said
+                        // as one::local's, since the standard library has a remainder too.
+                        case token_kind::slash: return {sum((typescript() ? "divided(" : "one::local::divided(") + number_of(as_value(l)) + ", " + number_of(as_value(r)) + ")")};
+                        case token_kind::remainder: return {sum((typescript() ? "remainder(" : "one::local::remainder(") + number_of(as_value(l)) + ", " + number_of(as_value(r)) + ")")};
                         default: break;
                     }
                 }
@@ -746,7 +744,7 @@ namespace one::generators {
                 out.generated_from(std::filesystem::path(path).filename().string());
                 {
                     auto fixed = out.fixed();
-                    out.line("import { all, by, command, compare, entity, failed, localPackage, number, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
+                    out.line("import { all, by, command, compare, divided, entity, failed, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
                     out.line();
                     out.line("// Each namespace's entities, commands and views, kept in this browser.");
                     out.open("export const packages = [");

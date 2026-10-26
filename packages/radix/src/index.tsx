@@ -938,6 +938,11 @@ export const radix: ComponentSet = {
   Chart,
   Charts,
   Monitor,
+  FilePicture: ({ source, fit }) => (
+    <div className="h-80 w-full overflow-hidden rounded-box bg-sunken">
+      {source && <img src={source} alt="" className={`h-full w-full ${fit ? "object-contain" : "object-cover"}`} />}
+    </div>
+  ),
   Cards: ({ status, cards }) => (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy={status === "loading"}>
       {cards.map((card) => {

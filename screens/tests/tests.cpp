@@ -202,11 +202,13 @@ TEST("a field with nothing in it is none, as a condition compares it") {
 	CHECK(!same(value(""), value("open")));
 }
 
-TEST("a value worked out on a screen leaves what's over as a clock counts, and none over none") {
+TEST("a value worked out on a screen leaves what's over as a clock counts, and either by 0 is 0, as on every target") {
 	CHECK(same(worked('%', value(5), value(4)), value(1)));
 	CHECK(same(worked('%', value(-1), value(4)), value(3)));
 	CHECK(same(worked('%', value(2.5), value(1)), value(0.5)));
-	CHECK(same(worked('%', value(3), value(0)), value()));
+	CHECK(same(worked('%', value(3), value(0)), value(0.0)));
+	CHECK(same(worked('/', value(6), value(4)), value(1.5)));
+	CHECK(same(worked('/', value(3), value(0)), value(0.0)));
 }
 
 TEST("a change is said in words, a command's action as done") {

@@ -98,6 +98,7 @@ namespace one::language {
         drawn_by{"table.page", "a table's pages", everywhere},
         drawn_by{"table.reorder", "reordering a table", everywhere},
         drawn_by{"table.picture", "a picture on each table row", "web desktop"},
+        drawn_by{"picture", "a picture of a file a value holds", "web desktop"},
         drawn_by{"table.hide", "a table's hide when empty", everywhere},
         drawn_by{"table.only", "a table's only", everywhere},
         drawn_by{"table.color", "a table's color", everywhere},
@@ -353,6 +354,8 @@ namespace one::language {
                         if (n.crop) use("collage.crop");
                         if (n.paste) use("collage.paste");
                         if (n.preview) use("collage.preview");
+                    } else if constexpr (std::is_same_v<T, picture_item>) {
+                        use("picture");
                     } else if constexpr (std::is_same_v<T, on_open_item>) {
                         use("on_open");
                         for (const auto& inner : n.run) item(inner, out);

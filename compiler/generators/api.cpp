@@ -2002,6 +2002,7 @@ namespace one::generators {
                     }
                     // As a clock counts, never below none: -1 % 4 is 3.
                     if (it->second == "%") return "one.Remainder(" + *l + ", " + *r + ")";
+                    if (it->second == "/") return "one.Divide(" + *l + ", " + *r + ")";
                     return *l + " " + it->second + " " + *r;
                 }
             }

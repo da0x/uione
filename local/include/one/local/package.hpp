@@ -60,6 +60,10 @@ namespace one::local {
 	// Orders two values of the same kind: false before true, numbers and text in
 	// their usual order, times as RFC 3339 text. Nothing comes first.
 	int compare(const value& a, const value& b);
+	// x / y and x % y in a command's body, as every target works them out: what's left
+	// over as a clock counts, never below none, so -1 % 4 is 3, and either by 0 is 0.
+	double divided(double x, double y);
+	double remainder(double x, double y);
 	// A field's name as a person reads it: due_at is "Due at".
 	std::string label(const std::string& name);
 	// == in a command's body: the same value, or both nothing when either is none.

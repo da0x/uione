@@ -114,7 +114,7 @@ Numbers are written as they are, `20` or `1.5`. Values are compared with `==`, `
 `<`, `<=`, `>` and `>=`, joined with `&&` (and) and `||` (or), and turned around with
 `!`. `+`, `-`, `*` and `/` work them out, and `%` leaves what's over as a clock
 counts, never below none: `(turns + 3) % 4` is 2 when turns is 3, and 3 when it's
-0. `=` gives a field a value, and `has` asks whether a list holds something: `where
+0. Dividing by 0, or what's left over from it, is 0, on every target alike. `=` gives a field a value, and `has` asks whether a list holds something: `where
 labels has label.id`.
 
 ## Built-in values
@@ -929,8 +929,9 @@ command ticket::create {
   and `at most 5000 per day` how many of each kind they may make in a day, unless an
   entity says its own.
 - In a command of a project that says `storage local`, `apart from undo` keeps what it
-  does, but never as a step `undo` takes back, like a preview drawn again or tidying
-  done as a page opens (decision 0018).
+  does, but never as a step `undo` takes back, like a preview drawn again or a
+  picture's own size filled in (decision 0018). A project kept in the cloud can't
+  say it yet.
 
 A limit counts each person on their own, so one person asking too fast never slows
 anyone else. What a command makes along the way, like a project's first member, and
@@ -2035,6 +2036,11 @@ form step::update "Save" {
   boards to someone outside it. `picture preview fit` shows a file each row holds as
   a picture on top of its card, all of it fitted in, or, with `fill` or nothing
   said, filling its place. A terminal draws no pictures, so it can't show one.
+- `picture poster.preview fit` shows the file a value holds, on its own, as wide as
+  its place and 320 tall: a field of what's picked, like `poster`, or of a view per
+  something, like `poster_page.preview`. All of it is fitted in, or, with `fill` or
+  nothing said, it fills its place; `when` shows it only while that holds. A
+  terminal draws no pictures, so it can't show one.
 - `chart agent_page.stats.cpu "CPU" percent` draws a run of numbers over time, newest
   at the right, as btop draws one: a line over a soft fill in the accent, its title,
   its latest value, and the top of its scale. Its numbers are a field of the view, or
@@ -2117,7 +2123,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   drawn lowest first, each where its `x y w h` say, from the parts it has: a
   `picture`, cropped by `crop_x crop_y crop_w crop_h` and turned and flipped by
   `turns` and `mirrored`; or `words`, as big as `size` says, in `color` and
-  `weight`, over a soft shadow. The first, when it's a picture, is the
+  `weight`, in the theme's text font, over a soft shadow. A theme that brings its
+  font, `text "Inter" from "fonts/Inter.ttf"`, has words drawn the same on every
+  machine. The first, when it's a picture, is the
   background: it sits as the view's `background` says, `fit`, `fill`, `stretch` or
   `center`, zoomed by `zoom` and slid by `slide_x` and `slide_y`, and what it leaves
   around it is its edges drawn out, or, with `around` set to `color`, its edge
@@ -2162,13 +2170,14 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     center` and `edges color`. Cropping needs the crop's four, and writing needs
     `words` and `size`. The runtimes know only the parts; which field keeps each
     is handed to them by the compiler.
-  - `paste`: pictures dropped on it, or pasted with Control+V, are made layers by
-    its `add`, each file uploaded into the layer's `picture` and, when it has them,
-    its own size sent in its `picture_width` and `picture_height`. The first on a collage with
-    nothing on it covers it; the rest are as big as they are, smaller where they
-    wouldn't fit, centered where they were let go, each a little further along, and
-    all of them are one step to undo. Words pasted are made words in the middle. A
-    `paste "Paste" icon paste` button pastes what's on the clipboard, and
+  - `paste`: pictures dropped on it, or pasted, are made layers by its `add`, each
+    file uploaded into the layer's `picture` and, when it has them, its own size sent
+    in its `picture_width` and `picture_height`. The first on a collage with nothing
+    on it covers it; the rest are as big as they are, smaller where they wouldn't
+    fit, centered where they were let go, each a little further along, and all of
+    them are one step to undo. Words pasted are made words in the middle. A `paste
+    "Paste" icon paste key ctrl+v` button pastes what's on the clipboard, by a press
+    or by its key; like every key, Control+V pastes only where a line says it. And
     `screenshot "Screenshot" icon screenshot` adds a picture of the screen. A web page
     reads the clipboard only when the browser lets it, and can't read a picture
     dragged from another site, so it says to save it first; it shows the screenshot
@@ -2192,9 +2201,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     own size, for any program to paste; `copy layer as picture`, naming the pick over
     it, copies only the picked layer, as big as it is. `save poster_page as picture
     "Save" icon save key ctrl+s` saves it as a PNG named for the view's `title`, or
-    `name`, and the minute. The desktop app saves in its own folder in the Pictures
-    folder, never over a picture saved before, and says where; a web page downloads
-    it. A web page copies a picture only when the browser lets it.
+    `name`, or the app's when it has neither, and the minute. The desktop app saves
+    in its own folder in the Pictures folder, never over a picture saved before, and
+    says where, with Show in folder to open it there, drawing it away from the
+    window's thread so the window never waits; a web page downloads it. A web page
+    copies a picture only when the browser lets it.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
   as the classic deploy screen did: a lane for each kind of card, its kind said by
   `lanes by labels`, in the order their stages come, and in it a row for each card,
@@ -2259,7 +2270,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `shift` and `alt`, then a letter, a digit, `f1` to `f12`, or `escape`, `enter`,
   `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `page_up`,
   `page_down`, `left`, `right`, `up`, `down`, `minus`, `equal`, `plus`, `comma`,
-  `period` or `slash`. On a Mac, Command is `ctrl`.
+  `period` or `slash`. On a Mac, Command is `ctrl`. Two lines may share a key only
+  when they're shown at different times, like Copy for the picked layer and Copy
+  for the whole collage, each with its own `when`; two always shown would leave one
+  never run, so the checker says so.
 - `toggle layers "Layers" icon layers key l` is something on or off, drawn as a
   button pressed while it's on, that the screen reads by its name: `side when
   layers`, `text "Shown" when layers`. Each person's is remembered on the device

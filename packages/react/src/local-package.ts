@@ -75,6 +75,16 @@ export function nothing(v: Value | undefined): boolean {
   return false;
 }
 
+// x / y and x % y in a command's body, as every target works them out: what's left
+// over as a clock counts, never below none, so -1 % 4 is 3, and either by 0 is 0.
+export function divided(x: number, y: number): number {
+  return y === 0 ? 0 : x / y;
+}
+
+export function remainder(x: number, y: number): number {
+  return y === 0 ? 0 : x - y * Math.floor(x / y);
+}
+
 // Orders two values of the same kind: false before true, numbers and text in
 // their usual order, times as RFC 3339 text. Nothing comes first.
 export function compare(a: Value | undefined, b: Value | undefined): number {

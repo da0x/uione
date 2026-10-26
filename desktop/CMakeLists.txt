@@ -82,6 +82,7 @@ add_library(one_desktop
 	src/field.cpp
 	src/gpu.cpp
 	src/offscreen.cpp
+	src/folder.cpp
 	src/screenshot.cpp
 	src/picture.cpp
 	src/renderer.cpp

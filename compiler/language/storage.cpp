@@ -179,11 +179,15 @@ namespace one::language {
 
     namespace storage_detail {
 
-        // Undo and redo, anywhere in a screen's items (decision 0018), in any namespace.
+        // Undo and redo, anywhere in a screen's items, and a command apart from undo, in
+        // any namespace (decision 0018).
         void history(const std::string& path, const std::vector<screen_item>& items, diagnostics& out);
         void history(const std::string& path, const std::vector<declaration>& all, diagnostics& out) {
             for (const auto& d : all) {
                 if (auto* s = std::get_if<screen_declaration>(&d.node)) history(path, s->items, out);
+                if (auto* c = std::get_if<command_declaration>(&d.node); c && c->apart) {
+                    out.push_back({path, c->apart_where, "apart from undo keeps a step out of what's undone on this machine, so it needs storage local in the project block, for now"});
+                }
                 if (auto* n = std::get_if<namespace_declaration>(&d.node)) history(path, n->declarations, out);
             }
         }

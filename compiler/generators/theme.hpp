@@ -41,6 +41,11 @@ namespace one::generators::theme {
     // when they did.
     std::string css(const look& l);
 
+    // The weights a font file draws, as a font-face says them: "100 900" for one that
+    // varies by weight, "700" for one of a single weight, read from the font itself;
+    // "400" when it can't be read.
+    std::string font_weights(const std::string& font);
+
     // The same, for a part of a page rather than the page, like a theme designer's
     // preview: under scope, dark with data-theme="dark" on it, and more contrast with
     // data-contrast="more", so light and dark, and more contrast, can be shown side by

@@ -79,6 +79,10 @@ namespace one::local {
 		}
 	}
 
+	double divided(double x, double y) { return y == 0 ? 0 : x / y; }
+
+	double remainder(double x, double y) { return y == 0 ? 0 : x - y * std::floor(x / y); }
+
 	int compare(const value& a, const value& b) {
 		if (a.is_null()) return b.is_null() ? 0 : -1;
 		if (b.is_null()) return 1;

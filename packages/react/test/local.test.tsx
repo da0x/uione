@@ -8,7 +8,8 @@
 // worked out for each row and a page per book, and undo and redo.
 
 import { vi } from "vitest";
-import { Rows, all, by, command, entity, first, localPackage, localSource, memoryStore, none, nothing, row, subject, view, where } from "../src/local.js";
+import { Rows, all, by, command, divided, entity, first, localPackage, localSource, memoryStore, none, nothing, remainder, row, subject, view, where } from "../src/local.js";
+import { divided as dividedOnScreen, remainder as remainderOnScreen } from "../src/index.js";
 import type { CommandReply, ViewState } from "../src/data.js";
 import type { LocalStore, Row, Value } from "../src/local.js";
 
@@ -361,5 +362,20 @@ describe("a local app's files", () => {
     // Undoing could bring it back while the page is open; read again, it's gone.
     await localSource({ name: "x", packages: [notes], store }).opened;
     expect(store.files.size).toBe(0);
+  });
+});
+
+describe("a value divided, or what's left over", () => {
+  it("is worked out as on every target: as a clock counts, and either by 0 is 0", () => {
+    for (const [divide, leave] of [
+      [divided, remainder],
+      [dividedOnScreen, remainderOnScreen],
+    ] as const) {
+      expect(divide(6, 4)).toBe(1.5);
+      expect(divide(3, 0)).toBe(0);
+      expect(leave(-1, 4)).toBe(3);
+      expect(leave(5, 4)).toBe(1);
+      expect(leave(3, 0)).toBe(0);
+    }
   });
 });

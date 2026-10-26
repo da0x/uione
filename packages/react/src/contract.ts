@@ -689,6 +689,13 @@ export interface ThemesProps {
   onCopy: () => void;
 }
 
+// A file's picture, as wide as its place and 320 tall, all of it fitted in or filling
+// it; its address, once it's known.
+export interface FilePictureProps {
+  source?: string;
+  fit: boolean;
+}
+
 export interface ComponentSet {
   Page: ComponentType<PageProps>;
   Account: ComponentType<AccountProps>;
@@ -710,6 +717,7 @@ export interface ComponentSet {
   Crumbs: ComponentType<CrumbsProps>;
   Diagram: ComponentType<DiagramProps>;
   Cards: ComponentType<CardsProps>;
+  FilePicture: ComponentType<FilePictureProps>;
   Chart: ComponentType<ChartProps>;
   Charts: ComponentType<{ charts: ChartProps[] }>; // several, side by side
   Monitor: ComponentType<MonitorProps>;

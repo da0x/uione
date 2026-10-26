@@ -3,22 +3,28 @@
 
 // Things coming into a collage: pictures dropped on it, the first covering it and the
 // rest at their own size where they were let go, all one step to undo; words pasted.
-// And going out: a small picture of it kept once changes settle, shown on cards and
-// in tables.
+// And going out: a small picture of it kept once changes settle, shown on cards, in
+// tables, and on its own.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, Collage, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { App, Cards, Collage, CollageButton, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
+import { setPicked } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
 
 // Each of a collage's parts in the field named like it, as an app's are by default.
 const parts = ["x", "y", "w", "h", "depth", "picture", "picture_width", "picture_height", "crop_x", "crop_y", "crop_w", "crop_h", "turns", "mirrored", "words", "size", "color", "weight", "background", "around", "zoom", "slide_x", "slide_y"];
 const namedLikeParts = Object.fromEntries(parts.map((part) => [part, part]));
 
-function renderCollage(source: MemorySource) {
+function renderCollage(source: MemorySource, pasteKeys?: string[]) {
   function Poster() {
     const page = useView("studio::poster_page", "p1");
-    return <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} add="studio::layer::create" parent="poster" subject="p1" paste />;
+    return (
+      <>
+        {pasteKeys && <CollageButton collage="/ collage" does="paste" label="Paste" keys={pasteKeys} />}
+        <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} add="studio::layer::create" parent="poster" subject="p1" name="/ collage" paste />
+      </>
+    );
   }
   const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
   return render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
@@ -73,13 +79,81 @@ describe("things coming into a collage", () => {
     ]);
   });
 
-  it("puts words pasted in the middle, a twelfth of its height", async () => {
+  it("puts words pasted with its Paste line's ctrl+v in the middle, a twelfth of its height", async () => {
+    const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
+    source.set("studio::poster_page", { width: 1200, height: 600, layers: [] }, "p1");
+    renderCollage(source, ["ctrl+v"]);
+    fireEvent.paste(document.body, { clipboardData: { files: [], getData: () => "Hello" } });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]!.input).toMatchObject({ words: "Hello", size: 50, poster: "p1" });
+  });
+
+  it("takes no paste no line asks for, as a key is only ever a line's", async () => {
     const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
     source.set("studio::poster_page", { width: 1200, height: 600, layers: [] }, "p1");
     renderCollage(source);
     fireEvent.paste(document.body, { clipboardData: { files: [], getData: () => "Hello" } });
+    await new Promise((settled) => setTimeout(settled, 50));
+    expect(source.runs).toEqual([]);
+  });
+});
+
+describe("a crop and words, in place", () => {
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
+  });
+
+  function renderPoster(source: MemorySource) {
+    source.set("studio::poster_page", {
+      width: 1600,
+      height: 900,
+      layers: [
+        { id: "b0", picture: "files/dusk", x: 0, y: 0, w: 1600, h: 900 },
+        { id: "s1", picture: "files/sun", x: 100, y: 100, w: 300, h: 300 },
+        { id: "w1", words: "Harbor", size: 96, x: 120, y: 600, w: 300, h: 120 },
+      ],
+    }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <CollageButton collage="/ layer" does="crop" label="Crop" />
+          <CollageButton collage="/ layer" does="edit" label="Edit" />
+          <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} pick="/ layer" name="/ layer" subject="p1" crop="studio::layer::crop" write="studio::layer::write" place="studio::layer::place" />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    return render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+  }
+
+  it("crops the picked picture, kept with Enter: all of it, where it was", async () => {
+    const source = memorySource({ commands: { "studio::layer::crop": (input) => ({ id: String(input["id"]) }) } });
+    const drawn = renderPoster(source);
+    await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
+    act(() => setPicked("/ layer", "s1"));
+    fireEvent.click(drawn.getByRole("button", { name: "Crop" }));
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: "Enter" });
     await waitFor(() => expect(source.runs.length).toBe(1));
-    expect(source.runs[0]!.input).toMatchObject({ words: "Hello", size: 50, poster: "p1" });
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "s1", crop_w: 1, crop_h: 1, x: 100, y: 100, w: 300, h: 300 } });
+  });
+
+  it("writes the picked words where they are, what's typed after them, kept with Enter as big as they now are", async () => {
+    const source = memorySource({ commands: { "studio::layer::write": (input) => ({ id: String(input["id"]) }) } });
+    const drawn = renderPoster(source);
+    await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
+    act(() => setPicked("/ layer", "w1"));
+    fireEvent.click(drawn.getByRole("button", { name: "Edit" }));
+    await act(async () => {});
+    fireEvent.keyDown(window, { key: "End" });
+    fireEvent.keyDown(window, { key: "!" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    const sent = source.runs[0]!.input as Record<string, unknown>;
+    expect(source.runs[0]!.command).toBe("studio::layer::write");
+    expect(sent).toMatchObject({ id: "w1", words: "Harbor!", size: 96, x: 120, y: 600 });
+    expect(sent["w"]).toBeGreaterThan(300);
   });
 });
 
@@ -116,6 +190,28 @@ describe("a collage's preview", () => {
       reading.readAsText(source.uploads[0]!.file);
     });
     expect(drawn).toBe("320x180");
+  });
+});
+
+describe("a picture on its own", () => {
+  it("shows the file a value holds, fitted in, and nothing while there's none", async () => {
+    const source = memorySource({ files: true });
+    source.set("studio::poster_page", { title: "Harbor", preview: "uploads/harbor.png" }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Picture source={page.data?.["preview"] ?? null} fit />
+          <Picture source={page.data?.["missing"] ?? null} />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelectorAll("img").length).toBe(1));
+    const shown = drawn.container.querySelector("img")!;
+    expect(shown.getAttribute("src")).toContain("harbor.png");
+    expect(shown.style.objectFit).toBe("contain");
   });
 });
 

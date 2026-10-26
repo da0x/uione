@@ -22,7 +22,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, hintOf, setPicked, useKeys, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, hintOf, setPicked, typing, useKeys, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -58,7 +58,20 @@ function fieldsOf(sent: Row, fields: Record<string, string>): Row {
   return out;
 }
 
-const wordsFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, Cantarell, Ubuntu, sans-serif';
+// Words are in the theme's text font, as the desktop draws them, which an app can
+// bring with it. A canvas only draws a web font once it's loaded, so it's asked for,
+// and what's drawn is drawn again when it arrives.
+function wordsFamily(): string {
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") return "sans-serif";
+  return getComputedStyle(document.documentElement).getPropertyValue("--font-sans").trim() || "sans-serif";
+}
+
+function wordsLoaded(): Promise<unknown> {
+  const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+  if (!fonts?.load) return Promise.resolve();
+  const family = wordsFamily();
+  return Promise.all([fonts.load(`400 16px ${family}`), fonts.load(`700 16px ${family}`)]).catch(() => {});
+}
 
 // How big words are, in the collage's pixels: as wide as their widest line, each line
 // a little more than their size.
@@ -67,7 +80,7 @@ function measured(words: string, size: number, weight: number): { w: number; h: 
   measurer ??= typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
   const lines = (words || " ").split("\n");
   if (!measurer) return { w: Math.max(1, size * 0.6 * Math.max(...lines.map((l) => l.length))), h: Math.max(1, size * 1.2 * lines.length) };
-  measurer.font = `${weight} ${size}px ${wordsFamily}`;
+  measurer.font = `${weight} ${size}px ${wordsFamily()}`;
   return { w: Math.max(1, ...lines.map((l) => measurer!.measureText(l).width)), h: Math.max(1, size * 1.2 * lines.length) };
 }
 
@@ -159,7 +172,7 @@ function paintAround(c: CanvasRenderingContext2D, path: string, shown: CanvasIma
 
 // Words drawn at x, y, `size` pixels tall, over a soft shadow.
 function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: number, x: number, y: number) {
-  c.font = `${weightOf(l)} ${size}px ${wordsFamily}`;
+  c.font = `${weightOf(l)} ${size}px ${wordsFamily()}`;
   c.textBaseline = "top";
   const off = Math.max(1, size * 0.04);
   said.split("\n").forEach((line, i) => {
@@ -251,13 +264,33 @@ function ask(name: string, does: string) {
   askListeners.forEach((changed) => changed());
 }
 
+// What a Paste line's ctrl+v pasted, handed to its collage as it came: a browser gives
+// a paste's pictures with the paste itself, without asking to read the clipboard.
+const pastes = new Map<string, { files: File[]; words: string }>();
+
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
 export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
+  // Pasting with ctrl+v takes what's pasted; its other keys, and a press, read the clipboard.
+  const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v");
+  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, () => ask(collage, does));
+  useEffect(() => {
+    if (!byPaste) return;
+    const pasted = (e: ClipboardEvent) => {
+      if (typing(e.target)) return;
+      const files = [...(e.clipboardData?.files ?? [])];
+      const words = e.clipboardData?.getData("text/plain") ?? "";
+      if (files.length === 0 && !words.trim()) return;
+      e.preventDefault();
+      pastes.set(collage, { files, words });
+      ask(collage, "pasted");
+    };
+    document.addEventListener("paste", pasted);
+    return () => document.removeEventListener("paste", pasted);
+  }, [byPaste, collage]);
   // A screenshot is taken where the browser can share the screen, and only there.
   if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
-  useKeys(keys, () => ask(collage, does));
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
       {label}
@@ -369,6 +402,7 @@ export function Collage({
   useEffect(() => {
     const changed = () => setRead((n) => n + 1);
     readListeners.add(changed);
+    void wordsLoaded().then(changed);
     const screen = () => setFull(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", screen);
     return () => {
@@ -505,27 +539,6 @@ export function Collage({
     return () => clearTimeout(waiting);
   }, [now]);
 
-  // Ctrl+V anywhere but where something's typed pastes on the collage.
-  useEffect(() => {
-    if (!paste) return;
-    const pasted = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-      const given = [...(e.clipboardData?.files ?? [])];
-      if (given.length > 0) {
-        e.preventDefault();
-        return void addPictures(given);
-      }
-      const words = e.clipboardData?.getData("text/plain") ?? "";
-      if (words.trim()) {
-        e.preventDefault();
-        addWords(words);
-      }
-    };
-    document.addEventListener("paste", pasted);
-    return () => document.removeEventListener("paste", pasted);
-  });
-
   // A crop or words are only of the picked layer; picking another puts them away.
   if (w.crop && w.crop.id !== picked) w.crop = undefined;
 
@@ -590,6 +603,11 @@ export function Collage({
           });
         }
       }
+    } else if (asking === "pasted") {
+      const given = pastes.get(name);
+      pastes.delete(name);
+      if (given && given.files.length > 0) void addPictures(given.files);
+      else if (given) addWords(given.words);
     } else if (asking === "paste") {
       void pasteNow();
     } else if (asking === "screenshot") {
@@ -689,7 +707,7 @@ export function Collage({
         const writing = w.editing?.id === l["id"] ? w.editing : undefined;
         const kept = measured(str(l["words"]), num(l["size"]), weightOf(l));
         const size = num(l["size"]) * (w.going?.id === l["id"] && w.now && kept.h > 0 ? b.h / w.scale / kept.h : 1) * scale;
-        c.font = `${weightOf(l)} ${size}px ${wordsFamily}`;
+        c.font = `${weightOf(l)} ${size}px ${wordsFamily()}`;
         c.textBaseline = "top";
         if (writing?.fresh) {
           c.fillStyle = accent;
@@ -747,7 +765,7 @@ export function Collage({
     }
     if (layers.length === 0 && !full && empty) {
       c.fillStyle = style.getPropertyValue("--color-muted").trim() || "#5b6577";
-      c.font = `13px ${wordsFamily}`;
+      c.font = `13px ${wordsFamily()}`;
       c.textAlign = "center";
       c.textBaseline = "middle";
       c.fillText(empty, board.x + bw / 2, board.y + bh / 2);

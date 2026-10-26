@@ -744,7 +744,7 @@ namespace one::language {
                     // apart from undo: kept, but never a step undo takes back.
                     if (at_word("apart") && peek(1).kind == token_kind::identifier && peek(1).text == "from" && peek(2).kind == token_kind::identifier &&
                         peek(2).text == "undo") {
-                        advance();
+                        command.apart_where = advance().where;
                         advance();
                         advance();
                         command.apart = true;
@@ -2204,6 +2204,16 @@ namespace one::language {
                 return {where, std::move(pipeline), std::move(shown_when)};
             }
             // collage poster_page.layers size width height { ... }: a picture made of layers.
+            // picture poster.preview fit: the file a value holds, shown.
+            if (at_word("picture") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
+                advance();
+                picture_item picture;
+                picture.source = parse_expression();
+                if (at_word("fit") || at_word("fill")) picture.fit = advance().text == "fit";
+                expression_ptr shown_when = shown_while();
+                end_line();
+                return {where, std::move(picture), std::move(shown_when)};
+            }
             if (at_word("collage") && peek(1).kind != token_kind::scope) {
                 advance();
                 collage_item collage;

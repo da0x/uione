@@ -2719,8 +2719,8 @@ namespace one::language {
                     // title, whatever its layout, so they're outside its regions.
                     auto* text = std::get_if<content_text>(&item.node);
                     if (text && text->subtitle) continue;
-                    // What's picked is the screen's, drawn nowhere.
-                    if (std::holds_alternative<pick_item>(item.node)) continue;
+                    // What's picked, and what's done as it's opened, is the screen's, drawn nowhere.
+                    if (std::holds_alternative<pick_item>(item.node) || std::holds_alternative<on_open_item>(item.node)) continue;
                     if (!block || (block->type != content_block::kind::region && block->type != content_block::kind::heading)) {
                         error(item.where, "this screen puts its items in regions, so this goes in one too, like main { ... }");
                     }
@@ -2763,6 +2763,39 @@ namespace one::language {
                 }
             };
             collages(s.items);
+            // A key runs the first line shown that has it, so two lines always shown can't
+            // share one: each says when it's shown, or one has another key.
+            std::map<std::string, location> always;
+            std::function<void(const std::vector<screen_item>&, bool)> keyed = [&](const std::vector<screen_item>& inside, bool sometimes) {
+                for (const auto& item : inside) {
+                    bool shown_sometimes = sometimes || item.when != nullptr;
+                    const std::vector<key_chord>* chords = nullptr;
+                    if (auto* b = std::get_if<button_item>(&item.node)) {
+                        chords = &b->keys;
+                        // One acting on what's picked is shown only while something is.
+                        const entity_declaration* on = find_command(ns, b->command);
+                        bool picked = on && std::ranges::any_of(picks_, [&](const auto& pick) { return pick.second && listed_entity(ns, *pick.second) == on; });
+                        shown_sometimes = shown_sometimes || b->when != nullptr || picked;
+                    }
+                    if (auto* t = std::get_if<toggle_item>(&item.node)) chords = &t->keys;
+                    if (auto* h = std::get_if<history_item>(&item.node)) chords = &h->keys;
+                    if (auto* f = std::get_if<full_screen_item>(&item.node)) chords = &f->keys;
+                    if (auto* l = std::get_if<content_link>(&item.node)) chords = &l->keys;
+                    if (auto* c = std::get_if<collage_button>(&item.node)) chords = &c->keys;
+                    if (chords && !shown_sometimes) {
+                        for (const auto& chord : *chords) {
+                            auto [first, fresh] = always.emplace(chord.chord, chord.where);
+                            if (!fresh) {
+                                error(chord.where, chord.chord + " already runs the line at " + std::to_string(first->second.line) +
+                                                       ", which is always shown too; say when each is shown, or give this one another key");
+                            }
+                        }
+                    }
+                    if (auto* block = std::get_if<content_block>(&item.node)) keyed(block->items, shown_sometimes);
+                    if (auto* c = std::get_if<collage_item>(&item.node)) keyed(c->tools, true);  // over the pick, only while there is one
+                }
+            };
+            keyed(s.items, false);
             screen_ = &s.items;
             screen_items(ns, s.items, full_route(ns, s.route));
             screen_ = nullptr;
@@ -3534,6 +3567,8 @@ namespace one::language {
                     verify_board(ns, *board, route);
                 } else if (auto* canvas = std::get_if<canvas_item>(&item.node)) {
                     verify_canvas(ns, *canvas, route);
+                } else if (auto* picture = std::get_if<picture_item>(&item.node)) {
+                    verify_picture(ns, *picture);
                 } else if (auto* collage = std::get_if<collage_item>(&item.node)) {
                     verify_collage(ns, *collage, route);
                 } else if (auto* does = std::get_if<collage_button>(&item.node)) {
@@ -3895,6 +3930,32 @@ namespace one::language {
             picks_[of->name] = rows;
             verify_condition(ns, *opening.where, route);
             picks_ = std::move(was);
+        }
+
+        // picture poster.preview fit: a file field of what's picked, or of what a view is
+        // per, read by the view.
+        void verify_picture(const std::string& ns, const picture_item& picture) {
+            static const std::string how = "a picture shows a file a view or a pick holds, like picture poster_page.preview, or picture layer.picture";
+            auto* member = std::get_if<member_expression>(&picture.source->node);
+            auto* named = member ? std::get_if<name_expression>(&member->object->node) : nullptr;
+            if (!named || named->name.parts.size() != 1) return error(picture.source->where, how);
+            const std::string& name = named->name.text();
+            const std::string& field_name = member->member;
+            const entity_declaration* of = nullptr;
+            bool read = false;
+            if (auto pick = picks_.find(name); pick != picks_.end()) {
+                if (pick->second) of = listed_entity(ns, *pick->second), read = in_rows(*pick->second, field_name);
+            } else if (const view_declaration* view = find(ns, qualified_name{{name}, picture.source->where}, &scope::views)) {
+                if (view->per) of = find_entity(ns, qualified_name{{*view->per}, picture.source->where});
+                read = std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == field_name; });
+            } else {
+                return error(picture.source->where, name + " isn't a view or something picked here; " + how);
+            }
+            if (!of) return error(picture.source->where, how);
+            const field* f = find_field(*of, field_name);
+            if (!f) return error(picture.source->where, "entity " + of->name + " has no field " + field_name + nearest(field_name, field_names(*of)));
+            if (!f->type || f->type->text() != "file" || f->list) return error(picture.source->where, of->name + "." + field_name + " isn't a file, so there's no picture to show");
+            if (!read) error(picture.source->where, name + " doesn't read " + field_name + "; add it to " + (picks_.contains(name) ? "the list it's picked from" : "the view"));
         }
 
         void verify_collage(const std::string& ns, const collage_item& collage, const std::string& route) {

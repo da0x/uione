@@ -107,10 +107,22 @@ TEST_CASE("a key is any of ctrl, shift and alt, then a key, and a toggle is name
                                    "25: a button's when compares a view's fields with values, like issue_page.status == status::open"});
 }
 
-TEST_CASE("undo and redo take back steps kept on the machine, so a project in the cloud can't say them yet") {
+TEST_CASE("two lines always shown can't share a key, as the first would always take it; shown at different times, they can") {
+    CHECK(messages(screen("\t\tposter::create \"New\" key ctrl+n\n\t\tlink / \"Home\" key ctrl+n\n")) ==
+          std::vector<std::string>{"23: ctrl+n already runs the line at 22, which is always shown too; say when each is shown, or give this one another key"});
+    CHECK(messages(screen("\t\ttoggle list \"List\"\n\t\tposter::create \"New\" key ctrl+n when list\n\t\tlink / \"Home\" key ctrl+n\n")).empty());
+}
+
+TEST_CASE("undo and redo take back steps kept on the machine, so a project in the cloud can't say them yet, nor keep a command apart from them") {
     std::string cloud = "import one\nproject studio {\n\tone  \"0.18.0\"\n}\n\n" + poster + "\n\tscreen \"Studio\" / {\n\t\tundo \"Undo\"\n\t\tredo \"Redo\"\n\t}\n}\n";
     CHECK(messages(cloud) == std::vector<std::string>{"20: undo takes a step back that's kept on this machine, so it needs storage local in the project block, for now",
                                                       "21: redo takes a step back that's kept on this machine, so it needs storage local in the project block, for now"});
+    std::string apart = cloud;
+    apart.replace(apart.find("\tcommand poster::create\n"), 0, "\tcommand poster::seen {\n\t\tapart from undo\n\t}\n");
+    CHECK(messages(apart) == std::vector<std::string>{
+                                 "12: apart from undo keeps a step out of what's undone on this machine, so it needs storage local in the project block, for now",
+                                 "23: undo takes a step back that's kept on this machine, so it needs storage local in the project block, for now",
+                                 "24: redo takes a step back that's kept on this machine, so it needs storage local in the project block, for now"});
 }
 
 namespace {
@@ -485,6 +497,49 @@ TEST_CASE("cards show a file each row holds as a picture on top, fitted in or fi
     CHECK(files["desktop/src/screens/main.cpp"].find(R"(.picture = "preview", .fit = true})") != std::string::npos);
 }
 
+TEST_CASE("a picture shows the file a pick or a view holds, on its own, fitted in or filling its place") {
+    const std::string source = project + R"(namespace studio at / {
+	entity poster {
+		title    text  required
+		preview  file
+	}
+
+	view posters {
+		each poster {
+			title  preview
+		}
+	}
+	view poster_page per poster {
+		title  preview
+	}
+
+	screen "Studio" / {
+		pick poster from posters
+		picture poster.preview fit when poster != none
+		picture poster.title
+		picture posters.preview
+	}
+	screen "Poster" /posters/:poster {
+		picture poster_page.preview
+	}
+}
+)";
+    CHECK(messages(source) == std::vector<std::string>{"26: poster.title isn't a file, so there's no picture to show",
+                                                       "27: a picture shows a file a view or a pick holds, like picture poster_page.preview, or picture layer.picture"});
+    std::string fine = source;
+    for (const std::string line : {"\t\tpicture poster.title\n", "\t\tpicture posters.preview\n"}) fine.erase(fine.find(line), line.size());
+    CHECK(messages(fine).empty());
+    auto files = built(fine);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Picture source={(pickedPoster?.["preview"] ?? null)} fit />)") != std::string::npos);
+    CHECK(web.find(R"(<Picture source={(posterPage.data?.["preview"] ?? null)} />)") != std::string::npos);
+    CHECK(native.find(R"(picture_of(p, field_of(picked_poster, "preview").as_string(), true, 320))") != std::string::npos);
+    CHECK(native.find(R"(picture_of(p, at(poster_page, "preview").as_string(), false, 320))") != std::string::npos);
+}
+
 TEST_CASE("a table shows a file each row holds as a small picture before its cells, and % leaves what's over as a clock counts") {
     const std::string source = project + R"(namespace studio at / {
 	entity poster {
@@ -522,7 +577,7 @@ TEST_CASE("a table shows a file each row holds as a small picture before its cel
     CAPTURE(native);
     CHECK(web.find(R"( picture="preview" fit)") != std::string::npos);
     CHECK(native.find(R"(.picture = "preview", .fit = true})") != std::string::npos);
-    CHECK(web.find(R"({(((Number(screenSize().width) - Number(2) * Math.floor(Number(screenSize().width) / Number(2))) === 0)) && <Text>An even screen</Text>})") != std::string::npos);
+    CHECK(web.find(R"({((remainder(Number(screenSize().width), Number(2)) === 0)) && <Text>An even screen</Text>})") != std::string::npos);
     CHECK(native.find(R"((same(worked('%', value(screen_width()), value(2)), value(0))) ? text({words("An even screen")}) : view())") != std::string::npos);
 }
 
@@ -569,4 +624,8 @@ TEST_CASE("on open, a screen opens the first row a condition holds for, or runs 
     CAPTURE(native);
     CHECK(web.find(R"(<OnOpen ready={posters.status === "live"} lines={[{ open: "/posters/:poster", rows: (posters.data?.["rows"] as Record<string, unknown>[] | undefined) ?? [], where: (row: Record<string, unknown>) => ((row["width"] ?? null) === screenSize().width) }, { run: { name: "studio::poster::create", given: { "width": screenSize().width }, thenOpen: "/posters/:poster" } }]} />)") != std::string::npos);
     CHECK(native.find(R"(on_open(p, ready(posters), {opening{.open = "/posters/:poster", .view = posters, .list = "", .where = [&](const value& row) { return same(field_of(row, "width"), value(screen_width())); }}, opening{.run = command_button{.command = "studio::poster::create", .label = "Create", .fields = value(std::map<std::string, value>{{"width", value(screen_width())}}), .then_open = "/posters/:poster"}}}))") != std::string::npos);
+    // A workspace's on open is the screen's own, outside its regions, and still done.
+    auto spread = built(project + poster + "\n\tscreen \"Studio\" / {\n\t\tlayout workspace\n\t\ton open poster::create\n\t\tmain {\n\t\t\ttext \"Hello\"\n\t\t}\n\t}\n}\n");
+    CHECK(spread["web/src/screens/main.tsx"].find(R"(<OnOpen ready={true} lines={[{ run: { name: "studio::poster::create" } }]} />)") != std::string::npos);
+    CHECK(spread["desktop/src/screens/main.cpp"].find(R"(on_open(p, true, {opening{.run = command_button{.command = "studio::poster::create", .label = "Create"}}}))") != std::string::npos);
 }

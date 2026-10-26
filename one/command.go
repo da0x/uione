@@ -639,10 +639,8 @@ func alike(x, y any) bool {
 	return reflect.DeepEqual(plain(x), plain(y))
 }
 
-// Has says whether a list holds a value, like the roles that may take a step
-// holding a project's contributor role.
 // Remainder is what's left of x over y, as a clock counts, never below none:
-// Remainder(-1, 4) is 3. Over none, it's none.
+// Remainder(-1, 4) is 3. By 0, it's 0, on every target alike.
 func Remainder(x, y float64) float64 {
 	if y == 0 {
 		return 0
@@ -650,6 +648,16 @@ func Remainder(x, y float64) float64 {
 	return x - y*math.Floor(x/y)
 }
 
+// Divide is x / y as every target works it out: by 0 is 0.
+func Divide(x, y float64) float64 {
+	if y == 0 {
+		return 0
+	}
+	return x / y
+}
+
+// Has says whether a list holds a value, like the roles that may take a step
+// holding a project's contributor role.
 func Has(list []string, value string) bool {
 	for _, item := range list {
 		if item == value {

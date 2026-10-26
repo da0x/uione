@@ -942,6 +942,16 @@ export function Confirm({ command, question }: { command: string; question: stri
   return null;
 }
 
+// x / y and x % y, as every target works them out: what's left over as a clock
+// counts, never below none, so -1 % 4 is 3, and either by 0 is 0.
+export function divided(x: number, y: number): number {
+  return y === 0 ? 0 : x / y;
+}
+
+export function remainder(x: number, y: number): number {
+  return y === 0 ? 0 : x - y * Math.floor(x / y);
+}
+
 // A value as it's put in order: a time as its milliseconds, so times compare as
 // times, a number as itself, and nothing before everything, like a person who has
 // never looked.
@@ -2450,6 +2460,15 @@ function useAddresses(rows: Row[], field: string | undefined): Record<string, st
     }
   }, [held.join("\n")]);
   return addresses;
+}
+
+// picture poster.preview fit: the file a value holds, as wide as its place and 320
+// tall, all of it fitted in or filling it.
+export function Picture({ source, fit = false }: { source: unknown; fit?: boolean }) {
+  const ui = useUI();
+  const path = typeof source === "string" ? source : "";
+  const addresses = useAddresses(path ? [{ id: path, path }] : [], "path");
+  return <ui.FilePicture source={addresses[path]} fit={fit} />;
 }
 
 // A list's rows as large cards, like a project's boards: each its title and link,

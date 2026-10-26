@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "generators/native.hpp"
+#include "generators/theme.hpp"
 #include "generators/web.hpp"
 #include "language/checker.hpp"
 #include <filesystem>
@@ -219,6 +220,22 @@ TEST_CASE("a native component's fonts come along with it, byte for byte, to be e
     CHECK(cmake->content.find("Logo.ttf") == std::string::npos);
 }
 
+TEST_CASE("a font brought is said to draw the weights it does, read from the font itself") {
+    // A font of one table, by its tag, and the table's bytes.
+    auto font = [](std::string_view tag, const std::string& table) {
+        std::string out("\0\1\0\0\0\1\0\0\0\0\0\0", 12);
+        out += tag;
+        out += std::string("\0\0\0\0\0\0\0\x1c", 8) + std::string("\0\0\0", 3) + static_cast<char>(table.size());
+        return out + table;
+    };
+    auto fixed = [](int n) { return std::string{static_cast<char>(n >> 8), static_cast<char>(n & 0xff), '\0', '\0'}; };
+    std::string fvar = std::string("\0\1\0\0\0\x10\0\x02\0\x01\0\x14\0\0\0\0", 16) + "wght" + fixed(100) + fixed(400) + fixed(900) + std::string(4, '\0');
+    CHECK(generators::theme::font_weights(font("fvar", fvar)) == "100 900");
+    CHECK(generators::theme::font_weights(font("OS/2", std::string("\0\4\0\0\x02\xbc", 6))) == "700");
+    CHECK(generators::theme::font_weights("not a font") == "400");
+    CHECK(generators::theme::font_weights(std::string("\0\1\0\0\xff\xff", 6)) == "400");
+}
+
 TEST_CASE("a theme's font brought from a file is embedded in the desktop app and served beside the site, and its headings are set in it") {
     namespace fs = std::filesystem;
     fs::path dir = fs::path(root) / "compiler" / "build" / "theme-font-project";
@@ -256,7 +273,7 @@ TEST_CASE("a theme's font brought from a file is embedded in the desktop app and
     const auto* index = find(web, "index.html");
     REQUIRE(css != nullptr);
     REQUIRE(index != nullptr);
-    CHECK(css->content.find("@font-face {\n  font-family: \"Fraunces\";\n  src: url(\"/fonts/Fraunces.ttf\");") != std::string::npos);
+    CHECK(css->content.find("@font-face {\n  font-family: \"Fraunces\";\n  src: url(\"/fonts/Fraunces.ttf\");\n  font-weight: 400;") != std::string::npos);
     CHECK(index->content.find("Fraunces") == std::string::npos);
     fs::remove(dir / "fonts" / "Fraunces.ttf");
     auto [missing, said] = read();

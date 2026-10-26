@@ -407,6 +407,9 @@ namespace one::generators {
                 } else if (layout == "single" && regions.empty()) {
                     screen_items(items, parts, ns, s->items, s->items);
                 } else {
+                    // What's done as the screen opens is its own, outside its regions.
+                    bool opens = std::ranges::any_of(s->items, [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
+                    if (opens && !regions.empty()) on_open(items, parts, ns, s->items);
                     parts.components.insert("Layout");
                     parts.components.insert("Region");
                     items.open("<Layout name=" + web_detail::js_string(layout) + ">");
@@ -802,14 +805,15 @@ namespace one::generators {
                     std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<=" : ">=";
                     return "(ordered(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " ordered(" + condition_of(parts, ns, *binary->right, read) + "))";
                 }
-                // A value worked out, like layer.size * 1.1.
-                // As a clock counts, never below none: -1 % 4 is 3.
-                if (binary->op == token_kind::remainder) {
-                    std::string l = "Number(" + condition_of(parts, ns, *binary->left, read) + ")", r = "Number(" + condition_of(parts, ns, *binary->right, read) + ")";
-                    return "(" + l + " - " + r + " * Math.floor(" + l + " / " + r + "))";
+                // A value worked out, like layer.size * 1.1; divided, or what's left over, as
+                // every target works it out.
+                if (binary->op == token_kind::slash || binary->op == token_kind::remainder) {
+                    std::string name = binary->op == token_kind::slash ? "divided" : "remainder";
+                    parts.components.insert(name);
+                    return name + "(Number(" + condition_of(parts, ns, *binary->left, read) + "), Number(" + condition_of(parts, ns, *binary->right, read) + "))";
                 }
-                if (binary->op == token_kind::plus || binary->op == token_kind::minus || binary->op == token_kind::star || binary->op == token_kind::slash) {
-                    std::string op = binary->op == token_kind::plus ? "+" : binary->op == token_kind::minus ? "-" : binary->op == token_kind::star ? "*" : "/";
+                if (binary->op == token_kind::plus || binary->op == token_kind::minus || binary->op == token_kind::star) {
+                    std::string op = binary->op == token_kind::plus ? "+" : binary->op == token_kind::minus ? "-" : "*";
                     return "(Number(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " Number(" + condition_of(parts, ns, *binary->right, read) + "))";
                 }
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
@@ -1310,6 +1314,13 @@ namespace one::generators {
                     bool first_one = std::none_of(items.begin() + static_cast<std::ptrdiff_t>(first), items.begin() + static_cast<std::ptrdiff_t>(at),
                                                   [](const language::screen_item& it) { return std::holds_alternative<language::on_open_item>(it.node); });
                     if (first_one) on_open(out, parts, ns, items);
+                } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
+                    // picture poster.preview fit: as wide as its place, 320 tall.
+                    parts.components.insert("Picture");
+                    shown_while(out, parts, ns, item, [&] {
+                        std::set<std::string> read;
+                        out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + " />");
+                    });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.
                     parts.components.insert("CollageButton");

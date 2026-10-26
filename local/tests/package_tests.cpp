@@ -306,3 +306,11 @@ TEST("a step taken after an undo means there's nothing to redo") {
 	a.ok("library::book::create", book("Emma", "LIT-0002"));
 	CHECK(!a.run("one::redo", value::map()));
 }
+
+TEST("a value divided, or what's left over, is worked out as on every target: as a clock counts, and either by 0 is 0") {
+	CHECK(one::local::divided(6, 4) == 1.5);
+	CHECK(one::local::divided(3, 0) == 0);
+	CHECK(one::local::remainder(-1, 4) == 3);
+	CHECK(one::local::remainder(5, 4) == 1);
+	CHECK(one::local::remainder(3, 0) == 0);
+}

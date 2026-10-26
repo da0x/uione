@@ -46,6 +46,7 @@ the same on every target.
 A command run on open is a step like any other. One that shouldn't be undone says
 `apart from undo` itself.
 
-An `each` in a command still picks rows by one field's value, so every storage can
-find them the same way. Tidying rows by a richer condition, like "untitled with
-nothing on it", isn't something a command can say yet.
+An app that opens into work reuses what's there rather than tidying it away: the
+first line finds a piece of work nothing's been done to, so opening again doesn't
+leave another behind. An `each` in a command still picks rows by one field's value,
+so every storage finds them the same way.

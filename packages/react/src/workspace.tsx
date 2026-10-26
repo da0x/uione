@@ -72,7 +72,7 @@ export function pressed(e: KeyboardEvent, chord: string): boolean {
 }
 
 // Whether what has the keyboard is somewhere to type, which keeps its keys.
-function typing(target: EventTarget | null): boolean {
+export function typing(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el || typeof el.tagName !== "string") return false;
   return el.isContentEditable || el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT";

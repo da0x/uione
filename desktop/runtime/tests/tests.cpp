@@ -1250,6 +1250,22 @@ TEST("a workspace: its bar, starting with the app's name and ending with light a
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a status line saying a file was saved offers to show it in its folder, and only while it says so") {
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) { return workspace(p, region{"main", items(text({words("The posters")}))}, region{"status", along(messages(p))}); }});
+	memory_source data;
+	navigator nav(s, data);
+	nav.open("/");
+	auto& p = nav.current();
+	p.kept<std::pair<std::string, std::string>>("said of a file").set({"Saved harbor.png in /home/someone/Pictures/studio.", "/home/someone/Pictures/studio/harbor.png"});
+	p.told().set("Saved harbor.png in /home/someone/Pictures/studio.");
+	matches_golden("saved", {640, 160}, [&] { return drawn(nav); });
+	// Said something else, there's no file to show.
+	p.told().set("Undid place.");
+	matches_golden("saved-then-not", {640, 160}, [&] { return drawn(nav); });
+}
+
 TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is picked, and one dragged is placed where it's let go") {
 	memory_source data;
 	data.set("studio::poster_page", "p1",
@@ -1422,7 +1438,7 @@ TEST("a picture coming into a collage with nothing on it covers it, and one comi
 	CHECK(second["depth"].as_double() == 1);
 }
 
-TEST("a collage is copied whole or a layer at a time, saved in the app's folder in Pictures, and keeps a preview of itself once changes settle") {
+TEST("a collage is copied or saved, whole or a layer at a time, drawn away from the window, saved in the app's folder in Pictures, and keeps a preview of itself once changes settle") {
 	auto pictures = std::filesystem::temp_directory_path() / ("one-pictures-" + std::to_string(::getpid()));
 	std::filesystem::remove_all(pictures);
 	::setenv("XDG_PICTURES_DIR", pictures.c_str(), 1);
@@ -1441,25 +1457,37 @@ TEST("a collage is copied whole or a layer at a time, saved in the app's folder 
 	navigator nav(s, data);
 	nav.open("/");
 	auto& p = nav.current();
-	// The words picked and copied: a picture as big as they are.
+	// The words picked and copied: drawn away from the window's thread, and put on the
+	// clipboard back on it, which only a running window does.
 	p.pick("/ layer", "w1");
 	p.kept<std::string>("collage do / layer").set("copy picked");
 	(void)drawn(nav);
-	auto copied = one::desktop::clipboard_picture();
-	CHECK(copied.has_value());
-	if (copied) {
-		auto read = one::desktop::picture::decode(*copied);
+	CHECK(*p.told() == "Copying…");
+	// The words picked and saved: in the app's folder, named for it and the minute, as
+	// big as they are, drawn and written away from the window's thread.
+	p.kept<std::string>("collage do / layer").set("save picked");
+	(void)drawn(nav);
+	std::filesystem::path folder = pictures / "studio";
+	auto written = [&] {
+		std::vector<std::filesystem::path> out;
+		if (std::filesystem::exists(folder)) {
+			for (const auto& f : std::filesystem::directory_iterator(folder)) out.push_back(f.path());
+		}
+		return out;
+	};
+	for (int i = 0; i < 200 && written().size() < 1; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	CHECK(written().size() == 1);
+	if (written().size() == 1) {
+		CHECK(written()[0].filename().string().starts_with("harbor-at-dusk-layer-"));
+		auto read = one::desktop::picture::read(written()[0]);
 		CHECK(read.has_value());
 		if (read) CHECK(read->width() == 300);
 	}
-	// Saved: in the app's folder, named for it and the minute.
+	// All of it saved too, beside it.
 	p.kept<std::string>("collage do / layer").set("save");
 	(void)drawn(nav);
-	std::filesystem::path folder = pictures / "studio";
-	for (int i = 0; i < 200 && (!std::filesystem::exists(folder) || std::filesystem::is_empty(folder)); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	bool saved = std::filesystem::exists(folder) && !std::filesystem::is_empty(folder);
-	CHECK(saved);
-	if (saved) CHECK(std::filesystem::directory_iterator(folder)->path().filename().string().starts_with("harbor-at-dusk-"));
+	for (int i = 0; i < 200 && written().size() < 2; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	CHECK(written().size() == 2);
 	// Once what it's drawn from has settled, as the timer it started says, its preview
 	// is sent, 320 wide, never a step undo takes back.
 	CHECK(data.runs().empty());

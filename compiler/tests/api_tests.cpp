@@ -111,6 +111,31 @@ TEST_CASE("the library example's backend is generated exactly as its target says
     CHECK(file->content == without_license(*target));
 }
 
+TEST_CASE("a value divided, or what's left over, is worked out in Go as on every target") {
+    language::diagnostics out;
+    std::vector<language::file> files;
+    files.push_back(language::parse("main.one", R"(namespace clock {
+entity hand {
+	turns  number  = 0
+	share  number  = 0
+}
+command hand::turn {
+	turns = (turns + 1) % 4
+	share = turns / 4
+}
+}
+)", out));
+    language::check(files, out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_api(files, root + "/examples/tasks", root + "/examples/tasks/build/api");
+    REQUIRE(generated.errors.empty());
+    auto found = std::find_if(generated.files.begin(), generated.files.end(), [](const auto& f) { return f.path == "clock/clock.go"; });
+    REQUIRE(found != generated.files.end());
+    CAPTURE(found->content);
+    CHECK(found->content.find("one.Remainder(") != std::string::npos);
+    CHECK(found->content.find("one.Divide(") != std::string::npos);
+}
+
 TEST_CASE("a field can be worked out from what another points at, and a list can start with values") {
     language::diagnostics out;
     std::vector<language::file> files;

@@ -505,6 +505,7 @@ export const plain: ComponentSet = {
       ))}
     </section>
   ),
+  FilePicture: ({ source, fit }) => <div style={{ height: 320 }}>{source && <img src={source} alt="" style={{ width: "100%", height: "100%", objectFit: fit ? "contain" : "cover" }} />}</div>,
   Cards: ({ status, cards }) => (
     <div aria-busy={status === "loading"}>
       {cards.map((card) => (

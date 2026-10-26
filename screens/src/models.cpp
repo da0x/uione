@@ -346,9 +346,10 @@ namespace one::screens {
 			case '+': return value(x + y);
 			case '-': return value(x - y);
 			case '*': return value(x * y);
-			// As a clock counts, never below none: -1 % 4 is 3.
-			case '%': return y == 0 ? value() : value(x - y * std::floor(x / y));
-			default: return y == 0 ? value() : value(x / y);
+			// As a clock counts, never below none: -1 % 4 is 3. Either by 0 is 0, on every
+			// target alike.
+			case '%': return value(y == 0 ? 0.0 : x - y * std::floor(x / y));
+			default: return value(y == 0 ? 0.0 : x / y);
 		}
 	}
 

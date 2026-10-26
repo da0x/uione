@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <thread>
 
+#include "one/desktop/folder.hpp"
 #include "one/desktop/runtime/components.hpp"
 
 namespace one::desktop::runtime {
@@ -192,7 +194,18 @@ namespace one::desktop::runtime {
 		}
 		std::string told = *p.told();
 		if (told.empty()) return {};
-		return desktop::text(std::move(told), t.quiet());
+		// While what's said is a file just saved, the file shown in its folder by a press.
+		auto [about, file] = p.kept<std::pair<std::string, std::string>>("said of a file").peek();
+		if (file.empty() || about != told) return desktop::text(std::move(told), t.quiet());
+		auto show = [problem = p.problem(), file] {
+			std::thread([problem, file] {
+				if (auto shown = desktop::show_in_folder(file); !shown) post([problem, why = shown.error()] { problem.set(why); });
+			}).detach();
+		};
+		std::vector<desktop::view> said;
+		said.push_back(desktop::text(std::move(told), t.quiet()));
+		said.push_back(desktop::tool_button("", "Show in folder", std::move(show)));
+		return along(std::move(said));
 	}
 
 	desktop::view on_open(page& p, bool ready, std::vector<opening> lines) {

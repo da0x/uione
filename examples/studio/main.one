@@ -42,6 +42,7 @@ namespace studio at / {
 		crop_h   number  = 1
 		words    text
 		size     number  = 64
+		weight   number  = 400
 		x        number  = 0
 		y        number  = 0
 		w        number  = 400
@@ -78,7 +79,7 @@ namespace studio at / {
 	}
 
 	command layer::write {
-		changes words size x y w h
+		changes words size weight x y w h
 		require size > 0  "words have a size"
 	}
 
@@ -101,7 +102,7 @@ namespace studio at / {
 		title  color  width  height  background  around  slide_x  slide_y
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  words  size  depth  x  y  w  h
+			picture  crop_x  crop_y  crop_w  crop_h  words  size  weight  depth  x  y  w  h
 		}
 	}
 
@@ -137,6 +138,8 @@ namespace studio at / {
 			}
 		}
 		side when colors {
+			// The picked poster as it looks, from the preview it keeps.
+			picture poster.preview fit when poster != none
 			text "{poster.title}, in {poster.color}" when poster != none
 		}
 		status {
@@ -168,13 +171,19 @@ namespace studio at / {
 		bar {
 			link / "Posters" icon gallery key escape
 			text "{poster_page.title}"
-			poster::view "Counted" on when poster_page.title != none
 		}
+		// Each visit counted, as the gallery shows.
+		on open poster::view
 		toolbar {
 			group "Insert" {
-				paste "Paste" icon paste
+				paste "Paste" icon paste key ctrl+v
 				add words "Text" icon text key t
 				screenshot "Screenshot" icon screenshot
+			}
+			// Bold drawn pressed while the picked words are, and taking it away then.
+			group "Words" small when layer.words != none {
+				layer::write "Bold" icon bold { weight = 400 } on when layer.weight >= 700
+				layer::write "Bold" icon bold { weight = 700 } when layer.weight < 700
 			}
 			group "Picture" {
 				copy poster_page as picture "Copy" icon copy key ctrl+shift+c

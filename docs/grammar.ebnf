@@ -261,6 +261,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
                  | "on" "open" ("open" ROUTE "for" qualified ("." NAME)? ("where" expression)? ("when" expression)? END | screen_item)
+                 /* the file a view's value, or a field of what's picked, holds, as wide as its place */
+                 | "picture" NAME "." NAME ("fit" | "fill")? ("when" expression)? END
                  /* a row of a view's list the screen holds, picked with a click, read by its name */
                  | "pick" NAME "from" qualified ("." NAME)? END
                  /* something on or off, read by its name, like side when layers */
