@@ -374,6 +374,7 @@ namespace one::language {
     struct command_declaration {
         qualified_name name;
         bool has_body = false;
+        bool apart = false;  // apart from undo: kept, but never a step undo takes back (decision 0018)
         std::vector<statement> body;
         std::optional<language::at_most> at_most;
         std::vector<command_extension> extended;
@@ -739,6 +740,7 @@ namespace one::language {
         location page_where;
         std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
         bool hide_empty = false;             // hide when empty: not there at all while it has no rows
+        std::optional<std::string> empty;    // empty "Add a picture to start": what it says while it has no rows
         location reorder_where;
         // download "audit.csv": a button that saves every row it keeps, in a file of
         // that name, as comma-separated values.
@@ -807,6 +809,23 @@ namespace one::language {
         std::optional<std::string> icon;      // icon edit: drawn as that, its words still naming it
         location icon_where;
         std::vector<key_chord> keys;          // key ctrl+s: run by that key too, as long as it's shown
+        // layer::scale "2×" { by = 2 }: what it's sent besides what it acts on, worked
+        // out as it's pressed, from the page's views and what's picked.
+        std::vector<field_value> given;
+        expression_ptr pressed_when;          // on when layer.weight >= 700: drawn pressed while it holds
+        std::optional<std::string> then_open;  // then open /:poster: where what it made is opened
+        location then_where;
+    };
+
+    // pick layer from poster_page.layers: a row of a view's list the screen holds, picked
+    // with a click on a table or a collage of it, read by its name, layer.size, and
+    // what a command on its entity acts on (decision 0017).
+    struct pick_item {
+        std::string name;
+        location name_where;
+        qualified_name view;
+        std::string list;
+        location list_where;
     };
 
     // toggle layers "Layers" icon layers: something on or off, like a side panel, that
@@ -1090,7 +1109,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

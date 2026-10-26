@@ -236,6 +236,11 @@ namespace one::local {
 		return *this;
 	}
 
+	command_description& command_description::apart() {
+		stands_apart = true;
+		return *this;
+	}
+
 	command_description command(std::string name) {
 		command_description c;
 		c.name = std::move(name);
@@ -256,7 +261,7 @@ namespace one::local {
 	}
 
 	void package::install(local_source& source) const {
-		for (const auto& c : commands_) source.on(c.name, [this, &c](const value& sent, step& changes) { return run(c, sent, changes); });
+		for (const auto& c : commands_) source.on(c.name, [this, &c](const value& sent, step& changes) { return run(c, sent, changes); }, c.stands_apart);
 		for (const auto& v : views_)
 			source.define(v.name, [this, &v](const store& entities, const std::string& subject) { return build(v, entities, subject); });
 	}

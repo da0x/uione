@@ -458,6 +458,7 @@ namespace one::generators {
                 }
                 if (action != "create" && action != "delete" && !allowed.empty()) head += ".fields(" + strings(allowed) + ")";
                 if (!s.inputs.empty()) head += ".takes(" + strings(std::vector<std::string>(s.inputs.begin(), s.inputs.end())) + ")";
+                if (c.apart) head += ".apart()";
                 bool has_body = std::ranges::any_of(c.body, [](const language::statement& st) {
                     return !std::holds_alternative<language::input_statement>(st.node) && !std::holds_alternative<language::permission_statement>(st.node) &&
                            !std::holds_alternative<language::changes_statement>(st.node);

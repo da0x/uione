@@ -188,13 +188,18 @@ namespace one::desktop::runtime {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
-		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
-			if (!busy) p.run(name, fields);
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open] {
+			if (busy) return;
+			if (then.empty()) return p.run(name, fields);
+			// What it made, opened: its id in the route's last parameter.
+			p.run(name, fields, [&p, then](const answer& made) {
+				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
 		// In a toolbar's group, a tool: its icon over its words, or its icon alone.
 		if (auto small = p.in_group()) {
-			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small ? hint_of(label_now, b.keys) : label_now, std::move(run), {.large = !*small});
+			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small ? hint_of(label_now, b.keys) : label_now, std::move(run), {.large = !*small, .on = b.pressed});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;

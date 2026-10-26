@@ -3,7 +3,8 @@
 
 // A studio: posters kept on the machine the app runs on, for one person, laid out as
 // a drawing app lays out its work. The smallest example that keeps its data at home
-// (decision 0015), and so the one that undoes and redoes (decision 0018).
+// (decision 0015), and so the one that undoes and redoes (decision 0018); a poster
+// picked from the list is what the toolbar's buttons act on (decision 0017).
 
 import one
 
@@ -16,51 +17,74 @@ project studio {
 namespace studio at / {
 
 	entity poster {
-		title  text  required
-		color  enum  ink | paper | sky = color::paper
+		title  text    required
+		color  enum    ink | paper | sky = color::paper
+		views  number  = 0
 	}
 
 	command poster::create
 	command poster::update
 	command poster::delete
 
+	// Opened once more: counted, but never a step undo takes back.
+	command poster::view {
+		changes views
+		apart from undo
+		views = views + 1
+	}
+
 	view posters {
 		each poster {
 			order by created_at descending
-			title  color
+			title  color  views
 		}
+	}
+
+	view poster_page per poster {
+		title  color
 	}
 
 	screen "Studio" / {
 		layout workspace
+		pick poster from posters
 		bar {
 			undo "Undo" icon undo key ctrl+z
 			redo "Redo" icon redo key ctrl+y key ctrl+shift+z
 			text "Posters"
 		}
 		toolbar {
-			group "View" {
+			group "Poster" {
+				poster::create "New" icon add key ctrl+n { title = "Untitled" } then open /posters/:poster
+				poster::delete "Delete" icon delete key delete
+			}
+			group "Color" small {
+				poster::update "Ink" { color = color::ink }
+				poster::update "Paper" { color = color::paper }
+				poster::update "Sky" { color = color::sky }
+			}
+			group "View" small at end {
 				toggle colors "Colors" icon color key c
 				full screen "Full screen" icon fullscreen key f11
 			}
 		}
 		main {
-			form poster::create "New poster" {
-				title
-			}
 			table posters {
 				title
-				delete "Delete" icon delete
+				empty "Make a poster, and it's listed here."
 			}
 		}
 		side when colors {
-			table posters {
-				title  color
-			}
+			text "{poster.title}, in {poster.color}" when poster != none
 		}
 		status {
+			text "Picked {poster.title}" when poster != none
 			messages
 		}
+	}
+
+	screen "Poster" /posters/:poster {
+		poster::view "Counted" on when poster_page.title != none
+		text "{poster_page.title}"
 	}
 
 }  // namespace studio

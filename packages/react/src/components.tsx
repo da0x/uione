@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, useKeys, useTool } from "./workspace.js";
+import { hintOf, setPicked as pickRow, useKeys, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -884,8 +884,10 @@ export function Themes() {
 // A value from a view, shown only while the view is live. While it's loading, stale
 // or denied, the component set shows a placeholder instead, because an old number
 // that looks current is worse than no number.
-export function Live({ view, field }: { view: ViewState; field: string }) {
+// A value of a view, or of a row the screen picked, like a picked layer's size.
+export function Live({ view, row, field }: { view?: ViewState; row?: Record<string, unknown> | null; field: string }) {
   const ui = useUI();
+  if (!view) return <ui.Live status="live" value={row ? show(row[field]) : ""} />;
   const value = view.status === "live" ? show(view.data?.[field]) : "";
   return <ui.Live status={view.status} value={value} />;
 }
@@ -1003,6 +1005,9 @@ export function Command({
   allowed = true,
   icon,
   keys,
+  given,
+  pressed,
+  thenOpen,
 }: {
   name: string;
   id?: string;
@@ -1011,17 +1016,29 @@ export function Command({
   allowed?: boolean; // whether the person reading may run it; while they may not, it isn't there
   icon?: string; // drawn as this, like edit, its words still naming it
   keys?: string[]; // run by these too, like ctrl+s, while it's there
+  given?: CommandInput; // what it's sent besides its id, worked out as the screen's drawn
+  pressed?: boolean; // drawn pressed, like a choice already made
+  thenOpen?: string; // a route like /:poster, opened with what it made
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
+  const replier = useRunner();
+  const navigate = useNavigate();
   const tool = useTool();
   const shown = when && allowed;
-  const run = () => void runner.run(name, id === undefined ? {} : { id });
+  const sent = { ...(given ?? {}), ...(id === undefined ? {} : { id }) };
+  const run = () => {
+    if (!thenOpen) return void runner.run(name, sent);
+    // What it made, opened: its id in the route's last parameter.
+    void replier.reply(name, sent).then((made) => {
+      if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
+    });
+  };
   useKeys(keys, run, shown && !runner.busy(name));
   if (!shown) return null;
   const words = says ?? label(action(name));
   return (
-    <ui.Button kind={icon || tool ? "secondary" : "primary"} icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={runner.busy(name)} error={runner.error(name)} onClick={run}>
+    <ui.Button kind={icon || tool ? "secondary" : "primary"} icon={icon} tool={tool} pressed={pressed} hint={hintOf(words, keys)} disabled={runner.busy(name)} error={runner.error(name)} onClick={run}>
       {words}
     </ui.Button>
   );
@@ -1444,8 +1461,12 @@ export function Table({
   track,
   download,
   more,
+  pick,
+  empty,
 }: {
   view: ViewState;
+  pick?: string; // the screen's pick of this list, by name: a row's click picks it
+  empty?: string; // what it says while it has no rows
   more?: () => void; // asks for the next page of rows, for a list read a page at a time, like everyone's
   list?: string; // which of the view's lists, like comments
   columns: Record<string, string>;
@@ -1476,6 +1497,7 @@ export function Table({
   const auth = useAuth();
   const links = useLinks();
   const params = useParams();
+  const pickedId = usePickedId(pick ?? "");
   // What's typed in the search box, over the fields it searches, as they're shown,
   // the tab that's open and the page it's on, kept in the address under the list's
   // name, like issues.tab=done, so a link shows the same.
@@ -1584,6 +1606,7 @@ export function Table({
       <ui.Table
         status={view.status}
         {...(hue ? { hue } : {})}
+        {...(empty ? { empty } : {})}
         tabs={tabs}
         search={slot ? undefined : searchBox}
         pages={page && count > 1 ? { page: current, count, onPage: setAt } : undefined}
@@ -1597,6 +1620,7 @@ export function Table({
           link: link ? links(rowLink(link, row, params, keyed, named)) : undefined,
           cells: Object.keys(columns).map((key) => cellOf(ui, links, row, key, { choices, labels, pictures, people })),
           tone: toneOf(row, tint),
+          ...(pick ? { picked: row.id === pickedId, onPick: () => pickRow(pick, row.id) } : {}),
           actions: pressed.filter((a) => !a.when || a.when(row)).map((a) => ({
             label: a.label ?? label(action(a.name)),
             disabled: runner.busy(a.name),

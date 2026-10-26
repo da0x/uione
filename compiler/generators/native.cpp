@@ -93,6 +93,7 @@ namespace one::generators {
         struct screen_parts {
             std::vector<std::pair<std::string, std::string>> views;  // variable, full view name
             std::set<std::string> params;                           // entities, like project
+            std::set<std::string> picks;                            // the picks it reads, like layer
         };
         // The components the screens draw, each with its file: components/name.cpp beside
         // the .one file drawing it.
@@ -137,9 +138,14 @@ namespace one::generators {
         std::string parts_of(screen_parts& parts, const std::vector<screens::title_part>& title) {
             std::string out;
             for (const auto& part : title) {
-                std::string one = part.live() ? "live(" + view_variable(parts, part.view) + ", " + str(part.field) + ")" : "words(" + str(part.text) + ")";
                 // The year it's read in, and what the app was built from.
                 std::string named = part.view.substr(part.view.rfind(':') == std::string::npos ? 0 : part.view.rfind(':') + 1);
+                // A field of the row picked, like {layer.size}.
+                if (part.live() && picks_.contains(named)) {
+                    out += (out.empty() ? "" : ", ") + std::string("words(show(field_of(") + picked(parts, named) + ", " + str(part.field) + ")))";
+                    continue;
+                }
+                std::string one = part.live() ? "live(" + view_variable(parts, part.view) + ", " + str(part.field) + ")" : "words(" + str(part.text) + ")";
                 if (!part.live() && part.text == "{year}") one = "words(this_year())";
                 if (part.live() && named == "build" && (part.field == "version" || part.field == "commit")) {
                     one = "words(build_" + part.field + ")";
@@ -178,6 +184,10 @@ namespace one::generators {
                 case token_kind::less_equal: return "(compared(" + left + ", " + right + ") <= 0)";
                 case token_kind::greater_equal: return "(compared(" + left + ", " + right + ") >= 0)";
                 case token_kind::has: return "has(" + left + ", " + right + ")";
+                case token_kind::plus: return "worked('+', " + left + ", " + right + ")";
+                case token_kind::minus: return "worked('-', " + left + ", " + right + ")";
+                case token_kind::star: return "worked('*', " + left + ", " + right + ")";
+                case token_kind::slash: return "worked('/', " + left + ", " + right + ")";
                 case token_kind::logical_and: return "(" + left + " && " + right + ")";
                 default: return "(" + left + " || " + right + ")";
             }
@@ -188,6 +198,10 @@ namespace one::generators {
                 return compare(binary->op, condition_of(parts, ns, *binary->left, read), condition_of(parts, ns, *binary->right, read));
             }
             if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + condition_of(parts, ns, *unary->operand, read);
+            // What's picked, like layer: its row, or nothing while there's none.
+            if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 1 && picks_.contains(name->name.text())) {
+                return picked(parts, name->name.text());
+            }
             // A toggle of the screen's, like layers: whether it's on.
             if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 1 && toggles_.contains(name->name.text())) {
                 return "p.toggled(" + str(route_ + " " + name->name.text()) + ")";
@@ -201,11 +215,33 @@ namespace one::generators {
                 }
                 auto* view = std::get_if<language::name_expression>(&object->node);
                 if (!view) return "value()";
+                // layer.size: the picked row's.
+                if (picks_.contains(view->name.text())) return "field_of(" + picked(parts, view->name.text()) + ", " + str(field) + ")";
                 std::string variable = view_variable(parts, screens::full_view(ns, view->name.text()));
                 read.insert(variable);
                 return "at(" + variable + ", " + str(field) + ")";
             }
             return plain_value(e, "value()");
+        }
+
+        // The picks anywhere in a screen.
+        static std::vector<const language::pick_item*> picks_in(const std::vector<language::screen_item>& items) {
+            std::vector<const language::pick_item*> out;
+            for (const auto& item : items) {
+                if (auto* p = std::get_if<language::pick_item>(&item.node)) out.push_back(p);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    auto inside = picks_in(block->items);
+                    out.insert(out.end(), inside.begin(), inside.end());
+                }
+            }
+            return out;
+        }
+
+        // A pick the screen reads, as the variable holding its row.
+        std::string picked(screen_parts& parts, const std::string& name) {
+            parts.picks.insert(name);
+            view_variable(parts, picks_.at(name).view);
+            return native_detail::identifier("picked_" + name);
         }
 
         // The toggles anywhere in a screen, by their names.
@@ -435,7 +471,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = screens::full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}};
                 if (const language::form_item* f = screens::model::form_for(ns, screen, command)) tools.push_back(form(parts, ns, *f, &button));
                 else tools.push_back(command_of(parts, ns, button));
             }
@@ -448,14 +484,50 @@ namespace one::generators {
         std::string command_of(screen_parts& parts, const std::string& ns, const language::button_item& button) {
             std::string command = screens::full_command(ns, button.command);
             std::string out = "command(p, {.command = " + str(command) + ", .label = " + str(button.label ? *button.label : screens::label(command.substr(command.rfind("::") + 2)));
-            if (std::string may = allowed(parts, ns, command); !may.empty()) out += ", .allowed = " + may;
+            std::string may = allowed(parts, ns, command);
             // A command on the entity the page's address names acts on that one.
             const language::entity_declaration* entity = model_.entity_of_command(command);
-            if (entity && command.substr(command.rfind("::") + 2) != "create" && screens::names_parameter(route_, entity->name) && model_.entity_named(ns, entity->name))
-                out += ", .id = " + id_of(parts, entity->name);
-            if (button.when) out += ", .when = " + condition(parts, ns, *button.when);
+            bool named = entity && command.substr(command.rfind("::") + 2) != "create" && screens::names_parameter(route_, entity->name) && model_.entity_named(ns, entity->name);
+            // A command on what's picked, like layer::delete, acts on the picked row, and
+            // is there only while one is.
+            std::string on_pick;
+            if (!named && entity && command.substr(command.rfind("::") + 2) != "create") {
+                for (const auto& [name, of] : picks_) {
+                    if (of.entity == entity->name) {
+                        on_pick = picked(parts, name);
+                        break;
+                    }
+                }
+            }
+            // What it's sent, worked out as the screen's built, and pressed while what it
+            // would set is already so.
+            std::string given, same;
+            for (const auto& v : button.given) {
+                std::set<std::string> read;
+                std::string value = condition_of(parts, ns, *v.value, read);
+                given += (given.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + value + "}";
+                std::string now;
+                // Only a field it stores can already be so; an input never is.
+                bool stored = entity && std::ranges::any_of(entity->fields, [&](const language::field& f) { return f.name == v.name; });
+                if (!stored) now = "";
+                else if (!on_pick.empty()) now = "field_of(" + on_pick + ", " + str(v.name) + ")";
+                else if (named) {
+                    if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "at(" + view_variable(parts, *holding) + ", " + str(v.name) + ")";
+                }
+                same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + "same(" + now + ", " + value + ")";
+            }
+            if (!given.empty()) out += ", .fields = value(std::map<std::string, value>{" + given + "})";
+            if (!may.empty()) out += ", .allowed = " + may;
+            if (named) out += ", .id = " + id_of(parts, entity->name);
+            if (!on_pick.empty()) out += ", .id = " + on_pick + "[\"id\"].as_string()";
+            std::string shown_when = button.when ? condition(parts, ns, *button.when) : "";
+            if (!on_pick.empty()) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
+            if (!shown_when.empty()) out += ", .when = " + shown_when;
             if (button.icon) out += ", .icon = " + str(*button.icon);
             if (!button.keys.empty()) out += ", .keys = " + keys_of(button.keys);
+            if (button.pressed_when) out += ", .pressed = " + condition(parts, ns, *button.pressed_when);
+            else if (!same.empty() && same != "-") out += ", .pressed = " + same;
+            if (button.then_open) out += ", .then_open = " + str(model_.full_route(ns, *button.then_open));
             return out + "})";
         }
 
@@ -562,6 +634,11 @@ namespace one::generators {
             if (std::string track = track_of(parts, ns, t.track ? &*t.track : nullptr); !track.empty()) out += ", .track = " + track;
             if (std::string reorder = reorder_of(parts, ns, t.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;
             if (!t.hue.empty()) out += ", .color = " + str(t.hue);
+            if (t.empty) out += ", .empty = " + str(*t.empty);
+            // A row picked with a click, when the screen picks one of this list.
+            for (const auto& [name, of] : picks_) {
+                if (of.view == screens::full_view(ns, t.view.text()) && of.list == (t.list ? *t.list : "rows")) out += ", .pick = " + str(route_ + " " + name);
+            }
             return out + "})";
         }
 
@@ -1091,6 +1168,11 @@ namespace one::generators {
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
+        // and its picks, each the view and list it picks a row of, and that list's entity
+        struct pick_of {
+            std::string view, list, entity;
+        };
+        std::map<std::string, pick_of> picks_;
 
         stream pages_file(const page_set& pages) const {
             namespace fs = std::filesystem;
@@ -1423,6 +1505,11 @@ namespace one::generators {
                 else if (std::find(model_.personal.begin(), model_.personal.end(), view) != model_.personal.end()) subject = ", p.me()";
                 out.line("auto " + variable + " = p.view(" + str(view) + subject + ");");
             }
+            // Each pick it reads, the row of its list picked now.
+            for (const auto& pick : parts.picks) {
+                const auto& of = picks_.at(pick);
+                out.line("value " + native_detail::identifier("picked_" + pick) + " = picked(p, " + str(route_ + " " + pick) + ", " + view_variable(parts, of.view) + ", " + str(of.list) + ");");
+            }
         }
 
         // one screen file
@@ -1436,6 +1523,11 @@ namespace one::generators {
                 route_ = model_.full_route(ns, s->route);
                 toggles_ = toggles_in(s->items);
                 at_end_said_ = false;
+                picks_.clear();
+                for (const auto* pick : picks_in(s->items)) {
+                    const language::entity_declaration* of = model_.listed(ns, pick->view.text(), pick->list.empty() ? std::nullopt : std::optional<std::string>(pick->list));
+                    picks_[pick->name] = {screens::full_view(ns, pick->view.text()), pick->list.empty() ? "rows" : pick->list, of ? of->name : ""};
+                }
                 under_ = s->under ? model_.full_route(ns, *s->under) : "";
                 shows_pages_ = false;
                 title_ = s->title_is_name ? "" : s->title;

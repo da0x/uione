@@ -924,6 +924,9 @@ command ticket::create {
 - In a project, `at most 600 per minute` is how often each person may run any command,
   and `at most 5000 per day` how many of each kind they may make in a day, unless an
   entity says its own.
+- In a command of a project that says `storage local`, `apart from undo` keeps what it
+  does, but never as a step `undo` takes back, like a preview drawn again or tidying
+  done as a page opens (decision 0018).
 
 A limit counts each person on their own, so one person asking too fast never slows
 anyone else. What a command makes along the way, like a project's first member, and
@@ -2167,6 +2170,24 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   turned down, until the next thing is.
 - `full screen "Full screen" icon fullscreen key f11` fills the screen with the
   window, and back. A terminal is already its whole window, so it draws nothing.
+- `pick layer from poster_page.layers` names a row of a view's list that the screen
+  holds, picked with a click on a table of that list, `pick poster from posters` for
+  a view's own list. The screen reads it by its name, `text "{layer.size}" when layer
+  != none`, and a button for a command on its entity, like `layer::delete "Delete"`,
+  acts on the row picked, and is there only while one is. What's picked lives as
+  long as the page, and is never stored or sent (decision 0017).
+- A button may say what it's sent, in braces after its words, icon and keys, each a
+  field or an input of its command and a value worked out as it's pressed, from
+  what the screen reads: `layer::scale "2×" { by = 2 }`, `layer::write "Larger" {
+  size = layer.size * 1.2 }`, `poster::update "Fill" icon fill { background =
+  background::fill }`. It's drawn pressed while what it would set is already so, on
+  the row picked or the entity the address names, or while `on when ...` holds, like
+  `on when layer.weight >= 700`.
+- `then open /posters/:poster` after a button that makes something opens it, its id
+  in the route's last parameter: `poster::create "New" { title = "Untitled" } then
+  open /posters/:poster`.
+- `empty "Make a poster, and it's listed here."` in a table says that while it has no
+  rows.
 - `landing grid` after a screen's address draws it as a front page, in one of
   uione's designs: `waveform`, a wave of bars under the hero; `studio`, the hero
   beside a player and its timeline; `aurora`, drifting light behind glass; `grid`,

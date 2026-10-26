@@ -504,6 +504,22 @@ namespace one::generators::screens {
             return *view->second->per;
         }
 
+        // A view per an entity that holds one of its fields at its top, like poster_page's
+        // background: where a button's given value is compared with what's stored, to
+        // draw it pressed while they're the same.
+        std::optional<std::string> view_holding(const std::string& ns, const std::string& entity, const std::string& field) const {
+            auto scope = views.find(ns);
+            if (scope == views.end()) return std::nullopt;
+            for (const auto& [name, view] : scope->second) {
+                if (!view->per || *view->per != entity) continue;
+                for (const auto& v : view->values) {
+                    std::string held = v.name ? *v.name : language::text_of(*v.value);
+                    if (held == field) return join(ns, name);
+                }
+            }
+            return std::nullopt;
+        }
+
         // Whether a view lists everyone who has signed up, read a page at a time
         // rather than kept: each user, when the namespace has no entity of that name.
         bool people_view(const std::string& full) const {

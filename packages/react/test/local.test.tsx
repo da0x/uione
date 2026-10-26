@@ -287,6 +287,24 @@ describe("undo and redo", () => {
   });
 });
 
+describe("a command apart from undo", () => {
+  it("is kept, but never a step undo takes back", async () => {
+    const notes = localPackage(
+      "x",
+      [entity("x::note", [{ name: "title" }, { name: "preview" }])],
+      [command("x::note::create").creates("x::note"), command("x::note::preview").on("x::note").fields(["preview"]).apart()],
+      [],
+    );
+    const source = localSource({ name: "x", packages: [notes], store: memoryStore() });
+    const made = (await source.run("x::note::create", { title: "Dune" })) as CommandReply;
+    await source.run("x::note::preview", { id: made.id, preview: "files/abc" });
+    expect(source.rows().find("x::note", made.id!)?.["preview"]).toBe("files/abc");
+    // Undo takes back the create, the step before, and the preview with what it made.
+    expect(await source.run("one::undo", {})).toEqual({ id: "x::note::create" });
+    expect(source.rows().find("x::note", made.id!)).toBeUndefined();
+  });
+});
+
 describe("the same app in two tabs", () => {
   it("runs each command on what the other kept, and shows what the other did", async () => {
     const store = memoryStore();

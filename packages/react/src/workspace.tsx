@@ -9,6 +9,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useRunner } from "./data.js";
+import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { useUI } from "./ui.js";
 
@@ -202,6 +203,46 @@ export function FullScreen({ label = "Full screen", icon, keys }: { label?: stri
     <ui.Button kind="secondary" icon={icon} tool={tool} pressed={full} hint={hintOf(label, keys)} onClick={flip}>
       {label}
     </ui.Button>
+  );
+}
+
+// picks
+
+const picks = new Map<string, string>();
+const watchingPicks = new Set<() => void>();
+
+// Picks a row of a list by its id, named by its screen's address and the pick's
+// name (decision 0017); nothing, to pick none.
+export function setPicked(name: string, id: string | undefined): void {
+  if (id === undefined) picks.delete(name);
+  else picks.set(name, id);
+  for (const changed of [...watchingPicks]) changed();
+}
+
+// The row picked of a view's list, as the view has it now: none until one's picked,
+// or when what was picked is gone.
+export function usePicked(name: string, view: ViewState, list: string): Record<string, unknown> | null {
+  const id = useSyncExternalStore(
+    (changed) => {
+      watchingPicks.add(changed);
+      return () => watchingPicks.delete(changed);
+    },
+    () => picks.get(name),
+    () => undefined,
+  );
+  if (id === undefined || view.status !== "live") return null;
+  const rows = (view.data?.[list] as Record<string, unknown>[] | undefined) ?? [];
+  return rows.find((row) => row["id"] === id) ?? null;
+}
+
+export function usePickedId(name: string): string | undefined {
+  return useSyncExternalStore(
+    (changed) => {
+      watchingPicks.add(changed);
+      return () => watchingPicks.delete(changed);
+    },
+    () => picks.get(name),
+    () => undefined,
   );
 }
 

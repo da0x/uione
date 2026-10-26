@@ -340,6 +340,7 @@ export class CommandDescription {
   allowed: string[] | undefined; // the fields it may be sent
   inputs: string[] = []; // what it's sent besides them
   body: Body | undefined;
+  standsApart = false; // apart from undo: never a step undo takes back
 
   constructor(readonly name: string) {}
 
@@ -370,6 +371,11 @@ export class CommandDescription {
   }
   does(body: Body): this {
     this.body = body;
+    return this;
+  }
+  // apart from undo: its steps kept, as if sent "one:history": "apart"
+  apart(): this {
+    this.standsApart = true;
     return this;
   }
 
@@ -669,7 +675,7 @@ export class LocalPackage {
 
   // Gives the source each command and view.
   install(source: Installing): void {
-    for (const c of this.commands) source.on(c.name, (sent, step) => this.run(c, sent, step));
+    for (const c of this.commands) source.on(c.name, (sent, step) => this.run(c, sent, step), c.standsApart);
     for (const v of this.views) source.define(v.name, (rows, about) => this.build(v, rows, about));
   }
 
@@ -836,7 +842,7 @@ export type Answer = { id: string } | Failure;
 export type CommandHandler = (sent: Row, step: Step) => Answer;
 export type ViewBuilder = (rows: Rows, subject: string) => Row | undefined;
 export interface Installing {
-  on(command: string, run: CommandHandler): void;
+  on(command: string, run: CommandHandler, apart?: boolean): void;
   define(view: string, build: ViewBuilder): void;
 }
 

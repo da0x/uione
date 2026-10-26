@@ -8,12 +8,17 @@
 
 #include <doctest/doctest.h>
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <filesystem>
+
+#include "driver/build.hpp"
 #include "language/checker.hpp"
 #include "language/parser.hpp"
+#include "platform/files.hpp"
 
 using namespace one::language;
 
@@ -107,3 +112,112 @@ TEST_CASE("undo and redo take back steps kept on the machine, so a project in th
     CHECK(messages(cloud) == std::vector<std::string>{"20: undo takes a step back that's kept on this machine, so it needs storage local in the project block, for now",
                                                       "21: redo takes a step back that's kept on this machine, so it needs storage local in the project block, for now"});
 }
+
+namespace {
+
+    const std::string layered = R"(namespace studio at / {
+	entity poster {
+		title  text  required
+		tint   enum  ink | paper = tint::paper
+	}
+
+	entity layer {
+		poster  poster  required
+		depth   number  = 0
+		size    number  = 10
+	}
+
+	command poster::create
+	command poster::arrange {
+		changes tint
+	}
+	command layer::scale {
+		input by number
+		changes size
+		size = size * by
+	}
+	command layer::delete
+	command poster::preview {
+		apart from undo
+	}
+
+	view poster_page per poster {
+		title  tint
+		layers = each layer in poster {
+			order by depth
+			depth  size
+		}
+	}
+)";
+
+    std::string layered_screen(const std::string& body) { return project + layered + "\n\tscreen \"Poster\" /:poster {\n" + body + "\t}\n}\n"; }
+
+    // What one build writes for a project, by path.
+    std::map<std::string, std::string> built(const std::string& source) {
+        auto dir = std::filesystem::temp_directory_path() / "uione-workspace";
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(dir);
+        one::platform::write_file((dir / "main.one").string(), source);
+        auto b = one::driver::build(dir.string(), (dir / "build").string());
+        for (const auto& d : b.problems) FAIL_CHECK(format(d));
+        std::map<std::string, std::string> out;
+        for (const auto& f : b.files) out[f.path] = f.content;
+        std::filesystem::remove_all(dir);
+        return out;
+    }
+
+}  // namespace
+
+TEST_CASE("a pick is a row of a view's list, read by its name, and a button's given values are its command's fields") {
+    CHECK(messages(layered_screen(R"(		pick layer from poster_page.layers
+		text "{layer.size}" when layer != none
+		text "{layer.color}"
+		layer::scale "Twice" { by = layer.size * 2 }
+		poster::arrange "Ink" { tint = tint::ink  shade = 1 }
+		pick layer from poster_page.layers
+		pick other from poster_page.sides
+)")) == std::vector<std::string>{"48: layer is picked here twice, or is a toggle too; a screen names each once",
+                                   "49: view poster_page has no list called sides",
+                                   "45: a picked layer's row has no color; add it to the list's block",
+                                   "47: poster::arrange has no field or input shade to be given"});
+}
+
+TEST_CASE("a pick is read, picked from a table, and acted on, on the web and the desktop alike") {
+    auto files = built(layered_screen(R"(		pick layer from poster_page.layers
+		table poster_page.layers {
+			depth  size
+			empty "Nothing on it yet"
+		}
+		text "{layer.size}"
+		layer::scale "Twice" { by = 2 }
+		layer::delete "Delete" icon delete key delete
+		poster::arrange "Ink" { tint = tint::ink }
+)"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The row picked, read by the screen, picked from the table, and what's said of it.
+    CHECK(web.find(R"(const pickedLayer = usePicked("/:poster layer", posterPage, "layers");)") != std::string::npos);
+    CHECK(web.find(R"(pick="/:poster layer")") != std::string::npos);
+    CHECK(web.find(R"(empty="Nothing on it yet")") != std::string::npos);
+    CHECK(web.find(R"(<Live row={pickedLayer} field="size" />)") != std::string::npos);
+    // A command on the picked layer acts on it, there only while one is, with what it's given.
+    CHECK(web.find(R"(<Command name="studio::layer::scale" id={pickedLayer?.id as string | undefined} label="Twice" given={{ "by": 2 }} when={pickedLayer !== null} />)") != std::string::npos);
+    CHECK(web.find(R"(keys={["delete"]})") != std::string::npos);
+    // One on the poster the address names is pressed while the poster already says so.
+    CHECK(web.find(R"(given={{ "tint": "ink" }} pressed={(posterPage.data?.["tint"] ?? null) === "ink"})") != std::string::npos);
+    CHECK(native.find(R"(value picked_layer = picked(p, "/:poster layer", poster_page, "layers");)") != std::string::npos);
+    CHECK(native.find(R"(.pick = "/:poster layer")") != std::string::npos);
+    CHECK(native.find(R"(.empty = "Nothing on it yet")") != std::string::npos);
+    CHECK(native.find(R"(words(show(field_of(picked_layer, "size"))))") != std::string::npos);
+    CHECK(native.find(R"(command(p, {.command = "studio::layer::scale", .label = "Twice", .fields = value(std::map<std::string, value>{{"by", value(2)}}), .id = picked_layer["id"].as_string(), .when = !none(picked_layer)})") != std::string::npos);
+    CHECK(native.find(R"(.pressed = same(at(poster_page, "tint"), value("ink")))") != std::string::npos);
+}
+
+TEST_CASE("a command apart from undo is kept, but never a step undo takes back") {
+    auto files = built(layered_screen("\t\ttext \"Poster\"\n"));
+    CHECK(files["desktop/src/local/studio.cpp"].find(R"(command("studio::poster::preview").on("studio::poster").apart())") != std::string::npos);
+    CHECK(files["web/src/local.generated.ts"].find(R"(command("studio::poster::preview").on("studio::poster").apart())") != std::string::npos);
+}
+

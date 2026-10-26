@@ -193,7 +193,17 @@ export function localSource(options: LocalOptions): LocalSource {
   let open = false;
   let broken: Error | undefined;
 
-  for (const p of options.packages) p.install({ on: (name, run) => commands.set(name, run), define: (name, build) => views.set(name, build) });
+  // Commands that stand apart from undo, as if each were sent "one:history": "apart".
+  const apart = new Set<string>();
+  for (const p of options.packages) {
+    p.install({
+      on: (name, run, standsApart) => {
+        commands.set(name, run);
+        if (standsApart) apart.add(name);
+      },
+      define: (name, build) => views.set(name, build),
+    });
+  }
 
   const built = (view: string, subject: string): ViewState => {
     const build = views.get(view);
@@ -337,7 +347,7 @@ export function localSource(options: LocalOptions): LocalSource {
     if (!handler) throw new Error(`there's no command ${command}`);
     // The history's word on it is the source's, not the command's.
     const sent = { ...(input as Row) };
-    const history = sent["one:history"];
+    const history = sent["one:history"] ?? (apart.has(command) ? "apart" : undefined);
     delete sent["one:history"];
     const changes = new Step(rows);
     const answer = handler(structuredClone(sent) as Row, changes);

@@ -198,6 +198,10 @@ export interface TableRow {
   cells: ReactNode[];
   actions: RowAction[];
   tone?: number; // how urgent it is, as Trac colored a ticket's priority: 1 the most, up to 5
+  // Picked with a click, when the screen picks a row of the list: what's picked is
+  // drawn as it, and onPick picks this one.
+  picked?: boolean;
+  onPick?: () => void;
 }
 
 export interface TableProps {
@@ -212,6 +216,7 @@ export interface TableProps {
   tools?: ReactNode; // buttons beside its search, like New issue
   filtered?: Filtered; // the filter its rows are picked by, like Opened by me, which can be cleared
   hue?: Hue; // its rows' links in this color, rather than the site's own
+  empty?: string; // what it says while it has no rows, rather than the usual words
 }
 
 // What a list is filtered by, from the page's address, and how to stop filtering.

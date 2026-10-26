@@ -64,6 +64,8 @@ namespace one::screens {
 		bool when = true;     // whether it applies now, like Follow for someone who doesn't
 		std::string icon = "";
 		std::vector<std::string> keys = {};  // run by these too, like ctrl+s, while it's shown
+		bool pressed = false;                // drawn pressed, like a choice already made
+		std::string then_open = "";          // a route like /:poster, opened with what it made
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what
@@ -310,6 +312,7 @@ namespace one::screens {
 		std::string color = "";  // what its rows open in this color, rather than the theme's
 		std::string empty = "Nothing here yet.";
 		std::string download = "";  // a button saving every row it keeps in a file of this name, like audit.csv
+		std::string pick = "";      // the screen's pick of its rows, by name: a row's click picks it
 	};
 
 	// A list's rows as large cards, like a project's boards: each its title, what

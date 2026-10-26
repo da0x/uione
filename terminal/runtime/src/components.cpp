@@ -188,8 +188,12 @@ namespace one::terminal::runtime {
 	terminal::view command(page& p, command_button b) {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
-		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
-			if (!busy) p.run(name, fields);
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open] {
+			if (busy) return;
+			if (then.empty()) return p.run(name, fields);
+			p.run(name, fields, [&p, then](const answer& made) {
+				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
+			});
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
 		return terminal::button(shown->label, std::move(run), b.primary);
@@ -460,7 +464,10 @@ namespace one::terminal::runtime {
 			shown.push_back({id, terminal::column(std::move(inside))});
 		}
 		terminal::list_options options;
-		if (!spec.link.empty()) {
+		if (!spec.pick.empty()) {
+			options.on_open = [&p, name = spec.pick](const std::string& id) { p.pick(name, id); };
+			options.start = p.picked_id(spec.pick);
+		} else if (!spec.link.empty()) {
 			options.on_open = [&p, by_id, link_to = spec.link, keyed = spec.keyed, named_by = spec.named](const std::string& id) {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link_to, found->second, p.params(), keyed, named_by));
 			};

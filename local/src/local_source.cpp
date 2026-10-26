@@ -69,6 +69,7 @@ namespace one::local {
 		// The history's word on it is the source's, not the command's.
 		value sent = fields;
 		std::string history = sent["one:history"].as_string();
+		if (history.empty() && apart_.contains(command_name)) history = "apart";
 		if (sent.is_map()) sent.fields.erase("one:history");
 		step changes(store_);
 		screens::answer answer = found->second(sent, changes);

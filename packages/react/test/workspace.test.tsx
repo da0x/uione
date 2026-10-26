@@ -6,7 +6,9 @@
 // the messages, and a command turned down said there too.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { App, Command, Group, History, Layout, Messages, Region, Toggle, keyShown, memorySource, screen as defineScreen, useToggled } from "../src/index.js";
+import { useLocation } from "react-router";
+import { App, Command, Group, History, Layout, Live, Messages, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useToggled, useView } from "../src/index.js";
+import { usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -98,5 +100,43 @@ describe("a workspace", () => {
     expect(await screen.findByText("Undid place.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("There's no such poster."));
+  });
+
+  it("picks a row from a table, which a command acts on with what it's given, drawn pressed while it already holds", async () => {
+    const source = memorySource({ commands: { "studio::layer::scale": () => ({ id: "l2" }) } });
+    source.set("studio::poster_page", { layers: [{ id: "l1", size: 10 }, { id: "l2", size: 20 }] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      const picked = usePicked("/ layer", page, "layers");
+      return (
+        <>
+          <Table view={page} list="layers" columns={{ size: "Size" }} pick="/ layer" />
+          <p>
+            Picked <Live row={picked} field="size" />
+          </p>
+          <Command name="studio::layer::scale" id={picked?.id as string | undefined} label="Twice" given={{ by: 2 }} when={picked !== null} />
+          <Command name="studio::layer::scale" id={picked?.id as string | undefined} label="Twenty" given={{ size: 20 }} pressed={picked?.["size"] === 20} when={picked !== null} />
+        </>
+      );
+    }
+    renderScreen(source, () => <Poster />);
+    expect(screen.queryByRole("button", { name: "Twice" })).toBeNull();
+    fireEvent.click(screen.getByText("20"));
+    expect(screen.getByText(/Picked/).textContent).toBe("Picked 20");
+    expect(screen.getByRole("button", { name: "Twenty" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Twice" }));
+    await waitFor(() => expect(source.runs).toEqual([{ command: "studio::layer::scale", input: { by: 2, id: "l2" } }]));
+  });
+
+  it("opens what a command made, at the route it says", async () => {
+    const source = memorySource({ commands: { "studio::poster::create": () => ({ id: "p9" }) } });
+    function Where() {
+      return <p>At {useLocation().pathname}</p>;
+    }
+    const studio = defineScreen({ title: "Studio", route: "/" }, () => <Command name="studio::poster::create" label="New" given={{ title: "Untitled" }} thenOpen="/posters/:poster" />);
+    const poster = defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Where />);
+    render(<App name="studio" screens={[studio, poster]} ui={plain} data={source} location="/" />);
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
   });
 });

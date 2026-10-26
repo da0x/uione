@@ -222,7 +222,11 @@ namespace one::desktop::runtime {
 			shown.push_back({id, desktop::column(std::move(inside)).spacing(10)});
 		}
 		desktop::list_options options;
-		if (!spec.link.empty()) {
+		// The screen's pick of its rows: a click picks one, and the one picked is chosen.
+		if (!spec.pick.empty()) {
+			options.on_open = [&p, name = spec.pick](const std::string& id) { p.pick(name, id); };
+			options.start = p.picked_id(spec.pick);
+		} else if (!spec.link.empty()) {
 			options.on_open = [&p, by_id, link = spec.link, keyed = spec.keyed, named = spec.named](const std::string& id) {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 			};

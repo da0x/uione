@@ -292,7 +292,10 @@ examples/studio/main.one	undo "Undo" icon undo key ctrl+z	undo	keyword
 examples/studio/main.one	redo "Redo"	redo	keyword
 examples/studio/main.one	key ctrl+z	key	keyword
 examples/studio/main.one	toolbar {	toolbar	keyword
-examples/studio/main.one	group "View" {	group	keyword
+examples/studio/main.one	group "View" small at end {	group	keyword
 examples/studio/main.one	toggle colors "Colors"	toggle	keyword
 examples/studio/main.one	full screen "Full screen"	full	keyword
 examples/studio/main.one	messages	messages	keyword
+examples/studio/main.one	pick poster from posters	pick	keyword
+examples/studio/main.one	apart from undo	apart	keyword
+examples/studio/main.one	then open /posters/:poster	/posters/:poster	route

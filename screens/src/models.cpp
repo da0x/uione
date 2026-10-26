@@ -338,6 +338,27 @@ namespace one::screens {
 		return v.is_null() || (v.is_string() && v.as_string().empty()) || (v.is_array() && v.as_array().empty());
 	}
 
+	value worked(char op, const value& a, const value& b) {
+		bool numbers = (a.is_integer() || a.is_double()) && (b.is_integer() || b.is_double());
+		if (!numbers) return value();
+		double x = a.as_double(), y = b.as_double();
+		switch (op) {
+			case '+': return value(x + y);
+			case '-': return value(x - y);
+			case '*': return value(x * y);
+			default: return y == 0 ? value() : value(x / y);
+		}
+	}
+
+	value picked(page_base& p, const std::string& name, const state<view_state>& v, const std::string& list) {
+		std::string id = p.picked_id(name);
+		if (id.empty() || !ready(v)) return value();
+		for (const auto& row : at(v, list).as_array()) {
+			if (row["id"].as_string() == id) return row;
+		}
+		return value();
+	}
+
 	bool same(const value& a, const value& b) {
 		// Compared with none, anything holding nothing is none.
 		if (a.is_null() || b.is_null()) return none(a) && none(b);

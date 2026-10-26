@@ -741,6 +741,16 @@ namespace one::language {
                         command.at_most = parse_at_most();
                         continue;
                     }
+                    // apart from undo: kept, but never a step undo takes back.
+                    if (at_word("apart") && peek(1).kind == token_kind::identifier && peek(1).text == "from" && peek(2).kind == token_kind::identifier &&
+                        peek(2).text == "undo") {
+                        advance();
+                        advance();
+                        advance();
+                        command.apart = true;
+                        end_line();
+                        continue;
+                    }
                     command.body.push_back(parse_statement());
                 }
                 expect(token_kind::right_brace, "'}'");
@@ -1511,6 +1521,24 @@ namespace one::language {
                 item.when = std::move(when);
                 return item;
             }
+            // pick layer from poster_page.layers: a row the screen holds, picked with a click.
+            if (at_word("pick") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "from") {
+                advance();
+                pick_item pick;
+                pick.name_where = peek().where;
+                pick.name = advance().text;
+                advance();
+                pick.view = parse_qualified_name("the view whose list it picks from, like poster_page");
+                // A view's own list, like posters, or one of its lists, like poster_page.layers.
+                pick.list_where = peek().where;
+                if (at(token_kind::dot)) {
+                    advance();
+                    pick.list_where = peek().where;
+                    pick.list = expect(token_kind::identifier, "the list it picks a row of, like layers").text;
+                }
+                end_line();
+                return {where, std::move(pick)};
+            }
             // toggle layers "Layers" icon layers key l: something on or off, read by its name.
             if (at_word("toggle") && peek(1).kind == token_kind::identifier) {
                 advance();
@@ -1733,6 +1761,13 @@ namespace one::language {
                             end_line();
                             continue;
                         }
+                        // empty "Add a picture to start": what it says while it has no rows.
+                        if (at_word("empty") && peek(1).kind == token_kind::string) {
+                            advance();
+                            table.empty = advance().text;
+                            end_line();
+                            continue;
+                        }
                         // download "audit.csv": its rows saved as comma-separated values.
                         if (at_word("download") && peek(1).kind == token_kind::string) {
                             advance();
@@ -1878,7 +1913,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
                             // Without along, it goes along the steps its workflow writes.
                             if (at_word("along")) {
                                 advance();
@@ -2083,7 +2118,7 @@ namespace one::language {
                         // move issue::move along board_page.steps: a card let go in another region moves there.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
                             if (at_word("along")) {
                                 advance();
                                 move.along = parse_qualified_name("the view whose list of steps it goes along, like board_page");
@@ -2510,7 +2545,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -2526,9 +2561,40 @@ namespace one::language {
                     button.icon = expect(token_kind::identifier, "the icon it's drawn as, like edit").text;
                 }
                 parse_keys(button.keys);
+                // { by = 2 }: what it's sent, each a field and a value worked out as it's pressed.
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        while (!at_line_end()) {
+                            field_value value;
+                            const std::size_t first = pos_;
+                            value.where = peek().where;
+                            value.name = expect(token_kind::identifier, "a field it's sent, like by").text;
+                            expect(token_kind::assign, "'='");
+                            value.value = parse_expression();
+                            cut(value, first);
+                            button.given.push_back(std::move(value));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                // on when layer.weight >= 700: drawn pressed while it holds.
+                if (at_word("on") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                    advance();
+                    advance();
+                    button.pressed_when = parse_expression();
+                }
                 if (at_word("when")) {
                     advance();
                     button.when = parse_when();
+                }
+                // then open /:poster: what it made, opened.
+                if (at_word("then") && peek(1).kind == token_kind::identifier && peek(1).text == "open") {
+                    advance();
+                    advance();
+                    button.then_where = peek().where;
+                    button.then_open = expect(token_kind::route, "where what it made opens, like /:poster").text;
                 }
                 // issue::update "Edit" form "Save" { title body }: the form it opens.
                 if (at_word("form")) {

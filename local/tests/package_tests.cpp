@@ -85,7 +85,9 @@ namespace {
 		                     .list("loans", where("library::loan", "book", subject))
 		                     .order("-number")
 		                     .fields({"number", "member", "returned_at"});
-		return package("library", {book, loan}, {book_create, update, withdraw, loan_create, checkin}, {shelf, desk, book_page});
+		// A summary written again by itself, kept, but never a step undo takes back.
+		auto summarize = command("library::book::summarize").on("library::book").fields({"summary"}).apart();
+		return package("library", {book, loan}, {book_create, update, withdraw, loan_create, checkin, summarize}, {shelf, desk, book_page});
 	}
 
 	// A source on a folder of its own, the library installed, and every command's answer.
@@ -287,6 +289,14 @@ TEST("a step joined to the one before is undone with it, one apart is never undo
 	CHECK(field("SCI-0001", "summary") == "Spice");  // changed apart, so it stays
 	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::create"));
 	CHECK(!a.source->entities().find("library::book", "LIT-0002"));
+}
+
+TEST("a command apart from undo is kept, but never a step undo takes back") {
+	app a;
+	a.ok("library::book::create", book("Dune", "SCI-0001"));
+	a.ok("library::book::summarize", value(fields{{"id", "SCI-0001"}, {"summary", "Spice"}}));
+	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::create"));
+	CHECK(!a.source->entities().find("library::book", "SCI-0001"));
 }
 
 TEST("a step taken after an undo means there's nothing to redo") {

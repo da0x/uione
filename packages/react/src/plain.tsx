@@ -352,7 +352,7 @@ export const plain: ComponentSet = {
     </>
   ),
 
-  Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered }) => {
+  Table: ({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered, empty }) => {
     const actions = Math.max(0, ...rows.map((row) => row.actions.length));
     return (
       <>
@@ -406,7 +406,7 @@ export const plain: ComponentSet = {
           </thead>
           <tbody>
             {rows.map((row, at) => (
-              <tr key={row.id}>
+              <tr key={row.id} aria-selected={row.onPick ? row.picked === true : undefined} onClick={row.onPick}>
                 {reorder && (
                   <td>
                     {/* Moved a place at a time, with Alt and the arrow keys. */}
@@ -443,6 +443,7 @@ export const plain: ComponentSet = {
             ))}
           </tbody>
         </table>
+        {empty && status === "live" && rows.length === 0 && <p>{empty}</p>}
         {error && <p role="alert">{error}</p>}
       </>
     );

@@ -133,6 +133,12 @@ namespace one::generators {
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
+        bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
+        // and its picks, each the view and list it picks a row of, and that list's entity
+        struct pick_of {
+            std::string view, list, entity;
+        };
+        std::map<std::string, pick_of> picks_;
         std::string under_;              // the page it's under, when it says one, like /:project/roadmap
         int item_line_ = 0;              // the screen item being written
         std::map<std::string, std::string> components_;    // hand-written components, by name, to their file
@@ -277,6 +283,7 @@ namespace one::generators {
             bool optional_page = false;
             bool viewer = false;  // a button's when reads who's reading, as me
             std::set<std::string> toggles;  // the toggles its whens read, like layers
+            std::set<std::string> picks;    // the picks it reads, like layer
             // It shows something its address says after its own, like a tab, a page of
             // rows, or a board rather than a table: /neotrac/boards/main/board/in_progress.
             bool shown_in_path = false;
@@ -315,6 +322,11 @@ namespace one::generators {
                 std::string route = full_route(ns, s->route);
                 route_ = route;
                 toggles_ = toggles_in(s->items);
+                picks_.clear();
+                for (const auto* pick : picks_in(s->items)) {
+                    const language::entity_declaration* of = listed(ns, pick->view.text(), pick->list.empty() ? std::nullopt : std::optional<std::string>(pick->list));
+                    picks_[pick->name] = {full_view(ns, pick->view.text()), pick->list.empty() ? "rows" : pick->list, of ? of->name : ""};
+                }
                 under_ = s->under ? full_route(ns, *s->under) : "";
                 screen_title_ = s->title_is_name ? "" : s->title;
                 docs_base_ = route.substr(0, route.find("/:"));  // where its pages live, if it has any
@@ -459,7 +471,7 @@ namespace one::generators {
                 for (const auto& [variable, view] : parts.views) {
                     if (auto per = per_entity(view)) parts.params.insert(*per);
                 }
-                if (parts.views.empty() && parts.params.empty() && !parts.viewer && parts.toggles.empty()) {
+                if (parts.views.empty() && parts.params.empty() && !parts.viewer && parts.toggles.empty() && parts.picks.empty()) {
                     bodies.open("export const " + name + " = screen(" + info + ", () => (");
                     bodies.embed(items);
                     bodies.close("));");
@@ -502,6 +514,13 @@ namespace one::generators {
                                     (per ? ", " + web_detail::js_name(*per + "_id") : std::string()) + ");");
                     }
                     if (!titling.empty()) bodies.line(titling);
+                    // Each pick it reads, the row of its list picked now.
+                    for (const auto& pick : parts.picks) {
+                        components.insert("usePicked");
+                        const auto& of = picks_.at(pick);
+                        bodies.line("const " + web_detail::js_name("picked_" + pick) + " = usePicked(" + web_detail::js_string(route + " " + pick) + ", " +
+                                    view_variable(parts, of.view) + ", " + web_detail::js_string(of.list) + ");");
+                    }
                     // Each toggle its whens read, on or off as the person left it.
                     for (const auto& toggle : parts.toggles) {
                         components.insert("useToggled");
@@ -667,6 +686,9 @@ namespace one::generators {
                     out += "<Built value=" + web_detail::js_string(value == "year" ? "year" : value.substr(6)) + " />";
                 } else if (dot == std::string_view::npos) {
                     out += web_detail::jsx_text(text.substr(open, close - open + 1));
+                } else if (picks_.contains(std::string(value.substr(0, dot)))) {
+                    parts.components.insert("Live");
+                    out += "<Live row={" + picked(parts, std::string(value.substr(0, dot))) + "} field=" + web_detail::js_string(value.substr(dot + 1)) + " />";
                 } else {
                     std::string view = full_view(ns, std::string(value.substr(0, dot)));
                     parts.components.insert("Live");
@@ -755,6 +777,11 @@ namespace one::generators {
                     std::string op = binary->op == token_kind::less ? "<" : binary->op == token_kind::greater ? ">" : binary->op == token_kind::less_equal ? "<=" : ">=";
                     return "(ordered(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " ordered(" + condition_of(parts, ns, *binary->right, read) + "))";
                 }
+                // A value worked out, like layer.size * 1.1.
+                if (binary->op == token_kind::plus || binary->op == token_kind::minus || binary->op == token_kind::star || binary->op == token_kind::slash) {
+                    std::string op = binary->op == token_kind::plus ? "+" : binary->op == token_kind::minus ? "-" : binary->op == token_kind::star ? "*" : "/";
+                    return "(Number(" + condition_of(parts, ns, *binary->left, read) + ") " + op + " Number(" + condition_of(parts, ns, *binary->right, read) + "))";
+                }
                 std::string op = binary->op == token_kind::equal ? "===" : binary->op == token_kind::not_equal ? "!=="
                                : binary->op == token_kind::logical_and ? "&&" : "||";
                 return "(" + condition_of(parts, ns, *binary->left, read) + " " + op + " " + condition_of(parts, ns, *binary->right, read) + ")";
@@ -770,6 +797,8 @@ namespace one::generators {
                 }
                 auto* view = std::get_if<language::name_expression>(&object->node);
                 if (!view) return "false";
+                // layer.size: the picked row's.
+                if (picks_.contains(view->name.text())) return "(" + picked(parts, view->name.text()) + "?.[" + web_detail::js_string(value) + "] ?? null)";
                 std::string variable = view_variable(parts, full_view(ns, view->name.text()));
                 read.insert(variable);
                 return "(" + variable + ".data?.[" + web_detail::js_string(value) + "] ?? null)";
@@ -782,6 +811,8 @@ namespace one::generators {
                     parts.viewer = true;
                     return "viewer";
                 }
+                // What's picked, like layer: its row, or null while there's none.
+                if (name->name.parts.size() == 1 && picks_.contains(word)) return picked(parts, word);
                 // A toggle of the screen's, like layers: whether it's on.
                 if (name->name.parts.size() == 1 && toggles_.contains(word)) {
                     parts.toggles.insert(word);
@@ -895,6 +926,7 @@ namespace one::generators {
             // opens it, and so do links. A command's line whose form draws its button is
             // passed over.
             auto presses = [&](const language::screen_item& it) {
+                if (in_group_) return false;  // a toolbar's group lays out its own tools
                 if (std::holds_alternative<language::content_link>(it.node)) return in_block_ == 0;  // a hero or a section lays out its own
                 if (auto* b = std::get_if<language::button_item>(&it.node)) return !has_form_for(screen, b->command);
                 if (auto* f = std::get_if<language::form_item>(&it.node)) {
@@ -993,7 +1025,9 @@ namespace one::generators {
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
                         out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->at_end ? " atEnd" : "") + ">");
+                        bool was = std::exchange(in_group_, true);
                         screen_items(out, parts, ns, group->items, screen);
+                        in_group_ = was;
                         out.close("</Group>");
                     });
                 } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
@@ -1143,10 +1177,49 @@ namespace one::generators {
                         parts.params.insert(entity->name);
                         id = " id={" + web_detail::js_name(entity->name + "_id") + "}";
                     }
+                    // A command on what's picked, like layer::delete, acts on the picked row,
+                    // and is there only while one is.
+                    std::string on_pick;
+                    if (id.empty() && entity && command.substr(command.rfind("::") + 2) != "create") {
+                        for (const auto& [name, of] : picks_) {
+                            if (of.entity != entity->name) continue;
+                            on_pick = picked(parts, name);
+                            id = " id={" + on_pick + "?.id as string | undefined}";
+                            break;
+                        }
+                    }
                     std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
-                    std::string when = button->when ? " when={" + condition(parts, ns, *button->when) + "}" : "";
+                    std::string shown_when = button->when ? condition(parts, ns, *button->when) : "";
+                    if (!on_pick.empty()) shown_when = shown_when.empty() ? on_pick + " !== null" : on_pick + " !== null && " + shown_when;
+                    std::string when = shown_when.empty() ? "" : " when={" + shown_when + "}";
+                    // What it's sent, worked out as the screen's drawn, and pressed while
+                    // what it would set is already so: on the picked row, or the entity the
+                    // address names, as a view per it holds it.
+                    std::string given, same;
+                    for (const auto& v : button->given) {
+                        std::set<std::string> read;
+                        std::string value = condition_of(parts, ns, *v.value, read);
+                        given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + value;
+                        std::string now;
+                        // Only a field it stores can already be so; an input never is.
+                        bool stored = entity && std::ranges::any_of(entity->fields, [&](const language::field& f) { return f.name == v.name; });
+                        if (!stored) now = "";
+                        else if (!on_pick.empty()) now = "(" + on_pick + "?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                        else if (entity && !id.empty()) {
+                            if (auto holding = model_.view_holding(ns, entity->name, v.name)) {
+                                std::string variable = view_variable(parts, *holding);
+                                now = "(" + variable + ".data?.[" + web_detail::js_string(v.name) + "] ?? null)";
+                            }
+                        }
+                        same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + now + " === " + value;
+                    }
+                    if (!given.empty()) given = " given={{ " + given + " }}";
+                    std::string pressed = button->pressed_when ? " pressed={" + condition(parts, ns, *button->pressed_when) + "}"
+                                          : !same.empty() && same != "-" ? " pressed={" + same + "}"
+                                                                          : "";
+                    std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
-                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + when + allowed(parts, ns, command) + " />");
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
                 } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node)) {
                     parts.components.insert("Toggle");
                     out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +
@@ -1372,6 +1445,26 @@ namespace one::generators {
         }
 
         // An element drawn only while its when holds, like a board while its board's style is kanban.
+        // The picks anywhere in a screen.
+        static std::vector<const language::pick_item*> picks_in(const std::vector<language::screen_item>& items) {
+            std::vector<const language::pick_item*> out;
+            for (const auto& item : items) {
+                if (auto* p = std::get_if<language::pick_item>(&item.node)) out.push_back(p);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    auto inside = picks_in(block->items);
+                    out.insert(out.end(), inside.begin(), inside.end());
+                }
+            }
+            return out;
+        }
+
+        // A pick the screen reads, as the variable holding its row.
+        std::string picked(screen_parts& parts, const std::string& name) {
+            parts.picks.insert(name);
+            view_variable(parts, picks_.at(name).view);
+            return web_detail::js_name("picked_" + name);
+        }
+
         // The toggles anywhere in a screen, by their names.
         static std::set<std::string> toggles_in(const std::vector<language::screen_item>& items) {
             std::set<std::string> out;
@@ -1915,7 +2008,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);
@@ -2115,6 +2208,11 @@ namespace one::generators {
             line += track_on(parts, ns, table.track ? &*table.track : nullptr);
             if (!table.hue.empty()) line += " hue=" + web_detail::js_string(table.hue);
             if (table.hide_empty) line += " hideEmpty";
+            if (table.empty) line += " empty=" + web_detail::js_string(*table.empty);
+            // A row picked with a click, when the screen picks one of this list.
+            for (const auto& [name, of] : picks_) {
+                if (of.view == view && of.list == (table.list ? *table.list : "rows")) line += " pick=" + web_detail::js_string(route_ + " " + name);
+            }
             if (table.download) line += " download=" + web_detail::js_string(*table.download);
             line += toolbar(parts, ns, table.columns, screen);
             // Rows dragged into order, each drop setting the field with an update.

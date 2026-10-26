@@ -201,6 +201,7 @@ namespace one::local {
 		std::optional<std::vector<std::string>> allowed;  // the fields it may be sent
 		std::vector<std::string> inputs;                  // what it's sent besides them
 		local::body run;
+		bool stands_apart = false;                        // apart from undo: never a step undo takes back
 
 		command_description& creates(std::string on);  // x::create: makes one from its fields
 		command_description& updates(std::string on);  // x::update: changes the fields given
@@ -209,6 +210,7 @@ namespace one::local {
 		command_description& fields(std::vector<std::string> names);
 		command_description& takes(std::vector<std::string> names);  // input into stage
 		command_description& does(local::body body);
+		command_description& apart();  // apart from undo
 	};
 	command_description command(std::string name);
 

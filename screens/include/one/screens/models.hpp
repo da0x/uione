@@ -60,6 +60,12 @@ namespace one::screens {
 	bool has(const value& list, const value& item);
 	int compared(const value& a, const value& b);
 	inline value me(const page_base& p) { return p.me().empty() ? value() : value(p.me()); }
+	// A value worked out, like layer.size * 1.1: two numbers added (+), taken away (-),
+	// multiplied (*) or divided (/); nothing where either isn't a number.
+	value worked(char op, const value& a, const value& b);
+	// The row of a view's list the screen picked, named by its address and the pick's
+	// name, as the view has it now; nothing while there's none (decision 0017).
+	value picked(page_base& p, const std::string& name, const state<view_state>& v, const std::string& list);
 
 	// Around a page
 

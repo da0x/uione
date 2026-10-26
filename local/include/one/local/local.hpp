@@ -148,7 +148,12 @@ namespace one::local {
 		// The folder's events read through, or why they couldn't be.
 		static std::expected<std::unique_ptr<local_source>, std::string> open(folder kept);
 
-		void on(const std::string& command_name, command handler) { commands_[command_name] = std::move(handler); }
+		// A command, and whether it stands apart from undo, its steps kept but never
+		// taken back, as if sent "one:history": "apart" (decision 0018).
+		void on(const std::string& command_name, command handler, bool apart = false) {
+			commands_[command_name] = std::move(handler);
+			if (apart) apart_.insert(command_name);
+		}
 		void define(const std::string& view_name, view built) { views_[view_name] = std::move(built); }
 
 		const store& entities() const { return store_; }
@@ -198,6 +203,7 @@ namespace one::local {
 
 		local::folder folder_;
 		store store_;
+		std::set<std::string> apart_;  // commands never undone
 		std::map<std::string, command> commands_;
 		std::map<std::string, view> views_;
 		std::map<int, listener> listeners_;

@@ -198,6 +198,7 @@ namespace one::language {
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
         std::set<std::string> toggles_;  // the toggles of the screen being checked, read by its whens
+        std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
@@ -2711,6 +2712,8 @@ namespace one::language {
                     // title, whatever its layout, so they're outside its regions.
                     auto* text = std::get_if<content_text>(&item.node);
                     if (text && text->subtitle) continue;
+                    // What's picked is the screen's, drawn nowhere.
+                    if (std::holds_alternative<pick_item>(item.node)) continue;
                     if (!block || (block->type != content_block::kind::region && block->type != content_block::kind::heading)) {
                         error(item.where, "this screen puts its items in regions, so this goes in one too, like main { ... }");
                     }
@@ -2727,6 +2730,24 @@ namespace one::language {
                 }
             };
             toggles(s.items);
+            // Its picks, each a list's row, read by name too.
+            picks_.clear();
+            std::function<void(const std::vector<screen_item>&)> picks = [&](const std::vector<screen_item>& inside) {
+                for (const auto& item : inside) {
+                    if (auto* pick = std::get_if<pick_item>(&item.node)) {
+                        snake(pick->name, pick->name_where);
+                        if (picks_.contains(pick->name) || toggles_.contains(pick->name)) {
+                            error(pick->name_where, pick->name + " is picked here twice, or is a toggle too; a screen names each once");
+                        } else if (find(ns, qualified_name{{pick->name}, pick->name_where}, &scope::views)) {
+                            error(pick->name_where, "there's a view " + pick->name + " already, so the pick is named otherwise, like picked");
+                        } else {
+                            picks_[pick->name] = named_list(ns, pick->view, pick->list, full_route(ns, s.route));
+                        }
+                    }
+                    if (auto* block = std::get_if<content_block>(&item.node)) picks(block->items);
+                }
+            };
+            picks(s.items);
             screen_ = &s.items;
             screen_items(ns, s.items, full_route(ns, s.route));
             screen_ = nullptr;
@@ -2894,6 +2915,12 @@ namespace one::language {
                     through = inner->object.get();
                 }
                 auto* object = std::get_if<name_expression>(&through->node);
+                // layer.size: a field of the row picked.
+                if (object && picks_.contains(object->name.text())) {
+                    const view_each* list = picks_.at(object->name.text());
+                    if (list && !in_rows(*list, value)) error(e.where, "a picked " + object->name.text() + "'s row has no " + value + "; add it to the list's block");
+                    return;
+                }
                 const view_declaration* view = object ? find(ns, object->name, &scope::views) : nullptr;
                 if (!view) {
                     error(e.where, how);
@@ -2907,7 +2934,8 @@ namespace one::language {
                 if (!has) error(e.where, "view " + object->name.text() + " has no " + value + " for the button to read");
             } else if (auto* name = std::get_if<name_expression>(&e.node)) {
                 const std::string word = name->name.text();
-                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me" && !toggles_.contains(word)) error(e.where, how);
+                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me" && !toggles_.contains(word) && !picks_.contains(word))
+                    error(e.where, how);
             } else if (!std::holds_alternative<literal_expression>(e.node)) {
                 error(e.where, how);
             }
@@ -2931,6 +2959,11 @@ namespace one::language {
                 if (dot == std::string::npos) continue;
                 qualified_name name{{}, where};
                 std::string written = inside.substr(0, dot);
+                if (auto picked = picks_.find(written); picked != picks_.end()) {
+                    std::string field = inside.substr(dot + 1);
+                    if (picked->second && !in_rows(*picked->second, field)) error(where, "a picked " + written + "'s row has no " + field + "; add it to the list's block");
+                    continue;
+                }
                 for (std::size_t at = 0;;) {
                     std::size_t next = written.find("::", at);
                     name.parts.push_back(written.substr(at, next == std::string::npos ? std::string::npos : next - at));
@@ -2949,6 +2982,28 @@ namespace one::language {
             if (route.find("/:" + *view.per) == std::string::npos) {
                 error(where, "view " + view_name + " has one document per " + *view.per + ", so the screen showing it needs :" +
                                  *view.per + " in its route, like /" + *view.per + "s/:" + *view.per);
+            }
+        }
+
+        // layer::scale "2×" { by = 2 }: each value given is one of the command's fields or
+        // inputs, worked out from what the screen reads.
+        void verify_given(const std::string& ns, const button_item& button, const std::string& route) {
+            if (button.given.empty()) return;
+            const command_declaration* command = nullptr;
+            if (auto here = scopes_.find(ns); here != scopes_.end()) {
+                if (auto it = here->second.command_nodes.find(button.command.text()); it != here->second.command_nodes.end()) command = it->second;
+            }
+            if (!command || command->name.parts.size() != 2) return;  // verify_command_use says so
+            const entity_declaration* entity = find_entity(ns, qualified_name{{command->name.parts[0]}, command->name.where});
+            std::set<std::string> inputs;
+            for (const auto& st : command->body) {
+                if (auto* input = std::get_if<input_statement>(&st.node)) inputs.insert(input->name);
+            }
+            for (const auto& v : button.given) {
+                if (!inputs.contains(v.name) && (!entity || !find_field(*entity, v.name)) && v.name != "id") {
+                    error(v.where, command->name.text() + " has no field or input " + v.name + " to be given");
+                }
+                verify_condition(ns, *v.value, route);
             }
         }
 
@@ -3532,6 +3587,8 @@ namespace one::language {
                 } else if (auto* button = std::get_if<button_item>(&item.node)) {
                     verify_command_use(ns, button->command);
                     if (button->when) verify_condition(ns, *button->when, route);
+                    if (button->pressed_when) verify_condition(ns, *button->pressed_when, route);
+                    verify_given(ns, *button, route);
                     if (button->along) verify_along(ns, *button, route);
                 } else if (auto* component = std::get_if<component_item>(&item.node)) {
                     snake(component->name, item.where);

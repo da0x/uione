@@ -594,7 +594,7 @@ export const radix: ComponentSet = {
     </div>
   ),
 
-  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered, hue }) {
+  Table: function RadixTable({ status, columns, rows, error, tabs, search, pages, reorder, tools, filtered, hue, empty }) {
     // The row being dragged, and the place it would go.
     const [dragged, setDragged] = useState<number>();
     const [over, setOver] = useState<number>();
@@ -655,15 +655,17 @@ export const radix: ComponentSet = {
             return (
               <li
                 key={row.id}
+                aria-selected={row.onPick ? row.picked === true : undefined}
                 onClick={
-                  row.link
+                  row.onPick || row.link
                     ? (event) => {
                         if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
-                        event.currentTarget.querySelector("a")?.click();
+                        if (row.onPick) row.onPick();
+                        else event.currentTarget.querySelector("a")?.click();
                       }
                     : undefined
                 }
-                className={`flex items-start gap-2 px-3 ${entry} ${toned(row.tone)} ${row.link ? "cursor-pointer active:bg-sunken/60" : ""}`}
+                className={`flex items-start gap-2 px-3 ${entry} ${toned(row.tone)} ${row.link || row.onPick ? "cursor-pointer active:bg-sunken/60" : ""} ${row.picked ? "bg-accent-soft" : ""}`}
               >
                 {reorder && (
                   <button
@@ -781,15 +783,17 @@ export const radix: ComponentSet = {
                     }
                   : undefined
               }
+              aria-selected={row.onPick ? row.picked === true : undefined}
               onClick={
-                row.link
+                row.onPick || row.link
                   ? (event) => {
                       if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
-                      event.currentTarget.querySelector("a")?.click();
+                      if (row.onPick) row.onPick();
+                      else event.currentTarget.querySelector("a")?.click();
                     }
                   : undefined
               }
-              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${toned(row.tone)} ${row.link ? "cursor-pointer" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
+              className={`border-t border-line transition-colors first:border-t-0 hover:bg-sunken/60 ${toned(row.tone)} ${row.link || row.onPick ? "cursor-pointer" : ""} ${row.picked ? "!bg-accent-soft" : ""} ${dragged === at ? "opacity-40" : ""} ${over === at && dragged !== undefined && dragged !== at ? (dragged < at ? "shadow-[inset_0_-2px_0_var(--color-accent)]" : "shadow-[inset_0_2px_0_var(--color-accent)]") : ""}`}
             >
               {reorder && (
                 <td className={`w-0 pl-2 ${room}`}>
@@ -843,7 +847,7 @@ export const radix: ComponentSet = {
       )}
       {rows.length === 0 && (
         <p className="px-4 py-6 text-center text-sm text-muted">
-          {status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : search?.value.trim() ? "Nothing matches." : "Nothing here yet."}
+          {status === "loading" ? "Loading…" : status === "denied" ? "You can't see this." : search?.value.trim() ? "Nothing matches." : (empty ?? "Nothing here yet.")}
         </p>
       )}
       {pages && (
@@ -1966,7 +1970,7 @@ export const radix: ComponentSet = {
   // A toolbar's group: its tools, then its name under them, and a line after it; a
   // small one's tools in two rows.
   Group: ({ name, small, atEnd, children }) => (
-    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0">
+    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div className={small ? "grid grid-flow-col grid-rows-2 gap-0.5" : "flex items-start gap-0.5"}>{children}</div>
       <span className="text-[0.6875rem] leading-tight text-muted">{name}</span>
     </div>

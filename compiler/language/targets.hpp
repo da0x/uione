@@ -70,6 +70,11 @@ namespace one::language {
         drawn_by{"messages", "messages", everywhere},
         drawn_by{"full_screen", "full screen", everywhere},
         drawn_by{"key", "a key", everywhere},
+        drawn_by{"pick", "a pick", everywhere},
+        drawn_by{"button.given", "a button's given values", everywhere},
+        drawn_by{"button.on", "a button's on when", everywhere},
+        drawn_by{"button.then", "a button's then open", everywhere},
+        drawn_by{"table.empty", "a table's empty", everywhere},
         drawn_by{"table", "a table", everywhere},
         drawn_by{"table.link", "a table's link", everywhere},
         drawn_by{"table.tabs", "a table's tabs, by … over", everywhere},
@@ -240,6 +245,7 @@ namespace one::language {
                         if (n.page) use("table.page");
                         if (n.reorder) use("table.reorder");
                         if (n.hide_empty) use("table.hide");
+                        if (n.empty) use("table.empty");
                         if (n.only) use("table.only");
                         if (!n.hue.empty()) use("table.color");
                         if (n.tint) use("table.tint");
@@ -285,6 +291,9 @@ namespace one::language {
                         if (n.when) use("button.when");
                         if (n.icon) use("button.icon");
                         if (!n.keys.empty()) use("key");
+                        if (!n.given.empty()) use("button.given");
+                        if (n.pressed_when) use("button.on");
+                        if (n.then_open) use("button.then");
                     } else if constexpr (std::is_same_v<T, component_item>) {
                         use("component");
                     } else if constexpr (std::is_same_v<T, thread_item>) {
@@ -313,6 +322,8 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, full_screen_item>) {
                         use("full_screen");
                         if (!n.keys.empty()) use("key");
+                    } else if constexpr (std::is_same_v<T, pick_item>) {
+                        use("pick");
                     }
                 },
                 i.node);

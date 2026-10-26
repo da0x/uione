@@ -187,6 +187,11 @@ namespace one::screens {
 		bool toggled(const std::string& name);
 		void toggle(const std::string& name);
 
+		// The row of a list it picked, by its id, named by the screen's address and the
+		// pick's name; an empty id picks none.
+		void pick(const std::string& name, std::string id) { kept<std::string>("pick " + name).set(std::move(id)); }
+		std::string picked_id(const std::string& name) { return kept<std::string>("pick " + name).get(); }
+
 		// Whether what's being built is in a toolbar's group, and a small one: its
 		// buttons drawn as tools.
 		std::optional<bool> in_group() const { return in_group_; }
