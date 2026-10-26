@@ -286,6 +286,15 @@ TEST("every icon a toolbar draws with draws something, its paths read whole") {
 	}
 }
 
+TEST("an icon's rounded corner turns the short way round, as SVG draws it") {
+	// The copy icon's back page has a corner of radius 1 at (2, 2); turned the long way
+	// it would loop out past the corner, through (1, 1).
+	auto drawn = one::desktop::picture::drawn(32, 32, [](one::desktop::canvas& c) { one::desktop::draw_icon(c, "copy", {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
+	auto alpha = [&](int x, int y) { return drawn.rgba()[(static_cast<std::size_t>(y) * 32 + static_cast<std::size_t>(x)) * 4 + 3]; };
+	CHECK(alpha(2, 2) == 0);
+	CHECK(alpha(5, 5) > 128);
+}
+
 TEST("a focus ring shows once the keyboard moved to it, not after a click or where focus was put first") {
 	auto root = one::desktop::row(one::desktop::button("Save", [] {})).take();
 	auto& button = *root->children[0];

@@ -157,7 +157,7 @@ namespace one::desktop {
 				float across = std::sqrt(std::max(0.f, radius * radius - half * half)) / half;
 				if (large == sweep) across = -across;
 				point middle{(now.x + end.x) / 2, (now.y + end.y) / 2};
-				point center{middle.x - across * dy, middle.y + across * dx};
+				point center{middle.x + across * dy, middle.y - across * dx};
 				float from = std::atan2(now.y - center.y, now.x - center.x), until = std::atan2(end.y - center.y, end.x - center.x);
 				float turn = until - from;
 				if (sweep && turn < 0) turn += 2 * std::numbers::pi_v<float>;
