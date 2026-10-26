@@ -104,6 +104,10 @@ namespace one::terminal::runtime {
 	terminal::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys);
 	terminal::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys);
 	terminal::view messages(page& p);
+	// A collage, as a terminal can show one: its layers a list, the background first,
+	// a picture by its place and words by what they say; Enter picks one, and the
+	// buttons over it follow.
+	terminal::view collage(page& p, collage_spec spec);
 	// A terminal has no window to fill, so full screen draws nothing.
 	terminal::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys);
 	// Whether a key pressed is a chord, like ctrl+z.

@@ -221,3 +221,84 @@ TEST_CASE("a command apart from undo is kept, but never a step undo takes back")
     CHECK(files["web/src/local.generated.ts"].find(R"(command("studio::poster::preview").on("studio::poster").apart())") != std::string::npos);
 }
 
+namespace {
+
+    const std::string collaged = R"(namespace studio at / {
+	entity poster {
+		title    text    required
+		width    number  = 1600
+		height   number  = 900
+		slide_x  number  = 0.5
+		slide_y  number  = 0.5
+	}
+
+	entity layer {
+		poster   poster  required
+		depth    number  = 0
+		picture  file
+		x        number  = 0
+		y        number  = 0
+		w        number  = 400
+		h        number  = 300
+	}
+
+	command poster::create
+	command poster::slide {
+		changes slide_x slide_y
+	}
+	command layer::place {
+		changes x y w h
+	}
+	command layer::delete
+
+	view poster_page per poster {
+		title  width  height  slide_x  slide_y
+		layers = each layer in poster {
+			order by depth
+			picture  x  y  w  h
+		}
+	}
+)";
+
+    std::string collage_screen(const std::string& body) { return project + collaged + "\n\tscreen \"Poster\" /posters/:poster {\n" + body + "\t}\n}\n"; }
+
+}  // namespace
+
+TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed and slid by commands, with buttons over the picked layer") {
+    const std::string fine = R"(		pick layer from poster_page.layers
+		collage poster_page.layers size width height {
+			place layer::place
+			slide poster::slide
+			snap to edges
+			empty "Add a picture to start"
+			over layer {
+				layer::delete "Delete" icon delete key delete
+			}
+		}
+)";
+    CHECK(messages(collage_screen(fine)).empty());
+    CHECK(messages(collage_screen(R"(		collage poster_page.layers size wide tall {
+			place poster::slide
+			slide layer::place
+			over layer {
+				text "Not a button"
+			}
+		}
+)")) == std::vector<std::string>{"45: view poster_page has no wide, which says how big the collage is; add it to the view",
+                                   "45: view poster_page has no tall, which says how big the collage is; add it to the view",
+                                   "46: a collage's layers are layers, so they're placed by a command on layer, like layer::place",
+                                   "47: a collage's background slides as the view poster_page says, so by a command on what the view is per, like poster::slide",
+                                   "48: over names the screen's pick of these layers, like pick layer from poster_page.layers",
+                                   "49: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete"});
+    auto files = built(collage_screen(fine));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Collage view={posterPage} list="layers" place="studio::layer::place" slide="studio::poster::slide" snap empty="Add a picture to start" pick="/posters/:poster layer" subject={posterId}>)") !=
+          std::string::npos);
+    CHECK(web.find(R"(<Command name="studio::layer::delete" id={pickedLayer?.id as string | undefined} label="Delete" icon="delete" keys={["delete"]} when={pickedLayer !== null} />)") != std::string::npos);
+    CHECK(native.find(R"(collage(p, {.view = poster_page, .list = "layers", .place = "studio::layer::place", .slide = "studio::poster::slide", .snap = true, .empty = "Add a picture to start", .pick = "/posters/:poster layer", .over = {command_button{.command = "studio::layer::delete", .label = "Delete", .id = picked_layer["id"].as_string(), .when = !none(picked_layer), .icon = "delete", .keys = std::vector<std::string>{"delete"}}}, .subject = poster_id})") !=
+          std::string::npos);
+}
+

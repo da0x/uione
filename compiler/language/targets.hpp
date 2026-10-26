@@ -71,6 +71,11 @@ namespace one::language {
         drawn_by{"full_screen", "full screen", everywhere},
         drawn_by{"key", "a key", everywhere},
         drawn_by{"pick", "a pick", everywhere},
+        drawn_by{"collage", "a collage", everywhere},
+        drawn_by{"collage.place", "placing a collage's layers", everywhere},
+        drawn_by{"collage.slide", "sliding a collage's background", everywhere},
+        drawn_by{"collage.snap", "snapping a collage's layers", everywhere},
+        drawn_by{"collage.over", "buttons over a collage's picked layer", everywhere},
         drawn_by{"button.given", "a button's given values", everywhere},
         drawn_by{"button.on", "a button's on when", everywhere},
         drawn_by{"button.then", "a button's then open", everywhere},
@@ -324,6 +329,12 @@ namespace one::language {
                         if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, pick_item>) {
                         use("pick");
+                    } else if constexpr (std::is_same_v<T, collage_item>) {
+                        use("collage");
+                        if (n.place) use("collage.place");
+                        if (n.slide) use("collage.slide");
+                        if (n.snap) use("collage.snap");
+                        if (n.over) use("collage.over");
                     }
                 },
                 i.node);

@@ -234,6 +234,7 @@ screen_place   ::= "under" ROUTE STRING END
 /* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
+collage_line   ::= ("place" qualified | "slide" qualified | "snap" "to" "edges" | "empty" STRING | "over" NAME screen_block) END
 /* key ctrl+z: what runs a line too; any of ctrl, shift and alt, then a key, like f11 or delete */
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
@@ -241,6 +242,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("main" | "side" | "bar" | "toolbar" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
                  | "group" STRING "small"? ("at" "end")? ("when" expression)? screen_block END
+                 /* a picture made of layers, as big as two of the view's values say */
+                 | "collage" qualified "." NAME ("size" NAME NAME)? "{" NEWLINE? collage_line* "}" END
                  /* a row of a view's list the screen holds, picked with a click, read by its name */
                  | "pick" NAME "from" qualified ("." NAME)? END
                  /* something on or off, read by its name, like side when layers */

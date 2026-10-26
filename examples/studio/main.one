@@ -17,14 +17,45 @@ project studio {
 namespace studio at / {
 
 	entity poster {
-		title  text    required
-		color  enum    ink | paper | sky = color::paper
-		views  number  = 0
+		title       text    required
+		color       enum    ink | paper | sky = color::paper
+		views       number  = 0
+		width       number  = 1600
+		height      number  = 900
+		background  enum    fit | fill | stretch | center = background::fill
+		around      enum    edges | color = around::edges
+		slide_x     number  = 0.5
+		slide_y     number  = 0.5
+	}
+
+	// What a poster is made of: pictures and words, lowest first.
+	entity layer {
+		poster   poster  required
+		depth    number  = 0
+		picture  file
+		words    text
+		size     number  = 64
+		x        number  = 0
+		y        number  = 0
+		w        number  = 400
+		h        number  = 300
 	}
 
 	command poster::create
 	command poster::update
 	command poster::delete
+
+	command poster::slide {
+		changes slide_x slide_y
+		require slide_x >= 0 && slide_x <= 1 && slide_y >= 0 && slide_y <= 1  "a slide is from 0 to 1"
+	}
+
+	command layer::create
+	command layer::delete
+	command layer::place {
+		changes x y w h
+		require w > 0 && h > 0  "a layer has a size"
+	}
 
 	// Opened once more: counted, but never a step undo takes back.
 	command poster::view {
@@ -41,7 +72,11 @@ namespace studio at / {
 	}
 
 	view poster_page per poster {
-		title  color
+		title  color  width  height  background  around  slide_x  slide_y
+		layers = each layer in poster {
+			order by depth
+			picture  words  size  x  y  w  h
+		}
 	}
 
 	screen "Studio" / {
@@ -82,9 +117,29 @@ namespace studio at / {
 		}
 	}
 
+	// A poster's layers, placed and slid where they look right.
 	screen "Poster" /posters/:poster {
-		poster::view "Counted" on when poster_page.title != none
-		text "{poster_page.title}"
+		layout workspace
+		pick layer from poster_page.layers
+		bar {
+			link / "Posters" icon gallery key escape
+			text "{poster_page.title}"
+			poster::view "Counted" on when poster_page.title != none
+		}
+		main {
+			collage poster_page.layers size width height {
+				place layer::place
+				slide poster::slide
+				snap to edges
+				empty "Add a picture or some words to start"
+				over layer {
+					layer::delete "Delete" icon delete key delete
+				}
+			}
+		}
+		status {
+			messages
+		}
 	}
 
 }  // namespace studio

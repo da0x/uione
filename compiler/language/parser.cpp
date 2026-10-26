@@ -2047,6 +2047,53 @@ namespace one::language {
                 end_line();
                 return {where, std::move(pipeline), std::move(shown_when)};
             }
+            // collage poster_page.layers size width height { ... }: a picture made of layers.
+            if (at_word("collage") && peek(1).kind != token_kind::scope) {
+                advance();
+                collage_item collage;
+                collage.view = parse_qualified_name("the view whose list is its layers, like poster_page");
+                expect(token_kind::dot, "'.' and the list of its layers, like poster_page.layers");
+                collage.list_where = peek().where;
+                collage.list = expect(token_kind::identifier, "the list of its layers, like layers").text;
+                // size width height: the view's values it's as big as.
+                if (at_word("size")) {
+                    advance();
+                    collage.size_where = peek().where;
+                    collage.width = expect(token_kind::identifier, "the view's value saying how wide it is, like width").text;
+                    collage.height = expect(token_kind::identifier, "the view's value saying how tall it is, like height").text;
+                }
+                expect(token_kind::left_brace, "'{' and what it does, like place layer::place");
+                while (in_block()) {
+                    if (at_word("place") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.place = parse_qualified_name("the command a layer moved or resized is sent to, like layer::place");
+                    } else if (at_word("slide") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.slide = parse_qualified_name("the command the background slid is sent to, like poster::slide");
+                    } else if (at_word("snap")) {
+                        collage.snap_where = advance().where;
+                        if (!at_word("to")) fail_expecting("to edges, as in snap to edges");
+                        advance();
+                        if (!at_word("edges")) fail_expecting("edges, as in snap to edges");
+                        advance();
+                        collage.snap = true;
+                    } else if (at_word("empty") && peek(1).kind == token_kind::string) {
+                        advance();
+                        collage.empty = advance().text;
+                    } else if (at_word("over") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.over_where = peek().where;
+                        collage.over = advance().text;
+                        collage.tools = parse_screen_block();
+                    } else {
+                        fail_expecting("what a collage does, like place layer::place, slide poster::slide, snap to edges, empty \"...\" or over layer { ... }");
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(collage)};
+            }
             if (at_word("canvas") && peek(1).kind != token_kind::scope) {
                 advance();
                 canvas_item canvas;

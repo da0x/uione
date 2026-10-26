@@ -15,11 +15,14 @@ import { useUI } from "./ui.js";
 
 // A toolbar's group its buttons are in, which draws them as tools.
 const InGroup = createContext<{ small: boolean } | undefined>(undefined);
+// Buttons over a collage's picked layer, small tools too.
+export const OverLayer = createContext(false);
 
-// How a button in a toolbar is drawn, if it's in one.
+// How a button in a toolbar, or over a picked layer, is drawn, if it's in one.
 export function useTool(): "large" | "small" | undefined {
   const group = useContext(InGroup);
-  return group ? (group.small ? "small" : "large") : undefined;
+  const over = useContext(OverLayer);
+  return over ? "small" : group ? (group.small ? "small" : "large") : undefined;
 }
 
 export function Group({ name, small = false, atEnd = false, children }: { name: string; small?: boolean; atEnd?: boolean; children?: ReactNode }) {

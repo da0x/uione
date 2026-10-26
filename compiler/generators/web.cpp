@@ -134,6 +134,7 @@ namespace one::generators {
         std::string route_;              // the address of the screen being written, like /projects/:project
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
+        bool workspace_ = false;         // the screen being written is laid out as a workspace
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
             std::string view, list, entity;
@@ -322,6 +323,7 @@ namespace one::generators {
                 std::string route = full_route(ns, s->route);
                 route_ = route;
                 toggles_ = toggles_in(s->items);
+                workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 picks_.clear();
                 for (const auto* pick : picks_in(s->items)) {
                     const language::entity_declaration* of = listed(ns, pick->view.text(), pick->list.empty() ? std::nullopt : std::optional<std::string>(pick->list));
@@ -1220,6 +1222,32 @@ namespace one::generators {
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
+                } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
+                    // A picture made of layers, the buttons over the picked one inside it.
+                    parts.components.insert("Collage");
+                    std::string view = full_view(ns, c->view.text());
+                    std::string line = "<Collage view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(c->list);
+                    if (c->width != "width") line += " width=" + web_detail::js_string(c->width);
+                    if (c->height != "height") line += " height=" + web_detail::js_string(c->height);
+                    if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
+                    if (c->slide) line += " slide=" + web_detail::js_string(full_command(ns, *c->slide));
+                    if (c->snap) line += " snap";
+                    if (c->empty) line += " empty=" + web_detail::js_string(*c->empty);
+                    if (c->over) line += " pick=" + web_detail::js_string(route_ + " " + *c->over);
+                    if (workspace_) line += " fills";
+                    if (auto per = per_entity(view)) {
+                        parts.params.insert(*per);
+                        line += " subject={" + web_detail::js_name(*per + "_id") + "}";
+                    }
+                    if (c->tools.empty()) {
+                        out.line(line + " />");
+                    } else {
+                        out.open(line + ">");
+                        bool was = std::exchange(in_group_, true);
+                        screen_items(out, parts, ns, c->tools, screen);
+                        in_group_ = was;
+                        out.close("</Collage>");
+                    }
                 } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node)) {
                     parts.components.insert("Toggle");
                     out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +

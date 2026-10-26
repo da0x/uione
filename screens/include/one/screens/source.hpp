@@ -13,6 +13,7 @@
 #include <ember.hpp>
 
 #include <expected>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
@@ -86,6 +87,9 @@ namespace one::screens {
 		// Told every second, on the loop, until it's stopped: for running times. A
 		// source with no loop, like one kept in memory, never ticks.
 		virtual listening ticking(std::function<void()>) { return {}; }
+		// Where a file a field names, like files/<sha-256>, is on this machine, for what
+		// draws it; a source that keeps none here says nowhere.
+		virtual std::optional<std::filesystem::path> file_here(const std::string&) const { return std::nullopt; }
 	};
 
 	// Views and commands kept in memory: set a view and its listeners are told; a

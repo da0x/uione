@@ -146,6 +146,7 @@ namespace one::desktop::runtime {
 	desktop::view table(page& p, table_spec spec);
 	desktop::view board(page& p, board_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
+	desktop::view collage(page& p, collage_spec spec);
 	desktop::view pipeline_board(page& p, pipeline_spec spec);
 	desktop::view cards(page& p, cards_spec spec);
 	// How far something is in its stage, like 2 of 5: a thin bar in the accent and its count.

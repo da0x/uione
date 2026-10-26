@@ -3513,6 +3513,8 @@ namespace one::language {
                     verify_board(ns, *board, route);
                 } else if (auto* canvas = std::get_if<canvas_item>(&item.node)) {
                     verify_canvas(ns, *canvas, route);
+                } else if (auto* collage = std::get_if<collage_item>(&item.node)) {
+                    verify_collage(ns, *collage, route);
                 } else if (auto* pipeline = std::get_if<pipeline_item>(&item.node)) {
                     verify_pipeline(ns, *pipeline, route);
                 } else if (auto* cards = std::get_if<cards_item>(&item.node)) {
@@ -3825,6 +3827,51 @@ namespace one::language {
         // canvas board_page.issues link /:project/:issue { ... }: its cards' rows hold where
         // they're placed, as numbers, and what they show; place names a command on the
         // cards' entity that changes those fields; by and over lay out the unplaced.
+        // collage poster_page.layers size width height: its size two of the view's values,
+        // its layers a list of rows placed by x y w h, moved by a command on their
+        // entity, its background slid by one on what the view is per, and buttons over
+        // the layer the screen picked.
+        void verify_collage(const std::string& ns, const collage_item& collage, const std::string& route) {
+            const view_each* layers = named_list(ns, collage.view, collage.list, route);
+            if (!layers) return;
+            const view_declaration* view = find(ns, collage.view, &scope::views);
+            for (const auto& value : {collage.width, collage.height}) {
+                bool held = view && std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == value; });
+                if (!held) error(collage.size_where.line > 1 ? collage.size_where : collage.view.where, "view " + collage.view.text() + " has no " + value + ", which says how big the collage is; add it to the view");
+            }
+            const entity_declaration* layer = listed_entity(ns, *layers);
+            if (!layer) return;
+            for (const std::string name : {"x", "y", "w", "h"}) {
+                const field* f = find_field(*layer, name);
+                if (!f) error(collage.list_where, "entity " + layer->name + " has no field " + name + ", where a collage keeps a layer's place; add " + name + " number to it");
+                else if (!f->type || f->type->text() != "number" || f->list) error(collage.list_where, layer->name + "." + name + " keeps where a layer is, so it's a number");
+                else if (!in_rows(*layers, name)) error(collage.list_where, "view " + collage.view.text() + " has no " + name + " in its " + collage.list + "; add it to the list's block");
+            }
+            if (collage.place) {
+                verify_command_use(ns, *collage.place);
+                const entity_declaration* on = find_command(ns, *collage.place);
+                if (on && on != layer) error(collage.place->where, "a collage's layers are " + layer->name + "s, so they're placed by a command on " + layer->name + ", like " + layer->name + "::place");
+            }
+            if (collage.slide) {
+                verify_command_use(ns, *collage.slide);
+                const entity_declaration* on = find_command(ns, *collage.slide);
+                if (view && (!view->per || (on && on->name != *view->per))) {
+                    error(collage.slide->where, "a collage's background slides as the view " + collage.view.text() + " says, so by a command on what the view is per" +
+                                                    (view->per ? ", like " + *view->per + "::slide" : ", and it isn't per anything"));
+                }
+            }
+            if (collage.over) {
+                auto picked = picks_.find(*collage.over);
+                if (picked == picks_.end() || picked->second != layers) {
+                    error(collage.over_where, "over names the screen's pick of these layers, like pick " + *collage.over + " from " + collage.view.text() + "." + collage.list);
+                }
+                for (const auto& tool : collage.tools) {
+                    if (!std::holds_alternative<button_item>(tool.node)) error(tool.where, "what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete");
+                }
+                screen_items(ns, collage.tools, route);
+            }
+        }
+
         void verify_canvas(const std::string& ns, const canvas_item& canvas, const std::string& route) {
             const view_each* cards = named_list(ns, canvas.view, *canvas.list, route);
             if (!cards) return;

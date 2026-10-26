@@ -158,6 +158,10 @@ namespace one::local {
 
 		const store& entities() const { return store_; }
 		const local::folder& kept() const { return folder_; }
+		std::optional<std::filesystem::path> file_here(const std::string& named) const override {
+			if (named.empty()) return std::nullopt;
+			return folder_.file(named);
+		}
 
 		screens::listening listen(const std::string& view, const std::string& subject, std::function<void(const screens::view_state&)> told) override;
 		// Commands, and two of the source's own: one::undo takes back the last step

@@ -315,6 +315,25 @@ namespace one::screens {
 		std::string pick = "";      // the screen's pick of its rows, by name: a row's click picks it
 	};
 
+	// A picture made of layers, as big as two of the view's values say, in its own
+	// pixels (decision 0019): its rows, lowest first, each placed by x y w h and drawn
+	// from picture, crop_x crop_y crop_w crop_h, turns, mirrored, words, size, color
+	// and weight; the first, when it's a picture, its background, sitting as the view's
+	// background, around, zoom, slide_x and slide_y say.
+	struct collage_spec {
+		state<view_state> view;
+		std::string list;
+		std::string width = "width", height = "height";
+		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
+		std::string slide = "";  // and the one the background slid is, with slide_x slide_y
+		bool snap = false;       // to the collage's edges and middle, and every other layer's
+		std::string empty = "";  // said while it has no layers
+		std::string pick = "";   // the screen's pick of its layers, which a click picks
+		std::vector<command_button> over = {};  // buttons above the picked layer
+		std::string subject = "";               // the id of what the view is per, which slides its background
+		bool fills = false;                     // in a workspace, as big as its region; elsewhere 560 tall
+	};
+
 	// A list's rows as large cards, like a project's boards: each its title, what
 	// else it shows, a tally of what it holds, like 3 To do · 1 Done, and links that
 	// open it filtered, like Assigned to me.

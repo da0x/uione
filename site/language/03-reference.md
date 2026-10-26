@@ -2096,6 +2096,34 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   In the desktop app a file copied in the file manager is pasted with Control+V, and
   in the terminal `p` asks for its path. `picture attachments` shows the first image
   a card holds on it, on the web.
+- `collage poster_page.layers size width height { ... }` shows a list's rows as the
+  layers of one picture, as big as two of the view's values say, in its own pixels,
+  like a wallpaper or a poster (decision 0019). In a workspace's `main` it fills its
+  region; anywhere else it's 560 tall. It's drawn scaled to fit with room around it,
+  or at its own size on black while the window fills the screen. Its layers are
+  drawn lowest first, each where its `x y w h` say, from what it holds by its
+  conventional name: a `picture`, cropped by `crop_x crop_y crop_w crop_h` and turned
+  and flipped by `turns` and `mirrored`; or `words`, as big as `size` says, in
+  `color` and `weight`, over a soft shadow. The first, when it's a picture, is the
+  background: it sits as the view's `background` says, `fit`, `fill`, `stretch` or
+  `center`, zoomed by `zoom` and slid by `slide_x` and `slide_y`, and what it leaves
+  around it is its edges drawn out, or, with `around` set to `color`, its edge
+  color. A click picks a layer, the background when it's on nothing else, and Esc
+  lets it go.
+  - `place layer::place`: a picked layer is moved, or resized by a corner with its
+    shape kept unless Shift is held, and the command is sent its `x y w h`; the arrows
+    nudge it, by ten with Shift. In a terminal, its layers are a list, and Alt with
+    the arrows moves the one picked.
+  - `slide poster::slide`: the background is dragged along the side it's longer or
+    shorter than the collage, its `slide_x` and `slide_y` sent to a command on what
+    the view is per.
+  - `snap to edges`: what's dragged is drawn to the collage's edges and middle, and
+    every other layer's, and evenly into a corner, with a line where it snaps, unless
+    Alt is held.
+  - `empty "Add a picture to start"`: said while it has no layers.
+  - `over layer { ... }`: buttons drawn just above the picked layer, or below it when
+    there's no room, for the screen's `pick layer from poster_page.layers`, like
+    `layer::delete "Delete" icon delete key delete`.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
   as the classic deploy screen did: a lane for each kind of card, its kind said by
   `lanes by labels`, in the order their stages come, and in it a row for each card,

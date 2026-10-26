@@ -1240,6 +1240,51 @@ TEST("a workspace: its bar, a toolbar of groups whose tools have keys, a side sh
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is picked, and one dragged is placed where it's let go") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "w1"}, {"words", "Harbor at dusk"}, {"size", 96}, {"x", 120}, {"y", 600}, {"w", 700}, {"h", 120}})}}}));
+	data.on("studio::layer::place", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .place = "studio::layer::place",
+		                                                                         .snap = true, .empty = "Add a picture to start", .pick = "/ layer", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	// The drawing: the element with nothing inside it that takes most of the page.
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	// Painted once, as the window would, so it knows where it is.
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	// Scaled to fit with 32 around it, so a point of the collage is where this says.
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	one::desktop::point start{origin.x + 300 * scale, origin.y + 650 * scale};
+	CHECK(board->press(start, 1));
+	CHECK(nav.current().picked_id("/ layer") == "w1");
+	board->drag({start.x + 50, start.y});
+	board->release({start.x + 50, start.y}, board);
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "studio::layer::place");
+	CHECK(std::abs(data.runs().back().fields["x"].as_double() - (120 + 50 / scale)) < 0.01);
+	CHECK(data.runs().back().fields["y"].as_double() == 600);
+	matches_golden("collage", {900, 560}, [&] { return drawn(nav); });
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

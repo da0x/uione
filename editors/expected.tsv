@@ -299,3 +299,6 @@ examples/studio/main.one	messages	messages	keyword
 examples/studio/main.one	pick poster from posters	pick	keyword
 examples/studio/main.one	apart from undo	apart	keyword
 examples/studio/main.one	then open /posters/:poster	/posters/:poster	route
+examples/studio/main.one	collage poster_page.layers size width height {	collage	keyword
+examples/studio/main.one	snap to edges	snap	keyword
+examples/studio/main.one	slide poster::slide	slide	keyword

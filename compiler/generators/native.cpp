@@ -224,6 +224,34 @@ namespace one::generators {
             return plain_value(e, "value()");
         }
 
+        // collage poster_page.layers size width height { ... }: its spec, with the buttons
+        // over the picked layer as command_buttons it draws itself.
+        std::string collage(screen_parts& parts, const std::string& ns, const language::collage_item& c) {
+            std::string view = screens::full_view(ns, c.view.text());
+            std::string out = "collage(p, {.view = " + view_variable(parts, view) + ", .list = " + str(c.list);
+            if (c.width != "width") out += ", .width = " + str(c.width);
+            if (c.height != "height") out += ", .height = " + str(c.height);
+            if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
+            if (c.slide) out += ", .slide = " + str(screens::full_command(ns, *c.slide));
+            if (c.snap) out += ", .snap = true";
+            if (c.empty) out += ", .empty = " + str(*c.empty);
+            if (c.over) out += ", .pick = " + str(route_ + " " + *c.over);
+            if (!c.tools.empty()) {
+                std::string over;
+                for (const auto& tool : c.tools) {
+                    auto* b = std::get_if<language::button_item>(&tool.node);
+                    if (!b) continue;
+                    std::string made = command_of(parts, ns, *b);  // command(p, {...})
+                    std::string spec = made.substr(std::string("command(p, ").size(), made.size() - std::string("command(p, ").size() - 1);
+                    over += (over.empty() ? "" : ", ") + std::string("command_button") + spec;
+                }
+                out += ", .over = {" + over + "}";
+            }
+            if (auto per = model_.per_entity(view)) out += ", .subject = " + id_of(parts, *per);
+            if (workspace_) out += ", .fills = true";
+            return out + "})";
+        }
+
         // The picks anywhere in a screen.
         static std::vector<const language::pick_item*> picks_in(const std::vector<language::screen_item>& items) {
             std::vector<const language::pick_item*> out;
@@ -1166,6 +1194,7 @@ namespace one::generators {
         bool shows_pages_ = false;              // whether the screen being written does, opening the first without :page
         std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
+        bool workspace_ = false;      // the screen being written is laid out as a workspace
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
         // and its picks, each the view and list it picks a row of, and that list's entity
@@ -1431,6 +1460,8 @@ namespace one::generators {
                 } else if (auto* b = std::get_if<language::button_item>(&item.node)) {
                     if (screens::model::has_form_for(screen, b->command)) continue;  // the form draws its own button
                     code = command_of(parts, ns, *b);
+                } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
+                    code = collage(parts, ns, *c);
                 } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {
                     code = "toggle(p, " + str(route_ + " " + t->name) + ", " + str(t->label ? *t->label : screens::label(t->name)) + ", " + str(t->icon.value_or("")) + ", " +
                            (t->keys.empty() ? "{}" : keys_of(t->keys)) + ")";
@@ -1523,6 +1554,7 @@ namespace one::generators {
                 route_ = model_.full_route(ns, s->route);
                 toggles_ = toggles_in(s->items);
                 at_end_said_ = false;
+                workspace_ = (s->layout ? *s->layout : model_.project.layout) == "workspace";
                 picks_.clear();
                 for (const auto* pick : picks_in(s->items)) {
                     const language::entity_declaration* of = model_.listed(ns, pick->view.text(), pick->list.empty() ? std::nullopt : std::optional<std::string>(pick->list));

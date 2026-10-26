@@ -154,6 +154,8 @@ namespace one::screens {
 		std::string error(const std::string& command) const;
 		void clear(const std::string& command);
 		std::optional<person> reader() const { return source_.reader(); }
+		// Where a file a field names is on this machine, when the source keeps it here.
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const { return source_.file_here(kept); }
 		std::string me() const { return reader() ? reader()->uid : ""; }
 
 		// What's being worked on now in what the page reads: each record someone holds
