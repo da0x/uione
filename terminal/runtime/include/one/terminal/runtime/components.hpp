@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "one/terminal/runtime/runtime.hpp"
@@ -34,7 +36,7 @@ namespace one::terminal::runtime {
 		return section(std::move(title), std::move(all));
 	}
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
-	terminal::view link(page& p, std::string words, std::string to, std::string icon = "");
+	terminal::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	terminal::view anchored(page& p, std::string name, terminal::view part);
 	terminal::view hero(std::string title, std::vector<terminal::view> inside);
@@ -74,6 +76,38 @@ namespace one::terminal::runtime {
 		return layout(std::move(name), std::move(all));
 	}
 	terminal::view menu(page& p, std::vector<menu_link> links, terminal::view beside);
+
+	// A workspace, as the desktop's: its bar, its toolbar, the work beside what's at
+	// its side, and a status line, each across the terminal.
+	terminal::view workspace(page& p, std::vector<region> regions);
+	template <class... R>
+		requires(std::same_as<std::decay_t<R>, region> && ...)
+	terminal::view workspace(page& p, R&&... each) {
+		std::vector<region> all;
+		(all.push_back(std::forward<R>(each)), ...);
+		return workspace(p, std::move(all));
+	}
+	terminal::view along(std::vector<terminal::view> all);
+	template <std::convertible_to<terminal::view>... V>
+	terminal::view along(V&&... each) {
+		std::vector<terminal::view> all;
+		(all.push_back(terminal::view(std::forward<V>(each))), ...);
+		return along(std::move(all));
+	}
+	terminal::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<terminal::view>()> build);
+	template <std::convertible_to<terminal::view>... V>
+	std::vector<terminal::view> tools(V&&... each) {
+		std::vector<terminal::view> all;
+		(all.push_back(terminal::view(std::forward<V>(each))), ...);
+		return all;
+	}
+	terminal::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys);
+	terminal::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys);
+	terminal::view messages(page& p);
+	// A terminal has no window to fill, so full screen draws nothing.
+	terminal::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys);
+	// Whether a key pressed is a chord, like ctrl+z.
+	bool pressed(const key_press& e, std::string_view chord);
 	// Ways of showing the same list, as the person picks: their own pick, kept for them,
 	// or else `start`, like the one a board's style says, or the first when it's -1.
 	terminal::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, std::vector<terminal::view> ways);

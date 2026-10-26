@@ -287,3 +287,12 @@ editors/fixtures/stripe.one	stripe checkout { price = price_key  quantity = seat
 editors/fixtures/stripe.one	stripe portal { back = "/billing" }	portal	keyword
 editors/fixtures/stripe.one	stripe cancel now	cancel	keyword
 editors/fixtures/stripe.one	webhook stripe /hooks/stripe as stripe {	webhook	declare
+examples/studio/main.one	layout workspace	workspace	plain
+examples/studio/main.one	undo "Undo" icon undo key ctrl+z	undo	keyword
+examples/studio/main.one	redo "Redo"	redo	keyword
+examples/studio/main.one	key ctrl+z	key	keyword
+examples/studio/main.one	toolbar {	toolbar	keyword
+examples/studio/main.one	group "View" {	group	keyword
+examples/studio/main.one	toggle colors "Colors"	toggle	keyword
+examples/studio/main.one	full screen "Full screen"	full	keyword
+examples/studio/main.one	messages	messages	keyword

@@ -1210,6 +1210,36 @@ int main() {
 	return check::run();
 }
 
+TEST("a workspace: its bar, a toolbar of groups whose tools have keys, a side shown while a toggle's on, and a status line saying what was undone") {
+	memory_source data;
+	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return "p1"; });
+	data.on("one::undo", [](const value&, memory_source&) -> answer { return "studio::poster::place"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     return workspace(p, region{"bar", along(history(p, false, "Undo", "undo", {"ctrl+z"}), history(p, true, "Redo", "redo", {"ctrl+y"}), text({words("Posters")}))},
+		                                      region{"toolbar", along(group(p, "Poster", false, false, [&] { return tools(command(p, {.command = "studio::poster::create", .label = "New", .icon = "add", .keys = {"ctrl+n"}})); }),
+		                                                              group(p, "View", true, true, [&] { return tools(toggle(p, "/ list", "List", "layers", {"l"}), full_screen(p, "Full screen", "fullscreen", {"f11"})); }))},
+		                                      region{"main", items(text({words("The posters")}))},
+		                                      region{"side", p.toggled("/ list") ? items(text({words("One a row")})) : one::desktop::view()},
+		                                      region{"status", along(messages(p))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	(void)drawn(nav);
+	CHECK(nav.current().keys().size() == 5);
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'n', .text = "", .control = true}));
+	CHECK(data.runs().size() == 1);
+	CHECK(!key(nav, one::desktop::key_event{.symbol = 'n', .text = "n"}));
+	CHECK(!nav.current().toggled("/ list"));
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'l', .text = "l"}));
+	CHECK(nav.current().toggled("/ list"));
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'z', .text = "", .control = true}));
+	CHECK(nav.current().told().peek() == "Undid place.");
+	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
+}
+
 TEST("work handed back from another thread is dropped when no app is running to take it") {
 	bool ran = false;
 	one::desktop::runtime::post([&ran] { ran = true; });

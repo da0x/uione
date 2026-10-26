@@ -333,6 +333,24 @@ TEST_CASE("a local body that changes other rows is written the same way in both"
     CHECK(ts.find(R"({ const done = c.update("pinned::board", text(e["id"]), { "name": "cleared" }); if (done) return done; })") != std::string::npos);
 }
 
+TEST_CASE("a / between two values divides, while a / alone after a screen's name is still its address") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand layer::raise {", "\tcommand layer::halve {\n\t\tchanges x w\n\t\tx = x + w / 4\n\t\tw = w / 2\n\t}\n\n\tcommand layer::raise {"), out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    // Tighter than +, as * is.
+    CHECK(cpp.find(R"(e.fields["x"] = value(e["x"].as_double() + value(e["w"].as_double() / value(4).as_double()).as_double());)") != std::string::npos);
+    CHECK(ts.find(R"(e["x"] = (number(e["x"]) + number((number(e["w"]) / number(4))));)") != std::string::npos);
+    CHECK(cpp.find(R"(e.fields["w"] = value(e["w"].as_double() / value(2).as_double());)") != std::string::npos);
+}
+
 TEST_CASE("a local each reads its where's right side as the command's, and leaves its rows as its dispatches left them") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tcommand board::create\n", R"(	command board::create

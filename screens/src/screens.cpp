@@ -452,6 +452,23 @@ namespace one::screens {
 		questions_[was->command] = question;
 	}
 
+	void page_base::say(std::string words) {
+		problem_.set("");
+		told_.set(std::move(words));
+	}
+
+	bool page_base::toggled(const std::string& name) {
+		auto on = kept<std::optional<bool>>("toggle " + name);
+		if (!on.peek()) on.set(remembered::get("toggle " + name) == "on");
+		return *on.get();
+	}
+
+	void page_base::toggle(const std::string& name) {
+		bool now = !toggled(name);
+		kept<std::optional<bool>>("toggle " + name).set(now);
+		remembered::set("toggle " + name, now ? "on" : "off");
+	}
+
 	void page_base::run(const std::string& command, const value& fields, std::function<void(const answer&)> after, bool says_why_itself) {
 		run(command, fields, attached_files{}, std::move(after), says_why_itself);
 	}

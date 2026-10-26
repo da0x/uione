@@ -149,4 +149,175 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2 8l6 3 6-3M2 11l6 3 6-3" />
     </svg>
   ),
+  crop: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 1.5v10h10M1.5 4.5h10v10" />
+    </svg>
+  ),
+  copy: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5.5" y="5.5" width="9" height="9" rx="1.5" />
+      <path d="M10.5 5.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2.5" />
+    </svg>
+  ),
+  raise: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 14V5.5M4.5 9L8 5.5 11.5 9M3 2.5h10" />
+    </svg>
+  ),
+  lower: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2v8.5M4.5 7L8 10.5 11.5 7M3 13.5h10" />
+    </svg>
+  ),
+  rotate_left: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 5.9L2.98 7.15 2.8 8.5 2.98 9.85 3.5 11.1 4.32 12.18 5.4 13 6.65 13.52 8 13.7 9.35 13.52 10.6 13 11.68 12.18 12.5 11.1 13.02 9.85 13.2 8.5 13.02 7.15 12.5 5.9 11.68 4.82 10.6 4 9.35 3.48 8 3.3 6.65 3.48 5.4 4M9.1 4.4L5.4 4 6.9 .59" />
+    </svg>
+  ),
+  rotate_right: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12.5 5.9L13.02 7.15 13.2 8.5 13.02 9.85 12.5 11.1 11.68 12.18 10.6 13 9.35 13.52 8 13.7 6.65 13.52 5.4 13 4.32 12.18 3.5 11.1 2.98 9.85 2.8 8.5 2.98 7.15 3.5 5.9 4.32 4.82 5.4 4 6.65 3.48 8 3.3 9.35 3.48 10.6 4M6.9 4.4L10.6 4 9.1 .59" />
+    </svg>
+  ),
+  flip_horizontal: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 1.5v13" />
+      <path d="M6 4L2.5 12H6z" />
+      <path d="M10 4l3.5 8H10z" />
+    </svg>
+  ),
+  flip_vertical: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 8h13" />
+      <path d="M4 6l8-3.5V6z" />
+      <path d="M4 10l8 3.5V10z" />
+    </svg>
+  ),
+  check: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 8.5l3.2 3.2L13 4.8" />
+    </svg>
+  ),
+  close: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
+  ),
+  paste: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3.5" y="3" width="9" height="11.5" rx="1.5" />
+      <rect x="6" y="1.5" width="4" height="3" rx="0.75" />
+      <path d="M6 8h4M6 10.5h4" />
+    </svg>
+  ),
+  save: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2v8M4.5 6.5L8 10l3.5-3.5" />
+      <path d="M2.5 10.5V14h11v-3.5" />
+    </svg>
+  ),
+  undo: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6L9.5 6 10.41 6.12 11.25 6.47 11.97 7.03 12.53 7.75 12.88 8.59 13 9.5 12.88 10.41 12.53 11.25 11.97 11.97 11.25 12.53 10.41 12.88 9.5 13 6 13M6 3L3 6 6 9" />
+    </svg>
+  ),
+  redo: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 6L6.5 6 5.59 6.12 4.75 6.47 4.03 7.03 3.47 7.75 3.12 8.59 3 9.5 3.12 10.41 3.47 11.25 4.03 11.97 4.75 12.53 5.59 12.88 6.5 13 10 13M10 3L13 6 10 9" />
+    </svg>
+  ),
+  text: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 3.5h10M8 3.5V13M6 13h4" />
+    </svg>
+  ),
+  screenshot: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="4.5" width="13" height="9.5" rx="1.5" />
+      <circle cx="8" cy="9.25" r="2.6" />
+      <path d="M5.5 4.5L6.75 2.5h2.5l1.25 2" />
+    </svg>
+  ),
+  fullscreen: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
+    </svg>
+  ),
+  sun: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
+    </svg>
+  ),
+  moon: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13.5 9.5A5.5 5.5 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z" />
+    </svg>
+  ),
+  bold: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 2.5h4.25a2.75 2.75 0 0 1 0 5.5H4.5zM4.5 8h5a3 3 0 0 1 0 6h-5z" />
+    </svg>
+  ),
+  smaller: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 13l3.5-9 3.5 9M2.9 10h4.2M10.5 8.5h4" />
+    </svg>
+  ),
+  larger: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 13l3.5-9 3.5 9M2.9 10h4.2M10.5 8.5h4M12.5 6.5v4" />
+    </svg>
+  ),
+  fill: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M3 4.5h10v7H3z" fill="currentColor" />
+    </svg>
+  ),
+  fit: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M5.5 4.5h5v7h-5z" fill="currentColor" />
+    </svg>
+  ),
+  stretch: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M4 8h8M6 6L4 8l2 2M10 6l2 2-2 2" />
+    </svg>
+  ),
+  center: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="1.5" y="3" width="13" height="10" rx="1" />
+      <path d="M6 6.5h4v3H6z" fill="currentColor" />
+    </svg>
+  ),
+  color: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 1L11.96 7.65A4.6 4.6 0 1 1 4.04 7.65z" />
+    </svg>
+  ),
+  edges: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="5" width="6" height="6" rx="1" />
+      <path d="M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5" />
+    </svg>
+  ),
+  picture: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <circle cx="5.5" cy="6.5" r="1.2" />
+      <path d="M2.5 12l3.5-3.5 2.5 2.5 2-2 3 3" />
+    </svg>
+  ),
+  gallery: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="5" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+      <rect x="9" y="9" width="5" height="5" rx="1" />
+    </svg>
+  ),
 };

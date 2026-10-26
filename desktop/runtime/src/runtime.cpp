@@ -29,6 +29,7 @@ namespace one::desktop::runtime {
 		const auto& t = current_theme();
 		const auto& s = nav.site();
 		const auto& shows = nav.shown(p);
+		p.forget_keys();
 		desktop::view built = shows.build ? shows.build(p) : desktop::column();
 		auto around = p.take_around();
 		bool wide = p.take_wide();
@@ -111,6 +112,14 @@ namespace one::desktop::runtime {
 		if (e.is(keys::escape) && shown_in && shown_in->fullscreen()) {
 			shown_in->fullscreen(false);
 			return true;
+		}
+		// What a line of the page is run by, like ctrl+z: the first said for a key.
+		auto lines = nav.current().keys();
+		for (const auto& [chord, run] : lines) {
+			if (pressed(e, chord)) {
+				run();
+				return true;
+			}
 		}
 		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 		return false;

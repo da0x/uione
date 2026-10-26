@@ -1475,14 +1475,79 @@ namespace one::language {
             bool string_follows = peek(1).kind == token_kind::string;
 
             // menu { link /settings "General" ... }: links down the side of the screen.
-            // main { ... }: one region of the screen's layout.
-            if ((at_word("main") || at_word("side")) && peek(1).kind == token_kind::left_brace) {
+            // main { ... }: one region of the screen's layout, and side when layers { ... }
+            // one shown while something holds.
+            bool region_word = at_word("main") || at_word("side") || at_word("bar") || at_word("toolbar") || at_word("status");
+            if (region_word && (peek(1).kind == token_kind::left_brace || (peek(1).kind == token_kind::identifier && peek(1).text == "when"))) {
                 content_block region;
                 region.type = content_block::kind::region;
                 region.title = advance().text;
+                expression_ptr when = shown_while();
                 region.items = parse_screen_block();
                 end_line();
-                return {where, std::move(region)};
+                screen_item item{where, std::move(region)};
+                item.when = std::move(when);
+                return item;
+            }
+            // group "Rotate" small at end when ... { ... }: a named part of a toolbar.
+            if (at_word("group") && string_follows) {
+                advance();
+                content_block group;
+                group.type = content_block::kind::group;
+                group.title = advance().text;
+                if (at_word("small")) {
+                    advance();
+                    group.small = true;
+                }
+                if (at_word("at") && peek(1).kind == token_kind::identifier && peek(1).text == "end") {
+                    advance();
+                    advance();
+                    group.at_end = true;
+                }
+                expression_ptr when = shown_while();
+                group.items = parse_screen_block();
+                end_line();
+                screen_item item{where, std::move(group)};
+                item.when = std::move(when);
+                return item;
+            }
+            // toggle layers "Layers" icon layers key l: something on or off, read by its name.
+            if (at_word("toggle") && peek(1).kind == token_kind::identifier) {
+                advance();
+                toggle_item toggle;
+                toggle.name_where = peek().where;
+                toggle.name = advance().text;
+                if (at(token_kind::string)) toggle.label = advance().text;
+                parse_icon(toggle.icon, toggle.icon_where);
+                parse_keys(toggle.keys);
+                end_line();
+                return {where, std::move(toggle)};
+            }
+            // undo "Undo" icon undo key ctrl+z, and redo: the page's last step.
+            if ((at_word("undo") || at_word("redo")) && peek(1).kind != token_kind::scope) {
+                history_item history;
+                history.redo = advance().text == "redo";
+                if (at(token_kind::string)) history.label = advance().text;
+                parse_icon(history.icon, history.icon_where);
+                parse_keys(history.keys);
+                end_line();
+                return {where, std::move(history)};
+            }
+            if (at_word("messages") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
+                advance();
+                end_line();
+                return {where, messages_item{}};
+            }
+            // full screen "Full screen" icon fullscreen key f11.
+            if (at_word("full") && peek(1).kind == token_kind::identifier && peek(1).text == "screen") {
+                advance();
+                advance();
+                full_screen_item full;
+                if (at(token_kind::string)) full.label = advance().text;
+                parse_icon(full.icon, full.icon_where);
+                parse_keys(full.keys);
+                end_line();
+                return {where, std::move(full)};
             }
             // heading { project::update "Edit project" }: beside the screen's title.
             if (at_word("heading") && peek(1).kind == token_kind::left_brace) {
@@ -1608,6 +1673,7 @@ namespace one::language {
                     link.icon_where = peek().where;
                     link.icon = expect(token_kind::identifier, "the icon it's drawn as, like workflow").text;
                 }
+                parse_keys(link.keys);
                 end_line();
                 return {where, std::move(link)};
             }
@@ -1812,7 +1878,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
                             // Without along, it goes along the steps its workflow writes.
                             if (at_word("along")) {
                                 advance();
@@ -2017,7 +2083,7 @@ namespace one::language {
                         // move issue::move along board_page.steps: a card let go in another region moves there.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
                             if (at_word("along")) {
                                 advance();
                                 move.along = parse_qualified_name("the view whose list of steps it goes along, like board_page");
@@ -2444,7 +2510,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -2459,6 +2525,7 @@ namespace one::language {
                     button.icon_where = peek().where;
                     button.icon = expect(token_kind::identifier, "the icon it's drawn as, like edit").text;
                 }
+                parse_keys(button.keys);
                 if (at_word("when")) {
                     advance();
                     button.when = parse_when();
@@ -2854,7 +2921,7 @@ namespace one::language {
         }
 
         // expressions, loosest first: || then && then == != then < > <= >= then + -
-        // then *, then ! and unary -, then calls and members, then plain values.
+        // then * and /, then ! and unary -, then calls and members, then plain values.
 
         static int precedence(token_kind kind) {
             switch (kind) {
@@ -2868,7 +2935,8 @@ namespace one::language {
                 case token_kind::greater_equal: return 4;
                 case token_kind::plus:
                 case token_kind::minus:         return 5;
-                case token_kind::star:          return 6;
+                case token_kind::star:
+                case token_kind::slash:         return 6;
                 default:                        return 0;
             }
         }
@@ -2902,6 +2970,36 @@ namespace one::language {
             return out;
         }
 
+        // icon undo: what a line is drawn as.
+        void parse_icon(std::optional<std::string>& icon, location& where) {
+            if (!at_word("icon")) return;
+            advance();
+            where = peek().where;
+            icon = expect(token_kind::identifier, "the icon it's drawn as, like undo").text;
+        }
+
+        // key ctrl+z key ctrl+y: the keys that run a line, each a key's name after any of
+        // ctrl, shift and alt, joined by +.
+        void parse_keys(std::vector<key_chord>& keys) {
+            while (at_word("key")) {
+                advance();
+                key_chord chord;
+                chord.where = peek().where;
+                for (;;) {
+                    if (at(token_kind::identifier) || at(token_kind::number)) {
+                        chord.chord += advance().text;
+                    } else {
+                        fail_expecting("a key, like ctrl+z, f11 or delete");
+                        break;
+                    }
+                    if (!at(token_kind::plus)) break;
+                    advance();
+                    chord.chord += "+";
+                }
+                keys.push_back(std::move(chord));
+            }
+        }
+
         expression_ptr shown_while() {
             if (!at_word("when")) return nullptr;
             advance();
@@ -2932,14 +3030,17 @@ namespace one::language {
         expression_ptr parse_binary(int loosest) {
             auto left = parse_unary();
             for (;;) {
-                // labels has bug compares as tightly as ==.
+                // labels has bug compares as tightly as ==, and a / alone after a value
+                // divides it, where anywhere else it's the root address.
                 bool has = at_word("has");
-                int p = has ? precedence(token_kind::equal) : precedence(peek().kind);
+                bool divides = at(token_kind::route) && peek().text == "/";
+                token_kind kind = has ? token_kind::has : divides ? token_kind::slash : peek().kind;
+                int p = precedence(has ? token_kind::equal : kind);
                 if (p == 0 || p <= loosest) return left;
                 const token& op = advance();
                 auto e = std::make_unique<expression>();
                 e->where = op.where;
-                e->node = binary_expression{has ? token_kind::has : op.kind, std::move(left), parse_binary(p)};
+                e->node = binary_expression{kind, std::move(left), parse_binary(p)};
                 left = std::move(e);
             }
         }

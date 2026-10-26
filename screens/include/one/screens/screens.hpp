@@ -146,6 +146,10 @@ namespace one::screens {
 		state<std::optional<asking>> asked() { return asked_; }
 		void answer_asked(bool yes);
 		state<std::string> problem() { return problem_; }
+		// What the page told the person it just did, like "Undid place", which a workspace's
+		// messages show until the next; saying something clears its problem().
+		state<std::string> told() { return told_; }
+		void say(std::string words);
 		// What turned a command down the last time it ran here, until it runs again.
 		std::string error(const std::string& command) const;
 		void clear(const std::string& command);
@@ -171,6 +175,22 @@ namespace one::screens {
 		// margin, only what the page is made of.
 		void fill() { fill_ = true; }
 		bool take_fill() { return std::exchange(fill_, false); }
+
+		// The keys its lines are run by, like ctrl+z, gathered each time it's built,
+		// while they're shown: the first said for a key takes it.
+		void on_key(std::string chord, std::function<void()> run) { keys_.emplace_back(std::move(chord), std::move(run)); }
+		const std::vector<std::pair<std::string, std::function<void()>>>& keys() const { return keys_; }
+		void forget_keys() { keys_.clear(); }
+
+		// Whether one of its toggles is on, named by the screen's address and its own,
+		// as the person left it on this machine (decision 0017); and turning it.
+		bool toggled(const std::string& name);
+		void toggle(const std::string& name);
+
+		// Whether what's being built is in a toolbar's group, and a small one: its
+		// buttons drawn as tools.
+		std::optional<bool> in_group() const { return in_group_; }
+		void in_group(std::optional<bool> small) { in_group_ = small; }
 
 		// Something the page keeps while it's open, made the first time it's asked for,
 		// like what's typed in a form: the same each time the screen is built.
@@ -201,10 +221,13 @@ namespace one::screens {
 		std::vector<part> title_;
 		bool wide_ = false;
 		bool fill_ = false;
+		std::vector<std::pair<std::string, std::function<void()>>> keys_;
+		std::optional<bool> in_group_;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;          // commands on their way, by name
 		state<std::map<std::string, std::string>> errors_;   // why each was last turned down
 		state<std::string> problem_;
+		state<std::string> told_;
 		std::map<std::string, std::string> questions_;
 		state<std::optional<asking>> asked_;
 	};

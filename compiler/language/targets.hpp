@@ -63,6 +63,13 @@ namespace one::language {
         drawn_by{"heading", "a heading", everywhere},
         drawn_by{"menu", "a menu", everywhere},
         drawn_by{"region", "a layout's region", everywhere},
+        drawn_by{"layout.workspace", "a workspace, filling the window", everywhere},
+        drawn_by{"group", "a toolbar's group", everywhere},
+        drawn_by{"toggle", "a toggle", everywhere},
+        drawn_by{"undo", "undo and redo", everywhere},
+        drawn_by{"messages", "messages", everywhere},
+        drawn_by{"full_screen", "full screen", everywhere},
+        drawn_by{"key", "a key", everywhere},
         drawn_by{"table", "a table", everywhere},
         drawn_by{"table.link", "a table's link", everywhere},
         drawn_by{"table.tabs", "a table's tabs, by … over", everywhere},
@@ -206,6 +213,7 @@ namespace one::language {
                             case content_block::kind::menu: use("menu"); break;
                             case content_block::kind::region: use("region"); break;
                             case content_block::kind::heading: use("heading"); break;
+                            case content_block::kind::group: use("group"); break;
                         }
                         if (!n.hue.empty()) use("section.color");
                         if (n.icon) use("section.icon");
@@ -222,6 +230,7 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, content_link>) {
                         use(n.built.empty() ? "link" : "link.built");
                         if (n.icon) use("link.icon");
+                        if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, table_item>) {
                         use("table");
                         if (n.link) use("table.link");
@@ -275,6 +284,7 @@ namespace one::language {
                         use(n.along ? "button.along" : "button");
                         if (n.when) use("button.when");
                         if (n.icon) use("button.icon");
+                        if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, component_item>) {
                         use("component");
                     } else if constexpr (std::is_same_v<T, thread_item>) {
@@ -292,6 +302,17 @@ namespace one::language {
                         use(n.drawn ? "diagram" : "grid");
                     } else if constexpr (std::is_same_v<T, find_item>) {
                         use("find");
+                    } else if constexpr (std::is_same_v<T, toggle_item>) {
+                        use("toggle");
+                        if (!n.keys.empty()) use("key");
+                    } else if constexpr (std::is_same_v<T, history_item>) {
+                        use("undo");
+                        if (!n.keys.empty()) use("key");
+                    } else if constexpr (std::is_same_v<T, messages_item>) {
+                        use("messages");
+                    } else if constexpr (std::is_same_v<T, full_screen_item>) {
+                        use("full_screen");
+                        if (!n.keys.empty()) use("key");
                     }
                 },
                 i.node);
@@ -304,7 +325,7 @@ namespace one::language {
                     declarations(n->declarations, out);
                 } else if (auto* s = std::get_if<screen_declaration>(&d.node)) {
                     if (s->landing) out.push_back({"landing", s->landing_where});
-                    if (s->layout) out.push_back({"layout", s->layout_where});
+                    if (s->layout) out.push_back({*s->layout == "workspace" ? "layout.workspace" : "layout", s->layout_where});
                     if (s->under) out.push_back({"under", s->under_where});
                     items(s->items, out);
                 } else if (auto* h = std::get_if<header_declaration>(&d.node)) {

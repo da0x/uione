@@ -14,6 +14,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { partsOf } from "./keys.js";
+import { useSaying } from "./said.js";
 
 export type ViewStatus = "loading" | "live" | "stale" | "denied";
 
@@ -348,6 +349,7 @@ export interface Runner {
 export function useRunner(): Runner {
   const source = useSource();
   const { show } = useContext(ShownContext);
+  const { say } = useSaying();
   const [running, setRunning] = useState<ReadonlySet<string>>(new Set());
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const clear = useCallback((command: string) => {
@@ -369,6 +371,8 @@ export function useRunner(): Runner {
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         setErrors((current) => ({ ...current, [command]: message }));
+        // Said in a workspace's messages too, where it has some.
+        say({ text: message, problem: true });
         return undefined;
       } finally {
         setRunning((current) => {
@@ -378,7 +382,7 @@ export function useRunner(): Runner {
         });
       }
     },
-    [source, clear, show],
+    [source, clear, show, say],
   );
   const run = useCallback(async (command: string, input: CommandInput = {}) => (await reply(command, input)) !== undefined, [reply]);
   return { run, reply, busy: (command) => running.has(command), error: (command) => errors[command], clear };

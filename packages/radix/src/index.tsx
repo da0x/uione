@@ -1795,16 +1795,37 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children, icon }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
+    const drawn = icon ? buttonIcons[icon] : undefined;
+    if (tool) {
+      // A tool in a workspace's toolbar: flat, tinted while it's on; large, its icon
+      // over its words; small, its icon alone, or its words when it has none.
+      const shape = tool === "large" ? "min-w-[3.75rem] flex-col gap-1 px-2 py-1.5 text-xs" : "size-8 text-xs";
+      return (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onClick}
+          aria-pressed={on}
+          aria-label={tool === "small" && drawn ? words : undefined}
+          title={hint ?? words}
+          className={`inline-flex items-center justify-center rounded-control border border-transparent transition-colors hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${shape} ${on ? "border-accent/50 bg-accent-soft font-semibold text-accent" : "text-ink"}`}
+        >
+          {drawn}
+          {(tool === "large" || !drawn) && <span className="whitespace-nowrap leading-none">{children}</span>}
+        </button>
+      );
+    }
     const pressed = (
       <button
         type="button"
         disabled={disabled}
         onClick={onClick}
         aria-label={icon ? words : undefined}
-        title={icon ? words : undefined}
+        aria-pressed={on}
+        title={hint ?? (icon ? words : undefined)}
         className={`self-start ${pressable} ${button[kind]} ${icon && buttonIcons[icon] ? "!px-2" : ""}`}
       >
         {(icon && buttonIcons[icon]) || children}
@@ -1908,8 +1929,24 @@ export const radix: ComponentSet = {
 
   // Two columns: what the page is about, wide, and what's said of it, narrow, beside
   // it on a wide screen and after it on a phone. Any other layout is one column.
+  // A workspace, filling the window: its bar along the top, its toolbar under it,
+  // the work beside what's at its side, and a status line along the bottom.
   Layout: ({ name, regions }) =>
-    name === "two_columns" ? (
+    name === "workspace" ? (
+      <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
+        {regions.bar && <div className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-surface px-3">{regions.bar}</div>}
+        {regions.toolbar && (
+          <div role="toolbar" className="flex shrink-0 items-stretch gap-1 overflow-x-auto border-b border-line bg-surface px-2 py-1 [&>[data-at-end]]:ml-auto [&>[data-at-end]~[data-at-end]]:ml-0">
+            {regions.toolbar}
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1">
+          <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
+          {regions.side && <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-surface p-3">{regions.side}</aside>}
+        </div>
+        {regions.status && <div className="flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line bg-surface px-3 py-1 text-xs text-muted">{regions.status}</div>}
+      </div>
+    ) : name === "two_columns" ? (
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
         <div className="flex min-w-0 flex-col gap-10">{regions.main}</div>
         {/* Beside the page, a section is a glance at something, so its heading is a
@@ -1925,6 +1962,22 @@ export const radix: ComponentSet = {
         ))}
       </div>
     ),
+
+  // A toolbar's group: its tools, then its name under them, and a line after it; a
+  // small one's tools in two rows.
+  Group: ({ name, small, atEnd, children }) => (
+    <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0">
+      <div className={small ? "grid grid-flow-col grid-rows-2 gap-0.5" : "flex items-start gap-0.5"}>{children}</div>
+      <span className="text-[0.6875rem] leading-tight text-muted">{name}</span>
+    </div>
+  ),
+
+  // What was just done, or why something was turned down, in the status line.
+  Messages: ({ text, problem }) => (
+    <span role="status" aria-live="polite" className={problem ? "text-danger" : ""}>
+      {text}
+    </span>
+  ),
 
   // Buttons in a row; while none of them applies, the row takes no room.
   Actions: ({ children }) => <div className="flex flex-wrap items-center gap-2 empty:hidden">{children}</div>,

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <initializer_list>
+#include <cctype>
 #include <functional>
 #include <map>
 #include <optional>
@@ -196,6 +197,8 @@ namespace one::language {
         std::map<std::string, std::string> placed_;  // where each namespace's at was first said
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
+        std::set<std::string> toggles_;  // the toggles of the screen being checked, read by its whens
+        bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
             if (ns.empty()) return "";
@@ -932,7 +935,8 @@ namespace one::language {
         // The regions each layout has, in the order it draws them, or none for a layout
         // there isn't.
         static const std::vector<std::string>* regions_of(const std::string& layout) {
-            static const std::map<std::string, std::vector<std::string>> layouts{{"single", {"main"}}, {"two_columns", {"main", "side"}}};
+            static const std::map<std::string, std::vector<std::string>> layouts{
+                {"single", {"main"}}, {"two_columns", {"main", "side"}}, {"workspace", {"bar", "toolbar", "main", "side", "status"}}};
             auto found = layouts.find(layout);
             return found == layouts.end() ? nullptr : &found->second;
         }
@@ -2687,7 +2691,7 @@ namespace one::language {
             front_page(s.items, s.landing.has_value(), nullptr);
             std::string layout = s.layout ? *s.layout : layout_.empty() ? "single" : layout_;
             const std::vector<std::string>* regions = regions_of(layout);
-            if (s.layout && !regions) error(s.layout_where, "layout is single or two_columns");
+            if (s.layout && !regions) error(s.layout_where, "layout is single, two_columns or workspace");
             std::set<std::string> placed;
             bool any_region = false;
             for (const auto& item : s.items) {
@@ -2712,6 +2716,17 @@ namespace one::language {
                     }
                 }
             }
+            // Its toggles, each named once, so its whens can read them wherever they are.
+            toggles_.clear();
+            std::function<void(const std::vector<screen_item>&)> toggles = [&](const std::vector<screen_item>& inside) {
+                for (const auto& item : inside) {
+                    if (auto* t = std::get_if<toggle_item>(&item.node); t && !toggles_.insert(t->name).second) {
+                        error(t->name_where, "toggle " + t->name + " is here twice; a screen has one of each");
+                    }
+                    if (auto* block = std::get_if<content_block>(&item.node)) toggles(block->items);
+                }
+            };
+            toggles(s.items);
             screen_ = &s.items;
             screen_items(ns, s.items, full_route(ns, s.route));
             screen_ = nullptr;
@@ -2892,7 +2907,7 @@ namespace one::language {
                 if (!has) error(e.where, "view " + object->name.text() + " has no " + value + " for the button to read");
             } else if (auto* name = std::get_if<name_expression>(&e.node)) {
                 const std::string word = name->name.text();
-                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me") error(e.where, how);
+                if (name->name.parts.size() != 2 && word != "true" && word != "false" && word != "none" && word != "me" && !toggles_.contains(word)) error(e.where, how);
             } else if (!std::holds_alternative<literal_expression>(e.node)) {
                 error(e.where, how);
             }
@@ -3161,10 +3176,13 @@ namespace one::language {
         // they don't have would show nothing but its words, so a misspelled one is an
         // error.
         void icon(const std::optional<std::string>& name, location where) {
-            static const std::set<std::string, std::less<>> known{"edit",     "add",      "follow", "following", "settings", "workflow", "delete", "archive",
-                                                                  "robot",    "building", "database", "code",     "connect",  "shield",   "cloud",  "chart",
-                                                                  "spark",    "people",   "lock",     "globe",    "layers"};
-            if (name && !known.contains(*name)) error(where, "there's no icon " + *name + "; there are " + join_words({known.begin(), known.end()}));
+            static const std::set<std::string, std::less<>> known{
+                "edit",   "add",    "follow", "following", "settings", "workflow", "delete", "archive", "robot",   "building", "database",   "code",
+                "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
+                "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
+                "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
+                "center", "color", "edges"};
+            if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
         // The colors a section or a filter can be drawn in, the library's hues, which
@@ -3182,12 +3200,51 @@ namespace one::language {
             mean(where, name.size(), "color " + name + ": " + choice_shown(*e->second.node, name), e->second.from, "screen");
         }
 
+        // ctrl+z, shift+delete or f11: any of ctrl, shift and alt, once each, then a key.
+        void keys(const std::vector<key_chord>& chords) {
+            static const std::set<std::string, std::less<>> named{
+                "escape", "enter", "tab", "space", "backspace", "delete", "insert", "home", "end", "page_up", "page_down", "left", "right", "up", "down",
+                "minus", "equal", "plus", "comma", "period", "slash", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12"};
+            for (const auto& c : chords) {
+                std::vector<std::string> parts;
+                for (std::size_t from = 0; from <= c.chord.size();) {
+                    std::size_t plus = std::min(c.chord.find('+', from), c.chord.size());
+                    parts.push_back(c.chord.substr(from, plus - from));
+                    from = plus + 1;
+                }
+                std::set<std::string> held;
+                bool fine = !parts.empty();
+                for (std::size_t i = 0; i + 1 < parts.size(); ++i) {
+                    if ((parts[i] != "ctrl" && parts[i] != "shift" && parts[i] != "alt") || !held.insert(parts[i]).second) fine = false;
+                }
+                const std::string& last = parts.back();
+                bool key = (last.size() == 1 && std::isalnum(static_cast<unsigned char>(last[0]))) || named.contains(last);
+                if (!fine || !key) error(c.where, "there's no key " + c.chord + "; a key is like ctrl+z, shift+delete, f11 or escape");
+            }
+        }
+
         void screen_items(const std::string& ns, const std::vector<screen_item>& items, const std::string& route) {
             for (const auto& item : items) {
-                if (auto* b = std::get_if<button_item>(&item.node)) icon(b->icon, b->icon_where);
+                if (auto* b = std::get_if<button_item>(&item.node)) {
+                    icon(b->icon, b->icon_where);
+                    keys(b->keys);
+                }
+                if (auto* t = std::get_if<toggle_item>(&item.node)) {
+                    icon(t->icon, t->icon_where);
+                    keys(t->keys);
+                }
+                if (auto* h = std::get_if<history_item>(&item.node)) {
+                    icon(h->icon, h->icon_where);
+                    keys(h->keys);
+                }
+                if (auto* f = std::get_if<full_screen_item>(&item.node)) {
+                    icon(f->icon, f->icon_where);
+                    keys(f->keys);
+                }
                 if (auto* block = std::get_if<content_block>(&item.node)) hue(block->hue, block->hue_where);
                 if (auto* l = std::get_if<content_link>(&item.node)) {
                     icon(l->icon, l->icon_where);
+                    keys(l->keys);
                     if (!l->built.empty() && l->built != "release" && l->built != "source") {
                         error(l->built_where, "a link to what the site was built from is build.release, its uione release's notes, or build.source, its commit");
                     }
@@ -3201,6 +3258,11 @@ namespace one::language {
                 }
                 if (item.when) verify_condition(ns, *item.when, route);
                 if (auto* block = std::get_if<content_block>(&item.node)) {
+                    if (block->type == content_block::kind::group && !in_toolbar_) {
+                        error(item.where, "a group is part of a workspace's toolbar, so it goes in toolbar { ... }");
+                    }
+                    bool was_in_toolbar = in_toolbar_;
+                    if (block->type == content_block::kind::region) in_toolbar_ = block->title == "toolbar";
                     if (block->type == content_block::kind::menu) {
                         for (const auto& inside : block->items) {
                             if (!std::holds_alternative<content_link>(inside.node)) {
@@ -3209,6 +3271,7 @@ namespace one::language {
                         }
                     }
                     screen_items(ns, block->items, route);
+                    in_toolbar_ = was_in_toolbar;
                 } else if (auto* box = std::get_if<find_item>(&item.node)) {
                     for (const auto& source : box->sources) {
                         const view_each* list = named_list(ns, source.view, source.list, route);

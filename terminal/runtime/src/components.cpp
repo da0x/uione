@@ -161,7 +161,8 @@ namespace one::terminal::runtime {
 		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
 	}
 
-	terminal::view link(page& p, std::string words, std::string to, std::string) {
+	terminal::view link(page& p, std::string words, std::string to, std::string, std::vector<std::string> keys) {
+		for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
 		if (leaves(to)) return terminal::link(std::move(words), [to] { open_in_browser(to); });
 		if (to.starts_with("#")) {
 			return terminal::link(std::move(words), [&p, name = to.substr(1)] {
@@ -187,9 +188,11 @@ namespace one::terminal::runtime {
 	terminal::view command(page& p, command_button b) {
 		auto shown = command_of(p, b);
 		if (!shown) return {};
-		return terminal::button(shown->label, [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
+		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
 			if (!busy) p.run(name, fields);
-		}, b.primary);
+		};
+		for (const auto& k : b.keys) p.on_key(k, run);
+		return terminal::button(shown->label, std::move(run), b.primary);
 	}
 
 	terminal::view confirm(page& p, std::string command_name, std::string question) {

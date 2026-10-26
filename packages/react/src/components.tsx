@@ -10,7 +10,8 @@ import { createPortal } from "react-dom";
 import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
-import { ShownPath, fill, useConfirmContext, usePageTitle, useSignIn, useSite } from "./app.js";
+import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
+import { hintOf, useKeys, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -62,10 +63,12 @@ function useFilled(): (to: string) => string {
     });
 }
 
-export function Link({ to, icon, children }: { to: string; icon?: string; children: ReactNode }) {
+export function Link({ to, icon, keys, children }: { to: string; icon?: string; keys?: string[]; children: ReactNode }) {
   const ui = useUI();
   const link = useLinks();
   const filled = useFilled()(to);
+  const navigate = useNavigate();
+  useKeys(keys, () => void navigate(filled));
   return (
     <ui.Link {...link(filled)} icon={icon}>
       {children}
@@ -336,9 +339,11 @@ export function Region({ children }: { name: string; children?: ReactNode }) {
   return <>{children}</>;
 }
 
-// A screen laid out in regions, gathered from the Regions inside it by name.
+// A screen laid out in regions, gathered from the Regions inside it by name. A
+// workspace fills the window, with nothing of the site around it.
 export function Layout({ name, children }: { name: string; children?: ReactNode }) {
   const ui = useUI();
+  useFill(name === "workspace");
   const regions: Record<string, ReactNode> = {};
   Children.forEach(children, (child) => {
     if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region) regions[child.props.name] = child.props.children;
@@ -997,6 +1002,7 @@ export function Command({
   when = true,
   allowed = true,
   icon,
+  keys,
 }: {
   name: string;
   id?: string;
@@ -1004,13 +1010,19 @@ export function Command({
   when?: boolean;
   allowed?: boolean; // whether the person reading may run it; while they may not, it isn't there
   icon?: string; // drawn as this, like edit, its words still naming it
+  keys?: string[]; // run by these too, like ctrl+s, while it's there
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
-  if (!when || !allowed) return null;
+  const tool = useTool();
+  const shown = when && allowed;
+  const run = () => void runner.run(name, id === undefined ? {} : { id });
+  useKeys(keys, run, shown && !runner.busy(name));
+  if (!shown) return null;
+  const words = says ?? label(action(name));
   return (
-    <ui.Button kind={icon ? "secondary" : "primary"} icon={icon} disabled={runner.busy(name)} error={runner.error(name)} onClick={() => void runner.run(name, id === undefined ? {} : { id })}>
-      {says ?? label(action(name))}
+    <ui.Button kind={icon || tool ? "secondary" : "primary"} icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={runner.busy(name)} error={runner.error(name)} onClick={run}>
+      {words}
     </ui.Button>
   );
 }

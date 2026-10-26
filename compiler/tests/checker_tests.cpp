@@ -1387,7 +1387,7 @@ TEST_CASE("details show values the view has") {
 TEST_CASE("a screen's regions are its layout's, and hold everything once there are any") {
     const std::string start = "namespace a {\n";
     CHECK(check_source(start + "screen \"S\" /s {\n\tlayout two_columns\n\tmain {\n\t\ttext \"a\"\n\t}\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").empty());
-    CHECK(only_error(start + "screen \"S\" /s {\n\tlayout three_columns\n\ttext \"a\"\n}\n}\n").message == "layout is single or two_columns");
+    CHECK(only_error(start + "screen \"S\" /s {\n\tlayout three_columns\n\ttext \"a\"\n}\n}\n").message == "layout is single, two_columns or workspace");
     CHECK(only_error(start + "screen \"S\" /s {\n\tside {\n\t\ttext \"b\"\n\t}\n}\n}\n").message == "layout single has no region side; its regions are main");
     CHECK(only_error(start + "screen \"S\" /s {\n\tlayout two_columns\n\tmain {\n\t\ttext \"a\"\n\t}\n\ttext \"b\"\n}\n}\n").message ==
           "this screen puts its items in regions, so this goes in one too, like main { ... }");
@@ -1447,9 +1447,9 @@ TEST_CASE("buttons, links and a toolbar's buttons are drawn as icons that exist"
                               "\tform issue::create {\n\t\ttitle\n\t}\n}\n}\n")
               .empty());
     CHECK(check_source(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Settings\" icon settings\n}\n}\n").empty());
-    CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message ==
-          "there's no icon flow; there are add, archive, building, chart, cloud, code, connect, database, delete, edit, follow, following, globe, layers, lock, "
-          "people, robot, settings, shield, spark and workflow");
+    CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Workflow\" icon flow\n}\n}\n").message == "there's no icon flow; did you mean follow?");
+    CHECK(only_error(code + "screen \"Issues\" /issues {\n\tlink /workflow \"Turn\" icon rotate_lft\n}\n}\n").message ==
+          "there's no icon rotate_lft; did you mean rotate_left?");
 }
 
 TEST_CASE("a section is drawn in one of the library's colors") {
@@ -1641,7 +1641,7 @@ TEST_CASE("a front page says its statement, its titles' overlines, its sections'
     CHECK(changed("\t\t\ttext \"Checked.\"", "\t\t\tstatement \"Checked.\"") == "a statement is a front page's one sentence, outside its hero and sections");
     CHECK(changed("\t\toverline \"What we do\"\n", "\t\toverline \"What\"\n\t\toverline \"we do\"\n") == "a title has one overline over it");
     CHECK(changed("\t\toverline \"Print\"", "\t\toverline \"{x.y}\"") == "an overline is plain words, as the title under it is");
-    CHECK(changed("icon shield", "icon dragon").starts_with("there's no icon dragon; there are add, archive, building"));
+    CHECK(changed("icon shield", "icon dragon") == "there's no icon dragon");
     CHECK(changed("\"Fast.\" {", "\"Fast.\" icon shield {") == "an icon is drawn beside a front page's section's title");
     CHECK(changed("\"Talk\" {", "\"Talk\" as steps {") == "a section as steps holds its steps, each a section, like section \"Plan\" { text \"...\" }");
     CHECK(changed("\"mailto:hello@example.com\"", "\"mailto:hello\"") == "an email link is mailto: and the address, like \"mailto:hello@example.com\"");

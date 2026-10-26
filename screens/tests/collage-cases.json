@@ -1,0 +1,57 @@
+{
+  "about": "Where a collage's layers go, as screens/src/collage.cpp and packages/react/src/collage.ts both work it out. Each case names the function, what it's given and what it gives; every number is worked out by hand, so the cases hold the rules, not either copy of them.",
+  "cases": [
+    { "what": "sitting", "sits": "fit", "picture": [1000, 500], "size": [1920, 1080], "box": [0, 60, 1920, 960] },
+    { "what": "sitting", "sits": "fill", "picture": [1000, 1000], "size": [1920, 1080], "box": [0, -420, 1920, 1920] },
+    { "what": "sitting", "sits": "center", "picture": [400, 300], "size": [1000, 1000], "box": [300, 350, 400, 300] },
+    { "what": "sitting", "sits": "stretch", "picture": [400, 300], "size": [1000, 1000], "box": [0, 0, 1000, 1000] },
+    { "what": "sitting", "sits": "", "picture": [0, 0], "size": [1000, 800], "box": [0, 0, 1000, 800] },
+
+    { "what": "background_at", "sits": "fill", "size": [1920, 1080], "zoom": 1, "slide": [0.5, 0], "picture": [1000, 1000], "box": [0, -840, 1920, 1920] },
+    { "what": "background_at", "sits": "fill", "size": [1920, 1080], "zoom": 1, "slide": [0.5, 1], "picture": [1000, 1000], "box": [0, 0, 1920, 1920] },
+    { "what": "background_at", "sits": "fit", "size": [1920, 1080], "zoom": 2, "slide": [0.5, 0.5], "picture": [1920, 1080], "box": [-960, -540, 3840, 2160] },
+    { "what": "background_at", "sits": "fit", "size": [1920, 1080], "zoom": 1, "slide": [0, 0.5], "picture": [1000, 1000], "box": [0, 0, 1080, 1080] },
+    { "what": "background_at", "sits": "center", "size": [1000, 1000], "zoom": 1, "slide": [0, 0], "picture": [400, 300], "box": [300, 350, 400, 300] },
+
+    { "what": "slides", "sits": "fit", "size": [1920, 1080], "zoom": 1, "at": [0, 60, 1920, 960], "slides": true },
+    { "what": "slides", "sits": "fit", "size": [1920, 1080], "zoom": 1, "at": [0, 0, 1920, 1080], "slides": false },
+    { "what": "slides", "sits": "stretch", "size": [1920, 1080], "zoom": 1, "at": [0, 0, 1920, 1080], "slides": false },
+    { "what": "slides", "sits": "center", "size": [1000, 1000], "zoom": 1, "at": [300, 350, 400, 300], "slides": false },
+    { "what": "slides", "sits": "center", "size": [1000, 1000], "zoom": 2, "at": [100, 200, 800, 600], "slides": true },
+
+    { "what": "whole_of", "shown": [100, 100, 200, 100], "crop": [0.5, 0.25, 0.5, 0.5], "box": [-100, 50, 400, 200] },
+
+    { "what": "snap_lines", "size": [100, 50], "others": [[10, 10, 20, 20]], "across": [0, 50, 100, 10, 20, 30], "down": [0, 25, 50, 10, 20, 30] },
+
+    { "what": "moved", "from": [10, 10, 20, 20], "by": [5, 7], "size": [1000, 1000], "others": [], "close": 8, "snapping": false, "box": [15, 17, 20, 20] },
+    { "what": "moved", "from": [0, 0, 100, 100], "by": [447, 200], "size": [1000, 1000], "others": [], "close": 8, "snapping": true, "box": [450, 200, 100, 100], "guide_x": 500 },
+    { "what": "moved", "from": [0, 0, 100, 100], "by": [447, 200], "size": [1000, 1000], "others": [], "close": 8, "snapping": false, "box": [447, 200, 100, 100] },
+    { "what": "moved", "from": [0, 0, 100, 100], "by": [40, 45], "size": [1000, 1000], "others": [], "close": 8, "snapping": true, "box": [40, 40, 100, 100], "guide_corner": [[0, 0], [40, 40]] },
+    { "what": "moved", "from": [0, 0, 100, 100], "by": [858, 855], "size": [1000, 1000], "others": [], "close": 8, "snapping": true, "box": [858, 858, 100, 100], "guide_corner": [[1000, 1000], [958, 958]] },
+    { "what": "moved", "from": [0, 0, 50, 50], "by": [203, 600], "size": [1000, 1000], "others": [[250, 100, 100, 100]], "close": 8, "snapping": true, "box": [200, 600, 50, 50], "guide_x": 250 },
+
+    { "what": "resized", "from": [100, 100, 200, 100], "corner": 2, "by": [100, 0], "keep_shape": true, "size": [1000, 1000], "others": [], "close": 8, "snapping": false, "box": [100, 100, 300, 150] },
+    { "what": "resized", "from": [100, 100, 200, 100], "corner": 0, "by": [-50, 20], "keep_shape": false, "size": [1000, 1000], "others": [], "close": 8, "snapping": false, "box": [50, 120, 250, 80] },
+    { "what": "resized", "from": [100, 100, 200, 100], "corner": 2, "by": [197, 0], "keep_shape": true, "size": [1000, 1000], "others": [], "close": 8, "snapping": true, "box": [100, 100, 400, 200], "guide_x": 500 },
+    { "what": "resized", "from": [100, 100, 200, 100], "corner": 2, "by": [-500, -500], "keep_shape": false, "size": [1000, 1000], "others": [], "close": 8, "snapping": false, "box": [100, 100, 8, 8] },
+
+    { "what": "slid", "from": [0, -420, 1920, 1920], "by": [0, 415], "across": [0, 0], "down": [-840, 0], "size": [1920, 1080], "close": 8, "snapping": true, "box": [0, -5, 1920, 1920] },
+    { "what": "slid", "from": [0, -420, 1920, 1920], "by": [0, 3], "across": [0, 0], "down": [-840, 0], "size": [1920, 1080], "close": 8, "snapping": true, "box": [0, -420, 1920, 1920], "guide_y": 540 },
+    { "what": "slid", "from": [0, -420, 1920, 1920], "by": [0, 3], "across": [0, 0], "down": [-840, 0], "size": [1920, 1080], "close": 8, "snapping": false, "box": [0, -417, 1920, 1920] },
+    { "what": "slid", "from": [0, -420, 1920, 1920], "by": [50, -1000], "across": [0, 0], "down": [-840, 0], "size": [1920, 1080], "close": 8, "snapping": true, "box": [0, -840, 1920, 1920] },
+
+    { "what": "cropped", "kept": [10, 10, 20, 20], "edges": 0, "by": [100, -100], "whole": [0, 0, 50, 50], "box": [30, 0, 20, 20] },
+    { "what": "cropped", "kept": [10, 10, 20, 20], "edges": 4, "by": [-20, 0], "whole": [0, 0, 50, 50], "box": [10, 10, 8, 20] },
+    { "what": "cropped", "kept": [10, 10, 20, 20], "edges": 3, "by": [-30, -5], "whole": [0, 0, 50, 50], "box": [0, 5, 30, 25] },
+
+    { "what": "corner_at", "box": [0, 0, 100, 50], "at": [98, 52], "handle": 5, "corner": 2 },
+    { "what": "corner_at", "box": [0, 0, 100, 50], "at": [50, 50], "handle": 5, "corner": -1 },
+    { "what": "corner_at", "box": [0, 0, 100, 50], "at": [-3, 4], "handle": 5, "corner": 0 },
+
+    { "what": "crop_edges_at", "box": [0, 0, 100, 50], "at": [0, 0], "handle": 5, "edges": 3 },
+    { "what": "crop_edges_at", "box": [0, 0, 100, 50], "at": [50, 25], "handle": 5, "edges": 0 },
+    { "what": "crop_edges_at", "box": [0, 0, 100, 50], "at": [200, 200], "handle": 5, "edges": -1 },
+    { "what": "crop_edges_at", "box": [0, 0, 100, 50], "at": [100, 25], "handle": 5, "edges": 4 },
+    { "what": "crop_edges_at", "box": [0, 0, 100, 50], "at": [99, 52], "handle": 5, "edges": 12 }
+  ]
+}

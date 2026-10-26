@@ -174,23 +174,29 @@ TEST_CASE("one run starts the first app a project targets, or the one --target n
     CHECK(driver::plan_run(built, out, "terminal", true).refusal == "this project doesn't build terminal");
 }
 
-TEST_CASE("the gallery uses everything a screen can say, in every target, and what one can't draw yet is in its gaps") {
+TEST_CASE("the gallery and the studio use everything a screen can say, in every target, and what one can't draw yet is in its gaps") {
     const std::string folder = std::string(UIONE_ROOT) + "/examples/gallery";
-    language::diagnostics out;
-    std::vector<language::file> files;
-    for (const auto& path : platform::find_one_files({folder})) files.push_back(language::parse(path, *platform::read_file(path), out));
-    REQUIRE(!files.empty());
-    language::check(files, out);
-    // Nothing's wrong with it but what a target can't draw.
-    for (const auto& d : out) {
-        if (d.message.find(" drawn by the ") == std::string::npos) FAIL_CHECK(language::format(d));
-    }
-    // It's built for every target there is.
-    auto targets = language::targets_of(files);
-    for (const auto& t : language::all_targets) CHECK(language::listed(targets, t));
-    // Every element, setting and kind of field in the table is in it somewhere.
+    // The gallery keeps its data in the cloud; the studio keeps its on the machine, so
+    // it says what only such a project can, like undo.
     std::vector<language::targets_detail::used> used;
-    for (const auto& f : files) language::targets_detail::declarations(f.declarations, used);
+    std::vector<std::vector<language::file>> projects;
+    for (const char* example : {"/examples/gallery", "/examples/studio"}) {
+        language::diagnostics out;
+        std::vector<language::file> files;
+        for (const auto& path : platform::find_one_files({std::string(UIONE_ROOT) + example})) files.push_back(language::parse(path, *platform::read_file(path), out));
+        REQUIRE(!files.empty());
+        language::check(files, out);
+        // Nothing's wrong with it but what a target can't draw.
+        for (const auto& d : out) {
+            if (d.message.find(" drawn by the ") == std::string::npos) FAIL_CHECK(language::format(d));
+        }
+        // It's built for every target there is.
+        auto targets = language::targets_of(files);
+        for (const auto& t : language::all_targets) CHECK(language::listed(targets, t));
+        for (const auto& f : files) language::targets_detail::declarations(f.declarations, used);
+        projects.push_back(std::move(files));
+    }
+    // Every element, setting and kind of field in the table is in one of them somewhere.
     for (const auto& s : language::support) {
         CAPTURE(s.name);
         CHECK(std::ranges::any_of(used, [&](const auto& u) { return u.name == s.name; }));

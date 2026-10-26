@@ -132,6 +132,7 @@ namespace one::generators {
         // from the project block; a screen's lines come from the screen and its items.
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
+        std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
         std::string under_;              // the page it's under, when it says one, like /:project/roadmap
         int item_line_ = 0;              // the screen item being written
         std::map<std::string, std::string> components_;    // hand-written components, by name, to their file
@@ -275,6 +276,7 @@ namespace one::generators {
             std::vector<std::string> imports;                        // extra import lines
             bool optional_page = false;
             bool viewer = false;  // a button's when reads who's reading, as me
+            std::set<std::string> toggles;  // the toggles its whens read, like layers
             // It shows something its address says after its own, like a tab, a page of
             // rows, or a board rather than a table: /neotrac/boards/main/board/in_progress.
             bool shown_in_path = false;
@@ -312,6 +314,7 @@ namespace one::generators {
                 screen_parts parts;
                 std::string route = full_route(ns, s->route);
                 route_ = route;
+                toggles_ = toggles_in(s->items);
                 under_ = s->under ? full_route(ns, *s->under) : "";
                 screen_title_ = s->title_is_name ? "" : s->title;
                 docs_base_ = route.substr(0, route.find("/:"));  // where its pages live, if it has any
@@ -346,10 +349,10 @@ namespace one::generators {
                     items.close("</Heading>");
                 }
                 std::string layout = s->layout ? *s->layout : layout_;
-                std::vector<const language::content_block*> regions;
+                std::vector<const language::screen_item*> regions;
                 for (const auto& item : s->items) {
                     auto* block = std::get_if<language::content_block>(&item.node);
-                    if (block && block->type == language::content_block::kind::region) regions.push_back(block);
+                    if (block && block->type == language::content_block::kind::region) regions.push_back(&item);
                 }
                 // A subtitle goes under the title, outside the regions of a screen laid out in them.
                 if (!regions.empty()) {
@@ -375,10 +378,14 @@ namespace one::generators {
                         screen_items(items, parts, ns, s->items, s->items);
                         items.close("</Region>");
                     }
-                    for (const auto* region : regions) {
-                        items.open("<Region name=" + web_detail::js_string(region->title) + ">");
-                        screen_items(items, parts, ns, region->items, s->items);
+                    for (const auto* item : regions) {
+                        const auto& region = std::get<language::content_block>(item->node);
+                        // side when layers: there only while it holds.
+                        if (item->when) items.open("{" + condition(parts, ns, *item->when) + " && (");
+                        items.open("<Region name=" + web_detail::js_string(region.title) + ">");
+                        screen_items(items, parts, ns, region.items, s->items);
                         items.close("</Region>");
+                        if (item->when) items.close(")}");
                     }
                     items.close("</Layout>");
                 }
@@ -452,7 +459,7 @@ namespace one::generators {
                 for (const auto& [variable, view] : parts.views) {
                     if (auto per = per_entity(view)) parts.params.insert(*per);
                 }
-                if (parts.views.empty() && parts.params.empty() && !parts.viewer) {
+                if (parts.views.empty() && parts.params.empty() && !parts.viewer && parts.toggles.empty()) {
                     bodies.open("export const " + name + " = screen(" + info + ", () => (");
                     bodies.embed(items);
                     bodies.close("));");
@@ -495,6 +502,11 @@ namespace one::generators {
                                     (per ? ", " + web_detail::js_name(*per + "_id") : std::string()) + ");");
                     }
                     if (!titling.empty()) bodies.line(titling);
+                    // Each toggle its whens read, on or off as the person left it.
+                    for (const auto& toggle : parts.toggles) {
+                        components.insert("useToggled");
+                        bodies.line("const " + web_detail::js_name("toggled_" + toggle) + " = useToggled(" + web_detail::js_string(route + " " + toggle) + ");");
+                    }
                     // Who's reading, for a button's when that says me; nobody, signed out.
                     if (parts.viewer) {
                         components.insert("useAuth");
@@ -770,6 +782,11 @@ namespace one::generators {
                     parts.viewer = true;
                     return "viewer";
                 }
+                // A toggle of the screen's, like layers: whether it's on.
+                if (name->name.parts.size() == 1 && toggles_.contains(word)) {
+                    parts.toggles.insert(word);
+                    return web_detail::js_name("toggled_" + word);
+                }
                 return web_detail::js_string(name->name.parts.back());  // a choice, like status::open
             }
             if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
@@ -972,7 +989,14 @@ namespace one::generators {
                 if (auto* block = std::get_if<language::content_block>(&item.node); block && block->type == language::content_block::kind::heading) {
                     continue;  // drawn on the title row, before the rest
                 }
-                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                if (auto* group = std::get_if<language::content_block>(&item.node); group && group->type == language::content_block::kind::group) {
+                    parts.components.insert("Group");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->at_end ? " atEnd" : "") + ">");
+                        screen_items(out, parts, ns, group->items, screen);
+                        out.close("</Group>");
+                    });
+                } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     bool hero = block->type == language::content_block::kind::hero;
                     std::string tag = hero ? "Hero" : "Section";
                     parts.components.insert(tag);
@@ -1000,7 +1024,7 @@ namespace one::generators {
                         out.line("<BuiltLink to=" + web_detail::js_string(link->built) + ">" + live_text(parts, ns, link->label) + "</BuiltLink>");
                     } else {
                         parts.components.insert("Link");
-                        out.line("<Link to=" + web_detail::js_string(target) + icon + ">" + live_text(parts, ns, link->label) + "</Link>");
+                        out.line("<Link to=" + web_detail::js_string(target) + icon + keys_of(link->keys) + ">" + live_text(parts, ns, link->label) + "</Link>");
                     }
                 } else if (auto* details = std::get_if<language::details_item>(&item.node)) {
                     this->details(out, parts, ns, *details);
@@ -1122,7 +1146,22 @@ namespace one::generators {
                     std::string label = button->label ? " label=" + web_detail::js_string(*button->label) : "";
                     std::string when = button->when ? " when={" + condition(parts, ns, *button->when) + "}" : "";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
-                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + when + allowed(parts, ns, command) + " />");
+                    out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + when + allowed(parts, ns, command) + " />");
+                } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node)) {
+                    parts.components.insert("Toggle");
+                    out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +
+                             (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
+                } else if (auto* history = std::get_if<language::history_item>(&item.node)) {
+                    parts.components.insert("History");
+                    out.line(std::string("<History") + (history->redo ? " redo" : "") + (history->label ? " label=" + web_detail::js_string(*history->label) : "") +
+                             (history->icon ? " icon=" + web_detail::js_string(*history->icon) : "") + keys_of(history->keys) + " />");
+                } else if (std::holds_alternative<language::messages_item>(item.node)) {
+                    parts.components.insert("Messages");
+                    out.line("<Messages />");
+                } else if (auto* full = std::get_if<language::full_screen_item>(&item.node)) {
+                    parts.components.insert("FullScreen");
+                    out.line(std::string("<FullScreen") + (full->label ? " label=" + web_detail::js_string(*full->label) : "") +
+                             (full->icon ? " icon=" + web_detail::js_string(*full->icon) : "") + keys_of(full->keys) + " />");
                 } else if (auto* component = std::get_if<language::component_item>(&item.node)) {
                     std::string tag = component_tag(component->name);
                     std::string line = "import " + tag + " from \"../components/" + component->name + "\";";
@@ -1333,6 +1372,24 @@ namespace one::generators {
         }
 
         // An element drawn only while its when holds, like a board while its board's style is kanban.
+        // The toggles anywhere in a screen, by their names.
+        static std::set<std::string> toggles_in(const std::vector<language::screen_item>& items) {
+            std::set<std::string> out;
+            for (const auto& item : items) {
+                if (auto* t = std::get_if<language::toggle_item>(&item.node)) out.insert(t->name);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) out.merge(toggles_in(block->items));
+            }
+            return out;
+        }
+
+        // key ctrl+z key ctrl+y: the keys a line is run by, as a component's keys.
+        static std::string keys_of(const std::vector<language::key_chord>& keys) {
+            if (keys.empty()) return "";
+            std::string all;
+            for (const auto& k : keys) all += (all.empty() ? "" : ", ") + web_detail::js_string(k.chord);
+            return " keys={[" + all + "]}";
+        }
+
         template <typename Draw>
         void shown_while(stream& out, screen_parts& parts, const std::string& ns, const language::screen_item& item, Draw draw) {
             if (!item.when) {
@@ -1858,7 +1915,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);

@@ -646,11 +646,18 @@ namespace one::language {
 
     struct screen_item;
 
+    // A key that runs what's on its line, like ctrl+z or f11: its keys, joined by +.
+    struct key_chord {
+        std::string chord;
+        location where;
+    };
+
     struct content_block {
         // A menu holds links, with the rest of the screen beside it; a region is one
         // part of the screen's layout, like main or side, named in title.
-        // A heading's items sit on the screen's title row, at its end.
-        enum class kind { hero, section, menu, region, heading };
+        // A heading's items sit on the screen's title row, at its end. A group is a
+        // named part of a workspace's toolbar, with a line between it and the next.
+        enum class kind { hero, section, menu, region, heading, group };
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;
@@ -660,6 +667,8 @@ namespace one::language {
         location icon_where;
         bool steps = false;  // section "How we work" as steps: its sections are done in order
         location steps_where;
+        bool small = false;   // group "Rotate" small: its buttons are icons, their words said when pointed at
+        bool at_end = false;  // group "View" at end: at the toolbar's far end
         std::vector<screen_item> items;
     };
 
@@ -682,6 +691,7 @@ namespace one::language {
         location icon_where;
         std::string built;                             // link build.release: what the site was built from, release or source
         location built_where;
+        std::vector<key_chord> keys;                   // key ctrl+o: opened by that key too
     };
 
     struct table_column {
@@ -796,6 +806,42 @@ namespace one::language {
         std::string along_list;               // its list of steps, like steps
         std::optional<std::string> icon;      // icon edit: drawn as that, its words still naming it
         location icon_where;
+        std::vector<key_chord> keys;          // key ctrl+s: run by that key too, as long as it's shown
+    };
+
+    // toggle layers "Layers" icon layers: something on or off, like a side panel, that
+    // the screen reads by its name, side when layers, remembered for the person on
+    // that device and never stored or sent (decision 0017).
+    struct toggle_item {
+        std::string name;
+        location name_where;
+        std::optional<std::string> label;
+        std::optional<std::string> icon;
+        location icon_where;
+        std::vector<key_chord> keys;
+    };
+
+    // undo "Undo" icon undo key ctrl+z, or redo: the page's last step taken back, or
+    // taken again, and said in the screen's messages (decision 0018).
+    struct history_item {
+        bool redo = false;
+        std::optional<std::string> label;
+        std::optional<std::string> icon;
+        location icon_where;
+        std::vector<key_chord> keys;
+    };
+
+    // messages: where what was just done is said, like "Undid place", or why a
+    // command was turned down, until the next.
+    struct messages_item {};
+
+    // full screen "Full screen" icon fullscreen key f11: the window filling the
+    // screen, and back.
+    struct full_screen_item {
+        std::optional<std::string> label;
+        std::optional<std::string> icon;
+        location icon_where;
+        std::vector<key_chord> keys;
     };
 
     // board project_page.issues by stage over project_page.stages { ... }: a list's
@@ -1044,7 +1090,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

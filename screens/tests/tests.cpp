@@ -4,7 +4,8 @@
 // one::screens' tests: values read as people read them, addresses, keys and routes
 // as the web makes them, changes said in words, and what a page does: its views read
 // live, its commands run, asked about first and turned down, and what it keeps.
-// What's drawn is held by each toolkit's own tests.
+// What's drawn is held by each toolkit's own tests. Where a collage's layers go is
+// held to collage-cases.json, as @uione/react's is.
 
 #include <cstdlib>
 #include <filesystem>
@@ -13,6 +14,7 @@
 #include <map>
 
 #include "check.hpp"
+#include "one/screens/collage.hpp"
 #include "one/screens/models.hpp"
 #include "one/screens/palette.hpp"
 
@@ -421,6 +423,81 @@ TEST("a theme from a palette is written as a project says one, to paste in") {
 		auto [wr, wg, wb] = colors::rgb(made["warning"].dark);
 		CHECK(wr >= wb && wg >= wb);
 	}
+}
+
+TEST("a collage's layers go where collage-cases.json says, as they do on the web") {
+	namespace c = one::screens::collage;
+	std::ifstream in(std::filesystem::path(__FILE__).parent_path() / "collage-cases.json");
+	auto all = ember::parse_json(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
+	auto n = [](const value& v, std::size_t i) { return v.as_array().at(i).as_double(); };
+	auto box_of = [&](const value& v) { return c::box{n(v, 0), n(v, 1), n(v, 2), n(v, 3)}; };
+	auto boxes_of = [&](const value& v) {
+		std::vector<c::box> out;
+		for (const auto& b : v.as_array()) out.push_back(box_of(b));
+		return out;
+	};
+	auto near = [](double a, double b) { return std::abs(a - b) < 1e-6; };
+	auto same = [&](c::box a, c::box b) { return near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h); };
+	auto said = [](c::box b) { return std::format("{} {} {} {}", b.x, b.y, b.w, b.h); };
+	// A gesture's guides, as the case says them, or none.
+	auto guided_as = [&](const c::guided& g, const value& k) {
+		bool x = k["guide_x"].is_null() ? !g.guide_x : g.guide_x && near(*g.guide_x, k["guide_x"].as_double());
+		bool y = k["guide_y"].is_null() ? !g.guide_y : g.guide_y && near(*g.guide_y, k["guide_y"].as_double());
+		bool corner = k["guide_corner"].is_null() ? !g.corner
+		                                    : g.corner && near(g.corner->first.x, n(k["guide_corner"].as_array()[0], 0)) && near(g.corner->first.y, n(k["guide_corner"].as_array()[0], 1)) &&
+		                                          near(g.corner->second.x, n(k["guide_corner"].as_array()[1], 0)) && near(g.corner->second.y, n(k["guide_corner"].as_array()[1], 1));
+		return x && y && corner;
+	};
+	int count = 0;
+	for (const auto& k : all["cases"].as_array()) {
+		++count;
+		const std::string& what = k["what"].as_string();
+		std::string note = std::format("case {}, {}", count, what);
+		auto size = k["size"];
+		c::backdrop b{k["sits"].as_string(), size.is_null() ? 0 : n(size, 0), size.is_null() ? 0 : n(size, 1), k["zoom"].is_null() ? 1 : k["zoom"].as_double(),
+		              k["slide"].is_null() ? 0.5 : n(k["slide"], 0), k["slide"].is_null() ? 0.5 : n(k["slide"], 1)};
+		if (what == "sitting") {
+			auto got = c::sitting(b.sits, n(k["picture"], 0), n(k["picture"], 1), b.width, b.height);
+			check::verify(same(got, box_of(k["box"])), "sitting", note + ": " + said(got));
+		} else if (what == "background_at") {
+			auto got = c::background_at(b, n(k["picture"], 0), n(k["picture"], 1));
+			check::verify(same(got, box_of(k["box"])), "background_at", note + ": " + said(got));
+		} else if (what == "slides") {
+			check::verify(c::slides(b, box_of(k["at"])) == k["slides"].as_bool(), "slides", note);
+		} else if (what == "whole_of") {
+			auto got = c::whole_of(box_of(k["shown"]), box_of(k["crop"]));
+			check::verify(same(got, box_of(k["box"])), "whole_of", note + ": " + said(got));
+		} else if (what == "snap_lines") {
+			auto got = c::snap_lines(b.width, b.height, boxes_of(k["others"]));
+			std::vector<double> across, down;
+			for (const auto& v : k["across"].as_array()) across.push_back(v.as_double());
+			for (const auto& v : k["down"].as_array()) down.push_back(v.as_double());
+			check::verify(got.across == across && got.down == down, "snap_lines", note);
+		} else if (what == "moved" || what == "resized") {
+			auto lines = c::snap_lines(b.width, b.height, boxes_of(k["others"]));
+			auto from = box_of(k["from"]);
+			double dx = n(k["by"], 0), dy = n(k["by"], 1), close = k["close"].as_double();
+			auto got = what == "moved" ? c::moved(from, dx, dy, lines, b.width, b.height, close, k["snapping"].as_bool())
+			                           : c::resized(from, static_cast<int>(k["corner"].as_integer()), dx, dy, k["keep_shape"].as_bool(), lines, close, k["snapping"].as_bool());
+			check::verify(same(got.at, box_of(k["box"])) && guided_as(got, k), "a gesture", note + ": " + said(got.at));
+		} else if (what == "slid") {
+			auto got = c::slid(box_of(k["from"]), n(k["by"], 0), n(k["by"], 1), {n(k["across"], 0), n(k["across"], 1)}, {n(k["down"], 0), n(k["down"], 1)}, b.width,
+			                   b.height, k["close"].as_double(), k["snapping"].as_bool());
+			check::verify(same(got.at, box_of(k["box"])) && guided_as(got, k), "slid", note + ": " + said(got.at));
+		} else if (what == "cropped") {
+			auto got = c::cropped(box_of(k["kept"]), static_cast<int>(k["edges"].as_integer()), n(k["by"], 0), n(k["by"], 1), box_of(k["whole"]));
+			check::verify(same(got, box_of(k["box"])), "cropped", note + ": " + said(got));
+		} else if (what == "corner_at") {
+			auto got = c::corner_at(box_of(k["box"]), {n(k["at"], 0), n(k["at"], 1)}, k["handle"].as_double());
+			check::verify(got == k["corner"].as_integer(), "corner_at", note);
+		} else if (what == "crop_edges_at") {
+			auto got = c::crop_edges_at(box_of(k["box"]), {n(k["at"], 0), n(k["at"], 1)}, k["handle"].as_double());
+			check::verify(got == k["edges"].as_integer(), "crop_edges_at", note);
+		} else {
+			check::verify(false, "a case of something known", note);
+		}
+	}
+	CHECK(count >= 40);
 }
 
 int main() {

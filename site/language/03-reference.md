@@ -1994,9 +1994,14 @@ form step::update "Save" {
   So can a link, `link /:project/boards/:board/workflow "Workflow" icon workflow`,
   and a button in a table's or a board's toolbar, `issue::create "New issue" icon
   add`. The icons are `add`, `archive`, `delete`, `edit`, `follow`, `following`,
-  `robot`, `settings` and `workflow`, and, for what a front page offers too,
+  `robot`, `settings` and `workflow`; for what a front page offers too,
   `building`, `chart`, `cloud`, `code`, `connect`, `database`, `globe`, `layers`,
-  `lock`, `people`, `shield` and `spark`.
+  `lock`, `people`, `shield` and `spark`; and for a drawing app's toolbar, `undo`,
+  `redo`, `save`, `paste`, `copy`, `crop`, `text`, `screenshot`, `picture`,
+  `gallery`, `fullscreen`, `sun`, `moon`, `check`, `close`, `raise`, `lower`,
+  `rotate_left`, `rotate_right`, `flip_horizontal`, `flip_vertical`, `bold`,
+  `smaller`, `larger`, `fill`, `fit`, `stretch`, `center`, `color` and `edges`. A
+  name close to one of them is told which it was likely meant to be.
 - A screen laid out in regions keeps its `heading` and `subtitle` outside them,
   under its title. Beside the page, in `side`, a `section` is a glance at
   something, with a smaller heading.
@@ -2133,6 +2138,35 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `side { ... }`, every item in one once it uses any, or leaves them all in main.
   `single`, one column, is how a screen is laid out unless it or the project block's
   `layout` setting says otherwise.
+- `layout workspace` lays a screen out as a drawing app is, filling the window with
+  nothing of the site around it: `bar { ... }` along the top, `toolbar { ... }` under
+  it, `main { ... }` for the work, `side when layers { ... }` beside it while a
+  toggle's on, and `status { ... }` along the bottom. Any region may say `when`, as
+  `side` does there.
+- `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
+  buttons and a line after it. Its buttons are tools: an icon over its words, or,
+  in a `small` group, `group "Rotate" small { ... }`, an icon alone, two rows of
+  them, its words said when it's pointed at. `group "View" at end` sits at the
+  toolbar's far end.
+- `key ctrl+z` after a button's or a link's words, and its icon, runs it with that
+  key too, while it's shown, but not while the person is typing in a field:
+  `poster::create "New" icon add key ctrl+n`. A line can have several, `key ctrl+y
+  key ctrl+shift+z`, and its tooltip names the first. A key is any of `ctrl`,
+  `shift` and `alt`, then a letter, a digit, `f1` to `f12`, or `escape`, `enter`,
+  `tab`, `space`, `backspace`, `delete`, `insert`, `home`, `end`, `page_up`,
+  `page_down`, `left`, `right`, `up`, `down`, `minus`, `equal`, `plus`, `comma`,
+  `period` or `slash`. On a Mac, Command is `ctrl`.
+- `toggle layers "Layers" icon layers key l` is something on or off, drawn as a
+  button pressed while it's on, that the screen reads by its name: `side when
+  layers`, `text "Shown" when layers`. Each person's is remembered on the device
+  they use, and never stored or sent (decision 0017).
+- `undo "Undo" icon undo key ctrl+z` takes back the page's last step, and `redo
+  "Redo" icon redo key ctrl+y` takes it again, each said in the screen's messages,
+  like "Undid place". They need `storage local`, for now (decision 0018).
+- `messages`, in a status line, says what was just done, or why a command was
+  turned down, until the next thing is.
+- `full screen "Full screen" icon fullscreen key f11` fills the screen with the
+  window, and back. A terminal is already its whole window, so it draws nothing.
 - `landing grid` after a screen's address draws it as a front page, in one of
   uione's designs: `waveform`, a wave of bars under the hero; `studio`, the hero
   beside a player and its timeline; `aurora`, drifting light behind glass; `grid`,

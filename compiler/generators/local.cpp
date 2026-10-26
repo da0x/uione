@@ -310,6 +310,7 @@ namespace one::generators {
                         case token_kind::plus: return {sum(number_of(as_value(l)) + " + " + number_of(as_value(r)))};
                         case token_kind::minus: return {sum(number_of(as_value(l)) + " - " + number_of(as_value(r)))};
                         case token_kind::star: return {sum(number_of(as_value(l)) + " * " + number_of(as_value(r)))};
+                        case token_kind::slash: return {sum(number_of(as_value(l)) + " / " + number_of(as_value(r)))};
                         default: break;
                     }
                 }

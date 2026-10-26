@@ -130,6 +130,18 @@ export const plain: ComponentSet = {
 
   Actions: ({ children }) => <div>{children}</div>,
 
+  Group: ({ name, children }) => (
+    <div role="group" aria-label={name}>
+      {children}
+    </div>
+  ),
+
+  Messages: ({ text, problem }) => (
+    <span role="status" data-problem={problem ? "" : undefined}>
+      {text}
+    </span>
+  ),
+
   Layout: ({ regions }) => (
     <>
       {Object.entries(regions).map(([name, content]) => (
@@ -880,9 +892,9 @@ export const plain: ComponentSet = {
     );
   },
 
-  Button: ({ disabled, error, onClick, children }) => (
+  Button: ({ disabled, error, onClick, children, pressed, hint }) => (
     <>
-      <button type="button" disabled={disabled} onClick={onClick}>
+      <button type="button" disabled={disabled} onClick={onClick} aria-pressed={pressed} title={hint}>
         {children}
       </button>
       {error && <span role="alert">{error}</span>}

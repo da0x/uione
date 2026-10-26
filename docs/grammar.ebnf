@@ -228,12 +228,24 @@ screen_body    ::= "{" NEWLINE? (screen_place | screen_item)* "}"
 screen_place   ::= "under" ROUTE STRING END
                  | "layout" NAME END
 /* under /:project/boards/:board "{issue_page.board.title}": the page above it, though its
-   address doesn't say so; layout two_columns: how its regions are laid out */
+   address doesn't say so; layout two_columns: how its regions are laid out, or layout
+   workspace: filling the window, with a bar, a toolbar, main, side and a status line */
 /* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
+/* key ctrl+z: what runs a line too; any of ctrl, shift and alt, then a key, like f11 or delete */
+key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
-                 | ("main" | "side") screen_block END
+                 | ("main" | "side" | "bar" | "toolbar" | "status") ("when" expression)? screen_block END
+                 /* a named part of a workspace's toolbar, its buttons tools */
+                 | "group" STRING "small"? ("at" "end")? ("when" expression)? screen_block END
+                 /* something on or off, read by its name, like side when layers */
+                 | "toggle" NAME STRING? ("icon" NAME)? key* END
+                 /* the page's last step taken back, or taken again, for a project kept on its machine */
+                 | ("undo" | "redo") STRING? ("icon" NAME)? key* END
+                 /* what was just done, or why a command was turned down */
+                 | "messages" END
+                 | "full" "screen" STRING? ("icon" NAME)? key* END
                  | "heading" screen_block END
                  | "subtitle" STRING END
                  /* the short line over a hero's or a section's title, and a front page's one sentence that stands for the site */
@@ -248,7 +260,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "text" STRING ("when" condition)? END
                  | "code" STRING END
                  | "markdown" STRING ("as" "document")? END
-                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? END
+                 | "link" (ROUTE | ANCHOR | "namespace" qualified | STRING | "build" "." ("release" | "source")) STRING ("icon" NAME)? key* END
                  | "table" qualified ("." NAME)? ("by" NAME tabs_over?)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? table_line* "}")? END
                  | "form" qualified+ STRING? "{" NEWLINE? form_line* "}" END
                  | "confirm" qualified STRING END
@@ -262,7 +274,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END
                  | "component" NAME END
                  /* a button, and the form it opens, issue::update "Edit" form "Save" { title } */
-                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("when" condition)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
+                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? key* ("when" condition)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? board_line* "}")? END
                  /* a lane for each kind of card, each a row of its kind's stages, the one it's at highlighted */
                  | "pipeline" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? pipeline_line* "}")? END
@@ -302,7 +314,7 @@ conjunction    ::= equality ("&&" equality)*
 equality       ::= comparison (("==" | "!=" | "has") comparison)*
 comparison     ::= sum (("<" | ">" | "<=" | ">=") sum)*
 sum            ::= product (("+" | "-") product)*
-product        ::= unary ("*" unary)*
+product        ::= unary (("*" | "/") unary)*   /* a / alone between two values divides */
 unary          ::= ("!" | "-") unary | "was" postfix | postfix
 postfix        ::= primary ("(" (argument ("," argument)*)? ")" | "." NAME)*
 argument       ::= expression ("where" expression)?

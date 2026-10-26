@@ -13,6 +13,8 @@ import { buildLinks } from "./contract.js";
 import { DataProvider, useAuth, useAuthorize, useShownOnce, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
+import { SayingContext } from "./said.js";
+import type { Said } from "./said.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
 
 export interface ScreenInfo {
@@ -362,10 +364,15 @@ function Shell({
   // window as it fills it or not, so filling never draws the screen afresh. On a
   // server, which draws once and has no window, it's drawn in the page.
   const [filled, setFilled] = useState(false);
+  // What the page says it just did, in a workspace's messages; a new address starts with nothing said.
+  const [said, say] = useState<Said | undefined>();
+  useEffect(() => say(undefined), [pathname]);
+  const saying = useMemo(() => ({ said, say }), [said]);
   const [host] = useState(() => (typeof document === "undefined" ? null : document.createElement("div")));
   if (host) host.style.display = "contents";
   const inner = (
     <Filling.Provider value={setFilled}>
+      <SayingContext.Provider value={saying}>
       {auth?.person && badgeSpecs.map((badge, at) => <ReadBadge key={at} badge={badge} at={at} onRead={onRead} />)}
       <HeadingSlot.Provider value={slot}>
         <CrumbsSlot.Provider value={trail}>
@@ -378,6 +385,7 @@ function Shell({
           </SubtitleSlot.Provider>
         </CrumbsSlot.Provider>
       </HeadingSlot.Provider>
+      </SayingContext.Provider>
     </Filling.Provider>
   );
   const page = (content: ReactNode) => (
@@ -439,13 +447,14 @@ const Filling = createContext<(fills: boolean) => void>(() => {});
 
 // The whole window for the screen, as a drawing app's workspace has it: no bar,
 // title, margin or footer around it, only what it's made of, for as long as what
-// calls this is shown. The desktop's page.fill() is the same.
-export function useFill() {
+// calls this is shown, and `fills`. The desktop's page.fill() is the same.
+export function useFill(fills = true) {
   const fill = useContext(Filling);
   useLayoutEffect(() => {
+    if (!fills) return;
     fill(true);
     return () => fill(false);
-  }, [fill]);
+  }, [fill, fills]);
 }
 
 const HeadingSlot = createContext<HTMLElement | null>(null);

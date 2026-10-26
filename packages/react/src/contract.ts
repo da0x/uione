@@ -594,6 +594,28 @@ export interface ButtonProps {
   onClick: () => void;
   children: ReactNode;
   icon?: string; // drawn instead of its words, which still name it, like edit
+  // In a workspace's toolbar: large, its icon over its words, or small, its icon
+  // alone, its words said when it's pointed at; either way, a flat tool, not a button.
+  tool?: "large" | "small";
+  pressed?: boolean; // a toggle, or a choice already made, drawn as pressed
+  hint?: string; // said when it's pointed at, like "Undo (Ctrl+Z)"
+}
+
+// A named part of a workspace's toolbar, like Rotate, with a line between it and the
+// next, its name under its tools; small, its tools are icons, two rows of them; at
+// its end, at the toolbar's far end.
+export interface GroupProps {
+  name: string;
+  small?: boolean;
+  atEnd?: boolean;
+  children: ReactNode;
+}
+
+// What was just done, like "Undid place", or why a command was turned down, said
+// until the next.
+export interface MessagesProps {
+  text: string;
+  problem?: boolean;
 }
 
 export interface DialogProps {
@@ -689,6 +711,8 @@ export interface ComponentSet {
   Form: ComponentType<FormProps>;
   Button: ComponentType<ButtonProps>;
   Actions: ComponentType<ActionsProps>;
+  Group: ComponentType<GroupProps>;
+  Messages: ComponentType<MessagesProps>;
   Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;
   Live: ComponentType<LiveProps>;

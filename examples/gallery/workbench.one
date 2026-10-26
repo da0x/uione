@@ -1,0 +1,44 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A workbench: a room's pieces laid out as a drawing app lays out its work, filling
+// the window. A bar along the top, a toolbar of named groups, its buttons tools with
+// keys; the pieces beside a list shown while a toggle's on; and a status line that
+// says what was just done, or why it wasn't.
+
+namespace gallery at / {
+
+	screen "Workbench" /rooms/:room/workbench {
+		layout workspace
+		bar {
+			link /rooms/:room "Back to the room" key escape
+			text "{room_page.name}"
+		}
+		toolbar {
+			group "Piece" {
+				piece::create "New piece" icon add key ctrl+n
+			}
+			group "View" small at end {
+				toggle list "List" icon layers key l
+				full screen "Full screen" icon fullscreen key f11
+			}
+		}
+		main {
+			cards room_page.pieces link /rooms/:room/pieces/:piece {
+				title
+				number  condition
+			}
+		}
+		side when list {
+			table room_page.pieces {
+				title
+				number
+			}
+		}
+		status {
+			text "{room_page.name}"
+			messages
+		}
+	}
+
+}  // namespace gallery

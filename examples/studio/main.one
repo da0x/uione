@@ -1,0 +1,66 @@
+// Copyright 2026 Daher Alfawares
+// SPDX-License-Identifier: AGPL-3.0-only
+
+// A studio: posters kept on the machine the app runs on, for one person, laid out as
+// a drawing app lays out its work. The smallest example that keeps its data at home
+// (decision 0015), and so the one that undoes and redoes (decision 0018).
+
+import one
+
+project studio {
+	one      "0.18.0"
+	storage  local
+	target   desktop web terminal
+}
+
+namespace studio at / {
+
+	entity poster {
+		title  text  required
+		color  enum  ink | paper | sky = color::paper
+	}
+
+	command poster::create
+	command poster::update
+	command poster::delete
+
+	view posters {
+		each poster {
+			order by created_at descending
+			title  color
+		}
+	}
+
+	screen "Studio" / {
+		layout workspace
+		bar {
+			undo "Undo" icon undo key ctrl+z
+			redo "Redo" icon redo key ctrl+y key ctrl+shift+z
+			text "Posters"
+		}
+		toolbar {
+			group "View" {
+				toggle colors "Colors" icon color key c
+				full screen "Full screen" icon fullscreen key f11
+			}
+		}
+		main {
+			form poster::create "New poster" {
+				title
+			}
+			table posters {
+				title
+				delete "Delete" icon delete
+			}
+		}
+		side when colors {
+			table posters {
+				title  color
+			}
+		}
+		status {
+			messages
+		}
+	}
+
+}  // namespace studio

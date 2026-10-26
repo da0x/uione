@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "one/desktop/icons.hpp"
@@ -48,7 +50,7 @@ namespace one::desktop::runtime {
 	std::optional<color> tone_color(int tone);
 
 	// A link to another screen, to a part of this one, like #projects, or out of the app.
-	desktop::view link(page& p, std::string words, std::string to, std::string icon = "");
+	desktop::view link(page& p, std::string words, std::string to, std::string icon = "", std::vector<std::string> keys = {});
 	// A part of the page a link names, like #projects, brought to the top when it's followed.
 	desktop::view anchored(page& p, std::string name, desktop::view part);
 	desktop::view hero(std::string title, std::vector<desktop::view> inside);
@@ -88,6 +90,47 @@ namespace one::desktop::runtime {
 		return layout(std::move(name), std::move(all));
 	}
 	desktop::view menu(page& p, std::vector<menu_link> links, desktop::view beside);
+
+	// A workspace, filling the window as a drawing app does: its bar along the top,
+	// its toolbar under it, the work beside what's at its side, and a status line
+	// along the bottom. Its bar, toolbar and status line are each a row, along(...).
+	desktop::view workspace(page& p, std::vector<region> regions);
+	template <class... R>
+		requires(std::same_as<std::decay_t<R>, region> && ...)
+	desktop::view workspace(page& p, R&&... each) {
+		std::vector<region> all;
+		(all.push_back(std::forward<R>(each)), ...);
+		return workspace(p, std::move(all));
+	}
+	desktop::view along(std::vector<desktop::view> all);
+	template <std::convertible_to<desktop::view>... V>
+	desktop::view along(V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return along(std::move(all));
+	}
+	// A toolbar's group, its name under its tools, which its buttons are built as;
+	// small, two rows of icons; at its end, at the toolbar's far end.
+	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build);
+	// A group's lines, each its own.
+	template <std::convertible_to<desktop::view>... V>
+	std::vector<desktop::view> tools(V&&... each) {
+		std::vector<desktop::view> all;
+		(all.push_back(desktop::view(std::forward<V>(each))), ...);
+		return all;
+	}
+	// toggle layers "Layers": on or off, as the person left it.
+	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys);
+	// undo "Undo", or redo: the page's last step, said in its messages.
+	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys);
+	// What was just done, or why something was turned down.
+	desktop::view messages(page& p);
+	desktop::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys);
+	// Whether a key pressed is a chord, like ctrl+z, and the chord as people read it, Ctrl+Z.
+	bool pressed(const key_event& e, std::string_view chord);
+	std::string key_shown(std::string_view chord);
+	// What a line says when it's pointed at: its words, and its first key.
+	std::string hint_of(const std::string& words, const std::vector<std::string>& keys);
 	// Ways of showing the same list, as the person picks: their own pick, kept for them,
 	// or else `start`, like the one a board's style says, or the first when it's -1.
 	desktop::view switched(page& p, std::string id, std::string label, std::vector<std::string> options, int start, std::vector<desktop::view> ways);

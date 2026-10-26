@@ -1974,7 +1974,8 @@ namespace one::generators {
                     {language::token_kind::equal, "=="}, {language::token_kind::not_equal, "!="}, {language::token_kind::less, "<"},
                     {language::token_kind::greater, ">"}, {language::token_kind::less_equal, "<="}, {language::token_kind::greater_equal, ">="},
                     {language::token_kind::logical_and, "&&"}, {language::token_kind::logical_or, "||"}, {language::token_kind::plus, "+"},
-                    {language::token_kind::minus, "-"}, {language::token_kind::star, "*"}};
+                    {language::token_kind::minus, "-"}, {language::token_kind::star, "*"},
+                    {language::token_kind::slash, "/"}};
                 // roles has role::member: whether a list holds a value.
                 if (b->op == language::token_kind::has) {
                     auto left = resolve(e, *b->left, me);

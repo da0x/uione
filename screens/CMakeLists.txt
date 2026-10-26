@@ -21,6 +21,7 @@ endif()
 
 add_library(one_screens
 	src/client_source.cpp
+	src/collage.cpp
 	src/memory_source.cpp
 	src/models.cpp
 	src/screens.cpp)

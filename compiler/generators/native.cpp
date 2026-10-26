@@ -188,6 +188,10 @@ namespace one::generators {
                 return compare(binary->op, condition_of(parts, ns, *binary->left, read), condition_of(parts, ns, *binary->right, read));
             }
             if (auto* unary = std::get_if<language::unary_expression>(&e.node)) return "!" + condition_of(parts, ns, *unary->operand, read);
+            // A toggle of the screen's, like layers: whether it's on.
+            if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 1 && toggles_.contains(name->name.text())) {
+                return "p.toggled(" + str(route_ + " " + name->name.text()) + ")";
+            }
             if (auto* member = std::get_if<language::member_expression>(&e.node)) {
                 std::string field = member->member;
                 const language::expression* object = member->object.get();
@@ -204,10 +208,28 @@ namespace one::generators {
             return plain_value(e, "value()");
         }
 
-        // A literal, a choice, me, or none, as a value.
+        // The toggles anywhere in a screen, by their names.
+        static std::set<std::string> toggles_in(const std::vector<language::screen_item>& items) {
+            std::set<std::string> out;
+            for (const auto& item : items) {
+                if (auto* t = std::get_if<language::toggle_item>(&item.node)) out.insert(t->name);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) out.merge(toggles_in(block->items));
+            }
+            return out;
+        }
+
+        // key ctrl+z key ctrl+y: the keys a line is run by, as a list.
+        static std::string keys_of(const std::vector<language::key_chord>& keys) {
+            std::string all;
+            for (const auto& k : keys) all += (all.empty() ? "" : ", ") + str(k.chord);
+            return "std::vector<std::string>{" + all + "}";
+        }
+
+        // A literal, a choice, me, none, or a toggle of the screen's, as a value.
         std::string plain_value(const language::expression& e, const std::string& otherwise) {
             if (auto* name = std::get_if<language::name_expression>(&e.node)) {
                 const std::string word = name->name.text();
+                if (name->name.parts.size() == 1 && toggles_.contains(word)) return "value(p.toggled(" + str(route_ + " " + word) + "))";
                 if (word == "true" || word == "false") return "value(" + word + ")";
                 if (word == "none") return "value()";
                 if (word == "me") return "me(p)";
@@ -413,7 +435,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = screens::full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}};
                 if (const language::form_item* f = screens::model::form_for(ns, screen, command)) tools.push_back(form(parts, ns, *f, &button));
                 else tools.push_back(command_of(parts, ns, button));
             }
@@ -433,6 +455,7 @@ namespace one::generators {
                 out += ", .id = " + id_of(parts, entity->name);
             if (button.when) out += ", .when = " + condition(parts, ns, *button.when);
             if (button.icon) out += ", .icon = " + str(*button.icon);
+            if (!button.keys.empty()) out += ", .keys = " + keys_of(button.keys);
             return out + "})";
         }
 
@@ -1065,6 +1088,9 @@ namespace one::generators {
         std::set<std::string> page_includes_;  // the page sets the screen file being written shows
         bool shows_pages_ = false;              // whether the screen being written does, opening the first without :page
         std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
+        bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
+        bool at_end_said_ = false;    // a group at the toolbar's end has been written
+        std::set<std::string> toggles_;  // the screen's toggles, which its whens read
 
         stream pages_file(const page_set& pages) const {
             namespace fs = std::filesystem;
@@ -1128,6 +1154,7 @@ namespace one::generators {
             // Buttons one after another sit in a row: a command's own, a form's that opens it,
             // and links.
             auto presses = [&](const language::screen_item& it) {
+                if (each_alone_) return false;  // a bar's or a toolbar's lines are each their own
                 if (std::holds_alternative<language::content_link>(it.node)) return true;
                 if (auto* b = std::get_if<language::button_item>(&it.node)) return !b->along && !screens::model::has_form_for(screen, b->command);
                 if (auto* f = std::get_if<language::form_item>(&it.node)) {
@@ -1201,6 +1228,16 @@ namespace one::generators {
                     }
                 }
                 if (grouped) {
+                } else if (auto* g = std::get_if<language::content_block>(&item.node); g && g->type == language::content_block::kind::group) {
+                    // A toolbar's group: its lines built as tools; the first at its end
+                    // takes the toolbar's far end.
+                    bool alone = std::exchange(each_alone_, true);
+                    auto inside = items(parts, ns, g->items, screen);
+                    each_alone_ = alone;
+                    bool end_here = g->at_end && !at_end_said_;
+                    at_end_said_ = at_end_said_ || g->at_end;
+                    code = "group(p, " + str(g->title) + ", " + (g->small ? "true" : "false") + ", " + (end_here ? "true" : "false") +
+                           ", [&] { return tools(" + joined_items(inside) + "); })";
                 } else if (auto* block = std::get_if<language::content_block>(&item.node)) {
                     using kind = language::content_block::kind;
                     if (block->type == kind::heading || block->type == kind::region) continue;  // drawn on the title's row, or by the layout
@@ -1259,7 +1296,9 @@ namespace one::generators {
                         code = "build_commit.empty() || build_repository.empty() ? view() : link(p, " + said_of(parts, ns, link->label) + ", build_repository + \"/commit/\" + build_commit)";
                     } else {
                         std::string target = link->namespace_name ? model_.full_route(link->namespace_name->text(), "/") : link->target.starts_with("/") ? model_.full_route(ns, link->target) : link->target;
-                        code = "link(p, " + said_of(parts, ns, link->label) + ", " + str(target) + (link->icon ? ", " + str(*link->icon) : "") + ")";
+                        std::string keys = link->keys.empty() ? "" : keys_of(link->keys);
+                        code = "link(p, " + said_of(parts, ns, link->label) + ", " + str(target) + (link->icon || !keys.empty() ? ", " + str(link->icon.value_or("")) : "") +
+                               (keys.empty() ? "" : ", " + keys) + ")";
                     }
                 } else if (auto* d = std::get_if<language::details_item>(&item.node)) {
                     code = details(parts, ns, *d);
@@ -1310,6 +1349,16 @@ namespace one::generators {
                 } else if (auto* b = std::get_if<language::button_item>(&item.node)) {
                     if (screens::model::has_form_for(screen, b->command)) continue;  // the form draws its own button
                     code = command_of(parts, ns, *b);
+                } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {
+                    code = "toggle(p, " + str(route_ + " " + t->name) + ", " + str(t->label ? *t->label : screens::label(t->name)) + ", " + str(t->icon.value_or("")) + ", " +
+                           (t->keys.empty() ? "{}" : keys_of(t->keys)) + ")";
+                } else if (auto* h = std::get_if<language::history_item>(&item.node)) {
+                    code = std::string("history(p, ") + (h->redo ? "true" : "false") + ", " + str(h->label.value_or("")) + ", " + str(h->icon.value_or("")) + ", " +
+                           (h->keys.empty() ? "{}" : keys_of(h->keys)) + ")";
+                } else if (std::holds_alternative<language::messages_item>(item.node)) {
+                    code = "messages(p)";
+                } else if (auto* f = std::get_if<language::full_screen_item>(&item.node)) {
+                    code = "full_screen(p, " + str(f->label.value_or("")) + ", " + str(f->icon.value_or("")) + ", " + (f->keys.empty() ? "{}" : keys_of(f->keys)) + ")";
                 }
                 if (code.empty()) continue;
                 // Drawn by a function of its own, as GCC sees a temporary in either arm of
@@ -1385,6 +1434,8 @@ namespace one::generators {
             for (const auto& [ns, s, where] : found) {
                 auto from_screen = bodies.from(f.path, where.line);
                 route_ = model_.full_route(ns, s->route);
+                toggles_ = toggles_in(s->items);
+                at_end_said_ = false;
                 under_ = s->under ? model_.full_route(ns, *s->under) : "";
                 shows_pages_ = false;
                 title_ = s->title_is_name ? "" : s->title;
@@ -1434,10 +1485,10 @@ namespace one::generators {
                     auto inside = items(parts, ns, block->items, s->items);
                     around.push_back("heading(p, actions(" + joined_items(inside) + "));");
                 }
-                std::vector<const language::content_block*> regions;
+                std::vector<const language::screen_item*> regions;
                 for (const auto& item : s->items) {
                     auto* block = std::get_if<language::content_block>(&item.node);
-                    if (block && block->type == language::content_block::kind::region) regions.push_back(block);
+                    if (block && block->type == language::content_block::kind::region) regions.push_back(&item);
                 }
                 std::vector<written> shown;
                 for (auto& w : before) shown.push_back(std::move(w));
@@ -1451,9 +1502,21 @@ namespace one::generators {
                             for (auto& w : items(parts, ns, s->items, s->items, at, 1)) shown.push_back(std::move(w));
                         }
                     }
+                    std::string layout = s->layout ? *s->layout : model_.project.layout;
                     std::string inside;
-                    for (const auto* region : regions) inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region->title) + ", items(" + joined_items(items(parts, ns, region->items, s->items)) + ")}";
-                    shown.push_back({"layout(" + str(s->layout ? *s->layout : model_.project.layout) + ", " + inside + ")", where.line});
+                    for (const auto* item : regions) {
+                        const auto& region = std::get<language::content_block>(item->node);
+                        // A workspace's bar, toolbar and status line are rows, each line its own.
+                        bool across = layout == "workspace" && region.title != "main" && region.title != "side";
+                        bool alone = std::exchange(each_alone_, across);
+                        std::string drawn = std::string(across ? "along(" : "items(") + joined_items(items(parts, ns, region.items, s->items)) + ")";
+                        each_alone_ = alone;
+                        // side when layers: there only while it holds.
+                        if (item->when) drawn = "[&] { if (" + condition(parts, ns, *item->when) + ") return " + drawn + "; return view(); }()";
+                        inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + "}";
+                    }
+                    if (layout == "workspace") shown.push_back({"workspace(p, " + inside + ")", where.line});
+                    else shown.push_back({"layout(" + str(layout) + ", " + inside + ")", where.line});
                 }
                 if (!menu.empty()) shown = {{"menu(p, {" + menu + "}, items(" + joined_items(shown) + "))", where.line}};
 

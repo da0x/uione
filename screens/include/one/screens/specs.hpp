@@ -63,6 +63,7 @@ namespace one::screens {
 		std::string id = "";  // what it acts on, sent as id
 		bool when = true;     // whether it applies now, like Follow for someone who doesn't
 		std::string icon = "";
+		std::vector<std::string> keys = {};  // run by these too, like ctrl+s, while it's shown
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what

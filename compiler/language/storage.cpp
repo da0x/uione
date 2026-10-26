@@ -177,8 +177,33 @@ namespace one::language {
 
     }  // namespace storage_detail
 
+    namespace storage_detail {
+
+        // Undo and redo, anywhere in a screen's items (decision 0018), in any namespace.
+        void history(const std::string& path, const std::vector<screen_item>& items, diagnostics& out);
+        void history(const std::string& path, const std::vector<declaration>& all, diagnostics& out) {
+            for (const auto& d : all) {
+                if (auto* s = std::get_if<screen_declaration>(&d.node)) history(path, s->items, out);
+                if (auto* n = std::get_if<namespace_declaration>(&d.node)) history(path, n->declarations, out);
+            }
+        }
+        void history(const std::string& path, const std::vector<screen_item>& items, diagnostics& out) {
+            for (const auto& item : items) {
+                if (auto* h = std::get_if<history_item>(&item.node)) {
+                    out.push_back({path, item.where,
+                                   std::string(h->redo ? "redo" : "undo") + " takes a step back that's kept on this machine, so it needs storage local in the project block, for now"});
+                }
+                if (auto* block = std::get_if<content_block>(&item.node)) history(path, block->items, out);
+            }
+        }
+
+    }  // namespace storage_detail
+
     void check_storage(const std::vector<file>& files, diagnostics& out) {
-        if (!stores_locally(files)) return;
+        if (!stores_locally(files)) {
+            for (const auto& f : files) storage_detail::history(f.path, f.declarations, out);
+            return;
+        }
         for (const auto& f : files) storage_detail::refusing{f.path, out}.declarations(f.declarations);
     }
 

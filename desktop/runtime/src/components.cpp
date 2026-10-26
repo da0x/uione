@@ -155,7 +155,8 @@ namespace one::desktop::runtime {
 		return std::move(part).key("#" + name + "-" + std::to_string(times)).brought_to_top();
 	}
 
-	desktop::view link(page& p, std::string words, std::string to, std::string icon) {
+	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
+		for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
 		// One of the web's icons is a quiet button drawn as just that, as on the web.
 		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
 			return desktop::icon_button(icon, std::move(words), [&p, address = address_of(p, to)] { p.open(address); });
@@ -190,6 +191,11 @@ namespace one::desktop::runtime {
 		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy] {
 			if (!busy) p.run(name, fields);
 		};
+		for (const auto& k : b.keys) p.on_key(k, run);
+		// In a toolbar's group, a tool: its icon over its words, or its icon alone.
+		if (auto small = p.in_group()) {
+			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small ? hint_of(label_now, b.keys) : label_now, std::move(run), {.large = !*small});
+		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;
 		return desktop::button(label_now, std::move(run), b.primary);

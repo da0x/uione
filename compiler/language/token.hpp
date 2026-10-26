@@ -38,6 +38,7 @@ namespace one::language {
         plus,
         minus,
         star,
+        slash,          // / between two values: written as a route, made by the parser
         has,            // labels has bug: written as a word, made by the parser
         pipe,           // | between choices
         newline,
@@ -89,6 +90,7 @@ namespace one::language {
             case token_kind::plus:          return "'+'";
             case token_kind::minus:         return "'-'";
             case token_kind::star:          return "'*'";
+            case token_kind::slash:         return "'/'";
             case token_kind::has:           return "'has'";
             case token_kind::pipe:          return "'|'";
             case token_kind::newline:       return "the end of the line";

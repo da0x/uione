@@ -19,6 +19,7 @@ namespace one::terminal::runtime {
 	terminal::view page_view(navigator& nav, page& p) {
 		const auto& s = nav.site();
 		const auto& shows = nav.shown(p);
+		p.forget_keys();
 		terminal::view built = shows.build ? shows.build(p) : terminal::column();
 		auto around = p.take_around();
 		std::vector<terminal::view> parts;
@@ -113,6 +114,14 @@ namespace one::terminal::runtime {
 			}
 			if (e.is('q')) asking_to_quit.set(std::nullopt);  // q again quits
 			return false;
+		}
+		// What a line of the page is run by, like ctrl+z: the first said for a key.
+		auto lines = nav.current().keys();
+		for (const auto& [chord, run] : lines) {
+			if (pressed(e, chord)) {
+				run();
+				return true;
+			}
 		}
 		if (e.is(keys::escape) || e.is(keys::backspace)) return nav.back();
 		if (e.is('q') && stops_agents) {

@@ -22,6 +22,9 @@ relevant record before changing what it covers.
 | [0014](0014-built-once-tested-released.md) | Everything is built once, tested, and released as it was tested |
 | [0015](0015-an-app-may-keep-its-data-on-the-machine.md) | An app may keep all its data on the machine it runs on |
 | [0016](0016-pictures-are-read-by-a-pinned-stb.md) | Pictures are read and written by a pinned copy of stb |
+| [0017](0017-a-screen-keeps-what-is-picked.md) | A screen keeps what's picked, and nothing else |
+| [0018](0018-undo-is-for-local-storage-for-now.md) | Undo and redo are for local storage, for now |
+| [0019](0019-a-collage-is-a-document.md) | A collage is a picture made of layers, not a canvas |
 
 ## Writing one
 
