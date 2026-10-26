@@ -13,7 +13,7 @@
 // caret, and resized by their size. Where everything goes is collage.ts, the model the
 // desktop's is held to as well. It's drawn on a canvas, the same in every component set.
 
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { backgroundAt, cornerAt, cropEdgesAt, cropped, moved, resized, slid, slideRange, slides, snapLines, wholeOf } from "./collage.js";
 import type { Backdrop, Box, Guided, Lines, Point } from "./collage.js";
@@ -36,6 +36,28 @@ const isBackground = (layers: Row[], l: Row) => layers.length > 0 && !isWords(l)
 const colorOf = (written: string, otherwise: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : otherwise);
 const weightOf = (l: Row) => num(l["weight"], 700);
 const inside = (b: Box, p: Point) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+// A collage's view as its parts: its own values and each of its layers, with the
+// fields its parts are kept in read as those parts.
+function partsOf(data: Row, list: string, fields: Record<string, string>): Row {
+  const asParts = (from: Row) => {
+    const out: Row = { ...from };
+    for (const part of Object.keys(fields)) delete out[part];
+    for (const [part, field] of Object.entries(fields)) if (field in from) out[part] = from[field];
+    return out;
+  };
+  const out = asParts(data);
+  out[list] = ((data[list] as Row[] | undefined) ?? []).map(asParts);
+  return out;
+}
+
+// And what it sends, its parts named as the fields they're kept in.
+function fieldsOf(sent: Row, fields: Record<string, string>): Row {
+  const out: Row = { ...sent };
+  for (const part of Object.keys(fields)) delete out[part];
+  for (const [part, field] of Object.entries(fields)) if (part in sent) out[field] = sent[part];
+  return out;
+}
+
 const wordsFamily = 'system-ui, -apple-system, "Segoe UI", Roboto, Cantarell, Ubuntu, sans-serif';
 
 // How big words are, in the collage's pixels: as wide as their widest line, each line
@@ -274,8 +296,9 @@ interface Placed {
 export function Collage({
   view,
   list,
-  width = "width",
-  height = "height",
+  width,
+  height,
+  fields,
   place,
   slide,
   snap = false,
@@ -292,16 +315,15 @@ export function Collage({
   preview,
   previewInto,
   previewWide = 480,
-  pasteInto,
-  sizedWidth,
-  sizedHeight,
+  paste = false,
   update,
   children,
 }: {
   view: ViewState;
   list: string;
-  width?: string;
-  height?: string;
+  width: string;
+  height: string;
+  fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
   slide?: string; // and the one the background slid is, with slide_x and slide_y
   snap?: boolean;
@@ -318,9 +340,7 @@ export function Collage({
   preview?: string; // the command a small picture of it is sent to, once changes settle
   previewInto?: string; // in this file field of what the view is per
   previewWide?: number; // this many pixels wide
-  pasteInto?: string; // a file dropped or pasted, made a picture by add, in this field
-  sizedWidth?: string; // and where a picture's own size is kept
-  sizedHeight?: string;
+  paste?: boolean; // a file dropped or pasted made a picture, by add
   update?: string; // the command a picture's own size is filled in by, when it isn't kept yet
   children?: ReactNode; // the buttons over the picked layer
 }) {
@@ -335,7 +355,10 @@ export function Collage({
   const [full, setFull] = useState(() => typeof document !== "undefined" && Boolean(document.fullscreenElement));
   const [dropping, setDropping] = useState(false);
 
-  const data = view.status === "live" ? ((view.data ?? {}) as Row) : {};
+  // Read as its parts, whichever of the app's fields keep them.
+  const kept = JSON.stringify(fields);
+  const data = useMemo(() => (view.status === "live" ? partsOf((view.data ?? {}) as Row, list, fields) : {}), [view.status, view.data, list, kept]);
+  const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
   const layers = (data[list] as Row[] | undefined) ?? [];
   const W = num(data[width]), H = num(data[height]);
   const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
@@ -360,22 +383,22 @@ export function Collage({
   // it filled in from the picture as it's turned, once, never a step undo takes back.
   const sizedAsked = useRef(new Set<string>());
   useEffect(() => {
-    if (!update || !sizedWidth || !sizedHeight) return;
+    if (!update) return;
     for (const l of layers) {
       const id = str(l["id"]);
-      if (!(sizedWidth in l) || num(l[sizedWidth]) > 0 || !str(l["picture"]) || sizedAsked.current.has(id)) continue;
+      if (!("picture_width" in l) || num(l["picture_width"]) > 0 || !str(l["picture"]) || sizedAsked.current.has(id)) continue;
       const p = pictureOf(str(l["picture"]), address);
       if (!p) continue;
       sizedAsked.current.add(id);
       const sideways = (((num(l["turns"]) % 4) + 4) % 4) % 2 === 1;
-      void runner.reply(update, { id, [sizedWidth]: sideways ? p.height : p.width, [sizedHeight]: sideways ? p.width : p.height, "one:history": "apart" });
+      void send(update, { id, picture_width: sideways ? p.height : p.width, picture_height: sideways ? p.width : p.height, "one:history": "apart" });
     }
   });
   // Pictures dropped or pasted: the first on a collage with nothing on it covers it, and
   // the rest are as big as they are, smaller where they wouldn't fit, centered where
   // they were let go, each a little further along; all one step to undo.
   const addPictures = async (given: File[], on?: Point) => {
-    if (!add || !pasteInto || !files) return;
+    if (!add || !paste || !("picture" in fields) || !files) return;
     const top = layers[layers.length - 1];
     let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
     let covered = layers.length > 0, at = 0, first = true;
@@ -400,25 +423,25 @@ export function Collage({
         at++;
       }
       const path = await files.upload(file, () => {});
-      const made: Record<string, unknown> = { [pasteInto]: path, x: b.x, y: b.y, w: b.w, h: b.h };
+      const made: Record<string, unknown> = { picture: path, x: b.x, y: b.y, w: b.w, h: b.h };
       if (parent) made[parent] = subject;
       if (depth !== undefined) made["depth"] = depth++;
-      if (sizedWidth && sizedHeight) (made[sizedWidth] = size.w), (made[sizedHeight] = size.h);
+      if ("picture_width" in fields) (made["picture_width"] = size.w), (made["picture_height"] = size.h);
       if (!first) made["one:history"] = "joined";
       first = false;
-      await runner.reply(add, made);
+      await send(add, made);
     }
   };
   // Words pasted: a layer of them in the middle, a twelfth of its height.
   const addWords = (words: string) => {
-    if (!add) return;
+    if (!add || !("words" in fields)) return;
     const size = Math.max(8, Math.round(H / 12));
     const m = measured(words, size, 700);
     const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
     if (parent) made[parent] = subject;
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-    void runner.reply(add, made);
+    void send(add, made);
   };
   // What's on the clipboard, pasted: pictures, or words.
   const pasteNow = async () => {
@@ -484,7 +507,7 @@ export function Collage({
 
   // Ctrl+V anywhere but where something's typed pastes on the collage.
   useEffect(() => {
-    if (!pasteInto) return;
+    if (!paste) return;
     const pasted = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
@@ -514,13 +537,13 @@ export function Collage({
     const l = layers.find((r) => r["id"] === e.id);
     if (!l) return;
     if (!e.words.trim()) {
-      if (remove) void runner.reply(remove, { id: e.id });
+      if (remove) void send(remove, { id: e.id });
       if (pick) setPicked(pick, undefined);
       return;
     }
     if (e.words === str(l["words"]) || !write) return;
     const m = measured(e.words, num(l["size"]), weightOf(l));
-    void runner.reply(write, { id: e.id, words: e.words, size: l["size"], x: l["x"], y: l["y"], w: m.w, h: m.h });
+    void send(write, { id: e.id, words: e.words, size: l["size"], x: l["x"], y: l["y"], w: m.w, h: m.h });
   };
   if (w.editing && w.editing.id !== picked) finishWriting();
 
@@ -571,7 +594,7 @@ export function Collage({
       void pasteNow();
     } else if (asking === "screenshot") {
       void screenshot();
-    } else if (asking === "add" && add) {
+    } else if (asking === "add" && add && "words" in fields) {
       // Words in the middle, a twelfth of its height, all chosen so the first key
       // typed replaces them, on top of the rest.
       const size = Math.max(8, Math.round(H / 12));
@@ -581,7 +604,7 @@ export function Collage({
       if (parent) made[parent] = subject;
       const top = layers[layers.length - 1];
       if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-      void runner.reply(add, made).then((reply) => {
+      void send(add, made).then((reply) => {
         if (!reply?.id) return;
         if (pick) setPicked(pick, reply.id);
         w.editing = { id: reply.id, words, caret: words.length, fresh: true };
@@ -826,7 +849,7 @@ export function Collage({
     if (!e || !crop) return;
     w.crop = undefined;
     w.going = { id: e.id, box: e.kept };
-    void runner.reply(crop, {
+    void send(crop, {
       id: e.id,
       crop_x: (e.kept.x - e.whole.x) / e.whole.w,
       crop_y: (e.kept.y - e.whole.y) / e.whole.h,
@@ -954,14 +977,14 @@ export function Collage({
     const l = layers.find((r) => r["id"] === g.id);
     if (g.what === "sliding") {
       const fraction = (v: number, [least, most]: [number, number]) => (most > least ? (v - least) / (most - least) : 0.5);
-      void runner.reply(slide!, { id: subject, slide_x: fraction(to.x, g.across), slide_y: fraction(to.y, g.down) }).then(back);
+      void send(slide!, { id: subject, slide_x: fraction(to.x, g.across), slide_y: fraction(to.y, g.down) }).then(back);
     } else if (l && isWords(l) && g.what === "resizing" && g.from.h > 0 && write) {
       // Words resized are larger or smaller words, not stretched ones.
       const size = num(l["size"]) * (to.h / g.from.h);
       const m = measured(str(l["words"]), size, weightOf(l));
-      void runner.reply(write, { id: g.id, words: l["words"], size, x: to.x, y: to.y, w: m.w, h: m.h }).then(back);
+      void send(write, { id: g.id, words: l["words"], size, x: to.x, y: to.y, w: m.w, h: m.h }).then(back);
     } else {
-      void runner.reply(place!, { id: g.id, x: to.x, y: to.y, w: to.w, h: to.h }).then(back);
+      void send(place!, { id: g.id, x: to.x, y: to.y, w: to.w, h: to.h }).then(back);
     }
     paint();
   };
@@ -1010,7 +1033,7 @@ export function Collage({
     const b = boxOf(chosen);
     const to = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
     w.going = { id: picked, box: to };
-    void runner.reply(place, { id: picked, ...to });
+    void send(place, { id: picked, ...to });
     paint();
   };
   const nudging = picked && place && !busy;
@@ -1032,7 +1055,7 @@ export function Collage({
       className="one-collage"
       style={{ position: "relative", flex: 1, minHeight: fills ? 0 : 560, width: "100%", height: fills ? "100%" : 560, outline: dropping ? "3px solid var(--color-accent, #2457d6)" : "none", outlineOffset: -3 }}
       onDragOver={
-        pasteInto
+        paste
           ? (e) => {
               e.preventDefault();
               setDropping(true);
@@ -1041,7 +1064,7 @@ export function Collage({
       }
       onDragLeave={() => setDropping(false)}
       onDrop={
-        pasteInto
+        paste
           ? (e) => {
               e.preventDefault();
               setDropping(false);

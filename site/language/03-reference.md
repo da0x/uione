@@ -2114,10 +2114,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   like a wallpaper or a poster (decision 0019). In a workspace's `main` it fills its
   region; anywhere else it's 560 tall. It's drawn scaled to fit with room around it,
   or at its own size on black while the window fills the screen. Its layers are
-  drawn lowest first, each where its `x y w h` say, from what it holds by its
-  conventional name: a `picture`, cropped by `crop_x crop_y crop_w crop_h` and turned
-  and flipped by `turns` and `mirrored`; or `words`, as big as `size` says, in
-  `color` and `weight`, over a soft shadow. The first, when it's a picture, is the
+  drawn lowest first, each where its `x y w h` say, from the parts it has: a
+  `picture`, cropped by `crop_x crop_y crop_w crop_h` and turned and flipped by
+  `turns` and `mirrored`; or `words`, as big as `size` says, in `color` and
+  `weight`, over a soft shadow. The first, when it's a picture, is the
   background: it sits as the view's `background` says, `fit`, `fill`, `stretch` or
   `center`, zoomed by `zoom` and slid by `slide_x` and `slide_y`, and what it leaves
   around it is its edges drawn out, or, with `around` set to `color`, its edge
@@ -2150,9 +2150,21 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     typed replaces them. They're made with the field naming what the view is per, like
     `poster`, and a `depth` above the top layer's, when its layers have one.
   - `delete layer::delete`: words written away to nothing are deleted.
-  - `paste into picture sized picture_width picture_height`: pictures dropped on it,
-    or pasted with Control+V, are made layers by its `add`, each file uploaded into
-    that field and its own size sent in the other two. The first on a collage with
+  - Each part is kept in the field named like it, when the view gives the collage
+    that field, so a collage over fields named that way says nothing more. Where
+    the app keeps one under another name, a line says which, and the rest keep
+    their names: `at left top  size across down`, `stacked by order`, `picture
+    image  sized image_width image_height`, `cropped to left top width height`,
+    `turned quarters`, `mirrored flipped`, `words caption  sized letters  colored
+    ink  weighing boldness`, and, of the view, `background sits  around margin
+    zoomed scale  slid across down`. The checker holds each to its type: numbers,
+    a file, text, and `background` and `around` choices from `fit fill stretch
+    center` and `edges color`. Cropping needs the crop's four, and writing needs
+    `words` and `size`. The runtimes know only the parts; which field keeps each
+    is handed to them by the compiler.
+  - `paste`: pictures dropped on it, or pasted with Control+V, are made layers by
+    its `add`, each file uploaded into the layer's `picture` and, when it has them,
+    its own size sent in its `picture_width` and `picture_height`. The first on a collage with
     nothing on it covers it; the rest are as big as they are, smaller where they
     wouldn't fit, centered where they were let go, each a little further along, and
     all of them are one step to undo. Words pasted are made words in the middle. A
@@ -2164,7 +2176,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     on, so its paste button asks for the picture's path, and it takes no screenshots.
     A picture whose own size isn't kept yet, like one kept before the fields were,
     has it filled in from the picture as it's turned, by the layer's `update`, never
-    a step undo takes back.
+    a step undo takes back, so a collage with `picture_width` and `picture_height`
+    needs that command.
   - `keep preview poster::preview into preview 480 wide`: a small picture of it, 480
     pixels wide, drawn once changes have settled for a moment and nothing's being
     moved, cropped or written, and sent to a command on what the view is per, its

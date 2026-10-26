@@ -351,7 +351,7 @@ namespace one::language {
                         if (n.add) use("collage.add");
                         if (n.write) use("collage.write");
                         if (n.crop) use("collage.crop");
-                        if (n.paste_into) use("collage.paste");
+                        if (n.paste) use("collage.paste");
                         if (n.preview) use("collage.preview");
                     } else if constexpr (std::is_same_v<T, on_open_item>) {
                         use("on_open");

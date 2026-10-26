@@ -26,6 +26,12 @@ namespace {
 	using fields = std::map<std::string, value>;
 	using list = std::vector<value>;
 
+	// Each of a collage's parts in the field named like it, as an app's are by default.
+	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
+	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"},
+	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"},
+	    {"background", "background"}, {"around", "around"}, {"zoom", "zoom"}, {"slide_x", "slide_x"}, {"slide_y", "slide_y"}};
+
 	const std::filesystem::path golden_folder = ONE_DESKTOP_TESTS "/golden";
 
 	const one::desktop::theme& tested_theme() {
@@ -452,6 +458,7 @@ namespace {
 			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
 			                                                   .link = "/:project/:issue",
 			                                                   .keyed = {"project"},
+			                                                   .x = "x", .y = "y", .w = "w", .h = "h",
 			                                                   .place = "projects::issue::place",
 			                                                   .grid = 160,
 			                                                   .origin_x = 20,
@@ -632,6 +639,7 @@ TEST("a whiteboard: its stages as columns, a card let go in the next moving ther
 		                     return items(canvas_board(p, {.view = board_page,
 		                                                   .list = "issues",
 		                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+		                                                   .x = "x", .y = "y", .w = "w", .h = "h",
 		                                                   .place = "projects::issue::place",
 		                                                   .grid = 160,
 		                                                   .origin_x = 20,
@@ -1251,7 +1259,7 @@ TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .place = "studio::layer::place",
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts, .place = "studio::layer::place",
 		                                                                         .snap = true, .empty = "Add a picture to start", .pick = "/ layer", .fills = true}))});
 	                     }});
 	navigator nav(s, data);
@@ -1299,7 +1307,7 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .place = "studio::layer::place",
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts, .place = "studio::layer::place",
 		                                                                         .pick = "/ layer", .fills = true, .crop = "studio::layer::crop", .write = "studio::layer::write",
 		                                                                         .key = "/ layer"}))});
 	                     }});
@@ -1330,23 +1338,28 @@ TEST("a collage crops its picked picture in place, kept with Enter, and words pi
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
 }
 
-TEST("a collage fills in the own size of a picture kept before it was, as it's turned, once, never a step undo takes back") {
+TEST("a collage fills in the own size of a picture kept before it was, as it's turned, once, never a step undo takes back, in whichever fields keep it") {
 	// Pictures kept beside the goldens, as a folder of the app's keeps them.
 	struct kept_here : memory_source {
 		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
 	} data;
 	data.set("studio::poster_page", "p1",
 	         value(fields{{"width", 1600}, {"height", 900},
-	                      {"layers", list{value(fields{{"id", "l1"}, {"picture", "collage.png"}, {"picture_width", 0}, {"picture_height", 0}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}}),
-	                                      value(fields{{"id", "l2"}, {"picture", "collage.png"}, {"picture_width", 0}, {"picture_height", 0}, {"turns", 1}, {"x", 0}, {"y", 0}, {"w", 56}, {"h", 90}}),
-	                                      value(fields{{"id", "l3"}, {"picture", "collage.png"}, {"picture_width", 90}, {"picture_height", 56}, {"x", 0}, {"y", 0}, {"w", 90}, {"h", 56}})}}}));
+	                      {"layers", list{value(fields{{"id", "l1"}, {"image", "collage.png"}, {"image_width", 0}, {"image_height", 0}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}}),
+	                                      value(fields{{"id", "l2"}, {"image", "collage.png"}, {"image_width", 0}, {"image_height", 0}, {"turns", 1}, {"x", 0}, {"y", 0}, {"w", 56}, {"h", 90}}),
+	                                      value(fields{{"id", "l3"}, {"image", "collage.png"}, {"image_width", 90}, {"image_height", 56}, {"x", 0}, {"y", 0}, {"w", 90}, {"h", 56}})}}}));
 	data.on("studio::layer::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
+	// Its pictures kept in fields named otherwise, read and sent as those.
+	static auto renamed = [] {
+		auto kept = named_like_parts;
+		kept["picture"] = "image", kept["picture_width"] = "image_width", kept["picture_height"] = "image_height";
+		return kept;
+	}();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .subject = "p1", .fills = true,
-		                                                                         .key = "/ collage", .paste_into = "picture", .sized_width = "picture_width",
-		                                                                         .sized_height = "picture_height", .update = "studio::layer::update"}))});
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = renamed, .subject = "p1", .fills = true,
+		                                                                         .key = "/ collage", .paste = true, .update = "studio::layer::update"}))});
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");
@@ -1359,12 +1372,12 @@ TEST("a collage fills in the own size of a picture kept before it was, as it's t
 	if (data.runs().size() != 2) return;
 	CHECK(data.runs()[0].command == "studio::layer::update");
 	CHECK(data.runs()[0].fields["id"].as_string() == "l1");
-	CHECK(data.runs()[0].fields["picture_width"].as_double() == 900);
-	CHECK(data.runs()[0].fields["picture_height"].as_double() == 560);
+	CHECK(data.runs()[0].fields["image_width"].as_double() == 900);
+	CHECK(data.runs()[0].fields["image_height"].as_double() == 560);
 	CHECK(data.runs()[0].fields["one:history"].as_string() == "apart");
 	CHECK(data.runs()[1].fields["id"].as_string() == "l2");
-	CHECK(data.runs()[1].fields["picture_width"].as_double() == 560);
-	CHECK(data.runs()[1].fields["picture_height"].as_double() == 900);
+	CHECK(data.runs()[1].fields["image_width"].as_double() == 560);
+	CHECK(data.runs()[1].fields["image_height"].as_double() == 900);
 }
 
 TEST("a picture coming into a collage with nothing on it covers it, and one coming in after is its own size, fitted, in the middle") {
@@ -1374,9 +1387,9 @@ TEST("a picture coming into a collage with nothing on it covers it, and one comi
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts, .pick = "/ layer", .subject = "p1",
 		                                                                         .fills = true, .add = "studio::layer::create", .parent = "poster", .key = "/ layer",
-		                                                                         .paste_into = "picture", .sized_width = "picture_width", .sized_height = "picture_height"}))});
+		                                                                         .paste = true}))});
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");
@@ -1421,7 +1434,7 @@ TEST("a collage is copied whole or a layer at a time, saved in the app's folder 
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts, .pick = "/ layer", .subject = "p1",
 		                                                                         .fills = true, .key = "/ layer", .preview = "studio::poster::preview", .preview_into = "preview",
 		                                                                         .preview_wide = 320}))});
 	                     }});

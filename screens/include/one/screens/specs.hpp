@@ -253,7 +253,7 @@ namespace one::screens {
 		std::string link = "";
 		std::vector<std::string> keyed = {};
 		std::map<std::string, int> named = {};
-		std::string x = "x", y = "y", w = "w", h = "h";
+		std::string x, y, w, h;  // the fields a card's place is kept in
 		std::string kind = "";   // the field saying how each card's drawn, like note or text
 		std::string place = "";  // the command a card's place is sent to
 		double grid = 0, origin_x = 0, origin_y = 0;
@@ -344,7 +344,10 @@ namespace one::screens {
 	struct collage_spec {
 		state<view_state> view;
 		std::string list;
-		std::string width = "width", height = "height";
+		std::string width, height;
+		// The field each of its parts is kept in, by part, like words: caption. It reads
+		// and sends only parts; these say which of the app's fields they are.
+		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		std::string slide = "";  // and the one the background slid is, with slide_x slide_y
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
@@ -360,13 +363,41 @@ namespace one::screens {
 		std::string parent = "";  // the field a layer names what the view is per by, like poster
 		std::string key = "";     // what its buttons, like crop and add words, name it by
 		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
-		std::string paste_into = "";         // what a file dropped or pasted is made, by add, a picture in this field
-		std::string sized_width = "", sized_height = "";  // and where a picture's own size is kept
+		bool paste = false;       // a file dropped or pasted made a picture, by add
 		std::string update = "";  // the command a picture's own size is filled in by, when it isn't kept yet
 		std::string preview = "";            // the command a small picture of it is sent to, once changes settle
 		std::string preview_into = "";       // in this file field of what the view is per
 		int preview_wide = 480;              // this many pixels wide
 	};
+
+	// A collage's view as its parts: its own values and each of its layers, with the
+	// fields its parts are kept in read as those parts.
+	inline value collage_parts_of(const value& data, const std::string& list, const std::map<std::string, std::string>& fields) {
+		if (!data.is_map()) return data;
+		auto as_parts = [&](const value& from) {
+			value out = from;
+			for (const auto& [part, field] : fields) out.fields.erase(part);
+			for (const auto& [part, field] : fields) {
+				if (const value* held = from.find(field)) out.fields[part] = *held;
+			}
+			return out;
+		};
+		value out = as_parts(data);
+		std::vector<value> layers;
+		for (const auto& layer : data[list].as_array()) layers.push_back(as_parts(layer));
+		out.fields[list] = value(std::move(layers));
+		return out;
+	}
+
+	// And what it sends, its parts named as the fields they're kept in.
+	inline value collage_fields_of(const value& sent, const std::map<std::string, std::string>& fields) {
+		value out = sent;
+		for (const auto& [part, field] : fields) out.fields.erase(part);
+		for (const auto& [part, field] : fields) {
+			if (const value* held = sent.find(part)) out.fields[field] = *held;
+		}
+		return out;
+	}
 
 	// A list's rows as large cards, like a project's boards: each its title, what
 	// else it shows, a tally of what it holds, like 3 To do · 1 Done, and links that

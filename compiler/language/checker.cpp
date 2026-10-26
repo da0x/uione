@@ -3551,10 +3551,10 @@ namespace one::language {
                         }
                     }
                     bool can = does->of.has_value() || std::ranges::any_of(collages_, [&](const collage_item* c) {
-                        return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste_into.has_value() : c->add.has_value();
+                        return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste : c->add.has_value();
                     });
                     if (!can) {
-                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : takes_pictures ? "paste into picture" : "add layer::create";
+                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : takes_pictures ? "paste" : "add layer::create";
                         error(item.where, "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {
@@ -3907,12 +3907,43 @@ namespace one::language {
             }
             const entity_declaration* layer = listed_entity(ns, *layers);
             if (!layer) return;
-            for (const std::string name : {"x", "y", "w", "h"}) {
-                const field* f = find_field(*layer, name);
-                if (!f) error(collage.list_where, "entity " + layer->name + " has no field " + name + ", where a collage keeps a layer's place; add " + name + " number to it");
-                else if (!f->type || f->type->text() != "number" || f->list) error(collage.list_where, layer->name + "." + name + " keeps where a layer is, so it's a number");
-                else if (!in_rows(*layers, name)) error(collage.list_where, "view " + collage.view.text() + " has no " + name + " in its " + collage.list + "; add it to the list's block");
+            // Each part in the field the collage names, or the one named like it: there, of
+            // the part's type, and read by the view.
+            const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, collage.view.where}) : nullptr;
+            auto kept = language::collage_fields(collage, layers, view);
+            for (const auto& part : language::collage_parts()) {
+                auto said = collage.fields_where.find(part.name);
+                const location& at = said != collage.fields_where.end() ? said->second : collage.list_where;
+                auto in = kept.find(part.name);
+                const entity_declaration* on = part.of_view ? per : layer;
+                if (in == kept.end()) {
+                    if (part.needed) error(at, "entity " + layer->name + " has no field " + part.name + ", where a collage keeps a layer's place; add " + part.name + " number to it, or say the fields, like at x y  size w h");
+                    continue;
+                }
+                const std::string& name = in->second;
+                const field* f = on ? find_field(*on, name) : nullptr;
+                if (!f) {
+                    std::string whose = on ? on->name : collage.view.text();
+                    error(at, "entity " + whose + " has no field " + name + (on ? nearest(name, field_names(*on)) : ""));
+                    continue;
+                }
+                std::string type = part.type;
+                bool choices = type.find(' ') != std::string::npos;
+                bool fits = choices ? !f->choices.empty() && std::ranges::all_of(f->choices, [&](const std::string& c) { return (" " + type + " ").find(" " + c + " ") != std::string::npos; })
+                                    : f->type && f->type->text() == type && !f->list;
+                if (!fits) {
+                    std::string what = choices ? "one of " + type : type == "file" ? "a file" : type == "text" ? "text" : "a number";
+                    error(at, on->name + "." + name + " keeps a collage's " + std::string(part.name) + ", so it's " + what + (said == collage.fields_where.end() ? "; or say the field that does, as in the collage's block" : ""));
+                    continue;
+                }
+                bool read = part.of_view ? view && std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == name; })
+                                         : in_rows(*layers, name);
+                if (!read) error(at, "view " + collage.view.text() + " has no " + name + (part.of_view ? "" : " in its " + collage.list) + ", which the collage draws; add it to " + (part.of_view ? "the view" : "the list's block"));
             }
+            auto has = [&](std::initializer_list<const char*> parts) { return std::ranges::all_of(parts, [&](const char* p) { return kept.contains(p); }); };
+            if (collage.crop && !has({"crop_x", "crop_y", "crop_w", "crop_h"})) error(collage.crop->where, "a crop is kept in a layer's crop_x crop_y crop_w crop_h, which " + layer->name + " doesn't have; add them, or say its fields, like cropped to left top width height");
+            if (collage.write && !has({"words", "size"})) error(collage.write->where, "words written are kept in a layer's words and size, which " + layer->name + " doesn't have; add them, or say its fields, like words caption sized letters");
+            if (kept.contains("picture_width") != kept.contains("picture_height")) error(collage.list_where, "a picture's own size is its picture_width and picture_height together");
             // Placed, cropped, written and made by commands on what its layers are.
             for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}}) {
                 if (!*command) continue;
@@ -3931,27 +3962,19 @@ namespace one::language {
                                                     (view->per ? ", like " + *view->per + "::slide" : ", and it isn't per anything"));
                 }
             }
-            // Pasted pictures are made by its add, the file in a file field of the layer's.
-            if (collage.paste_into) {
+            // Pasted pictures are made by its add, the file in the layer's picture.
+            if (collage.paste) {
                 if (!collage.add) error(collage.paste_where, "pasted pictures are made by the collage's add, so it says one too, like add " + layer->name + "::create");
-                const field* f = find_field(*layer, *collage.paste_into);
-                if (!f || !f->type || f->type->text() != "file") error(collage.paste_where, layer->name + "." + *collage.paste_into + " holds what's pasted, so it's a file");
-                if (collage.sized) {
-                    for (const auto& name : {collage.sized->first, collage.sized->second}) {
-                        const field* n = find_field(*layer, name);
-                        if (!n || !n->type || n->type->text() != "number") error(collage.paste_where, layer->name + "." + name + " keeps a picture's own size, so it's a number");
-                    }
-                    // A picture whose own size isn't kept yet, like one from before, has it filled in.
-                    if (!find_command(ns, qualified_name{{layer->name, "update"}, collage.paste_where})) {
-                        error(collage.paste_where, "a picture's own size, when it isn't kept yet, is filled in by " + layer->name + "::update, which isn't declared " + in_namespace(ns));
-                    }
-                }
+                if (!kept.contains("picture")) error(collage.paste_where, "a pasted picture is kept in a layer's picture, which " + layer->name + " doesn't have; add picture file to it, or say its field, like picture image");
+            }
+            // A picture whose own size isn't kept yet, like one from before, has it filled in.
+            if (has({"picture", "picture_width", "picture_height"}) && !find_command(ns, qualified_name{{layer->name, "update"}, collage.list_where})) {
+                error(collage.list_where, "a picture's own size, when it isn't kept yet, is filled in by " + layer->name + "::update, which isn't declared " + in_namespace(ns));
             }
             // A preview is kept on what the view is per, by a command on it, in a file field.
             if (collage.preview) {
                 verify_command_use(ns, *collage.preview);
                 const entity_declaration* on = find_command(ns, *collage.preview);
-                const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, collage.view.where}) : nullptr;
                 if (!per) {
                     error(collage.preview_where, "a collage's preview is kept on what the view " + collage.view.text() + " is per, and it isn't per anything");
                 } else {

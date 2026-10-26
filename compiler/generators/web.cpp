@@ -1262,8 +1262,11 @@ namespace one::generators {
                     parts.components.insert("Collage");
                     std::string view = full_view(ns, c->view.text());
                     std::string line = "<Collage view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(c->list);
-                    if (c->width != "width") line += " width=" + web_detail::js_string(c->width);
-                    if (c->height != "height") line += " height=" + web_detail::js_string(c->height);
+                    line += " width=" + web_detail::js_string(c->width) + " height=" + web_detail::js_string(c->height);
+                    std::string kept;
+                    auto fields = model_.collage_fields(ns, *c);
+                    for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
+                    line += " fields={{ " + kept + " }}";
                     if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
                     if (c->slide) line += " slide=" + web_detail::js_string(full_command(ns, *c->slide));
                     if (c->snap) line += " snap";
@@ -1282,9 +1285,9 @@ namespace one::generators {
                         }
                     }
                     line += " name=" + web_detail::js_string(route_ + " " + (c->over ? *c->over : std::string("collage")));
-                    if (c->paste_into) line += " pasteInto=" + web_detail::js_string(*c->paste_into);
-                    if (c->sized) line += " sizedWidth=" + web_detail::js_string(c->sized->first) + " sizedHeight=" + web_detail::js_string(c->sized->second);
-                    if (const language::entity_declaration* layer = listed(ns, c->view.text(), c->list); layer && c->sized) line += " update=" + web_detail::js_string(web_detail::join(ns, layer->name + "::update"));
+                    if (c->paste) line += " paste";
+                    bool sized = fields.contains("picture") && fields.contains("picture_width") && fields.contains("picture_height");
+                    if (const language::entity_declaration* layer = listed(ns, c->view.text(), c->list); layer && sized) line += " update=" + web_detail::js_string(web_detail::join(ns, layer->name + "::update"));
                     if (c->preview) {
                         line += " preview=" + web_detail::js_string(full_command(ns, *c->preview)) + " previewInto=" + web_detail::js_string(c->preview_into) +
                                 " previewWide={" + std::to_string(c->preview_wide) + "}";
@@ -1473,9 +1476,7 @@ namespace one::generators {
             }
             auto number = [](double n) { return std::format("{}", n); };
             std::string line = "<Canvas view={" + view_variable(parts, full_view(ns, c.view.text())) + "} list=" + web_detail::js_string(*c.list) + " columns={{ " + columns + " }}";
-            for (const auto& [name, field] : {std::pair{"x", c.x}, std::pair{"y", c.y}, std::pair{"w", c.w}, std::pair{"h", c.h}}) {
-                if (field != name) line += std::string(" ") + name + "=" + web_detail::js_string(field);
-            }
+            for (const auto& [name, field] : {std::pair{"x", c.x}, std::pair{"y", c.y}, std::pair{"w", c.w}, std::pair{"h", c.h}}) line += std::string(" ") + name + "=" + web_detail::js_string(field);
             if (!c.kind.empty()) line += " kind=" + web_detail::js_string(c.kind);
             if (c.place) line += " place=" + web_detail::js_string(full_command(ns, *c.place));
             if (c.grid > 0) line += " grid={{ step: " + number(c.grid) + ", x: " + number(c.origin_x) + ", y: " + number(c.origin_y) + " }}";

@@ -504,6 +504,22 @@ namespace one::generators::screens {
             return *view->second->per;
         }
 
+        // The field each of a collage's parts is kept in, by part, as the checker found
+        // them: what its runtimes are handed, so they read and send parts, never fields.
+        std::map<std::string, std::string> collage_fields(const std::string& ns, const language::collage_item& c) const {
+            const language::view_declaration* view = nullptr;
+            if (auto scope = views.find(ns); scope != views.end()) {
+                if (auto v = scope->second.find(c.view.text()); v != scope->second.end()) view = v->second;
+            }
+            const language::view_each* layers = nullptr;
+            if (view) {
+                for (const auto& each : view->each) {
+                    if (each.name && *each.name == c.list) layers = &each;
+                }
+            }
+            return language::collage_fields(c, layers, view);
+        }
+
         // A view per an entity that holds one of its fields at its top, like poster_page's
         // background: where a button's given value is compared with what's stored, to
         // draw it pressed while they're the same.

@@ -828,11 +828,11 @@ namespace one::language {
 
     // collage poster_page.layers size width height { ... }: a picture made of layers, as
     // big as two of the view's values say, in its own pixels (decision 0019). Its rows
-    // are its layers, lowest first, each placed by x y w h and drawn from what they
-    // hold by their conventional names: picture, crop_x crop_y crop_w crop_h, turns,
-    // mirrored, words, size, color and weight; the first, when it's a picture, is its
-    // background, sitting as the view's background, around, zoom, slide_x and slide_y
-    // say.
+    // are its layers, lowest first, each drawn from the parts it has: a place, a
+    // picture, its crop and turns, words and how they look; the first, when it's a
+    // picture, is its background, sitting as the view's background part says. Each part
+    // is kept in the field named like it, unless the collage says another, as in
+    // words caption, and the runtimes know only the parts.
     struct collage_item {
         qualified_name view;
         std::string list;
@@ -845,11 +845,13 @@ namespace one::language {
         std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
         std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept
         std::optional<qualified_name> remove;  // delete layer::delete: words written away to nothing, gone
-        // paste into picture sized picture_width picture_height: files dropped or pasted
-        // made pictures by its add, the file in that field and its own size in those.
-        std::optional<std::string> paste_into;
+        // paste: files dropped or pasted made pictures by its add.
+        bool paste = false;
         location paste_where;
-        std::optional<std::pair<std::string, std::string>> sized;
+        // words caption, stacked by order, ...: the fields playing parts other than those
+        // named like them, by part, and where each was said.
+        std::map<std::string, std::string> fields;
+        std::map<std::string, location> fields_where;
         // keep preview poster::preview into preview 480 wide: a small picture of it, drawn
         // once changes settle and sent to a command on what the view is per, never a
         // step undo takes back.
@@ -1396,6 +1398,47 @@ namespace one::language {
             if (each.name && *each.name == source->name.parts[0]) return {&each, w};
         }
         return {};
+    }
+
+    // A collage's parts: what each is, the type it's kept as, and whether it's of the
+    // view rather than its layers. A layer must have a place; every other part is drawn
+    // when it's there.
+    struct collage_part {
+        const char* name;
+        const char* type;  // number, text, file, or the choices it's one of
+        bool of_view = false;
+        bool needed = false;
+    };
+
+    inline const std::vector<collage_part>& collage_parts() {
+        static const std::vector<collage_part> all{
+            {"x", "number", false, true}, {"y", "number", false, true}, {"w", "number", false, true}, {"h", "number", false, true},
+            {"depth", "number"}, {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"},
+            {"crop_x", "number"}, {"crop_y", "number"}, {"crop_w", "number"}, {"crop_h", "number"},
+            {"turns", "number"}, {"mirrored", "number"},
+            {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"},
+            {"background", "fit fill stretch center", true}, {"around", "edges color", true}, {"zoom", "number", true},
+            {"slide_x", "number", true}, {"slide_y", "number", true},
+        };
+        return all;
+    }
+
+    // The field each part is kept in: the one the collage names, or else the one named
+    // like the part, when its layers' rows, or its view's own values, hold it.
+    inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers, const view_declaration* view) {
+        auto holds = [](const std::vector<view_value>& values, const std::string& name) {
+            return std::ranges::any_of(values, [&](const view_value& v) {
+                if (v.name) return *v.name == name;
+                auto* plain = v.value ? std::get_if<name_expression>(&v.value->node) : nullptr;
+                return plain && plain->name.text() == name;
+            });
+        };
+        std::map<std::string, std::string> out;
+        for (const auto& part : collage_parts()) {
+            if (auto said = c.fields.find(part.name); said != c.fields.end()) out[part.name] = said->second;
+            else if (part.of_view ? view && holds(view->values, part.name) : layers && holds(layers->rows, part.name)) out[part.name] = part.name;
+        }
+        return out;
     }
 
 } // namespace one::language

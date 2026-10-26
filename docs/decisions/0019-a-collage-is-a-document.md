@@ -33,10 +33,19 @@ collage poster_page.layers size width height {
 
 - It's as big as `size` says, scaled to fit where it's shown, and drawn at its own
   size in full screen.
-- Its layers are drawn in the list's order, each by conventional fields: `x y w h`,
+- Its layers are drawn in the list's order, each from its parts: `x y w h`,
   `picture`, `crop_x crop_y crop_w crop_h`, `turns`, `mirrored`, `words`, `size`,
   `color`, `weight`, and the background's `background`, `around`, `zoom`,
   `slide_x` and `slide_y`.
+
+**Each part is kept in the field named like it, unless the collage says another.**
+An app whose fields have those names says nothing; one that keeps words in
+`caption` says `words caption`, and only that. The compiler works out which field
+keeps each part and hands the runtimes that list, so the desktop, web and terminal
+runtimes read and send parts and never an app's field names. That keeps an app's
+data out of uione's code, the way a library names what it needs, like a range's
+`begin` and `end`, and lets a type say otherwise. A canvas's place works the same
+way, `at x y  size w h`, its fields always handed to the runtimes.
 - What it shares with a canvas is shared below the language: placing and showing a
   card at once and back if refused, and pasting files.
 

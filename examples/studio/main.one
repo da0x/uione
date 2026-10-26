@@ -190,7 +190,7 @@ namespace studio at / {
 				delete layer::delete
 				slide poster::slide
 				snap to edges
-				paste into picture sized picture_width picture_height
+				paste
 				keep preview poster::preview into preview 480 wide
 				empty "Add a picture or some words to start"
 				over layer {

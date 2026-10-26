@@ -144,7 +144,9 @@ namespace one::terminal::runtime {
 	terminal::view collage(page& p, collage_spec spec) {
 		const view_state& v = *spec.view;
 		if (v.status == status::loading) return terminal::text("Loading…", dim());
-		const auto& layers = v.data[spec.list].as_array();
+		// Read as its parts, whichever of the app's fields keep them.
+		const value data = collage_parts_of(v.data, spec.list, spec.fields);
+		const auto& layers = data[spec.list].as_array();
 		std::string chosen = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		// Words being written: a line to type them in, kept with Enter.
 		auto writing = p.kept<std::string>("collage writing " + spec.key);
@@ -154,19 +156,19 @@ namespace one::terminal::runtime {
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.peek().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
-			double width = v.data[spec.width].as_double(), height = v.data[spec.height].as_double();
-			if (does == "paste" && !spec.paste_into.empty()) {
+			double width = data[spec.width].as_double(), height = data[spec.height].as_double();
+			if (does == "paste" && spec.paste && spec.fields.contains("picture")) {
 				pasting.set(true);
 			} else if (does == "edit" && !spec.write.empty()) {
 				for (const auto& l : layers) {
 					if (l["id"].as_string() == chosen && l["picture"].as_string().empty()) writing.set(chosen), typed.set(l["words"].as_string());
 				}
-			} else if (does == "add" && !spec.add.empty()) {
+			} else if (does == "add" && !spec.add.empty() && spec.fields.contains("words")) {
 				double size = std::max(8.0, height / 12);
 				value made = value(std::map<std::string, value>{{"words", "Your text"}, {"size", size}, {"x", width / 3}, {"y", (height - size) / 2}, {"w", width / 3}, {"h", size * 1.2}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				if (!layers.empty() && !layers.back()["depth"].is_null()) made.fields["depth"] = value(layers.back()["depth"].as_double() + 1);
-				p.run(spec.add, made, [&p, pick = spec.pick, writing, typed](const answer& a) {
+				p.run(spec.add, collage_fields_of(made, spec.fields), [&p, pick = spec.pick, writing, typed](const answer& a) {
 					if (!a) return;
 					if (!pick.empty()) p.pick(pick, *a);
 					writing.set(*a), typed.set("Your text");
@@ -198,13 +200,13 @@ namespace one::terminal::runtime {
 			bool background = i == 0 && !l["picture"].as_string().empty();
 			for (auto [key, dx, dy] : {std::tuple{"left", -1.0, 0.0}, {"right", 1.0, 0.0}, {"up", 0.0, -1.0}, {"down", 0.0, 1.0}}) {
 				if (background && !spec.slide.empty()) {
-					double sx = v.data["slide_x"].is_null() ? 0.5 : v.data["slide_x"].as_double(), sy = v.data["slide_y"].is_null() ? 0.5 : v.data["slide_y"].as_double();
-					p.on_key(std::string("alt+") + key, [&p, command = spec.slide, subject = spec.subject, sx, sy, dx, dy] {
-						p.run(command, value(std::map<std::string, value>{{"id", subject}, {"slide_x", std::clamp(sx + dx * 0.05, 0.0, 1.0)}, {"slide_y", std::clamp(sy + dy * 0.05, 0.0, 1.0)}}));
+					double sx = data["slide_x"].is_null() ? 0.5 : data["slide_x"].as_double(), sy = data["slide_y"].is_null() ? 0.5 : data["slide_y"].as_double();
+					p.on_key(std::string("alt+") + key, [&p, command = spec.slide, kept = spec.fields, subject = spec.subject, sx, sy, dx, dy] {
+						p.run(command, collage_fields_of(value(std::map<std::string, value>{{"id", subject}, {"slide_x", std::clamp(sx + dx * 0.05, 0.0, 1.0)}, {"slide_y", std::clamp(sy + dy * 0.05, 0.0, 1.0)}}), kept));
 					});
 				} else if (!background && !spec.place.empty()) {
-					p.on_key(std::string("alt+") + key, [&p, command = spec.place, l, dx, dy] {
-						p.run(command, value(std::map<std::string, value>{{"id", l["id"]}, {"x", l["x"].as_double() + dx * 10}, {"y", l["y"].as_double() + dy * 10}, {"w", l["w"]}, {"h", l["h"]}}));
+					p.on_key(std::string("alt+") + key, [&p, command = spec.place, kept = spec.fields, l, dx, dy] {
+						p.run(command, collage_fields_of(value(std::map<std::string, value>{{"id", l["id"]}, {"x", l["x"].as_double() + dx * 10}, {"y", l["y"].as_double() + dy * 10}, {"w", l["w"]}, {"h", l["h"]}}), kept));
 					});
 				}
 			}
@@ -220,7 +222,7 @@ namespace one::terminal::runtime {
 		// A picture pasted by its path, as a terminal can't be dropped on: the first covers
 		// the collage, the rest go in the middle as big as the collage allows.
 		if (pasting.get()) {
-			double width = v.data[spec.width].as_double(), height = v.data[spec.height].as_double();
+			double width = data[spec.width].as_double(), height = data[spec.height].as_double();
 			parts.push_back(terminal::field(path, {.placeholder = "The picture's path, like ~/Pictures/harbor.png", .on_submit = [&p, spec, pasting, path, layers, width, height] {
 				value made = layers.empty() ? value(std::map<std::string, value>{{"x", 0}, {"y", 0}, {"w", width}, {"h", height}})
 				                            : value(std::map<std::string, value>{{"x", width / 4}, {"y", height / 4}, {"w", width / 2}, {"h", height / 2}});
@@ -228,7 +230,7 @@ namespace one::terminal::runtime {
 				if (!layers.empty() && !layers.back()["depth"].is_null()) made.fields["depth"] = value(layers.back()["depth"].as_double() + 1);
 				std::string file = path.peek();
 				if (const char* home = std::getenv("HOME"); file.starts_with("~/") && home) file = home + file.substr(1);
-				p.run(spec.add, made, attached_files{{spec.paste_into, {file}}}, [](const answer&) {}, false);
+				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file}}}, [](const answer&) {}, false);
 				pasting.set(false), path.set("");
 			}}));
 		}
@@ -237,7 +239,7 @@ namespace one::terminal::runtime {
 				for (const auto& l : layers) {
 					if (l["id"].as_string() != writing.peek()) continue;
 					if (typed.peek().find_first_not_of(" \t") == std::string::npos && !spec.remove.empty()) p.run(spec.remove, value(std::map<std::string, value>{{"id", l["id"]}}));
-					else p.run(spec.write, value(std::map<std::string, value>{{"id", l["id"]}, {"words", typed.peek()}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", l["w"]}, {"h", l["h"]}}));
+					else p.run(spec.write, collage_fields_of(value(std::map<std::string, value>{{"id", l["id"]}, {"words", typed.peek()}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", l["w"]}, {"h", l["h"]}}), spec.fields));
 				}
 				writing.set("");
 			}}));

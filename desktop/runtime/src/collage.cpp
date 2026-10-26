@@ -285,13 +285,14 @@ namespace one::desktop::runtime {
 		}
 
 		// A crop kept: the part of the picture kept, as fractions of it, and where it is.
-		void keep_crop(page& p, placed& w, const std::string& command) {
+		void keep_crop(page& p, placed& w, const collage_spec& spec) {
 			if (!w.crop) return;
 			const auto& e = *w.crop;
 			model::box crop{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
 			w.going = std::pair{e.id, e.kept};
-			p.run(command, value(fields{{"id", e.id}, {"crop_x", crop.x}, {"crop_y", crop.y}, {"crop_w", crop.w}, {"crop_h", crop.h},
-			                            {"x", e.kept.x}, {"y", e.kept.y}, {"w", e.kept.w}, {"h", e.kept.h}}));
+			p.run(spec.crop, collage_fields_of(value(fields{{"id", e.id}, {"crop_x", crop.x}, {"crop_y", crop.y}, {"crop_w", crop.w}, {"crop_h", crop.h},
+			                                                {"x", e.kept.x}, {"y", e.kept.y}, {"w", e.kept.w}, {"h", e.kept.h}}),
+			                                   spec.fields));
 			w.crop.reset();
 		}
 
@@ -308,7 +309,7 @@ namespace one::desktop::runtime {
 				}
 				if (e.words == l["words"].as_string()) return;
 				auto [mw, mh] = measured(e.words, l["size"].as_double(), weight_of(l));
-				p.run(spec.write, value(fields{{"id", e.id}, {"words", e.words}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", mw}, {"h", mh}}));
+				p.run(spec.write, collage_fields_of(value(fields{{"id", e.id}, {"words", e.words}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", mw}, {"h", mh}}), spec.fields));
 			}
 		}
 
@@ -365,7 +366,7 @@ namespace one::desktop::runtime {
 		// where they were let go, each a little further along; all one step to undo.
 		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
 		                  std::optional<model::point> on) {
-			if (spec.add.empty() || spec.paste_into.empty()) return;
+			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
 			const auto& all = layers.as_array();
 			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
 			bool first = true, covered = !all.empty();
@@ -390,22 +391,22 @@ namespace one::desktop::runtime {
 				value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
-				if (!spec.sized_width.empty()) made.fields[spec.sized_width] = value(pw), made.fields[spec.sized_height] = value(ph);
+				if (spec.fields.contains("picture_width")) made.fields["picture_width"] = value(pw), made.fields["picture_height"] = value(ph);
 				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
-				p.run(spec.add, made, attached_files{{spec.paste_into, {file.string()}}}, [](const answer&) {}, false);
+				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file.string()}}}, [](const answer&) {}, false);
 			}
 		}
 
 		// Words pasted: a layer of them in the middle, a twelfth of its height.
 		void add_words(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::string& words) {
-			if (spec.add.empty()) return;
+			if (spec.add.empty() || !spec.fields.contains("words")) return;
 			double size = std::max(8.0, std::round(height / 12));
 			auto [mw, mh] = measured(words, size, 700);
 			value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 			const auto& all = layers.as_array();
 			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
-			p.run(spec.add, made);
+			p.run(spec.add, collage_fields_of(made, spec.fields));
 		}
 
 		// What's on the clipboard, pasted: files a file manager copied, or a picture, as
@@ -548,7 +549,8 @@ namespace one::desktop::runtime {
 		// While its view isn't there to show, what it says instead.
 		if (v.status == status::loading) return desktop::text("Loading…", current_theme().quiet());
 		if (v.status == status::failed) return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, current_theme().quiet());
-		const value data = v.data;
+		// Read as its parts, whichever of the app's fields keep them.
+		const value data = collage_parts_of(v.data, spec.list, spec.fields);
 		const value layers = data[spec.list];
 		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
 		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
@@ -559,14 +561,14 @@ namespace one::desktop::runtime {
 		}
 		// A picture whose own size isn't kept yet, like one kept before its size was, has
 		// it filled in from the picture as it's turned, once, never a step undo takes back.
-		if (!spec.update.empty() && !spec.sized_width.empty()) {
+		if (!spec.update.empty()) {
 			auto asked = p.kept<std::shared_ptr<std::set<std::string>>>("collage sized " + spec.key, std::make_shared<std::set<std::string>>()).peek();
 			for (const auto& l : layers.as_array()) {
-				if (!l.fields.contains(spec.sized_width) || l[spec.sized_width].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
+				if (!l.fields.contains("picture_width") || l["picture_width"].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
 				const desktop::picture* shown = l["picture"].as_string().empty() ? nullptr : layer_picture(p, l);
 				if (!shown) continue;
 				asked->insert(l["id"].as_string());
-				p.run(spec.update, value(fields{{"id", l["id"]}, {spec.sized_width, shown->width()}, {spec.sized_height, shown->height()}, {"one:history", "apart"}}));
+				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", shown->width()}, {"picture_height", shown->height()}, {"one:history", "apart"}}), spec.fields));
 			}
 		}
 		// Its preview, drawn once changes have settled for a moment and nothing's being
@@ -612,7 +614,7 @@ namespace one::desktop::runtime {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
 			} else if (does == "paste") {
 				paste(p, spec, layers, width, height);
-			} else if (does == "screenshot" && !spec.paste_into.empty()) {
+			} else if (does == "screenshot" && spec.paste) {
 				// The desktop's own screenshot, which waits on the person, away from the
 				// window's thread; added like any picture once it's taken.
 				// It's handed back through states, which outlive the page if it's left first.
@@ -642,7 +644,7 @@ namespace one::desktop::runtime {
 						save(p, drawn, one ? name + " layer" : name);
 					}
 				}
-			} else if (does == "add" && !spec.add.empty()) {
+			} else if (does == "add" && !spec.add.empty() && spec.fields.contains("words")) {
 				// Words in the middle, a twelfth of its height, all chosen so the first key
 				// typed replaces them, on top of the rest.
 				double size = std::max(8.0, std::round(height / 12));
@@ -652,7 +654,7 @@ namespace one::desktop::runtime {
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				const auto& all = layers.as_array();
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
-				p.run(spec.add, made, [&p, w, pick = spec.pick, words](const answer& a) {
+				p.run(spec.add, collage_fields_of(made, spec.fields), [&p, w, pick = spec.pick, words](const answer& a) {
 					if (!a) return;
 					if (!pick.empty()) p.pick(pick, *a);
 					w->editing = placed::writing{*a, words, true};
@@ -671,7 +673,7 @@ namespace one::desktop::runtime {
 				return written(*w->editing, k);
 			});
 		} else if (w->crop) {
-			p.on_key("enter", [&p, w, command = spec.crop] { keep_crop(p, *w, command); });
+			p.on_key("enter", [&p, w, spec] { keep_crop(p, *w, spec); });
 			p.on_key("escape", [w] { w->crop.reset(); });
 		}
 		// The buttons over the picked layer, as they are now; while cropping, keep and
@@ -701,10 +703,10 @@ namespace one::desktop::runtime {
 				for (auto [key, dx, dy] : {std::tuple{"left", -1.0, 0.0}, {"right", 1.0, 0.0}, {"up", 0.0, -1.0}, {"down", 0.0, 1.0}}) {
 					for (double by : {1.0, 10.0}) {
 						std::string chord = by > 1 ? std::string("shift+") + key : key;
-						p.on_key(chord, [&p, w, place = spec.place, id = picked, b = box_of(*chosen), dx, dy, by] {
+						p.on_key(chord, [&p, w, place = spec.place, kept = spec.fields, id = picked, b = box_of(*chosen), dx, dy, by] {
 							model::box to{b.x + dx * by, b.y + dy * by, b.w, b.h};
 							w->going = std::pair{id, to};
-							p.run(place, value(fields{{"id", id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}));
+							p.run(place, collage_fields_of(value(fields{{"id", id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), kept));
 						});
 					}
 				}
@@ -845,7 +847,7 @@ namespace one::desktop::runtime {
 			        for (const auto& [area, i] : w->tools) {
 				        if (!area.contains(at)) continue;
 				        if (w->crop) {
-					        if (i == 0) keep_crop(p, *w, spec.crop);
+					        if (i == 0) keep_crop(p, *w, spec);
 					        else w->crop.reset();
 					        return true;
 				        }
@@ -885,7 +887,7 @@ namespace one::desktop::runtime {
 					        return true;
 				        }
 				        if (edges < 0) {
-					        keep_crop(p, *w, spec.crop);
+					        keep_crop(p, *w, spec);
 					        return true;
 				        }
 				        w->now = {.what = gesture::cropping, .id = w->crop->id, .from = w->crop->kept, .at = at, .corner = 0, .across = {}, .down = {}, .edges = edges, .kept_from = {}};
@@ -980,7 +982,7 @@ namespace one::desktop::runtime {
 			        };
 			        if (g.what == gesture::sliding) {
 				        auto fraction = [](double at, std::pair<double, double> range) { return range.second > range.first ? (at - range.first) / (range.second - range.first) : 0.5; };
-				        p.run(spec.slide, value(fields{{"id", spec.subject}, {"slide_x", fraction(to.x, g.across)}, {"slide_y", fraction(to.y, g.down)}}), back);
+				        p.run(spec.slide, collage_fields_of(value(fields{{"id", spec.subject}, {"slide_x", fraction(to.x, g.across)}, {"slide_y", fraction(to.y, g.down)}}), spec.fields), back);
 				        return;
 			        }
 			        // Words resized are larger or smaller words, not stretched ones.
@@ -988,11 +990,11 @@ namespace one::desktop::runtime {
 				        if (l["id"].as_string() == g.id && is_words(l) && g.what == gesture::resizing && g.from.h > 0) {
 					        double size = l["size"].as_double() * to.h / g.from.h;
 					        auto [mw, mh] = measured(l["words"].as_string(), size, weight_of(l));
-					        p.run(spec.write, value(fields{{"id", g.id}, {"words", l["words"]}, {"size", size}, {"x", to.x}, {"y", to.y}, {"w", mw}, {"h", mh}}), back);
+					        p.run(spec.write, collage_fields_of(value(fields{{"id", g.id}, {"words", l["words"]}, {"size", size}, {"x", to.x}, {"y", to.y}, {"w", mw}, {"h", mh}}), spec.fields), back);
 					        return;
 				        }
 			        }
-			        p.run(spec.place, value(fields{{"id", g.id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), back);
+			        p.run(spec.place, collage_fields_of(value(fields{{"id", g.id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), spec.fields), back);
 		        },
 		    .cursor =
 		        [&p, w, data, layers, width, height, picked, spec](desktop::point at) {
@@ -1031,7 +1033,7 @@ namespace one::desktop::runtime {
 		};
 		desktop::view drawn = desktop::drawing(std::move(paint), std::move(pointer));
 		// Files dropped on it, or a browser's picture, are pictures where they're let go.
-		if (!spec.paste_into.empty()) {
+		if (spec.paste) {
 			drawn = desktop::file_target(
 			    std::move(drawn),
 			    [&p, w, spec, layers, width, height](desktop::dropped what, desktop::point at) {

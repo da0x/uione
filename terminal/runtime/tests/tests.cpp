@@ -21,6 +21,12 @@ namespace {
 	using namespace one::terminal::runtime;
 	using fields = std::map<std::string, value>;
 	using list = std::vector<value>;
+
+	// Each of a collage's parts in the field named like it, as an app's are by default.
+	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
+	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"},
+	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"},
+	    {"background", "background"}, {"around", "around"}, {"zoom", "zoom"}, {"slide_x", "slide_x"}, {"slide_y", "slide_y"}};
 	namespace terminal = one::terminal;
 
 	const std::filesystem::path golden_folder = ONE_TERMINAL_TESTS "/golden";
@@ -254,6 +260,7 @@ namespace {
 			                     return items(canvas_board(p, {.view = board_page,
 			                                                   .list = "issues",
 			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+			                                                   .x = "x", .y = "y", .w = "w", .h = "h",
 			                                                   .place = "projects::issue::place",
 			                                                   .grid = 160,
 			                                                   .origin_x = 0,
@@ -272,6 +279,7 @@ namespace {
 			                     return items(canvas_board(p, {.view = board_page,
 			                                                   .list = "issues",
 			                                                   .columns = {{"title", "Title"}, {"number", "#"}},
+			                                                   .x = "x", .y = "y", .w = "w", .h = "h",
 			                                                   .place = "projects::issue::place",
 			                                                   .grid = 160,
 			                                                   .by = "stage",
@@ -672,8 +680,8 @@ TEST("a picture is pasted on a collage by its path, as a terminal can't be dropp
 	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
 	site s{.name = "studio"};
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
-		                     return items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .pick = "/ layer", .subject = "p1",
-		                                              .add = "studio::layer::create", .parent = "poster", .key = "/ layer", .paste_into = "picture"}));
+		                     return items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts, .pick = "/ layer", .subject = "p1",
+		                                              .add = "studio::layer::create", .parent = "poster", .key = "/ layer", .paste = true}));
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");

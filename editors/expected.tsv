@@ -310,8 +310,6 @@ examples/studio/main.one	slide poster::slide	slide	keyword
 examples/studio/main.one	add words "Text" icon text key t	words	keyword
 examples/studio/main.one	crop "Crop" icon crop key c	crop	keyword
 examples/studio/main.one	write layer::write	write	keyword
-examples/studio/main.one	paste into picture sized picture_width picture_height	sized	keyword
-examples/studio/main.one	paste into picture sized picture_width picture_height	paste	keyword
 examples/studio/main.one	screenshot "Screenshot" icon screenshot	screenshot	keyword
 examples/studio/main.one	save poster_page as picture "Save" icon save key ctrl+s	save	keyword
 examples/studio/main.one	keep preview poster::preview into preview 480 wide	wide	keyword
@@ -319,3 +317,15 @@ examples/studio/main.one	keep preview poster::preview into preview 480 wide	keep
 examples/studio/main.one	background  enum    fit | fill | stretch | center = background::fill	fit	plain
 examples/studio/main.one	on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster	on	keyword
 examples/studio/main.one	on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster	open	keyword
+editors/fixtures/body.one	stacked by position	stacked	keyword
+editors/fixtures/body.one	stacked by position	position	plain
+editors/fixtures/body.one	picture cover sized cover_width cover_height	sized	keyword
+editors/fixtures/body.one	cropped to cx cy cw ch	cropped	keyword
+editors/fixtures/body.one	turned quarter_turns	turned	keyword
+editors/fixtures/body.one	mirrored flipped	mirrored	keyword
+editors/fixtures/body.one	words title sized letters colored ink weighing boldness	colored	keyword
+editors/fixtures/body.one	words title sized letters colored ink weighing boldness	weighing	keyword
+editors/fixtures/body.one	words title sized letters colored ink weighing boldness	letters	plain
+editors/fixtures/body.one	background sits around margin zoomed scale slid sx sy	around	keyword
+editors/fixtures/body.one	background sits around margin zoomed scale slid sx sy	zoomed	keyword
+editors/fixtures/body.one	background sits around margin zoomed scale slid sx sy	slid	keyword

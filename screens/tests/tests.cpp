@@ -70,7 +70,7 @@ TEST("a file's path pasted on a canvas makes a card of it, named from it, upload
 	memory_source data;
 	navigator nav(s, data);
 	CHECK(nav.open("/walls/w1"));
-	canvas_spec spec{.view = nav.current().view("ideas::wall"), .list = "notes", .grid = 160, .paste = "ideas::note::create", .paste_into = "files", .paste_named = "title", .given = {{"wall", "w1"}}};
+	canvas_spec spec{.view = nav.current().view("ideas::wall"), .list = "notes", .x = "x", .y = "y", .w = "w", .h = "h", .grid = 160, .paste = "ideas::note::create", .paste_into = "files", .paste_named = "title", .given = {{"wall", "w1"}}};
 	CHECK(paste_on_canvas(nav.current(), spec, "file://" + file.string() + "\n", 40, 40));
 	CHECK(data.runs().size() == 1);
 	if (data.runs().empty()) return;
@@ -81,7 +81,7 @@ TEST("a file's path pasted on a canvas makes a card of it, named from it, upload
 	CHECK(made.fields["x"].as_double() == 40);
 	CHECK(made.fields["w"].as_double() == 160);
 	CHECK(data.uploads() == std::vector<std::string>{file.string()});
-	CHECK(!paste_on_canvas(nav.current(), canvas_spec{.view = spec.view, .list = "notes"}, file.string(), 0, 0));
+	CHECK(!paste_on_canvas(nav.current(), canvas_spec{.view = spec.view, .list = "notes", .x = "x", .y = "y", .w = "w", .h = "h"}, file.string(), 0, 0));
 	std::filesystem::remove_all(file.parent_path());
 }
 
@@ -270,7 +270,7 @@ TEST("a whiteboard's regions are its stages side by side: a card let go in anoth
 		{"issues", value(list{value(fields{{"id", "atlas-1"}, {"title", "Laid out"}, {"stage", "todo"}})})},
 		{"stages", value(list{value(fields{{"id", "todo"}, {"title", "To do"}, {"width", 400.0}}), value(fields{{"id", "done"}, {"title", "Done"}})})}}));
 	auto board = p.view("tracker::board_page", "atlas");
-	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
+	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .x = "x", .y = "y", .w = "w", .h = "h", .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
 	                 .by = "stage", .over = board, .over_list = "stages", .regions = "width", .move = "tracker::issue::move", .resize = "tracker::stage::update"};
 	auto c = canvas_of(p, spec);
 	CHECK(c.regions.size() == 2);
@@ -343,7 +343,7 @@ TEST("a canvas places its cards where they say, lays out those that don't by col
 		                      value(fields{{"id", "atlas-3"}, {"title", "Also todo"}, {"stage", "todo"}})})},
 		{"stages", value(list{value(fields{{"id", "todo"}}), value(fields{{"id", "done"}})})}}));
 	auto board = p.view("tracker::board_page", "atlas");
-	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
+	canvas_spec spec{.view = board, .list = "issues", .columns = {{"title", "Title"}}, .x = "x", .y = "y", .w = "w", .h = "h", .place = "tracker::issue::place", .grid = 160, .origin_x = 40, .origin_y = 80,
 	                 .by = "stage", .over = board, .over_list = "stages"};
 	auto c = canvas_of(p, spec);
 	CHECK(c.cards.size() == 3);

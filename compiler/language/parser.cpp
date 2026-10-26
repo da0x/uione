@@ -759,6 +759,87 @@ namespace one::language {
             return command;
         }
 
+        // The lines naming a collage's fields, each part kept in the field named like it
+        // unless one of these says another:
+        //   at x y  size w h          stacked by depth
+        //   picture picture  sized picture_width picture_height
+        //   cropped to crop_x crop_y crop_w crop_h   turned turns   mirrored mirrored
+        //   words words  sized size  colored color  weighing weight
+        //   background background  around around  zoomed zoom  slid slide_x slide_y
+        bool collage_fields_line(collage_item& collage) {
+            auto field = [&](const char* part, const char* like) {
+                collage.fields_where[part] = peek().where;
+                collage.fields[part] = expect(token_kind::identifier, like).text;
+            };
+            auto then = [&](const char* word) {
+                if (!at_word(word)) return false;
+                advance();
+                return true;
+            };
+            auto ends = [&](int n) { return peek(n).kind == token_kind::newline || peek(n).kind == token_kind::right_brace; };
+            if (at_word("at") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier) {
+                advance();
+                field("x", "the field a layer's left is kept in, like x");
+                field("y", "the field a layer's top is kept in, like y");
+                if (then("size")) field("w", "the field a layer's width is kept in, like w"), field("h", "the field a layer's height is kept in, like h");
+                return true;
+            }
+            if (at_word("size") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && ends(3)) {
+                advance();
+                field("w", "the field a layer's width is kept in, like w");
+                field("h", "the field a layer's height is kept in, like h");
+                return true;
+            }
+            if (at_word("stacked") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                advance();
+                advance();
+                field("depth", "the field saying where a layer is in the stack, like depth");
+                return true;
+            }
+            if (at_word("picture") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("picture", "the file field a layer's picture is kept in, like picture");
+                if (then("sized")) field("picture_width", "the field a picture's own width is kept in, like picture_width"), field("picture_height", "and its height's, like picture_height");
+                return true;
+            }
+            if (at_word("cropped") && peek(1).kind == token_kind::identifier && peek(1).text == "to") {
+                advance();
+                advance();
+                field("crop_x", "the field a crop's left is kept in, like crop_x");
+                field("crop_y", "its top's, like crop_y");
+                field("crop_w", "its width's, like crop_w");
+                field("crop_h", "its height's, like crop_h");
+                return true;
+            }
+            if (at_word("turned") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("turns", "the field keeping how many quarters a picture's turned, like turns");
+                return true;
+            }
+            if (at_word("mirrored") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("mirrored", "the field keeping whether a picture's mirrored, like mirrored");
+                return true;
+            }
+            if (at_word("words") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("words", "the field a layer's words are kept in, like words");
+                if (then("sized")) field("size", "the field their size is kept in, like size");
+                if (then("colored")) field("color", "the field their color is kept in, like color");
+                if (then("weighing")) field("weight", "the field their weight is kept in, like weight");
+                return true;
+            }
+            if (at_word("background") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("background", "the field saying how the background sits, like background");
+                if (then("around")) field("around", "the field saying what fills around it, like around");
+                if (then("zoomed")) field("zoom", "the field keeping how far it's zoomed, like zoom");
+                if (then("slid")) field("slide_x", "the field keeping how far it's slid across, like slide_x"), field("slide_y", "and down, like slide_y");
+                return true;
+            }
+            return false;
+        }
+
         bool at_most_next() const { return at_word("at") && peek(1).kind == token_kind::identifier && peek(1).text == "most"; }
 
         // at most 30 per hour
@@ -2157,17 +2238,12 @@ namespace one::language {
                     } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.remove = parse_qualified_name("the command that deletes a layer, like layer::delete");
-                    } else if (at_word("paste") && peek(1).kind == token_kind::identifier && peek(1).text == "into") {
-                        advance();
-                        advance();
-                        collage.paste_where = peek().where;
-                        collage.paste_into = expect(token_kind::identifier, "the field a pasted picture's file goes in, like picture").text;
-                        if (at_word("sized")) {
-                            advance();
-                            std::string across = expect(token_kind::identifier, "the field a picture's own width goes in, like picture_width").text;
-                            std::string down = expect(token_kind::identifier, "and its height's, like picture_height").text;
-                            collage.sized = std::pair{across, down};
-                        }
+                    } else if (at_word("paste") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
+                        // paste: files dropped or pasted, made pictures by its add.
+                        collage.paste_where = advance().where;
+                        collage.paste = true;
+                    } else if (collage_fields_line(collage)) {
+                        // words caption sized letters, stacked by order, ...: fields playing its parts.
                     } else if (at_word("keep") && peek(1).kind == token_kind::identifier && peek(1).text == "preview") {
                         // keep preview poster::preview into preview 480 wide
                         advance();
@@ -2196,7 +2272,7 @@ namespace one::language {
                         collage.over = advance().text;
                         collage.tools = parse_screen_block();
                     } else {
-                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, slide poster::slide, snap to edges, empty \"...\" or over layer { ... }");
+                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, slide poster::slide, paste, snap to edges, empty \"...\", over layer { ... }, or a field playing one of its parts, like words caption");
                     }
                     end_line();
                 }

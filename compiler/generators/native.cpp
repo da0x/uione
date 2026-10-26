@@ -272,8 +272,11 @@ namespace one::generators {
         std::string collage(screen_parts& parts, const std::string& ns, const language::collage_item& c) {
             std::string view = screens::full_view(ns, c.view.text());
             std::string out = "collage(p, {.view = " + view_variable(parts, view) + ", .list = " + str(c.list);
-            if (c.width != "width") out += ", .width = " + str(c.width);
-            if (c.height != "height") out += ", .height = " + str(c.height);
+            out += ", .width = " + str(c.width) + ", .height = " + str(c.height);
+            std::string kept;
+            auto fields = model_.collage_fields(ns, c);
+            for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
+            out += ", .fields = {" + kept + "}";
             if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
             if (c.slide) out += ", .slide = " + str(screens::full_command(ns, *c.slide));
             if (c.snap) out += ", .snap = true";
@@ -313,9 +316,9 @@ namespace one::generators {
                         ", .icon = " + str(does->icon.value_or("")) + (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "}";
             }
             if (!asks.empty()) out += ", .asks = {" + asks + "}";
-            if (c.paste_into) out += ", .paste_into = " + str(*c.paste_into);
-            if (c.sized) out += ", .sized_width = " + str(c.sized->first) + ", .sized_height = " + str(c.sized->second);
-            if (const language::entity_declaration* layer = model_.listed(ns, c.view.text(), c.list); layer && c.sized) out += ", .update = " + str(screens::join(ns, layer->name + "::update"));
+            if (c.paste) out += ", .paste = true";
+            bool sized = fields.contains("picture") && fields.contains("picture_width") && fields.contains("picture_height");
+            if (const language::entity_declaration* layer = model_.listed(ns, c.view.text(), c.list); layer && sized) out += ", .update = " + str(screens::join(ns, layer->name + "::update"));
             if (c.preview) out += ", .preview = " + str(screens::full_command(ns, *c.preview)) + ", .preview_into = " + str(c.preview_into) + ", .preview_wide = " + std::to_string(c.preview_wide);
             return out + "})";
         }

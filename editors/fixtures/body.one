@@ -92,6 +92,17 @@ namespace board {
 			move card::move along columns.arrows
 			title
 		}
+		collage columns.cards size width height {
+			at left top  size across down
+			stacked by position
+			picture cover sized cover_width cover_height
+			cropped to cx cy cw ch
+			turned quarter_turns
+			mirrored flipped
+			words title sized letters colored ink weighing boldness
+			background sits around margin zoomed scale slid sx sy
+			paste
+		}
 	}
 
 }

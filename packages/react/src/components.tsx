@@ -2034,10 +2034,10 @@ export function Canvas({
   people = {},
   choices = {},
   labels = [],
-  x = "x",
-  y = "y",
-  w = "w",
-  h = "h",
+  x,
+  y,
+  w,
+  h,
   kind,
   place,
   grid,
@@ -2062,10 +2062,10 @@ export function Canvas({
   people?: Record<string, string>;
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
-  x?: string; // the fields a card's place is kept in
-  y?: string;
-  w?: string;
-  h?: string;
+  x: string; // the fields a card's place is kept in
+  y: string;
+  w: string;
+  h: string;
   kind?: string; // the field saying how a card's drawn, like note or text
   place?: string; // the command a card's place is sent to
   grid?: { step: number; x: number; y: number };
