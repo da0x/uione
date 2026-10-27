@@ -353,6 +353,8 @@ namespace one::generators {
             if (paper.empty) out += ", .empty = " + str(*paper.empty);
             if (workspace_) out += ", .fills = true";
             if (paper.outline) out += ", .outline = true";
+            if (paper.paste) out += ", .paste = true";
+            if (paper.progress) out += ", .progress = true";
             if (paper.warm) out += ", .warm = " + condition(parts, ns, *paper.warm);
             if (paper.spread) out += ", .spread = " + condition(parts, ns, *paper.spread);
             if (paper.read_only) out += ", .read_only = " + condition(parts, ns, *paper.read_only);
@@ -1315,6 +1317,7 @@ namespace one::generators {
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
         std::string paper_key_;       // and its insert buttons its paper
+        bool screen_pastes_into_paper_ = false;  // its paste buttons paste into its paper, as it has no collage that pastes
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
@@ -1638,6 +1641,10 @@ namespace one::generators {
                     code = std::string(insert->sizes ? "paper_size(p, " : "paper_button(p, ") + "{.key = " + str(paper_key_) + ", .label = " + str(insert->label.value_or("Insert")) + ", .icon = " + str(insert->icon.value_or("")) +
                            (insert->keys.empty() ? "" : ", .keys = " + keys_of(insert->keys)) + ", .fields = value(std::map<std::string, value>{" + given + "})" +
                            (insert->sizes ? ", .sizes = " + std::to_string(insert->sizes) : "") + "})";
+                } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && does->does == language::collage_button::kind::paste && screen_pastes_into_paper_) {
+                    // Paste into the screen's paper: what's on the clipboard, after the caret.
+                    code = "paper_button(p, {.key = " + str(paper_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
+                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + ", .pastes = true})";
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
@@ -1750,9 +1757,10 @@ namespace one::generators {
                 collage_key_ = route_ + " collage";
                 collage_over_.reset();
                 paper_key_ = route_ + " paper";
+                screen_pastes_into_paper_ = false;
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
                     for (const auto& item : inside) {
-                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route_ + " paper " + paper->list;
+                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route_ + " paper " + paper->list, screen_pastes_into_paper_ = paper->paste;
                         if (auto* block = std::get_if<language::content_block>(&item.node)) papers(block->items);
                     }
                 };

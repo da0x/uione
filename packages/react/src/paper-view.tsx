@@ -11,12 +11,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
-import { useRunner } from "./data.js";
+import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { hintOf, setPicked, useKeys, useOff, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
+import type { Parts } from "./paper/index.js";
 
 type Row = Record<string, unknown>;
 interface Block {
@@ -25,6 +26,7 @@ interface Block {
   align: string;
   words: string;
   position: number;
+  parts?: Parts;
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
@@ -121,14 +123,38 @@ function askInsert(name: string, given: Row) {
   insertListeners.forEach((changed) => changed());
 }
 
+// What a paper's paste buttons ask of it: the clipboard's pictures after the caret.
+const pastes = new Set<string>();
+function askPaste(name: string) {
+  pastes.add(name);
+  insertListeners.forEach((changed) => changed());
+}
+
 // insert "Equation" icon equation { kind = kind::math }: a block made after the caret's.
 // larger "Larger" and smaller "Smaller": the reader's page a step larger or smaller.
-export function PaperButton({ paper, label, icon, keys, given = {}, sizes: by = 0 }: { paper: string; label: string; icon?: string; keys?: string[]; given?: Row; sizes?: number }) {
+// paste "Photo": what's on the clipboard, after the caret.
+export function PaperButton({
+  paper,
+  label,
+  icon,
+  keys,
+  given = {},
+  sizes: by = 0,
+  pastes: pasting = false,
+}: {
+  paper: string;
+  label: string;
+  icon?: string;
+  keys?: string[];
+  given?: Row;
+  sizes?: number;
+  pastes?: boolean;
+}) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const step = useSizeStep();
   const off = useOff() || (by > 0 && step >= sizes.length - 1) || (by < 0 && step <= 0);
-  const press = () => (by ? resize(by) : askInsert(paper, given));
+  const press = () => (pasting ? askPaste(paper) : by ? resize(by) : askInsert(paper, given));
   useKeys(keys, press, !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
@@ -143,7 +169,20 @@ function blocksOf(view: ViewState, list: string, fields: Record<string, string>)
   const rows = (((view.data ?? {}) as Row)[list] as Row[] | undefined) ?? [];
   const field = (part: string) => fields[part] ?? part;
   return rows
-    .map((r) => ({ id: str(r["id"]), kind: str(r[field("kind")]) || "text", align: str(r[field("align")]), words: str(r[field("words")]), position: num(r[field("position")]) }))
+    .map((r) => ({
+      id: str(r["id"]),
+      kind: str(r[field("kind")]) || "text",
+      align: str(r[field("align")]),
+      words: str(r[field("words")]),
+      position: num(r[field("position")]),
+      parts: {
+        picture: str(r[field("picture")]) || undefined,
+        pictureWidth: num(r[field("picture_width")]),
+        pictureHeight: num(r[field("picture_height")]),
+        width: r[field("width")] === undefined || r[field("width")] === null ? 1 : num(r[field("width")]),
+        corners: num(r[field("corners")]),
+      },
+    }))
     .sort((a, b) => a.position - b.position);
 }
 
@@ -239,6 +278,8 @@ export function Paper({
   warm = false,
   spread = false,
   readOnly = false,
+  paste = false,
+  progress = false,
   fills = false,
 }: {
   view: ViewState;
@@ -257,6 +298,8 @@ export function Paper({
   warm?: boolean; // set on warm paper, as under a reading lamp: its page, sheet, ink and lines
   spread?: boolean; // its pages two at a time, side by side
   readOnly?: boolean; // read, not written on
+  paste?: boolean; // pictures pasted or dropped, made picture blocks after the caret
+  progress?: boolean; // a bar across its top, as far along as it's been read
   fills?: boolean; // in a workspace, as big as its region, scrolling
 }) {
   const runner = useRunner();
@@ -290,6 +333,18 @@ export function Paper({
   const room = useRef<HTMLDivElement | null>(null);
   const [roomWidth, setRoomWidth] = useState(sheetWidth + 56);
   const [heights, setHeights] = useState<number[]>([]);
+  // How far along it's been read: the share of it scrolled past, in its own scroll or
+  // the page's.
+  const [past, setPast] = useState(0);
+  const readTo = (top: number, span: number) => setPast(span > 0 ? Math.min(1, Math.max(0, top / span)) : 0);
+  // In the page's scroll, when it doesn't scroll itself.
+  useEffect(() => {
+    if (!progress || fills) return;
+    const measure = () => readTo(window.scrollY, document.documentElement.scrollHeight - window.innerHeight);
+    measure();
+    window.addEventListener("scroll", measure, { passive: true });
+    return () => window.removeEventListener("scroll", measure);
+  }, [progress, fills]);
   useLayoutEffect(() => {
     const el = room.current;
     if (!el) return;
@@ -427,6 +482,67 @@ export function Paper({
     void run(add, fieldsOf(made, fields));
   }, [asked]);
 
+  // Pictures, each a block after the caret's, in turn, the caret then in the first's
+  // caption; all one step to undo. The same as the desktop's.
+  const files = useFiles();
+  const addPictures = async (given: File[]) => {
+    if (!add || !paste || !files) return;
+    sendAll();
+    const i = shown.findIndex((b) => b.id === caretBlock.current);
+    const here = i >= 0 ? shown[i] : shown[shown.length - 1];
+    const at = here ? shown.indexOf(here) : -1;
+    const from = first || !here ? 0 : here.position;
+    const to = first ? undefined : shown[at + 1]?.position;
+    const known = new Set(shown.map((b) => b.id));
+    let n = 0;
+    for (const file of given) {
+      let size: { w: number; h: number };
+      try {
+        const bitmap = await createImageBitmap(file);
+        size = { w: bitmap.width, h: bitmap.height };
+        bitmap.close();
+      } catch {
+        say({ text: `${file.name} isn't a picture this can read.`, problem: true });
+        continue;
+      }
+      const position = to !== undefined ? from + ((to - from) * (n + 1)) / (given.length + 1) : from + n + 1;
+      const path = await files.upload(file, () => {});
+      const made: Row = { picture: path, picture_width: size.w, picture_height: size.h, position, words: "", kind: "picture", align: "center" };
+      if (parent && subject) made[parent] = subject;
+      if (n > 0) made["one:history"] = "joined";
+      else going.current = { position, at: 0, known };
+      n++;
+      await run(add, fieldsOf(made, fields));
+    }
+  };
+  // A paste button: the clipboard's pictures, read as the browser lets them be.
+  const pasteAsked = useSyncExternalStore(
+    (changed) => {
+      insertListeners.add(changed);
+      return () => insertListeners.delete(changed);
+    },
+    () => (name ? pastes.has(name) : false),
+    () => false,
+  );
+  useEffect(() => {
+    if (!pasteAsked || !name) return;
+    pastes.delete(name);
+    void (async () => {
+      try {
+        const items = await navigator.clipboard.read();
+        const pictures: File[] = [];
+        for (const item of items) {
+          const kind = item.types.find((t) => t.startsWith("image/"));
+          if (kind) pictures.push(new File([await item.getType(kind)], `Pasted.${kind.slice(6)}`, { type: kind }));
+        }
+        if (pictures.length === 0) return say({ text: "There's no picture on the clipboard to paste." });
+        await addPictures(pictures);
+      } catch {
+        say({ text: "This browser didn't let the page read the clipboard. Press Ctrl+V instead.", problem: true });
+      }
+    })();
+  }, [pasteAsked]);
+
   const goTo = (i: number, at: "start" | "end" | number) => {
     const b = shown[i];
     const el = b && elements.current.get(b.id);
@@ -450,7 +566,7 @@ export function Paper({
       void run(write, fieldsOf({ id: b.id, words: head }, fields));
     }
     const position = between(b.position, shown[i + 1]?.position);
-    const made: Row = { position, words: tail, kind: middle ? b.kind : "text" };
+    const made: Row = { position, words: tail, kind: middle ? (kindOf(b.kind).continuesAs ?? b.kind) : "text" };
     if (b.align && b.align !== "left" && (middle || b.kind === "text")) made["align"] = b.align;
     if (parent && subject) made[parent] = subject;
     made["one:history"] = "joined";
@@ -641,7 +757,44 @@ export function Paper({
 
   if (view.status === "loading") return <p className="one-quiet">Loading…</p>;
   const page = (
-    <div ref={room} className="one-paper" style={{ ...(fills ? { height: "100%", overflowY: "auto" } : {}), flex: 1, minWidth: 0 }}>
+    <div
+      ref={room}
+      className="one-paper"
+      style={{ ...(fills ? { height: "100%", overflowY: "auto" } : {}), flex: 1, minWidth: 0 }}
+      onScroll={(e) => {
+        if (progress && fills) readTo(e.currentTarget.scrollTop, e.currentTarget.scrollHeight - e.currentTarget.clientHeight);
+      }}
+      onPasteCapture={(e) => {
+        // A picture pasted is a picture block after the caret's; words are typed.
+        const pictures = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+        if (!paste || pictures.length === 0) return;
+        e.preventDefault();
+        void addPictures(pictures);
+      }}
+      onDragOver={(e) => {
+        if (paste && e.dataTransfer.types.includes("Files")) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (!paste) return;
+        const pictures = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+        if (pictures.length === 0) {
+          if (e.dataTransfer.getData("text/uri-list")) say({ text: "That picture is on the web. Save it first, then drop it here." });
+          return;
+        }
+        e.preventDefault();
+        void addPictures(pictures);
+      }}
+    >
+      {progress && (
+        <div
+          role="progressbar"
+          aria-label="Read"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(past * 100)}
+          style={{ position: "sticky", top: 0, height: 3, width: `${past * 100}%`, background: "var(--color-accent, #2457d6)", zIndex: 2 }}
+        />
+      )}
       <div style={{ ...sheet, ...(warm ? warmPaper : {}) }}>
         {sheets}
         {shown.map((b, i) => (
@@ -741,6 +894,8 @@ function PaperBlock({
   const look = kind.look({ face, zoom });
   const align = (block.align || "left") as CSSProperties["textAlign"];
   const showing = kind.showing?.({
+    parts: block.parts ?? {},
+    across: place.width,
     words,
     focused,
     readOnly,
@@ -777,6 +932,7 @@ function PaperBlock({
           {hint}
         </div>
       )}
+      {showing.before}
       <div
         ref={(el) => {
           ref.current = el;

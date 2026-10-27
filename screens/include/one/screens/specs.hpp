@@ -386,6 +386,7 @@ namespace one::screens {
 		std::vector<std::string> keys = {};
 		value fields = {};
 		int sizes = 0;  // or, larger or smaller, the reader's page made a step larger, 1, or smaller, -1
+		bool pastes = false;  // or what's on the clipboard pasted into the paper
 	};
 
 	struct paper_spec {
@@ -404,6 +405,8 @@ namespace one::screens {
 		std::string empty = "";    // what an empty page says where its first words go
 		bool fills = false;        // in a workspace, as big as its region, scrolling
 		bool outline = false;      // its title and headings listed beside it, the caret's section marked, each going there
+		bool paste = false;        // pictures pasted or dropped, made picture blocks after the caret
+		bool progress = false;     // a bar across its top, as far along as it's been read
 		bool warm = false;         // set on warm paper, as under a reading lamp: its page, sheet, ink and lines
 		bool spread = false;       // its pages two at a time, side by side
 		bool read_only = false;    // read, not written on: no caret, and keys left for the page

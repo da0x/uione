@@ -124,6 +124,7 @@ if(ONE_DESKTOP_RUNTIME)
 		runtime/src/paper/words.cpp
 		runtime/src/paper/math.cpp
 		runtime/src/paper/code.cpp
+		runtime/src/paper/picture.cpp
 		runtime/src/runtime.cpp
 		runtime/src/table.cpp
 		runtime/src/timeline.cpp

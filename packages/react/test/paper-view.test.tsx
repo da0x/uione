@@ -333,4 +333,51 @@ describe("a paper", () => {
     fireEvent.input(block);
     expect(block.textContent).toBe("New");
   });
+
+  it("shows a picture as wide as it says, its caption under it, and makes dropped pictures picture blocks after the caret's", async () => {
+    globalThis.createImageBitmap = (async () => ({ width: 400, height: 200, close() {} })) as unknown as typeof createImageBitmap;
+    const source = memorySource({ files: true, commands: { "studio::passage::create": () => ({ id: "b9" }) } });
+    source.set("studio::notes_page", { passages: [
+      { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+      { id: "p1", kind: "picture", words: "A caption", position: 2, align: "center", picture: "harbor.png", picture_width: 900, picture_height: 450, width: 0.5, corners: 0 },
+    ] }, "p1");
+    const all = { ...parts, picture: "picture", picture_width: "picture_width", picture_height: "picture_height", width: "width", corners: "corners" };
+    function Notes() {
+      const page = useView("studio::notes_page", "p1");
+      return <Paper view={page} list="passages" fields={all} add="studio::passage::create" parent="poster" subject="p1" paste />;
+    }
+    const only = defineScreen({ title: "Notes", route: "/" }, () => <Notes />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    const photo = drawn.container.querySelector("[data-kind=picture]")!;
+    // Half the page's width, its own shape, and its caption is its words.
+    const box = photo.firstElementChild as HTMLElement;
+    expect(parseFloat(box.style.width) / parseFloat(box.style.height)).toBeCloseTo(2);
+    expect(blocks(drawn)[1]!.textContent).toBe("A caption");
+    // A picture dropped while the caret's in the first block goes after it.
+    fireEvent.focus(blocks(drawn)[0]!);
+    const file = new File(["a"], "a.png", { type: "image/png" });
+    fireEvent.drop(drawn.container.querySelector(".one-paper")!, { dataTransfer: { files: [file], getData: () => "", types: ["Files"] } });
+    await waitFor(() => expect(source.runs.some((r) => r.command === "studio::passage::create")).toBe(true));
+    const made = source.runs.find((r) => r.command === "studio::passage::create")!.input as Record<string, unknown>;
+    expect(made).toMatchObject({ kind: "picture", picture_width: 400, picture_height: 200, position: 1.5, poster: "p1" });
+    expect(source.uploads.map((u) => u.file.name)).toEqual(["a.png"]);
+  });
+
+  it("shows how far along it's been read, across its top", async () => {
+    const source = sourceWith([{ id: "b1", kind: "text", words: "Words", position: 1, align: "left" }]);
+    function Notes() {
+      const page = useView("studio::notes_page", "p1");
+      return <Paper view={page} list="passages" fields={parts} progress fills />;
+    }
+    const only = defineScreen({ title: "Notes", route: "/" }, () => <Notes />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    const bar = await waitFor(() => drawn.getByRole("progressbar", { name: "Read" }));
+    const scroller = drawn.container.querySelector(".one-paper") as HTMLElement;
+    Object.defineProperty(scroller, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(scroller, "clientHeight", { value: 1000, configurable: true });
+    scroller.scrollTop = 500;
+    fireEvent.scroll(scroller);
+    await waitFor(() => expect(bar.getAttribute("aria-valuenow")).toBe("50"));
+  });
 });

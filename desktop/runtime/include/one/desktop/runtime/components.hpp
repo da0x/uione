@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -167,6 +169,9 @@ namespace one::desktop::runtime {
 	// A list's rows as one sheet of paper, written on in place: each a block of words
 	// set as its kind says and aligned as it says (see paper_spec).
 	desktop::view paper(page& p, paper_spec spec);
+	// Where a picture's bytes, like one pasted, are kept until they're sent: this person's
+	// own runtime folder, readable by them alone.
+	std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes);
 	desktop::view paper_button(page& p, paper_ask ask);
 	desktop::view paper_size(page& p, paper_ask ask);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.

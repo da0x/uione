@@ -3613,7 +3613,9 @@ namespace one::language {
                             error(does->of_where, *does->of + " isn't a collage on this screen, or its pick; a picture is made of one" + like);
                         }
                     }
-                    bool can = does->of.has_value() || std::ranges::any_of(collages_, [&](const collage_item* c) {
+                    // A picture pasted can go into the screen's paper too, when it says paste.
+                    bool into_paper = does->does == kind::paste && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
+                    bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste : c->add.has_value();
                     });
                     if (!can) {
@@ -4055,6 +4057,11 @@ namespace one::language {
                     std::string line = like == std::string("create") ? "add" : like;
                     error((*command)->where, "a paper's blocks are " + block->name + "s, so " + line + " names a command on " + block->name + ", like " + block->name + "::" + like);
                 }
+            }
+            // Pasted pictures are made by its add, the file in the block's picture.
+            if (paper.paste) {
+                if (!paper.add) error(paper.paste_where, "pasted pictures are made by the paper's add, so it says one too, like add " + block->name + "::create");
+                if (!kept.contains("picture")) error(paper.paste_where, "a pasted picture is kept in a block's picture, which " + block->name + " doesn't have; add picture file to it, or say its field, like picture image");
             }
             // Written: what's typed is its words, so write changes them.
             if (paper.write && kept.contains("words")) {

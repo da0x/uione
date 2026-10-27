@@ -2367,6 +2367,14 @@ namespace one::language {
                     } else if (at_word("outline") && ends(1)) {
                         advance();
                         paper.outline = true;
+                    } else if (at_word("progress") && ends(1)) {
+                        // progress: a bar across its top, as far along as it's been read.
+                        advance();
+                        paper.progress = true;
+                    } else if (at_word("paste") && ends(1)) {
+                        // paste: pictures pasted or dropped, made picture blocks by its add.
+                        paper.paste_where = advance().where;
+                        paper.paste = true;
                     } else if (at_word("side") && peek(1).kind == token_kind::identifier && peek(1).text == "by" && peek(2).kind == token_kind::identifier && peek(2).text == "side") {
                         // side by side when spread: its pages two at a time while it holds.
                         advance(), advance(), advance();
@@ -2391,7 +2399,7 @@ namespace one::language {
                         paper.fields_where[part] = peek().where;
                         paper.fields[part] = advance().text;
                     } else {
-                        fail_expecting("what a paper does, like write block::write, add block::create, delete block::delete, empty \"...\", outline, warm when coffee, side by side when spread, read only when reading, or a field playing one of its parts, like words body");
+                        fail_expecting("what a paper does, like write block::write, add block::create, delete block::delete, empty \"...\", outline, progress, paste, warm when coffee, side by side when spread, read only when reading, or a field playing one of its parts, like words body");
                     }
                     end_line();
                 }

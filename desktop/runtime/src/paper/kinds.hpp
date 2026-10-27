@@ -21,6 +21,10 @@ namespace one::desktop::runtime::paper_kinds {
 	struct block {
 		std::string id, kind, align, words;
 		double position = 0;
+		// A picture's: its file, its own size, how much of the page's width it runs, and
+		// how round its corners are, a share of its shorter side.
+		std::string picture = "";
+		double picture_width = 0, picture_height = 0, width = 1, corners = 0;
 	};
 
 	// What a kind is told as it's laid out and drawn: the paper's theme, warm or not, the
@@ -29,6 +33,9 @@ namespace one::desktop::runtime::paper_kinds {
 		const desktop::theme& look;
 		const std::string& face;
 		float zoom = 1;
+		// A picture kept in a file, read once and kept while the app runs; none when it
+		// can't be read.
+		std::function<const desktop::picture*(const std::string&)> picture = {};
 	};
 
 	// A block as it's laid out: its box on its page, its words' place in it, and what its
@@ -74,6 +81,9 @@ namespace one::desktop::runtime::paper_kinds {
 		// What it becomes when it starts with a character and a space as it's typed, like
 		// "# " a heading.
 		virtual std::optional<std::string> shortcut(char) const { return std::nullopt; }
+		// The kind of a block made of its words after the caret, by Enter: its own, unless
+		// it says another, as a picture's caption goes on as text.
+		virtual std::optional<std::string> continues_as() const { return std::nullopt; }
 	};
 
 	// The kind of that name, or text when there's none.
@@ -90,5 +100,6 @@ namespace one::desktop::runtime::paper_kinds {
 	const kind& quote_kind();
 	const kind& math_kind();
 	const kind& code_kind();
+	const kind& picture_kind();
 
 }  // namespace one::desktop::runtime::paper_kinds

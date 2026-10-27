@@ -1477,6 +1477,55 @@ TEST("a paper is pages, each numbered at its foot, a block that doesn't fit goin
 	matches_golden("paper-pages", {500, 1320}, [&] { return drawn(nav); });
 }
 
+TEST("a paper's picture is as wide as it says, its own shape, its corners as round as it says, its caption under it, and Enter there goes on in text") {
+	struct kept_here : memory_source {
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
+	} data;
+	auto block = [](std::string id, std::string kind, std::string words, double position) {
+		return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", "center"}});
+	};
+	value photo = block("p1", "picture", "The harbor, as the poster has it", 2);
+	photo.fields["picture"] = value("collage.png");
+	photo.fields["picture_width"] = value(900), photo.fields["picture_height"] = value(560);
+	photo.fields["width"] = value(0.5), photo.fields["corners"] = value(0.06);
+	data.set("studio::notes_page", "p1", value(fields{{"passages", list{block("b1", "title", "A harbor at dusk", 1), photo, block("b3", "text", "Below the picture.", 3)}}}));
+	data.on("studio::passage::create", [](const value&, memory_source&) -> answer { return std::string("b9"); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}, {"picture", "picture"},
+		                                                                                   {"picture_width", "picture_width"}, {"picture_height", "picture_height"}, {"width", "width"}, {"corners", "corners"}},
+		                                                                        .write = "studio::passage::write", .add = "studio::passage::create", .key = "/ paper", .fills = true, .paste = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("paper-picture", {900, 640}, [&] { return drawn(nav); });
+	// In the caption, Enter makes text after it, not another picture.
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> sheet = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.entry() && e.frame.width > 400) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = sheet(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	// From the start of the text below, Left goes to the end of the caption.
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::home, .text = ""}));
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::left, .text = ""}));
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = 'x', .text = "x"}));
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::left, .text = ""}));
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));
+	CHECK(!data.runs().empty());
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().command == "studio::passage::create");
+	CHECK(data.runs().back().fields["kind"].as_string() == "text");
+	CHECK(data.runs().back().fields["words"].as_string() == "x");
+}
+
 TEST("a paper is set in its document's face: a book's serif, the app's own face, a lyric's warmer serif, or a typewriter's") {
 	for (std::string face : {"book", "lyric", "typewriter"}) {
 		memory_source data;

@@ -21,6 +21,8 @@ terminal table.picture
 terminal paper
 terminal paper.insert
 terminal paper.outline
+terminal paper.paste
+terminal paper.progress
 terminal paper.warm
 terminal paper.spread
 terminal paper.read_only

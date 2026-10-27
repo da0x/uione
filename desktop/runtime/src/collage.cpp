@@ -510,17 +510,6 @@ namespace one::desktop::runtime {
 			return true;
 		}
 
-		// Where a picture's bytes are kept until they're sent: this person's own runtime
-		// folder, readable by them alone.
-		std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes) {
-			static int made = 0;
-			const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR");
-			std::filesystem::path folder = runtime_dir && *runtime_dir ? std::filesystem::path(runtime_dir) : std::filesystem::temp_directory_path();
-			std::filesystem::path file = folder / std::format("one-picture-{}-{}", ::getpid(), ++made);
-			std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-			std::filesystem::permissions(file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
-			return file;
-		}
 
 		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
 		// and the rest are as big as they are, smaller where they wouldn't fit, centered
@@ -852,6 +841,18 @@ namespace one::desktop::runtime {
 		}
 
 	}  // namespace
+
+	// Where a picture's bytes are kept until they're sent: this person's own runtime
+	// folder, readable by them alone.
+	std::filesystem::path kept_for_now(const std::vector<std::uint8_t>& bytes) {
+		static int made = 0;
+		const char* runtime_dir = std::getenv("XDG_RUNTIME_DIR");
+		std::filesystem::path folder = runtime_dir && *runtime_dir ? std::filesystem::path(runtime_dir) : std::filesystem::temp_directory_path();
+		std::filesystem::path file = folder / std::format("one-picture-{}-{}", ::getpid(), ++made);
+		std::ofstream(file, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+		std::filesystem::permissions(file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+		return file;
+	}
 
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);

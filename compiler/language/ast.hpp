@@ -886,6 +886,9 @@ namespace one::language {
         std::map<std::string, location> fields_where;
         std::optional<std::string> empty;      // empty "Title": where an empty page's first words go
         bool outline = false;                  // outline: its title and headings beside it, each going there
+        bool paste = false;                    // paste: pictures pasted or dropped, made picture blocks by its add
+        bool progress = false;                 // progress: a bar across its top, as far along as it's been read
+        location paste_where;
         expression_ptr warm;                   // warm when coffee: set on warm paper, as under a reading lamp, while it holds
         expression_ptr spread;                 // side by side when spread: its pages two at a time, while it holds
         expression_ptr read_only;              // read only when reading: read, not written on, while it holds
@@ -1467,7 +1470,9 @@ namespace one::language {
     // A paper's: a block's words and its place in the order, and how it's set.
     inline const std::vector<collage_part>& paper_parts() {
         static const std::vector<collage_part> all{
-            {"words", "text", true}, {"position", "number", true}, {"kind", "title subtitle heading text quote math code"}, {"align", "left center right"},
+            {"words", "text", true}, {"position", "number", true}, {"kind", "title subtitle heading text quote math code picture"}, {"align", "left center right"},
+            // A picture's: the file, its own size, how much of the page's width it runs, and how round its corners are.
+            {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"}, {"width", "number"}, {"corners", "number"},
         };
         return all;
     }

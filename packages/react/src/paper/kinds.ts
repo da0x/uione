@@ -20,9 +20,21 @@ export interface Showing {
   raw: boolean;
   words?: CSSProperties;
   over?: ReactNode;
+  before?: ReactNode; // shown above its words, as a picture is over its caption
+}
+
+// A block's parts besides its words, as a picture's.
+export interface Parts {
+  picture?: string; // the file it keeps
+  pictureWidth?: number;
+  pictureHeight?: number;
+  width?: number; // how much of the page's width it runs, from 0 to 1
+  corners?: number; // how round its corners are, a share of its shorter side
 }
 
 export interface ShowingAsked {
+  parts: Parts;
+  across: number; // how wide its place is
   words: string;
   focused: boolean;
   readOnly: boolean;
@@ -47,6 +59,9 @@ export interface BlockKind {
   enter?(words: string, caret: number, selecting: boolean): "split" | "line" | "leave";
   // What it becomes when it starts with a character and a space as it's typed.
   shortcut?(first: string): string | undefined;
+  // The kind of a block made of its words after the caret, by Enter: its own, unless it
+  // says another, as a picture's caption goes on as text.
+  continuesAs?: string;
   // What it shows besides its words; its words alone when it doesn't say.
   showing?(asked: ShowingAsked): Showing;
 }

@@ -2226,7 +2226,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).
   Each row is a block, in the order its `position` says, set as its `kind` says
   (`title`, `subtitle`, `heading`, `text`, `quote`, `math`, an equation set from its
-  words, or `code`, kept as it's typed) and aligned as its `align` says (`left`, `center` or `right`). Its words
+  words, `code`, kept as it's typed, or `picture`, with its words its caption) and
+  aligned as its `align` says (`left`, `center` or `right`). Its words
   are its `words`.
   - `write block::write`: what's typed in a block, sent once typing pauses or the
     caret leaves it. When the command changes `kind` too, `# ` at the start of a text
@@ -2256,6 +2257,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     marked, each putting the caret there and bringing it into view. It's always
     there, so the page doesn't move as headings come and go.
   - A heading is ruled under, across the whole line.
+  - `progress`: a thin bar across its top, as far along as it's been read.
+  - `paste`: pictures pasted or dropped on it are picture blocks after the caret's,
+    made by its `add`, the file in its `picture` and its own size in `picture_width`
+    and `picture_height`; a `paste "Photo"` button anywhere on the screen pastes the
+    clipboard's. A picture runs as much of the page's width as its `width` says, from 0
+    to 1, its corners as round as its `corners` says, a share of its shorter side, and
+    Enter in its caption goes on in text.
   - Each part is kept in the field named like it; one kept in another says so, like
     `words body`.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows

@@ -53,6 +53,11 @@ app's own text and code faces.
 marked, each going there. Its place is kept whether there are headings or not, so the
 page doesn't move as they come and go.
 
+**A picture is a block like any other**: pasted or dropped, it's made after the caret's
+block, as wide as its `width` says, its corners as round as its `corners` says, its
+words its caption. Each kind of block is a component of its own on both targets, behind
+one interface, so a new kind is a file and a line.
+
 **A math block is its equation, set**, from the notation its words are written in,
 until the caret is in it, when it's its words. It keeps the room of the larger, so
 the page doesn't move as the caret comes and goes.

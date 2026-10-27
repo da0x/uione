@@ -56,10 +56,14 @@ namespace studio at / {
 	// a quote or an equation, aligned as it's written.
 	entity passage {
 		poster    poster  required
-		kind      enum    title | subtitle | heading | text | quote | math = kind::text
+		kind      enum    title | subtitle | heading | text | quote | math | picture = kind::text
 		words     text
 		align     enum    left | center | right = align::left
 		position  number  = 0
+		// A picture's, pasted or dropped: its file and its own size.
+		picture         file
+		picture_width   number  = 0
+		picture_height  number  = 0
 	}
 
 	command passage::create
@@ -131,7 +135,7 @@ namespace studio at / {
 		title
 		passages = each passage in poster {
 			order by position
-			kind  words  align  position
+			kind  words  align  position  picture  picture_width  picture_height
 		}
 	}
 
@@ -283,6 +287,7 @@ namespace studio at / {
 			}
 			group "Insert" {
 				insert "Equation" icon equation { kind = kind::math  align = align::center }
+				paste "Photo" icon picture
 			}
 			// The reader's own: how large it is, one page or two, and warm paper.
 			group "Read" small {
@@ -299,6 +304,8 @@ namespace studio at / {
 				delete passage::delete
 				empty "Title"
 				outline
+				progress
+				paste
 				warm when coffee
 				side by side when spread
 				read only when reading

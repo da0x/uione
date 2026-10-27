@@ -309,6 +309,7 @@ examples/studio/main.one	paper notes_page.passages {	paper	keyword
 examples/studio/main.one	insert "Equation" icon equation	insert	keyword
 examples/studio/main.one	group "Align" small rows of 3 {	rows	keyword
 examples/studio/main.one	outline	outline	keyword
+examples/studio/main.one	progress	progress	keyword
 examples/studio/main.one	warm when coffee	warm	keyword
 examples/studio/main.one	snap to edges	snap	keyword
 examples/studio/main.one	add words "Text" icon text key t	words	keyword

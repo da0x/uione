@@ -76,6 +76,8 @@ namespace one::language {
         drawn_by{"paper", "a paper", "web desktop"},
         drawn_by{"paper.insert", "a block inserted in a paper", "web desktop"},
         drawn_by{"paper.outline", "a paper's outline", "web desktop"},
+        drawn_by{"paper.paste", "pictures pasted and dropped on a paper", "web desktop"},
+        drawn_by{"paper.progress", "how far along a paper's been read", "web desktop"},
         drawn_by{"paper.warm", "a paper set on warm paper", "web desktop"},
         drawn_by{"paper.spread", "a paper's pages side by side", "web desktop"},
         drawn_by{"paper.read_only", "a paper read only", "web desktop"},
@@ -366,6 +368,8 @@ namespace one::language {
                     } else if constexpr (std::is_same_v<T, paper_item>) {
                         use("paper");
                         if (n.outline) use("paper.outline");
+                        if (n.paste) use("paper.paste");
+                        if (n.progress) use("paper.progress");
                         if (n.warm) use("paper.warm");
                         if (n.spread) use("paper.spread");
                         if (n.read_only) use("paper.read_only");

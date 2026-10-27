@@ -99,6 +99,20 @@ namespace one::desktop::runtime {
 		// A place between two blocks' positions, or after the last.
 		double between(double before, std::optional<double> after) { return after ? (before + *after) / 2 : before + 1; }
 
+		// A picture a block keeps, read from its file once and kept while the app runs.
+		const desktop::picture* picture_kept(page& p, const std::string& kept) {
+			static std::map<std::string, std::optional<desktop::picture>> read;
+			auto found = read.find(kept);
+			if (found == read.end()) {
+				std::optional<desktop::picture> shown;
+				if (auto file = p.file_here(kept)) {
+					if (auto made = desktop::picture::read(*file)) shown = std::move(*made);
+				}
+				found = read.emplace(kept, std::move(shown)).first;
+			}
+			return found->second ? &*found->second : nullptr;
+		}
+
 		class paper_element : public element, public text_entry {
 		public:
 			paper_element(page& p, paper_spec spec, std::shared_ptr<paper_state> s, std::vector<block> blocks, state<int> tick, state<int> due)
@@ -134,6 +148,13 @@ namespace one::desktop::runtime {
 					c.text(said, {page.right() - m - said.width(), page.bottom() - m / 2 - said.height() / 2});
 				}
 				for (std::size_t i = 0; i < shown_.size(); ++i) paint_block(c, i);
+				// How far along it's been read: a bar across the top of what's in view, as
+				// long as the share of it scrolled past.
+				if (spec_.progress && parent) {
+					rect seen = parent->frame;
+					float past = std::clamp((seen.y - frame.y) / std::max(1.f, frame.height - seen.height), 0.f, 1.f);
+					c.box({seen.x, seen.y, seen.width * past, 3}, {.fill = current_theme().accent});
+				}
 				// Moved by a key: the caret brought into view, as a field's is; gone to a
 				// heading, it and what follows it.
 				if (std::exchange(s_->show_caret, false) && (focused || spec_.read_only)) {
@@ -212,6 +233,8 @@ namespace one::desktop::runtime {
 							copy_text(s_->edit.selected());
 							return changed([&] { s_->edit.erase_back(false); });
 						case 'v':
+							// A picture pasted is a picture block after this one; words are typed.
+							if (spec_.paste && pasted_pictures()) return true;
 							if (auto pasted = clipboard_text(); pasted && !pasted->empty()) return typed(*pasted);
 							return true;
 						case 'z':
@@ -260,7 +283,10 @@ namespace one::desktop::runtime {
 				auto [above, below] = kind_of(kind).room();
 				return {above * size(), below * size()};
 			}
-			paper_kinds::setting setting() const { return {.look = look_, .face = spec_.face, .zoom = size()}; }
+			paper_kinds::setting setting() const {
+				page* on = &p_;
+				return {.look = look_, .face = spec_.face, .zoom = size(), .picture = [on](const std::string& kept) { return picture_kept(*on, kept); }};
+			}
 			// Its pages are a letter page's size, made smaller, every part alike, when they're
 			// wider than the room there is, as a book's pages are shown whole on a small
 			// screen: showing two at a time, or a narrower window, moves nothing from one
@@ -604,6 +630,50 @@ namespace one::desktop::runtime {
 			}
 
 		public:
+			// Pictures on the clipboard, as files or a picture's bytes, made blocks after the
+			// caret's; whether there were any.
+			bool pasted_pictures() {
+				std::vector<std::filesystem::path> files = desktop::clipboard_files();
+				if (files.empty()) {
+					if (auto bytes = desktop::clipboard_picture()) files.push_back(kept_for_now(*bytes));
+				}
+				if (files.empty()) return false;
+				add_pictures(files);
+				return true;
+			}
+
+			// Pictures, each a block after the caret's, in turn, the caret then in the first's
+			// caption; all one step to undo.
+			void add_pictures(const std::vector<std::filesystem::path>& files) {
+				if (spec_.add.empty() || !spec_.fields.contains("picture")) return;
+				if (block* here = current()) send(here->id);
+				std::size_t i = index();
+				double from = i < blocks_.size() && !s_->first ? blocks_[i].position : 0;
+				std::optional<double> to = i + 1 < blocks_.size() ? std::optional(blocks_[i + 1].position) : std::nullopt;
+				if (s_->first) from = 0, to = std::nullopt;
+				bool first = true;
+				s_->known.clear();
+				for (const auto& b : blocks_) s_->known.insert(b.id);
+				int n = 0, count = static_cast<int>(files.size());
+				for (const auto& file : files) {
+					auto read = desktop::picture::read(file);
+					if (!read) {
+						p_.told().set(file.filename().string() + " isn't a picture this can read.");
+						continue;
+					}
+					// Spread evenly between this block and the next, or one after another.
+					double position = to ? from + (*to - from) * (n + 1) / (count + 1) : from + n + 1;
+					++n;
+					value made = value(fields{{"position", position}, {"words", ""}, {"kind", "picture"}, {"align", "center"}});
+					if (spec_.fields.contains("picture_width")) made.fields["picture_width"] = value(read->width()), made.fields["picture_height"] = value(read->height());
+					if (!spec_.parent.empty()) made.fields[spec_.parent] = value(spec_.subject);
+					if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
+					else s_->coming = position, s_->coming_id.clear(), s_->coming_caret = 0, s_->first = false;
+					p_.run(spec_.add, collage_fields_of(made, spec_.fields), attached_files{{spec_.fields.at("picture"), {file.string()}}}, [](const answer&) {}, false);
+				}
+				tick_.set(tick_.peek() + 1);
+			}
+
 			// Inserted from a toolbar: an empty block after the caret's, given what the button
 			// gives, the caret then in it.
 			void insert(const value& given) {
@@ -646,7 +716,8 @@ namespace one::desktop::runtime {
 				std::optional<double> next;
 				if (i + 1 < blocks_.size()) next = blocks_[i + 1].position;
 				double position = between(here->position, next);
-				value made = value(fields{{"position", position}, {"words", tail}, {"kind", middle ? here->kind : std::string("text")}, {"align", middle ? here->align : std::string("")}});
+				std::string goes_on = kind_of(here->kind).continues_as().value_or(here->kind);
+				value made = value(fields{{"position", position}, {"words", tail}, {"kind", middle ? goes_on : std::string("text")}, {"align", middle ? here->align : std::string("")}});
 				if (!middle && here->align != "" && here->align != "left" && here->kind == "text") made.fields["align"] = value(here->align);
 				if (std::string(made["align"].as_string()).empty()) made.fields.erase("align");
 				if (!spec_.parent.empty()) made.fields[spec_.parent] = value(spec_.subject);
@@ -755,7 +826,9 @@ namespace one::desktop::runtime {
 
 	desktop::view paper_button(page& p, paper_ask ask) {
 		auto asked = p.kept<std::optional<value>>("paper insert " + ask.key);
-		auto press = [asked, given = ask.fields] { asked.set(given); };
+		auto pasting = p.kept<bool>("paper paste " + ask.key);
+		std::function<void()> press = [asked, given = ask.fields] { asked.set(given); };
+		if (ask.pastes) press = [pasting] { pasting.set(true); };
 		bool off = p.in_group() && p.off();
 		if (!off) {
 			for (const auto& k : ask.keys) p.on_key(k, press);
@@ -784,7 +857,12 @@ namespace one::desktop::runtime {
 		if (spec.face == "book" || spec.face == "lyric") use_faces();
 		std::vector<block> blocks;
 		for (const auto& row : data[spec.list].as_array()) {
-			blocks.push_back({row["id"].as_string(), row["kind"].as_string(), row["align"].as_string(), row["words"].as_string(), row["position"].as_double()});
+			block b{row["id"].as_string(), row["kind"].as_string(), row["align"].as_string(), row["words"].as_string(), row["position"].as_double()};
+			b.picture = row["picture"].as_string();
+			b.picture_width = row["picture_width"].as_double(), b.picture_height = row["picture_height"].as_double();
+			b.width = row["width"].is_null() ? 1 : row["width"].as_double();
+			b.corners = row["corners"].as_double();
+			blocks.push_back(std::move(b));
 		}
 		std::ranges::stable_sort(blocks, {}, &block::position);
 		// What the view has caught up with is no longer kept apart; what it hasn't yet is
@@ -881,6 +959,11 @@ namespace one::desktop::runtime {
 			outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
+		// What a paste button asked of it: the clipboard's pictures after the caret.
+		if (auto asked = p.kept<bool>("paper paste " + spec.key); asked.get()) {
+			asked.set(false);
+			if (!made->pasted_pictures()) p.told().set("There's no picture on the clipboard to paste.");
+		}
 		// What an insert button asked of it.
 		if (auto asked = p.kept<std::optional<value>>("paper insert " + spec.key); asked.get()) {
 			value given = *asked.peek();
@@ -892,7 +975,29 @@ namespace one::desktop::runtime {
 			due.set(0);
 			made->send_all();
 		}
+		// Pictures dropped on it, as files or a browser's picture, are picture blocks after
+		// the caret's.
+		paper_element* taking = made.get();
 		desktop::view shown(std::move(made));
+		if (spec.paste) {
+			auto dropped = p.kept<std::shared_ptr<std::vector<std::filesystem::path>>>("paper dropped " + spec.key, std::make_shared<std::vector<std::filesystem::path>>()).peek();
+			if (!dropped->empty()) {
+				taking->add_pictures(*dropped);
+				dropped->clear();
+			}
+			shown = desktop::file_target(
+			    std::move(shown),
+			    [&p, dropped, tick](desktop::dropped what, desktop::point) {
+				    if (!what.picture.empty()) what.files.push_back(kept_for_now(what.picture));
+				    if (what.files.empty() && !what.elsewhere.empty()) {
+					    p.told().set("That picture is on the web. Save it first, then drop it here.");
+					    return;
+				    }
+				    *dropped = what.files;
+				    tick.set(tick.peek() + 1);
+			    },
+			    {.border = t.accent, .border_width = 3});
+		}
 		if (spec.fills) shown = desktop::scroll(std::move(shown)).grow();
 		if (!outline) return shown;
 		// Beside the page, and as much room on its other side, so the page stays in the

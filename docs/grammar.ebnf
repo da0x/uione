@@ -248,6 +248,10 @@ collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "wr
 paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "empty" STRING
                   /* its title and headings listed beside it, the caret's section marked, each going there */
                   | "outline"
+                  /* pictures pasted or dropped, made picture blocks by its add */
+                  | "paste"
+                  /* a bar across its top, as far along as it's been read */
+                  | "progress"
                   /* set on warm paper, as under a reading lamp, while it holds, like a reader's toggle */
                   | "warm" "when" expression
                   /* its pages two at a time, side by side, while it holds, like a reader's toggle */
