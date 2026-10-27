@@ -24,9 +24,8 @@ namespace {
 
 	// Each of a collage's parts in the field named like it, as an app's are by default.
 	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
-	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"},
-	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"},
-	    {"background", "background"}, {"around", "around"}, {"zoom", "zoom"}, {"slide_x", "slide_x"}, {"slide_y", "slide_y"}};
+	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"}, {"around", "around"}, {"corners", "corners"},
+	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}};
 	namespace terminal = one::terminal;
 
 	const std::filesystem::path golden_folder = ONE_TERMINAL_TESTS "/golden";

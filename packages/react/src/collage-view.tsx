@@ -3,26 +3,26 @@
 
 // A collage: a picture made of layers, as big as its view says, drawn scaled to fit
 // with room around it, or at its own size on black filling the screen (decision
-// 0019). Its background sits as its view says, and what it leaves around it is the
-// picture's edges drawn out, or its edge color; pictures are cropped, turned and
-// mirrored as each layer says, and words drawn over a soft shadow. A click picks a
+// 0021). Pictures are cropped, turned and mirrored as each layer says, what's around
+// each drawn as it says, its edges drawn out, its edge color, a blend of it, or it
+// melted into what's under it, and words drawn over a soft shadow. A click picks a
 // layer, framed with its corners and the buttons over it; a picked layer is moved, or
 // resized by a corner with its shape kept unless Shift is held, snapped unless Alt
-// is, and the background slid where it can. A picture is cropped in place, its whole
-// picture faint around what's kept, and words are written where they are, with a
-// caret, and resized by their size. Where everything goes is collage.ts, the model the
-// desktop's is held to as well. It's drawn on a canvas, the same in every component set.
+// is. A picture is cropped in place, its whole picture faint around what's kept, and
+// words are written where they are, with a caret, and resized by their size. Where
+// everything goes is collage.ts, the model the desktop's is held to as well. It's drawn
+// on a canvas, the same in every component set.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { backgroundAt, cornerAt, cropEdgesAt, cropped, harmonicFill, moved, resized, slid, slideRange, slides, snapLines, wholeOf } from "./collage.js";
-import type { Backdrop, Box, Guided, Lines, Point } from "./collage.js";
+import { cornerAt, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
+import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, hintOf, setPicked, typing, useKeys, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, hintOf, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -32,9 +32,10 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 const boxOf = (l: Row): Box => ({ x: num(l["x"]), y: num(l["y"]), w: num(l["w"]), h: num(l["h"]) });
 const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0), w: num(l["crop_w"], 1), h: num(l["crop_h"], 1) });
 const isWords = (l: Row) => str(l["picture"]) === "";
-const isBackground = (layers: Row[], l: Row) => layers.length > 0 && !isWords(l) && layers[0]!["id"] === l["id"];
 const colorOf = (written: string, otherwise: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : otherwise);
 const weightOf = (l: Row) => num(l["weight"], 700);
+// Words' face, as a canvas's font says it: italic when they are, and their weight.
+const faceOf = (l: Row) => `${num(l["italic"]) !== 0 ? "italic " : ""}${weightOf(l)}`;
 const inside = (b: Box, p: Point) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
 // A collage's view as its parts: its own values and each of its layers, with the
 // fields its parts are kept in read as those parts.
@@ -76,11 +77,11 @@ function wordsLoaded(): Promise<unknown> {
 // How big words are, in the collage's pixels: as wide as their widest line, each line
 // a little more than their size.
 let measurer: CanvasRenderingContext2D | null | undefined;
-function measured(words: string, size: number, weight: number): { w: number; h: number } {
+function measured(words: string, size: number, face: string): { w: number; h: number } {
   measurer ??= typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
   const lines = (words || " ").split("\n");
   if (!measurer) return { w: Math.max(1, size * 0.6 * Math.max(...lines.map((l) => l.length))), h: Math.max(1, size * 1.2 * lines.length) };
-  measurer.font = `${weight} ${size}px ${wordsFamily()}`;
+  measurer.font = `${face} ${size}px ${wordsFamily()}`;
   return { w: Math.max(1, ...lines.map((l) => measurer!.measureText(l).width)), h: Math.max(1, size * 1.2 * lines.length) };
 }
 
@@ -125,12 +126,13 @@ function orientedOf(path: string, p: ImageBitmap, turns: number, mirrored: boole
   return made;
 }
 
-// A background as it's shown: turned and mirrored, then only the part its crop keeps,
-// so it sits, and fills what's around it, by that part alone.
+// A picture as it's shown: turned and mirrored, then only the part its crop keeps, so
+// it's drawn, and fills what's around it, by that part alone.
 const croppedOnes = new Map<string, HTMLCanvasElement>();
-function backgroundOf(key: string, shown: CanvasImageSource & { width: number; height: number }, cr: Box): CanvasImageSource & { width: number; height: number } {
+function keptOf(l: Row, shown: CanvasImageSource & { width: number; height: number }): CanvasImageSource & { width: number; height: number } {
+  const cr = cropOf(l);
   if (cr.x <= 0 && cr.y <= 0 && cr.w >= 1 && cr.h >= 1) return shown;
-  const named = `${key} ${cr.x} ${cr.y} ${cr.w} ${cr.h}`;
+  const named = edgeKeyOf(l);
   let made = croppedOnes.get(named);
   if (!made) {
     made = document.createElement("canvas");
@@ -142,11 +144,97 @@ function backgroundOf(key: string, shown: CanvasImageSource & { width: number; h
   return made;
 }
 
-// What names a background's edges: its picture as turned, and its crop.
+// What names a picture's edges: its picture as turned, and its crop.
 const edgeKeyOf = (l: Row) => {
   const cr = cropOf(l);
   return `${str(l["picture"])} ${num(l["turns"])} ${num(l["mirrored"])} ${cr.x} ${cr.y} ${cr.w} ${cr.h}`;
 };
+
+// What a picture is drawn from: what its crop keeps, its colors moved as the collage's
+// matching says, and what names that, for what's worked out from it.
+type Picture = CanvasImageSource & { width: number; height: number };
+interface Look {
+  picture: Picture;
+  key: string;
+}
+
+// A picture as it's read, turned and mirrored, or nothing while it's being read.
+function shownOf(l: Row, address: ((path: string) => Promise<string>) | undefined): Picture | undefined {
+  const path = str(l["picture"]);
+  const p = pictureOf(path, address);
+  return p ? orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0) : undefined;
+}
+
+// A picture's colors, measured once from a small copy of it.
+const measuredColors = new Map<string, ColorStats>();
+function statsKept(l: Row, kept: Picture, weight: number): ColorStats | undefined {
+  const key = edgeKeyOf(l);
+  let known = measuredColors.get(key);
+  if (!known) {
+    // Big enough that a busy picture's detail, and so its contrast, isn't averaged away.
+    const side = 128;
+    const small = document.createElement("canvas");
+    small.width = side;
+    small.height = side;
+    const g = small.getContext("2d", { willReadFrequently: true });
+    if (!g) return undefined;
+    g.drawImage(kept, 0, 0, side, side);
+    const read = g.getImageData(0, 0, side, side).data, colors = new Float64Array(side * side * 3);
+    for (let i = 0; i < side * side; i++) for (let k = 0; k < 3; k++) colors[i * 3 + k] = read[i * 4 + k]!;
+    known = statsOf(colors, 1);
+    if (measuredColors.size > 256) measuredColors.clear();
+    measuredColors.set(key, known);
+  }
+  return { ...known, weight };
+}
+
+// What each picture's colors are moved by while the collage matches them, so they look
+// like one picture: each moved most of the way toward all of theirs, weighed by how much
+// of the collage it covers where it's kept, so the larger lead.
+function shiftsOf(layers: Row[], matching: boolean, address: ((path: string) => Promise<string>) | undefined): Map<string, ColorShift> {
+  const out = new Map<string, ColorShift>();
+  if (!matching) return out;
+  const ids: string[] = [], stats: ColorStats[] = [];
+  for (const l of layers) {
+    if (isWords(l)) continue;
+    const shown = shownOf(l, address), b = boxOf(l);
+    if (!shown || b.w <= 0 || b.h <= 0) continue;
+    const colors = statsKept(l, keptOf(l, shown), b.w * b.h);
+    if (!colors) continue;
+    ids.push(str(l["id"]));
+    stats.push(colors);
+  }
+  matched(stats, matchingStrength, matchingCast).forEach((shift, i) => out.set(ids[i]!, shift));
+  return out;
+}
+
+// A picture as it's drawn: what its crop keeps, its colors moved as its shift says,
+// worked out once.
+const tonedOnes = new Map<string, HTMLCanvasElement>();
+function lookOf(l: Row, shown: Picture, shifts: Map<string, ColorShift>): Look {
+  const kept = keptOf(l, shown), named = edgeKeyOf(l);
+  const shift = shifts.get(str(l["id"]));
+  if (!shift) return { picture: kept, key: named };
+  const key = `${named} ${shift.gain.map((g) => g.toFixed(3)).join(" ")} ${shift.offset.map((o) => o.toFixed(1)).join(" ")} ${(shift.to ?? []).map((t) => t.toFixed(1)).join(" ")}`;
+  let made = tonedOnes.get(key);
+  if (!made) {
+    made = document.createElement("canvas");
+    made.width = kept.width;
+    made.height = kept.height;
+    const g = made.getContext("2d", { willReadFrequently: true });
+    if (!g) return { picture: kept, key: named };
+    g.drawImage(kept, 0, 0);
+    const pixels = g.getImageData(0, 0, made.width, made.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      const rgb = shifted(shift, pixels.data[i]!, pixels.data[i + 1]!, pixels.data[i + 2]!);
+      for (let k = 0; k < 3; k++) pixels.data[i + k] = Math.max(0, Math.min(255, Math.round(rgb[k]!)));
+    }
+    g.putImageData(pixels, 0, 0);
+    if (tonedOnes.size > 32) tonedOnes.clear();
+    tonedOnes.set(key, made);
+  }
+  return { picture: made, key };
+}
 
 function edgeColorOf(path: string, p: CanvasImageSource & { width: number; height: number }): string {
   const known = edges.get(path);
@@ -170,8 +258,8 @@ function edgeColorOf(path: string, p: CanvasImageSource & { width: number; heigh
   return color;
 }
 
-// What a background leaves around it on the board: its outermost pixels drawn out to
-// the edges, or its edge color.
+// What a picture leaves around it on the board: its outermost pixels drawn out to the
+// edges, or its edge color.
 function paintAround(c: CanvasRenderingContext2D, path: string, shown: CanvasImageSource & { width: number; height: number }, board: Box, b: Box, around: string) {
   const covers = b.x <= board.x && b.y <= board.y && b.x + b.w >= board.x + board.w && b.y + b.h >= board.y + board.h;
   if (covers) return;
@@ -195,7 +283,7 @@ function paintAround(c: CanvasRenderingContext2D, path: string, shown: CanvasIma
 
 // Words drawn at x, y, `size` pixels tall, over a soft shadow.
 function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: number, x: number, y: number) {
-  c.font = `${weightOf(l)} ${size}px ${wordsFamily()}`;
+  c.font = `${faceOf(l)} ${size}px ${wordsFamily()}`;
   c.textBaseline = "top";
   const off = Math.max(1, size * 0.04);
   said.split("\n").forEach((line, i) => {
@@ -206,17 +294,15 @@ function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: num
   });
 }
 
-// The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
-// all of it, or only one layer, as big as that layer, cropped as it is. Pictures not
-// yet read are read first.
-// With around blend, the space no picture covers, filled from every picture's edges
-// (harmonic fill): its pictures drawn small, each gap settled between the colors
-// around it, and the result drawn as big as the collage, smooth as it is. Worked out
-// again only when what it's drawn from changes, once every picture has been read.
+// With around blend, the board filled from a picture's edges (harmonic fill): it drawn
+// small where it is, each cell it doesn't cover settled between the colors around
+// it, and the result drawn as big as the collage, smooth as it is. Worked out again
+// only when the picture, or where it is, changes.
 const blends = new Map<string, HTMLCanvasElement>();
-function blendOf(layers: Row[], data: Row, W: number, H: number, address: ((path: string) => Promise<string>) | undefined): HTMLCanvasElement | undefined {
-  if (str(data["around"]) !== "blend" || W <= 0 || H <= 0) return undefined;
-  const key = JSON.stringify([layers, data["background"], data["zoom"], data["slide_x"], data["slide_y"], W, H]);
+function blendOf(l: Row, seen: Look, W: number, H: number): HTMLCanvasElement | undefined {
+  if (W <= 0 || H <= 0) return undefined;
+  const b = boxOf(l), kept = seen.picture;
+  const key = `${seen.key} ${b.x} ${b.y} ${b.w} ${b.h} ${W} ${H}`;
   const known = blends.get(key);
   if (known) return known;
   const gw = 320, gh = Math.max(1, Math.round((320 * H) / W)), s = gw / W;
@@ -225,26 +311,11 @@ function blendOf(layers: Row[], data: Row, W: number, H: number, address: ((path
   small.height = gh;
   const c = small.getContext("2d", { willReadFrequently: true });
   if (!c) return undefined;
-  const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
-  for (const l of layers) {
-    if (isWords(l)) continue;
-    const path = str(l["picture"]);
-    const p = pictureOf(path, address);
-    if (!p) return undefined; // not read yet: blended once it is
-    const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
-    if (isBackground(layers, l)) {
-      const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
-      const b = backgroundAt(backdrop, kept.width, kept.height);
-      c.drawImage(kept, b.x * s, b.y * s, b.w * s, b.h * s);
-    } else {
-      const b = boxOf(l), cr = cropOf(l);
-      c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x * s, b.y * s, b.w * s, b.h * s);
-    }
-  }
+  c.drawImage(kept, b.x * s, b.y * s, b.w * s, b.h * s);
   const pixels = c.getImageData(0, 0, gw, gh);
   const cells = gw * gh, colors = new Float64Array(cells * 3), covered: boolean[] = new Array(cells);
   for (let i = 0; i < cells; i++) {
-    // Only a cell a picture covers whole is its color; one its edge crosses is part
+    // Only a cell the picture covers whole is its color; one its edge crosses is part
     // picture, part nothing, and would leave a seam of the two.
     covered[i] = pixels.data[i * 4 + 3]! >= 250;
     for (let k = 0; k < 3; k++) colors[i * 3 + k] = pixels.data[i * 4 + k]!;
@@ -260,7 +331,80 @@ function blendOf(layers: Row[], data: Row, W: number, H: number, address: ((path
   return small;
 }
 
-async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, only?: string): Promise<HTMLCanvasElement> {
+// A harmonized picture's halo: worked out small, its own colors spread past its edges
+// and fading into what's under it (halo), as far as haloReach of its shorter side, and
+// drawn over it, as much bigger as `growX` and `growY` say, each a share of its width
+// and height.
+interface Halo {
+  picture: HTMLCanvasElement;
+  growX: number;
+  growY: number;
+}
+const halos = new Map<string, Halo>();
+function haloOf(l: Row, seen: Look): Halo | undefined {
+  const b = boxOf(l), kept = seen.picture;
+  if (b.w <= 0 || b.h <= 0) return undefined;
+  const sw = b.w >= b.h ? 64 : Math.max(1, Math.round((64 * b.w) / b.h));
+  const sh = b.w >= b.h ? Math.max(1, Math.round((64 * b.h) / b.w)) : 64;
+  const reach = Math.max(4, Math.round(haloReach * Math.min(sw, sh)));
+  const key = `${seen.key} ${sw} ${sh}`;
+  const known = halos.get(key);
+  if (known) return known;
+  const small = document.createElement("canvas");
+  small.width = sw;
+  small.height = sh;
+  const g = small.getContext("2d", { willReadFrequently: true });
+  if (!g) return undefined;
+  g.drawImage(kept, 0, 0, sw, sh);
+  const read = g.getImageData(0, 0, sw, sh).data, colors = new Float64Array(sw * sh * 3);
+  for (let i = 0; i < sw * sh; i++) for (let k = 0; k < 3; k++) colors[i * 3 + k] = read[i * 4 + k]!;
+  const spread = halo(sw, sh, colors, reach, reach * haloInside);
+  const made = document.createElement("canvas");
+  made.width = sw + 2 * reach;
+  made.height = sh + 2 * reach;
+  const m = made.getContext("2d");
+  if (!m) return undefined;
+  const pixels = m.createImageData(made.width, made.height);
+  for (let i = 0; i < spread.length; i++) pixels.data[i] = Math.max(0, Math.min(255, Math.round(spread[i]!)));
+  m.putImageData(pixels, 0, 0);
+  if (halos.size > 64) halos.clear();
+  const drawn = { picture: made, growX: reach / sw, growY: reach / sh };
+  halos.set(key, drawn);
+  return drawn;
+}
+
+// A picture layer drawn at `b`, the collage's `board` W by H: what's around it first,
+// over what's under it, as its around says, then it, then its halo when it's
+// harmonized.
+function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Box, b: Box, W: number, H: number) {
+  const around = str(l["around"]), kept = seen.picture;
+  if (around === "edges" || around === "color") paintAround(c, seen.key, kept, board, b, around);
+  else if (around === "blend") {
+    const blend = blendOf(l, seen, W, H);
+    if (blend) c.drawImage(blend, board.x, board.y, board.w, board.h);
+  }
+  // Its corners trimmed round as far as its corners say, a share of its shorter side.
+  const radius = Math.min(num(l["corners"]) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
+  if (radius > 0) {
+    c.save();
+    c.beginPath();
+    c.roundRect(b.x, b.y, b.w, b.h, radius);
+    c.clip();
+    c.drawImage(kept, b.x, b.y, b.w, b.h);
+    c.restore();
+  } else c.drawImage(kept, b.x, b.y, b.w, b.h);
+  // Blended too, so its edge melts into what's filled from it, as seamless.
+  const h = around === "harmonize" || around === "blend" ? haloOf(l, seen) : undefined;
+  if (h) {
+    const gx = h.growX * b.w, gy = h.growY * b.h;
+    c.drawImage(h.picture, b.x - gx, b.y - gy, b.w + 2 * gx, b.h + 2 * gy);
+  }
+}
+
+// The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
+// all of it, or only one layer, as big as that layer, cropped as it is. Pictures not
+// yet read are read first.
+async function drawnWhole(layers: Row[], W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, matching: boolean, only?: string): Promise<HTMLCanvasElement> {
   const read = async (path: string) => {
     if (!pictures.has(path) || pictures.get(path) === "reading") {
       pictureOf(path, address);
@@ -273,7 +417,7 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     const p = pictures.get(path);
     return p !== "reading" && p !== "failed" ? p : undefined;
   };
-  const one = only ? layers.find((l) => l["id"] === only && !isBackground(layers, l)) : undefined;
+  const one = only ? layers.find((l) => l["id"] === only) : undefined;
   const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
   const made = document.createElement("canvas");
   made.width = Math.max(1, Math.round(area.w * scale));
@@ -285,10 +429,9 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, board.w, board.h);
   }
-  // Every picture read first, so what fills between them is worked out from them all.
-  for (const l of layers) if (!isWords(l)) await read(str(l["picture"]));
-  const blend = only ? undefined : blendOf(layers, data, W, H, address);
-  if (blend) c.drawImage(blend, board.x, board.y, board.w, board.h);
+  // Every picture read first, so matching measures them all.
+  if (matching) for (const l of layers) if (!isWords(l)) await read(str(l["picture"]));
+  const shifts = shiftsOf(layers, matching, address);
   for (const l of layers) {
     if (only && l["id"] !== only) continue;
     if (isWords(l)) {
@@ -299,17 +442,10 @@ async function drawnWhole(layers: Row[], data: Row, W: number, H: number, scale:
     const path = str(l["picture"]);
     const p = await read(path);
     if (!p) continue;
-    const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
-    const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
-    if (isBackground(layers, l)) {
-      const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
-      const b = at(backgroundAt(backdrop, kept.width, kept.height));
-      if (!blend) paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
-      c.drawImage(kept, b.x, b.y, b.w, b.h);
-    } else {
-      const b = at(boxOf(l)), cr = cropOf(l);
-      c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
-    }
+    const seen = lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts);
+    // A layer copied alone is drawn without what it would leave around it.
+    if (only) c.drawImage(seen.picture, 0, 0, made.width, made.height);
+    else paintPicture(c, l, seen, board, at(boxOf(l)), W, H);
   }
   return made;
 }
@@ -351,9 +487,10 @@ const pastes = new Map<string, { files: File[]; words: string }>();
 export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
+  const off = useOff();
   // Pasting with ctrl+v takes what's pasted; its other keys, and a press, read the clipboard.
-  const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v");
-  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, () => ask(collage, does));
+  const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v") && !off;
+  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, () => ask(collage, does), !off);
   useEffect(() => {
     if (!byPaste) return;
     const pasted = (e: ClipboardEvent) => {
@@ -371,7 +508,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
   // A screenshot is taken where the browser can share the screen, and only there.
   if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
       {label}
     </ui.Button>
   );
@@ -379,13 +516,11 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "sliding" | "cropping" | "shifting";
+  what: "moving" | "resizing" | "cropping" | "shifting";
   id: string;
   from: Box;
   at: Point;
   corner: number;
-  across: [number, number];
-  down: [number, number];
   edges: number;
   keptFrom?: Box;
 }
@@ -401,7 +536,7 @@ interface Placed {
   going?: { id: string; box: Box };
   lines: Lines;
   guide?: Guided;
-  crop?: { id: string; whole: Box; kept: Box; background?: boolean }; // a background sits again by its rules once kept
+  crop?: { id: string; whole: Box; kept: Box };
   editing?: { id: string; words: string; caret: number; fresh: boolean };
 }
 
@@ -412,8 +547,8 @@ export function Collage({
   height,
   fields,
   place,
-  slide,
   snap = false,
+  matchColors = false,
   empty,
   pick,
   subject,
@@ -437,11 +572,11 @@ export function Collage({
   height: string;
   fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
-  slide?: string; // and the one the background slid is, with slide_x and slide_y
   snap?: boolean;
+  matchColors?: boolean; // its pictures' colors moved toward one another's, so they look like one picture
   empty?: string;
   pick?: string; // the screen's pick of its layers
-  subject?: string; // the id of what the view is per, which its background slides on
+  subject?: string; // the id of what the view is per, which its layers and preview are made on
   fills?: boolean; // in a workspace, as big as its region; elsewhere 560 tall
   add?: string; // the command that makes a layer, sent `parent` = subject
   crop?: string; // the one a picture cropped is sent to, its crop and its place
@@ -473,7 +608,6 @@ export function Collage({
   const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
   const layers = (data[list] as Row[] | undefined) ?? [];
   const W = num(data[width]), H = num(data[height]);
-  const backdrop: Backdrop = { sits: str(data["background"]), width: W, height: H, zoom: num(data["zoom"], 1), slideX: num(data["slide_x"], 0.5), slideY: num(data["slide_y"], 0.5) };
   const address = files ? (path: string) => files.address(path) : undefined;
   const chosen = layers.find((l) => l["id"] === picked);
   const w = placed.current;
@@ -507,7 +641,7 @@ export function Collage({
       void send(update, { id, picture_width: sideways ? p.height : p.width, picture_height: sideways ? p.width : p.height, "one:history": "apart" });
     }
   });
-  // Pictures dropped or pasted: the first on a collage with nothing on it covers it, and
+  // Pictures dropped or pasted: the first on a collage with nothing on it fills it, and
   // the rest are as big as they are, smaller where they wouldn't fit, centered where
   // they were let go, each a little further along; all one step to undo.
   const addPictures = async (given: File[], on?: Point) => {
@@ -527,7 +661,7 @@ export function Collage({
       }
       let b: Box;
       if (!covered) {
-        b = { x: 0, y: 0, w: W, h: H };
+        b = sitting("fill", size.w, size.h, W, H);
         covered = true;
       } else {
         const s = Math.min(1, W / size.w, H / size.h);
@@ -549,7 +683,7 @@ export function Collage({
   const addWords = (words: string) => {
     if (!add || !("words" in fields)) return;
     const size = Math.max(8, Math.round(H / 12));
-    const m = measured(words, size, 700);
+    const m = measured(words, size, "700");
     const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
     if (parent) made[parent] = subject;
     const top = layers[layers.length - 1];
@@ -605,7 +739,7 @@ export function Collage({
       waiting = setTimeout(() => {
         if (w.now || w.crop || w.editing) return settle();
         drawnFrom.current = now;
-        void drawnWhole(layers, data, W, H, previewWide / W, address)
+        void drawnWhole(layers, W, H, previewWide / W, address, Boolean(matchColors))
           .then((made) => new Promise<Blob | null>((done) => made.toBlob(done, "image/png")))
           .then(async (blob) => {
             if (!blob) return;
@@ -634,7 +768,7 @@ export function Collage({
       return;
     }
     if (e.words === str(l["words"]) || !write) return;
-    const m = measured(e.words, num(l["size"]), weightOf(l));
+    const m = measured(e.words, num(l["size"]), faceOf(l));
     void send(write, { id: e.id, words: e.words, size: l["size"], x: l["x"], y: l["y"], w: m.w, h: m.h });
   };
   if (w.editing && w.editing.id !== picked) finishWriting();
@@ -661,7 +795,7 @@ export function Collage({
       if (one && !chosen) say({ text: "Pick a layer first." });
       else if (layers.length === 0 || W <= 0 || H <= 0) say({ text: copying ? "There's nothing to copy yet." : "There's nothing to save yet." });
       else {
-        const png = drawnWhole(layers, data, W, H, 1, address, one ? picked : undefined).then(
+        const png = drawnWhole(layers, W, H, 1, address, Boolean(matchColors), one ? picked : undefined).then(
           (made) => new Promise<Blob>((done, failed) => made.toBlob((b) => (b ? done(b) : failed(new Error("not drawn"))), "image/png")),
         );
         if (copying) {
@@ -696,7 +830,7 @@ export function Collage({
       // typed replaces them, on top of the rest.
       const size = Math.max(8, Math.round(H / 12));
       const words = "Your text";
-      const m = measured(words, size, 700);
+      const m = measured(words, size, "700");
       const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
       if (parent) made[parent] = subject;
       const top = layers[layers.length - 1];
@@ -711,18 +845,10 @@ export function Collage({
     redraw((n) => n + 1);
   });
 
-  // Where each layer is on the collage: the background where it sits, words as big
-  // as they are, the rest as they say, and one being moved or let go where it's going.
+  // Where each layer is on the collage: words as big as they are, the rest as they
+  // say, and one being moved or let go where it's going.
   const whereIs = (l: Row): Box => {
     let b = boxOf(l);
-    if (isBackground(layers, l)) {
-      const p = pictureOf(str(l["picture"]), address);
-      if (p) {
-        // It sits by the part its crop keeps.
-        const sideways = num(l["turns"]) % 2 === 1, cr = cropOf(l);
-        b = backgroundAt(backdrop, (sideways ? p.height : p.width) * cr.w, (sideways ? p.width : p.height) * cr.h);
-      }
-    }
     const g = w.going;
     if (g && g.id === l["id"]) {
       const near = (a: number, z: number) => Math.abs(a - z) < 0.01;
@@ -731,17 +857,15 @@ export function Collage({
     }
     if (isWords(l) && !(w.going && w.going.id === l["id"] && w.now)) {
       const writing = w.editing?.id === l["id"];
-      const m = measured(writing ? w.editing!.words : str(l["words"]), num(l["size"]), weightOf(l));
+      const m = measured(writing ? w.editing!.words : str(l["words"]), num(l["size"]), faceOf(l));
       b = { x: b.x, y: b.y, w: m.w, h: m.h };
     }
     return b;
   };
-  // A crop begun on a picture where it is: the background where it sits, the rest
-  // where they say, and the whole picture behind it.
+  // A crop begun on a picture where it is, and the whole picture behind it.
   const cropBegun = (l: Row): NonNullable<Placed["crop"]> => {
-    const background = isBackground(layers, l);
-    const kept = background ? whereIs(l) : boxOf(l);
-    return { id: str(l["id"]), whole: wholeOf(kept, cropOf(l)), kept, background };
+    const kept = boxOf(l);
+    return { id: str(l["id"]), whole: wholeOf(kept, cropOf(l)), kept };
   };
   const onBoard = (b: Box): Box => ({ x: w.board.x + b.x * w.scale, y: w.board.y + b.y * w.scale, w: b.w * w.scale, h: b.h * w.scale });
 
@@ -781,9 +905,9 @@ export function Collage({
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, bw, bh);
     c.restore();
-    const blend = blendOf(layers, data, W, H, address);
-    if (blend) c.drawImage(blend, board.x, board.y, bw, bh);
+    const shifts = shiftsOf(layers, matchColors, address);
     let framed: Box | undefined;
+    let framedRadius = 0;
     c.save();
     c.beginPath();
     c.rect(board.x, board.y, bw, bh);
@@ -794,9 +918,9 @@ export function Collage({
         // Being written: as typed so far, with its caret, all of it marked while the
         // first key would replace it; being resized, its letters as large.
         const writing = w.editing?.id === l["id"] ? w.editing : undefined;
-        const kept = measured(str(l["words"]), num(l["size"]), weightOf(l));
+        const kept = measured(str(l["words"]), num(l["size"]), faceOf(l));
         const size = num(l["size"]) * (w.going?.id === l["id"] && w.now && kept.h > 0 ? b.h / w.scale / kept.h : 1) * scale;
-        c.font = `${weightOf(l)} ${size}px ${wordsFamily()}`;
+        c.font = `${faceOf(l)} ${size}px ${wordsFamily()}`;
         c.textBaseline = "top";
         if (writing?.fresh) {
           c.fillStyle = accent;
@@ -826,18 +950,17 @@ export function Collage({
             const fx = (w.crop.kept.x - w.crop.whole.x) / w.crop.whole.w, fy = (w.crop.kept.y - w.crop.whole.y) / w.crop.whole.h;
             c.drawImage(shown, fx * shown.width, fy * shown.height, (w.crop.kept.w / w.crop.whole.w) * shown.width, (w.crop.kept.h / w.crop.whole.h) * shown.height, kept.x, kept.y, kept.w, kept.h);
             b = kept;
-          } else if (isBackground(layers, l)) {
-            // Only what its crop keeps, what's around it filled from that part's edges.
-            const kept = backgroundOf(edgeKeyOf(l), shown, cropOf(l));
-            if (!blend) paintAround(c, edgeKeyOf(l), kept, board, b, str(data["around"]));
-            c.drawImage(kept, b.x, b.y, b.w, b.h);
           } else {
-            const cr = cropOf(l);
-            c.drawImage(shown, cr.x * shown.width, cr.y * shown.height, cr.w * shown.width, cr.h * shown.height, b.x, b.y, b.w, b.h);
+            // Only what its crop keeps, its colors as matched, and what's around it as it says.
+            paintPicture(c, l, lookOf(l, shown, shifts), board, b, W, H);
           }
         }
       }
-      if (l["id"] === picked && !full) framed = b;
+      if (l["id"] === picked && !full) {
+        framed = b;
+        // A picture's frame follows its corners, round as they are.
+        framedRadius = isWords(l) || (w.crop && w.crop.id === l["id"]) ? 0 : Math.min(num(l["corners"]) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
+      }
     }
     c.restore();
     // The lines a moved layer snapped to, across the whole collage.
@@ -866,8 +989,12 @@ export function Collage({
     if (framed) {
       c.strokeStyle = accent;
       c.lineWidth = 2;
-      c.strokeRect(framed.x, framed.y, framed.w, framed.h);
-      const corners = w.crop ? true : chosen && isWords(chosen) ? Boolean(write) : chosen && !isBackground(layers, chosen) && Boolean(place);
+      if (framedRadius > 0) {
+        c.beginPath();
+        c.roundRect(framed.x, framed.y, framed.w, framed.h, framedRadius);
+        c.stroke();
+      } else c.strokeRect(framed.x, framed.y, framed.w, framed.h);
+      const corners = w.crop ? true : chosen && isWords(chosen) ? Boolean(write) : chosen && Boolean(place);
       const points: [number, number][] = [];
       if (corners && !w.editing) points.push([framed.x, framed.y], [framed.x + framed.w, framed.y], [framed.x + framed.w, framed.y + framed.h], [framed.x, framed.y + framed.h]);
       if (w.crop) {
@@ -946,9 +1073,7 @@ export function Collage({
     const to =
       g.what === "moving"
         ? moved(g.from, dx, dy, w.lines, W, H, close, snaps)
-        : g.what === "sliding"
-          ? slid(g.from, dx, dy, g.across, g.down, W, H, close, snaps)
-          : resized(g.from, g.corner, dx, dy, !e.shiftKey, w.lines, close, snaps);
+        : resized(g.from, g.corner, dx, dy, !e.shiftKey, w.lines, close, snaps);
     w.guide = to;
     return to.at;
   };
@@ -957,7 +1082,7 @@ export function Collage({
     const e = w.crop;
     if (!e || !crop) return;
     w.crop = undefined;
-    if (!e.background) w.going = { id: e.id, box: e.kept };
+    w.going = { id: e.id, box: e.kept };
     void send(crop, {
       id: e.id,
       crop_x: (e.kept.x - e.whole.x) / e.whole.w,
@@ -990,31 +1115,30 @@ export function Collage({
     if (w.crop) {
       const edgesAt = cropEdgesAt(onBoard(w.crop.kept), p, handle);
       if (edgesAt < 0 && inside(onBoard(w.crop.whole), p)) {
-        w.now = { what: "shifting", id: w.crop.id, from: w.crop.whole, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: 0, keptFrom: w.crop.kept };
+        w.now = { what: "shifting", id: w.crop.id, from: w.crop.whole, at: p, corner: 0, edges: 0, keptFrom: w.crop.kept };
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
       if (edgesAt < 0) return keepCrop();
-      w.now = { what: "cropping", id: w.crop.id, from: w.crop.kept, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: edgesAt };
+      w.now = { what: "cropping", id: w.crop.id, from: w.crop.kept, at: p, corner: 0, edges: edgesAt };
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
     // A corner of the picked layer resizes it: a picture with its shape kept, words by their size.
-    if (chosen && !isBackground(layers, chosen) && (isWords(chosen) ? write : place)) {
+    if (chosen && (isWords(chosen) ? write : place)) {
       const b = whereIs(chosen);
       const corner = cornerAt(onBoard(b), p, handle);
       if (corner >= 0) {
-        w.now = { what: "resizing", id: picked, from: b, at: p, corner, across: [0, 0], down: [0, 0], edges: 0 };
+        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0 };
         w.lines = linesFor(picked);
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
       }
     }
-    // The top layer under the pointer, never the background, is picked and moves;
-    // pressed twice, a picture is cropped and words written.
+    // The top layer under the pointer is picked and moves; pressed twice, a picture is
+    // cropped and words written.
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i]!;
-      if (i === 0 && !isWords(l)) break;
       const b = whereIs(l);
       if (!inside(onBoard(b), p)) continue;
       const id = str(l["id"]);
@@ -1026,31 +1150,14 @@ export function Collage({
         return;
       }
       if (place) {
-        w.now = { what: "moving", id, from: b, at: p, corner: 0, across: [0, 0], down: [0, 0], edges: 0 };
+        w.now = { what: "moving", id, from: b, at: p, corner: 0, edges: 0 };
         w.lines = linesFor(id);
         e.currentTarget.setPointerCapture(e.pointerId);
       }
       return;
     }
-    // On the background with nothing over it, it's picked; anywhere else, on the space
-    // around it or off the collage, nothing is.
-    if (!inside(w.board, p) || layers.length === 0 || isWords(layers[0]!) || !inside(onBoard(whereIs(layers[0]!)), p)) {
-      pickRow("");
-      return;
-    }
-    const bottom = layers[0]!;
-    pickRow(str(bottom["id"]));
-    // Pressed twice, it's cropped where it sits, as any picture is.
-    if (e.detail >= 2 && crop) {
-      w.crop = cropBegun(bottom);
-      redraw((n) => n + 1);
-      return;
-    }
-    const b = whereIs(bottom);
-    if (slide && slides(backdrop, b)) {
-      w.now = { what: "sliding", id: str(bottom["id"]), from: b, at: p, corner: 0, across: slideRange(W, b.w), down: slideRange(H, b.h), edges: 0 };
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
+    // On nothing, nothing is picked.
+    pickRow("");
   };
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = w.now;
@@ -1092,13 +1199,10 @@ export function Collage({
       }
     };
     const l = layers.find((r) => r["id"] === g.id);
-    if (g.what === "sliding") {
-      const fraction = (v: number, [least, most]: [number, number]) => (most > least ? (v - least) / (most - least) : 0.5);
-      void send(slide!, { id: subject, slide_x: fraction(to.x, g.across), slide_y: fraction(to.y, g.down) }).then(back);
-    } else if (l && isWords(l) && g.what === "resizing" && g.from.h > 0 && write) {
+    if (l && isWords(l) && g.what === "resizing" && g.from.h > 0 && write) {
       // Words resized are larger or smaller words, not stretched ones.
       const size = num(l["size"]) * (to.h / g.from.h);
-      const m = measured(str(l["words"]), size, weightOf(l));
+      const m = measured(str(l["words"]), size, faceOf(l));
       void send(write, { id: g.id, words: l["words"], size, x: to.x, y: to.y, w: m.w, h: m.h }).then(back);
     } else {
       void send(place!, { id: g.id, x: to.x, y: to.y, w: to.w, h: to.h }).then(back);
@@ -1127,11 +1231,10 @@ export function Collage({
                   : "ns-resize";
     } else if (w.editing) cursor = "text";
     else {
-      const corner = chosen && !isBackground(layers, chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
+      const corner = chosen && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";
       else if (corner === 1 || corner === 3) cursor = "nesw-resize";
-      else if (layers.some((l, i) => (i > 0 || isWords(l)) && inside(onBoard(whereIs(l)), p))) cursor = place ? "move" : "pointer";
-      else if (slide && layers.length > 0 && !isWords(layers[0]!) && slides(backdrop, whereIs(layers[0]!))) cursor = "grab";
+      else if (layers.some((l) => inside(onBoard(whereIs(l)), p))) cursor = place ? "move" : "pointer";
     }
     e.currentTarget.style.cursor = cursor;
   };
@@ -1146,7 +1249,7 @@ export function Collage({
   });
   useKeys(picked && !busy ? ["escape"] : undefined, () => pickRow(""));
   const nudge = (dx: number, dy: number) => {
-    if (!chosen || !place || isBackground(layers, chosen)) return;
+    if (!chosen || !place) return;
     const b = boxOf(chosen);
     const to = { x: b.x + dx, y: b.y + dy, w: b.w, h: b.h };
     w.going = { id: picked, box: to };

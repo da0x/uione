@@ -1,6 +1,6 @@
 # 0019: A collage is a picture made of layers, not a canvas
 
-- Status: Accepted
+- Status: Accepted; its background superseded by [0021](0021-every-picture-in-a-collage-is-a-layer.md)
 - Date: 2026-10-25
 - Deciders: Daher Alfawares
 

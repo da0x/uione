@@ -745,6 +745,7 @@ namespace one::language {
         std::optional<int> page;          // page 25: this many rows at a time
         location page_where;
         std::optional<std::string> reorder;  // reorder position: rows put in order by dragging, which sets this
+        bool reorder_descending = false;     // reorder depth descending: the highest first
         bool hide_empty = false;             // hide when empty: not there at all while it has no rows
         std::optional<std::string> empty;    // empty "Add a picture to start": what it says while it has no rows
         location reorder_where;
@@ -841,7 +842,6 @@ namespace one::language {
         std::string width = "width", height = "height";
         location size_where;
         std::optional<qualified_name> place;  // place layer::place: a layer moved or resized, kept
-        std::optional<qualified_name> slide;  // slide poster::slide: the background slid, kept
         std::optional<qualified_name> add;    // add layer::create: what makes new layers, like words added
         std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
         std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept
@@ -861,6 +861,7 @@ namespace one::language {
         int preview_wide = 480;
         location preview_where;
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
+        expression_ptr match_colors;          // match colors when poster_page.matched: its pictures' colors moved toward one another's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer
@@ -1414,26 +1415,23 @@ namespace one::language {
     struct collage_part {
         const char* name;
         const char* type;  // number, text, file, or the choices it's one of
-        bool of_view = false;
         bool needed = false;
     };
 
     inline const std::vector<collage_part>& collage_parts() {
         static const std::vector<collage_part> all{
-            {"x", "number", false, true}, {"y", "number", false, true}, {"w", "number", false, true}, {"h", "number", false, true},
+            {"x", "number", true}, {"y", "number", true}, {"w", "number", true}, {"h", "number", true},
             {"depth", "number"}, {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"},
             {"crop_x", "number"}, {"crop_y", "number"}, {"crop_w", "number"}, {"crop_h", "number"},
-            {"turns", "number"}, {"mirrored", "number"},
-            {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"},
-            {"background", "fit fill stretch center", true}, {"around", "edges color blend", true}, {"zoom", "number", true},
-            {"slide_x", "number", true}, {"slide_y", "number", true},
+            {"turns", "number"}, {"mirrored", "number"}, {"around", "clear edges color blend harmonize"}, {"corners", "number"},
+            {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"}, {"italic", "number"},
         };
         return all;
     }
 
     // The field each part is kept in: the one the collage names, or else the one named
     // like the part, when its layers' rows, or its view's own values, hold it.
-    inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers, const view_declaration* view) {
+    inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) {
         auto holds = [](const std::vector<view_value>& values, const std::string& name) {
             return std::ranges::any_of(values, [&](const view_value& v) {
                 if (v.name) return *v.name == name;
@@ -1444,7 +1442,7 @@ namespace one::language {
         std::map<std::string, std::string> out;
         for (const auto& part : collage_parts()) {
             if (auto said = c.fields.find(part.name); said != c.fields.end()) out[part.name] = said->second;
-            else if (part.of_view ? view && holds(view->values, part.name) : layers && holds(layers->rows, part.name)) out[part.name] = part.name;
+            else if (layers && holds(layers->rows, part.name)) out[part.name] = part.name;
         }
         return out;
     }

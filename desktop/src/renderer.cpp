@@ -151,8 +151,8 @@ namespace one::desktop {
 		                            nullptr);
 
 		// Pictures: drawn with the glyphs' layout, a texture each, sampled smoothly and
-		// between their smaller copies when shown smaller.
-		picture_pipeline_ = pipeline(device, glyph_layout_, target, picture_vertex, picture_fragment, 4);
+		// between their smaller copies when shown smaller, with their corners' radius.
+		picture_pipeline_ = pipeline(device, glyph_layout_, target, picture_vertex, picture_fragment, 5);
 		smooth_ = vk::raii::Sampler{device, vk::SamplerCreateInfo{.magFilter = vk::Filter::eLinear,
 		                                                          .minFilter = vk::Filter::eLinear,
 		                                                          .mipmapMode = vk::SamplerMipmapMode::eLinear,
@@ -329,15 +329,16 @@ namespace one::desktop {
 		return made;
 	}
 
-	void renderer::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, const rect& clip) {
+	void renderer::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip) {
 		texture* t = texture_of(p);
 		if (!t) return;
 		t->used = frame_;
-		glyph_instance g{};
+		picture_instance g{};
 		put(g.bounds, area);
 		g.source[0] = from.x, g.source[1] = from.y, g.source[2] = from.right(), g.source[3] = from.bottom();
 		put(g.tint, color{1, 1, 1, std::clamp(opacity, 0.f, 1.f)});
 		put_clip(g.clip, clip);
+		g.shape[0] = std::clamp(radius, 0.f, std::min(area.width, area.height) / 2);
 		pictures_.push_back(g);
 		add(kind::pictures, t);
 	}
@@ -398,10 +399,10 @@ namespace one::desktop {
 		auto& buffers = slots_[slot_];
 		ensure(buffers.boxes, std::max<std::size_t>(1, boxes_.size()) * sizeof(box_instance), vk::BufferUsageFlagBits::eVertexBuffer);
 		ensure(buffers.glyphs, std::max<std::size_t>(1, glyphs_.size()) * sizeof(glyph_instance), vk::BufferUsageFlagBits::eVertexBuffer);
-		ensure(buffers.pictures, std::max<std::size_t>(1, pictures_.size()) * sizeof(glyph_instance), vk::BufferUsageFlagBits::eVertexBuffer);
+		ensure(buffers.pictures, std::max<std::size_t>(1, pictures_.size()) * sizeof(picture_instance), vk::BufferUsageFlagBits::eVertexBuffer);
 		std::memcpy(buffers.boxes.mapped, boxes_.data(), boxes_.size() * sizeof(box_instance));
 		std::memcpy(buffers.glyphs.mapped, glyphs_.data(), glyphs_.size() * sizeof(glyph_instance));
-		std::memcpy(buffers.pictures.mapped, pictures_.data(), pictures_.size() * sizeof(glyph_instance));
+		std::memcpy(buffers.pictures.mapped, pictures_.data(), pictures_.size() * sizeof(picture_instance));
 		upload_pictures(commands);
 
 		vk::ImageSubresourceRange whole{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1};
@@ -540,9 +541,9 @@ namespace one::desktop {
 		}
 	}
 
-	void canvas::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity) {
+	void canvas::picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius) {
 		if (!p) return;
-		renderer_.picture(p, in_pixels(area, scale()), from, opacity, clip_in_pixels(clips_, renderer_));
+		renderer_.picture(p, in_pixels(area, scale()), from, opacity, radius * static_cast<float>(scale()), clip_in_pixels(clips_, renderer_));
 	}
 
 	void canvas::text(const text_layout& laid, point at) {

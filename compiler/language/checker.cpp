@@ -3289,7 +3289,7 @@ namespace one::language {
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
-                "center", "color", "edges", "blend"};
+                "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3959,6 +3959,7 @@ namespace one::language {
         }
 
         void verify_collage(const std::string& ns, const collage_item& collage, const std::string& route) {
+            if (collage.match_colors) verify_condition(ns, *collage.match_colors, route);
             const view_each* layers = named_list(ns, collage.view, collage.list, route);
             if (!layers) return;
             const view_declaration* view = find(ns, collage.view, &scope::views);
@@ -3970,13 +3971,12 @@ namespace one::language {
             if (!layer) return;
             // Each part in the field the collage names, or the one named like it: there, of
             // the part's type, and read by the view.
-            const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, collage.view.where}) : nullptr;
-            auto kept = language::collage_fields(collage, layers, view);
+            auto kept = language::collage_fields(collage, layers);
             for (const auto& part : language::collage_parts()) {
                 auto said = collage.fields_where.find(part.name);
                 const location& at = said != collage.fields_where.end() ? said->second : collage.list_where;
                 auto in = kept.find(part.name);
-                const entity_declaration* on = part.of_view ? per : layer;
+                const entity_declaration* on = layer;
                 if (in == kept.end()) {
                     if (part.needed) error(at, "entity " + layer->name + " has no field " + part.name + ", where a collage keeps a layer's place; add " + part.name + " number to it, or say the fields, like at x y  size w h");
                     continue;
@@ -3997,9 +3997,7 @@ namespace one::language {
                     error(at, on->name + "." + name + " keeps a collage's " + std::string(part.name) + ", so it's " + what + (said == collage.fields_where.end() ? "; or say the field that does, as in the collage's block" : ""));
                     continue;
                 }
-                bool read = part.of_view ? view && std::any_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == name; })
-                                         : in_rows(*layers, name);
-                if (!read) error(at, "view " + collage.view.text() + " has no " + name + (part.of_view ? "" : " in its " + collage.list) + ", which the collage draws; add it to " + (part.of_view ? "the view" : "the list's block"));
+                if (!in_rows(*layers, name)) error(at, "view " + collage.view.text() + " has no " + name + " in its " + collage.list + ", which the collage draws; add it to the list's block");
             }
             auto has = [&](std::initializer_list<const char*> parts) { return std::ranges::all_of(parts, [&](const char* p) { return kept.contains(p); }); };
             if (collage.crop && !has({"crop_x", "crop_y", "crop_w", "crop_h"})) error(collage.crop->where, "a crop is kept in a layer's crop_x crop_y crop_w crop_h, which " + layer->name + " doesn't have; add them, or say its fields, like cropped to left top width height");
@@ -4015,14 +4013,6 @@ namespace one::language {
                     error((*command)->where, "a collage's layers are " + layer->name + "s, so " + line + " names a command on " + layer->name + ", like " + layer->name + "::" + like);
                 }
             }
-            if (collage.slide) {
-                verify_command_use(ns, *collage.slide);
-                const entity_declaration* on = find_command(ns, *collage.slide);
-                if (view && (!view->per || (on && on->name != *view->per))) {
-                    error(collage.slide->where, "a collage's background slides as the view " + collage.view.text() + " says, so by a command on what the view is per" +
-                                                    (view->per ? ", like " + *view->per + "::slide" : ", and it isn't per anything"));
-                }
-            }
             // Pasted pictures are made by its add, the file in the layer's picture.
             if (collage.paste) {
                 if (!collage.add) error(collage.paste_where, "pasted pictures are made by the collage's add, so it says one too, like add " + layer->name + "::create");
@@ -4034,6 +4024,7 @@ namespace one::language {
             }
             // A preview is kept on what the view is per, by a command on it, in a file field.
             if (collage.preview) {
+                const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, collage.view.where}) : nullptr;
                 verify_command_use(ns, *collage.preview);
                 const entity_declaration* on = find_command(ns, *collage.preview);
                 if (!per) {
@@ -5040,6 +5031,12 @@ namespace one::language {
                 if (!e) error(argument.where, name + " needs an entity, like " + name + "(loan)");
                 return e;
             }
+            // min(a, b) and max(a, b): the smaller and the larger of two numbers.
+            if (name == "min" || name == "max") {
+                if (!arguments(2)) return nullptr;
+                for (const auto& a : call.arguments) resolve(in, *a);
+                return nullptr;
+            }
             // exists(step where from == was issue.stage && held(roles)): whether
             // there's one, in a command's require.
             if (name == "exists") {
@@ -5122,7 +5119,7 @@ namespace one::language {
                 }
                 return nullptr;
             }
-            std::vector<std::string> known{"count", "first", "exists", "waiting", "was", "held", "starts_with", "drop", "github_secret"};
+            std::vector<std::string> known{"count", "first", "min", "max", "exists", "waiting", "was", "held", "starts_with", "drop", "github_secret"};
             for (const auto& candidate : candidates(in.ns, {})) {
                 auto s = scopes_.find(candidate);
                 if (s == scopes_.end()) continue;

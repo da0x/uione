@@ -200,6 +200,17 @@ namespace one::screens {
 		// buttons drawn as tools.
 		std::optional<bool> in_group() const { return in_group_; }
 		void in_group(std::optional<bool> small) { in_group_ = small; }
+		// Whether what's being built in a toolbar doesn't apply now: drawn, so the
+		// toolbar keeps its shape, but it can't be pressed. Built by `build` while
+		// `holds` doesn't, and while what it's in doesn't apply either.
+		bool off() const { return off_; }
+		template <class F>
+		auto off_unless(bool holds, F build) {
+			bool was = std::exchange(off_, off_ || !holds);
+			auto made = build();
+			off_ = was;
+			return made;
+		}
 
 		// Something the page keeps while it's open, made the first time it's asked for,
 		// like what's typed in a form: the same each time the screen is built.
@@ -232,6 +243,7 @@ namespace one::screens {
 		bool fill_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
+		bool off_ = false;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;          // commands on their way, by name
 		state<std::map<std::string, std::string>> errors_;   // why each was last turned down

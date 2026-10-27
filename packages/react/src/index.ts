@@ -4,7 +4,7 @@
 // @uione/react: the runtime every uione screen is built on.
 
 export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, useFill, usePageTitle, useSignIn, useSite, useTitle } from "./app.js";
-export { FullScreen, Group, History, Messages, Toggle, hintOf, keyShown, setPicked, setToggled, useKeys, usePicked, usePickedId, useTool, useToggled } from "./workspace.js";
+export { Applies, Either, FullScreen, Group, History, Messages, Toggle, hintOf, keyShown, setPicked, setToggled, useInGroup, useKeys, useOff, usePicked, usePickedId, useTool, useToggled } from "./workspace.js";
 export { useSaying } from "./said.js";
 export { Collage, CollageButton } from "./collage-view.js";
 export { OnOpen, screenSize } from "./opening.js";

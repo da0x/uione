@@ -278,8 +278,8 @@ namespace one::generators {
             for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
             out += ", .fields = {" + kept + "}";
             if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
-            if (c.slide) out += ", .slide = " + str(screens::full_command(ns, *c.slide));
             if (c.snap) out += ", .snap = true";
+            if (c.match_colors) out += ", .match_colors = " + condition(parts, ns, *c.match_colors);
             if (c.empty) out += ", .empty = " + str(*c.empty);
             if (c.over) out += ", .pick = " + str(route_ + " " + *c.over);
             if (!c.tools.empty()) {
@@ -545,10 +545,11 @@ namespace one::generators {
             return "";
         }
 
-        std::string reorder_of(screen_parts& parts, const std::string& ns, const std::optional<std::string>& field, const language::entity_declaration* entity) {
+        std::string reorder_of(screen_parts& parts, const std::string& ns, const std::optional<std::string>& field, const language::entity_declaration* entity, bool descending = false) {
             if (!field || !entity) return "";
             std::string command = screens::join(ns, entity->name + "::update");
             std::string may = allowed(parts, ns, command);
+            if (descending) return "reorder_spec{" + str(command) + ", " + str(*field) + ", " + (may.empty() ? "true" : may) + ", true}";
             return "reorder_spec{" + str(command) + ", " + str(*field) + (may.empty() ? "" : ", " + may) + "}";
         }
 
@@ -626,6 +627,7 @@ namespace one::generators {
             if (!on_pick.empty()) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
             if (!shown_when.empty()) out += ", .when = " + shown_when;
             if (button.icon) out += ", .icon = " + str(*button.icon);
+            if (std::string swatch = screens::swatch_of(button); !swatch.empty()) out += ", .swatch = " + str(swatch);
             if (!button.keys.empty()) out += ", .keys = " + keys_of(button.keys);
             if (button.pressed_when) out += ", .pressed = " + condition(parts, ns, *button.pressed_when);
             else if (!same.empty() && same != "-") out += ", .pressed = " + same;
@@ -735,7 +737,7 @@ namespace one::generators {
             if (t.download) out += ", .download = " + str(*t.download);
             if (std::string tint = tint_of(ns, t.view, t.list, t.tint); !tint.empty()) out += ", .tint = " + tint;
             if (std::string track = track_of(parts, ns, t.track ? &*t.track : nullptr); !track.empty()) out += ", .track = " + track;
-            if (std::string reorder = reorder_of(parts, ns, t.reorder, entity); !reorder.empty()) out += ", .reorder = " + reorder;
+            if (std::string reorder = reorder_of(parts, ns, t.reorder, entity, t.reorder_descending); !reorder.empty()) out += ", .reorder = " + reorder;
             if (!t.hue.empty()) out += ", .color = " + str(t.hue);
             if (t.empty) out += ", .empty = " + str(*t.empty);
             // A row picked with a click, when the screen picks one of this list.
@@ -1271,7 +1273,9 @@ namespace one::generators {
         bool shows_pages_ = false;              // whether the screen being written does, opening the first without :page
         std::map<const language::content_block*, int> steps_;  // each step of a section as steps, by its number
         bool each_alone_ = false;     // building a bar's or a toolbar's lines, each its own
+        bool in_group_ = false;       // building a toolbar group's lines
         bool workspace_ = false;      // the screen being written is laid out as a workspace
+        bool quiet_ = false;          // building a status line, its words said quietly
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
@@ -1314,7 +1318,7 @@ namespace one::generators {
             if (text.type == language::content_text::kind::overline) return "";  // said with its hero's or section's title
             if (text.type == language::content_text::kind::statement) return "statement(" + parts_of(parts, ns, text.value) + ")";
             if (text.type == language::content_text::kind::text) {
-                std::string shown = "text(" + parts_of(parts, ns, text.value) + ")";
+                std::string shown = "text(" + parts_of(parts, ns, text.value) + (quiet_ ? ", true" : "") + ")";
                 if (text.when) return condition(parts, ns, *text.when) + " ? " + shown + " : view()";
                 return shown;
             }
@@ -1337,6 +1341,43 @@ namespace one::generators {
             page_includes_.insert(name);
             shows_pages_ = true;
             return "pages(p, " + str(base) + ", " + name + "_pages" + (text.document ? ", true" : "") + ")";
+        }
+
+        // A toolbar's commands side by side with the same words and icon, like Bold that
+        // sets it and Bold that takes it away, as one tool: the first whose when holds.
+        static std::vector<written> alternatives(std::vector<written> lines) {
+            const std::string call = "command(p, ";
+            auto said = [](const std::string& code) {
+                auto part = [&](const std::string& name) {
+                    auto at = code.find(", ." + name + " = \"");
+                    if (at == std::string::npos) return std::string();
+                    auto from = code.find('"', at) + 1;
+                    return code.substr(from, code.find('"', from) - from);
+                };
+                return part("label") + "\n" + part("icon");
+            };
+            std::vector<written> out;
+            std::vector<std::string> ways;
+            auto finish = [&] {
+                if (ways.size() > 1) {
+                    std::string joined;
+                    for (const auto& w : ways) joined += (joined.empty() ? "" : ", ") + std::string("command_button") + w;
+                    out.back().code = "either(p, {" + joined + "})";
+                }
+                ways.clear();
+            };
+            for (auto& line : lines) {
+                bool command = line.code.starts_with(call);
+                if (command && !ways.empty() && said(line.code) == said(out.back().code.starts_with(call) ? out.back().code : "") && out.back().code.starts_with(call)) {
+                    ways.push_back(line.code.substr(call.size(), line.code.size() - call.size() - 1));
+                    continue;
+                }
+                finish();
+                out.push_back(std::move(line));
+                if (command) ways.push_back(out.back().code.substr(call.size(), out.back().code.size() - call.size() - 1));
+            }
+            finish();
+            return out;
         }
 
         std::vector<written> items(screen_parts& parts, const std::string& ns, const std::vector<language::screen_item>& list, const std::vector<language::screen_item>& screen,
@@ -1423,7 +1464,9 @@ namespace one::generators {
                     // A toolbar's group: its lines built as tools; the first at its end
                     // takes the toolbar's far end.
                     bool alone = std::exchange(each_alone_, true);
-                    auto inside = items(parts, ns, g->items, screen);
+                    bool grouping = std::exchange(in_group_, true);
+                    auto inside = alternatives(items(parts, ns, g->items, screen));
+                    in_group_ = grouping;
                     each_alone_ = alone;
                     bool end_here = g->at_end && !at_end_said_;
                     at_end_said_ = at_end_said_ || g->at_end;
@@ -1572,7 +1615,12 @@ namespace one::generators {
                 if (code.empty()) continue;
                 // Drawn by a function of its own, as GCC sees a temporary in either arm of
                 // a ?: outliving the line when the arm's a call given a spec.
-                if (item.when && !grouped) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
+                // In a toolbar, a group or a line that doesn't apply now is there, but off, so
+                // the toolbar keeps its shape.
+                bool toolbar = in_group_ || (std::holds_alternative<language::content_block>(item.node) &&
+                                             std::get<language::content_block>(item.node).type == language::content_block::kind::group);
+                if (item.when && !grouped && toolbar) code = "p.off_unless(" + condition(parts, ns, *item.when) + ", [&] { return " + code + "; })";
+                else if (item.when && !grouped) code = "[&] { if (" + condition(parts, ns, *item.when) + ") return " + code + "; return view(); }()";
                 if (presses(item)) {
                     if (row.empty()) row_line = item.where.line;
                     row.push_back(code);
@@ -1742,8 +1790,10 @@ namespace one::generators {
                         // A workspace's bar, toolbar and status line are rows, each line its own.
                         bool across = layout == "workspace" && region.title != "main" && region.title != "side";
                         bool alone = std::exchange(each_alone_, across);
+                        bool quiet = std::exchange(quiet_, layout == "workspace" && region.title == "status");
                         std::string drawn = std::string(across ? "along(" : "items(") + joined_items(items(parts, ns, region.items, s->items)) + ")";
                         each_alone_ = alone;
+                        quiet_ = quiet;
                         // side when layers: there only while it holds.
                         if (item->when) drawn = "[&] { if (" + condition(parts, ns, *item->when) + ") return " + drawn + "; return view(); }()";
                         inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + "}";

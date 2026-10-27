@@ -351,6 +351,28 @@ TEST_CASE("a / between two values divides, while a / alone after a screen's name
     CHECK(cpp.find(R"(e.fields["w"] = value(one::local::divided(e["w"].as_double(), value(2).as_double()));)") != std::string::npos);
 }
 
+TEST_CASE("min and max are the smaller and the larger of two numbers, in a command as on every target") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand layer::raise {", "\tcommand layer::fit {\n\t\tinput room number\n\t\tw = min(room, w * 2)\n\t\tx = max(0, x)\n\t}\n\n\tcommand layer::raise {"), out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CAPTURE(cpp);
+    CAPTURE(ts);
+    CHECK(cpp.find("std::min<double>(") != std::string::npos);
+    CHECK(cpp.find("std::max<double>(") != std::string::npos);
+    CHECK(ts.find("Math.min(") != std::string::npos);
+    CHECK(ts.find("Math.max(") != std::string::npos);
+    language::diagnostics wrong;
+    auto three = parsed(with(board, "\tcommand layer::raise {", "\tcommand layer::fit {\n\t\tw = min(w, 1, 2)\n\t}\n\n\tcommand layer::raise {"), wrong);
+    language::check(three, wrong);
+    CHECK(std::ranges::any_of(wrong, [](const auto& d) { return d.message == "min takes 2 arguments, not 3"; }));
+}
+
 TEST_CASE("a % leaves what's over as a clock counts, and was reads what the command's entity held before it") {
     language::diagnostics out;
     auto files = parsed(with(board, "\tcommand layer::raise {", "\tcommand layer::turn {\n\t\tx = (was x + 3) % 4\n\t\tw = was x\n\t}\n\n\tcommand layer::raise {"), out);

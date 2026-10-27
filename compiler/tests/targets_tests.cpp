@@ -170,6 +170,13 @@ TEST_CASE("one run starts the first app a project targets, or the one --target n
     auto npm = driver::plan_run(built, out, "web", false);
     CHECK(npm.before[0].command == std::vector<std::string>{"npm", "install"});
     CHECK(npm.app.command == std::vector<std::string>{"npm", "run", "dev", "--", "--force"});
+    // Libraries from a checkout, which Yarn copies in, are copied in again each time.
+    auto from_checkout = built;
+    for (auto& f : from_checkout.files) {
+        if (f.path == "web/package.json") f.content += "\"@uione/react\": \"file:/uione/packages/react\"";
+    }
+    CHECK(driver::plan_run(from_checkout, out, "web", true).before[0].command == std::vector<std::string>{"yarn", "install", "--force"});
+    CHECK(driver::plan_run(from_checkout, out, "web", false).before[0].command == std::vector<std::string>{"npm", "install"});
 
     CHECK(driver::plan_run(built, out, "terminal", true).refusal == "this project doesn't build terminal");
 }

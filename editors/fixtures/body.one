@@ -99,8 +99,9 @@ namespace board {
 			cropped to cx cy cw ch
 			turned quarter_turns
 			mirrored flipped
-			words title sized letters colored ink weighing boldness
-			background sits around margin zoomed scale slid sx sy
+			around margin
+			rounded roundness
+			words title sized letters colored ink weighing boldness slanted lean
 			paste
 		}
 	}

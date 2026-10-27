@@ -50,8 +50,8 @@ namespace one::desktop {
 		void line(point a, point b, float half_width, color tint, const rect& clip);
 		void glyph(const fonts::face* face, std::uint32_t id, float x, float baseline, color tint, const rect& clip);
 		// The part of a picture `from` names, as fractions of it, in an area in pixels,
-		// as much of it showing as `opacity` says.
-		void picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, const rect& clip);
+		// as much of it showing as `opacity` says, its corners rounded by `radius` pixels.
+		void picture(const one::desktop::picture& p, const rect& area, const rect& from, float opacity, float radius, const rect& clip);
 
 	private:
 		struct box_instance {
@@ -59,6 +59,10 @@ namespace one::desktop {
 		};
 		struct glyph_instance {
 			float bounds[4], source[4], tint[4], clip[4];
+		};
+		// A picture's: a glyph's, and its corners' radius in pixels, first of shape.
+		struct picture_instance {
+			float bounds[4], source[4], tint[4], clip[4], shape[4];
 		};
 		// A picture's texture: its image with its smaller copies, and the descriptor
 		// it's drawn with. Kept while the picture is drawn, then let go once no frame
@@ -129,7 +133,7 @@ namespace one::desktop {
 		double scale_ = 1;
 		std::vector<box_instance> boxes_;
 		std::vector<glyph_instance> glyphs_;
-		std::vector<glyph_instance> pictures_;  // laid out as a glyph is: bounds, source, tint, clip
+		std::vector<picture_instance> pictures_;
 		std::vector<batch> batches_;
 	};
 

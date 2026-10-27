@@ -3,12 +3,12 @@
 
 // A collage: a picture made of layers, as big as it says, drawn scaled to fit on the
 // workspace with room around it, or at its own size on black filling the screen
-// (decision 0019). Its background sits as its view says, and what it leaves around
-// it is the picture's edges drawn out, or its edge color; pictures are cropped,
-// turned and mirrored as each layer says, and words drawn over a soft shadow. A click
-// picks a layer, framed with its corners and the buttons over it; a picked layer is
-// moved, or resized by a corner with its shape kept unless Shift is held, snapped
-// unless Alt is, and the background slid where it can. A picture is cropped in place,
+// (decision 0021). Pictures are cropped, turned and mirrored as each layer says, the
+// rest of the collage filled around one from its edges, its edge color or a blend of
+// it as it says, or it melted into what's under it; words are drawn over a soft
+// shadow. A click picks a layer, framed with its corners and the buttons over it; a
+// picked layer is moved, or resized by a corner with its shape kept unless Shift is
+// held, snapped unless Alt is. A picture is cropped in place,
 // its whole picture faint around what's kept, and words are written where they are,
 // with a caret, and resized by their size. Where everything goes is one::screens's
 // collage model, the web's too.
@@ -19,7 +19,9 @@
 #include <format>
 #include <map>
 #include <memory>
+#include <limits>
 #include <mutex>
+#include <optional>
 #include <set>
 
 #include <one/screens/collage.hpp>
@@ -53,12 +55,6 @@ namespace one::desktop::runtime {
 
 		bool is_words(const value& layer) { return layer["picture"].as_string().empty(); }
 
-		// The lowest layer, when it's a picture: the background.
-		bool is_background(const value& layers, const value& layer) {
-			const auto& all = layers.as_array();
-			return !all.empty() && !is_words(layer) && all.front()["id"].as_string() == layer["id"].as_string();
-		}
-
 		desktop::rect as_rect(const model::box& b) { return {static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.w), static_cast<float>(b.h)}; }
 
 		desktop::color color_of(const std::string& written, desktop::color otherwise) {
@@ -68,19 +64,40 @@ namespace one::desktop::runtime {
 			return end && *end == 0 ? desktop::color::hex(static_cast<std::uint32_t>(hex)) : otherwise;
 		}
 
-		// Each picture read once, by where it's kept; drawn on more than one thread, so
-		// one at a time reads.
-		std::mutex reading;
-
-		const desktop::picture* picture_kept(const std::filesystem::path& file) {
-			static std::map<std::string, desktop::picture> read;
-			std::lock_guard hold(reading);
-			auto found = read.find(file.string());
-			if (found == read.end()) {
-				auto p = desktop::picture::read(file);
-				found = read.emplace(file.string(), p ? *p : desktop::picture()).first;
+		// What's worked out from pictures, kept by what it's made of, for any thread: made
+		// outside the lock, so nothing waits on another's work, and handed out whole, its
+		// pixels shared, so letting older ones go never pulls one from under a drawing.
+		template <class T>
+		class kept_by {
+		public:
+			explicit kept_by(std::size_t most) : most_(most) {}
+			std::optional<T> peek(const std::string& key) {
+				std::lock_guard hold(lock_);
+				auto found = made_.find(key);
+				return found == made_.end() ? std::nullopt : std::optional<T>(found->second);
 			}
-			return found->second ? &found->second : nullptr;
+			template <class Make>
+			T get(const std::string& key, Make make) {
+				if (auto known = peek(key)) return *known;
+				T fresh = make();
+				std::lock_guard hold(lock_);
+				if (made_.size() >= most_) made_.clear();
+				return made_.emplace(key, std::move(fresh)).first->second;
+			}
+
+		private:
+			std::mutex lock_;
+			std::map<std::string, T> made_;
+			std::size_t most_;
+		};
+
+		// Each picture read once, by where it's kept.
+		desktop::picture picture_kept(const std::filesystem::path& file) {
+			static kept_by<desktop::picture> read(std::numeric_limits<std::size_t>::max());
+			return read.get(file.string(), [&] {
+				auto p = desktop::picture::read(file);
+				return p ? *p : desktop::picture();
+			});
 		}
 
 		// A picture mirrored, then turned a quarter clockwise as many times as `turns`.
@@ -105,73 +122,186 @@ namespace one::desktop::runtime {
 			return desktop::picture::of(w, h, std::move(pixels));
 		}
 
-		// A layer's picture as it's shown: turned and mirrored as the layer says.
-		const desktop::picture* layer_picture(page& p, const value& layer) {
-			auto file = p.file_here(layer["picture"].as_string());
-			if (!file) return nullptr;
-			const desktop::picture* whole = picture_kept(*file);
+		// A picture kept at `file`, turned and mirrored as a layer says.
+		desktop::picture turned_at(const std::filesystem::path& file, const value& layer) {
 			int turns = (static_cast<int>(layer["turns"].as_double()) % 4 + 4) % 4;
 			bool mirrored = layer["mirrored"].as_double() != 0;
+			desktop::picture whole = picture_kept(file);
 			if (!whole || (turns == 0 && !mirrored)) return whole;
-			static std::map<std::string, desktop::picture> made;
-			std::string key = std::format("{} {} {}", file->string(), turns, mirrored);
-			std::lock_guard hold(reading);
-			auto found = made.find(key);
-			if (found == made.end()) found = made.emplace(key, oriented(*whole, turns, mirrored)).first;
-			return &found->second;
+			static kept_by<desktop::picture> made(64);
+			return made.get(std::format("{} {} {}", file.string(), turns, mirrored), [&] { return oriented(whole, turns, mirrored); });
 		}
 
-		// A background as it's shown: turned and mirrored, then only the part its crop
-		// keeps, so it sits, and fills what's around it, by that part alone.
-		const desktop::picture* background_picture(page& p, const value& layer) {
-			const desktop::picture* turned = layer_picture(p, layer);
-			model::box crop = crop_of(layer);
-			if (!turned || (crop.x <= 0 && crop.y <= 0 && crop.w >= 1 && crop.h >= 1)) return turned;
-			static std::map<std::string, desktop::picture> made;
-			std::string key = std::format("{} {} {} {} {} {} {}", layer["picture"].as_string(), layer["turns"].as_double(), layer["mirrored"].as_double(), crop.x, crop.y, crop.w, crop.h);
-			std::lock_guard hold(reading);
-			auto found = made.find(key);
-			if (found == made.end()) {
-				int pw = turned->width(), ph = turned->height();
-				int x = std::clamp(static_cast<int>(std::lround(crop.x * pw)), 0, pw - 1), y = std::clamp(static_cast<int>(std::lround(crop.y * ph)), 0, ph - 1);
-				int w = std::clamp(static_cast<int>(std::lround(crop.w * pw)), 1, pw - x), h = std::clamp(static_cast<int>(std::lround(crop.h * ph)), 1, ph - y);
-				std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
-				const auto& rgba = turned->rgba();
-				for (int row = 0; row < h; ++row) {
-					std::copy_n(rgba.begin() + ((static_cast<std::ptrdiff_t>(y + row) * pw + x) * 4), w * 4, pixels.begin() + static_cast<std::ptrdiff_t>(row) * w * 4);
-				}
-				found = made.emplace(key, desktop::picture::of(w, h, std::move(pixels))).first;
-			}
-			return &found->second;
+		// A layer's picture as it's shown: turned and mirrored as the layer says.
+		desktop::picture layer_picture(page& p, const value& layer) {
+			auto file = p.file_here(layer["picture"].as_string());
+			return file ? turned_at(*file, layer) : desktop::picture();
 		}
 
-		// What names a background's edge color: its picture and its crop.
-		std::string edge_key(const value& layer) {
-			model::box crop = crop_of(layer);
-			return std::format("{} {} {} {} {}", layer["picture"].as_string(), crop.x, crop.y, crop.w, crop.h);
-		}
-
-		// A background's edge color: the average of its outermost pixels, once.
-		desktop::color edge_color(const std::string& kept, const desktop::picture& p) {
-			static std::map<std::string, desktop::color> made;
-			std::lock_guard hold(reading);
-			if (auto found = made.find(kept); found != made.end()) return found->second;
+		// The part `crop` keeps of a picture made `w` by `h`, each of its cells the average
+		// of the pixels it covers, three channels a cell: worked out on the processor, so
+		// it's the same on any thread and while anything else is being drawn.
+		std::vector<double> averaged(const desktop::picture& p, model::box crop, int w, int h) {
+			std::vector<double> out(static_cast<std::size_t>(w) * h * 3, 0);
 			const auto& rgba = p.rgba();
-			int w = p.width(), h = p.height();
-			double sum[3] = {};
-			long long count = 0;
-			auto add = [&](int x, int y) {
-				for (int c = 0; c < 3; ++c) sum[c] += rgba[(static_cast<std::size_t>(y) * w + x) * 4 + c];
-				++count;
-			};
-			for (int x = 0; x < w; ++x) add(x, 0), add(x, h - 1);
-			for (int y = 1; y < h - 1; ++y) add(0, y), add(w - 1, y);
-			auto channel = [&](int c) { return static_cast<std::uint32_t>(std::lround(sum[c] / static_cast<double>(std::max(1LL, count)))); };
-			return made.emplace(kept, desktop::color::hex(channel(0) << 16 | channel(1) << 8 | channel(2))).first->second;
+			int pw = p.width(), ph = p.height();
+			if (pw <= 0 || ph <= 0) return out;
+			for (int y = 0; y < h; ++y) {
+				int top = std::clamp(static_cast<int>((crop.y + crop.h * y / h) * ph), 0, ph - 1);
+				int bottom = std::clamp(static_cast<int>(std::ceil((crop.y + crop.h * (y + 1) / h) * ph)), top + 1, ph);
+				for (int x = 0; x < w; ++x) {
+					int left = std::clamp(static_cast<int>((crop.x + crop.w * x / w) * pw), 0, pw - 1);
+					int right = std::clamp(static_cast<int>(std::ceil((crop.x + crop.w * (x + 1) / w) * pw)), left + 1, pw);
+					double sum[3] = {0, 0, 0};
+					for (int py = top; py < bottom; ++py) {
+						for (int px = left; px < right; ++px) {
+							for (int c = 0; c < 3; ++c) sum[c] += rgba[(static_cast<std::size_t>(py) * pw + px) * 4 + c];
+						}
+					}
+					double count = static_cast<double>(bottom - top) * (right - left);
+					for (int c = 0; c < 3; ++c) out[(static_cast<std::size_t>(y) * w + x) * 3 + c] = sum[c] / count;
+				}
+			}
+			return out;
 		}
 
-		// The space a background leaves, `board` in the window, filled as the view says:
-		// its outermost pixels drawn out to the edges, unless it says its edge color.
+		// What a picture is drawn from: what its crop keeps, its colors moved as the
+		// collage's matching says, and what names that, for what's worked out from it.
+		struct look {
+			desktop::picture picture;
+			std::string key;
+		};
+
+		// A picture as what its crop keeps, its colors not yet moved: only that part, so
+		// it sits, and what's around it is filled, by that part alone.
+		std::string kept_key(const std::filesystem::path& file, const value& layer) {
+			model::box crop = crop_of(layer);
+			return std::format("{} {} {} {} {} {} {}", file.string(), layer["turns"].as_double(), layer["mirrored"].as_double(), crop.x, crop.y, crop.w, crop.h);
+		}
+		look kept_look(const std::filesystem::path& file, const value& layer) {
+			model::box crop = crop_of(layer);
+			std::string key = kept_key(file, layer);
+			desktop::picture turned = turned_at(file, layer);
+			if (!turned || (crop.x <= 0 && crop.y <= 0 && crop.w >= 1 && crop.h >= 1)) return {turned, key};
+			static kept_by<desktop::picture> made(64);
+			return {made.get(key,
+			                 [&] {
+				                 int pw = turned.width(), ph = turned.height();
+				                 int x = std::clamp(static_cast<int>(std::lround(crop.x * pw)), 0, pw - 1), y = std::clamp(static_cast<int>(std::lround(crop.y * ph)), 0, ph - 1);
+				                 int w = std::clamp(static_cast<int>(std::lround(crop.w * pw)), 1, pw - x), h = std::clamp(static_cast<int>(std::lround(crop.h * ph)), 1, ph - y);
+				                 std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+				                 const auto& rgba = turned.rgba();
+				                 for (int row = 0; row < h; ++row) {
+					                 std::copy_n(rgba.begin() + ((static_cast<std::ptrdiff_t>(y + row) * pw + x) * 4), w * 4, pixels.begin() + static_cast<std::ptrdiff_t>(row) * w * 4);
+				                 }
+				                 return desktop::picture::of(w, h, std::move(pixels));
+			                 }),
+			        key};
+		}
+
+		// A small copy of what's drawn, no more than 512 on a side, made once: what halos,
+		// blends and color measuring work from, so none of them reads every pixel of a
+		// large photo again.
+		desktop::picture small_of(const look& seen) {
+			static kept_by<desktop::picture> made(64);
+			return made.get(seen.key, [&] {
+				int pw = seen.picture.width(), ph = seen.picture.height();
+				double s = std::min(1.0, 512.0 / std::max(pw, ph));
+				int w = std::max(1, static_cast<int>(std::lround(pw * s))), h = std::max(1, static_cast<int>(std::lround(ph * s)));
+				auto colors = averaged(seen.picture, {0, 0, 1, 1}, w, h);
+				std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4, 255);
+				for (std::size_t i = 0; i < static_cast<std::size_t>(w) * h; ++i) {
+					for (std::size_t c = 0; c < 3; ++c) pixels[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(std::lround(colors[i * 3 + c]), 0L, 255L));
+				}
+				return desktop::picture::of(w, h, std::move(pixels));
+			});
+		}
+
+		// A picture's colors, measured once from a small copy of it.
+		kept_by<model::color_stats> measured_colors(256);
+		model::color_stats stats_kept(const look& seen, double weight) {
+			model::color_stats out = measured_colors.get(seen.key, [&] { return model::stats_of(averaged(small_of(seen), {0, 0, 1, 1}, 128, 128), 1); });
+			out.weight = weight;
+			return out;
+		}
+
+		// A picture as it's drawn: what its crop keeps, its colors moved as its shift says,
+		// worked out once on the processor.
+		look look_at(const std::filesystem::path& file, const value& layer, const model::color_shift* shift) {
+			look seen = kept_look(file, layer);
+			if (!seen.picture || !shift) return seen;
+			const auto& m = *shift;
+			std::string key = std::format("{} {:.3f} {:.3f} {:.3f} {:.1f} {:.1f} {:.1f}", seen.key, m.gain[0], m.gain[1], m.gain[2], m.offset[0], m.offset[1], m.offset[2]);
+			for (double t : m.to) key += std::format(" {:.1f}", t);
+			static kept_by<desktop::picture> made(32);
+			return {made.get(key,
+			                 [&] {
+				                 std::vector<std::uint8_t> pixels = seen.picture.rgba();
+				                 for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) {
+					                 double rgb[3] = {static_cast<double>(pixels[i]), static_cast<double>(pixels[i + 1]), static_cast<double>(pixels[i + 2])};
+					                 model::shifted(m, rgb);
+					                 for (std::size_t c = 0; c < 3; ++c) pixels[i + c] = static_cast<std::uint8_t>(std::clamp(std::lround(rgb[c]), 0L, 255L));
+				                 }
+				                 return desktop::picture::of(seen.picture.width(), seen.picture.height(), std::move(pixels));
+			                 }),
+			        key};
+		}
+
+		// With around harmonize or blend, a picture's halo: worked out small, its own
+		// colors spread past its edges and fading into what's under it (model::halo), and
+		// drawn over it, as much bigger as `grow_x` and `grow_y` say, each a share of its
+		// width and height.
+		struct halo_drawn {
+			desktop::picture picture;
+			double grow_x = 0, grow_y = 0;
+		};
+
+		std::optional<halo_drawn> halo_of(const value& layer, const look& seen) {
+			const double feather = model::halo_reach;
+			model::box b = box_of(layer);
+			// Blended too, so its edge melts into what's filled from it, as seamless.
+			std::string around = layer["around"].as_string();
+			if ((around != "harmonize" && around != "blend") || b.w <= 0 || b.h <= 0 || !seen.picture) return std::nullopt;
+			int sw = b.w >= b.h ? 64 : std::max(1, static_cast<int>(std::lround(64 * b.w / b.h)));
+			int sh = b.w >= b.h ? std::max(1, static_cast<int>(std::lround(64 * b.h / b.w))) : 64;
+			int reach = std::max(4, static_cast<int>(std::lround(feather * std::min(sw, sh))));
+			static kept_by<halo_drawn> made(64);
+			return made.get(std::format("{} {} {} {}", seen.key, feather, sw, sh), [&] {
+				auto spread = model::halo(sw, sh, averaged(small_of(seen), {0, 0, 1, 1}, sw, sh), reach, reach * model::halo_inside);
+				std::vector<std::uint8_t> bytes(spread.size());
+				for (std::size_t i = 0; i < spread.size(); ++i) bytes[i] = static_cast<std::uint8_t>(std::clamp(std::lround(spread[i]), 0L, 255L));
+				return halo_drawn{desktop::picture::of(sw + 2 * reach, sh + 2 * reach, std::move(bytes)), static_cast<double>(reach) / sw, static_cast<double>(reach) / sh};
+			});
+		}
+
+		// A halo drawn over the picture it's of, where that's drawn.
+		void paint_halo(desktop::canvas& c, const halo_drawn& h, desktop::rect on) {
+			float gx = static_cast<float>(h.grow_x) * on.width, gy = static_cast<float>(h.grow_y) * on.height;
+			c.picture(h.picture, {on.x - gx, on.y - gy, on.width + 2 * gx, on.height + 2 * gy}, {0, 0, 1, 1});
+		}
+
+		// A picture's edge color: the average of its outermost pixels, once.
+		desktop::color edge_color(const std::string& kept, const desktop::picture& p) {
+			static kept_by<desktop::color> made(256);
+			return made.get(kept, [&] {
+				const auto& rgba = p.rgba();
+				int w = p.width(), h = p.height();
+				double sum[3] = {};
+				long long count = 0;
+				auto add = [&](int x, int y) {
+					for (int c = 0; c < 3; ++c) sum[c] += rgba[(static_cast<std::size_t>(y) * w + x) * 4 + c];
+					++count;
+				};
+				for (int x = 0; x < w; ++x) add(x, 0), add(x, h - 1);
+				for (int y = 1; y < h - 1; ++y) add(0, y), add(w - 1, y);
+				auto channel = [&](int c) { return static_cast<std::uint32_t>(std::lround(sum[c] / static_cast<double>(std::max(1LL, count)))); };
+				return desktop::color::hex(channel(0) << 16 | channel(1) << 8 | channel(2));
+			});
+		}
+
+		// The rest of the collage around a picture, `board` in the window, filled from it:
+		// its outermost pixels drawn out to the collage's edges, or with around color, its
+		// edge color.
 		void paint_around(desktop::canvas& c, desktop::rect board, desktop::rect shown, const std::string& kept, const desktop::picture& p, const std::string& around) {
 			if (shown.x <= board.x && shown.y <= board.y && shown.right() >= board.right() && shown.bottom() >= board.bottom()) return;
 			c.box(board, {.fill = edge_color(kept, p)});
@@ -195,14 +325,15 @@ namespace one::desktop::runtime {
 		// they read on most photos, white unless they say.
 		// Words are in the theme's text font, as the web draws them, which an app can bring;
 		// one drawn away from the window's thread is told it.
-		desktop::text_style words_style(double size, int weight, desktop::color color, const std::string& family = current_theme().text_family) {
-			return {.family = family, .size = static_cast<float>(size), .weight = weight, .color = color, .line_height = 1.2f};
+		desktop::text_style words_style(double size, int weight, desktop::color color, const std::string& family = current_theme().text_family, bool italic = false) {
+			return {.family = family, .size = static_cast<float>(size), .weight = weight, .italic = italic, .color = color, .line_height = 1.2f};
 		}
 		int weight_of(const value& layer) { return layer["weight"].is_null() ? 700 : static_cast<int>(layer["weight"].as_double()); }
+		bool italic_of(const value& layer) { return layer["italic"].as_double() != 0; }
 
 		// How big words are on the collage, in its own pixels.
-		std::pair<double, double> measured(const std::string& words, double size, int weight) {
-			auto laid = desktop::lay_out(desktop::text_span{words.empty() ? " " : words, words_style(size, weight, {})}, unwrapped, 1.0);
+		std::pair<double, double> measured(const std::string& words, double size, int weight, bool italic) {
+			auto laid = desktop::lay_out(desktop::text_span{words.empty() ? " " : words, words_style(size, weight, {}, current_theme().text_family, italic)}, unwrapped, 1.0);
 			return {std::max(1.f, laid.width()), std::max(1.f, laid.height())};
 		}
 
@@ -214,8 +345,9 @@ namespace one::desktop::runtime {
 			desktop::color shade = desktop::color::hex(0x000000);
 			shade.alpha = 0.45f;
 			float off = std::max(1.f, static_cast<float>(size) * 0.04f);
-			c.text(desktop::lay_out(desktop::text_span{words, words_style(size, weight, shade, family)}, unwrapped, c.scale()), {at.x + off / 2, at.y + off});
-			auto laid = desktop::lay_out(desktop::text_span{words, words_style(size, weight, color_of(layer["color"].as_string(), desktop::color::hex(0xffffff)), family)}, unwrapped, c.scale());
+			bool italic = italic_of(layer);
+			c.text(desktop::lay_out(desktop::text_span{words, words_style(size, weight, shade, family, italic)}, unwrapped, c.scale()), {at.x + off / 2, at.y + off});
+			auto laid = desktop::lay_out(desktop::text_span{words, words_style(size, weight, color_of(layer["color"].as_string(), desktop::color::hex(0xffffff)), family, italic)}, unwrapped, c.scale());
 			c.text(laid, at);
 			auto end = laid.caret(std::min(caret, said.size()));
 			float line = static_cast<float>(size) * 1.2f;
@@ -224,12 +356,11 @@ namespace one::desktop::runtime {
 
 		// What the pointer is doing to a layer, from where it was and where the pointer was.
 		struct gesture {
-			enum { none, moving, resizing, sliding, cropping, shifting } what = none;
+			enum { none, moving, resizing, cropping, shifting } what = none;
 			std::string id;
 			model::box from;
 			desktop::point at;
 			int corner = 0;
-			std::pair<double, double> across, down;  // how far a background slides
 			int edges = 0;                           // a crop's edges dragged, or none to move it
 			model::box kept_from = {};               // while a crop's picture shifts, what's kept as it was
 		};
@@ -249,7 +380,6 @@ namespace one::desktop::runtime {
 			struct crop_edit {
 				std::string id;
 				model::box whole, kept;
-				bool background = false;  // which sits again by its rules once kept, wherever its crop was
 			};
 			std::optional<crop_edit> crop;
 			struct writing {
@@ -265,18 +395,10 @@ namespace one::desktop::runtime {
 			model::point on_collage(desktop::point at) const { return {(at.x - board.x) / scale, (at.y - board.y) / scale}; }
 		};
 
-		model::backdrop backdrop_of(const value& v, double width, double height) {
-			auto or_else = [&](const char* f, double otherwise) { return v[f].is_null() ? otherwise : v[f].as_double(); };
-			return {v["background"].as_string(), width, height, or_else("zoom", 1), or_else("slide_x", 0.5), or_else("slide_y", 0.5)};
-		}
-
-		// Where each layer is on the collage: the background where it sits, the rest as
-		// they say, and one being moved or let go where it's going.
-		model::box where_is(page& p, const value& v, const value& layers, const value& layer, double width, double height, placed& w) {
+		// Where each layer is on the collage: where it says, or, being moved or let go,
+		// where it's going.
+		model::box where_is(const value& layer, placed& w) {
 			model::box b = box_of(layer);
-			if (is_background(layers, layer)) {
-				if (const desktop::picture* shown = background_picture(p, layer)) b = model::background_at(backdrop_of(v, width, height), shown->width(), shown->height());
-			}
 			if (auto& g = w.going; g && g->first == layer["id"].as_string()) {
 				auto near = [](double a, double z) { return std::abs(a - z) < 0.01; };
 				bool there = near(b.x, g->second.x) && near(b.y, g->second.y) && near(b.w, g->second.w) && near(b.h, g->second.h);
@@ -286,19 +408,17 @@ namespace one::desktop::runtime {
 			return b;
 		}
 
-		// A crop begun on a picture where it is: the background where it sits, the rest
-		// where they say, and the whole picture behind it.
-		placed::crop_edit crop_begun(page& p, const value& data, const value& layers, const value& layer, double width, double height, placed& w) {
-			bool background = is_background(layers, layer);
-			model::box b = background ? where_is(p, data, layers, layer, width, height, w) : box_of(layer);
-			return {layer["id"].as_string(), model::whole_of(b, crop_of(layer)), b, background};
+		// A crop begun on a picture where it is, and the whole picture behind it.
+		placed::crop_edit crop_begun(const value& layer) {
+			model::box b = box_of(layer);
+			return {layer["id"].as_string(), model::whole_of(b, crop_of(layer)), b};
 		}
 
 		// The lines a layer snaps to: the collage's edges and middle, and every other layer's.
-		void snap_lines(page& p, const value& v, const value& layers, double width, double height, placed& w, const std::string& moving) {
+		void snap_lines(const value& layers, double width, double height, placed& w, const std::string& moving) {
 			std::vector<model::box> others;
 			for (const auto& l : layers.as_array()) {
-				if (l["id"].as_string() != moving) others.push_back(where_is(p, v, layers, l, width, height, w));
+				if (l["id"].as_string() != moving) others.push_back(where_is(l, w));
 			}
 			w.lines = model::snap_lines(width, height, others);
 		}
@@ -311,7 +431,6 @@ namespace one::desktop::runtime {
 			if (g.what == gesture::cropping && w.crop) return model::cropped(g.from, g.edges, dx, dy, w.crop->whole);
 			model::guided to;
 			if (g.what == gesture::moving) to = model::moved(g.from, dx, dy, w.lines, width, height, close, snaps);
-			else if (g.what == gesture::sliding) to = model::slid(g.from, dx, dy, g.across, g.down, width, height, close, snaps);
 			else to = model::resized(g.from, g.corner, dx, dy, !desktop::held().shift, w.lines, close, snaps);
 			w.guide_x = to.guide_x, w.guide_y = to.guide_y, w.corner = to.corner;
 			return to.at;
@@ -331,7 +450,7 @@ namespace one::desktop::runtime {
 			if (!w.crop) return;
 			const auto& e = *w.crop;
 			model::box crop{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
-			if (!e.background) w.going = std::pair{e.id, e.kept};
+			w.going = std::pair{e.id, e.kept};
 			p.run(spec.crop, collage_fields_of(value(fields{{"id", e.id}, {"crop_x", crop.x}, {"crop_y", crop.y}, {"crop_w", crop.w}, {"crop_h", crop.h},
 			                                                {"x", e.kept.x}, {"y", e.kept.y}, {"w", e.kept.w}, {"h", e.kept.h}}),
 			                                   spec.fields));
@@ -350,7 +469,7 @@ namespace one::desktop::runtime {
 					return;
 				}
 				if (e.words == l["words"].as_string()) return;
-				auto [mw, mh] = measured(e.words, l["size"].as_double(), weight_of(l));
+				auto [mw, mh] = measured(e.words, l["size"].as_double(), weight_of(l), italic_of(l));
 				p.run(spec.write, collage_fields_of(value(fields{{"id", e.id}, {"words", e.words}, {"size", l["size"]}, {"x", l["x"]}, {"y", l["y"]}, {"w", mw}, {"h", mh}}), spec.fields));
 			}
 		}
@@ -422,7 +541,7 @@ namespace one::desktop::runtime {
 				double pw = read->width(), ph = read->height();
 				model::box b;
 				if (!covered) {
-					b = {0, 0, width, height};
+					b = model::sitting("fill", pw, ph, width, height);
 					covered = true;
 				} else {
 					double s = std::min({1.0, width / pw, height / ph});
@@ -443,7 +562,7 @@ namespace one::desktop::runtime {
 		void add_words(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::string& words) {
 			if (spec.add.empty() || !spec.fields.contains("words")) return;
 			double size = std::max(8.0, std::round(height / 12));
-			auto [mw, mh] = measured(words, size, 700);
+			auto [mw, mh] = measured(words, size, 700, false);
 			value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 			const auto& all = layers.as_array();
@@ -460,77 +579,191 @@ namespace one::desktop::runtime {
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
 		}
 
-		// The collage drawn on nothing, `scale` times its own size, as it's kept: all of
-		// it, or only one layer, as big as that layer, cropped as it is.
-		// With around blend, the space no picture covers, filled from every picture's edges
-		// (harmonic fill): its pictures drawn small, each gap settled between the colors
-		// around it, and the result drawn as big as the collage, smooth as it is. Worked
-		// out again only when what it's drawn from changes.
-		const desktop::picture* blended(page& p, const value& data, const value& layers, double width, double height) {
-			if (data["around"].as_string() != "blend" || width <= 0 || height <= 0) return nullptr;
-			static std::map<std::string, desktop::picture> made;
-			std::string key = std::format("{:016x}", std::hash<std::string>{}(ember::to_json(layers) + ember::to_json(data["background"]) + ember::to_json(data["zoom"]) +
-			                                                                   ember::to_json(data["slide_x"]) + ember::to_json(data["slide_y"]) + std::format(" {} {}", width, height)));
-			if (auto found = made.find(key); found != made.end()) return &found->second;
-			int gw = 320, gh = std::max(1, static_cast<int>(std::lround(320 * height / width)));
-			double s = gw / width;
-			auto small = desktop::picture::drawn(gw, gh, [&](desktop::canvas& c) {
-				auto at = [&](const model::box& b) { return desktop::rect{static_cast<float>(b.x * s), static_cast<float>(b.y * s), static_cast<float>(b.w * s), static_cast<float>(b.h * s)}; };
-				for (const auto& layer : layers.as_array()) {
-					if (is_words(layer)) continue;
-					if (is_background(layers, layer)) {
-						if (const desktop::picture* kept = background_picture(p, layer)) {
-							c.picture(*kept, at(model::background_at(backdrop_of(data, width, height), kept->width(), kept->height())), {0, 0, 1, 1});
+		// With around blend, the rest of the collage filled from a picture's edges
+		// (harmonic fill): it drawn small where it is, each gap settled between the colors
+		// around it, and the result drawn as big as the collage, smooth as it is. Worked out
+		// again only when the picture, or where it is, changes.
+		desktop::picture blended(const value& layer, const look& seen, double width, double height) {
+			if (layer["around"].as_string() != "blend" || width <= 0 || height <= 0 || !seen.picture) return {};
+			model::box b = box_of(layer);
+			static kept_by<desktop::picture> made(16);
+			return made.get(std::format("{} {} {} {} {} {} {}", seen.key, b.x, b.y, b.w, b.h, width, height), [&] {
+				int gw = 320, gh = std::max(1, static_cast<int>(std::lround(320 * height / width)));
+				double s = gw / width;
+				// The cells the picture covers whole are its color; one its edge crosses is part
+				// picture, part nothing, and would leave a seam of the two.
+				int left = std::max(0, static_cast<int>(std::ceil(b.x * s))), right = std::min(gw, static_cast<int>(std::floor((b.x + b.w) * s)));
+				int top = std::max(0, static_cast<int>(std::ceil(b.y * s))), bottom = std::min(gh, static_cast<int>(std::floor((b.y + b.h) * s)));
+				std::size_t cells = static_cast<std::size_t>(gw) * gh;
+				std::vector<double> colors(cells * 3, 0);
+				std::vector<bool> covered(cells, false);
+				if (right > left && bottom > top) {
+					model::box part{(left / s - b.x) / b.w, (top / s - b.y) / b.h, (right - left) / s / b.w, (bottom - top) / s / b.h};
+					auto small = averaged(small_of(seen), part, right - left, bottom - top);
+					for (int y = top; y < bottom; ++y) {
+						for (int x = left; x < right; ++x) {
+							std::size_t at = static_cast<std::size_t>(y) * gw + x, from = (static_cast<std::size_t>(y - top) * (right - left) + (x - left)) * 3;
+							covered[at] = true;
+							for (std::size_t c = 0; c < 3; ++c) colors[at * 3 + c] = small[from + c];
 						}
-					} else if (const desktop::picture* shown = layer_picture(p, layer)) {
-						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
 					}
 				}
+				colors = model::harmonic_fill(gw, gh, std::move(colors), covered);
+				std::vector<std::uint8_t> filled(cells * 4, 255);
+				for (std::size_t i = 0; i < cells; ++i) {
+					for (std::size_t c = 0; c < 3; ++c) filled[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(std::lround(colors[i * 3 + c]), 0L, 255L));
+				}
+				return desktop::picture::of(gw, gh, std::move(filled));
 			});
-			const auto& rgba = small.rgba();
-			std::size_t cells = static_cast<std::size_t>(gw) * gh;
-			if (rgba.size() < cells * 4) return nullptr;
-			std::vector<double> colors(cells * 3);
-			std::vector<bool> covered(cells);
-			for (std::size_t i = 0; i < cells; ++i) {
-				// Only a cell a picture covers whole is its color; one its edge crosses is
-				// part picture, part nothing, and would leave a seam of the two.
-				covered[i] = rgba[i * 4 + 3] >= 250;
-				for (std::size_t c = 0; c < 3; ++c) colors[i * 3 + c] = rgba[i * 4 + c];
-			}
-			colors = model::harmonic_fill(gw, gh, std::move(colors), covered);
-			std::vector<std::uint8_t> filled(cells * 4, 255);
-			for (std::size_t i = 0; i < cells; ++i) {
-				for (std::size_t c = 0; c < 3; ++c) filled[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(std::lround(colors[i * 3 + c]), 0L, 255L));
-			}
-			if (made.size() > 16) made.clear();
-			return &made.emplace(key, desktop::picture::of(gw, gh, std::move(filled))).first->second;
 		}
 
-		// What drawing it whole needs, gathered on the window's thread: its pictures, read
-		// and turned, and the font its words are in, so it's drawn away from that thread.
-		struct whole {
-			value data, layers;
-			double width = 0, height = 0, scale = 1;
-			std::string only, family;
-			std::map<std::string, const desktop::picture*> pictures;  // each layer's, by its id
-			const desktop::picture* blend = nullptr;                   // what fills the space no picture covers, with around blend
+		// What each picture's colors are moved by while the collage matches them, so they
+		// look like one picture: each moved toward all of theirs, weighed by how much of
+		// the collage it covers, so the larger lead; from its colors as `measure` says
+		// them; while one's aren't known yet, nothing's matched.
+		template <class Measure>
+		std::map<std::string, model::color_shift> shifts_of(page& p, const value& layers, bool matching, Measure measure) {
+			std::map<std::string, model::color_shift> out;
+			if (!matching) return out;
+			std::vector<std::string> ids;
+			std::vector<model::color_stats> stats;
+			for (const auto& l : layers.as_array()) {
+				if (is_words(l)) continue;
+				auto file = p.file_here(l["picture"].as_string());
+				model::box b = box_of(l);
+				if (!file || b.w <= 0 || b.h <= 0) continue;
+				std::optional<model::color_stats> known = measure(*file, l, b.w * b.h);
+				if (!known) return out;
+				ids.push_back(l["id"].as_string());
+				stats.push_back(*known);
+			}
+			auto shifts = model::matched(stats, model::matching, model::matching_cast);
+			for (std::size_t i = 0; i < ids.size(); ++i) out[ids[i]] = shifts[i];
+			return out;
+		}
+
+		// Colors measured now, as a picture saved is drawn; or only as they're known
+		// already, as the window draws, which never waits on reading a picture.
+		std::optional<model::color_stats> measured_now(const std::filesystem::path& file, const value& layer, double weight) {
+			look seen = kept_look(file, layer);
+			if (!seen.picture) return std::nullopt;
+			return stats_kept(seen, weight);
+		}
+		std::optional<model::color_stats> measured_already(const std::filesystem::path& file, const value& layer, double weight) {
+			auto known = measured_colors.peek(kept_key(file, layer));
+			if (known) known->weight = weight;
+			return known;
+		}
+
+		// All a picture layer is drawn from: its look, its halo and what its blend fills
+		// the collage with; its colors measured on the way, so matching finds them known.
+		struct ready_layer {
+			look seen;
+			std::optional<halo_drawn> halo;
+			desktop::picture blend;
 		};
 
-		whole gathered(page& p, const value& data, const value& layers, double width, double height, double scale, const std::string& only = "") {
-			whole all{data, layers, width, height, scale, only, current_theme().text_family, {}, only.empty() ? blended(p, data, layers, width, height) : nullptr};
+		ready_layer made_ready(const std::filesystem::path& file, const value& layer, std::optional<model::color_shift> shift, double width, double height) {
+			if (look kept = kept_look(file, layer); kept.picture) (void)stats_kept(kept, 1);
+			look seen = look_at(file, layer, shift ? &*shift : nullptr);
+			return {seen, halo_of(layer, seen), blended(layer, seen, width, height)};
+		}
+
+		// A picture layer as the window draws it: ready, or made ready away from the
+		// window's thread and shown once it is, `woken` changed then so the window draws
+		// again; meanwhile, the last made ready for that layer, or nothing yet. With no
+		// window to wake, as when it's drawn to a file, it's made ready now.
+		template <class Woken>
+		std::optional<ready_layer> ready_of(page& p, const value& layer, const std::map<std::string, model::color_shift>& shifts, double width, double height, Woken woken) {
+			auto file = p.file_here(layer["picture"].as_string());
+			if (!file) return std::nullopt;
+			std::optional<model::color_shift> shift;
+			if (auto found = shifts.find(layer["id"].as_string()); found != shifts.end()) shift = found->second;
+			if (!posting()) return made_ready(*file, layer, shift, width, height);
+			model::box b = box_of(layer);
+			std::string key = std::format("{} {} {} {} {} {} {} {}", kept_key(*file, layer), layer["around"].as_string(), b.x, b.y, b.w, b.h, width, height);
+			if (shift) {
+				key += std::format(" {:.3f} {:.3f} {:.3f} {:.1f} {:.1f} {:.1f}", shift->gain[0], shift->gain[1], shift->gain[2], shift->offset[0], shift->offset[1], shift->offset[2]);
+				for (double t : shift->to) key += std::format(" {:.1f}", t);
+			}
+			static kept_by<ready_layer> readied(256);
+			static std::mutex preparing;
+			static std::set<std::string> working;
+			static std::map<std::string, std::string> last;  // each layer's last made ready, by its id
+			std::string id = layer["id"].as_string();
+			if (auto known = readied.peek(key)) {
+				std::lock_guard hold(preparing);
+				last[id] = key;
+				return known;
+			}
+			std::string shown;
+			{
+				std::lock_guard hold(preparing);
+				if (working.insert(key).second) {
+					std::thread([key, id, file = *file, layer, shift, width, height, woken] {
+						ready_layer made = made_ready(file, layer, shift, width, height);
+						readied.get(key, [&] { return made; });
+						{
+							std::lock_guard hold(preparing);
+							working.erase(key);
+							last[id] = key;
+						}
+						post([woken] { woken.set(woken.peek() + 1); });
+					}).detach();
+				}
+				if (auto found = last.find(id); found != last.end()) shown = found->second;
+			}
+			return shown.empty() ? std::nullopt : readied.peek(shown);
+		}
+
+		// A picture layer drawn at `on` in the window, `board` the collage there: what's
+		// around it first, as its around says, over what's under it; then it, its corners
+		// trimmed round as far as its corners say, a share of its shorter side; then,
+		// when it's harmonized, its halo.
+		void paint_picture(desktop::canvas& c, desktop::rect board, desktop::rect on, const value& layer, const look& seen, const desktop::picture& blend,
+		                   const std::optional<halo_drawn>& halo) {
+			std::string around = layer["around"].as_string();
+			const desktop::picture& kept = seen.picture;
+			if (blend) c.picture(blend, board, {0, 0, 1, 1});
+			else if (around == "edges" || around == "color") paint_around(c, board, on, seen.key, kept, around);
+			c.picture(kept, on, {0, 0, 1, 1}, 1, static_cast<float>(layer["corners"].as_double()) * std::min(on.width, on.height));
+			if (halo) paint_halo(c, *halo, on);
+		}
+
+		// What drawing it whole needs, gathered on the window's thread: its pictures, read,
+		// turned and cropped, what each fills around itself, and the font its words are in,
+		// so it's drawn away from that thread.
+		struct whole {
+			value layers;
+			double width = 0, height = 0, scale = 1;
+			std::string only, family;
+			std::map<std::string, ready_layer> pictures;  // each picture layer's, by its id
+		};
+
+		whole gathered(page& p, const value& layers, double width, double height, double scale, bool matching, const std::string& only = "") {
+			whole all{layers, width, height, scale, only, current_theme().text_family, {}};
+			auto shifts = shifts_of(p, layers, matching, measured_now);
 			for (const auto& l : layers.as_array()) {
-				if (!is_words(l)) all.pictures[l["id"].as_string()] = is_background(layers, l) ? background_picture(p, l) : layer_picture(p, l);
+				if (is_words(l)) continue;
+				auto file = p.file_here(l["picture"].as_string());
+				if (!file) continue;
+				std::optional<model::color_shift> shift;
+				if (auto found = shifts.find(l["id"].as_string()); found != shifts.end()) shift = found->second;
+				ready_layer made = made_ready(*file, l, shift, width, height);
+				if (!only.empty()) made.blend = {};
+				all.pictures.emplace(l["id"].as_string(), std::move(made));
 			}
 			return all;
 		}
 
+		// The collage drawn on nothing, `scale` times its own size, as it's kept: all of
+		// it, or only one layer, as big as that layer, cropped as it is.
 		desktop::picture drawn_whole(const whole& all) {
 			const value& layers = all.layers;
 			double width = all.width, height = all.height, scale = all.scale;
 			model::box area{0, 0, width, height};
 			for (const auto& l : layers.as_array()) {
-				if (!all.only.empty() && l["id"].as_string() == all.only && !is_background(layers, l)) area = box_of(l);
+				if (!all.only.empty() && l["id"].as_string() == all.only) area = box_of(l);
 			}
 			int w = std::max(1, static_cast<int>(std::lround(area.w * scale))), h = std::max(1, static_cast<int>(std::lround(area.h * scale)));
 			return desktop::picture::drawn(w, h, [&](desktop::canvas& c) {
@@ -539,24 +772,18 @@ namespace one::desktop::runtime {
 				};
 				desktop::rect board = at({0, 0, width, height});
 				if (all.only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
-				if (all.blend) c.picture(*all.blend, board, {0, 0, 1, 1});
 				for (const auto& layer : layers.as_array()) {
-					if (!all.only.empty() && layer["id"].as_string() != all.only) continue;
+					std::string id = layer["id"].as_string();
+					if (!all.only.empty() && id != all.only) continue;
 					if (is_words(layer)) {
 						desktop::rect on = at(box_of(layer));
 						paint_words(c, layer, layer["words"].as_string(), layer["size"].as_double() * scale, {on.x, on.y}, std::string::npos, all.family);
 						continue;
 					}
-					auto found = all.pictures.find(layer["id"].as_string());
-					const desktop::picture* shown = found == all.pictures.end() ? nullptr : found->second;
-					if (!shown) continue;
-					if (is_background(layers, layer)) {
-						desktop::rect on = at(model::background_at(backdrop_of(all.data, width, height), shown->width(), shown->height()));
-						if (!all.blend) paint_around(c, board, on, edge_key(layer), *shown, all.data["around"].as_string());
-						c.picture(*shown, on, {0, 0, 1, 1});
-					} else {
-						c.picture(*shown, at(box_of(layer)), as_rect(crop_of(layer)));
-					}
+					auto found = all.pictures.find(id);
+					if (found == all.pictures.end() || !found->second.seen.picture) continue;
+					const ready_layer& ready = found->second;
+					paint_picture(c, board, at(box_of(layer)), layer, ready.seen, ready.blend, ready.halo);
 				}
 			});
 		}
@@ -628,18 +855,18 @@ namespace one::desktop::runtime {
 
 	desktop::view picture_of(page& p, const std::string& kept, bool fit, float height) {
 		auto file = kept.empty() ? std::nullopt : p.file_here(kept);
-		const desktop::picture* shown = file ? picture_kept(*file) : nullptr;
+		desktop::picture shown = file ? picture_kept(*file) : desktop::picture();
 		return desktop::drawing([shown, fit](desktop::canvas& c, desktop::rect area) {
 			       const auto& t = current_theme();
 			       c.box(area, {.fill = t.sunken});
 			       if (!shown || area.width <= 0 || area.height <= 0) return;
-			       float pw = static_cast<float>(shown->width()), ph = static_cast<float>(shown->height());
+			       float pw = static_cast<float>(shown.width()), ph = static_cast<float>(shown.height());
 			       float s = fit ? std::min(area.width / pw, area.height / ph) : std::max(area.width / pw, area.height / ph);
 			       if (fit) {
-				       c.picture(*shown, {area.x + (area.width - pw * s) / 2, area.y + (area.height - ph * s) / 2, pw * s, ph * s});
+				       c.picture(shown, {area.x + (area.width - pw * s) / 2, area.y + (area.height - ph * s) / 2, pw * s, ph * s});
 			       } else {
 				       float fw = area.width / (pw * s), fh = area.height / (ph * s);
-				       c.picture(*shown, area, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
+				       c.picture(shown, area, {(1 - fw) / 2, (1 - fh) / 2, fw, fh});
 			       }
 		       })
 		    .height(height);
@@ -648,9 +875,12 @@ namespace one::desktop::runtime {
 	desktop::view collage_button(page& p, collage_ask ask) {
 		auto asked = p.kept<std::string>("collage do " + ask.key);
 		auto press = [asked, does = ask.does] { asked.set(does); };
-		for (const auto& k : ask.keys) p.on_key(k, press);
+		bool off = p.in_group() && p.off();
+		if (!off) {
+			for (const auto& k : ask.keys) p.on_key(k, press);
+		}
 		if (auto small = p.in_group()) {
-			return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", *small ? hint_of(ask.label, ask.keys) : ask.label, std::move(press), {.large = !*small});
+			return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", *small ? hint_of(ask.label, ask.keys) : ask.label, std::move(press), {.large = !*small, .off = off});
 		}
 		return desktop::tool_button(desktop::has_icon(ask.icon) ? ask.icon : "", hint_of(ask.label, ask.keys), std::move(press));
 	}
@@ -677,10 +907,10 @@ namespace one::desktop::runtime {
 			auto asked = p.kept<std::shared_ptr<std::set<std::string>>>("collage sized " + spec.key, std::make_shared<std::set<std::string>>()).peek();
 			for (const auto& l : layers.as_array()) {
 				if (!l.fields.contains("picture_width") || l["picture_width"].as_double() > 0 || asked->contains(l["id"].as_string())) continue;
-				const desktop::picture* shown = l["picture"].as_string().empty() ? nullptr : layer_picture(p, l);
+				desktop::picture shown = l["picture"].as_string().empty() ? desktop::picture() : layer_picture(p, l);
 				if (!shown) continue;
 				asked->insert(l["id"].as_string());
-				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", shown->width()}, {"picture_height", shown->height()}, {"one:history", "apart"}}), spec.fields));
+				p.run(spec.update, collage_fields_of(value(fields{{"id", l["id"]}, {"picture_width", shown.width()}, {"picture_height", shown.height()}, {"one:history", "apart"}}), spec.fields));
 			}
 		}
 		// Its preview, drawn once changes have settled for a moment and nothing's being
@@ -695,7 +925,7 @@ namespace one::desktop::runtime {
 			// Read so the timer's settling draws it, as it's set from away from here.
 			if (now != drawn_from.peek() && still && settled.get() == now) {
 				drawn_from.set(now);
-				auto small = drawn_whole(gathered(p, data, layers, width, height, spec.preview_wide / width));
+				auto small = drawn_whole(gathered(p, layers, width, height, spec.preview_wide / width, spec.match_colors));
 				std::filesystem::path file = kept_for_now(small.png());
 				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
 				      [file](const answer&) { std::filesystem::remove(file); }, true);
@@ -722,7 +952,7 @@ namespace one::desktop::runtime {
 			std::string does = asked.peek();
 			asked.set("");
 			if (does == "crop" && chosen && !is_words(*chosen) && !spec.crop.empty()) {
-				w->crop = crop_begun(p, data, layers, *chosen, width, height, *w);
+				w->crop = crop_begun(*chosen);
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
 			} else if (does == "paste") {
@@ -746,7 +976,7 @@ namespace one::desktop::runtime {
 				if (one && !chosen) p.told().set("Pick a layer first.");
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else {
-					auto all = gathered(p, data, layers, width, height, 1, one ? picked : "");
+					auto all = gathered(p, layers, width, height, 1, spec.match_colors, one ? picked : "");
 					if (copying) {
 						// Drawn away from the window's thread, and put on the clipboard back on it.
 						p.told().set("Copying…");
@@ -769,7 +999,7 @@ namespace one::desktop::runtime {
 				// typed replaces them, on top of the rest.
 				double size = std::max(8.0, std::round(height / 12));
 				std::string words = "Your text";
-				auto [mw, mh] = measured(words, size, 700);
+				auto [mw, mh] = measured(words, size, 700, false);
 				value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 				const auto& all = layers.as_array();
@@ -819,7 +1049,7 @@ namespace one::desktop::runtime {
 		// Esc lets the picked layer go; the arrows nudge it, by ten with Shift.
 		if (!picked.empty() && !w->crop && !w->editing) {
 			p.on_key("escape", [&p, name = spec.pick] { p.pick(name, ""); });
-			if (chosen && !is_background(layers, *chosen) && !spec.place.empty()) {
+			if (chosen && !spec.place.empty()) {
 				for (auto [key, dx, dy] : {std::tuple{"left", -1.0, 0.0}, {"right", 1.0, 0.0}, {"up", 0.0, -1.0}, {"down", 0.0, 1.0}}) {
 					for (double by : {1.0, 10.0}) {
 						std::string chord = by > 1 ? std::string("shift+") + key : key;
@@ -832,7 +1062,10 @@ namespace one::desktop::runtime {
 				}
 			}
 		}
-		auto paint = [&p, w, data, layers, width, height, picked, full, over, spec](desktop::canvas& c, desktop::rect area) {
+		// Changed as a picture's made ready away from the window, so it's drawn again.
+		auto woken = p.kept<int>("collage ready " + spec.key);
+		(void)woken.get();
+		auto paint = [&p, w, data, layers, width, height, picked, full, over, spec, woken](desktop::canvas& c, desktop::rect area) {
 			const auto& t = current_theme();
 			c.box(area, {.fill = full ? desktop::color::hex(0x000000) : t.sunken});
 			if (width <= 0 || height <= 0) return;
@@ -849,15 +1082,33 @@ namespace one::desktop::runtime {
 				c.shadow(board, 0, 14, shade, {0, 2});
 			}
 			c.box(board, {.fill = desktop::color::hex(0xffffff)});
-			const desktop::picture* blend = blended(p, data, layers, width, height);
-			if (blend) c.picture(*blend, board, {0, 0, 1, 1});
+			auto shifts = shifts_of(p, layers, spec.match_colors, posting() ? measured_already : measured_now);
+			// Each picture as it's ready to be drawn; while one never has been, the
+			// collage's last picture of itself, its preview, stands in for all of it, so
+			// it shows at once, as it was, and then as it is.
+			std::map<std::string, ready_layer> ready;
+			bool waiting = false;
+			for (const auto& layer : layers.as_array()) {
+				std::string id = layer["id"].as_string();
+				if (is_words(layer) || (w->crop && w->crop->id == id) || !p.file_here(layer["picture"].as_string())) continue;
+				if (auto made = ready_of(p, layer, shifts, width, height, woken)) ready.emplace(id, std::move(*made));
+				else waiting = true;
+			}
+			if (waiting) {
+				auto file = spec.preview_into.empty() ? std::nullopt : p.file_here(data[spec.preview_into].as_string());
+				if (desktop::picture last = file ? picture_kept(*file) : desktop::picture()) {
+					c.picture(last, board, {0, 0, 1, 1});
+					return;
+				}
+			}
 			std::optional<desktop::rect> framed;
-			bool framed_background = false, framed_words = false, chosen_picture = false;
+			float framed_radius = 0;  // a picture's frame follows its corners, round as they are
+			bool framed_words = false, chosen_picture = false;
 			{
 				auto inside = c.clip(board);
 				for (const auto& layer : layers.as_array()) {
 					std::string id = layer["id"].as_string();
-					model::box b = where_is(p, data, layers, layer, width, height, *w);
+					model::box b = where_is(layer, *w);
 					if (is_words(layer)) {
 						// Being written: as typed so far, with its caret, all of it marked while
 						// the first key would replace it. Resized: its letters as large.
@@ -866,7 +1117,7 @@ namespace one::desktop::runtime {
 						double size = layer["size"].as_double();
 						model::box kept = box_of(layer);
 						if (!writing && kept.h > 0) size *= b.h / kept.h;
-						auto [mw, mh] = measured(said, size, weight_of(layer));
+						auto [mw, mh] = measured(said, size, weight_of(layer), italic_of(layer));
 						b.w = mw, b.h = mh;
 						desktop::rect on = as_rect(w->on_board(b));
 						if (writing && w->editing->fresh) {
@@ -879,31 +1130,27 @@ namespace one::desktop::runtime {
 						if (id == picked && !full) framed = on, framed_words = true;
 						continue;
 					}
-					const desktop::picture* shown = layer_picture(p, layer);
 					desktop::rect on = as_rect(w->on_board(b));
-					bool background = is_background(layers, layer);
-					if (shown && w->crop && w->crop->id == id) {
+					if (w->crop && w->crop->id == id) {
 						// Being cropped: the whole picture faint, what's kept as it will be.
-						const auto& e = *w->crop;
-						c.picture(*shown, as_rect(w->on_board(e.whole)), {0, 0, 1, 1}, 0.35f);
-						model::box from{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
-						on = as_rect(w->on_board(e.kept));
-						c.picture(*shown, on, as_rect(from));
-					} else if (background) {
-						// Only what its crop keeps, sitting by its rules, what's around it filled
-						// from that part's edges.
-						if (const desktop::picture* kept = background_picture(p, layer)) {
-							if (!blend) paint_around(c, board, on, edge_key(layer), *kept, data["around"].as_string());
-							c.picture(*kept, on, {0, 0, 1, 1});
+						if (desktop::picture shown = layer_picture(p, layer)) {
+							const auto& e = *w->crop;
+							c.picture(shown, as_rect(w->on_board(e.whole)), {0, 0, 1, 1}, 0.35f);
+							model::box from{(e.kept.x - e.whole.x) / e.whole.w, (e.kept.y - e.whole.y) / e.whole.h, e.kept.w / e.whole.w, e.kept.h / e.whole.h};
+							on = as_rect(w->on_board(e.kept));
+							c.picture(shown, on, as_rect(from));
 						}
-					} else if (shown) {
-						c.picture(*shown, on, as_rect(crop_of(layer)));
+					} else if (auto made = ready.find(id); made != ready.end()) {
+						paint_picture(c, board, on, layer, made->second.seen, made->second.blend, made->second.halo);
 					}
-					if (id == picked && !full) framed = on, framed_background = background, chosen_picture = true;
+					if (id == picked && !full) {
+						framed = on, chosen_picture = true;
+						if (!(w->crop && w->crop->id == id)) framed_radius = std::min(static_cast<float>(layer["corners"].as_double()) * std::min(on.width, on.height), std::min(on.width, on.height) / 2);
+					}
 				}
 			}
 			// The lines a moved layer snapped to, across the whole collage.
-			if (w->now.what == gesture::moving || w->now.what == gesture::resizing || w->now.what == gesture::sliding) {
+			if (w->now.what == gesture::moving || w->now.what == gesture::resizing) {
 				if (w->corner) {
 					auto [corner, own] = *w->corner;
 					c.line({board.x + static_cast<float>(corner.x) * scale, board.y + static_cast<float>(corner.y) * scale},
@@ -920,9 +1167,9 @@ namespace one::desktop::runtime {
 			// handles too, and its buttons just above it, or below when there's no room.
 			w->tools.clear();
 			if (!framed) return;
-			c.box(*framed, {.border = t.accent, .border_width = 2});
+			c.box(*framed, {.border = t.accent, .border_width = 2, .radius = framed_radius});
 			std::vector<desktop::point> handles;
-			bool corners = w->crop ? true : framed_words ? !spec.write.empty() : !framed_background && !spec.place.empty();
+			bool corners = w->crop ? true : framed_words ? !spec.write.empty() : !spec.place.empty();
 			if (corners && !w->editing) handles = {{framed->x, framed->y}, {framed->right(), framed->y}, {framed->right(), framed->bottom()}, {framed->x, framed->bottom()}};
 			if (w->crop) {
 				float mid_x = framed->x + framed->width / 2, mid_y = framed->y + framed->height / 2;
@@ -998,7 +1245,7 @@ namespace one::desktop::runtime {
 				        bool on_them = false;
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != w->editing->id) continue;
-					        auto [mw, mh] = measured(w->editing->words, l["size"].as_double(), weight_of(l));
+					        auto [mw, mh] = measured(w->editing->words, l["size"].as_double(), weight_of(l), italic_of(l));
 					        model::box b = box_of(l);
 					        b.w = mw, b.h = mh;
 					        on_them = w->on_board(b).contains(on);
@@ -1011,40 +1258,39 @@ namespace one::desktop::runtime {
 			        if (w->crop) {
 				        int edges = model::crop_edges_at(w->on_board(w->crop->kept), on, handle);
 				        if (edges < 0 && w->on_board(w->crop->whole).contains(on)) {
-					        w->now = {.what = gesture::shifting, .id = w->crop->id, .from = w->crop->whole, .at = at, .corner = 0, .across = {}, .down = {}, .edges = 0, .kept_from = w->crop->kept};
+					        w->now = {.what = gesture::shifting, .id = w->crop->id, .from = w->crop->whole, .at = at, .corner = 0, .edges = 0, .kept_from = w->crop->kept};
 					        return true;
 				        }
 				        if (edges < 0) {
 					        keep_crop(p, *w, spec);
 					        return true;
 				        }
-				        w->now = {.what = gesture::cropping, .id = w->crop->id, .from = w->crop->kept, .at = at, .corner = 0, .across = {}, .down = {}, .edges = edges, .kept_from = {}};
+				        w->now = {.what = gesture::cropping, .id = w->crop->id, .from = w->crop->kept, .at = at, .corner = 0, .edges = edges, .kept_from = {}};
 				        return true;
 			        }
 			        // A corner of the picked layer resizes it: a picture with its shape kept,
 			        // words by their size.
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked || is_background(layers, l)) continue;
+				        if (l["id"].as_string() != picked) continue;
 				        if (is_words(l) ? spec.write.empty() : spec.place.empty()) continue;
-				        model::box b = where_is(p, data, layers, l, width, height, *w);
+				        model::box b = where_is(l, *w);
 				        if (is_words(l)) {
-					        auto [mw, mh] = measured(l["words"].as_string(), l["size"].as_double(), weight_of(l));
+					        auto [mw, mh] = measured(l["words"].as_string(), l["size"].as_double(), weight_of(l), italic_of(l));
 					        b.w = mw, b.h = mh;
 				        }
 				        if (int corner = model::corner_at(w->on_board(b), on, handle); corner >= 0) {
-					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .across = {}, .down = {}, .edges = 0, .kept_from = {}};
-					        snap_lines(p, data, layers, width, height, *w, picked);
+					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .edges = 0, .kept_from = {}};
+					        snap_lines(layers, width, height, *w, picked);
 					        return true;
 				        }
 			        }
-			        // The top layer under the pointer, never the background, is picked and moves;
-			        // pressed twice, a picture is cropped and words written.
+			        // The top layer under the pointer is picked and moves; pressed twice, a picture
+			        // is cropped and words written.
 			        const auto& all = layers.as_array();
 			        for (std::size_t i = all.size(); i-- > 0;) {
-				        if (i == 0 && !is_words(all[0])) break;
-				        model::box b = where_is(p, data, layers, all[i], width, height, *w);
+				        model::box b = where_is(all[i], *w);
 				        if (is_words(all[i])) {
-					        auto [mw, mh] = measured(all[i]["words"].as_string(), all[i]["size"].as_double(), weight_of(all[i]));
+					        auto [mw, mh] = measured(all[i]["words"].as_string(), all[i]["size"].as_double(), weight_of(all[i]), italic_of(all[i]));
 					        b.w = mw, b.h = mh;
 				        }
 				        if (!w->on_board(b).contains(on)) continue;
@@ -1052,37 +1298,18 @@ namespace one::desktop::runtime {
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        if (clicks >= 2) {
 					        if (is_words(all[i]) && !spec.write.empty()) w->editing = placed::writing{id, all[i]["words"].as_string(), false};
-					        else if (!is_words(all[i]) && !spec.crop.empty()) w->crop = crop_begun(p, data, layers, all[i], width, height, *w);
+					        else if (!is_words(all[i]) && !spec.crop.empty()) w->crop = crop_begun(all[i]);
 					        return true;
 				        }
 				        if (!spec.place.empty()) {
-					        w->now = {.what = gesture::moving, .id = id, .from = b, .at = at, .corner = 0, .across = {}, .down = {}, .edges = 0, .kept_from = {}};
-					        snap_lines(p, data, layers, width, height, *w, id);
+					        w->now = {.what = gesture::moving, .id = id, .from = b, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+					        snap_lines(layers, width, height, *w, id);
 				        }
 				        return true;
 			        }
-			        // On the background with nothing over it, the background is picked, and slides
-			        // where it can; anywhere else, on the space around it or off the collage,
-			        // nothing is.
-			        bool on_background = w->board.contains(at) && !all.empty() && !is_words(all.front()) &&
-			                             as_rect(w->on_board(where_is(p, data, layers, all.front(), width, height, *w))).contains(at);
-			        if (!on_background) {
-				        if (!spec.pick.empty()) p.pick(spec.pick, "");
-				        return false;
-			        }
-			        std::string id = all.front()["id"].as_string();
-			        if (!spec.pick.empty()) p.pick(spec.pick, id);
-			        // Pressed twice, it's cropped where it sits, as any picture is.
-			        if (clicks >= 2 && !spec.crop.empty()) {
-				        w->crop = crop_begun(p, data, layers, all.front(), width, height, *w);
-				        return true;
-			        }
-			        model::box b = where_is(p, data, layers, all.front(), width, height, *w);
-			        if (!spec.slide.empty() && model::slides(backdrop_of(data, width, height), b)) {
-				        w->now = {.what = gesture::sliding, .id = id, .from = b, .at = at, .corner = 0, .across = model::slide_range(width, b.w), .down = model::slide_range(height, b.h),
-				                  .edges = 0, .kept_from = {}};
-			        }
-			        return true;
+			        // On nothing, or off the collage, nothing is picked.
+			        if (!spec.pick.empty()) p.pick(spec.pick, "");
+			        return false;
 		        },
 		    .on_drag =
 		        [w, width, height, snap = spec.snap](desktop::point at) {
@@ -1115,16 +1342,11 @@ namespace one::desktop::runtime {
 			        auto back = [w](const answer& a) {
 				        if (!a) w->going.reset();
 			        };
-			        if (g.what == gesture::sliding) {
-				        auto fraction = [](double at, std::pair<double, double> range) { return range.second > range.first ? (at - range.first) / (range.second - range.first) : 0.5; };
-				        p.run(spec.slide, collage_fields_of(value(fields{{"id", spec.subject}, {"slide_x", fraction(to.x, g.across)}, {"slide_y", fraction(to.y, g.down)}}), spec.fields), back);
-				        return;
-			        }
 			        // Words resized are larger or smaller words, not stretched ones.
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() == g.id && is_words(l) && g.what == gesture::resizing && g.from.h > 0) {
 					        double size = l["size"].as_double() * to.h / g.from.h;
-					        auto [mw, mh] = measured(l["words"].as_string(), size, weight_of(l));
+					        auto [mw, mh] = measured(l["words"].as_string(), size, weight_of(l), italic_of(l));
 					        p.run(spec.write, collage_fields_of(value(fields{{"id", g.id}, {"words", l["words"]}, {"size", size}, {"x", to.x}, {"y", to.y}, {"w", mw}, {"h", mh}}), spec.fields), back);
 					        return;
 				        }
@@ -1134,7 +1356,6 @@ namespace one::desktop::runtime {
 		    .cursor =
 		        [&p, w, data, layers, width, height, picked, spec](desktop::point at) {
 			        if (w->scale <= 0) return desktop::cursor::normal;
-			        if (w->now.what == gesture::sliding) return desktop::cursor::grabbing;
 			        for (const auto& [area, i] : w->tools) {
 				        if (area.contains(at)) return desktop::cursor::pointer;
 			        }
@@ -1149,19 +1370,14 @@ namespace one::desktop::runtime {
 			        }
 			        if (w->editing) return desktop::cursor::text;
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked || is_background(layers, l) || is_words(l) || spec.place.empty()) continue;
-				        int corner = model::corner_at(w->on_board(where_is(p, data, layers, l, width, height, *w)), on, handle);
+				        if (l["id"].as_string() != picked || is_words(l) || spec.place.empty()) continue;
+				        int corner = model::corner_at(w->on_board(where_is(l, *w)), on, handle);
 				        if (corner == 0 || corner == 2) return desktop::cursor::resize_falling;
 				        if (corner == 1 || corner == 3) return desktop::cursor::resize_rising;
 			        }
 			        const auto& all = layers.as_array();
 			        for (std::size_t i = all.size(); i-- > 0;) {
-				        if (i == 0 && !is_words(all[0])) break;
-				        if (w->on_board(where_is(p, data, layers, all[i], width, height, *w)).contains(on)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
-			        }
-			        if (!spec.slide.empty() && !all.empty() && !is_words(all.front()) && w->board.contains(at) &&
-			            model::slides(backdrop_of(data, width, height), where_is(p, data, layers, all.front(), width, height, *w))) {
-				        return desktop::cursor::grab;
+				        if (w->on_board(where_is(all[i], *w)).contains(on)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
 			        }
 			        return desktop::cursor::normal;
 		        },

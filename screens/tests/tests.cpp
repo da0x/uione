@@ -463,36 +463,26 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		const std::string& what = k["what"].as_string();
 		std::string note = std::format("case {}, {}", count, what);
 		auto size = k["size"];
-		c::backdrop b{k["sits"].as_string(), size.is_null() ? 0 : n(size, 0), size.is_null() ? 0 : n(size, 1), k["zoom"].is_null() ? 1 : k["zoom"].as_double(),
-		              k["slide"].is_null() ? 0.5 : n(k["slide"], 0), k["slide"].is_null() ? 0.5 : n(k["slide"], 1)};
+		double width = size.is_null() ? 0 : n(size, 0), height = size.is_null() ? 0 : n(size, 1);
 		if (what == "sitting") {
-			auto got = c::sitting(b.sits, n(k["picture"], 0), n(k["picture"], 1), b.width, b.height);
+			auto got = c::sitting(k["sits"].as_string(), n(k["picture"], 0), n(k["picture"], 1), width, height);
 			check::verify(same(got, box_of(k["box"])), "sitting", note + ": " + said(got));
-		} else if (what == "background_at") {
-			auto got = c::background_at(b, n(k["picture"], 0), n(k["picture"], 1));
-			check::verify(same(got, box_of(k["box"])), "background_at", note + ": " + said(got));
-		} else if (what == "slides") {
-			check::verify(c::slides(b, box_of(k["at"])) == k["slides"].as_bool(), "slides", note);
 		} else if (what == "whole_of") {
 			auto got = c::whole_of(box_of(k["shown"]), box_of(k["crop"]));
 			check::verify(same(got, box_of(k["box"])), "whole_of", note + ": " + said(got));
 		} else if (what == "snap_lines") {
-			auto got = c::snap_lines(b.width, b.height, boxes_of(k["others"]));
+			auto got = c::snap_lines(width, height, boxes_of(k["others"]));
 			std::vector<double> across, down;
 			for (const auto& v : k["across"].as_array()) across.push_back(v.as_double());
 			for (const auto& v : k["down"].as_array()) down.push_back(v.as_double());
 			check::verify(got.across == across && got.down == down, "snap_lines", note);
 		} else if (what == "moved" || what == "resized") {
-			auto lines = c::snap_lines(b.width, b.height, boxes_of(k["others"]));
+			auto lines = c::snap_lines(width, height, boxes_of(k["others"]));
 			auto from = box_of(k["from"]);
 			double dx = n(k["by"], 0), dy = n(k["by"], 1), close = k["close"].as_double();
-			auto got = what == "moved" ? c::moved(from, dx, dy, lines, b.width, b.height, close, k["snapping"].as_bool())
+			auto got = what == "moved" ? c::moved(from, dx, dy, lines, width, height, close, k["snapping"].as_bool())
 			                           : c::resized(from, static_cast<int>(k["corner"].as_integer()), dx, dy, k["keep_shape"].as_bool(), lines, close, k["snapping"].as_bool());
 			check::verify(same(got.at, box_of(k["box"])) && guided_as(got, k), "a gesture", note + ": " + said(got.at));
-		} else if (what == "slid") {
-			auto got = c::slid(box_of(k["from"]), n(k["by"], 0), n(k["by"], 1), {n(k["across"], 0), n(k["across"], 1)}, {n(k["down"], 0), n(k["down"], 1)}, b.width,
-			                   b.height, k["close"].as_double(), k["snapping"].as_bool());
-			check::verify(same(got.at, box_of(k["box"])) && guided_as(got, k), "slid", note + ": " + said(got.at));
 		} else if (what == "cropped") {
 			auto got = c::cropped(box_of(k["kept"]), static_cast<int>(k["edges"].as_integer()), n(k["by"], 0), n(k["by"], 1), box_of(k["whole"]));
 			check::verify(same(got, box_of(k["box"])), "cropped", note + ": " + said(got));
@@ -518,11 +508,77 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 				for (std::size_t i = 0; i < 3; ++i) close = close && std::abs(got[at * 3 + i] - n(e, 2 + i)) <= k["close"].as_double();
 				check::verify(close, "harmonic_fill", std::format("{} at {}, {}: {} {} {}", note, n(e, 0), n(e, 1), got[at * 3], got[at * 3 + 1], got[at * 3 + 2]));
 			}
+		} else if (what == "halo") {
+			int w = static_cast<int>(n(k["size"], 0)), h = static_cast<int>(n(k["size"], 1));
+			std::vector<double> colors(static_cast<std::size_t>(w) * h * 3, 0);
+			for (const auto& c : k["cells"].as_array()) {
+				std::size_t at = static_cast<std::size_t>(n(c, 1)) * w + static_cast<std::size_t>(n(c, 0));
+				for (std::size_t i = 0; i < 3; ++i) colors[at * 3 + i] = n(c, 2 + i);
+			}
+			int reach = static_cast<int>(k["reach"].as_integer());
+			auto got = c::halo(w, h, colors, reach, k["inner"].as_double());
+			for (const auto& e : k["expect"].as_array()) {
+				std::size_t at = static_cast<std::size_t>(n(e, 1)) * (w + 2 * reach) + static_cast<std::size_t>(n(e, 0));
+				bool close = true;
+				for (std::size_t i = 0; i < 4; ++i) close = close && std::abs(got[at * 4 + i] - n(e, 2 + i)) <= k["close"].as_double();
+				check::verify(close, "halo", std::format("{} at {}, {}: {} {} {} {}", note, n(e, 0), n(e, 1), got[at * 4], got[at * 4 + 1], got[at * 4 + 2], got[at * 4 + 3]));
+			}
+		} else if (what == "stats_of") {
+			std::vector<double> colors;
+			for (const auto& c : k["cells"].as_array()) {
+				for (std::size_t i = 0; i < 3; ++i) colors.push_back(n(c, i));
+			}
+			auto got = c::stats_of(colors, k["weight"].as_double());
+			bool close = got.weight == k["weight"].as_double();
+			for (std::size_t i = 0; i < 3; ++i) {
+				close = close && std::abs(got.mean[i] - n(k["mean"], i)) <= k["close"].as_double() && std::abs(got.spread[i] - n(k["spread"], i)) <= k["close"].as_double();
+			}
+			if (!k["tones"].is_null()) {
+				close = close && got.tones.size() == k["tones"].as_array().size();
+				for (std::size_t i = 0; close && i < got.tones.size(); ++i) close = std::abs(got.tones[i] - n(k["tones"], i)) <= k["close"].as_double();
+			}
+			check::verify(close, "stats_of", note);
+		} else if (what == "matched") {
+			std::vector<c::color_stats> pictures;
+			for (const auto& p : k["pictures"].as_array()) {
+				c::color_stats s;
+				s.weight = p["weight"].as_double();
+				for (std::size_t i = 0; i < 3; ++i) s.mean[i] = n(p["mean"], i), s.spread[i] = n(p["spread"], i);
+				if (!p["tones"].is_null()) {
+					for (std::size_t i = 0; i < p["tones"].as_array().size(); ++i) s.tones.push_back(n(p["tones"], i));
+				}
+				pictures.push_back(s);
+			}
+			auto got = c::matched(pictures, k["strength"].as_double(), k["cast"].as_double());
+			const auto& want = k["shifts"].as_array();
+			bool close = got.size() == want.size();
+			for (std::size_t j = 0; close && j < got.size(); ++j) {
+				for (std::size_t i = 0; i < 3; ++i) {
+					close = close && std::abs(got[j].gain[i] - n(want[j]["gain"], i)) <= k["close"].as_double() && std::abs(got[j].offset[i] - n(want[j]["offset"], i)) <= k["close"].as_double();
+				}
+				for (const char* curve : {"from", "to"}) {
+					const auto& said = std::string(curve) == "from" ? got[j].from : got[j].to;
+					std::size_t wanted = want[j][curve].is_null() ? 0 : want[j][curve].as_array().size();
+					close = close && said.size() == wanted;
+					for (std::size_t i = 0; close && i < wanted; ++i) close = std::abs(said[i] - n(want[j][curve], i)) <= k["close"].as_double();
+				}
+			}
+			check::verify(close, "matched", note);
+		} else if (what == "shifted") {
+			c::color_shift s;
+			const auto& said = k["shift"];
+			for (std::size_t i = 0; i < 3; ++i) s.gain[i] = n(said["gain"], i), s.offset[i] = n(said["offset"], i);
+			for (std::size_t i = 0; !said["from"].is_null() && i < said["from"].as_array().size(); ++i) s.from.push_back(n(said["from"], i)), s.to.push_back(n(said["to"], i));
+			double rgb[3] = {n(k["rgb"], 0), n(k["rgb"], 1), n(k["rgb"], 2)};
+			c::shifted(s, rgb);
+			bool close = true;
+			for (std::size_t i = 0; i < 3; ++i) close = close && std::abs(rgb[i] - n(k["expect"], i)) <= k["close"].as_double();
+			check::verify(close, "shifted", std::format("{}: {} {} {}", note, rgb[0], rgb[1], rgb[2]));
 		} else {
 			check::verify(false, "a case of something known", note);
 		}
 	}
-	CHECK(count >= 40);
+	CHECK(count >= 30);
 }
 
 int main() {

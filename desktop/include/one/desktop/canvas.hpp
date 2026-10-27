@@ -58,8 +58,8 @@ namespace one::desktop {
 		void text(const text_layout& laid, point at);
 		// A picture in an area, stretched to it: all of it, or the part `from` names
 		// in fractions of its width and height, as a crop does; and as much of it
-		// showing as `opacity` says.
-		void picture(const one::desktop::picture& p, const rect& area, const rect& from = {0, 0, 1, 1}, float opacity = 1);
+		// showing as `opacity` says; its corners rounded as far as `radius` says.
+		void picture(const one::desktop::picture& p, const rect& area, const rect& from = {0, 0, 1, 1}, float opacity = 1, float radius = 0);
 
 		// Drawn once everything else is, over it, outside any clip: a button's name
 		// shown while it's pointed at.

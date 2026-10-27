@@ -301,6 +301,8 @@ namespace one::desktop {
 	struct tool_options {
 		bool large = false;
 		bool on = false;
+		bool off = false;  // drawn faint, and it can't be pressed
+		std::optional<color> swatch = {};  // drawn as a circle of this color, its words said when pointed at
 	};
 	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or

@@ -277,7 +277,7 @@ TEST("a picture copied is on the clipboard as a PNG to paste, and text copied af
 TEST("every icon a toolbar draws with draws something, its paths read whole") {
 	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close",
 	                         "paste", "save", "undo", "redo", "text", "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold",
-	                         "smaller", "larger", "fill", "fit", "stretch", "center", "color", "edges"}) {
+	                         "smaller", "larger", "fill", "fit", "stretch", "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic"}) {
 		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
 		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 		std::size_t inked = 0;
@@ -292,7 +292,8 @@ TEST("an icon's rounded corner turns the short way round, as SVG draws it") {
 	auto drawn = one::desktop::picture::drawn(32, 32, [](one::desktop::canvas& c) { one::desktop::draw_icon(c, "copy", {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 	auto alpha = [&](int x, int y) { return drawn.rgba()[(static_cast<std::size_t>(y) * 32 + static_cast<std::size_t>(x)) * 4 + 3]; };
 	CHECK(alpha(2, 2) == 0);
-	CHECK(alpha(5, 5) > 128);
+	// The front page's left edge, at 5.5 of 16, is drawn.
+	CHECK(alpha(10, 18) > 128);
 }
 
 TEST("a focus ring shows once the keyboard moved to it, not after a click or where focus was put first") {

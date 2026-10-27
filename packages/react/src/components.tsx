@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, setPicked as pickRow, useKeys, usePickedId, useTool } from "./workspace.js";
+import { hintOf, setPicked as pickRow, useInGroup, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
@@ -69,11 +69,12 @@ export function Link({ to, icon, keys, children }: { to: string; icon?: string; 
   const filled = useFilled()(to);
   const navigate = useNavigate();
   const tool = useTool();
-  useKeys(keys, () => void navigate(filled));
+  const off = useOff();
+  useKeys(keys, () => void navigate(filled), !off);
   // In a toolbar's group, a tool, as its buttons are.
   if (tool) {
     return (
-      <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
+      <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(typeof children === "string" ? children : "", keys)} onClick={() => void navigate(filled)}>
         {children}
       </ui.Button>
     );
@@ -1041,6 +1042,7 @@ export function Command({
   given,
   pressed,
   thenOpen,
+  swatch,
 }: {
   name: string;
   id?: string;
@@ -1052,13 +1054,19 @@ export function Command({
   given?: CommandInput; // what it's sent besides its id, worked out as the screen's drawn
   pressed?: boolean; // drawn pressed, like a choice already made
   thenOpen?: string; // a route like /:poster, opened with what it made
+  swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
   const replier = useRunner();
   const navigate = useNavigate();
   const tool = useTool();
-  const shown = when && allowed;
+  // In a toolbar, one that doesn't apply now is there, but off, so the toolbar keeps
+  // its shape.
+  const inGroup = useInGroup();
+  const groupOff = useOff();
+  const off = inGroup && (groupOff || !when);
+  const shown = (when || inGroup) && allowed;
   const sent = { ...(given ?? {}), ...(id === undefined ? {} : { id }) };
   const run = () => {
     if (!thenOpen) return void runner.run(name, sent);
@@ -1067,11 +1075,21 @@ export function Command({
       if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
     });
   };
-  useKeys(keys, run, shown && !runner.busy(name));
+  useKeys(keys, run, shown && !off && !runner.busy(name));
   if (!shown) return null;
   const words = says ?? label(action(name));
   return (
-    <ui.Button kind={icon || tool ? "secondary" : "primary"} icon={icon} tool={tool} pressed={pressed} hint={hintOf(words, keys)} disabled={runner.busy(name)} error={runner.error(name)} onClick={run}>
+    <ui.Button
+      kind={icon || tool ? "secondary" : "primary"}
+      icon={icon}
+      tool={tool}
+      pressed={pressed && !off}
+      swatch={tool ? swatch : undefined}
+      hint={hintOf(words, keys)}
+      disabled={off || runner.busy(name)}
+      error={runner.error(name)}
+      onClick={run}
+    >
       {words}
     </ui.Button>
   );
@@ -1178,7 +1196,7 @@ function placed(list: Row[], field: string, row: Row, before: Row | undefined, a
 
 // A list put in order by a field, with the places just given to rows by dragging
 // until the view says so too, so a dropped row stays where it was put.
-function usePlacing(rows: Row[], field: string | undefined, data: unknown) {
+function usePlacing(rows: Row[], field: string | undefined, data: unknown, descending = false) {
   const [placing, setPlacing] = useState<Record<string, number>>({});
   useEffect(() => {
     setPlacing((now) => {
@@ -1188,15 +1206,16 @@ function usePlacing(rows: Row[], field: string | undefined, data: unknown) {
     });
     // Only the view's newer documents settle a place.
   }, [data]);
+  // Shown highest first when it's descending.
   const ordered =
-    !field || Object.keys(placing).length === 0
+    !field || (Object.keys(placing).length === 0 && !descending)
       ? rows
       : rows
           .map((row) => (row.id in placing ? { ...row, [field]: placing[row.id] } : row))
           .map((row, i) => ({ row, i }))
           .sort((a, b) => {
             const [x, y] = [a.row[field], b.row[field]];
-            return typeof x === "number" && typeof y === "number" && x !== y ? x - y : a.i - b.i;
+            return typeof x === "number" && typeof y === "number" && x !== y ? (descending ? y - x : x - y) : a.i - b.i;
           })
           .map(({ row }) => row);
   const place = (changes: { id: string; value: number }[]) => setPlacing((now) => ({ ...now, ...Object.fromEntries(changes.map((c) => [c.id, c.value])) }));
@@ -1522,7 +1541,7 @@ export function Table({
   page?: number; // how many rows a page has
   // Rows put in order by dragging, which runs the command with a number for the field
   // between its new neighbors', like a stage's position; the list is ordered by it.
-  reorder?: { command: string; field: string; allowed?: boolean };
+  reorder?: { command: string; field: string; allowed?: boolean; descending?: boolean }; // descending: the highest first
   tools?: ReactNode; // buttons beside its search, like New issue
   hideEmpty?: boolean; // not there at all while the list has no rows, like a person's reports
   only?: Record<string, string>; // the rows it keeps, worked out as it's shown, like { "due<=": "+2w" }
@@ -1546,7 +1565,7 @@ export function Table({
   const setAt = (n: number) => setPage_(n <= 1 ? "" : String(n));
   const wanted = query.trim().toLowerCase();
   const { matches, filtered } = useFilter();
-  const placing = usePlacing(rowsOf(view.data?.[list]), reorder?.field, view.data);
+  const placing = usePlacing(rowsOf(view.data?.[list]), reorder?.field, view.data, reorder?.descending);
   const own = placing.ordered.filter((row) => !only || kept(row, Object.entries(only), auth?.person?.uid ?? ""));
   const tracked = useTrack(track, own, list === "rows" ? "rows" : list, () => setAt(1));
   const found = own.filter(tracked.keeps).filter(matches).filter(
@@ -1615,7 +1634,10 @@ export function Table({
     const offset = page ? (current - 1) * page : 0;
     const row = sorted[offset + from];
     const rest = sorted.filter((other) => other.id !== row.id);
-    const changes = placed(own, arranged.field, row, rest[offset + to - 1], rest[offset + to]);
+    // Shown highest first, placed as the same rows lowest first, its neighbors swapped.
+    const changes = arranged.descending
+      ? placed([...own].reverse(), arranged.field, row, rest[offset + to], rest[offset + to - 1])
+      : placed(own, arranged.field, row, rest[offset + to - 1], rest[offset + to]);
     placing.place(changes);
     for (const change of changes) {
       void runner.run(arranged.command, { id: change.id, [arranged.field]: change.value }).then((done) => {

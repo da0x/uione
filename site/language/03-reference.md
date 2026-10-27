@@ -114,7 +114,9 @@ Numbers are written as they are, `20` or `1.5`. Values are compared with `==`, `
 `<`, `<=`, `>` and `>=`, joined with `&&` (and) and `||` (or), and turned around with
 `!`. `+`, `-`, `*` and `/` work them out, and `%` leaves what's over as a clock
 counts, never below none: `(turns + 3) % 4` is 2 when turns is 3, and 3 when it's
-0. Dividing by 0, or what's left over from it, is 0, on every target alike. `=` gives a field a value, and `has` asks whether a list holds something: `where
+0. Dividing by 0, or what's left over from it, is 0, on every target alike. In a
+command, `min(a, b)` and `max(a, b)` are the smaller and the larger of two numbers:
+`w = min(room, w * 2)`. `=` gives a field a value, and `has` asks whether a list holds something: `where
 labels has label.id`.
 
 ## Built-in values
@@ -1897,7 +1899,8 @@ screen "Book" /books/:book {
   position between its new neighbors', so only it changes. The list is ordered by
   that field, and the entity's `update` may set it. It works within a tab or a page
   too, where a row's neighbors are still its neighbors in the whole list, but not
-  while the table is sorted by a column or searched. In a board, `reorder position`
+  while the table is sorted by a column or searched. `reorder depth descending` shows
+  the highest first, as a stack of layers is listed top first. In a board, `reorder position`
   puts each column's cards in order the same way: a card is dragged up or down its
   column, or moved with Alt+↑ and Alt+↓.
 - `picture preview fit` shows a file each row holds as a small picture before its
@@ -2118,30 +2121,38 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   a card holds on it, on the web.
 - `collage poster_page.layers size width height { ... }` shows a list's rows as the
   layers of one picture, as big as two of the view's values say, in its own pixels,
-  like a wallpaper or a poster (decision 0019). In a workspace's `main` it fills its
+  like a wallpaper or a poster (decisions 0019 and 0021). In a workspace's `main` it fills its
   region; anywhere else it's 560 tall. It's drawn scaled to fit with room around it,
   or at its own size on black while the window fills the screen. Its layers are
   drawn lowest first, each where its `x y w h` say, from the parts it has: a
   `picture`, cropped by `crop_x crop_y crop_w crop_h` and turned and flipped by
   `turns` and `mirrored`; or `words`, as big as `size` says, in `color` and
-  `weight`, in the theme's text font, over a soft shadow. A theme that brings its
+  `weight`, italic while `italic` isn't 0, in the theme's text font, over a soft shadow. A theme that brings its
   font, `text "Inter" from "fonts/Inter.ttf"`, has words drawn the same on every
-  machine. The first, when it's a picture, is the
-  background: it sits as the view's `background` says, `fit`, `fill`, `stretch` or
-  `center`, zoomed by `zoom` and slid by `slide_x` and `slide_y`, and what it leaves
-  around it is its edges drawn out, or, with `around` set to `color`, its edge
-  color. With `around` set to `blend`, the space no picture covers is filled from
-  every picture's edges, not just the background's, each settling between the
-  colors around it (a harmonic fill), so two pictures with a gap between them flow
-  into each other across it. A click picks a layer, the background when it's on nothing else, and Esc
-  lets it go.
+  machine. Every picture is a layer like any other, and its `around` says what's
+  drawn around it, over the layers under it: nothing with `clear`, the default; the
+  rest of the collage drawn out from its edges with `edges`, or in its edge color
+  with `color`; with `blend`, the rest of the collage filled from its edges, each
+  color settling between the ones around it (a harmonic fill), its edges softened
+  into that as `harmonize` softens them; and with
+  `harmonize`, it melted into what's under it, its own colors spread past its edges
+  about a seventh of its shorter side and fading as they go, its edges softened under
+  them. Its `corners` trim it round, as far as that share of its shorter side, with
+  no line drawn along them; at 0, the default, they're square. A click picks a
+  layer, nothing when it's on nothing, and Esc lets it go.
   - `place layer::place`: a picked layer is moved, or resized by a corner with its
     shape kept unless Shift is held, and the command is sent its `x y w h`; the arrows
     nudge it, by ten with Shift. In a terminal, its layers are a list, and Alt with
     the arrows moves the one picked.
-  - `slide poster::slide`: the background is dragged along the side it's longer or
-    shorter than the collage, its `slide_x` and `slide_y` sent to a command on what
-    the view is per.
+  - `match colors when poster_page.matched == 1`: while it holds, its pictures look
+    like one picture, as color transfer matches pictures: each one's cast, read from
+    its grays, whites and shadows so a red hat doesn't read as a red light, moved all
+    the way to theirs, as a white balance would, so the same face in two lights looks
+    alike; its tones, its darkest to its brightest, along a curve to theirs, so its
+    contrast is theirs; and how strong its colors are; those most of the way, weighed
+    by how much of the collage each covers, so the larger lead. The pictures kept aren't touched, and what's around one, its
+    halo and a picture saved or copied are drawn from the colors as moved. A terminal
+    draws no pictures, so it doesn't.
   - `snap to edges`: what's dragged is drawn to the collage's edges and middle, and
     every other layer's, and evenly into a corner, with a line where it snaps, unless
     Alt is held.
@@ -2150,9 +2161,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     what's kept, its edges and corners trimming it, a drag inside moving it, and one on
     the rest of the picture shifting it under the crop. Enter, a click elsewhere or the
     check keeps it, sending the command its `crop_x crop_y crop_w crop_h` and its new
-    `x y w h`; Esc puts it away. The background is cropped where it sits, and then sits
-    by the part it keeps, as its `background` says, what's around it filled from that
-    part's edges. A terminal draws no pictures, so it doesn't crop.
+    `x y w h`; Esc puts it away. What's around it is filled from the part it keeps. A
+    terminal draws no pictures, so it doesn't crop.
   - `write layer::write`: words are written where they are, as a press twice on them
     or an `edit words "Edit" icon edit key enter` button begins, with a caret moved by
     a click, the arrows, Home and End, and Shift+Enter for a new line; Enter, Esc or a
@@ -2169,17 +2179,16 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the app keeps one under another name, a line says which, and the rest keep
     their names: `at left top  size across down`, `stacked by order`, `picture
     image  sized image_width image_height`, `cropped to left top width height`,
-    `turned quarters`, `mirrored flipped`, `words caption  sized letters  colored
-    ink  weighing boldness`, and, of the view, `background sits  around margin
-    zoomed scale  slid across down`. The checker holds each to its type: numbers,
-    a file, text, and `background` and `around` choices from `fit fill stretch
-    center` and `edges color`. Cropping needs the crop's four, and writing needs
+    `turned quarters`, `mirrored flipped`, `around margin`, `rounded roundness`, and `words caption  sized
+    letters  colored ink  weighing boldness  slanted lean`. The checker holds each to its type:
+    numbers, a file, text, and `around` choices from `clear edges color blend
+    harmonize`. Cropping needs the crop's four, and writing needs
     `words` and `size`. The runtimes know only the parts; which field keeps each
     is handed to them by the compiler.
   - `paste`: pictures dropped on it, or pasted, are made layers by its `add`, each
     file uploaded into the layer's `picture` and, when it has them, its own size sent
     in its `picture_width` and `picture_height`. The first on a collage with nothing
-    on it covers it; the rest are as big as they are, smaller where they wouldn't
+    on it fills it; the rest are as big as they are, smaller where they wouldn't
     fit, centered where they were let go, each a little further along, and all of
     them are one step to undo. Words pasted are made words in the middle. A `paste
     "Paste" icon paste key ctrl+v` button pastes what's on the clipboard, by a press
@@ -2266,9 +2275,20 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   its own lines at the start, and the switch between light and dark at the end.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
   buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
-  in a `small` group, `group "Rotate" small { ... }`, an icon alone, two rows of
-  them, its words said when it's pointed at. `group "View" at end` sits at the
-  toolbar's far end.
+  in a `small` group, `group "Rotate" small { ... }`, an icon alone, in two rows
+  read a row at a time, its words said when it's pointed at. A large tool is as
+  tall as two small ones, so the toolbar is as tall whichever groups it shows.
+  `group "View" at end` sits at the toolbar's far end.
+- In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
+  there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
+  shape as what's picked changes. `group "Rotate" small when layer.picture != none`.
+  A tool with no icon whose one given value is a color written `#rrggbb` is drawn
+  as a circle of it, its words said when it's pointed at: `layer::write "White" {
+  color = "#ffffff" }`. Tools side by side with the same words and icon are one, the
+  first whose `when` holds, so a pair like Bold that sets it and Bold that takes it away is one button:
+  `layer::write "Bold" icon bold { weight = 400 } on when layer.weight >= 700 when
+  layer.weight >= 700` then `layer::write "Bold" icon bold { weight = 700 } when
+  layer.weight < 700`.
 - `key ctrl+z` after a button's or a link's words, and its icon, runs it with that
   key too, while it's shown, but not while the person is typing in a field:
   `poster::create "New" icon add key ctrl+n`. A line can have several, `key ctrl+y
@@ -2300,8 +2320,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - A button may say what it's sent, in braces after its words, icon and keys, each a
   field or an input of its command and a value worked out as it's pressed, from
   what the screen reads: `layer::scale "2×" { by = 2 }`, `layer::write "Larger" {
-  size = layer.size * 1.2 }`, `poster::update "Fill" icon fill { background =
-  background::fill }`. It's drawn pressed while what it would set is already so, on
+  size = layer.size * 1.2 }`, `layer::arrange "Blend" icon blend { around =
+  around::blend }`. It's drawn pressed while what it would set is already so, on
   the row picked or the entity the address names, or while `on when ...` holds, like
   `on when layer.weight >= 700`.
 - `then open /posters/:poster` after a button that makes something opens it, its id

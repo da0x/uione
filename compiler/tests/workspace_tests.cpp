@@ -227,6 +227,77 @@ TEST_CASE("a pick is read, picked from a table, and acted on, on the web and the
     CHECK(native.find(R"(.pressed = same(at(poster_page, "tint"), value("ink")))") != std::string::npos);
 }
 
+TEST_CASE("a status line's words are quiet on the desktop, as its messages are, and as the web's status line draws them") {
+    auto files = built(layered_screen(R"(		pick layer from poster_page.layers
+		layout workspace
+		main {
+			text "{layer.size}"
+		}
+		status {
+			text "{layer.size} wide"
+			messages
+		}
+)"));
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(native);
+    CHECK(native.find(R"(region{"status", along(text({words(show(field_of(picked_layer, "size"))), words(" wide")}, true), messages(p))})") != std::string::npos);
+    CHECK(native.find(R"(region{"main", items(text({words(show(field_of(picked_layer, "size")))}))})") != std::string::npos);
+}
+
+TEST_CASE("in a toolbar, a group or a tool that doesn't apply now is there but off, and tools side by side with the same words are one") {
+    auto files = built(layered_screen(R"(		pick layer from poster_page.layers
+		layout workspace
+		toolbar {
+			group "Size" small when layer != none {
+				layer::scale "Twice" icon larger { by = 2 } when layer.size < 100
+				layer::scale "Twice" icon larger { by = 0.5 } on when layer.size >= 100 when layer.size >= 100
+				layer::delete "Delete" icon delete
+			}
+		}
+		main {
+			table poster_page.layers {
+				depth  size
+			}
+		}
+)"));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    // The group is there while nothing's picked, off.
+    CHECK(native.find(R"(p.off_unless((!same(picked_layer, value())), [&] { return group(p, "Size", true, false, [&] { return tools(either(p, {command_button{)") != std::string::npos);
+    CHECK(web.find(R"(<Applies when={(!isNone(pickedLayer))}>)") != std::string::npos);
+    // The two Twice lines are one tool, and Delete its own.
+    CHECK(native.find(R"(command(p, {.command = "studio::layer::delete")") != std::string::npos);
+    auto either = web.find("<Either>"), delete_at = web.find(R"(name="studio::layer::delete")");
+    CHECK(either != std::string::npos);
+    CHECK(web.find("</Either>", either) < delete_at);
+}
+
+TEST_CASE("in a toolbar, a tool giving a color written #rrggbb, with no icon, is drawn as a circle of it") {
+    std::string source = layered_screen(R"(		pick layer from poster_page.layers
+		layout workspace
+		toolbar {
+			group "Tint" small {
+				poster::arrange "Ink" { tint = tint::ink }
+				layer::scale "Twice" { by = 2 }
+			}
+		}
+		main {
+			text "{poster_page.title}"
+		}
+)");
+    auto files = built(source);
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(native);
+    // Neither gives a color, so neither is a swatch.
+    CHECK(native.find(".swatch") == std::string::npos);
+    source.replace(source.find("{ tint = tint::ink }"), std::string("{ tint = tint::ink }").size(), "{ title = \"#ffd23f\" }");
+    files = built(source);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.swatch = "#ffd23f")") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"( swatch="#ffd23f")") != std::string::npos);
+}
+
 TEST_CASE("a command apart from undo is kept, but never a step undo takes back") {
     auto files = built(layered_screen("\t\ttext \"Poster\"\n"));
     CHECK(files["desktop/src/local/studio.cpp"].find(R"(command("studio::poster::preview").on("studio::poster").apart())") != std::string::npos);
@@ -240,8 +311,6 @@ namespace {
 		title    text    required
 		width    number  = 1600
 		height   number  = 900
-		slide_x  number  = 0.5
-		slide_y  number  = 0.5
 	}
 
 	entity layer {
@@ -250,6 +319,7 @@ namespace {
 		picture  file
 		picture_width   number  = 0
 		picture_height  number  = 0
+		around   enum clear | edges | color | blend | harmonize = around::clear
 		x        number  = 0
 		y        number  = 0
 		w        number  = 400
@@ -257,9 +327,6 @@ namespace {
 	}
 
 	command poster::create
-	command poster::slide {
-		changes slide_x slide_y
-	}
 	command layer::place {
 		changes x y w h
 	}
@@ -267,10 +334,10 @@ namespace {
 	command layer::delete
 	command layer::update
 	view poster_page per poster {
-		title  width  height  slide_x  slide_y
+		title  width  height
 		layers = each layer in poster {
 			order by depth
-			picture  picture_width  picture_height  x  y  w  h
+			picture  picture_width  picture_height  around  x  y  w  h
 		}
 	}
 )";
@@ -279,11 +346,35 @@ namespace {
 
 }  // namespace
 
-TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed and slid by commands, with buttons over the picked layer") {
+TEST_CASE("a table reordered descending shows its rows highest first, on the web and the desktop alike") {
+    std::string source = layered_screen(R"(		table poster_page.layers {
+			size
+			reorder depth descending
+		}
+)");
+    source.replace(source.find("\tcommand layer::delete\n"), 0, "\tcommand layer::update\n");
+    auto files = built(source);
+    CAPTURE(files["desktop/src/screens/main.cpp"]);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.reorder = reorder_spec{"studio::layer::update", "depth", true, true})") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(reorder={{ command: "studio::layer::update", field: "depth", descending: true }})") != std::string::npos);
+}
+
+TEST_CASE("a collage matches its pictures' colors while a condition holds, on the web and the desktop alike") {
+    auto files = built(collage_screen(R"(		collage poster_page.layers size width height {
+			match colors when poster_page.width > 1000
+		}
+)"));
+    CAPTURE(files["desktop/src/screens/main.cpp"]);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.match_colors = (ready(poster_page) && (compared(at(poster_page, "width"), value(1000)) > 0)))") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"( matchColors={)") != std::string::npos);
+    CHECK(messages(collage_screen("\t\tcollage poster_page.layers size width height {\n\t\t\tmatch colors when poster_page.wide > 1\n\t\t}\n")) ==
+          std::vector<std::string>{"45: view poster_page has no wide for the button to read"});
+}
+
+TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {
 			place layer::place
-			slide poster::slide
 			snap to edges
 			empty "Add a picture to start"
 			over layer {
@@ -293,27 +384,25 @@ TEST_CASE("a collage is a view's list as layers, as big as two of its values, pl
 )";
     CHECK(messages(collage_screen(fine)).empty());
     CHECK(messages(collage_screen(R"(		collage poster_page.layers size wide tall {
-			place poster::slide
-			slide layer::place
+			place poster::create
 			over layer {
 				text "Not a button"
 			}
 		}
-)")) == std::vector<std::string>{"48: view poster_page has no wide, which says how big the collage is; add it to the view",
-                                   "48: view poster_page has no tall, which says how big the collage is; add it to the view",
-                                   "49: a collage's layers are layers, so place names a command on layer, like layer::place",
-                                   "50: a collage's background slides as the view poster_page says, so by a command on what the view is per, like poster::slide",
-                                   "51: over names the screen's pick of these layers, like pick layer from poster_page.layers",
-                                   "52: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\""});
+)")) == std::vector<std::string>{"44: view poster_page has no wide, which says how big the collage is; add it to the view",
+                                   "44: view poster_page has no tall, which says how big the collage is; add it to the view",
+                                   "45: a collage's layers are layers, so place names a command on layer, like layer::place",
+                                   "46: over names the screen's pick of these layers, like pick layer from poster_page.layers",
+                                   "47: what's over a picked layer are buttons, like layer::delete \"Delete\" icon delete, or crop \"Crop\""});
     auto files = built(collage_screen(fine));
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];
     CAPTURE(web);
     CAPTURE(native);
-    CHECK(web.find(R"(<Collage view={posterPage} list="layers" width="width" height="height" fields={{ h: "h", picture: "picture", picture_height: "picture_height", picture_width: "picture_width", slide_x: "slide_x", slide_y: "slide_y", w: "w", x: "x", y: "y" }} place="studio::layer::place" slide="studio::poster::slide" snap empty="Add a picture to start" pick="/posters/:poster layer" parent="poster" name="/posters/:poster layer" update="studio::layer::update" subject={posterId}>)") !=
+    CHECK(web.find(R"(<Collage view={posterPage} list="layers" width="width" height="height" fields={{ around: "around", h: "h", picture: "picture", picture_height: "picture_height", picture_width: "picture_width", w: "w", x: "x", y: "y" }} place="studio::layer::place" snap empty="Add a picture to start" pick="/posters/:poster layer" parent="poster" name="/posters/:poster layer" update="studio::layer::update" subject={posterId}>)") !=
           std::string::npos);
     CHECK(web.find(R"(<Command name="studio::layer::delete" id={pickedLayer?.id as string | undefined} label="Delete" icon="delete" keys={["delete"]} when={pickedLayer !== null} />)") != std::string::npos);
-    CHECK(native.find(R"(collage(p, {.view = poster_page, .list = "layers", .width = "width", .height = "height", .fields = {{"h", "h"}, {"picture", "picture"}, {"picture_height", "picture_height"}, {"picture_width", "picture_width"}, {"slide_x", "slide_x"}, {"slide_y", "slide_y"}, {"w", "w"}, {"x", "x"}, {"y", "y"}}, .place = "studio::layer::place", .slide = "studio::poster::slide", .snap = true, .empty = "Add a picture to start", .pick = "/posters/:poster layer", .over = {command_button{.command = "studio::layer::delete", .label = "Delete", .id = picked_layer["id"].as_string(), .when = !none(picked_layer), .icon = "delete", .keys = std::vector<std::string>{"delete"}}}, .subject = poster_id, .parent = "poster", .key = "/posters/:poster layer", .update = "studio::layer::update"})") !=
+    CHECK(native.find(R"(collage(p, {.view = poster_page, .list = "layers", .width = "width", .height = "height", .fields = {{"around", "around"}, {"h", "h"}, {"picture", "picture"}, {"picture_height", "picture_height"}, {"picture_width", "picture_width"}, {"w", "w"}, {"x", "x"}, {"y", "y"}}, .place = "studio::layer::place", .snap = true, .empty = "Add a picture to start", .pick = "/posters/:poster layer", .over = {command_button{.command = "studio::layer::delete", .label = "Delete", .id = picked_layer["id"].as_string(), .when = !none(picked_layer), .icon = "delete", .keys = std::vector<std::string>{"delete"}}}, .subject = poster_id, .parent = "poster", .key = "/posters/:poster layer", .update = "studio::layer::update"})") !=
           std::string::npos);
 }
 
@@ -346,9 +435,9 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
 				paste
 			}
 		}
-)")) == std::vector<std::string>{"52: this screen has no collage that says crop layer::crop for this button to use",
-                                   "57: layer.x keeps a collage's picture, so it's a file", "57: layer.picture keeps a collage's picture_width, so it's a number",
-                                   "58: pasted pictures are made by the collage's add, so it says one too, like add layer::create"});
+)")) == std::vector<std::string>{"48: this screen has no collage that says crop layer::crop for this button to use",
+                                   "53: layer.x keeps a collage's picture, so it's a file", "53: layer.picture keeps a collage's picture_width, so it's a number",
+                                   "54: pasted pictures are made by the collage's add, so it says one too, like add layer::create"});
     auto files = built(collage_screen("\t\tlayout workspace\n" + fine));
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];
@@ -357,11 +446,11 @@ TEST_CASE("pictures dropped, pasted or taken from the screen are made by a colla
     CHECK(web.find(R"(<CollageButton collage="/posters/:poster collage" does="paste" label="Paste" icon="paste" keys={["ctrl+shift+v"]} />)") != std::string::npos);
     // Each part in the field named like it, the runtimes sent which; one whose own size
     // isn't kept yet has it filled in by the layer's update.
-    CHECK(web.find(R"(<Collage view={posterPage} list="layers" width="width" height="height" fields={{ h: "h", picture: "picture", picture_height: "picture_height", picture_width: "picture_width", slide_x: "slide_x", slide_y: "slide_y", w: "w", x: "x", y: "y" }} fills add="studio::layer::create" parent="poster" name="/posters/:poster collage" paste update="studio::layer::update" subject={posterId} />)") != std::string::npos);
+    CHECK(web.find(R"(<Collage view={posterPage} list="layers" width="width" height="height" fields={{ around: "around", h: "h", picture: "picture", picture_height: "picture_height", picture_width: "picture_width", w: "w", x: "x", y: "y" }} fills add="studio::layer::create" parent="poster" name="/posters/:poster collage" paste update="studio::layer::update" subject={posterId} />)") != std::string::npos);
     CHECK(native.find(R"(.paste = true, .update = "studio::layer::update"})") != std::string::npos);
     std::string unsized = collage_screen("\t\tlayout workspace\n" + fine);
     unsized.erase(unsized.find("\tcommand layer::update\n"), std::string("\tcommand layer::update\n").size());
-    CHECK(messages(unsized) == std::vector<std::string>{"55: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
+    CHECK(messages(unsized) == std::vector<std::string>{"51: a picture's own size, when it isn't kept yet, is filled in by layer::update, which isn't declared in namespace studio"});
     CHECK(native.find(R"(collage_button(p, {.key = "/posters/:poster collage", .does = "screenshot", .label = "Screenshot", .icon = "screenshot"}))") != std::string::npos);
 }
 
@@ -377,6 +466,7 @@ TEST_CASE("a collage reads each part from the field named like it, or from the o
 		stack    number  = 0
 		caption  text
 		letters  number  = 48
+		margin   enum clear | edges = margin::clear
 		left     number  = 0
 		top      number  = 0
 		w        number  = 0
@@ -393,7 +483,7 @@ TEST_CASE("a collage reads each part from the field named like it, or from the o
 		width  height
 		notes = each note in poster {
 			order by stack
-			stack  caption  letters  left  top  w  h
+			stack  caption  letters  margin  left  top  w  h
 		}
 	}
 
@@ -402,6 +492,7 @@ TEST_CASE("a collage reads each part from the field named like it, or from the o
 			at left top
 			stacked by stack
 			words caption sized letters
+			around margin
 			place note::place
 			write note::write
 		}
@@ -414,20 +505,20 @@ TEST_CASE("a collage reads each part from the field named like it, or from the o
     const std::string& native = files["desktop/src/screens/main.cpp"];
     CAPTURE(web);
     CAPTURE(native);
-    CHECK(web.find(R"(fields={{ depth: "stack", h: "h", size: "letters", w: "w", words: "caption", x: "left", y: "top" }})") != std::string::npos);
-    CHECK(native.find(R"(.fields = {{"depth", "stack"}, {"h", "h"}, {"size", "letters"}, {"w", "w"}, {"words", "caption"}, {"x", "left"}, {"y", "top"}})") != std::string::npos);
+    CHECK(web.find(R"(fields={{ around: "margin", depth: "stack", h: "h", size: "letters", w: "w", words: "caption", x: "left", y: "top" }})") != std::string::npos);
+    CHECK(native.find(R"(.fields = {{"around", "margin"}, {"depth", "stack"}, {"h", "h"}, {"size", "letters"}, {"w", "w"}, {"words", "caption"}, {"x", "left"}, {"y", "top"}})") != std::string::npos);
     // Without them, there's no place, and no words to write.
     std::string unsaid = project + noted;
     for (const std::string line : {"\t\t\tat left top\n", "\t\t\twords caption sized letters\n"}) unsaid.erase(unsaid.find(line), line.size());
     CHECK(messages(unsaid) == std::vector<std::string>{
-                                  "40: entity note has no field x, where a collage keeps a layer's place; add x number to it, or say the fields, like at x y  size w h",
-                                  "40: entity note has no field y, where a collage keeps a layer's place; add y number to it, or say the fields, like at x y  size w h",
-                                  "43: words written are kept in a layer's words and size, which note doesn't have; add them, or say its fields, like words caption sized letters"});
+                                  "41: entity note has no field x, where a collage keeps a layer's place; add x number to it, or say the fields, like at x y  size w h",
+                                  "41: entity note has no field y, where a collage keeps a layer's place; add y number to it, or say the fields, like at x y  size w h",
+                                  "45: words written are kept in a layer's words and size, which note doesn't have; add them, or say its fields, like words caption sized letters"});
 }
 
 TEST_CASE("a collage is copied or saved as a picture, all of it or its picked layer, and keeps a small picture of itself on what its view is per") {
     std::string kept = project + collaged;
-    kept.replace(kept.find("\t\tslide_y  number  = 0.5\n"), 0, "\t\tpreview  file\n");
+    kept.replace(kept.find("\t\theight   number  = 900\n"), 0, "\t\tpreview  file\n");
     kept.replace(kept.find("\tcommand poster::create\n"), 0, "\tcommand poster::preview {\n\t\tchanges preview\n\t\tapart from undo\n\t}\n");
     auto on_screen = [&](const std::string& body) { return kept + "\n\tscreen \"Poster\" /posters/:poster {\n" + body + "\t}\n}\n"; };
     const std::string fine = R"(		pick layer from poster_page.layers
@@ -447,9 +538,9 @@ TEST_CASE("a collage is copied or saved as a picture, all of it or its picked la
 		}
 )");
     auto lines = messages(said);
-    CHECK(lines == std::vector<std::string>{"53: posters isn't a collage on this screen, or its pick; a picture is made of one, like poster_page",
-                                            "55: a collage's preview is kept on poster, so by a command on it, like poster::preview",
-                                            "55: poster.title holds its preview, so it's a file", "55: a preview is from 16 to 4096 wide"});
+    CHECK(lines == std::vector<std::string>{"49: posters isn't a collage on this screen, or its pick; a picture is made of one, like poster_page",
+                                            "51: a collage's preview is kept on poster, so by a command on it, like poster::preview",
+                                            "51: poster.title holds its preview, so it's a file", "51: a preview is from 16 to 4096 wide"});
     auto files = built(on_screen(fine));
     const std::string& web = files["web/src/screens/main.tsx"];
     const std::string& native = files["desktop/src/screens/main.cpp"];

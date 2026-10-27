@@ -613,6 +613,7 @@ export interface ButtonProps {
   tool?: "large" | "small";
   pressed?: boolean; // a toggle, or a choice already made, drawn as pressed
   hint?: string; // said when it's pointed at, like "Undo (Ctrl+Z)"
+  swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff, its words said when it's pointed at
 }
 
 // A named part of a workspace's toolbar, like Rotate, with a line between it and the

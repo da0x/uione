@@ -821,20 +821,23 @@ namespace one::language {
                 field("mirrored", "the field keeping whether a picture's mirrored, like mirrored");
                 return true;
             }
+            if (at_word("around") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("around", "the field saying what's drawn around a picture, like around");
+                return true;
+            }
+            if (at_word("rounded") && peek(1).kind == token_kind::identifier) {
+                advance();
+                field("corners", "the field keeping how round a picture's corners are, like corners");
+                return true;
+            }
             if (at_word("words") && peek(1).kind == token_kind::identifier) {
                 advance();
                 field("words", "the field a layer's words are kept in, like words");
                 if (then("sized")) field("size", "the field their size is kept in, like size");
                 if (then("colored")) field("color", "the field their color is kept in, like color");
                 if (then("weighing")) field("weight", "the field their weight is kept in, like weight");
-                return true;
-            }
-            if (at_word("background") && peek(1).kind == token_kind::identifier) {
-                advance();
-                field("background", "the field saying how the background sits, like background");
-                if (then("around")) field("around", "the field saying what fills around it, like around");
-                if (then("zoomed")) field("zoom", "the field keeping how far it's zoomed, like zoom");
-                if (then("slid")) field("slide_x", "the field keeping how far it's slid across, like slide_x"), field("slide_y", "and down, like slide_y");
+                if (then("slanted")) field("italic", "the field saying whether they're italic, like italic");
                 return true;
             }
             return false;
@@ -1936,6 +1939,7 @@ namespace one::language {
                             advance();
                             table.reorder_where = peek().where;
                             table.reorder = advance().text;
+                            if (at_word("descending")) advance(), table.reorder_descending = true;
                             end_line();
                             continue;
                         }
@@ -2233,9 +2237,6 @@ namespace one::language {
                     if (at_word("place") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.place = parse_qualified_name("the command a layer moved or resized is sent to, like layer::place");
-                    } else if (at_word("slide") && peek(1).kind == token_kind::identifier) {
-                        advance();
-                        collage.slide = parse_qualified_name("the command the background slid is sent to, like poster::slide");
                     } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.add = parse_qualified_name("the command that makes its layers, like layer::create");
@@ -2266,6 +2267,11 @@ namespace one::language {
                         collage.preview_wide = std::stoi(expect(token_kind::number, "how wide it's drawn, like 480 wide").text);
                         if (!at_word("wide")) fail_expecting("wide, as in 480 wide");
                         advance();
+                    } else if (at_word("match") && peek(1).kind == token_kind::identifier && peek(1).text == "colors") {
+                        advance(), advance();
+                        if (!at_word("when")) fail_expecting("when, as in match colors when poster_page.matched == 1");
+                        advance();
+                        collage.match_colors = parse_expression();
                     } else if (at_word("snap")) {
                         collage.snap_where = advance().where;
                         if (!at_word("to")) fail_expecting("to edges, as in snap to edges");
@@ -2282,7 +2288,7 @@ namespace one::language {
                         collage.over = advance().text;
                         collage.tools = parse_screen_block();
                     } else {
-                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, slide poster::slide, paste, snap to edges, empty \"...\", over layer { ... }, or a field playing one of its parts, like words caption");
+                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, paste, snap to edges, empty \"...\", over layer { ... }, or a field playing one of its parts, like words caption");
                     }
                     end_line();
                 }

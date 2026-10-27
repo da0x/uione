@@ -63,6 +63,7 @@ namespace one::screens {
 		std::string id = "";  // what it acts on, sent as id
 		bool when = true;     // whether it applies now, like Follow for someone who doesn't
 		std::string icon = "";
+		std::string swatch = "";              // in a toolbar, drawn as a circle of this color, like #ffffff
 		std::vector<std::string> keys = {};  // run by these too, like ctrl+s, while it's shown
 		bool pressed = false;                // drawn pressed, like a choice already made
 		std::string then_open = "";          // a route like /:poster, opened with what it made
@@ -178,6 +179,7 @@ namespace one::screens {
 		std::string command;
 		std::string field;
 		bool allowed = true;
+		bool descending = false;  // the highest first
 	};
 
 	// A list's rows as cards in columns, like a project's issues in its stages: a
@@ -338,10 +340,9 @@ namespace one::screens {
 	};
 
 	// A picture made of layers, as big as two of the view's values say, in its own
-	// pixels (decision 0019): its rows, lowest first, each placed by x y w h and drawn
-	// from picture, crop_x crop_y crop_w crop_h, turns, mirrored, words, size, color
-	// and weight; the first, when it's a picture, its background, sitting as the view's
-	// background, around, zoom, slide_x and slide_y say.
+	// pixels (decision 0021): its rows, lowest first, each placed by x y w h and drawn
+	// from picture, crop_x crop_y crop_w crop_h, turns, mirrored and around, words,
+	// size, color and weight.
 	struct collage_spec {
 		state<view_state> view;
 		std::string list;
@@ -350,12 +351,12 @@ namespace one::screens {
 		// and sends only parts; these say which of the app's fields they are.
 		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
-		std::string slide = "";  // and the one the background slid is, with slide_x slide_y
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
+		bool match_colors = false;  // its pictures' colors moved toward one another's, so they look like one picture
 		std::string empty = "";  // said while it has no layers
 		std::string pick = "";   // the screen's pick of its layers, which a click picks
 		std::vector<command_button> over = {};  // buttons above the picked layer
-		std::string subject = "";               // the id of what the view is per, which slides its background
+		std::string subject = "";               // the id of what the view is per
 		bool fills = false;                     // in a workspace, as big as its region; elsewhere 560 tall
 		std::string add = "";     // the command that makes a layer, sent `parent` = subject
 		std::string crop = "";    // and the one a picture cropped is sent to, its crop and its place

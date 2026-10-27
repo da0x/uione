@@ -22,14 +22,15 @@ namespace studio at / {
 		views       number  = 0
 		width       number  = 1600
 		height      number  = 900
-		background  enum    fit | fill | stretch | center = background::fill
-		around      enum    edges | color | blend = around::edges
-		slide_x     number  = 0.5
-		slide_y     number  = 0.5
+		// Whether its pictures' colors are matched, so they look like one picture.
+		matched     number  = 0
 		preview     file
 	}
 
-	// What a poster is made of: pictures and words, lowest first.
+	// What a poster is made of: pictures and words, lowest first. Around a picture is
+	// nothing, its edges drawn out or its edge color to the poster's edges, a blend of
+	// it into the rest, or it melted into what's under it; its corners are square, or
+	// trimmed round.
 	entity layer {
 		poster   poster  required
 		depth    number  = 0
@@ -40,6 +41,8 @@ namespace studio at / {
 		crop_y   number  = 0
 		crop_w   number  = 1
 		crop_h   number  = 1
+		around   enum    clear | edges | color | blend | harmonize = around::clear
+		corners  number  = 0
 		words    text
 		size     number  = 64
 		weight   number  = 400
@@ -57,11 +60,6 @@ namespace studio at / {
 	command poster::preview {
 		changes preview
 		apart from undo
-	}
-
-	command poster::slide {
-		changes slide_x slide_y
-		require slide_x >= 0 && slide_x <= 1 && slide_y >= 0 && slide_y <= 1  "a slide is from 0 to 1"
 	}
 
 	command layer::create
@@ -83,6 +81,10 @@ namespace studio at / {
 		require size > 0  "words have a size"
 	}
 
+	command layer::arrange {
+		changes around corners
+	}
+
 	// Opened once more: counted, but never a step undo takes back.
 	command poster::view {
 		changes views
@@ -99,10 +101,10 @@ namespace studio at / {
 	}
 
 	view poster_page per poster {
-		title  color  width  height  background  around  slide_x  slide_y
+		title  color  width  height  matched
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  words  size  weight  depth  x  y  w  h
+			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h
 		}
 	}
 
@@ -185,6 +187,21 @@ namespace studio at / {
 				layer::write "Bold" icon bold { weight = 400 } on when layer.weight >= 700
 				layer::write "Bold" icon bold { weight = 700 } when layer.weight < 700
 			}
+			group "Margins" small when layer.picture != none {
+				layer::arrange "Clear" icon clear { around = around::clear }
+				layer::arrange "Edges" icon edges { around = around::edges }
+				layer::arrange "Edge color" icon color { around = around::color }
+				layer::arrange "Blend" icon blend { around = around::blend }
+				layer::arrange "Harmonize" icon harmonize { around = around::harmonize }
+			}
+			group "Corners" small when layer.picture != none {
+				layer::arrange "Square" icon square { corners = 0 }
+				layer::arrange "Rounded" icon rounded { corners = 0.06 }
+			}
+			group "Look" small {
+				poster::update "Match colors" icon magic { matched = 0 } on when poster_page.matched == 1 when poster_page.matched == 1
+				poster::update "Match colors" icon magic { matched = 1 } when poster_page.matched != 1
+			}
 			group "Picture" {
 				copy poster_page as picture "Copy" icon copy key ctrl+shift+c
 				save poster_page as picture "Save" icon save key ctrl+s
@@ -197,8 +214,8 @@ namespace studio at / {
 				crop layer::crop
 				write layer::write
 				delete layer::delete
-				slide poster::slide
 				snap to edges
+				match colors when poster_page.matched == 1
 				paste
 				keep preview poster::preview into preview 480 wide
 				empty "Add a picture or some words to start"

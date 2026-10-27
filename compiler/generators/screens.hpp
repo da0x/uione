@@ -20,6 +20,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -88,6 +89,17 @@ namespace one::generators::screens {
     // What a name written inside a namespace refers to, in full. A command written
     // as entity::action, or a view written by its name alone, is in the same
     // namespace; one written with its namespace stays as written.
+    // The color a button is drawn as, a circle of it, in a toolbar: one with no icon
+    // whose one given value is a color written #rrggbb, like White's { color = "#ffffff" }.
+    inline std::string swatch_of(const language::button_item& button) {
+        if (button.icon || button.given.size() != 1) return "";
+        auto* literal = std::get_if<language::literal_expression>(&button.given.front().value->node);
+        if (!literal || literal->type != language::literal_expression::kind::string) return "";
+        const std::string& v = literal->value;
+        bool hex = v.size() == 7 && v[0] == '#' && std::all_of(v.begin() + 1, v.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+        return hex ? v : "";
+    }
+
     inline std::string full_command(const std::string& ns, const language::qualified_name& name) {
         return name.parts.size() == 2 ? join(ns, name.text()) : name.text();
     }
@@ -517,7 +529,7 @@ namespace one::generators::screens {
                     if (each.name && *each.name == c.list) layers = &each;
                 }
             }
-            return language::collage_fields(c, layers, view);
+            return language::collage_fields(c, layers);
         }
 
         // A view per an entity that holds one of its fields at its top, like poster_page's

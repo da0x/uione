@@ -8,12 +8,6 @@
 
 namespace one::screens::collage {
 
-	namespace {
-
-		bool slides_sitting(std::string_view sits) { return sits.empty() || sits == "fill" || sits == "fit"; }
-
-	} // namespace
-
 	box sitting(std::string_view sits, double picture_width, double picture_height, double width, double height) {
 		if (sits == "stretch") return {0, 0, width, height};
 		if (picture_width <= 0 || picture_height <= 0) return {0, 0, width, height};
@@ -22,25 +16,6 @@ namespace one::screens::collage {
 		                              : std::min(width / picture_width, height / picture_height);
 		double w = picture_width * s, h = picture_height * s;
 		return {(width - w) / 2, (height - h) / 2, w, h};
-	}
-
-	std::pair<double, double> slide_range(double side, double length) { return {std::min(0.0, side - length), std::max(0.0, side - length)}; }
-
-	box background_at(const backdrop& b, double picture_width, double picture_height) {
-		box at = sitting(b.sits, picture_width, picture_height, b.width, b.height);
-		double zoom = b.zoom > 0 ? b.zoom : 1;
-		at = {at.x + at.w * (1 - zoom) / 2, at.y + at.h * (1 - zoom) / 2, at.w * zoom, at.h * zoom};
-		if (slides_sitting(b.sits) || zoom != 1) {
-			auto [left, right] = slide_range(b.width, at.w);
-			auto [top, bottom] = slide_range(b.height, at.h);
-			at.x = left + (right - left) * std::clamp(b.slide_x, 0.0, 1.0);
-			at.y = top + (bottom - top) * std::clamp(b.slide_y, 0.0, 1.0);
-		}
-		return at;
-	}
-
-	bool slides(const backdrop& b, box at) {
-		return (slides_sitting(b.sits) || (b.zoom > 0 && b.zoom != 1)) && (std::abs(at.w - b.width) > 0.5 || std::abs(at.h - b.height) > 0.5);
 	}
 
 	box whole_of(box shown, box crop) {
@@ -141,25 +116,6 @@ namespace one::screens::collage {
 		return out;
 	}
 
-	guided slid(box from, double dx, double dy, std::pair<double, double> across, std::pair<double, double> down, double width, double height,
-	            double close, bool snapping) {
-		guided out{from, {}, {}, {}};
-		box& b = out.at;
-		b.x = std::clamp(b.x + dx, across.first, across.second);
-		b.y = std::clamp(b.y + dy, down.first, down.second);
-		if (!snapping) return out;
-		double middle_x = (across.first + across.second) / 2, middle_y = (down.first + down.second) / 2;
-		if (across.second > across.first && std::abs(b.x - middle_x) <= close) {
-			b.x = middle_x;
-			out.guide_x = width / 2;
-		}
-		if (down.second > down.first && std::abs(b.y - middle_y) <= close) {
-			b.y = middle_y;
-			out.guide_y = height / 2;
-		}
-		return out;
-	}
-
 	box cropped(box kept, int edges, double dx, double dy, box whole) {
 		if (edges == 0) {
 			return {std::clamp(kept.x + dx, whole.x, whole.x + whole.w - kept.w), std::clamp(kept.y + dy, whole.y, whole.y + whole.h - kept.h), kept.w, kept.h};
@@ -254,6 +210,170 @@ namespace one::screens::collage {
 			}
 		}
 		return colors;
+	}
+
+	std::vector<double> halo(int width, int height, const std::vector<double>& colors, int reach, double inner) {
+		int ow = width + 2 * reach, oh = height + 2 * reach;
+		if (width <= 0 || height <= 0 || reach < 0) return {};
+		std::vector<double> spread(static_cast<std::size_t>(ow) * oh * 3, 0);
+		std::vector<bool> covered(static_cast<std::size_t>(ow) * oh, false);
+		for (int y = 0; y < height; ++y) {
+			for (int x = 0; x < width; ++x) {
+				std::size_t at = static_cast<std::size_t>(y + reach) * ow + (x + reach);
+				covered[at] = true;
+				for (int c = 0; c < 3; ++c) spread[at * 3 + c] = colors[(static_cast<std::size_t>(y) * width + x) * 3 + c];
+			}
+		}
+		spread = harmonic_fill(ow, oh, std::move(spread), covered);
+		auto smooth = [](double from, double to, double v) {
+			double t = to > from ? std::clamp((v - from) / (to - from), 0.0, 1.0) : (v >= to ? 1.0 : 0.0);
+			return t * t * (3 - 2 * t);
+		};
+		std::vector<double> out(static_cast<std::size_t>(ow) * oh * 4, 0);
+		for (int y = 0; y < oh; ++y) {
+			for (int x = 0; x < ow; ++x) {
+				// How far the cell's middle is outside the picture, or, less than none, inside it.
+				double px = x + 0.5 - reach, py = y + 0.5 - reach;
+				double ox = std::max({0.0, -px, px - width}), oy = std::max({0.0, -py, py - height});
+				double d = ox > 0 || oy > 0 ? std::hypot(ox, oy) : -std::min({px, width - px, py, height - py});
+				// Whole a cell either side of its edge, so drawn bigger, smoothly between cells, it's
+				// whole on the edge itself and the picture's own edge never shows; and gone a
+				// cell before the reach's end, so it fades to nothing before the grid ends.
+				double alpha = d <= 0 ? smooth(-inner - 1, -1, d) : 1 - smooth(1, reach - 1, d);
+				std::size_t at = static_cast<std::size_t>(y) * ow + x;
+				for (int c = 0; c < 3; ++c) out[at * 4 + c] = spread[at * 3 + c];
+				out[at * 4 + 3] = alpha * 255;
+			}
+		}
+		return out;
+	}
+
+	namespace {
+
+		// Red, green and blue as brightness and two colors, and back (YCbCr, as JPEG has it).
+		void to_ycc(const double rgb[3], double out[3]) {
+			out[0] = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
+			out[1] = -0.168736 * rgb[0] - 0.331264 * rgb[1] + 0.5 * rgb[2];
+			out[2] = 0.5 * rgb[0] - 0.418688 * rgb[1] - 0.081312 * rgb[2];
+		}
+		void to_rgb(const double ycc[3], double out[3]) {
+			out[0] = ycc[0] + 1.402 * ycc[2];
+			out[1] = ycc[0] - 0.344136 * ycc[1] - 0.714136 * ycc[2];
+			out[2] = ycc[0] + 1.772 * ycc[1];
+		}
+
+	} // namespace
+
+	color_stats stats_of(const std::vector<double>& colors, double weight) {
+		color_stats out;
+		out.weight = weight;
+		std::size_t cells = colors.size() / 3;
+		if (cells == 0) return out;
+		std::vector<double> ycc(cells * 3);
+		for (std::size_t i = 0; i < cells; ++i) {
+			to_ycc(&colors[i * 3], &ycc[i * 3]);
+			for (int c = 0; c < 3; ++c) out.mean[c] += ycc[i * 3 + c];
+		}
+		out.mean[0] /= static_cast<double>(cells);
+		for (std::size_t i = 0; i < cells; ++i) out.spread[0] += (ycc[i * 3] - out.mean[0]) * (ycc[i * 3] - out.mean[0]);
+		out.spread[0] = std::sqrt(out.spread[0] / static_cast<double>(cells));
+		// How colorful each cell is, and the middle of them.
+		std::vector<double> colorful(cells);
+		for (std::size_t i = 0; i < cells; ++i) colorful[i] = std::hypot(ycc[i * 3 + 1], ycc[i * 3 + 2]);
+		std::vector<double> sorted = colorful;
+		std::ranges::sort(sorted);
+		double middle = cells % 2 ? sorted[cells / 2] : (sorted[cells / 2 - 1] + sorted[cells / 2]) / 2;
+		out.spread[1] = out.spread[2] = middle;
+		// Its cast, from the cells no more colorful than that.
+		double cast[2] = {0, 0};
+		std::size_t plain = 0;
+		for (std::size_t i = 0; i < cells; ++i) {
+			if (colorful[i] > middle) continue;
+			cast[0] += ycc[i * 3 + 1], cast[1] += ycc[i * 3 + 2];
+			++plain;
+		}
+		out.mean[1] = cast[0] / static_cast<double>(plain);
+		out.mean[2] = cast[1] / static_cast<double>(plain);
+		std::vector<double> bright(cells);
+		for (std::size_t i = 0; i < cells; ++i) bright[i] = ycc[i * 3];
+		std::ranges::sort(bright);
+		for (int q = 0; q < tone_points; ++q) {
+			double at = static_cast<double>(cells - 1) * q / (tone_points - 1);
+			std::size_t low = static_cast<std::size_t>(at);
+			double part = at - static_cast<double>(low);
+			out.tones.push_back(low + 1 < cells ? bright[low] + (bright[low + 1] - bright[low]) * part : bright[low]);
+		}
+		return out;
+	}
+
+	void shifted(const color_shift& s, double rgb[3]) {
+		double ycc[3];
+		to_ycc(rgb, ycc);
+		// Its brightness along the tone curve, straight between its points, and as far
+		// past its ends as it is from them.
+		const auto& from = s.from;
+		const auto& to = s.to;
+		if (from.size() >= 2 && from.size() == to.size()) {
+			double y = ycc[0];
+			std::size_t i = 0;
+			while (i + 2 < from.size() && y > from[i + 1]) ++i;
+			double span = from[i + 1] - from[i];
+			ycc[0] = span > 1e-9 ? to[i] + (to[i + 1] - to[i]) * (y - from[i]) / span : to[i] + (y - from[i]);
+			if (y < from.front()) ycc[0] = to.front() + (y - from.front());
+			if (y > from.back()) ycc[0] = to.back() + (y - from.back());
+			// Its colors as much stronger or weaker as it's brighter or darker, so it
+			// looks as colorful as it was: darker with the same colors looks more so.
+			double follow = std::clamp((ycc[0] + 16) / (y + 16), 0.5, 2.0);
+			ycc[1] *= follow, ycc[2] *= follow;
+		} else {
+			ycc[0] = ycc[0] * s.gain[0] + s.offset[0];
+		}
+		for (int c = 1; c < 3; ++c) ycc[c] = ycc[c] * s.gain[c] + s.offset[c];
+		to_rgb(ycc, rgb);
+	}
+
+	std::vector<color_shift> matched(const std::vector<color_stats>& pictures, double strength, double cast) {
+		double total = 0, mean[3] = {0, 0, 0}, spread[3] = {0, 0, 0};
+		for (const auto& p : pictures) {
+			total += p.weight;
+			for (int c = 0; c < 3; ++c) mean[c] += p.mean[c] * p.weight, spread[c] += p.spread[c] * p.weight;
+		}
+		std::vector<color_shift> out(pictures.size());
+		if (total <= 0) return out;
+		for (int c = 0; c < 3; ++c) mean[c] /= total, spread[c] /= total;
+		// Their tones together: each point the average of theirs there, weighed alike.
+		std::vector<double> tones(tone_points, 0);
+		bool toned = std::ranges::all_of(pictures, [](const color_stats& p) { return p.tones.size() == static_cast<std::size_t>(tone_points); });
+		for (const auto& p : pictures) {
+			for (int q = 0; toned && q < tone_points; ++q) tones[static_cast<std::size_t>(q)] += p.tones[static_cast<std::size_t>(q)] * p.weight / total;
+		}
+		double k = std::clamp(strength, 0.0, 1.0), toward_cast = std::clamp(cast, 0.0, 1.0);
+		for (std::size_t i = 0; i < pictures.size(); ++i) {
+			for (int c = 0; c < 3; ++c) {
+				const auto& p = pictures[i];
+				// How strong its colors are changes only half as far, and only so far, so a
+				// colorful picture keeps most of it; and one nearly gray is left so, never
+				// colorized.
+				double g = c == 0 ? (p.spread[c] < 1 ? 1 : std::clamp(spread[c] / p.spread[c], 1.0 / 3, 3.0))
+				                  : (p.spread[c] < 4 ? 1 : std::clamp(spread[c] / p.spread[c], 0.8, 1.25));
+				double toward = c == 0 ? k : k / 2;
+				// Spread about its own average, part of the way; then that average moved
+				// toward all of theirs, the two colors' as far as their cast is.
+				out[i].gain[c] = 1 - toward + toward * g;
+				out[i].offset[c] = p.mean[c] * (1 - out[i].gain[c]) + (c == 0 ? k : toward_cast) * (mean[c] - p.mean[c]);
+			}
+			// Its brightness along a curve from its tones to theirs, part of the way.
+			if (toned) {
+				out[i].from = pictures[i].tones;
+				// Half as far as the rest, and each tone no more than 24 of 255, so a bright
+				// picture comes nearer darker ones without turning dark.
+				for (int q = 0; q < tone_points; ++q) {
+					double own = pictures[i].tones[static_cast<std::size_t>(q)];
+					out[i].to.push_back(own + std::clamp(k / 2 * (tones[static_cast<std::size_t>(q)] - own), -24.0, 24.0));
+				}
+			}
+		}
+		return out;
 	}
 
 } // namespace one::screens::collage

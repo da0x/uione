@@ -6,12 +6,13 @@
 # fails while this differs from what's so, so it only ever gets shorter; a new
 # target starts with everything here and is done when none of its lines are left.
 # A terminal draws no pictures, so it can't show one alone, on a card or a table's
-# row, crop one in place, or copy, save or keep a picture of a collage, and it has
-# no screen of its own to take a screenshot of.
+# row, crop one in place, match a collage's colors, or copy, save or keep a picture of
+# a collage, and it has no screen of its own to take a screenshot of.
 terminal cards.picture
 terminal picture
 terminal collage.copy
 terminal collage.crop
+terminal collage.match_colors
 terminal collage.preview
 terminal collage.save
 terminal collage.screenshot

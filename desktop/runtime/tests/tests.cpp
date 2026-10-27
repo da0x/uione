@@ -28,9 +28,8 @@ namespace {
 
 	// Each of a collage's parts in the field named like it, as an app's are by default.
 	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
-	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"},
-	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"},
-	    {"background", "background"}, {"around", "around"}, {"zoom", "zoom"}, {"slide_x", "slide_x"}, {"slide_y", "slide_y"}};
+	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"}, {"around", "around"}, {"corners", "corners"},
+	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}};
 
 	const std::filesystem::path golden_folder = ONE_DESKTOP_TESTS "/golden";
 
@@ -990,6 +989,37 @@ namespace {
 
 }  // namespace
 
+TEST("a table reordered descending shows its rows highest first, and a row moved down goes between the two now under it") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"layers", list{value(fields{{"id", "l0"}, {"words", "Lowest"}, {"depth", 0}}), value(fields{{"id", "l1"}, {"words", "Middle"}, {"depth", 1}}),
+	                                      value(fields{{"id", "l2"}, {"words", "Top"}, {"depth", 2}})}}}));
+	data.on("studio::layer::update", [](const value& f, memory_source&) -> answer { return f["id"].as_string(); });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return items(table(p, {.view = p.view("studio::poster_page", "p1"),
+		                                            .list = "layers",
+		                                            .columns = {{"words", "Layers"}},
+		                                            .reorder = reorder_spec{"studio::layer::update", "depth", true, true}}));
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	auto* rows = list_holding(*root, "l2");
+	CHECK(rows);
+	if (!rows) return;
+	std::vector<std::string> shown;
+	for (auto& c : rows->children) shown.push_back(c->key);
+	CHECK((shown == std::vector<std::string>{"l2", "l1", "l0"}));
+	// The top row, first, moved down: below Middle, above Lowest.
+	CHECK(pressed(rows, one::desktop::key_event{.symbol = one::desktop::keys::down, .text = "", .alt = true}));
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	CHECK(data.runs().back().fields["id"].as_string() == "l2");
+	CHECK(data.runs().back().fields["depth"].as_double() == 0.5);
+}
+
 TEST("a table: tabs by a choice, searched, sorted and in pages, with a row's action asking with its form") {
 	memory_source data;
 	fill_table(data);
@@ -1250,6 +1280,40 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("in a toolbar, a group that doesn't apply now is there, off, its keys doing nothing, and of tools with the same words the one that holds is drawn") {
+	memory_source data;
+	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return "p1"; });
+	data.on("studio::poster::update", [](const value&, memory_source&) -> answer { return "p1"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     bool applies = p.toggled("/ on");
+		                     return workspace(p, region{"toolbar", along(p.off_unless(applies, [&] {
+			                                                return group(p, "Poster", false, false, [&] {
+				                                                return tools(command(p, {.command = "studio::poster::create", .label = "New", .icon = "add", .keys = {"ctrl+n"}}),
+				                                                             either(p, {command_button{.command = "studio::poster::update", .label = "Bold", .when = false, .icon = "bold", .keys = {"ctrl+b"}},
+				                                                                        command_button{.command = "studio::poster::update", .label = "Bold", .when = true, .icon = "bold", .keys = {"ctrl+b"}}}));
+			                                                });
+		                                                }))},
+		                                      region{"main", items(text({words("The posters")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	(void)drawn(nav);
+	// Off: drawn, but no key of it works.
+	CHECK(!key(nav, one::desktop::key_event{.symbol = 'n', .text = "", .control = true}));
+	CHECK(!key(nav, one::desktop::key_event{.symbol = 'b', .text = "", .control = true}));
+	CHECK(data.runs().empty());
+	matches_golden("toolbar-off", {420, 120}, [&] { return drawn(nav); });
+	// Applying, both work, Bold once, as the one whose when holds.
+	nav.current().toggle("/ on");
+	(void)drawn(nav);
+	CHECK(nav.current().keys().size() == 2);
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'n', .text = "", .control = true}));
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'b', .text = "", .control = true}));
+	CHECK(data.runs().size() == 2);
+}
+
 TEST("a status line saying a file was saved offers to show it in its folder, and only while it says so") {
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
@@ -1367,16 +1431,16 @@ TEST("a collage crops its picked picture in place, the background too, kept with
 	CHECK(data.runs().back().fields["w"].as_double() > 200);
 }
 
-TEST("a background cropped sits by the part it keeps, what's around it filled from that part's edges") {
+TEST("a picture cropped is drawn by the part it keeps, and around edges draws the rest of the collage out from that part's edges") {
 	struct kept_here : memory_source {
 		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
 	} data;
-	// The left half of a picture as wide as the collage, fitted: as tall as it is, and
-	// what's either side of it drawn out from its edges.
+	// The left half of a 900 by 560 picture, fitted in the middle, as tall as the collage,
+	// and what's either side of it drawn out from its edges.
 	data.set("studio::poster_page", "p1",
-	         value(fields{{"width", 1600}, {"height", 900}, {"background", "fit"}, {"around", "edges"},
-	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "collage.png"}, {"crop_x", 0}, {"crop_y", 0}, {"crop_w", 0.5}, {"crop_h", 1},
-	                                                   {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}})}}}));
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "collage.png"}, {"crop_x", 0}, {"crop_y", 0}, {"crop_w", 0.5}, {"crop_h", 1}, {"around", "edges"},
+	                                                   {"x", 800 - 450 * 900.0 / 560 / 2}, {"y", 0}, {"w", 450 * 900.0 / 560}, {"h", 900}})}}}));
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
@@ -1385,33 +1449,19 @@ TEST("a background cropped sits by the part it keeps, what's around it filled fr
 	                     }});
 	navigator nav(s, data);
 	nav.open("/");
-	matches_golden("collage-background-cropped", {900, 560}, [&] { return drawn(nav); });
+	matches_golden("collage-cropped-edges", {900, 560}, [&] { return drawn(nav); });
 }
 
-TEST("around blend fills the space no picture covers from every picture's edges, each color flowing into the next") {
-	// Pictures of one color each, kept in a folder of the test's own.
-	std::filesystem::path folder = std::filesystem::temp_directory_path() / "uione-blend-test";
-	std::filesystem::create_directories(folder);
-	auto solid = [&](const std::string& name, int w, int h, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
-		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
-		for (std::size_t i = 0; i < pixels.size(); i += 4) pixels[i] = r, pixels[i + 1] = g, pixels[i + 2] = b, pixels[i + 3] = 255;
-		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
-	};
-	solid("red.png", 30, 90, 220, 40, 40);
-	solid("blue.png", 30, 90, 40, 80, 220);
-	solid("green.png", 200, 200, 60, 180, 90);
-	struct kept_there : memory_source {
-		std::filesystem::path in;
-		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+TEST("around blend fills the rest of the collage from a picture's edges, each color settling between the ones around it, and what's over it is drawn over it") {
+	struct kept_here : memory_source {
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
 	} data;
-	data.in = folder;
-	// A small background in the middle, a picture at each side, and the space between
-	// them blended.
+	// A picture small in the middle, blended out to the collage's edges, and one over it,
+	// sharp.
 	data.set("studio::poster_page", "p1",
-	         value(fields{{"width", 1600}, {"height", 900}, {"background", "center"}, {"around", "blend"},
-	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "green.png"}, {"x", 0}, {"y", 0}, {"w", 200}, {"h", 200}}),
-	                                      value(fields{{"id", "l1"}, {"picture", "red.png"}, {"x", 0}, {"y", 0}, {"w", 300}, {"h", 900}}),
-	                                      value(fields{{"id", "l2"}, {"picture", "blue.png"}, {"x", 1300}, {"y", 0}, {"w", 300}, {"h", 900}})}}}));
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"picture", "collage.png"}, {"around", "blend"}, {"x", 575}, {"y", 310}, {"w", 450}, {"h", 280}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "collage.png"}, {"x", 1200}, {"y", 600}, {"w", 300}, {"h", 187}})}}}));
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();
 	s.screens.push_back({"Poster", "/", "", [](page& p) {
@@ -1421,6 +1471,87 @@ TEST("around blend fills the space no picture covers from every picture's edges,
 	navigator nav(s, data);
 	nav.open("/");
 	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
+}
+
+TEST("around harmonize melts a picture into what's under it, its own colors spread past its edges and fading, and one that's clear stays sharp, its corners trimmed round") {
+	std::filesystem::path folder = std::filesystem::temp_directory_path() / "uione-harmonize-test";
+	std::filesystem::create_directories(folder);
+	auto solid = [&](const std::string& name, int w, int h, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+		std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4);
+		for (std::size_t i = 0; i < pixels.size(); i += 4) pixels[i] = r, pixels[i + 1] = g, pixels[i + 2] = b, pixels[i + 3] = 255;
+		CHECK(one::desktop::picture::of(w, h, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	solid("green.png", 160, 90, 60, 180, 90);
+	solid("red.png", 100, 100, 220, 40, 40);
+	solid("blue.png", 100, 100, 40, 80, 220);
+	solid("yellow.png", 100, 100, 240, 210, 60);
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// Two harmonized pictures overlapping on one that fills the collage, melting into it
+	// and each other, and a sharp one beside them with round corners.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "b0"}, {"picture", "green.png"}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}}),
+	                                      value(fields{{"id", "l1"}, {"picture", "red.png"}, {"x", 250}, {"y", 200}, {"w", 400}, {"h", 400}, {"around", "harmonize"}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "blue.png"}, {"x", 550}, {"y", 350}, {"w", 400}, {"h", 400}, {"around", "harmonize"}}),
+	                                      value(fields{{"id", "l3"}, {"picture", "yellow.png"}, {"x", 1150}, {"y", 250}, {"w", 300}, {"h", 300}, {"corners", 0.2}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("collage-harmonize", {900, 560}, [&] { return drawn(nav); });
+	std::filesystem::remove_all(folder);
+}
+
+TEST("a collage matching colors moves each picture's colors most of the way toward all of theirs, so they look like one picture") {
+	std::filesystem::path folder = std::filesystem::temp_directory_path() / "uione-match-test";
+	std::filesystem::create_directories(folder);
+	auto solid = [&](const std::string& name, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+		std::vector<std::uint8_t> pixels(100 * 100 * 4);
+		for (std::size_t i = 0; i < pixels.size(); i += 4) pixels[i] = r, pixels[i + 1] = g, pixels[i + 2] = b, pixels[i + 3] = 255;
+		CHECK(one::desktop::picture::of(100, 100, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	solid("red.png", 220, 40, 40);
+	solid("blue.png", 40, 80, 220);
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// As big as each other, so their colors meet halfway: each one's cast all the way,
+	// its tones half of 0.85 of the way, its colors following its brightness: red to
+	// 130.49 63.82 133.82.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"picture", "red.png"}, {"x", 0}, {"y", 0}, {"w", 800}, {"h", 900}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "blue.png"}, {"x", 800}, {"y", 0}, {"w", 800}, {"h", 900}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .match_colors = true, .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto drawn_now = one::desktop::offscreen::draw({900, 560}, 1, tested_theme().page, [&](one::desktop::canvas& c) {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		auto root = drawn(nav).take();
+		root->place({0, 0, 900, 560});
+		root->paint(c);
+	});
+	auto at = [&](int x, int y) { return &drawn_now.rgba[(static_cast<std::size_t>(y) * 900 + x) * 4]; };
+	const std::uint8_t* red = at(250, 280);
+	CHECK(std::abs(red[0] - 130) <= 2);
+	CHECK(std::abs(red[1] - 64) <= 2);
+	CHECK(std::abs(red[2] - 134) <= 2);
+	matches_golden("collage-matched", {900, 560}, [&] { return drawn(nav); });
 	std::filesystem::remove_all(folder);
 }
 
@@ -1466,7 +1597,7 @@ TEST("a collage fills in the own size of a picture kept before it was, as it's t
 	CHECK(data.runs()[1].fields["image_height"].as_double() == 900);
 }
 
-TEST("a picture coming into a collage with nothing on it covers it, and one coming in after is its own size, fitted, in the middle") {
+TEST("a picture coming into a collage with nothing on it fills it, and one coming in after is its own size, fitted, in the middle") {
 	memory_source data;
 	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
 	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
@@ -1488,8 +1619,11 @@ TEST("a picture coming into a collage with nothing on it covers it, and one comi
 	if (data.runs().empty()) return;
 	const value& first = data.runs().back().fields;
 	CHECK(data.runs().back().command == "studio::layer::create");
+	// 900 by 560, as wide as the collage and spilling over its top and bottom alike.
+	CHECK(first["x"].as_double() == 0);
 	CHECK(first["w"].as_double() == 1600);
-	CHECK(first["h"].as_double() == 900);
+	CHECK(std::abs(first["h"].as_double() - 560 * 1600.0 / 900) < 1e-9);
+	CHECK(std::abs(first["y"].as_double() - (900 - 560 * 1600.0 / 900) / 2) < 1e-9);
 	CHECK(first["poster"].as_string() == "p1");
 	CHECK(first["picture_width"].as_double() == 900);
 	CHECK(first["picture_height"].as_double() == 560);

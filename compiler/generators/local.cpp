@@ -297,6 +297,12 @@ namespace one::generators {
                     if (callee && callee->name.text() == "was" && named && named->name.parts.size() == 1 && s.own && field(s.own, named->name.parts[0])) {
                         return {"c.at(" + str(full(s.own->name)) + ", e[" + str("id") + "])[" + str(named->name.parts[0]) + "]"};
                     }
+                    // min(a, b) and max(a, b), of two numbers.
+                    if (callee && (callee->name.text() == "min" || callee->name.text() == "max") && call->arguments.size() == 2) {
+                        std::string a = number_of(as_value(expression(*call->arguments[0], s))), b = number_of(as_value(expression(*call->arguments[1], s)));
+                        std::string said = typescript() ? "Math." + callee->name.text() : "std::" + callee->name.text() + "<double>";
+                        return {sum(said + "(" + a + ", " + b + ")")};
+                    }
                     unsupported(e.where, "this call in a command");
                     return {nothing_value()};
                 }

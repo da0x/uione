@@ -183,7 +183,7 @@ namespace one::terminal::runtime {
 		for (std::size_t i = 0; i < layers.size(); ++i) {
 			const auto& l = layers[i];
 			bool words = l["picture"].as_string().empty();
-			std::string name = words ? "\"" + l["words"].as_string() + "\"" : i == 0 ? "Background" : "Picture " + std::to_string(++pictures);
+			std::string name = words ? "\"" + l["words"].as_string() + "\"" : "Picture " + std::to_string(++pictures);
 			name += std::format("  {}×{} at {}, {}", static_cast<long long>(l["w"].as_double()), static_cast<long long>(l["h"].as_double()),
 			                    static_cast<long long>(l["x"].as_double()), static_cast<long long>(l["y"].as_double()));
 			rows.push_back({l["id"].as_string(), terminal::text(name)});
@@ -194,24 +194,15 @@ namespace one::terminal::runtime {
 			options.start = p.picked_id(spec.pick);
 		}
 		// Alt and the arrows, as a board's cards move, take the picked layer ten of its
-		// pixels, or slide the background a twentieth of the way; the arrows alone go
-		// from layer to layer. Nothing's dragged here, so nothing snaps.
+		// pixels; the arrows alone go from layer to layer. Nothing's dragged here, so
+		// nothing snaps.
 		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
-		for (std::size_t i = 0; i < layers.size() && !picked.empty(); ++i) {
-			const auto& l = layers[i];
-			if (l["id"].as_string() != picked) continue;
-			bool background = i == 0 && !l["picture"].as_string().empty();
+		for (const auto& l : layers) {
+			if (picked.empty() || l["id"].as_string() != picked || spec.place.empty()) continue;
 			for (auto [key, dx, dy] : {std::tuple{"left", -1.0, 0.0}, {"right", 1.0, 0.0}, {"up", 0.0, -1.0}, {"down", 0.0, 1.0}}) {
-				if (background && !spec.slide.empty()) {
-					double sx = data["slide_x"].is_null() ? 0.5 : data["slide_x"].as_double(), sy = data["slide_y"].is_null() ? 0.5 : data["slide_y"].as_double();
-					p.on_key(std::string("alt+") + key, [&p, command = spec.slide, kept = spec.fields, subject = spec.subject, sx, sy, dx, dy] {
-						p.run(command, collage_fields_of(value(std::map<std::string, value>{{"id", subject}, {"slide_x", std::clamp(sx + dx * 0.05, 0.0, 1.0)}, {"slide_y", std::clamp(sy + dy * 0.05, 0.0, 1.0)}}), kept));
-					});
-				} else if (!background && !spec.place.empty()) {
-					p.on_key(std::string("alt+") + key, [&p, command = spec.place, kept = spec.fields, l, dx, dy] {
-						p.run(command, collage_fields_of(value(std::map<std::string, value>{{"id", l["id"]}, {"x", l["x"].as_double() + dx * 10}, {"y", l["y"].as_double() + dy * 10}, {"w", l["w"]}, {"h", l["h"]}}), kept));
-					});
-				}
+				p.on_key(std::string("alt+") + key, [&p, command = spec.place, kept = spec.fields, l, dx, dy] {
+					p.run(command, collage_fields_of(value(std::map<std::string, value>{{"id", l["id"]}, {"x", l["x"].as_double() + dx * 10}, {"y", l["y"].as_double() + dy * 10}, {"w", l["w"]}, {"h", l["h"]}}), kept));
+				});
 			}
 		}
 		std::vector<terminal::view> parts;

@@ -32,7 +32,12 @@ namespace one::driver {
         }
         std::string folder = out + "/" + plan.target;
         if (plan.target == "web") {
-            plan.before.push_back({{yarn ? "yarn" : "npm", "install"}, folder});
+            // Libraries from a checkout are copied in by Yarn, which keeps its copy until
+            // their version changes, so it's made again each time, a change in them
+            // since the last run being what's served; npm links them, so it needn't.
+            bool checkout = std::ranges::any_of(b.files, [](const auto& f) { return f.path == "web/package.json" && f.content.find("\"file:") != std::string::npos; });
+            if (yarn && checkout) plan.before.push_back({{"yarn", "install", "--force"}, folder});
+            else plan.before.push_back({{yarn ? "yarn" : "npm", "install"}, folder});
             // Served with Vite's own copy of the packages made again, so a uione library
             // changed since the last run, like a checkout's, is what's served.
             plan.app = {yarn ? std::vector<std::string>{"yarn", "dev", "--force"} : std::vector<std::string>{"npm", "run", "dev", "--", "--force"}, folder};

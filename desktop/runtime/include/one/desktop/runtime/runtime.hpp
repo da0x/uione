@@ -73,6 +73,9 @@ namespace one::desktop::runtime {
 	// background comes back to be shown; it runs soon after, and what it changes is
 	// shown. Nothing runs once the app has stopped.
 	void post(std::function<void()> task);
+	// Whether there's a window for work handed back to reach: none while drawing to a
+	// file, or in a test, where what would be worked out away is worked out now.
+	bool posting();
 
 	// Whether an address was handed to a copy of the app already running, as
 	// launching it again with one does when the first holds its data: that copy shows

@@ -6,7 +6,7 @@
 // redo, full screen, and the messages saying what was just done. The desktop's
 // runtime does the same, from the same lines.
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Children, createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
@@ -23,6 +23,37 @@ export function useTool(): "large" | "small" | undefined {
   const group = useContext(InGroup);
   const over = useContext(OverLayer);
   return over ? "small" : group ? (group.small ? "small" : "large") : undefined;
+}
+
+// Whether what's in a toolbar doesn't apply now: drawn, so the toolbar keeps its shape,
+// but it can't be pressed, and its keys do nothing.
+const Off = createContext(false);
+
+// A toolbar's group or tool that applies only while `when` holds, and while what it's
+// in does.
+export function Applies({ when, children }: { when: boolean; children?: ReactNode }) {
+  const off = useContext(Off);
+  return <Off.Provider value={off || !when}>{children}</Off.Provider>;
+}
+
+// Whether what's drawn is in a toolbar's group.
+export function useInGroup(): boolean {
+  return Boolean(useContext(InGroup));
+}
+
+// Whether a tool is off: in a toolbar's group, and not applying now.
+export function useOff(): boolean {
+  const group = useContext(InGroup);
+  const off = useContext(Off);
+  return Boolean(group) && off;
+}
+
+// Tools side by side with the same words, like Bold that sets it and Bold that takes it
+// away: one, the first whose when holds, or the first, off.
+export function Either({ children }: { children?: ReactNode }) {
+  const ways = Children.toArray(children) as { props: { when?: boolean; allowed?: boolean } }[];
+  const holds = ways.find((w) => w.props.when !== false && w.props.allowed !== false);
+  return <>{holds ?? ways[0]}</>;
 }
 
 export function Group({ name, small = false, atEnd = false, children }: { name: string; small?: boolean; atEnd?: boolean; children?: ReactNode }) {
@@ -143,10 +174,11 @@ export function Toggle({ name, label, icon, keys }: { name: string; label: strin
   const ui = useUI();
   const tool = useTool() ?? "small";
   const on = useToggled(name);
+  const off = useOff();
   const flip = useCallback(() => setToggled(name, !stored(name)), [name]);
-  useKeys(keys, flip);
+  useKeys(keys, flip, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on} hint={hintOf(label, keys)} onClick={flip}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
       {label}
     </ui.Button>
   );
@@ -171,9 +203,10 @@ export function History({ redo = false, label, icon, keys }: { redo?: boolean; l
     const step = await runner.reply(command);
     if (step) say({ text: `${redo ? "Redid" : "Undid"} ${stepWords(step.id)}.` });
   }, [runner, command, redo, say]);
-  useKeys(keys, () => void take());
+  const off = useOff();
+  useKeys(keys, () => void take(), !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={runner.busy(command)} onClick={() => void take()}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={off || runner.busy(command)} onClick={() => void take()}>
       {words}
     </ui.Button>
   );
@@ -201,9 +234,10 @@ export function FullScreen({ label = "Full screen", icon, keys }: { label?: stri
     if (fullNow()) void document.exitFullscreen();
     else document.documentElement.requestFullscreen?.().catch(() => say({ text: "This browser didn't let the page fill the screen.", problem: true }));
   }, [say]);
-  useKeys(keys, flip);
+  const off = useOff();
+  useKeys(keys, flip, !off);
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={full} hint={hintOf(label, keys)} onClick={flip}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={full && !off} disabled={off} hint={hintOf(label, keys)} onClick={flip}>
       {label}
     </ui.Button>
   );

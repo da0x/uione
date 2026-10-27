@@ -88,10 +88,10 @@ namespace one::desktop::runtime {
 	}
 
 	// Words with a link written in them, like [Daher](https://…), are Markdown.
-	desktop::view text(std::vector<part> parts) {
+	desktop::view text(std::vector<part> parts, bool quiet) {
 		std::string words = said(parts);
 		if (words.find("](") != std::string::npos) return markdown_view(words);
-		return desktop::text(std::move(words), current_theme().body());
+		return desktop::text(std::move(words), quiet ? current_theme().quiet() : current_theme().body());
 	}
 
 	desktop::view subtitle(page& p, std::vector<part> parts) {
@@ -156,11 +156,14 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view link(page& p, std::string words, std::string to, std::string icon, std::vector<std::string> keys) {
-		for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
+		bool off = p.in_group() && p.off();
+		if (!off) {
+			for (const auto& k : keys) p.on_key(k, [&p, address = address_of(p, to)] { p.open(address); });
+		}
 		// In a toolbar's group, a tool, as its buttons are.
 		if (auto small = p.in_group()) {
 			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", *small ? hint_of(words, keys) : words, [&p, address = address_of(p, to)] { p.open(address); },
-			                            {.large = !*small});
+			                            {.large = !*small, .off = off});
 		}
 		// One of the web's icons is a quiet button drawn as just that, as on the web.
 		if (desktop::has_icon(icon) && !leaves(to) && !to.starts_with("#")) {
@@ -190,6 +193,10 @@ namespace one::desktop::runtime {
 	}
 
 	desktop::view command(page& p, command_button b) {
+		// In a toolbar, one that doesn't apply now is there, but off, so the toolbar keeps
+		// its shape.
+		bool off = p.in_group() && (p.off() || !b.when);
+		if (p.in_group()) b.when = true;
 		auto shown = command_of(p, b);
 		if (!shown) return {};
 		std::string label_now = shown->label;
@@ -201,14 +208,26 @@ namespace one::desktop::runtime {
 				if (made) p.open(then.substr(0, then.rfind(':')) + *made);
 			});
 		};
-		for (const auto& k : b.keys) p.on_key(k, run);
-		// In a toolbar's group, a tool: its icon over its words, or its icon alone.
+		if (!off) {
+			for (const auto& k : b.keys) p.on_key(k, run);
+		}
+		// In a toolbar's group, a tool: its icon over its words, or its icon alone, or a
+		// circle of the color it gives.
 		if (auto small = p.in_group()) {
-			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small ? hint_of(label_now, b.keys) : label_now, std::move(run), {.large = !*small, .on = b.pressed});
+			std::optional<desktop::color> swatch;
+			if (b.swatch.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(b.swatch.c_str() + 1, nullptr, 16)));
+			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch ? hint_of(label_now, b.keys) : label_now, std::move(run),
+			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;
 		return desktop::button(label_now, std::move(run), b.primary);
+	}
+
+	desktop::view either(page& p, std::vector<command_button> ways) {
+		if (ways.empty()) return {};
+		auto holds = std::ranges::find_if(ways, [](const command_button& b) { return b.allowed && b.when; });
+		return command(p, holds == ways.end() ? ways.front() : *holds);
 	}
 
 	desktop::view confirm(page& p, std::string command, std::string question) {

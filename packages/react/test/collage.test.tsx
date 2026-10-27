@@ -7,18 +7,29 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { backgroundAt, cornerAt, cropEdgesAt, cropped, harmonicFill, moved, resized, sitting, slid, slides, snapLines, wholeOf } from "../src/collage.js";
-import type { Backdrop, Box, Guided } from "../src/collage.js";
+import { cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
 interface Case {
   what: string;
   covered?: Numbers[]; // harmonic_fill: x, y and three channels of each covered cell
+  cells?: Numbers[]; // halo: x, y and three channels of each of the picture's cells; stats_of: three channels of each
+  weight?: number;
+  mean?: Numbers;
+  spread?: Numbers;
+  pictures?: { mean: Numbers; spread: Numbers; tones?: Numbers; weight: number }[];
+  tones?: Numbers;
+  shift?: { gain: Numbers; offset: Numbers; from?: Numbers; to?: Numbers };
+  rgb?: Numbers;
+  cast?: number;
+  strength?: number;
+  shifts?: { gain: Numbers; offset: Numbers; from?: Numbers; to?: Numbers }[];
+  reach?: number;
+  inner?: number;
   expect?: Numbers[];
   sits?: string;
   size?: Numbers;
-  zoom?: number;
-  slide?: Numbers;
   picture?: Numbers;
   at?: Numbers;
   box?: Numbers;
@@ -33,7 +44,6 @@ interface Case {
   keep_shape?: boolean;
   close?: number;
   snapping?: boolean;
-  slides?: boolean;
   kept?: Numbers;
   edges?: number;
   whole?: Numbers;
@@ -49,14 +59,7 @@ const cases = (JSON.parse(readFileSync(join(here, "../../../screens/tests/collag
 const boxOf = (n: Numbers): Box => ({ x: n[0]!, y: n[1]!, w: n[2]!, h: n[3]! });
 const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 const same = (a: Box, b: Box) => near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h);
-const backdropOf = (k: Case): Backdrop => ({
-  sits: k.sits ?? "",
-  width: k.size?.[0] ?? 0,
-  height: k.size?.[1] ?? 0,
-  zoom: k.zoom ?? 1,
-  slideX: k.slide?.[0] ?? 0.5,
-  slideY: k.slide?.[1] ?? 0.5,
-});
+const sizeOf = (k: Case) => ({ width: k.size?.[0] ?? 0, height: k.size?.[1] ?? 0 });
 // A gesture's guides as the case says them, or none.
 const guidedAs = (g: Guided, k: Case) =>
   (k.guide_x === undefined ? g.guideX === undefined : g.guideX !== undefined && near(g.guideX, k.guide_x)) &&
@@ -71,20 +74,14 @@ const guidedAs = (g: Guided, k: Case) =>
 
 describe("where a collage's layers go", () => {
   it("has the cases the desktop is held to", () => {
-    expect(cases.length).toBeGreaterThanOrEqual(40);
+    expect(cases.length).toBeGreaterThanOrEqual(30);
   });
 
   it.each(cases.map((k, i) => [`${i + 1}, ${k.what}`, k] as const))("case %s", (_, k) => {
-    const b = backdropOf(k);
+    const b = sizeOf(k);
     switch (k.what) {
       case "sitting":
-        expect(same(sitting(b.sits, k.picture![0]!, k.picture![1]!, b.width, b.height), boxOf(k.box!))).toBe(true);
-        break;
-      case "background_at":
-        expect(backgroundAt(b, k.picture![0]!, k.picture![1]!)).toSatisfy((got: Box) => same(got, boxOf(k.box!)));
-        break;
-      case "slides":
-        expect(slides(b, boxOf(k.at!))).toBe(k.slides);
+        expect(same(sitting(k.sits ?? "", k.picture![0]!, k.picture![1]!, b.width, b.height), boxOf(k.box!))).toBe(true);
         break;
       case "whole_of":
         expect(same(wholeOf(boxOf(k.shown!), boxOf(k.crop!)), boxOf(k.box!))).toBe(true);
@@ -101,11 +98,6 @@ describe("where a collage's layers go", () => {
           k.what === "moved"
             ? moved(from, dx, dy, lines, b.width, b.height, k.close!, k.snapping!)
             : resized(from, k.corner!, dx, dy, k.keep_shape!, lines, k.close!, k.snapping!);
-        expect(same(got.at, boxOf(k.box!)) && guidedAs(got, k)).toBe(true);
-        break;
-      }
-      case "slid": {
-        const got = slid(boxOf(k.from!), k.by![0]!, k.by![1]!, k.across as [number, number], k.down as [number, number], b.width, b.height, k.close!, k.snapping!);
         expect(same(got.at, boxOf(k.box!)) && guidedAs(got, k)).toBe(true);
         break;
       }
@@ -131,6 +123,57 @@ describe("where a collage's layers go", () => {
           const at = e[1]! * w + e[0]!;
           for (let i = 0; i < 3; i++) expect(Math.abs(got[at * 3 + i]! - e[2 + i]!)).toBeLessThanOrEqual(k.close!);
         }
+        break;
+      }
+      case "halo": {
+        const [w, h] = k.size as [number, number];
+        const colors = new Array<number>(w * h * 3).fill(0);
+        for (const c of k.cells!) for (let i = 0; i < 3; i++) colors[(c[1]! * w + c[0]!) * 3 + i] = c[2 + i]!;
+        const got = halo(w, h, colors, k.reach!, k.inner!);
+        for (const e of k.expect!) {
+          const at = e[1]! * (w + 2 * k.reach!) + e[0]!;
+          for (let i = 0; i < 4; i++) expect(Math.abs(got[at * 4 + i]! - e[2 + i]!)).toBeLessThanOrEqual(k.close!);
+        }
+        break;
+      }
+      case "stats_of": {
+        const got = statsOf(k.cells!.flat(), k.weight!);
+        expect(got.weight).toBe(k.weight);
+        for (let i = 0; i < 3; i++) {
+          expect(Math.abs(got.mean[i]! - k.mean![i]!)).toBeLessThanOrEqual(k.close!);
+          expect(Math.abs(got.spread[i]! - k.spread![i]!)).toBeLessThanOrEqual(k.close!);
+        }
+        if (k.tones) {
+          expect(got.tones?.length).toBe(k.tones.length);
+          k.tones.forEach((t, i) => expect(Math.abs(got.tones![i]! - t)).toBeLessThanOrEqual(k.close!));
+        }
+        break;
+      }
+      case "matched": {
+        const got = matched(
+          k.pictures!.map((p) => ({ mean: p.mean as [number, number, number], spread: p.spread as [number, number, number], tones: p.tones, weight: p.weight })),
+          k.strength!,
+          k.cast!,
+        );
+        expect(got.length).toBe(k.shifts!.length);
+        got.forEach((shift, j) => {
+          for (let i = 0; i < 3; i++) {
+            expect(Math.abs(shift.gain[i] - k.shifts![j]!.gain[i]!)).toBeLessThanOrEqual(k.close!);
+            expect(Math.abs(shift.offset[i] - k.shifts![j]!.offset[i]!)).toBeLessThanOrEqual(k.close!);
+          }
+          for (const curve of ["from", "to"] as const) {
+            const want = k.shifts![j]![curve] ?? [];
+            expect(shift[curve]?.length ?? 0).toBe(want.length);
+            want.forEach((t, i) => expect(Math.abs(shift[curve]![i]! - t)).toBeLessThanOrEqual(k.close!));
+          }
+        });
+        break;
+      }
+      case "shifted": {
+        const s = k.shift!;
+        const got = shifted({ gain: s.gain as [number, number, number], offset: s.offset as [number, number, number], from: s.from, to: s.to }, k.rgb![0]!, k.rgb![1]!, k.rgb![2]!);
+        const want = k.expect as unknown as number[]; // one color, red, green and blue
+        for (let i = 0; i < 3; i++) expect(Math.abs(got[i] - want[i]!)).toBeLessThanOrEqual(k.close!);
         break;
       }
       default:

@@ -591,15 +591,17 @@ namespace one::desktop {
 				padding = tool.large ? edges(6, 8) : edges(7, 7);
 			}
 
-			bool focusable() const override { return true; }
-			one::desktop::cursor cursor() const override { return cursor::pointer; }
+			bool focusable() const override { return !tool_.off; }
+			one::desktop::cursor cursor() const override { return tool_.off ? cursor::normal : cursor::pointer; }
 
 			extent measure_content(float) override {
 				const auto& laid = laid_out();
-				if (flat_ && tool_.large) return {std::max(44.f, small_words().width()), 24 + 4 + small_words().height()};
-				// A small one with no icon is its words, as a scale like 1.5× is.
-				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), std::max(18.f, small_words().height())};
-				if (flat_) return {18, 18};
+				if (flat_ && tool_.large) return {std::max({44.f, small_words().width(), large_icon()}), large_icon() + 4 + small_words().height()};
+				// A small one with no icon is its words, as a scale like 1.5× is; with one or
+				// without, as tall as its words would be, so every small one is.
+				if (flat_ && tool_.swatch) return {18, small_height()};
+				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), small_height()};
+				if (flat_) return {18, small_height()};
 				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
 				if (!icon_.empty()) return {16, laid.height()};
 				return {laid.width(), laid.height()};
@@ -625,13 +627,13 @@ namespace one::desktop {
 			}
 			bool handle_key(const key_event& e) override {
 				if (e.is(keys::enter) || e.is(keys::space) || e.is(keys::keypad_enter)) {
-					if (pressed_) pressed_();
+					if (pressed_ && !tool_.off) pressed_();
 					return true;
 				}
 				return false;
 			}
 			bool click(point) override {
-				if (pressed_) pressed_();
+				if (pressed_ && !tool_.off) pressed_();
 				return true;
 			}
 
@@ -645,14 +647,24 @@ namespace one::desktop {
 				float corners = std::min(t.corners, 6.f);
 				color tint = mixed(t.surface, t.accent, 0.16f);
 				if (tool_.on) c.box(frame, {.fill = hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
-				else if (hovered) c.box(frame, {.fill = t.sunken, .radius = corners});
+				else if (hovered && !tool_.off) c.box(frame, {.fill = t.sunken, .radius = corners});
 				if (shows_focus()) c.box(frame.inset(-2), {.border = mixed(t.accent, t.page, 0.4f), .border_width = 2, .radius = corners + 2});
 				rect area = inner();
+				// One that doesn't apply now is faint, as a disabled button is.
 				color ink = tool_.on ? t.accent : t.ink;
+				if (tool_.off) ink = mixed(t.surface, ink, 0.35f);
 				if (tool_.large) {
-					draw_icon(c, icon_, {area.x + (area.width - 24) / 2, area.y, 24, 24}, ink);
+					float size = large_icon();
+					draw_icon(c, icon_, {area.x + (area.width - size) / 2, area.y, size, size}, ink);
 					const auto& words = small_words();
-					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + 28});
+					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + size + 4});
+					return;
+				}
+				if (tool_.swatch) {
+					color fill = *tool_.swatch;
+					if (tool_.off) fill.alpha *= 0.35f;
+					c.box({area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, {.fill = fill, .border = t.line, .border_width = 1, .radius = 8});
+					if (hovered) tooltip(c, t);
 					return;
 				}
 				if (icon_.empty()) {
@@ -678,11 +690,17 @@ namespace one::desktop {
 					on.text(named, {under.x + 8, under.y + 4});
 				});
 			}
+			// A small tool's height inside its padding, and a large one's icon: as big as
+			// makes a large tool as tall as two small ones stacked, as a group of them is,
+			// so a toolbar stays as tall whichever groups it shows.
+			float small_height() { return std::max(18.f, small_words().height()); }
+			float large_icon() { return 2 * (small_height() + 14) + 2 - 12 - 4 - small_words().height(); }
+
 			const text_layout& small_words() {
 				double scale = detail::layout_scale();
 				if (!small_ || scale != small_scale_) {
 					text_style s = current_theme().quiet();
-					s.color = current_theme().ink;
+					s.color = tool_.off ? mixed(current_theme().surface, current_theme().ink, 0.35f) : current_theme().ink;
 					small_ = lay_out({label_, s}, 0, scale);
 					small_scale_ = scale;
 				}

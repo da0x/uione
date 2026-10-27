@@ -8,12 +8,15 @@ layout(location = 0) in vec4 bounds;    // x, y, width, height, in pixels
 layout(location = 1) in vec4 source;    // u0, v0, u1, v1 of the picture: the part shown
 layout(location = 2) in vec4 tint;      // how much of it shows, premultiplied
 layout(location = 3) in vec4 clip;
+layout(location = 4) in vec4 shape;     // its corners' radius, in pixels
 
 layout(push_constant) uniform frame { vec2 viewport; } screen;
 
 layout(location = 0) out vec2 uv;
 layout(location = 1) flat out vec4 color;
 layout(location = 2) flat out vec4 clip_out;
+layout(location = 3) flat out vec4 rounded;  // where it is, in pixels
+layout(location = 4) flat out float radius;
 
 const vec2 corners[6] = vec2[](vec2(0, 0), vec2(1, 0), vec2(0, 1), vec2(1, 0), vec2(1, 1), vec2(0, 1));
 
@@ -23,5 +26,7 @@ void main() {
 	uv = mix(source.xy, source.zw, corner);
 	color = tint;
 	clip_out = clip;
+	rounded = bounds;
+	radius = shape.x;
 	gl_Position = vec4(at / screen.viewport * 2.0 - 1.0, 0.0, 1.0);
 }

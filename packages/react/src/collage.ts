@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Where a collage's layers go: a picture made of layers, as big as it says, in its
-// own pixels (decision 0019). How its background sits and slides, the whole picture
-// behind a crop, and where a layer moved, resized, slid or cropped ends up, snapped
+// own pixels (decision 0021). Where a picture sits when it's placed, the whole picture
+// behind a crop, and where a layer moved, resized or cropped ends up, snapped
 // to the collage's edges and middle and every other layer's. It's the same model as
 // one::screens's collage.hpp, and both are held to screens/tests/collage-cases.json,
 // so the web, the desktop and the terminal put a layer in the same place.
@@ -23,18 +23,6 @@ export interface Box {
 // The smallest a layer, or a crop of one, is made by a drag, in the collage's pixels.
 export const smallest = 8;
 
-// How the background sits on a collage: covering it (fill), all of it showing (fit,
-// the default), stretched to it, or at its own size in the middle; zoomed about its
-// middle; and how far along each side it's slid, from 0 to 1.
-export interface Backdrop {
-  sits: string;
-  width: number;
-  height: number;
-  zoom: number;
-  slideX: number;
-  slideY: number;
-}
-
 // Where a layer went, and the lines it snapped to: one across, one down, and a corner
 // it sits in evenly, the collage's corner and its own.
 export interface Guided {
@@ -51,42 +39,18 @@ export interface Lines {
 }
 
 const clamp = (v: number, least: number, most: number) => Math.min(Math.max(v, least), most);
-const slidesSitting = (sits: string) => sits === "" || sits === "fill" || sits === "fit";
 
 export function contains(r: Box, at: Point): boolean {
   return at.x >= r.x && at.x <= r.x + r.w && at.y >= r.y && at.y <= r.y + r.h;
 }
 
-// Where a picture of its own size sits on a collage, as `sits` says.
+// Where a picture of its own size sits on a collage, as `sits` says: covering it
+// (fill), all of it showing (fit), stretched to it, or at its own size in the middle.
 export function sitting(sits: string, pictureWidth: number, pictureHeight: number, width: number, height: number): Box {
   if (sits === "stretch" || pictureWidth <= 0 || pictureHeight <= 0) return { x: 0, y: 0, w: width, h: height };
   const s = sits === "fill" ? Math.max(width / pictureWidth, height / pictureHeight) : sits === "center" ? 1 : Math.min(width / pictureWidth, height / pictureHeight);
   const w = pictureWidth * s, h = pictureHeight * s;
   return { x: (width - w) / 2, y: (height - h) / 2, w, h };
-}
-
-// How far something `length` long can go along a side `side` long.
-export function slideRange(side: number, length: number): [number, number] {
-  return [Math.min(0, side - length), Math.max(0, side - length)];
-}
-
-// Where the background is: sitting as it says, zoomed, and slid as far as it says.
-export function backgroundAt(b: Backdrop, pictureWidth: number, pictureHeight: number): Box {
-  let at = sitting(b.sits, pictureWidth, pictureHeight, b.width, b.height);
-  const zoom = b.zoom > 0 ? b.zoom : 1;
-  at = { x: at.x + (at.w * (1 - zoom)) / 2, y: at.y + (at.h * (1 - zoom)) / 2, w: at.w * zoom, h: at.h * zoom };
-  if (slidesSitting(b.sits) || zoom !== 1) {
-    const [left, right] = slideRange(b.width, at.w);
-    const [top, bottom] = slideRange(b.height, at.h);
-    at.x = left + (right - left) * clamp(b.slideX, 0, 1);
-    at.y = top + (bottom - top) * clamp(b.slideY, 0, 1);
-  }
-  return at;
-}
-
-// Whether a background where it is has room to slide.
-export function slides(b: Backdrop, at: Box): boolean {
-  return (slidesSitting(b.sits) || (b.zoom > 0 && b.zoom !== 1)) && (Math.abs(at.w - b.width) > 0.5 || Math.abs(at.h - b.height) > 0.5);
 }
 
 // The whole picture a layer shows part of, `crop` in fractions of it.
@@ -171,20 +135,6 @@ export function resized(from: Box, corner: number, dx: number, dy: number, keepS
     }
   }
   out.at = { x: west ? right - w : left, y: north ? bottom - h : top, w, h };
-  return out;
-}
-
-// A background slid by dx and dy, within how far it goes each way, and to the middle
-// of a collage `width` by `height` when it's `close` to it.
-export function slid(from: Box, dx: number, dy: number, across: [number, number], down: [number, number], width: number, height: number, close: number, snapping: boolean): Guided {
-  const out: Guided = { at: { ...from } };
-  const b = out.at;
-  b.x = clamp(b.x + dx, across[0], across[1]);
-  b.y = clamp(b.y + dy, down[0], down[1]);
-  if (!snapping) return out;
-  const middleX = (across[0] + across[1]) / 2, middleY = (down[0] + down[1]) / 2;
-  if (across[1] > across[0] && Math.abs(b.x - middleX) <= close) (b.x = middleX), (out.guideX = width / 2);
-  if (down[1] > down[0] && Math.abs(b.y - middleY) <= close) (b.y = middleY), (out.guideY = height / 2);
   return out;
 }
 
@@ -296,4 +246,205 @@ export function harmonicFill(width: number, height: number, given: ArrayLike<num
     }
   }
   return colors;
+}
+
+// What a picture lays over itself to melt into what's under it: its own colors, spread
+// `reach` cells past each edge by harmonic fill, clear over its middle, whole a cell
+// either side of its edge, and gone a cell before the end of the reach, smoothly each
+// way. `inner` is how far in from that it starts to show. Four channels a cell, its
+// alpha 0 to 255, over a grid `reach` bigger than the picture on every side.
+// How far a harmonized or blended picture's halo reaches past its edges, as a share of
+// its shorter side, and how much of that it starts in from them: a little, so the picture
+// stays sharp nearly to its edge.
+export const haloReach = 0.15;
+export const haloInside = 0.25;
+
+export function halo(width: number, height: number, colors: ArrayLike<number>, reach: number, inner: number): Float64Array {
+  const ow = width + 2 * reach, oh = height + 2 * reach;
+  if (width <= 0 || height <= 0 || reach < 0) return new Float64Array(0);
+  const spread = new Float64Array(ow * oh * 3);
+  const covered: boolean[] = new Array(ow * oh).fill(false);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y + reach) * ow + (x + reach);
+      covered[at] = true;
+      for (let c = 0; c < 3; c++) spread[at * 3 + c] = colors[(y * width + x) * 3 + c]!;
+    }
+  }
+  const filled = harmonicFill(ow, oh, spread, covered);
+  const smooth = (from: number, to: number, v: number) => {
+    const t = to > from ? Math.min(1, Math.max(0, (v - from) / (to - from))) : v >= to ? 1 : 0;
+    return t * t * (3 - 2 * t);
+  };
+  const out = new Float64Array(ow * oh * 4);
+  for (let y = 0; y < oh; y++) {
+    for (let x = 0; x < ow; x++) {
+      // How far the cell's middle is outside the picture, or, less than none, inside it.
+      const px = x + 0.5 - reach, py = y + 0.5 - reach;
+      const ox = Math.max(0, -px, px - width), oy = Math.max(0, -py, py - height);
+      const d = ox > 0 || oy > 0 ? Math.hypot(ox, oy) : -Math.min(px, width - px, py, height - py);
+      // Whole a cell either side of its edge, so drawn bigger, smoothly between cells, it's
+      // whole on the edge itself and the picture's own edge never shows; and gone a cell
+      // before the reach's end, so it fades to nothing before the grid ends.
+      const alpha = d <= 0 ? smooth(-inner - 1, -1, d) : 1 - smooth(1, reach - 1, d);
+      const at = y * ow + x;
+      for (let c = 0; c < 3; c++) out[at * 4 + c] = filled[at * 3 + c]!;
+      out[at * 4 + 3] = alpha * 255;
+    }
+  }
+  return out;
+}
+
+// How many of a picture's brightnesses its tones are told by: its darkest, its
+// brightest, and evenly between.
+export const tonePoints = 21;
+
+// A picture's colors, as matching them needs, each as brightness and two colors (YCbCr:
+// Y, then blue against yellow and red against green, 0 where it's gray): its brightness's
+// average and how far its cells spread from that (their standard deviation); its cast,
+// the two colors' average over its less colorful half alone, its grays, whites and
+// shadows, so a red hat doesn't read as a red light; how strong its colors are, the
+// middle of its cells' (their median), for both colors alike, so a few vivid things
+// don't make it all seem so; its tones, its
+// cells' brightness from the darkest to the brightest at each of the tone points (its
+// quantiles); from three channels a cell, red, green and blue; and how much of the
+// collage it covers, which counts for that much.
+export interface ColorStats {
+  mean: [number, number, number];
+  spread: [number, number, number];
+  tones?: number[];
+  weight: number;
+}
+
+// Red, green and blue as brightness and two colors, and back (YCbCr, as JPEG has it).
+const toYcc = (r: number, g: number, b: number): [number, number, number] => [
+  0.299 * r + 0.587 * g + 0.114 * b,
+  -0.168736 * r - 0.331264 * g + 0.5 * b,
+  0.5 * r - 0.418688 * g - 0.081312 * b,
+];
+const toRgb = (y: number, cb: number, cr: number): [number, number, number] => [y + 1.402 * cr, y - 0.344136 * cb - 0.714136 * cr, y + 1.772 * cb];
+
+export function statsOf(colors: ArrayLike<number>, weight: number): ColorStats {
+  const out: ColorStats = { mean: [0, 0, 0], spread: [0, 0, 0], weight };
+  const cells = Math.floor(colors.length / 3);
+  if (cells === 0) return out;
+  const ycc = new Float64Array(cells * 3);
+  for (let i = 0; i < cells; i++) {
+    const [y, cb, cr] = toYcc(colors[i * 3]!, colors[i * 3 + 1]!, colors[i * 3 + 2]!);
+    ycc[i * 3] = y, ycc[i * 3 + 1] = cb, ycc[i * 3 + 2] = cr;
+    for (let c = 0; c < 3; c++) out.mean[c] += ycc[i * 3 + c]!;
+  }
+  out.mean[0] /= cells;
+  for (let i = 0; i < cells; i++) out.spread[0] += (ycc[i * 3]! - out.mean[0]) ** 2;
+  out.spread[0] = Math.sqrt(out.spread[0] / cells);
+  // How colorful each cell is, and the middle of them.
+  const colorful = Array.from({ length: cells }, (_, i) => Math.hypot(ycc[i * 3 + 1]!, ycc[i * 3 + 2]!));
+  const sorted = [...colorful].sort((a, b) => a - b);
+  const middle = cells % 2 ? sorted[(cells - 1) / 2]! : (sorted[cells / 2 - 1]! + sorted[cells / 2]!) / 2;
+  out.spread[1] = out.spread[2] = middle;
+  // Its cast, from the cells no more colorful than that.
+  let cb = 0, cr = 0, plain = 0;
+  for (let i = 0; i < cells; i++) {
+    if (colorful[i]! > middle) continue;
+    cb += ycc[i * 3 + 1]!;
+    cr += ycc[i * 3 + 2]!;
+    plain++;
+  }
+  out.mean[1] = cb / plain;
+  out.mean[2] = cr / plain;
+  const bright = Array.from({ length: cells }, (_, i) => ycc[i * 3]!).sort((a, b) => a - b);
+  out.tones = [];
+  for (let q = 0; q < tonePoints; q++) {
+    const at = ((cells - 1) * q) / (tonePoints - 1), low = Math.floor(at), part = at - low;
+    out.tones.push(low + 1 < cells ? bright[low]! + (bright[low + 1]! - bright[low]!) * part : bright[low]!);
+  }
+  return out;
+}
+
+// How far a collage matching its colors moves each picture's: its cast all the way, so
+// the same face in two lights looks alike, and the rest most of the way.
+export const matchingStrength = 0.85;
+export const matchingCast = 1;
+
+// What a picture's colors become, as brightness and two colors: its brightness along a
+// tone curve, through each of `from` to the one in `to` and straight between, and each of
+// the two colors times its gain and plus its offset.
+export interface ColorShift {
+  gain: [number, number, number];
+  offset: [number, number, number];
+  from?: number[];
+  to?: number[];
+}
+
+// A color, red, green and blue in 0 to 255, as a shift makes it.
+export function shifted(s: ColorShift, r: number, g: number, b: number): [number, number, number] {
+  const ycc = toYcc(r, g, b);
+  let y = ycc[0] * s.gain[0] + s.offset[0];
+  // Its brightness along the tone curve, straight between its points, and as far past its
+  // ends as it is from them.
+  const from = s.from, to = s.to;
+  if (from && to && from.length >= 2 && from.length === to.length) {
+    const v = ycc[0];
+    let i = 0;
+    while (i + 2 < from.length && v > from[i + 1]!) i++;
+    const span = from[i + 1]! - from[i]!;
+    y = span > 1e-9 ? to[i]! + ((to[i + 1]! - to[i]!) * (v - from[i]!)) / span : to[i]! + (v - from[i]!);
+    if (v < from[0]!) y = to[0]! + (v - from[0]!);
+    if (v > from[from.length - 1]!) y = to[to.length - 1]! + (v - from[from.length - 1]!);
+    // Its colors as much stronger or weaker as it's brighter or darker, so it looks as
+    // colorful as it was: darker with the same colors looks more so.
+    const follow = Math.min(2, Math.max(0.5, (y + 16) / (v + 16)));
+    ycc[1] *= follow;
+    ycc[2] *= follow;
+  }
+  return toRgb(y, ycc[1] * s.gain[1] + s.offset[1], ycc[2] * s.gain[2] + s.offset[2]);
+}
+
+// Pictures' colors matched, so they look like one picture, by matching their statistics
+// (color transfer): each one's cast, the average of its two colors, moved `cast` of the
+// way to all of theirs, as a white balance would; its tones, its darkest to its
+// brightest, along a curve to all of theirs averaged, point by point, so its contrast is
+// theirs; and how strong its colors are; those `strength` of the way; each 0 to 1,
+// weighed by how much each covers. Its contrast is never made more than three times or a
+// third; its tones are moved half as far, none more than 24 of 255; how strong its colors
+// are is moved half as far, never past a quarter more or a fifth less; one too even to
+// tell, or nearly gray, is left as it is.
+export function matched(pictures: ColorStats[], strength: number, cast: number): ColorShift[] {
+  let total = 0;
+  const mean = [0, 0, 0], spread = [0, 0, 0];
+  for (const p of pictures) {
+    total += p.weight;
+    for (let c = 0; c < 3; c++) (mean[c]! += p.mean[c] * p.weight), (spread[c]! += p.spread[c] * p.weight);
+  }
+  const out: ColorShift[] = pictures.map(() => ({ gain: [1, 1, 1], offset: [0, 0, 0] }));
+  if (total <= 0) return out;
+  for (let c = 0; c < 3; c++) (mean[c]! /= total), (spread[c]! /= total);
+  // Their tones together: each point the average of theirs there, weighed alike.
+  const toned = pictures.every((p) => p.tones?.length === tonePoints);
+  const tones = new Array<number>(tonePoints).fill(0);
+  if (toned) for (const p of pictures) for (let q = 0; q < tonePoints; q++) tones[q]! += (p.tones![q]! * p.weight) / total;
+  const k = Math.min(1, Math.max(0, strength)), towardCast = Math.min(1, Math.max(0, cast));
+  pictures.forEach((p, i) => {
+    for (let c = 0; c < 3; c++) {
+      // How strong its colors are changes only half as far, and only so far, so a colorful
+      // picture keeps most of it; and one nearly gray is left so, never colorized.
+      const g =
+        c === 0
+          ? p.spread[c] < 1 ? 1 : Math.min(3, Math.max(1 / 3, spread[c]! / p.spread[c]))
+          : p.spread[c] < 4 ? 1 : Math.min(1.25, Math.max(0.8, spread[c]! / p.spread[c]));
+      const toward = c === 0 ? k : k / 2;
+      // Spread about its own average, part of the way; then that average moved toward all
+      // of theirs, the two colors' as far as their cast is.
+      out[i]!.gain[c] = 1 - toward + toward * g;
+      out[i]!.offset[c] = p.mean[c] * (1 - out[i]!.gain[c]) + (c === 0 ? k : towardCast) * (mean[c]! - p.mean[c]);
+    }
+    // Its brightness along a curve from its tones to theirs, part of the way.
+    if (toned) {
+      out[i]!.from = [...p.tones!];
+      // Half as far as the rest, and each tone no more than 24 of 255, so a bright picture
+      // comes nearer darker ones without turning dark.
+      out[i]!.to = p.tones!.map((own, q) => own + Math.min(24, Math.max(-24, (k / 2) * (tones[q]! - own))));
+    }
+  });
+  return out;
 }

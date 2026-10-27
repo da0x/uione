@@ -115,7 +115,14 @@ namespace one::desktop {
 			    {"center", {box(1.5f, 3, 13, 10, 1), path("M6 6.5h4v3H6z", true)}},
 			    {"color", {path("M8 1L11.96 7.65A4.6 4.6 0 1 1 4.04 7.65z")}},
 			    {"edges", {box(5, 5, 6, 6, 1), path("M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5")}},
+			    {"clear", {box(5, 5, 6, 6, 1), path("M1.5 4V1.5H4M12 1.5h2.5V4M14.5 12v2.5H12M4 14.5H1.5V12")}},
+			    {"square", {path("M3 13V3h10")}},
+			    {"italic", {path("M7 3h5M4 13h5M10 3L6 13")}},
+			    // A wand and the sparks off its tip.
+			    {"magic", {path("M2.5 13.5l8-8M12 1.5v2M12 7.5v2M8 5.5h2M14 5.5h2")}},
+			    {"rounded", {path("M3 13V8a5 5 0 0 1 5-5h5")}},
 			    {"blend", {ring(5.5f, 8, 4), ring(10.5f, 8, 4)}},
+			    {"harmonize", {ring(8, 5.5f, 3.5f), ring(5.5f, 10, 3.5f), ring(10.5f, 10, 3.5f)}},
 			    // The ways a switch shows a list.
 			    {"pipeline", {ring(3, 5, 1.5f), ring(8, 5, 1.5f), ring(13, 5, 1.5f), path("M4.5 5h2M9.5 5h2M2 11h12")}},
 			    {"whiteboard", {box(2, 2.5f, 12, 11, 1.5f), icon_part{.d = "M8 2.5v11", .dash = 1.5f}, box(3.5f, 4.5f, 3, 3, 0.5f), box(9.5f, 8, 3, 3, 0.5f)}},
@@ -217,17 +224,19 @@ namespace one::desktop {
 		float s = std::min(area.width, area.height) / 16;
 		point origin{area.x + (area.width - 16 * s) / 2, area.y + (area.height - 16 * s) / 2};
 		auto at = [&](point p) { return point{origin.x + p.x * s, origin.y + p.y * s}; };
-		float stroke = 1.5f * s;
+		// Drawn in a fine line, half the usual 1.5, so they don't feel heavy.
+		const float weight = 0.75f;
+		float stroke = weight * s;
 		for (const auto& part : found->second) {
 			switch (part.shape) {
 				case icon_part::kind::rect: {
 					// A stroke on the edge, half in and half out, as SVG draws one.
-					rect r{origin.x + (part.x - 0.75f) * s, origin.y + (part.y - 0.75f) * s, (part.w + 1.5f) * s, (part.h + 1.5f) * s};
-					c.box(r, {.border = tint, .border_width = stroke, .radius = (part.r + 0.75f) * s});
+					rect r{origin.x + (part.x - weight / 2) * s, origin.y + (part.y - weight / 2) * s, (part.w + weight) * s, (part.h + weight) * s};
+					c.box(r, {.border = tint, .border_width = stroke, .radius = (part.r + weight / 2) * s});
 					break;
 				}
 				case icon_part::kind::circle: {
-					float r = (part.r + 0.75f) * s;
+					float r = (part.r + weight / 2) * s;
 					point center = at({part.x, part.y});
 					c.box({center.x - r, center.y - r, 2 * r, 2 * r}, {.border = tint, .border_width = stroke, .radius = r});
 					break;

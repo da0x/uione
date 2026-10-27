@@ -13,7 +13,7 @@
 import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
 import { Surface } from "@uione/react";
@@ -1825,14 +1825,21 @@ export const radix: ComponentSet = {
     );
   },
 
-  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint }) => {
+  Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
-    const drawn = icon ? buttonIcons[icon] : undefined;
+    // A color it gives, drawn as a circle of it, outlined so white shows.
+    const drawn = swatch ? (
+      <span aria-hidden="true" className="size-4 rounded-full border border-line" style={{ backgroundColor: swatch }} />
+    ) : icon ? (
+      buttonIcons[icon]
+    ) : undefined;
     if (tool) {
       // A tool in a workspace's toolbar: flat, tinted while it's on; large, its icon
-      // over its words; small, its icon alone, or its words when it has none.
-      const shape = tool === "large" ? "min-w-[3.75rem] flex-col gap-1 px-2 py-1.5 text-xs" : "size-8 text-xs";
+      // over its words, as tall as two small ones stacked, as a group of them is, so
+      // the toolbar stays as tall whichever groups it shows; small, its icon alone, or
+      // its words when it has none.
+      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8" : "size-8 text-xs";
       return (
         <button
           type="button"
@@ -2007,10 +2014,15 @@ export const radix: ComponentSet = {
     ),
 
   // A toolbar's group: its tools, then its name under them, and a line after it; a
-  // small one's tools in two rows.
+  // small one's tools in two rows, read a row at a time, the first the longer.
   Group: ({ name, small, atEnd, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
-      <div className={small ? "grid grid-flow-col grid-rows-2 gap-0.5" : "flex items-start gap-0.5"}>{children}</div>
+      <div
+        className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
+        style={small ? { gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}
+      >
+        {children}
+      </div>
       <span className="text-[0.6875rem] leading-tight text-muted">{name}</span>
     </div>
   ),

@@ -728,13 +728,19 @@ namespace one::screens {
 		}
 		std::ranges::stable_sort(rows, [&](const value& a, const value& b) {
 			auto x = number_of(field_of(a, spec->field)), y = number_of(field_of(b, spec->field));
-			return x && y && *x < *y;
+			return x && y && (spec->descending ? *x > *y : *x < *y);
 		});
 		return rows;
 	}
 
 	bool move_row(page_base& p, const std::string& key, const reorder_spec& spec, const std::vector<value>& around, const std::string& id, int by) {
 		if (!spec.allowed) return false;
+		// Shown highest first, moved as the same rows lowest first, the other way.
+		if (spec.descending) {
+			reorder_spec rising = spec;
+			rising.descending = false;
+			return move_row(p, key, rising, std::vector<value>(around.rbegin(), around.rend()), id, -by);
+		}
 		auto at = std::ranges::find_if(around, [&](const value& row) { return row["id"].as_string() == id; });
 		if (at == around.end()) return false;
 		std::ptrdiff_t index = at - around.begin(), to = index + by;

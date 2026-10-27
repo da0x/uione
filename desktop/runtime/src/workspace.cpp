@@ -39,7 +39,7 @@ namespace one::desktop::runtime {
 		// small, its icon alone, its words and its key said when it's pointed at.
 		desktop::view tool(page& p, const std::string& icon, const std::string& words, const std::vector<std::string>& keys, std::function<void()> run, bool on) {
 			bool small = p.in_group().value_or(false);
-			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", small ? hint_of(words, keys) : words, std::move(run), {.large = !small, .on = on});
+			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", small ? hint_of(words, keys) : words, std::move(run), {.large = !small, .on = on && !p.off(), .off = p.off()});
 		}
 
 	}  // namespace
@@ -126,6 +126,16 @@ namespace one::desktop::runtime {
 					bar.push_back(desktop::row(std::move(end)).spacing(6).align(align::center).width(0).grow());
 					v = desktop::row(std::move(bar)).spacing(6).align(align::center);
 				}
+				// A toolbar's groups with a line between each and the next, as the web draws them.
+				if (std::string_view(across) == "toolbar") {
+					auto groups = std::move(v).take();
+					std::vector<desktop::view> lined;
+					for (auto& g : groups->children) {
+						if (!lined.empty()) lined.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
+						lined.push_back(desktop::view(std::move(g)));
+					}
+					v = desktop::row(std::move(lined)).align(align::stretch);
+				}
 				parts.push_back(std::move(v).padding(edges(6, 12)).background({.fill = t.surface}));
 				parts.push_back(desktop::divider());
 			}
@@ -156,19 +166,22 @@ namespace one::desktop::runtime {
 		if (tools.empty()) return {};
 		desktop::view laid;
 		if (small) {
-			// Two rows of icons, a column at a time.
+			// Two rows of icons, read a row at a time, the first the longer: each column
+			// one from the top row over the one below it, so they line up.
+			std::size_t across = (tools.size() + 1) / 2;
 			std::vector<desktop::view> columns;
-			for (std::size_t i = 0; i < tools.size(); i += 2) {
-				if (i + 1 < tools.size()) columns.push_back(desktop::column(std::move(tools[i]), std::move(tools[i + 1])).spacing(2));
+			for (std::size_t i = 0; i < across; ++i) {
+				if (i + across < tools.size()) columns.push_back(desktop::column(std::move(tools[i]), std::move(tools[i + across])).spacing(2));
 				else columns.push_back(desktop::column(std::move(tools[i])));
 			}
-			laid = desktop::row(std::move(columns)).spacing(2);
+			// A column of one sits in the top row, beside the rest of it.
+			laid = desktop::row(std::move(columns)).spacing(2).align(align::start);
 		} else {
 			laid = desktop::row(std::move(tools)).spacing(2);
 		}
 		auto label = t.quiet();
 		label.size -= 1;
-		auto drawn = desktop::column(std::move(laid), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 6));
+		auto drawn = desktop::column(std::move(laid), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
 		if (!at_end) return drawn;
 		return desktop::row(desktop::spacer(), std::move(drawn)).grow();
 	}
@@ -176,7 +189,7 @@ namespace one::desktop::runtime {
 	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys) {
 		bool on = p.toggled(name);
 		auto flip = [&p, name] { p.toggle(name); };
-		for (const auto& k : keys) p.on_key(k, flip);
+		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (p.in_group()) return tool(p, icon, label, keys, flip, on);
 		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on});
 	}
@@ -189,7 +202,7 @@ namespace one::desktop::runtime {
 				if (a) told.set(std::string(redo ? "Redid " : "Undid ") + step_words(*a) + ".");
 			});
 		};
-		for (const auto& k : keys) p.on_key(k, take);
+		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, take);
 		if (label.empty()) label = redo ? "Redo" : "Undo";
 		if (p.in_group()) return tool(p, icon, label, keys, take, false);
 		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take);
@@ -236,7 +249,7 @@ namespace one::desktop::runtime {
 
 	desktop::view full_screen(page& p, std::string label, std::string icon, std::vector<std::string> keys) {
 		auto flip = [] { fullscreen(!fullscreen()); };
-		for (const auto& k : keys) p.on_key(k, flip);
+		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, flip);
 		if (label.empty()) label = "Full screen";
 		if (p.in_group()) return tool(p, icon, label, keys, flip, fullscreen());
 		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = fullscreen()});

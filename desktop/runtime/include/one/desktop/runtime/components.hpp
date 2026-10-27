@@ -27,8 +27,9 @@ namespace one::desktop::runtime {
 		return items(std::move(all));
 	}
 
-	// Text, with values read live from views; a subtitle says less, under the title.
-	desktop::view text(std::vector<part> parts);
+	// Text, with values read live from views, quiet as a status line's is; a subtitle
+	// says less, under the title.
+	desktop::view text(std::vector<part> parts, bool quiet = false);
 	desktop::view subtitle(page& p, std::vector<part> parts);
 	// The pages above this one, nearest last, each followed back with a click.
 	desktop::view crumbs(page& p, std::vector<crumb> trail);
@@ -72,6 +73,9 @@ namespace one::desktop::runtime {
 	desktop::view statement(std::vector<part> parts);
 
 	desktop::view command(page& p, command_button b);
+	// Lines side by side in a toolbar with the same words, like Bold that sets it and
+	// Bold that takes it away: one tool, the first whose when holds, or the first, off.
+	desktop::view either(page& p, std::vector<command_button> ways);
 	desktop::view confirm(page& p, std::string command, std::string question);
 	desktop::view actions(std::vector<desktop::view> all);
 	template <std::convertible_to<desktop::view>... V>

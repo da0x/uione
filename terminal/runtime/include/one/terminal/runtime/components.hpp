@@ -58,6 +58,9 @@ namespace one::terminal::runtime {
 	terminal::view statement(std::vector<part> parts);
 
 	terminal::view command(page& p, command_button b);
+	// Lines side by side in a toolbar with the same words: one, the first whose when
+	// holds, or the first, off.
+	terminal::view either(page& p, std::vector<command_button> ways);
 	terminal::view confirm(page& p, std::string command, std::string question);
 	terminal::view actions(std::vector<terminal::view> all);
 	template <std::convertible_to<terminal::view>... V>

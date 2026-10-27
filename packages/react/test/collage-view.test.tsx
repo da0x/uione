@@ -13,7 +13,7 @@ import { setPicked } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
 
 // Each of a collage's parts in the field named like it, as an app's are by default.
-const parts = ["x", "y", "w", "h", "depth", "picture", "picture_width", "picture_height", "crop_x", "crop_y", "crop_w", "crop_h", "turns", "mirrored", "words", "size", "color", "weight", "background", "around", "zoom", "slide_x", "slide_y"];
+const parts = ["x", "y", "w", "h", "depth", "picture", "picture_width", "picture_height", "crop_x", "crop_y", "crop_w", "crop_h", "turns", "mirrored", "words", "size", "color", "weight", "around"];
 const namedLikeParts = Object.fromEntries(parts.map((part) => [part, part]));
 
 function renderCollage(source: MemorySource, pasteKeys?: string[]) {
@@ -38,7 +38,7 @@ describe("things coming into a collage", () => {
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
   });
 
-  it("covers itself with the first picture dropped, fits the rest, and keeps them one step", async () => {
+  it("fills itself with the first picture dropped, fits the rest, and keeps them one step", async () => {
     const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
     source.set("studio::poster_page", { width: 200, height: 100, layers: [] }, "p1");
     const drawn = renderCollage(source);
@@ -139,7 +139,7 @@ describe("a crop and words, in place", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "s1", crop_w: 1, crop_h: 1, x: 100, y: 100, w: 300, h: 300 } });
   });
 
-  it("crops the background too, where it sits, kept with Enter", async () => {
+  it("crops the lowest picture as any other, where it is, kept with Enter", async () => {
     const source = memorySource({ commands: { "studio::layer::crop": (input) => ({ id: String(input["id"]) }) } });
     const drawn = renderPoster(source);
     await waitFor(() => expect(drawn.container.querySelector(".one-collage")).toBeTruthy());
@@ -148,7 +148,7 @@ describe("a crop and words, in place", () => {
     await act(async () => {});
     fireEvent.keyDown(window, { key: "Enter" });
     await waitFor(() => expect(source.runs.length).toBe(1));
-    expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "b0", crop_w: 1, crop_h: 1 } });
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::crop", input: { id: "b0", crop_w: 1, crop_h: 1, x: 0, y: 0, w: 1600, h: 900 } });
   });
 
   it("writes the picked words where they are, what's typed after them, kept with Enter as big as they now are", async () => {
@@ -202,6 +202,31 @@ describe("a collage's preview", () => {
       reading.readAsText(source.uploads[0]!.file);
     });
     expect(drawn).toBe("320x180");
+  });
+});
+
+describe("a collage matching colors", () => {
+  it("draws, and keeps its preview, as one that doesn't", async () => {
+    const drawing = new Proxy({}, { get: (_, name) => (name === "measureText" ? () => ({ width: 10 }) : () => {}), set: () => true });
+    HTMLCanvasElement.prototype.getContext = (() => drawing) as unknown as HTMLCanvasElement["getContext"];
+    HTMLCanvasElement.prototype.toBlob = function (done: BlobCallback) {
+      done(new Blob([`${this.width}x${this.height}`], { type: "image/png" }));
+    };
+    vi.useFakeTimers();
+    const source = memorySource({ files: true, commands: { "studio::poster::preview": () => ({ id: "p1" }) } });
+    source.set("studio::poster_page", { width: 1600, height: 900, layers: [{ id: "w1", words: "Harbor", size: 96, x: 0, y: 0, w: 300, h: 120 }] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} subject="p1" matchColors preview="studio::poster::preview" previewInto="preview" previewWide={320} />;
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    vi.useRealTimers();
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::poster::preview", input: { id: "p1", "one:history": "apart" } });
   });
 });
 

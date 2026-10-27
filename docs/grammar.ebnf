@@ -235,15 +235,14 @@ screen_place   ::= "under" ROUTE STRING END
 /* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
-collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified | "slide" qualified
-                  | "snap" "to" "edges" | "empty" STRING | "over" NAME screen_block
+collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
+                  | "snap" "to" "edges" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
                   /* pictures dropped or pasted are made by add, in the layer's picture */
                   | "paste"
                   /* the fields playing its parts, each kept in the field named like it unless one of these says another */
                   | "at" NAME NAME ("size" NAME NAME)? | "size" NAME NAME | "stacked" "by" NAME
-                  | "picture" NAME ("sized" NAME NAME)? | "cropped" "to" NAME NAME NAME NAME | "turned" NAME | "mirrored" NAME
-                  | "words" NAME ("sized" NAME)? ("colored" NAME)? ("weighing" NAME)?
-                  | "background" NAME ("around" NAME)? ("zoomed" NAME)? ("slid" NAME NAME)?
+                  | "picture" NAME ("sized" NAME NAME)? | "cropped" "to" NAME NAME NAME NAME | "turned" NAME | "mirrored" NAME | "around" NAME | "rounded" NAME
+                  | "words" NAME ("sized" NAME)? ("colored" NAME)? ("weighing" NAME)? ("slanted" NAME)?
                   /* a small picture of it, drawn once changes settle, sent to a command on what the view is per */
                   | "keep" "preview" qualified "into" NAME NUMBER "wide") END
 /* key ctrl+z: what runs a line too; any of ctrl, shift and alt, then a key, like f11 or delete */
@@ -368,7 +367,7 @@ find_line      ::= qualified ("." NAME)? STRING ("link" ROUTE)? "by" NAME+ END
 track          ::= "track" NAME "over" qualified "." NAME ("{" NEWLINE? (("hide" "when" "empty" | "picked" "last" | column+) END)* "}")?
 table_line     ::= "by" NAME tabs_over? END
                  | NAME "::" NAME STRING? ("icon" NAME)? END
-                 | "reorder" NAME END
+                 | "reorder" NAME "descending"? END
                  /* a small picture of a file each row holds, before its cells */
                  | "picture" NAME ("fit" | "fill")? END
                  | "hide" "when" "empty" END

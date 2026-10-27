@@ -186,8 +186,12 @@ namespace one::terminal::runtime {
 	}
 
 	terminal::view command(page& p, command_button b) {
+		// In a toolbar, one that doesn't apply now is there, dim, and can't be pressed.
+		bool off = p.in_group() && (p.off() || !b.when);
+		if (p.in_group()) b.when = true;
 		auto shown = command_of(p, b);
 		if (!shown) return {};
+		if (off) return terminal::text(shown->label, terminal::dim());
 		auto run = [&p, name = b.command, fields = shown->fields, busy = shown->busy, then = b.then_open] {
 			if (busy) return;
 			if (then.empty()) return p.run(name, fields);
@@ -197,6 +201,12 @@ namespace one::terminal::runtime {
 		};
 		for (const auto& k : b.keys) p.on_key(k, run);
 		return terminal::button(shown->label, std::move(run), b.primary);
+	}
+
+	terminal::view either(page& p, std::vector<command_button> ways) {
+		if (ways.empty()) return {};
+		auto holds = std::ranges::find_if(ways, [](const command_button& b) { return b.allowed && b.when; });
+		return command(p, holds == ways.end() ? ways.front() : *holds);
 	}
 
 	terminal::view confirm(page& p, std::string command_name, std::string question) {

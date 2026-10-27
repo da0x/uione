@@ -296,6 +296,8 @@ namespace one::desktop::runtime {
 		if (desktop::app* app = posting_to.load()) app->post(std::move(task));
 	}
 
+	bool posting() { return posting_to.load() != nullptr; }
+
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
 		posting_to = &app;
 		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown

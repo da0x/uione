@@ -982,11 +982,29 @@ namespace one::generators {
             };
             bool in_row = false;
             std::size_t end = count == std::string::npos ? items.size() : std::min(items.size(), first + count);
+            // In a toolbar's group, commands side by side with the same words and icon, like
+            // Bold that sets it and Bold that takes it away, are one tool: the first whose
+            // when holds.
+            auto same_tool = [&](std::size_t a, std::size_t b) {
+                auto* x = std::get_if<language::button_item>(&items[a].node);
+                auto* y = std::get_if<language::button_item>(&items[b].node);
+                return in_group_ && x && y && x->label == y->label && x->icon == y->icon;
+            };
+            bool in_either = false;
             for (std::size_t at = first; at < end; ++at) {
                 const auto& item = items[at];
                 if (in_row && !presses(item) && !passed(item)) {
                     out.close("</Actions>");
                     in_row = false;
+                }
+                if (in_either && !same_tool(at - 1, at)) {
+                    out.close("</Either>");
+                    in_either = false;
+                }
+                if (!in_either && at + 1 < end && same_tool(at, at + 1)) {
+                    parts.components.insert("Either");
+                    out.open("<Either>");
+                    in_either = true;
                 }
                 // Lists of the same rows one after another, a table, a board, a pipeline or a
                 // whiteboard, are one, switched between: each person's own pick, or else the
@@ -1260,6 +1278,7 @@ namespace one::generators {
                                                                           : "";
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
+                    if (std::string swatch = screens::swatch_of(*button); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     // A picture made of layers, the buttons over the picked one inside it.
@@ -1272,8 +1291,8 @@ namespace one::generators {
                     for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
                     line += " fields={{ " + kept + " }}";
                     if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
-                    if (c->slide) line += " slide=" + web_detail::js_string(full_command(ns, *c->slide));
                     if (c->snap) line += " snap";
+                    if (c->match_colors) line += " matchColors={" + condition(parts, ns, *c->match_colors) + "}";
                     if (c->empty) line += " empty=" + web_detail::js_string(*c->empty);
                     if (c->over) line += " pick=" + web_detail::js_string(route_ + " " + *c->over);
                     if (workspace_) line += " fills";
@@ -1352,6 +1371,7 @@ namespace one::generators {
                     out.line("<" + tag + " />");
                 }
             }
+            if (in_either) out.close("</Either>");
             if (in_row) out.close("</Actions>");
         }
 
@@ -1638,6 +1658,16 @@ namespace one::generators {
         void shown_while(stream& out, screen_parts& parts, const std::string& ns, const language::screen_item& item, Draw draw) {
             if (!item.when) {
                 draw();
+                return;
+            }
+            // In a toolbar, a group or a line that doesn't apply now is there, but off, so
+            // the toolbar keeps its shape.
+            auto* group = std::get_if<language::content_block>(&item.node);
+            if (in_group_ || (group && group->type == language::content_block::kind::group)) {
+                parts.components.insert("Applies");
+                out.open("<Applies when={" + condition(parts, ns, *item.when) + "}>");
+                draw();
+                out.close("</Applies>");
                 return;
             }
             out.open("{" + condition(parts, ns, *item.when) + " && (<>");
@@ -2374,7 +2404,7 @@ namespace one::generators {
                 std::string command = web_detail::join(ns, entity->name + "::update");
                 std::string allowed = this->allowed(parts, ns, command);
                 line += " reorder={{ command: " + web_detail::js_string(command) + ", field: " + web_detail::js_string(*table.reorder) +
-                        (allowed.empty() ? "" : ", allowed: " + allowed.substr(10, allowed.size() - 11)) + " }}";
+                        (allowed.empty() ? "" : ", allowed: " + allowed.substr(10, allowed.size() - 11)) + (table.reorder_descending ? ", descending: true" : "") + " }}";
             }
             out.line(line + " />");
         }
