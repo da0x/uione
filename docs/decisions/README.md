@@ -27,6 +27,7 @@ relevant record before changing what it covers.
 | [0019](0019-a-collage-is-a-document.md) | A collage is a picture made of layers, not a canvas |
 | [0020](0020-a-screen-may-act-as-it-opens.md) | A screen may act as it's opened |
 | [0021](0021-every-picture-in-a-collage-is-a-layer.md) | Every picture in a collage is a layer like the rest |
+| [0022](0022-a-paper-is-a-page-written-in-place.md) | A paper is a page written on in place |
 
 ## Writing one
 

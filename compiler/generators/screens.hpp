@@ -532,6 +532,31 @@ namespace one::generators::screens {
             return language::collage_fields(c, layers);
         }
 
+        // And a paper's.
+        std::map<std::string, std::string> paper_fields(const std::string& ns, const language::paper_item& paper) const {
+            const language::view_each* blocks = nullptr;
+            const std::vector<language::view_value>* values = nullptr;
+            if (auto scope = views.find(ns); scope != views.end()) {
+                if (auto v = scope->second.find(paper.view.text()); v != scope->second.end()) {
+                    values = &v->second->values;
+                    for (const auto& each : v->second->each) {
+                        if (each.name && *each.name == paper.list) blocks = &each;
+                    }
+                }
+            }
+            return language::paper_fields(paper, blocks, values);
+        }
+
+        // Whether a command changes a field, by its changes lines.
+        bool changes(const std::string& command, const std::string& field) const {
+            auto declared = command_nodes.find(command);
+            if (declared == command_nodes.end()) return false;
+            for (const auto& st : declared->second->body) {
+                if (auto* c = std::get_if<language::changes_statement>(&st.node); c && std::ranges::contains(c->fields, field)) return true;
+            }
+            return false;
+        }
+
         // A view per an entity that holds one of its fields at its top, like poster_page's
         // background: where a button's given value is compared with what's stored, to
         // draw it pressed while they're the same.

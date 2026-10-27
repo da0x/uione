@@ -6,7 +6,11 @@
 export { App, Built, BuiltLink, Crumbs, Heading, Subtitle, accentOf, screen, useFill, usePageTitle, useSignIn, useSite, useTitle } from "./app.js";
 export { Applies, Either, FullScreen, Group, History, Messages, Toggle, hintOf, keyShown, setPicked, setToggled, useInGroup, useKeys, useOff, usePicked, usePickedId, useTool, useToggled } from "./workspace.js";
 export { useSaying } from "./said.js";
+export { Equation } from "./equation.js";
+export { layOutMath, mathFont, parseMath, writtenMath } from "./math.js";
+export type { MathLaidOut, MathNode, MathPlaced, MathProblem } from "./math.js";
 export { Collage, CollageButton } from "./collage-view.js";
+export { Paper, PaperButton } from "./paper-view.js";
 export { OnOpen, screenSize } from "./opening.js";
 export type { OpeningLine } from "./opening.js";
 export type { Said, Saying } from "./said.js";

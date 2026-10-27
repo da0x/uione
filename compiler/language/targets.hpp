@@ -73,6 +73,13 @@ namespace one::language {
         drawn_by{"pick", "a pick", everywhere},
         drawn_by{"on_open", "what a screen does as it's opened", everywhere},
         drawn_by{"collage", "a collage", everywhere},
+        drawn_by{"paper", "a paper", "web desktop"},
+        drawn_by{"paper.insert", "a block inserted in a paper", "web desktop"},
+        drawn_by{"paper.outline", "a paper's outline", "web desktop"},
+        drawn_by{"paper.warm", "a paper set on warm paper", "web desktop"},
+        drawn_by{"paper.spread", "a paper's pages side by side", "web desktop"},
+        drawn_by{"paper.read_only", "a paper read only", "web desktop"},
+        drawn_by{"paper.size", "a paper made larger or smaller", "web desktop"},
         drawn_by{"collage.place", "placing a collage's layers", everywhere},
         drawn_by{"collage.snap", "snapping a collage's layers", everywhere},
         drawn_by{"collage.over", "buttons over a collage's picked layer", everywhere},
@@ -356,6 +363,15 @@ namespace one::language {
                         if (n.match_colors) use("collage.match_colors");
                     } else if constexpr (std::is_same_v<T, picture_item>) {
                         use("picture");
+                    } else if constexpr (std::is_same_v<T, paper_item>) {
+                        use("paper");
+                        if (n.outline) use("paper.outline");
+                        if (n.warm) use("paper.warm");
+                        if (n.spread) use("paper.spread");
+                        if (n.read_only) use("paper.read_only");
+                    } else if constexpr (std::is_same_v<T, paper_insert>) {
+                        use(n.sizes ? "paper.size" : "paper.insert");
+                        if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, on_open_item>) {
                         use("on_open");
                         for (const auto& inner : n.run) item(inner, out);

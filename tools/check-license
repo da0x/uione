@@ -43,7 +43,10 @@ marker() {
 		# Legal texts and prose, formats that cannot hold a comment, build
 		# manifests and lockfiles, which tools rewrite, and images: an SVG is
 		# text, but a header in it would be downloaded with every page it's on.
-		LICENSE|COPYING|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg|*.png) echo exempt ;;
+		LICENSE|COPYING|ofl.txt|*-ofl.txt|.gitignore|*.md|*.json|*.tsv|yarn.lock|go.mod|go.sum|*.svg|*.png) echo exempt ;;
+		# Fonts, other projects', under the SIL Open Font License beside them, kept as
+		# they were fetched or cut down by the script beside them.
+		*.ttf|*.woff) echo exempt ;;
 		# stb's pictures, another project's, public domain, pinned by their sha256 in
 		# desktop/CMakeLists.txt and kept exactly as fetched.
 		stb_image.h|stb_image_write.h) case "$1" in desktop/src/stb/*) echo exempt ;; esac ;;
@@ -53,8 +56,9 @@ marker() {
 		# /* ... */, each line starting with " *".
 		*.css|*.ebnf) echo ' *' ;;
 		*.sh|*.py|*.yaml|*.yml|makefile|CMakeLists.txt|dockerfile|gaps) echo '#' ;;
-		# What a terminal shows, as a test holds it, byte for byte, like a golden image.
-		*.txt) case "$1" in */tests/golden/*) echo exempt ;; esac ;;
+		# What a terminal shows, or where an equation's parts are set, as a test holds
+		# it, byte for byte, like a golden image.
+		*.txt) case "$1" in */tests/golden/*|math/tests/layouts.txt) echo exempt ;; esac ;;
 		*.*) ;;
 		*) content "$1" | head -1 | grep -q '^#!' && echo '#' ;;
 	esac

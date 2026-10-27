@@ -200,6 +200,7 @@ namespace one::language {
         std::set<std::string> toggles_;  // the toggles of the screen being checked, read by its whens
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
+        std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
         bool in_toolbar_ = false;        // whether what's being checked is in a workspace's toolbar
 
         std::string prefix_of(const std::string& ns) const {
@@ -2756,9 +2757,11 @@ namespace one::language {
             };
             picks(s.items);
             collages_.clear();
+            papers_.clear();
             std::function<void(const std::vector<screen_item>&)> collages = [&](const std::vector<screen_item>& inside) {
                 for (const auto& item : inside) {
                     if (auto* c = std::get_if<collage_item>(&item.node)) collages_.push_back(c);
+                    if (auto* paper = std::get_if<paper_item>(&item.node)) papers_.push_back(paper);
                     if (auto* block = std::get_if<content_block>(&item.node)) collages(block->items);
                 }
             };
@@ -2782,6 +2785,7 @@ namespace one::language {
                     if (auto* f = std::get_if<full_screen_item>(&item.node)) chords = &f->keys;
                     if (auto* l = std::get_if<content_link>(&item.node)) chords = &l->keys;
                     if (auto* c = std::get_if<collage_button>(&item.node)) chords = &c->keys;
+                    if (auto* i = std::get_if<paper_insert>(&item.node)) chords = &i->keys;
                     if (chords && !shown_sometimes) {
                         for (const auto& chord : *chords) {
                             auto [first, fresh] = always.emplace(chord.chord, chord.where);
@@ -3289,7 +3293,8 @@ namespace one::language {
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
-                "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic"};
+                "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic", "align_left", "align_center", "align_right",
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "spread"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3368,6 +3373,10 @@ namespace one::language {
                 if (auto* block = std::get_if<content_block>(&item.node)) {
                     if (block->type == content_block::kind::group && !in_toolbar_) {
                         error(item.where, "a group is part of a workspace's toolbar, so it goes in toolbar { ... }");
+                    }
+                    if (block->type == content_block::kind::group && block->across != 0) {
+                        if (!block->small) error(block->across_where, "rows of says how a small group's tools are laid out, so the group is small, as in group \"Align\" small rows of 3");
+                        else if (block->across < 1 || block->across > 8) error(block->across_where, "a row of a small group holds from 1 to 8 tools");
                     }
                     bool was_in_toolbar = in_toolbar_;
                     if (block->type == content_block::kind::region) in_toolbar_ = block->title == "toolbar";
@@ -3571,6 +3580,25 @@ namespace one::language {
                     verify_picture(ns, *picture);
                 } else if (auto* collage = std::get_if<collage_item>(&item.node)) {
                     verify_collage(ns, *collage, route);
+                } else if (auto* paper = std::get_if<paper_item>(&item.node)) {
+                    verify_paper(ns, *paper, route);
+                } else if (auto* insert = std::get_if<paper_insert>(&item.node)) {
+                    // A block made by the screen's paper's add, each value given one of a block's fields.
+                    icon(insert->icon, insert->icon_where);
+                    keys(insert->keys);
+                    const paper_item* paper = papers_.empty() ? nullptr : papers_.front();
+                    if (insert->sizes) {
+                        if (!paper) error(item.where, std::string(insert->sizes > 0 ? "larger" : "smaller") + " makes the screen's paper larger or smaller, and this screen has no paper");
+                    } else if (!paper || !paper->add) {
+                        error(item.where, "insert makes a block by the screen's paper's add, and this screen has no paper that says one, like add block::create");
+                    } else {
+                        const view_each* blocks = named_list(ns, paper->view, paper->list, route);
+                        const entity_declaration* block = blocks ? listed_entity(ns, *blocks) : nullptr;
+                        for (const auto& v : insert->given) {
+                            if (block && !find_field(*block, v.name)) error(v.where, "entity " + block->name + " has no field " + v.name + " to be given" + nearest(v.name, field_names(*block)));
+                            verify_condition(ns, *v.value, route);
+                        }
+                    }
                 } else if (auto* does = std::get_if<collage_button>(&item.node)) {
                     // What it asks of the screen's collage, which says how it's kept.
                     icon(does->icon, does->icon_where);
@@ -3958,6 +3986,92 @@ namespace one::language {
             if (!read) error(picture.source->where, name + " doesn't read " + field_name + "; add it to " + (picks_.contains(name) ? "the list it's picked from" : "the view"));
         }
 
+        // Each part of an element drawn from a list's rows, like a collage's or a paper's, in
+        // the field it names or the one named like the part: there, of the part's type, and
+        // read by the view.
+        void verify_parts(const std::string& element, const qualified_name& view, const std::string& list, const location& list_where, const view_each& rows,
+                          const entity_declaration& row, const std::map<std::string, std::string>& kept, const std::map<std::string, location>& fields_where,
+                          const std::vector<collage_part>& parts, const std::string& needed_for, const std::string& like) {
+            for (const auto& part : parts) {
+                auto said = fields_where.find(part.name);
+                const location& at = said != fields_where.end() ? said->second : list_where;
+                auto in = kept.find(part.name);
+                if (in == kept.end()) {
+                    if (part.needed) error(at, "entity " + row.name + " has no field " + part.name + ", " + needed_for + "; add " + part.name + " " + part.type + " to it, or say the fields, like " + like);
+                    continue;
+                }
+                const std::string& name = in->second;
+                const field* f = find_field(row, name);
+                if (!f) {
+                    error(at, "entity " + row.name + " has no field " + name + nearest(name, field_names(row)));
+                    continue;
+                }
+                std::string type = part.type;
+                bool choices = type.find(' ') != std::string::npos;
+                bool fits = choices ? !f->choices.empty() && std::ranges::all_of(f->choices, [&](const std::string& c) { return (" " + type + " ").find(" " + c + " ") != std::string::npos; })
+                                    : f->type && f->type->text() == type && !f->list;
+                if (!fits) {
+                    std::string what = choices ? "one of " + type : type == "file" ? "a file" : type == "text" ? "text" : "a number";
+                    error(at, row.name + "." + name + " keeps a " + element + "'s " + std::string(part.name) + ", so it's " + what + (said == fields_where.end() ? "; or say the field that does, as in the " + element + "'s block" : ""));
+                    continue;
+                }
+                if (!in_rows(rows, name)) error(at, "view " + view.text() + " has no " + name + " in its " + list + ", which the " + element + " draws; add it to the list's block");
+            }
+        }
+
+        // paper document_page.blocks: its blocks a list of rows with words and a position,
+        // written, made and deleted by commands on what they are; write changes words.
+        void verify_paper(const std::string& ns, const paper_item& paper, const std::string& route) {
+            for (const auto* holds : {&paper.warm, &paper.spread, &paper.read_only}) {
+                if (*holds) verify_condition(ns, **holds, route);
+            }
+            const view_each* blocks = named_list(ns, paper.view, paper.list, route);
+            if (!blocks) return;
+            const entity_declaration* block = listed_entity(ns, *blocks);
+            if (!block) return;
+            const view_declaration* view = find(ns, paper.view, &scope::views);
+            auto kept = language::paper_fields(paper, blocks, view ? &view->values : nullptr);
+            verify_parts("paper", paper.view, paper.list, paper.list_where, *blocks, *block, kept, paper.fields_where, language::paper_parts(),
+                         "which every block of a paper has", "words body");
+            // Its face, a value of its view, kept on what the view is per, one of its faces.
+            if (auto face = kept.find("face"); face != kept.end()) {
+                auto said = paper.fields_where.find("face");
+                const location& at = said != paper.fields_where.end() ? said->second : paper.view.where;
+                const entity_declaration* per = view && view->per ? find_entity(ns, qualified_name{{*view->per}, paper.view.where}) : nullptr;
+                const field* f = per ? find_field(*per, face->second) : nullptr;
+                const std::string faces = language::paper_face().type;
+                bool fits = f && !f->choices.empty() && std::ranges::all_of(f->choices, [&](const std::string& c) { return (" " + faces + " ").find(" " + c + " ") != std::string::npos; });
+                if (!per) error(at, "a paper's face is kept on what the view " + paper.view.text() + " is per, and it isn't per anything");
+                else if (!f) error(at, "entity " + per->name + " has no field " + face->second + nearest(face->second, field_names(*per)));
+                else if (!fits) error(at, per->name + "." + face->second + " keeps a paper's face, so it's one of " + faces);
+                bool read = view && std::ranges::any_of(view->values, [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == face->second; });
+                if (f && !read) error(at, "view " + paper.view.text() + " has no " + face->second + ", which the paper is set in; add it to the view");
+            }
+            for (const auto& [command, like] : {std::pair{&paper.write, "write"}, {&paper.add, "create"}, {&paper.remove, "delete"}}) {
+                if (!*command) continue;
+                verify_command_use(ns, **command);
+                const entity_declaration* on = find_command(ns, **command);
+                if (on && on != block) {
+                    std::string line = like == std::string("create") ? "add" : like;
+                    error((*command)->where, "a paper's blocks are " + block->name + "s, so " + line + " names a command on " + block->name + ", like " + block->name + "::" + like);
+                }
+            }
+            // Written: what's typed is its words, so write changes them.
+            if (paper.write && kept.contains("words")) {
+                const command_declaration* command = nullptr;
+                if (auto here = scopes_.find(ns); here != scopes_.end()) {
+                    if (auto it = here->second.command_nodes.find(paper.write->text()); it != here->second.command_nodes.end()) command = it->second;
+                }
+                bool words = false;
+                if (command) {
+                    for (const auto& st : command->body) {
+                        if (auto* c = std::get_if<changes_statement>(&st.node)) words = words || std::ranges::contains(c->fields, kept.at("words"));
+                    }
+                }
+                if (command && !words) error(paper.write->where, paper.write->text() + " is what's typed on the paper is sent to, so it changes " + kept.at("words"));
+            }
+        }
+
         void verify_collage(const std::string& ns, const collage_item& collage, const std::string& route) {
             if (collage.match_colors) verify_condition(ns, *collage.match_colors, route);
             const view_each* layers = named_list(ns, collage.view, collage.list, route);
@@ -3972,33 +4086,8 @@ namespace one::language {
             // Each part in the field the collage names, or the one named like it: there, of
             // the part's type, and read by the view.
             auto kept = language::collage_fields(collage, layers);
-            for (const auto& part : language::collage_parts()) {
-                auto said = collage.fields_where.find(part.name);
-                const location& at = said != collage.fields_where.end() ? said->second : collage.list_where;
-                auto in = kept.find(part.name);
-                const entity_declaration* on = layer;
-                if (in == kept.end()) {
-                    if (part.needed) error(at, "entity " + layer->name + " has no field " + part.name + ", where a collage keeps a layer's place; add " + part.name + " number to it, or say the fields, like at x y  size w h");
-                    continue;
-                }
-                const std::string& name = in->second;
-                const field* f = on ? find_field(*on, name) : nullptr;
-                if (!f) {
-                    std::string whose = on ? on->name : collage.view.text();
-                    error(at, "entity " + whose + " has no field " + name + (on ? nearest(name, field_names(*on)) : ""));
-                    continue;
-                }
-                std::string type = part.type;
-                bool choices = type.find(' ') != std::string::npos;
-                bool fits = choices ? !f->choices.empty() && std::ranges::all_of(f->choices, [&](const std::string& c) { return (" " + type + " ").find(" " + c + " ") != std::string::npos; })
-                                    : f->type && f->type->text() == type && !f->list;
-                if (!fits) {
-                    std::string what = choices ? "one of " + type : type == "file" ? "a file" : type == "text" ? "text" : "a number";
-                    error(at, on->name + "." + name + " keeps a collage's " + std::string(part.name) + ", so it's " + what + (said == collage.fields_where.end() ? "; or say the field that does, as in the collage's block" : ""));
-                    continue;
-                }
-                if (!in_rows(*layers, name)) error(at, "view " + collage.view.text() + " has no " + name + " in its " + collage.list + ", which the collage draws; add it to the list's block");
-            }
+            verify_parts("collage", collage.view, collage.list, collage.list_where, *layers, *layer, kept, collage.fields_where, language::collage_parts(),
+                         "where a collage keeps a layer's place", "at x y  size w h");
             auto has = [&](std::initializer_list<const char*> parts) { return std::ranges::all_of(parts, [&](const char* p) { return kept.contains(p); }); };
             if (collage.crop && !has({"crop_x", "crop_y", "crop_w", "crop_h"})) error(collage.crop->where, "a crop is kept in a layer's crop_x crop_y crop_w crop_h, which " + layer->name + " doesn't have; add them, or say its fields, like cropped to left top width height");
             if (collage.write && !has({"words", "size"})) error(collage.write->where, "words written are kept in a layer's words and size, which " + layer->name + " doesn't have; add them, or say its fields, like words caption sized letters");

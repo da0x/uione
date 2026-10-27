@@ -2221,6 +2221,43 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     says where, with Show in folder to open it there, drawing it away from the
     window's thread so the window never waits; a web page downloads it. A web page
     copies a picture only when the browser lets it.
+- `paper document_page.blocks { ... }` shows a list's rows as one upright sheet of
+  paper, letter-shaped, that's typed on in place, as a word processor's page is
+  ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).
+  Each row is a block, in the order its `position` says, set as its `kind` says
+  (`title`, `subtitle`, `heading`, `text`, `quote`, `math`, an equation set from its
+  words, or `code`, kept as it's typed) and aligned as its `align` says (`left`, `center` or `right`). Its words
+  are its `words`.
+  - `write block::write`: what's typed in a block, sent once typing pauses or the
+    caret leaves it. When the command changes `kind` too, `# ` at the start of a text
+    block makes it a heading, and `> ` a quote.
+  - `add block::create`: Enter splits a block, the words after the caret made a block
+    after it, of the same kind when they were in its middle, or text after its end;
+    the first words typed on an empty page make its first block, a title. Each is one
+    step undo takes back.
+  - `delete block::delete`: Backspace at a block's start joins it to the one before.
+  - A math block shows its words while the caret's in it, and its equation, set, once
+    the caret leaves; it keeps the room of the larger, so the page doesn't move. In a
+    code block, Enter starts a new line, and Enter on an empty last line leaves it for
+    text after it.
+  - `insert "Equation" icon equation { kind = kind::math }`, a button anywhere on the
+    screen, makes an empty block after the one the caret is in, given those values, by
+    the paper's `add`, and puts the caret in it.
+  - `empty "Title"`: where an empty page's first words go, said faintly.
+  - The block the caret is in is the screen's `pick block from document_page.blocks`,
+    so the toolbar's buttons, like `block::style "Center" icon align_center { align =
+    align::center }`, act on it.
+  - Its `face`, a value of the view kept on what it's per, is the type the whole page
+    is set in: `book`, a book's serif; `modern`, the app's own face; `lyric`, a warmer
+    serif for verse and letters; or `typewriter`, the app's code face. Code and an
+    equation's words stay in the code face whatever it is. A toolbar sets it like any
+    field, `document::set "Book" { face = face::book }`, pressed while it's so.
+  - `outline`: its title and headings listed beside it, the section the caret is in
+    marked, each putting the caret there and bringing it into view. It's always
+    there, so the page doesn't move as headings come and go.
+  - A heading is ruled under, across the whole line.
+  - Each part is kept in the field named like it; one kept in another says so, like
+    `words body`.
 - `pipeline board_page.issues by stage over board_page.stages` shows a list's rows
   as the classic deploy screen did: a lane for each kind of card, its kind said by
   `lanes by labels`, in the order their stages come, and in it a row for each card,
@@ -2278,7 +2315,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, in two rows
   read a row at a time, its words said when it's pointed at. A large tool is as
   tall as two small ones, so the toolbar is as tall whichever groups it shows.
-  `group "View" at end` sits at the toolbar's far end.
+  `group "Align" small rows of 3 { ... }` lays its tools in rows of three instead,
+  read a row at a time. `group "View" at end` sits at the toolbar's far end.
 - In a toolbar, `when` doesn't hide: a group or a tool whose `when` doesn't hold is
   there, faint, and can't be pressed, nor its keys used, so the toolbar keeps its
   shape as what's picked changes. `group "Rotate" small when layer.picture != none`.

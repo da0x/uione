@@ -245,15 +245,33 @@ collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "wr
                   | "words" NAME ("sized" NAME)? ("colored" NAME)? ("weighing" NAME)? ("slanted" NAME)?
                   /* a small picture of it, drawn once changes settle, sent to a command on what the view is per */
                   | "keep" "preview" qualified "into" NAME NUMBER "wide") END
+paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "empty" STRING
+                  /* its title and headings listed beside it, the caret's section marked, each going there */
+                  | "outline"
+                  /* set on warm paper, as under a reading lamp, while it holds, like a reader's toggle */
+                  | "warm" "when" expression
+                  /* its pages two at a time, side by side, while it holds, like a reader's toggle */
+                  | "side" "by" "side" "when" expression
+                  /* read, not written on, while it holds */
+                  | "read" "only" "when" expression
+                  /* a part, words, kind, align or position, then the field playing it: each is kept in the field
+                     named like it unless one of these says another */
+                  | NAME NAME) END
 /* key ctrl+z: what runs a line too; any of ctrl, shift and alt, then a key, like f11 or delete */
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
                  | ("main" | "side" | "bar" | "toolbar" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
-                 | "group" STRING "small"? ("at" "end")? ("when" expression)? screen_block END
+                 | "group" STRING "small"? ("rows" "of" NUMBER)? ("at" "end")? ("when" expression)? screen_block END
                  /* a picture made of layers, as big as two of the view's values say */
                  | "collage" qualified "." NAME ("size" NAME NAME)? "{" NEWLINE? collage_line* "}" END
+                 /* a list's rows as a sheet of paper, written on in place */
+                 | "paper" qualified "." NAME "{" NEWLINE? paper_line* "}" END
+                 /* a block made after the one the screen's paper has the caret in, given these values */
+                 | "insert" STRING ("icon" NAME)? key* given? ("when" expression)? END
+                 /* the reader's paper made larger or smaller, as zooming a book does, kept for them */
+                 | ("larger" | "smaller") STRING ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot, or copies or saves it, or its picked layer, as a picture */
                  | ("crop" | "edit" "words" | "add" "words" | "paste" | "screenshot" | ("copy" | "save") NAME "as" "picture") STRING? ("icon" NAME)? key* ("when" expression)? END

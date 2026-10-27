@@ -13,6 +13,11 @@
 import "@fontsource-variable/ibm-plex-sans";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
+// The faces a paper is set in beyond the app's own: book's Literata and lyric's Fraunces.
+import "@fontsource-variable/literata/wght.css";
+import "@fontsource-variable/literata/wght-italic.css";
+import "@fontsource-variable/fraunces/wght.css";
+import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ComponentSet } from "@uione/react";
@@ -1840,10 +1845,13 @@ export const radix: ComponentSet = {
       // the toolbar stays as tall whichever groups it shows; small, its icon alone, or
       // its words when it has none.
       const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8" : "size-8 text-xs";
+      // Pressed, it acts on what's being worked on and leaves the keyboard, and any
+      // caret, with it; Tab still reaches it.
       return (
         <button
           type="button"
           disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={onClick}
           aria-pressed={on}
           aria-label={tool === "small" && drawn ? words : undefined}
@@ -2014,12 +2022,13 @@ export const radix: ComponentSet = {
     ),
 
   // A toolbar's group: its tools, then its name under them, and a line after it; a
-  // small one's tools in two rows, read a row at a time, the first the longer.
-  Group: ({ name, small, atEnd, children }) => (
+  // small one's tools in rows as long as it says, or two rows, read a row at a time,
+  // the first the longer.
+  Group: ({ name, small, across, atEnd, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div
         className={small ? "grid gap-0.5" : "flex items-start gap-0.5"}
-        style={small ? { gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}
+        style={small ? { gridTemplateColumns: `repeat(${across ?? Math.max(1, Math.ceil(Children.toArray(children).length / 2))}, auto)` } : undefined}
       >
         {children}
       </div>

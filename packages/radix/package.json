@@ -27,7 +27,7 @@
   "scripts": {
     "prepack": "node -e \"if(!require('fs').existsSync('dist')){console.error('dist is published as the checks built and tested it, never built again here; build it and run the checks first');process.exit(1)}\"",
     "grammar": "mkdir -p src/grammar && cp ../../editors/vscode/syntaxes/uione.tmlanguage.json src/grammar/uione.json",
-    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && tailwindcss -i src/styles.css -o dist/styles.css --minify",
+    "build": "yarn grammar && tsc -p tsconfig.build.json && mkdir -p dist/grammar && cp src/grammar/uione.json dist/grammar/ && cp -r src/fonts dist/ && tailwindcss -i src/styles.css -o dist/styles.css --minify",
     "typecheck": "yarn grammar && tsc --noEmit",
     "test": "yarn grammar && vitest run"
   },
@@ -35,7 +35,9 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "5.3.0",
     "@fontsource-variable/ibm-plex-sans": "5.3.0",
+    "@fontsource-variable/literata": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@shikijs/themes": "^4.4.3",

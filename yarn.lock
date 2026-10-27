@@ -824,10 +824,20 @@
   resolved "https://registry.yarnpkg.com/@firebase/webchannel-wrapper/-/webchannel-wrapper-1.0.7.tgz#45a201ad457323f8fda59c17cc4be11c8908cd4a"
   integrity sha512-phBFwieDLvkZGYN9CE9ZFNEIoBVksprzsnCzQejCmCHtgwCXReeuRpoEGN9C4EbhONztv8NRV1tau6Rb9pONwQ==
 
+"@fontsource-variable/fraunces@5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/fraunces/-/fraunces-5.3.0.tgz#6c8a69a0dcac753643a04e068ed2ad5689e99229"
+  integrity sha512-9BYGySn4AHEJdgp9Z28tQ3X+laJMEOITXkQarZXeloWQZDq5oOvXJ3kDA8c7MGIfpogIaZfjrQBqmda8POOCKA==
+
 "@fontsource-variable/ibm-plex-sans@5.3.0":
   version "5.3.0"
   resolved "https://registry.yarnpkg.com/@fontsource-variable/ibm-plex-sans/-/ibm-plex-sans-5.3.0.tgz#61ed443b8f904720fb28049370dc201e152f3ed5"
   integrity sha512-agG8tXFEo0hD9+J7npa4vbbWult52eMLVaQ6WQRlhs/iCAojrMAoejru85W9HTVXHfyUj96KM7gp/KGAS87XaQ==
+
+"@fontsource-variable/literata@5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource-variable/literata/-/literata-5.3.0.tgz#954648604745856c3f6d4827712c840c029a1aa4"
+  integrity sha512-1Jw7xvOcoGyB83lxB2nG4bfNbqtX2/TTbdh9sHAOmU064SvmSdulDtA5RBu5JYWf64fdaKX7xU+z3GO1T2bCHA==
 
 "@fontsource/fira-code@5.3.0":
   version "5.3.0"
@@ -1653,24 +1663,6 @@
   version "2.0.11"
   resolved "https://registry.yarnpkg.com/@types/unist/-/unist-2.0.11.tgz#11af57b127e32487774841f7a4e54eab166d03c4"
   integrity sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==
-
-"@uione/radix@0.6.18":
-  version "0.6.18"
-  resolved "https://registry.yarnpkg.com/@uione/radix/-/radix-0.6.18.tgz#46c1c8a3d270db395e782c66fb37b4a781433013"
-  integrity sha512-aEmsLvfRP/EomYy5EZtN3wbiETFPi+48xp44u5WcUjEvyGNHUa5zvJQRZDNTkLryyYWDLFzgSsRPNaxr5RMgCQ==
-  dependencies:
-    "@fontsource-variable/ibm-plex-sans" "5.3.0"
-    "@fontsource/ibm-plex-mono" "5.3.0"
-    "@radix-ui/react-dialog" "^1.1.23"
-    "@shikijs/themes" "^4.4.3"
-    react-markdown "^10.1.0"
-    remark-gfm "^4.0.1"
-    shiki "^4.4.3"
-
-"@uione/react@0.6.18":
-  version "0.6.18"
-  resolved "https://registry.yarnpkg.com/@uione/react/-/react-0.6.18.tgz#a38e721a51163a8f903c9268d928b4b465f17a11"
-  integrity sha512-ShPTiNrhOY0tLj3GmiV0QZIcUL4d5m6Euo8/Ea71hI7W55vgjhqmjoCHBF5o+TacaM+/7TJHrSRrcscStltMoA==
 
 "@ungap/structured-clone@^1.0.0":
   version "1.4.0"

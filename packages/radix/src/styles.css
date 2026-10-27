@@ -16,6 +16,16 @@
 @source "./**/*.tsx";
 
 /*
+ * The font equations are set in, cut down to the characters they use. Its measures are
+ * what @uione/react places every glyph by, so it has to be this font and no other.
+ */
+@font-face {
+  font-family: "Noto Sans Math";
+  src: url("./fonts/noto-sans-math.woff") format("woff");
+  font-display: block;
+}
+
+/*
  * Colors, named for what they're for. A cool, exact palette: pages a breath off
  * white, panels white so they sit crisply on them, a deep blue-black for text, and
  * one accent, the logo's blue sharpened. Dark mode is navy-black, not gray.
@@ -322,6 +332,11 @@ main:has(.one-document) .one-heading > div:first-child > :not(h1) {
 }
 /* Docs pages arrive as HTML, so they're styled by element rather than by class. */
 @layer components {
+  /* An equation on a line of its own, centered, as a book sets one. */
+  .one-prose .one-math {
+    text-align: center;
+    margin: 0.75em 0;
+  }
   /* A page set as a printed document, like a license, over the prose styles below: a book face, its title, parts
      and sections centered, the text justified, and a fleuron where it breaks. */
   .one-prose.one-document {

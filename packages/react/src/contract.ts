@@ -622,6 +622,7 @@ export interface ButtonProps {
 export interface GroupProps {
   name: string;
   small?: boolean;
+  across?: number; // a small one's tools in rows this long, rather than two rows, the first the longer
   atEnd?: boolean;
   children: ReactNode;
 }

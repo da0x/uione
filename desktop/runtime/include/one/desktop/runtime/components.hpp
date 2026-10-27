@@ -27,6 +27,17 @@ namespace one::desktop::runtime {
 		return items(std::move(all));
 	}
 
+	// An equation written in one::math's notation, set as a book sets it: on its own
+	// lines, or in a line of text; one that can't be read shown as it's written.
+	desktop::view equation(std::string written, bool displayed);
+	// The same, set at a size, for something that draws it itself: how big it is, and
+	// drawing it with its top left at a point. One that can't be read isn't read.
+	struct set_equation {
+		bool read = false;
+		float width = 0, ascent = 0, descent = 0;
+		std::function<void(desktop::canvas&, desktop::point)> draw = {};
+	};
+	set_equation equation_set(const std::string& written, float em, bool displayed, color ink);
 	// Text, with values read live from views, quiet as a status line's is; a subtitle
 	// says less, under the title.
 	desktop::view text(std::vector<part> parts, bool quiet = false);
@@ -115,7 +126,9 @@ namespace one::desktop::runtime {
 	}
 	// A toolbar's group, its name under its tools, which its buttons are built as;
 	// small, two rows of icons; at its end, at the toolbar's far end.
-	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build);
+	// A small one's tools are laid in rows `across` long, or, when it's 0, in two rows, the
+	// first the longer.
+	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across = 0);
 	// A group's lines, each its own.
 	template <std::convertible_to<desktop::view>... V>
 	std::vector<desktop::view> tools(V&&... each) {
@@ -151,6 +164,11 @@ namespace one::desktop::runtime {
 	desktop::view board(page& p, board_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
 	desktop::view collage(page& p, collage_spec spec);
+	// A list's rows as one sheet of paper, written on in place: each a block of words
+	// set as its kind says and aligned as it says (see paper_spec).
+	desktop::view paper(page& p, paper_spec spec);
+	desktop::view paper_button(page& p, paper_ask ask);
+	desktop::view paper_size(page& p, paper_ask ask);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage.
 	desktop::view collage_button(page& p, collage_ask ask);
 	// on open: what the screen does as it's opened, and "Opening…" while it decides.

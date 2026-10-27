@@ -7,7 +7,8 @@
 # target starts with everything here and is done when none of its lines are left.
 # A terminal draws no pictures, so it can't show one alone, on a card or a table's
 # row, crop one in place, match a collage's colors, or copy, save or keep a picture of
-# a collage, and it has no screen of its own to take a screenshot of.
+# a collage, and it has no screen of its own to take a screenshot of. A paper is
+# written on in place, which a terminal doesn't do yet.
 terminal cards.picture
 terminal picture
 terminal collage.copy
@@ -17,3 +18,10 @@ terminal collage.preview
 terminal collage.save
 terminal collage.screenshot
 terminal table.picture
+terminal paper
+terminal paper.insert
+terminal paper.outline
+terminal paper.warm
+terminal paper.spread
+terminal paper.read_only
+terminal paper.size

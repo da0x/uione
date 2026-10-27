@@ -147,6 +147,7 @@ namespace one::generators {
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
+        std::string paper_key_;          // and its insert buttons its paper
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
@@ -339,6 +340,14 @@ namespace one::generators {
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
                 collage_over_.reset();
+                paper_key_ = route + " paper";
+                std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
+                    for (const auto& item : inside) {
+                        if (auto* paper = std::get_if<language::paper_item>(&item.node)) paper_key_ = route + " paper " + paper->list;
+                        if (auto* block = std::get_if<language::content_block>(&item.node)) papers(block->items);
+                    }
+                };
+                papers(s->items);
                 for (const auto& item : s->items) {
                     if (auto* block = std::get_if<language::content_block>(&item.node)) {
                         for (const auto& inside : block->items) {
@@ -1083,7 +1092,8 @@ namespace one::generators {
                 if (auto* group = std::get_if<language::content_block>(&item.node); group && group->type == language::content_block::kind::group) {
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
-                        out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->at_end ? " atEnd" : "") + ">");
+                        out.open("<Group name=" + web_detail::js_string(group->title) + (group->small ? " small" : "") + (group->across ? " across={" + std::to_string(group->across) + "}" : "") +
+                                 (group->at_end ? " atEnd" : "") + ">");
                         bool was = std::exchange(in_group_, true);
                         screen_items(out, parts, ns, group->items, screen);
                         in_group_ = was;
@@ -1280,6 +1290,42 @@ namespace one::generators {
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     if (std::string swatch = screens::swatch_of(*button); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
+                } else if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
+                    // A list's rows as a sheet of paper, written on in place.
+                    parts.components.insert("Paper");
+                    std::string view = full_view(ns, paper->view.text());
+                    std::string line = "<Paper view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(paper->list);
+                    std::string kept;
+                    auto fields = model_.paper_fields(ns, *paper);
+                    for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
+                    line += " fields={{ " + kept + " }}";
+                    if (paper->write) {
+                        std::string write = full_command(ns, *paper->write);
+                        line += " write=" + web_detail::js_string(write);
+                        if (fields.contains("kind") && model_.changes(write, fields.at("kind"))) line += " writesKind";
+                    }
+                    if (paper->add) line += " add=" + web_detail::js_string(full_command(ns, *paper->add));
+                    if (paper->remove) line += " remove=" + web_detail::js_string(full_command(ns, *paper->remove));
+                    if (auto per = per_entity(view)) {
+                        if (const language::entity_declaration* block = listed(ns, paper->view.text(), paper->list)) {
+                            for (const auto& f : block->fields) {
+                                if (f.type && f.type->text() == *per) line += " parent=" + web_detail::js_string(f.name);
+                            }
+                        }
+                        parts.params.insert(*per);
+                        line += " subject={" + web_detail::js_name(*per + "_id") + "}";
+                    }
+                    for (const auto& [name, picked] : picks_) {
+                        if (picked.view == view && picked.list == paper->list) line += " pick=" + web_detail::js_string(route_ + " " + name);
+                    }
+                    if (paper->empty) line += " empty=" + web_detail::js_string(*paper->empty);
+                    if (paper->outline) line += " outline";
+                    if (paper->warm) line += " warm={" + condition(parts, ns, *paper->warm) + "}";
+                    if (paper->spread) line += " spread={" + condition(parts, ns, *paper->spread) + "}";
+                    if (paper->read_only) line += " readOnly={" + condition(parts, ns, *paper->read_only) + "}";
+                    line += " name=" + web_detail::js_string(paper_key_);
+                    if (workspace_) line += " fills";
+                    out.line(line + " />");
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     // A picture made of layers, the buttons over the picked one inside it.
                     parts.components.insert("Collage");
@@ -1339,6 +1385,17 @@ namespace one::generators {
                     shown_while(out, parts, ns, item, [&] {
                         std::set<std::string> read;
                         out.line("<Picture source={" + condition_of(parts, ns, *picture->source, read) + "}" + (picture->fit ? " fit" : "") + " />");
+                    });
+                } else if (auto* insert = std::get_if<language::paper_insert>(&item.node)) {
+                    // A block made after the caret's, by the screen's paper.
+                    parts.components.insert("PaperButton");
+                    std::set<std::string> read;
+                    std::string given;
+                    for (const auto& v : insert->given) given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + condition_of(parts, ns, *v.value, read);
+                    shown_while(out, parts, ns, item, [&] {
+                        out.line("<PaperButton paper=" + web_detail::js_string(paper_key_) + " label=" + web_detail::js_string(insert->label.value_or("Insert")) +
+                                 (insert->icon ? " icon=" + web_detail::js_string(*insert->icon) : "") + keys_of(insert->keys) +
+                                 (insert->sizes ? " sizes={" + std::to_string(insert->sizes) + "}" : " given={{ " + given + " }}") + " />");
                     });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.

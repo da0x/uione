@@ -56,11 +56,11 @@ export function Either({ children }: { children?: ReactNode }) {
   return <>{holds ?? ways[0]}</>;
 }
 
-export function Group({ name, small = false, atEnd = false, children }: { name: string; small?: boolean; atEnd?: boolean; children?: ReactNode }) {
+export function Group({ name, small = false, across, atEnd = false, children }: { name: string; small?: boolean; across?: number; atEnd?: boolean; children?: ReactNode }) {
   const ui = useUI();
   return (
     <InGroup.Provider value={{ small }}>
-      <ui.Group name={name} small={small} atEnd={atEnd}>
+      <ui.Group name={name} small={small} across={across} atEnd={atEnd}>
         {children}
       </ui.Group>
     </InGroup.Provider>

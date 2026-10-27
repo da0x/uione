@@ -10,14 +10,90 @@ import { useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Equation } from "@uione/react";
+
+// Markdown's tree, as much of it as math needs.
+type MarkdownNode = { type: string; value?: string; lang?: string | null; children?: MarkdownNode[]; data?: object };
+
+// Equations in the words, $x^2$, and ```math blocks, read as one::markdown reads them: a
+// `$` opens before something other than a space and closes after one, not before a
+// digit, so "$5 and $10" stays money.
+function mathOf(words: string): MarkdownNode[] {
+  const out: MarkdownNode[] = [];
+  let from = 0;
+  for (let i = 0; i < words.length; i++) {
+    if (words[i] !== "$" || i + 1 >= words.length || words[i + 1] === " " || words[i + 1] === "$") continue;
+    let close = i + 1;
+    while ((close = words.indexOf("$", close + 1)) !== -1) {
+      if (words[close - 1] !== " " && !/[0-9]/.test(words[close + 1] ?? "")) break;
+    }
+    if (close === -1) continue;
+    if (i > from) out.push({ type: "text", value: words.slice(from, i) });
+    const written = words.slice(i + 1, close);
+    out.push({ type: "math", value: written, data: { hName: "span", hProperties: { dataMath: written } } });
+    from = i = close + 1;
+    i--;
+  }
+  if (from < words.length) out.push({ type: "text", value: words.slice(from) });
+  return out;
+}
+
+function remarkMath() {
+  const walk = (node: MarkdownNode) => {
+    if (!node.children) return;
+    node.children = node.children.flatMap((child) => {
+      if (child.type === "text") return mathOf(child.value ?? "");
+      if (child.type === "code" && child.lang === "math") {
+        const written = (child.value ?? "").trim();
+        return [{ type: "math", value: written, data: { hName: "div", hProperties: { dataMath: written, dataDisplayed: true }, hChildren: [] } }];
+      }
+      walk(child);
+      return [child];
+    });
+  };
+  return walk;
+}
+
+// An equation alone in a paragraph is set on its own line, as a ```math block is.
+function alone(children: unknown) {
+  const all = Array.isArray(children) ? children : [children];
+  const shown = all.filter((c) => !(typeof c === "string" && c.trim() === ""));
+  return shown.length === 1 && typeof shown[0] === "object" && shown[0] !== null && "props" in shown[0] && (shown[0].props as Record<string, unknown>)["data-math"] !== undefined
+    ? String((shown[0].props as Record<string, unknown>)["data-math"])
+    : undefined;
+}
 
 export function MarkdownText({ source }: { source: string }) {
   return (
     <div className="one-prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
         skipHtml
         components={{
+          span: ({ node: _, ...props }) => {
+            const written = (props as Record<string, unknown>)["data-math"];
+            return typeof written === "string" ? <Equation written={written} displayed={false} /> : <span {...props} />;
+          },
+          div: ({ node: _, ...props }) => {
+            const written = (props as Record<string, unknown>)["data-math"];
+            return typeof written === "string" ? (
+              <div className="one-math">
+                <Equation written={written} displayed />
+              </div>
+            ) : (
+              <div {...props} />
+            );
+          },
+          p: ({ node: _, children, ...props }) => {
+            const written = alone(children);
+            return written !== undefined ? (
+              <div className="one-math">
+                <Equation written={written} displayed />
+              </div>
+            ) : (
+              <p {...props}>{children}</p>
+            );
+          },
           // A link whose address was blocked arrives with none, and an empty href
           // would reload the page, so it's shown as its text.
           a: ({ href, children }) =>

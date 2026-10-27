@@ -56,12 +56,14 @@ namespace one::desktop {
 			for (auto& child : e.children) each_element(*child, visit);
 		}
 
-		void focus(window::state& w, element* chosen) {
+		// What's given the keyboard is brought into view, unless it was pressed, when it's
+		// in sight already.
+		void focus(window::state& w, element* chosen, bool reveal = true) {
 			if (!w.root) return;
 			each_element(*w.root, [](element& e) { e.focused = e.focused_by_default = e.focused_by_pointer = false; });
 			if (chosen) {
 				chosen->focused = true;
-				chosen->reveal(chosen->frame);
+				if (reveal) chosen->reveal(chosen->frame);
 			}
 			w.redraw();
 		}
@@ -234,7 +236,8 @@ namespace one::desktop {
 		w.dragging = nullptr;
 		for (element* e = target; e; e = e->parent) {
 			if (e->focusable()) {
-				focus(w, e);
+				if (!e->focused_by_press()) break;
+				focus(w, e, false);
 				e->focused_by_pointer = true;
 				break;
 			}

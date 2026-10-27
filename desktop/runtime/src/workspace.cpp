@@ -156,7 +156,7 @@ namespace one::desktop::runtime {
 		return desktop::column(std::move(parts)).background({.fill = t.sunken}).grow();
 	}
 
-	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build) {
+	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across_said) {
 		const auto& t = current_theme();
 		auto was = p.in_group();
 		p.in_group(small);
@@ -166,13 +166,14 @@ namespace one::desktop::runtime {
 		if (tools.empty()) return {};
 		desktop::view laid;
 		if (small) {
-			// Two rows of icons, read a row at a time, the first the longer: each column
-			// one from the top row over the one below it, so they line up.
-			std::size_t across = (tools.size() + 1) / 2;
+			// Rows of icons, read a row at a time: as long as the group says, or two rows, the
+			// first the longer. Each column is one from each row, so they line up.
+			std::size_t across = across_said > 0 ? static_cast<std::size_t>(across_said) : (tools.size() + 1) / 2;
 			std::vector<desktop::view> columns;
-			for (std::size_t i = 0; i < across; ++i) {
-				if (i + across < tools.size()) columns.push_back(desktop::column(std::move(tools[i]), std::move(tools[i + across])).spacing(2));
-				else columns.push_back(desktop::column(std::move(tools[i])));
+			for (std::size_t i = 0; i < across && i < tools.size(); ++i) {
+				std::vector<desktop::view> down;
+				for (std::size_t j = i; j < tools.size(); j += across) down.push_back(std::move(tools[j]));
+				columns.push_back(desktop::column(std::move(down)).spacing(2));
 			}
 			// A column of one sits in the top row, beside the rest of it.
 			laid = desktop::row(std::move(columns)).spacing(2).align(align::start);
@@ -181,9 +182,11 @@ namespace one::desktop::runtime {
 		}
 		auto label = t.quiet();
 		label.size -= 1;
-		auto drawn = desktop::column(std::move(laid), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
+		// Its name at the bottom, in line with every other group's, however many rows of
+		// tools are over it, as the web's.
+		auto drawn = desktop::column(std::move(laid), desktop::spacer(), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
 		if (!at_end) return drawn;
-		return desktop::row(desktop::spacer(), std::move(drawn)).grow();
+		return desktop::row(desktop::spacer(), std::move(drawn)).align(align::stretch).grow();
 	}
 
 	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys) {

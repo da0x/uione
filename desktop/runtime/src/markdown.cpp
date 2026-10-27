@@ -6,6 +6,8 @@
 
 #include "one/desktop/runtime/markdown.hpp"
 
+#include "one/desktop/runtime/components.hpp"
+
 #include <one/markdown.hpp>
 
 #include <algorithm>
@@ -57,6 +59,9 @@ namespace one::desktop::runtime {
 						s.underline = true;
 						spans_of(node.children, s, out);
 						break;
+					case md::inline_kind::math:
+						out.push_back({"$" + node.text + "$", s});
+						break;
 					case md::inline_kind::image: {
 						s.color = t.muted;
 						std::vector<text_span> alt;
@@ -70,21 +75,50 @@ namespace one::desktop::runtime {
 			}
 		}
 
-		desktop::view paragraph(const std::vector<md::inline_node>& nodes, text_style style) {
-			std::vector<text_span> spans;
-			spans_of(nodes, style, spans);
-			if (spans.empty()) spans.push_back({"", style});
-			return desktop::text(std::move(spans));
-		}
-
-		desktop::view block(const md::block_node& b);
-
 		// One view in a column, which can be centered in it.
 		desktop::view alone(desktop::view v) {
 			std::vector<desktop::view> one;
 			one.push_back(std::move(v));
 			return desktop::column(std::move(one));
 		}
+
+		desktop::view paragraph(const std::vector<md::inline_node>& nodes, text_style style) {
+			// An equation alone is set on a line of its own, centered.
+			if (nodes.size() == 1 && nodes.front().kind == md::inline_kind::math) return alone(equation(nodes.front().text, true)).align(align::center);
+			bool math = std::ranges::any_of(nodes, [](const auto& n) { return n.kind == md::inline_kind::math; });
+			std::vector<text_span> spans;
+			if (!math) {
+				spans_of(nodes, style, spans);
+				if (spans.empty()) spans.push_back({"", style});
+				return desktop::text(std::move(spans));
+			}
+			// With equations among its words, each word is its own piece, so the line
+			// can break between them, and every piece sits on the words' baseline. The
+			// space after a word is kept as one that doesn't break, which isn't trimmed.
+			std::vector<desktop::view> pieces;
+			for (const auto& node : nodes) {
+				if (node.kind == md::inline_kind::math) {
+					pieces.push_back(equation(node.text, false));
+					continue;
+				}
+				std::vector<text_span> some;
+				spans_of({node}, style, some);
+				for (const auto& span : some) {
+					std::size_t at = 0;
+					while (at < span.text.size()) {
+						std::size_t end = span.text.find(' ', at);
+						std::string word = span.text.substr(at, (end == std::string::npos ? span.text.size() : end) - at);
+						if (end != std::string::npos) word += "\u00A0";
+						end = end == std::string::npos ? span.text.size() : end + 1;
+						pieces.push_back(desktop::text(std::vector<text_span>{{std::move(word), span.style}}));
+						at = end;
+					}
+				}
+			}
+			return desktop::flow(std::move(pieces));
+		}
+
+		desktop::view block(const md::block_node& b);
 
 		// Whether what's being drawn is set as a document: its book face, its headings centered.
 		bool documented = false;
@@ -115,6 +149,7 @@ namespace one::desktop::runtime {
 				case md::block_kind::code_block: {
 					std::string code = b.literal;
 					while (!code.empty() && code.back() == '\n') code.pop_back();
+					if (b.info == "math") return alone(equation(code, true)).align(align::center).padding(edges(4, 0));
 					return desktop::text(code, t.code()).padding(edges(10, 14)).background({.fill = t.sunken, .radius = 6});
 				}
 				case md::block_kind::block_quote: return desktop::row(desktop::edge(t.line), blocks(b.children).grow()).spacing(12).align(align::stretch);

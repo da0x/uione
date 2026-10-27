@@ -52,6 +52,25 @@ namespace studio at / {
 		h        number  = 300
 	}
 
+	// A poster's notes, written as a page: each block a title, a heading, a paragraph,
+	// a quote or an equation, aligned as it's written.
+	entity passage {
+		poster    poster  required
+		kind      enum    title | subtitle | heading | text | quote | math = kind::text
+		words     text
+		align     enum    left | center | right = align::left
+		position  number  = 0
+	}
+
+	command passage::create
+	command passage::delete
+	command passage::write {
+		changes words kind
+	}
+	command passage::style {
+		changes kind align
+	}
+
 	command poster::create
 	command poster::update
 	command poster::delete
@@ -105,6 +124,14 @@ namespace studio at / {
 		layers = each layer in poster {
 			order by depth
 			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h
+		}
+	}
+
+	view notes_page per poster {
+		title
+		passages = each passage in poster {
+			order by position
+			kind  words  align  position
 		}
 	}
 
@@ -229,6 +256,53 @@ namespace studio at / {
 		}
 		status {
 			messages
+		}
+	}
+
+	// A poster's notes, written on a sheet of paper; the toolbar sets the block the
+	// caret is in.
+	screen "Notes" /posters/:poster/notes {
+		layout workspace
+		pick passage from notes_page.passages
+		bar {
+			link / "Posters" icon gallery key escape
+			text "{notes_page.title}"
+			toggle reading "Read" icon eye
+		}
+		toolbar {
+			group "Style" {
+				passage::style "Title" icon title { kind = kind::title }
+				passage::style "Heading" icon heading { kind = kind::heading }
+				passage::style "Text" icon text { kind = kind::text }
+				passage::style "Quote" icon quote { kind = kind::quote }
+			}
+			group "Align" small rows of 3 {
+				passage::style "Left" icon align_left { align = align::left }
+				passage::style "Center" icon align_center { align = align::center }
+				passage::style "Right" icon align_right { align = align::right }
+			}
+			group "Insert" {
+				insert "Equation" icon equation { kind = kind::math  align = align::center }
+			}
+			// The reader's own: how large it is, one page or two, and warm paper.
+			group "Read" small {
+				smaller "Smaller" icon smaller
+				larger "Larger" icon larger
+				toggle spread "Two pages" icon spread
+				toggle coffee "Coffee" icon coffee
+			}
+		}
+		main {
+			paper notes_page.passages {
+				write passage::write
+				add passage::create
+				delete passage::delete
+				empty "Title"
+				outline
+				warm when coffee
+				side by side when spread
+				read only when reading
+			}
 		}
 	}
 

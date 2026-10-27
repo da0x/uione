@@ -364,6 +364,15 @@ describe("markdown someone wrote", () => {
     expect(container.textContent).toContain("home");
   });
 
+  it("sets $…$ as math in its line, an equation alone and a math block on their own lines, and leaves money as words", () => {
+    const { container } = render(<MarkdownText source={"Roots of $x^2 - 1$ cost $5 and $10.\n\n$a / b$\n\n```math\nsqrt(2)\n```"} />);
+    const shown = [...container.querySelectorAll("svg[role=img]")].map((svg) => svg.getAttribute("aria-label"));
+    expect(shown).toEqual(["x^2 - 1", "a / b", "sqrt(2)"]);
+    expect(container.querySelector("p")?.textContent).toContain("cost $5 and $10.");
+    expect(container.querySelectorAll(".one-math")).toHaveLength(2);
+    expect(container.querySelector("pre")).toBeNull();
+  });
+
   it("is written in a form with a preview of how it will look", () => {
     renderScreen(() => <Form command="library::book::create" fields={[{ name: "summary", type: "markdown" }]} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Summary" }), { target: { value: "A **classic**." } });

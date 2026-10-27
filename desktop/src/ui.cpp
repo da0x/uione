@@ -79,6 +79,13 @@ namespace one::desktop {
 		return {fixed_width.value_or(content.width + across), fixed_height.value_or(content.height + down)};
 	}
 
+	std::optional<float> element::baseline(float width) {
+		float given = fixed_width.value_or(width);
+		auto inside = baseline_content(std::max(0.f, given - padding.left - padding.right));
+		if (!inside) return std::nullopt;
+		return padding.top + *inside;
+	}
+
 	void element::place(const rect& area) {
 		frame = area;
 		place_content(inner());
@@ -171,6 +178,11 @@ namespace one::desktop {
 				return {laid.width(), laid.height()};
 			}
 			void place_content(const rect& area) override { laid_out(area.width); }
+			std::optional<float> baseline_content(float width) override {
+				const text_layout& laid = laid_out(width);
+				if (laid.lines().empty()) return std::nullopt;
+				return laid.lines().front().baseline / static_cast<float>(scale_);
+			}
 			void paint_content(canvas& c) override {
 				rect area = inner();
 				c.text(laid_out(area.width), {area.x, area.y});
@@ -277,7 +289,9 @@ namespace one::desktop {
 		};
 
 		// Children left to right at the widths they want, going on to a new line, as
-		// words do, when the next doesn't fit; each line as tall as its tallest.
+		// words do, when the next doesn't fit; each line as tall as its tallest. Those
+		// with a baseline sit on one shared line, as words of different sizes do; the
+		// rest are centered.
 		class flow_element : public element {
 		public:
 			extent measure_content(float width) override {
@@ -296,7 +310,9 @@ namespace one::desktop {
 					for (std::size_t i = line.first; i < line.last; ++i) {
 						extent e = children[i]->measure(area.width);
 						float width = std::min(e.width, area.width);
-						children[i]->place({x, y + (line.height - e.height) / 2, width, e.height});
+						auto b = children[i]->baseline(width);
+						float top = b ? line.above - *b + (line.height - line.above - line.below) / 2 : (line.height - e.height) / 2;
+						children[i]->place({x, y + top, width, e.height});
 						x += width + spacing;
 					}
 					y += line.height + spacing;
@@ -307,6 +323,7 @@ namespace one::desktop {
 			struct line {
 				std::size_t first = 0, last = 0;
 				float width = 0, height = 0;
+				float above = 0, below = 0;  // the most of those on the baseline, over and under it
 			};
 			std::vector<line> lines(float width) {
 				std::vector<line> out;
@@ -319,7 +336,11 @@ namespace one::desktop {
 						now = {i, i, 0, 0};
 					}
 					now.width += (now.last > now.first ? spacing : 0) + w;
-					now.height = std::max(now.height, e.height);
+					if (auto b = children[i]->baseline(w)) {
+						now.above = std::max(now.above, *b);
+						now.below = std::max(now.below, e.height - *b);
+					}
+					now.height = std::max({now.height, e.height, now.above + now.below});
 					now.last = i + 1;
 				}
 				if (now.last > now.first) out.push_back(now);
@@ -415,6 +436,8 @@ namespace one::desktop {
 				float start = across_ ? area.x - viewport_.x : area.y - viewport_.y;
 				float size = across_ ? area.width : area.height, visible = across_ ? viewport_.width : viewport_.height;
 				float before = offset_;
+				// Something filling the view already, taller than it, stays where it is.
+				if (start < 0 && start + size > visible) return true;
 				if (start < 0) offset_ += start - 8;
 				else if (start + size > visible) offset_ += start + size - visible + 8;
 				if (offset_ != before) place_content(viewport_);
@@ -592,6 +615,7 @@ namespace one::desktop {
 			}
 
 			bool focusable() const override { return !tool_.off; }
+			bool focused_by_press() const override { return !flat_; }
 			one::desktop::cursor cursor() const override { return tool_.off ? cursor::normal : cursor::pointer; }
 
 			extent measure_content(float) override {
@@ -955,6 +979,8 @@ namespace one::desktop {
 		adopt_children(*e);
 		return view(std::move(e));
 	}
+
+	double text_scale() { return detail::layout_scale(); }
 
 	view flow(std::vector<view> children) {
 		auto e = std::make_unique<flow_element>();

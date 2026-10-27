@@ -266,7 +266,7 @@ namespace one::desktop {
 
 	}  // namespace
 
-	text_layout lay_out(std::span<const text_span> spans, float width, double scale) {
+	text_layout lay_out(std::span<const text_span> spans, float width, double scale, text_align align) {
 		// Faces are shared and not safe to shape with on two threads at once.
 		auto hold = fonts::exclusively();
 		text_layout out;
@@ -315,6 +315,7 @@ namespace one::desktop {
 		// Lines, filled with words while they fit. A line with no words, at the end after
 		// a newline or of no text at all, has a caret at the end.
 		std::size_t base_of_empty = base;
+		std::vector<std::pair<std::size_t, std::size_t>> starts;  // each line's first glyph and rule
 		float top = 0;
 		std::size_t at = 0;
 		auto finish = [&](std::size_t from, std::size_t to) {
@@ -332,6 +333,7 @@ namespace one::desktop {
 			height = std::max(height, ascent + descent);
 			float baseline = std::round(top + (height - ascent - descent) / 2 + ascent);
 			std::size_t line = out.lines_.size();
+			starts.push_back({out.glyphs_.size(), out.rules_.size()});
 			if (from == to) out.carets_.push_back({base_of_empty, line, 0});
 			for (std::size_t k = from; k < to; ++k) {
 				const word& w = words[k];
@@ -369,6 +371,21 @@ namespace one::desktop {
 		}
 		if (words.empty() || words.back().breaks_after) finish(words.size(), words.size());
 		out.height_ = top;
+		// Aligned: each line, its glyphs, rules and carets, moved across by its spare room.
+		if (align != text_align::left) {
+			float room = limit > 0 ? limit : out.width_;
+			for (std::size_t l = 0; l < out.lines_.size(); ++l) {
+				auto& line = out.lines_[l];
+				float spare = std::max(0.f, room - line.width);
+				line.left = std::round(align == text_align::center ? spare / 2 : spare);
+				std::size_t glyphs_to = l + 1 < starts.size() ? starts[l + 1].first : out.glyphs_.size();
+				std::size_t rules_to = l + 1 < starts.size() ? starts[l + 1].second : out.rules_.size();
+				for (std::size_t g = starts[l].first; g < glyphs_to; ++g) out.glyphs_[g].x += line.left;
+				for (std::size_t r = starts[l].second; r < rules_to; ++r) out.rules_[r].x += line.left;
+			}
+			for (auto& c : out.carets_) c.x += out.lines_[c.line].left;
+			if (limit > 0) out.width_ = std::max(out.width_, limit);
+		}
 		return out;
 	}
 

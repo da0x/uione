@@ -52,7 +52,11 @@ namespace one::desktop {
 		float baseline = 0;  // likewise
 		float height = 0;
 		float width = 0;
+		float left = 0;      // where it starts, moved across by how it's aligned
 	};
+
+	// Where each line sits across the width it's laid out in.
+	enum class text_align { left, center, right };
 
 	// Where a caret can stand: before the character at a byte of the text, every
 	// span's text taken together, on a line, at an x in pixels. The text's end is one.
@@ -80,7 +84,7 @@ namespace one::desktop {
 		std::size_t offset_at(float x, float y) const;
 
 	private:
-		friend text_layout lay_out(std::span<const text_span>, float, double);
+		friend text_layout lay_out(std::span<const text_span>, float, double, text_align);
 		double scale_ = 1;
 		float width_ = 0, height_ = 0;  // in pixels
 		std::vector<text_line> lines_;
@@ -97,7 +101,10 @@ namespace one::desktop {
 	// Lays spans out within a width in logical pixels, breaking lines between words
 	// and at newlines; 0 means one line for each paragraph, however long. Safe from
 	// any thread, as drawing a picture with no window away from the window's is.
-	text_layout lay_out(std::span<const text_span> spans, float width, double scale);
-	inline text_layout lay_out(const text_span& span, float width, double scale) { return lay_out(std::span(&span, 1), width, scale); }
+	// Each line aligned within the width, or within the widest line when there's none.
+	text_layout lay_out(std::span<const text_span> spans, float width, double scale, text_align align = text_align::left);
+	inline text_layout lay_out(const text_span& span, float width, double scale, text_align align = text_align::left) {
+		return lay_out(std::span(&span, 1), width, scale, align);
+	}
 
 }  // namespace one::desktop

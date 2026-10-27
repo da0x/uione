@@ -224,6 +224,7 @@ enum class inline_kind {
     strikethrough,    // ~~strike~~
     link,             // [text](url)
     image,            // ![alt](url)
+    math,             // $x^2$, an equation in one::math's notation
 };
 
 struct inline_node {
@@ -376,6 +377,22 @@ struct inline_scanner {
                     }
                     emit({inline_kind::code, code, {}, {}});
                     i = close + length;
+                    continue;
+                }
+            }
+
+            // Math: $x^2$. Opened by a `$` before something other than a space and
+            // closed by one after it that isn't before a digit, so "$5 and $10" stays
+            // money.
+            if (c == '$' && i + 1 < source.size() && source[i + 1] != ' ' && source[i + 1] != '$') {
+                std::size_t close = i + 1;
+                while ((close = source.find('$', close + 1)) != not_found) {
+                    bool digit_after = close + 1 < source.size() && source[close + 1] >= '0' && source[close + 1] <= '9';
+                    if (source[close - 1] != ' ' && source[close - 1] != '\\' && !digit_after) break;
+                }
+                if (close != not_found) {
+                    emit({inline_kind::math, std::string(source.substr(i + 1, close - i - 1)), {}, {}});
+                    i = close + 1;
                     continue;
                 }
             }
@@ -1587,6 +1604,10 @@ inline void flatten(const std::vector<inline_node>& nodes, const style& base,
                 look.bold = false;
                 look.italic = false;
                 look.foreground = color::bright_yellow;
+                push(node.text, look);
+                break;
+            case inline_kind::math:
+                look.italic = true;
                 push(node.text, look);
                 break;
             case inline_kind::emphasis:

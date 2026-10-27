@@ -1314,6 +1314,194 @@ TEST("in a toolbar, a group that doesn't apply now is there, off, its keys doing
 	CHECK(data.runs().size() == 2);
 }
 
+TEST("an equation is drawn as one::math sets it, in the math font the app brings, and one that can't be read is shown as it's written") {
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Equations", "/", "", [](page&) {
+		                     return items(equation("x = (-b +- sqrt(b^2 - 4a c)) / 2a", true), equation("sum(k = 1 to n) k^2 = n(n + 1)(2n + 1) / 6", true),
+		                                  equation("A = [1, 2; 3, 4]", true), equation("f(x) = cases(x if x >= 0; -x otherwise)", true), equation("(a + b", true));
+	                     }});
+	memory_source data;
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("equations", {520, 420}, [&] { return drawn(nav); });
+}
+
+TEST("Markdown sets $…$ as math on the words' baseline, an equation alone on its line centered, and a math block displayed") {
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page&) {
+		                     return items(markdown_view("The roots of $a x^2 + b x + c$ are where it crosses $y = 0$, and $5 stays money.\n\n"
+		                                                "$x = (-b +- sqrt(b^2 - 4a c)) / 2a$\n\n```math\nsum(k = 1 to n) k = n(n + 1) / 2\n```\n"));
+	                     }});
+	memory_source data;
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("markdown-math", {520, 320}, [&] { return drawn(nav); });
+}
+
+TEST("a paper: its blocks set as their kinds say and aligned as they say, written in place, Enter splitting one and Backspace joining it to the one before") {
+	memory_source data;
+	auto block = [](std::string id, std::string kind, std::string words, double position, std::string align = "left") {
+		return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", std::move(align)}});
+	};
+	list passages{block("b1", "title", "A harbor at dusk", 1, "center"), block("b2", "subtitle", "Notes for the poster", 2, "center"), block("b3", "heading", "The light", 3),
+	              block("b4", "text", "The water holds the last of the sun a little longer than the sky does, so the poster's bottom edge is warmer than its top.", 4),
+	              block("b5", "quote", "Paint what you see, not what you know.", 5), block("b6", "math", "x = (-b +- sqrt(b^2 - 4a c)) / 2a", 6),
+	              block("b7", "text", "Signed, the harbor master", 7, "right")};
+	data.set("studio::notes_page", "p1", value(fields{{"passages", passages}}));
+	for (const char* command : {"studio::passage::write", "studio::passage::create", "studio::passage::delete"}) {
+		data.on(command, [](const value&, memory_source&) -> answer { return std::string("b8"); });
+	}
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages", .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .write = "studio::passage::write", .writes_kind = true, .add = "studio::passage::create", .remove = "studio::passage::delete",
+		                                                                        .parent = "poster", .subject = "p1", .pick = "/ passage", .key = "/ paper", .empty = "Title", .fills = true,
+		                                                                        .outline = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("paper", {900, 900}, [&] { return drawn(nav); });
+	auto root = built(nav);
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	std::function<one::desktop::element*(one::desktop::element&)> sheet = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.entry() && e.frame.width > 400) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = sheet(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	// Opened, the caret is at the end of the last block, which is the screen's pick.
+	CHECK(nav.current().picked_id("/ passage") == "b7");
+	auto key = [](std::uint32_t symbol, std::string text = "") { return one::desktop::key_event{.symbol = symbol, .text = std::move(text)}; };
+	// Typed, and nothing sent until typing pauses or the caret leaves the block.
+	CHECK(page->handle_key(key('.', ".")));
+	CHECK(data.runs().empty());
+	// Enter at the end: the words written, and a text block made after it, as one step.
+	CHECK(page->handle_key(key(one::desktop::keys::enter)));
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() < 2) return;
+	CHECK(data.runs()[0].command == "studio::passage::write");
+	CHECK(data.runs()[0].fields["words"].as_string() == "Signed, the harbor master.");
+	CHECK(data.runs()[1].command == "studio::passage::create");
+	CHECK(data.runs()[1].fields["position"].as_double() == 8);
+	CHECK(data.runs()[1].fields["kind"].as_string() == "text");
+	CHECK(data.runs()[1].fields["poster"].as_string() == "p1");
+	CHECK(data.runs()[1].fields["one:history"].as_string() == "joined");
+	// Once the view has the block made, the caret is in it, and it's the pick.
+	passages.push_back(block("b8", "text", "", 8));
+	data.set("studio::notes_page", "p1", value(fields{{"passages", passages}}));
+	auto again = built(nav);
+	CHECK(nav.current().picked_id("/ passage") == "b8");
+	// Typed there, it's that block's words.
+	auto* paper_again = sheet(*again);
+	CHECK(paper_again != nullptr);
+	if (!paper_again) return;
+	CHECK(paper_again->handle_key(key(one::desktop::keys::escape)) == false);
+	CHECK(paper_again->handle_key(key('A', "A")));
+	CHECK(paper_again->handle_key(key(one::desktop::keys::enter)));
+	CHECK(data.runs().size() == 4);
+	if (data.runs().size() < 4) return;
+	CHECK(data.runs()[2].fields["id"].as_string() == "b8");
+	CHECK(data.runs()[2].fields["words"].as_string() == "A");
+	// An insert button: an empty block after the caret's, given what it gives.
+	nav.current().kept<std::optional<value>>("paper insert / paper").set(value(fields{{"kind", "math"}}));
+	(void)built(nav);
+	CHECK(data.runs().size() == 5);
+	if (data.runs().size() < 5) return;
+	CHECK(data.runs()[4].command == "studio::passage::create");
+	CHECK(data.runs()[4].fields["kind"].as_string() == "math");
+	CHECK(data.runs()[4].fields["words"].as_string() == "");
+	CHECK(data.runs()[4].fields["position"].as_double() == 9);
+}
+
+TEST("a paper's math block is its words while the caret's in it, in a well, and keeps the room its equation takes") {
+	memory_source data;
+	auto block = [](std::string id, std::string kind, std::string words, double position, std::string align = "left") {
+		return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", std::move(align)}});
+	};
+	// Opened, the caret is at the end of the last block, the equation.
+	data.set("studio::notes_page", "p1",
+	         value(fields{{"passages", list{block("b1", "heading", "The roots", 1), block("b2", "math", "x = (-b +- sqrt(b^2 - 4a c)) / 2a", 2, "center"),
+	                                        block("b3", "text", "Below it.", 3)}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .key = "/ paper", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> sheet = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.entry() && e.frame.width > 400) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = sheet(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	// Up from the last block goes into the equation, which shows its words.
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::up, .text = ""}));
+	matches_golden("paper-math-written", {900, 420}, [&] { return drawn(nav); });
+}
+
+TEST("a paper is pages, each numbered at its foot, a block that doesn't fit going to the next, and a heading with what it heads, warm when it says") {
+	memory_source data;
+	auto block = [](std::string id, std::string kind, std::string words, double position) {
+		return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", "left"}});
+	};
+	std::string said = "The water holds the last of the sun a little longer than the sky does, so the bottom edge is warmer than its top.";
+	list passages{block("b1", "title", "A harbor at dusk", 1)};
+	for (int i = 0; i < 9; ++i) passages.push_back(block("t" + std::to_string(i), "text", said + " " + said + " " + said, 2 + i));
+	passages.push_back(block("h1", "heading", "The water", 10));
+	passages.push_back(block("t9", "text", said + " " + said, 11));
+	data.set("studio::notes_page", "p1", value(fields{{"passages", passages}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .key = "/ paper", .warm = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("paper-pages", {500, 1320}, [&] { return drawn(nav); });
+}
+
+TEST("a paper is set in its document's face: a book's serif, the app's own face, a lyric's warmer serif, or a typewriter's") {
+	for (std::string face : {"book", "lyric", "typewriter"}) {
+		memory_source data;
+		auto block = [](std::string id, std::string kind, std::string words, double position, std::string align = "left") {
+			return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", std::move(align)}});
+		};
+		data.set("studio::notes_page", "p1",
+		         value(fields{{"face", face},
+		                      {"passages", list{block("b1", "title", "A harbor at dusk", 1, "center"), block("b2", "subtitle", "Notes for the poster", 2, "center"),
+		                                        block("b3", "heading", "The light", 3),
+		                                        block("b4", "text", "The water holds the last of the sun a little longer than the sky does, so the poster's bottom edge is warmer than its top.", 4),
+		                                        block("b5", "quote", "Paint what you see, not what you know.", 5), block("b6", "code", "let warm = sun - sky", 6)}}}));
+		site s{.name = "studio", .id = "org.uione.runtime-tests"};
+		s.look = tested_theme();
+		s.screens.push_back({"Notes", "/", "", [](page& p) {
+			                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+			                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}, {"face", "face"}},
+			                                                                        .key = "/ paper", .fills = true}))});
+		                     }});
+		navigator nav(s, data);
+		nav.open("/");
+		matches_golden("paper-" + face, {900, 640}, [&] { return drawn(nav); });
+	}
+}
+
 TEST("a status line saying a file was saved offers to show it in its folder, and only while it says so") {
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};
 	s.look = tested_theme();

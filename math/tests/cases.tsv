@@ -1,0 +1,43 @@
+# What an equation written reads as, a line each: the equation, a tab, then its tree as
+# one::math's written() and @uione/react's math.ts both write it, or "! " and what's
+# wrong, the start of the problem said. Both are held to every line.
+x = (-b +- sqrt(b^2 - 4a c)) / 2a	(= x (frac (group (+- (neg b) (root (- (^ b 2) (row 4 a c))))) (row 2 a)))
+sum(k = 1 to n) k^2 = n(n + 1)(2n + 1) / 6	(= (sum (= k 1) n (^ k 2)) (frac (row n (group (+ n 1)) (group (+ (row 2 n) 1))) 6))
+int(0 to inf) e^(-x^2) dx = sqrt(pi) / 2	(= (int 0 symbol:inf (row (^ e (group (neg (^ x 2)))) (d x))) (frac (root greek:pi) 2))
+f(x) = cases(x if x >= 0; -x otherwise)	(= (row f (group x)) (cases (row x (>= x 0)) (row (neg x) "otherwise")))
+1 / 2a	(frac 1 (row 2 a))
+(1 / 2) a	(row (group (frac 1 2)) a)
+n(n + 1) / 2	(frac (row n (group (+ n 1))) 2)
+sin 2x	(call:sin (row 2 x))
+sin x / 2	(frac (call:sin x) 2)
+sin(x) cos(x)	(row (call:sin (group x)) (call:cos (group x)))
+2^3^2	(^ 2 (^ 3 2))
+e^(i pi)	(^ e (group (row i greek:pi)))
+x_1	(_ x 1)
+x_max	(_ x max)
+x_(i + 1)	(_ x (group (+ i 1)))
+theta_0	(_ greek:theta 0)
+monthly_rate * 12	(* monthly_rate 12)
+6.5%	(% 6.5)
+6.02e23	6.02e23
+n!	(! n)
+f'(x)	(row (' f) (group x))
+|x|	(abs x)
+floor(x / 2)	(floor (frac x 2))
+hat(x)	(hat x)
+[1, 2; 3, 4]	(matrix (row 1 2) (row 3 4))
+0 < x <= 1	(<= (< 0 x) 1)
+a ≤ b	(<= a b)
+a ± b	(+- a b)
+lim(x -> 0) sin x / x	(frac (lim (-> x 0) (row) (call:sin x)) x)
+max(a, b)	(call:max a b)
+dot(x) + ddot(y)	(+ (dot x) (ddot y))
+dy / dx	(frac (d y) (d x))
+partial f / partial x	(frac (row symbol:partial f) (row symbol:partial x))
+root(3, x)	(root 3 x)
+area(r) = pi r^2	(= (call:area (group r)) (row greek:pi (^ r 2)))
+x in "the reals"	(in x "the reals")
+-x^2	(neg (^ x 2))
+(a + b	! a ) to close
+sqrt x	! sqrt takes parentheses
+a +	! something more to finish the equation

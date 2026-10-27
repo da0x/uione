@@ -372,6 +372,47 @@ namespace one::screens {
 		int preview_wide = 480;              // this many pixels wide
 	};
 
+	// A list's rows as one upright sheet of paper, written on in place, as a page of a
+	// document is: each row a block, in the order its position says, set as its kind
+	// says (title, subtitle, heading, text, quote, math or code) and aligned left, center or
+	// right as its align says, or code. Typing writes the block the caret is in; Enter splits it
+	// in two, the part after the caret made a block by add; Backspace at a block's
+	// start joins it to the one before, deleting it. The caret's block is the screen's
+	// pick, which the toolbar acts on.
+	// insert "Equation" icon equation { kind = kind::math }: a block made after the one the
+	// paper has the caret in, given these fields, the caret then in it.
+	struct paper_ask {
+		std::string key, label, icon;
+		std::vector<std::string> keys = {};
+		value fields = {};
+		int sizes = 0;  // or, larger or smaller, the reader's page made a step larger, 1, or smaller, -1
+	};
+
+	struct paper_spec {
+		state<view_state> view;
+		std::string list;
+		// The field each of its parts is kept in, by part, like words: body.
+		std::map<std::string, std::string> fields = {};
+		std::string write = "";   // the command a block's words written are sent to, with its kind when a shortcut like "# " changes it
+		bool writes_kind = false;  // whether that command changes the kind, so "# " can make a heading
+		std::string add = "";     // the command that makes a block: id-less, with position, words, kind and align
+		std::string remove = "";  // the one that deletes a block joined into the one before
+		std::string parent = "";  // the field a block names what the view is per by, like document
+		std::string subject = "";  // the id of what the view is per
+		std::string pick = "";     // the screen's pick of its blocks, the one the caret is in
+		std::string key = "";
+		std::string empty = "";    // what an empty page says where its first words go
+		bool fills = false;        // in a workspace, as big as its region, scrolling
+		bool outline = false;      // its title and headings listed beside it, the caret's section marked, each going there
+		bool warm = false;         // set on warm paper, as under a reading lamp: its page, sheet, ink and lines
+		bool spread = false;       // its pages two at a time, side by side
+		bool read_only = false;    // read, not written on: no caret, and keys left for the page
+		double size = 1;           // the reader's size, as a book is zoomed, read as it's built
+		// The face it's all set in, book, modern, lyric or typewriter, as its view's face
+		// part says; read as it's built.
+		std::string face = "";
+	};
+
 	// A collage's view as its parts: its own values and each of its layers, with the
 	// fields its parts are kept in read as those parts.
 	inline value collage_parts_of(const value& data, const std::string& list, const std::map<std::string, std::string>& fields) {

@@ -86,6 +86,7 @@ namespace one::desktop {
 		bool fills_across = false;     // takes a row's whole height, or a column's width, however its siblings align
 		bool wants_focus = false;      // has the keyboard when the view is first shown
 		box_style background;
+		std::optional<float> fixed_baseline;  // where its line sits, down from its top, for one that isn't text
 		std::function<void()> on_click;
 		std::function<bool(const key_event&)> on_key;
 
@@ -95,6 +96,9 @@ namespace one::desktop {
 
 		// Layout: the size wanted within a width, then the place given.
 		extent measure(float width);
+		// Where its first line sits, down from its top, within a width, when it has one;
+		// a flow lines its children up on it, as words are.
+		std::optional<float> baseline(float width);
 		void place(const rect& area);
 		void paint(canvas& c);
 
@@ -110,6 +114,9 @@ namespace one::desktop {
 		virtual bool wheel(point at, float dx, float dy);
 		virtual element* hit(point at);
 		virtual bool focusable() const { return false; }
+		// Whether a press gives it the keyboard; a toolbar's button acts on what's being
+		// worked on and leaves the keyboard with it, though Tab still reaches it.
+		virtual bool focused_by_press() const { return true; }
 		virtual bool prefers_focus() const { return false; }  // given the keyboard first, as a list is
 		virtual text_entry* entry() { return nullptr; }       // typed into, as a field is
 		virtual one::desktop::cursor cursor() const { return on_click ? cursor::pointer : cursor::normal; }
@@ -135,6 +142,7 @@ namespace one::desktop {
 
 	protected:
 		virtual extent measure_content(float width);
+		virtual std::optional<float> baseline_content(float) { return fixed_baseline; }
 		virtual void place_content(const rect& inner);
 		virtual void paint_content(canvas& c);
 		virtual bool reveal_here(const rect&) { return false; }
@@ -156,6 +164,7 @@ namespace one::desktop {
 		view&& spacing(float s) && { element_->spacing = s; return std::move(*this); }
 		view&& align(one::desktop::align a) && { element_->cross = a; return std::move(*this); }
 		view&& background(box_style s) && { element_->background = s; return std::move(*this); }
+		view&& baseline(float b) && { element_->fixed_baseline = b; return std::move(*this); }
 		view&& key(std::string k) && { element_->key = std::move(k); return std::move(*this); }
 		view&& on_click(std::function<void()> f) && { element_->on_click = std::move(f); return std::move(*this); }
 		view&& on_key(std::function<bool(const key_event&)> f) && { element_->on_key = std::move(f); return std::move(*this); }
@@ -245,6 +254,9 @@ namespace one::desktop {
 	// Children left to right, going on to a new line when the next doesn't fit, like
 	// buttons in a narrow column.
 	view flow(std::vector<view> children);
+	// The scale text is laid out at in the window being built, measured or drawn, for an
+	// element that lays out text of its own.
+	double text_scale();
 	view scroll(view content);
 	view scroll_across(view content);
 

@@ -675,6 +675,8 @@ namespace one::language {
         bool steps = false;  // section "How we work" as steps: its sections are done in order
         location steps_where;
         bool small = false;   // group "Rotate" small: its buttons are icons, their words said when pointed at
+        int across = 0;       // group "Align" small rows of 3: this many in each row, rather than two rows, the first the longer
+        location across_where;
         bool at_end = false;  // group "View" at end: at the toolbar's far end
         std::vector<screen_item> items;
     };
@@ -867,6 +869,39 @@ namespace one::language {
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer
         location over_where;
         std::vector<screen_item> tools;
+    };
+
+    // paper document_page.blocks { ... }: a list's rows as one upright sheet of paper,
+    // written on in place (decision 0022). Its rows are its blocks, in the order their
+    // position says, each set as its kind says and aligned as its align says. Each part
+    // is kept in the field named like it, unless a line names another, as in words body.
+    struct paper_item {
+        qualified_name view;
+        std::string list;
+        location list_where;
+        std::optional<qualified_name> write;   // write block::write: a block's words written, kept
+        std::optional<qualified_name> add;     // add block::create: Enter splitting a block, or the first words on an empty page
+        std::optional<qualified_name> remove;  // delete block::delete: a block joined into the one before
+        std::map<std::string, std::string> fields;
+        std::map<std::string, location> fields_where;
+        std::optional<std::string> empty;      // empty "Title": where an empty page's first words go
+        bool outline = false;                  // outline: its title and headings beside it, each going there
+        expression_ptr warm;                   // warm when coffee: set on warm paper, as under a reading lamp, while it holds
+        expression_ptr spread;                 // side by side when spread: its pages two at a time, while it holds
+        expression_ptr read_only;              // read only when reading: read, not written on, while it holds
+    };
+
+    // insert "Equation" icon equation { kind = kind::math }: a block made after the one
+    // the screen's paper has the caret in, given these values, the caret then in it.
+    struct paper_insert {
+        // larger "Larger" or smaller "Smaller": the reader's page made larger or smaller, as
+        // zooming a book does, rather than a block inserted.
+        int sizes = 0;
+        std::optional<std::string> label;
+        std::optional<std::string> icon;
+        location icon_where;
+        std::vector<key_chord> keys;
+        std::vector<field_value> given;
     };
 
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
@@ -1233,7 +1268,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item, paper_item, paper_insert>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.
@@ -1429,9 +1464,17 @@ namespace one::language {
         return all;
     }
 
-    // The field each part is kept in: the one the collage names, or else the one named
-    // like the part, when its layers' rows, or its view's own values, hold it.
-    inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) {
+    // A paper's: a block's words and its place in the order, and how it's set.
+    inline const std::vector<collage_part>& paper_parts() {
+        static const std::vector<collage_part> all{
+            {"words", "text", true}, {"position", "number", true}, {"kind", "title subtitle heading text quote math code"}, {"align", "left center right"},
+        };
+        return all;
+    }
+
+    // The field each part is kept in: the one the element names, or else the one named
+    // like the part, when its rows hold it.
+    inline std::map<std::string, std::string> parts_fields(const std::map<std::string, std::string>& said, const view_each* rows, const std::vector<collage_part>& parts) {
         auto holds = [](const std::vector<view_value>& values, const std::string& name) {
             return std::ranges::any_of(values, [&](const view_value& v) {
                 if (v.name) return *v.name == name;
@@ -1440,10 +1483,30 @@ namespace one::language {
             });
         };
         std::map<std::string, std::string> out;
-        for (const auto& part : collage_parts()) {
-            if (auto said = c.fields.find(part.name); said != c.fields.end()) out[part.name] = said->second;
-            else if (layers && holds(layers->rows, part.name)) out[part.name] = part.name;
+        for (const auto& part : parts) {
+            if (auto named = said.find(part.name); named != said.end()) out[part.name] = named->second;
+            else if (rows && holds(rows->rows, part.name)) out[part.name] = part.name;
         }
+        return out;
+    }
+
+    inline std::map<std::string, std::string> collage_fields(const collage_item& c, const view_each* layers) { return parts_fields(c.fields, layers, collage_parts()); }
+    // And the one part of the page as a whole: its face, the type it's all set in, a value
+    // of its view, kept on what the view is per.
+    inline const collage_part& paper_face() {
+        static const collage_part face{"face", "book modern lyric typewriter"};
+        return face;
+    }
+
+    inline std::map<std::string, std::string> paper_fields(const paper_item& p, const view_each* blocks, const std::vector<view_value>* values = nullptr) {
+        auto out = parts_fields(p.fields, blocks, paper_parts());
+        if (auto said = p.fields.find("face"); said != p.fields.end()) out["face"] = said->second;
+        else if (values && std::ranges::any_of(*values, [](const view_value& v) {
+                     if (v.name) return *v.name == "face";
+                     auto* plain = v.value ? std::get_if<name_expression>(&v.value->node) : nullptr;
+                     return plain && plain->name.text() == "face";
+                 }))
+            out["face"] = "face";
         return out;
     }
 

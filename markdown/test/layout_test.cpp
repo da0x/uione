@@ -66,6 +66,19 @@ int main(int argc, char** argv) {
         }
     }
 
+    // An equation between dollars is math, but money is money: "$5 and $10".
+    {
+        auto blocks = one::markdown::parse("Let $x^2 + 1$ cost $5 and $10.\n");
+        const auto& inlines = blocks.front().inlines;
+        int math = 0;
+        for (const auto& node : inlines) math += node.kind == one::markdown::inline_kind::math && node.text == "x^2 + 1";
+        ++checked;
+        if (math != 1 || inlines.size() != 3) {
+            std::cerr << "math between dollars isn't read as one equation, with the money left as words\n";
+            ++failures;
+        }
+    }
+
     if (failures) {
         std::cerr << "layout_test: " << failures << " failure(s)\n";
         return 1;

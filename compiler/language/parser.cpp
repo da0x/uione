@@ -759,6 +759,26 @@ namespace one::language {
             return command;
         }
 
+        // { by = 2 }: what a button gives, each a field and a value worked out as it's pressed.
+        void parse_given(std::vector<field_value>& given) {
+            if (!at(token_kind::left_brace)) return;
+            advance();
+            while (in_block()) {
+                while (!at_line_end()) {
+                    field_value value;
+                    const std::size_t first = pos_;
+                    value.where = peek().where;
+                    value.name = expect(token_kind::identifier, "a field it's sent, like by").text;
+                    expect(token_kind::assign, "'='");
+                    value.value = parse_expression();
+                    cut(value, first);
+                    given.push_back(std::move(value));
+                }
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+        }
+
         // The lines naming a collage's fields, each part kept in the field named like it
         // unless one of these says another:
         //   at x y  size w h          stacked by depth
@@ -1599,6 +1619,13 @@ namespace one::language {
                     advance();
                     group.small = true;
                 }
+                // rows of 3: as many in each row.
+                if (at_word("rows") && peek(1).kind == token_kind::identifier && peek(1).text == "of") {
+                    advance();
+                    advance();
+                    group.across_where = peek().where;
+                    group.across = std::stoi(expect(token_kind::number, "how many tools go in each row, like rows of 3").text);
+                }
                 if (at_word("at") && peek(1).kind == token_kind::identifier && peek(1).text == "end") {
                     advance();
                     advance();
@@ -1629,9 +1656,26 @@ namespace one::language {
                 end_line();
                 return {where, std::move(pick)};
             }
+            // insert "Equation" icon equation { kind = kind::math }: a block made after the
+            // caret's, by the screen's paper.
+            if ((at_word("insert") || at_word("larger") || at_word("smaller")) && peek(1).kind == token_kind::string) {
+                paper_insert button;
+                std::string does = advance().text;
+                button.sizes = does == "larger" ? 1 : does == "smaller" ? -1 : 0;
+                button.label = advance().text;
+                parse_icon(button.icon, button.icon_where);
+                parse_keys(button.keys);
+                if (!button.sizes) parse_given(button.given);
+                screen_item item{where, std::move(button)};
+                item.when = shown_while();
+                end_line();
+                return item;
+            }
             // crop "Crop", edit words "Edit", add words "Text", copy layer as picture "Copy":
             // what the collage does.
-            bool alone = peek(1).kind != token_kind::scope && peek(1).kind != token_kind::identifier;
+            // Alone, or with no words and only an icon, keys or when after it, as in crop key c.
+            bool alone = peek(1).kind != token_kind::scope &&
+                         (peek(1).kind != token_kind::identifier || peek(1).text == "icon" || peek(1).text == "key" || peek(1).text == "when");
             bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
                               peek(3).kind == token_kind::identifier && peek(3).text == "picture";
             bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) || as_picture ||
@@ -2296,6 +2340,65 @@ namespace one::language {
                 end_line();
                 return {where, std::move(collage)};
             }
+            // paper document_page.blocks { write block::write  add block::create  delete block::delete }:
+            // a list's rows as a sheet of paper, written on in place.
+            if (at_word("paper") && peek(1).kind != token_kind::scope) {
+                advance();
+                paper_item paper;
+                paper.view = parse_qualified_name("the view whose list is its blocks, like document_page");
+                expect(token_kind::dot, "'.' and the list of its blocks, like document_page.blocks");
+                paper.list_where = peek().where;
+                paper.list = expect(token_kind::identifier, "the list of its blocks, like blocks").text;
+                expect(token_kind::left_brace, "'{' and what it does, like write block::write");
+                while (in_block()) {
+                    auto ends = [&](int n) { return peek(n).kind == token_kind::newline || peek(n).kind == token_kind::right_brace; };
+                    if (at_word("write") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        paper.write = parse_qualified_name("the command a block's words written are sent to, like block::write");
+                    } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        paper.add = parse_qualified_name("the command that makes its blocks, like block::create");
+                    } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        paper.remove = parse_qualified_name("the command that deletes a block, like block::delete");
+                    } else if (at_word("empty") && peek(1).kind == token_kind::string) {
+                        advance();
+                        paper.empty = advance().text;
+                    } else if (at_word("outline") && ends(1)) {
+                        advance();
+                        paper.outline = true;
+                    } else if (at_word("side") && peek(1).kind == token_kind::identifier && peek(1).text == "by" && peek(2).kind == token_kind::identifier && peek(2).text == "side") {
+                        // side by side when spread: its pages two at a time while it holds.
+                        advance(), advance(), advance();
+                        if (!at_word("when")) fail_expecting("when, as in side by side when spread");
+                        advance();
+                        paper.spread = parse_expression();
+                    } else if (at_word("read") && peek(1).kind == token_kind::identifier && peek(1).text == "only") {
+                        // read only when reading: read, not written on, while it holds.
+                        advance(), advance();
+                        if (!at_word("when")) fail_expecting("when, as in read only when reading");
+                        advance();
+                        paper.read_only = parse_expression();
+                    } else if (at_word("warm") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                        // warm when coffee: on warm paper while it holds, as a reader's toggle says.
+                        advance();
+                        advance();
+                        paper.warm = parse_expression();
+                    } else if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::identifier && ends(2) &&
+                               (peek().text == paper_face().name || std::ranges::any_of(paper_parts(), [&](const collage_part& part) { return peek().text == part.name; }))) {
+                        // words body: the field playing one of its parts.
+                        std::string part = advance().text;
+                        paper.fields_where[part] = peek().where;
+                        paper.fields[part] = advance().text;
+                    } else {
+                        fail_expecting("what a paper does, like write block::write, add block::create, delete block::delete, empty \"...\", outline, warm when coffee, side by side when spread, read only when reading, or a field playing one of its parts, like words body");
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(paper)};
+            }
             if (at_word("canvas") && peek(1).kind != token_kind::scope) {
                 advance();
                 canvas_item canvas;
@@ -2820,23 +2923,7 @@ namespace one::language {
                 }
                 parse_keys(button.keys);
                 // { by = 2 }: what it's sent, each a field and a value worked out as it's pressed.
-                if (at(token_kind::left_brace)) {
-                    advance();
-                    while (in_block()) {
-                        while (!at_line_end()) {
-                            field_value value;
-                            const std::size_t first = pos_;
-                            value.where = peek().where;
-                            value.name = expect(token_kind::identifier, "a field it's sent, like by").text;
-                            expect(token_kind::assign, "'='");
-                            value.value = parse_expression();
-                            cut(value, first);
-                            button.given.push_back(std::move(value));
-                        }
-                        end_line();
-                    }
-                    expect(token_kind::right_brace, "'}'");
-                }
+                parse_given(button.given);
                 // on when layer.weight >= 700: drawn pressed while it holds.
                 if (at_word("on") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
                     advance();

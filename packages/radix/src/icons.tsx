@@ -321,6 +321,76 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M7 3h5M4 13h5M10 3L6 13" />
     </svg>
   ),
+  eye: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8" />
+    </svg>
+  ),
+  spread: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 3.5h5.5v9h-5.5zM9 3.5h5.5v9H9z" />
+    </svg>
+  ),
+  coffee: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 6.5h8.5v3.5a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 10zM11 7.5h1.25a1.75 1.75 0 0 1 0 3.5H11M5 2.5v2M8.5 2.5v2" />
+    </svg>
+  ),
+  book: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 4.5A9 9 0 0 0 1.5 3v9.5A9 9 0 0 1 8 14 9 9 0 0 1 14.5 12.5V3A9 9 0 0 0 8 4.5zM8 4.5V14" />
+    </svg>
+  ),
+  letters: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 13L5 3.5 8.5 13M2.8 9.8h4.4M14.5 8.5V13M14.5 11A2.1 2.1 0 1 1 10.3 11 2.1 2.1 0 1 1 14.5 11" />
+    </svg>
+  ),
+  quill: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 13.5L13.5 2.5M13.5 2.5A11 11 0 0 0 5.5 10.5M13.5 2.5A11 11 0 0 1 5.5 10.5" />
+    </svg>
+  ),
+  typewriter: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 7V2.5h7V7M1.5 7h13v6.5h-13zM4 9.5h1M7.5 9.5h1M11 9.5h1M5 11.5h6" />
+    </svg>
+  ),
+  align_left: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 4h11M2.5 7h7M2.5 10h11M2.5 13h7" />
+    </svg>
+  ),
+  align_center: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 4h11M4.5 7h7M2.5 10h11M4.5 13h7" />
+    </svg>
+  ),
+  align_right: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 4h11M6.5 7h7M2.5 10h11M6.5 13h7" />
+    </svg>
+  ),
+  title: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 2.5h10M3 4.5h10M8 4.5v9" />
+    </svg>
+  ),
+  heading: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 3v10M12 3v10M4 8h8" />
+    </svg>
+  ),
+  quote: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.5 3.5v9M6.5 5h7M6.5 8h7M6.5 11h5" />
+    </svg>
+  ),
+  equation: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 4.5h4M4.5 2.5v4M9.5 4.5h4M2.5 11.5l3-3M2.5 8.5l3 3M9.5 10h4M9.5 12.5h4" />
+    </svg>
+  ),
   square: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 13V3h10" />
