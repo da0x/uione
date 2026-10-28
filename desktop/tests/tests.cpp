@@ -334,6 +334,24 @@ TEST("an SVG document is drawn by the pinned nanosvg, an ellipse filled inside a
 	CHECK(!one::desktop::picture::from_svg("not an svg", 10, 10));
 }
 
+TEST("an SVG file is read as an SVG, never as pixels it isn't: known by what it says, sized by its width and height or its viewBox, and drawn from its vectors") {
+	std::string svg = "\xEF\xBB\xBF  <?xml version=\"1.0\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 12\"><rect width=\"24\" height=\"12\" fill=\"#e4572e\"/></svg>";
+	std::span<const std::uint8_t> bytes(reinterpret_cast<const std::uint8_t*>(svg.data()), svg.size());
+	CHECK(one::desktop::picture::is_svg(bytes));
+	std::string png = "\x89PNG\r\n";
+	CHECK(!one::desktop::picture::is_svg({reinterpret_cast<const std::uint8_t*>(png.data()), png.size()}));
+	auto size = one::desktop::picture::svg_size(svg);
+	CHECK(size.has_value());
+	if (size) CHECK((size->first == 24 && size->second == 12));
+	auto read = one::desktop::picture::decode(bytes);
+	CHECK(read.has_value());
+	if (!read) return;
+	CHECK(read->width() == 24);
+	CHECK(read->height() == 12);
+	CHECK(read->rgba()[0] == 0xe4);
+	CHECK(read->rgba()[3] == 255);
+}
+
 TEST("a screenshot with no desktop to ask says so, rather than waiting or failing badly") {
 	const char* was = std::getenv("DBUS_SESSION_BUS_ADDRESS");
 	std::string kept = was ? was : "";

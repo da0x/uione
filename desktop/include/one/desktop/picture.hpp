@@ -16,9 +16,11 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace one::desktop {
@@ -47,6 +49,10 @@ namespace one::desktop {
 		// edges smooth, by the pinned nanosvg (decision 0025): what a collage's shapes are
 		// drawn from. Nothing when it can't be read.
 		static picture from_svg(std::string_view svg, int width, int height);
+		// Whether bytes are an SVG document, which is drawn from its vectors rather than
+		// read as pixels; and its own size, as nanosvg reads it, when it can be.
+		static bool is_svg(std::span<const std::uint8_t> bytes);
+		static std::optional<std::pair<double, double>> svg_size(std::string_view svg);
 
 		int width() const { return pixels_ ? pixels_->width : 0; }
 		int height() const { return pixels_ ? pixels_->height : 0; }

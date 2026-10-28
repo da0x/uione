@@ -60,6 +60,18 @@ describe("things coming into a collage", () => {
     await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l"));
   });
 
+  it("takes an SVG dropped as one, as big as it says, never covering it, nor as pixels it can't read", async () => {
+    const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
+    source.set("studio::poster_page", { width: 200, height: 100, layers: [] }, "p1");
+    const drawn = renderCollage(source);
+    const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 12"><rect width="24" height="12"/></svg>'], "icon.svg", { type: "image/svg+xml" });
+    fireEvent.drop(drawn.container.querySelector(".one-collage")!, { dataTransfer: { files: [svg], getData: () => "" } });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    // Even the first on an empty collage: drawing, not a photograph, so it doesn't cover it.
+    expect(source.runs[0]!.input).toMatchObject({ x: 88, y: 44, w: 24, h: 12, picture_width: 24, picture_height: 12 });
+    expect(source.uploads.map((u) => u.file.name)).toEqual(["icon.svg"]);
+  });
+
   it("fills in the own size of a picture kept before it was, as it's turned, never to be undone, in whichever fields keep it", async () => {
     globalThis.fetch = (async () => new Response(new Blob(["a"]))) as typeof fetch;
     const source = memorySource({ files: true, commands: { "studio::layer::update": () => ({ id: "l" }) } });

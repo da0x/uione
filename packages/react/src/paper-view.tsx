@@ -14,6 +14,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
+import { pictureSize } from "./vectors.js";
 import { choosePictures, hintOf, setPicked, useKeys, useOff, useTool } from "./workspace.js";
 import { useUI } from "./ui.js";
 import { kindOf } from "./paper/index.js";
@@ -578,12 +579,8 @@ export function Paper({
     const known = new Set(shown.map((b) => b.id));
     let n = 0;
     for (const file of given) {
-      let size: { w: number; h: number };
-      try {
-        const bitmap = await createImageBitmap(file);
-        size = { w: bitmap.width, h: bitmap.height };
-        bitmap.close();
-      } catch {
+      const size = await pictureSize(file);
+      if (!size) {
         say({ text: `${file.name} isn't a picture this can read.`, problem: true });
         continue;
       }

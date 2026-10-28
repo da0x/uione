@@ -107,6 +107,23 @@ namespace one::desktop::runtime {
 			std::size_t most_;
 		};
 
+		// An SVG's text, read once, by where it's kept; nothing when the file isn't one.
+		// An SVG layer is drawn from its vectors at the size it's shown, never read as
+		// pixels.
+		std::string vector_of(const std::filesystem::path& file) {
+			static kept_by<std::string> read(std::numeric_limits<std::size_t>::max());
+			return read.get(file.string(), [&] {
+				std::ifstream in(file, std::ios::binary);
+				std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+				return desktop::picture::is_svg({reinterpret_cast<const std::uint8_t*>(text.data()), text.size()}) ? text : std::string();
+			});
+		}
+		std::string vector_here(page& p, const value& layer) {
+			if (!is_picture(layer)) return {};
+			auto file = p.file_here(layer["picture"].as_string());
+			return file ? vector_of(*file) : std::string();
+		}
+
 		// Each picture read once, by where it's kept.
 		desktop::picture picture_kept(const std::filesystem::path& file) {
 			static kept_by<desktop::picture> read(std::numeric_limits<std::size_t>::max());
@@ -563,9 +580,10 @@ namespace one::desktop::runtime {
 
 
 		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
-		// and the rest are as big as they are, smaller where they wouldn't fit, centered
-		// where they were let go, each a little further along; all one step to undo. The
-		// last of them is picked once it's made, so it's ready to be worked on.
+		// and the rest, and every SVG, are as big as they are, smaller where they wouldn't
+		// fit, centered where they were let go, each a little further along; all one step
+		// to undo. The last of them is picked once it's made, so it's ready to be worked
+		// on.
 		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
 		                  std::optional<model::point> on) {
 			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
@@ -581,7 +599,9 @@ namespace one::desktop::runtime {
 				}
 				double pw = read->width(), ph = read->height();
 				model::box b;
-				if (!covered) {
+				// An SVG is drawing, not a photograph: it comes in at its own size, fitted,
+				// never covering the collage.
+				if (!covered && vector_of(file).empty()) {
 					b = model::sitting("fill", pw, ph, width, height);
 					covered = true;
 				} else {
@@ -787,7 +807,7 @@ namespace one::desktop::runtime {
 		std::optional<ready_layer> ready_of(page& p, const value& layer, const std::map<std::string, model::color_shift>& shifts, double width, double height, Woken woken,
 		                                    bool last_only = false) {
 			auto file = p.file_here(layer["picture"].as_string());
-			if (!file) return std::nullopt;
+			if (!file || !vector_of(*file).empty()) return std::nullopt;
 			std::optional<model::color_shift> shift;
 			if (auto found = shifts.find(layer["id"].as_string()); found != shifts.end()) shift = found->second;
 			if (!posting()) return made_ready(*file, layer, shift);
@@ -846,6 +866,19 @@ namespace one::desktop::runtime {
 			c.picture(drawn, {on.x - out, on.y - out, on.width + 2 * out, on.height + 2 * out}, {0, 0, 1, 1}, opacity_of(layer));
 		}
 
+		// An SVG layer drawn at `on`, from its vectors, by the pinned nanosvg, as many
+		// pixels as it's shown; made once for each size. Stretched to its box when that's
+		// shaped otherwise than it is.
+		void paint_vector(desktop::canvas& c, desktop::rect on, const std::string& svg, const value& layer) {
+			auto size = desktop::picture::svg_size(svg);
+			if (!size || on.width <= 0 || on.height <= 0) return;
+			int pw = std::max(1, static_cast<int>(std::lround(on.width * c.scale())));
+			int ph = std::max(1, static_cast<int>(std::lround(pw * size->second / size->first)));
+			static kept_by<desktop::picture> made(64);
+			desktop::picture drawn = made.get(std::format("{} {} {}", std::hash<std::string>{}(svg), pw, ph), [&] { return desktop::picture::from_svg(svg, pw, ph); });
+			if (drawn) c.picture(drawn, on, {0, 0, 1, 1}, opacity_of(layer));
+		}
+
 		// A picture layer drawn at `on` in the window, `board` the collage there: what's
 		// around it first, as its around says, over what's under it; then it, its corners
 		// trimmed round as far as its corners say, a share of its shorter side; then,
@@ -878,16 +911,21 @@ namespace one::desktop::runtime {
 			double width = 0, height = 0, scale = 1;
 			std::string only, family;
 			std::map<std::string, ready_layer> pictures;  // each picture layer's, by its id
+			std::map<std::string, std::string> vectors;   // and each SVG layer's text, by its id
 			desktop::picture fill;                        // and what's under the harmonized ones
 		};
 
 		whole gathered(page& p, const value& layers, double width, double height, double scale, bool matching, const std::string& only = "") {
-			whole all{layers, width, height, scale, only, current_theme().text_family, {}, {}};
+			whole all{layers, width, height, scale, only, current_theme().text_family, {}, {}, {}};
 			auto shifts = shifts_of(p, layers, matching, measured_now);
 			for (const auto& l : layers.as_array()) {
 				if (!is_picture(l)) continue;
 				auto file = p.file_here(l["picture"].as_string());
 				if (!file) continue;
+				if (std::string svg = vector_of(*file); !svg.empty()) {
+					all.vectors.emplace(l["id"].as_string(), std::move(svg));
+					continue;
+				}
 				std::optional<model::color_shift> shift;
 				if (auto found = shifts.find(l["id"].as_string()); found != shifts.end()) shift = found->second;
 				all.pictures.emplace(l["id"].as_string(), made_ready(*file, l, shift));
@@ -923,6 +961,10 @@ namespace one::desktop::runtime {
 					}
 					if (is_shape(layer)) {
 						paint_shape(c, at(box_of(layer)), box_of(layer), layer);
+						continue;
+					}
+					if (auto svg = all.vectors.find(id); svg != all.vectors.end()) {
+						paint_vector(c, at(box_of(layer)), svg->second, layer);
 						continue;
 					}
 					auto found = all.pictures.find(id);
@@ -1317,6 +1359,11 @@ namespace one::desktop::runtime {
 						if (id == picked && !full) framed = on, chosen_picture = true;
 						continue;
 					}
+					if (std::string svg = vector_here(p, layer); !svg.empty()) {
+						paint_vector(c, on, svg, layer);
+						if (id == picked && !full) framed = on, chosen_picture = true;
+						continue;
+					}
 					if (w->crop && w->crop->id == id) {
 						// Being cropped: the whole picture faint, what's kept as it will be.
 						if (desktop::picture shown = layer_picture(p, layer)) {
@@ -1428,7 +1475,7 @@ namespace one::desktop::runtime {
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != picked) continue;
 					        for (const auto& a : spec.asks) {
-						        bool fits = a.does == "crop" ? is_picture(l) : a.does == "edit" ? is_words(l) : true;
+						        bool fits = a.does == "crop" ? is_picture(l) && vector_here(p, l).empty() : a.does == "edit" ? is_words(l) : true;
 						        if (fits) fitting.push_back(a.does);
 					        }
 				        }
@@ -1502,7 +1549,7 @@ namespace one::desktop::runtime {
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        if (clicks >= 2) {
 					        if (is_words(all[i]) && !spec.write.empty()) w->editing = placed::writing{id, all[i]["words"].as_string(), false};
-					        else if (is_picture(all[i]) && !spec.crop.empty()) w->crop = crop_begun(all[i]);
+					        else if (is_picture(all[i]) && vector_here(p, all[i]).empty() && !spec.crop.empty()) w->crop = crop_begun(all[i]);
 					        return true;
 				        }
 				        if (!spec.place.empty()) {

@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 // nanosvg's own code, compiled here once: what reads an SVG document and draws it.
 #define NANOSVG_IMPLEMENTATION
@@ -34,6 +36,20 @@
 #pragma GCC diagnostic pop
 
 namespace one::desktop {
+
+	bool picture::is_svg(std::span<const std::uint8_t> bytes) {
+		std::string_view text(reinterpret_cast<const char*>(bytes.data()), std::min<std::size_t>(bytes.size(), 4096));
+		if (text.starts_with("\xEF\xBB\xBF")) text.remove_prefix(3);
+		std::size_t first = text.find_first_not_of(" \t\r\n");
+		return first != std::string_view::npos && text[first] == '<' && text.find("<svg") != std::string_view::npos;
+	}
+
+	std::optional<std::pair<double, double>> picture::svg_size(std::string_view svg) {
+		std::string text(svg);
+		std::unique_ptr<NSVGimage, decltype(&nsvgDelete)> image(nsvgParse(text.data(), "px", 96), nsvgDelete);
+		if (!image || image->width <= 0 || image->height <= 0) return std::nullopt;
+		return std::pair<double, double>{image->width, image->height};
+	}
 
 	picture picture::from_svg(std::string_view svg, int width, int height) {
 		if (width <= 0 || height <= 0 || static_cast<std::int64_t>(width) * height > most_pixels) return {};

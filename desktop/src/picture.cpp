@@ -58,11 +58,22 @@ namespace one::desktop {
 
 	std::expected<picture, std::string> picture::decode(std::span<const std::uint8_t> bytes) {
 		if (bytes.empty() || bytes.size() > static_cast<std::size_t>(INT_MAX)) return std::unexpected(std::string("That isn't a picture."));
+		// An SVG drawn from its vectors at its own size, no longer on its longer side
+		// than any picture.
+		if (is_svg(bytes)) {
+			std::string_view svg(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+			auto size = svg_size(svg);
+			if (!size) return std::unexpected(std::string("This SVG couldn't be read. It may be damaged, or have no size."));
+			double scale = std::min(1.0, longest_side / std::max(size->first, size->second));
+			picture drawn = from_svg(svg, std::max(1, static_cast<int>(std::lround(size->first * scale))), std::max(1, static_cast<int>(std::lround(size->second * scale))));
+			if (!drawn) return std::unexpected(std::string("This SVG couldn't be drawn."));
+			return drawn;
+		}
 		auto length = static_cast<int>(bytes.size());
 		int width = 0, height = 0, channels = 0;
 		// Its size first, so one too large is refused before it takes the memory.
 		if (!stbi_info_from_memory(bytes.data(), length, &width, &height, &channels))
-			return std::unexpected(std::string("That isn't a picture, or not one of a kind that can be read: PNG, JPEG, GIF, BMP or TGA."));
+			return std::unexpected(std::string("That isn't a picture, or not one of a kind that can be read: SVG, PNG, JPEG, GIF, BMP or TGA."));
 		if (static_cast<std::int64_t>(width) * height > most_pixels) return std::unexpected(std::string("This picture is too large to open. Try a smaller copy."));
 		unsigned char* decoded = stbi_load_from_memory(bytes.data(), length, &width, &height, &channels, 4);
 		if (!decoded) return std::unexpected(std::string("This picture couldn't be read. The file may be damaged."));

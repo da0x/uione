@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
+import { pictureSize, svgIn, svgSize } from "./vectors.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
@@ -122,25 +123,49 @@ function measured(words: string, size: number, face: string): { w: number; h: nu
 }
 
 // Each picture read once, by what names it, and what's drawn from it: turned and
-// mirrored as a layer says, and its edge color.
-const pictures = new Map<string, ImageBitmap | "reading" | "failed">();
+// mirrored as a layer says, and its edge color. An SVG is "vector", never read as
+// pixels: it's drawn from its vectors, at the size it's shown.
+const pictures = new Map<string, ImageBitmap | "reading" | "failed" | "vector">();
+const vectors = new Map<string, HTMLImageElement>();
 const orientedOnes = new Map<string, HTMLCanvasElement>();
 const edges = new Map<string, string>();
 const readListeners = new Set<() => void>();
 
 function pictureOf(path: string, address: ((path: string) => Promise<string>) | undefined): ImageBitmap | undefined {
   const kept = pictures.get(path);
-  if (kept !== undefined && kept !== "reading" && kept !== "failed") return kept;
+  if (kept !== undefined && kept !== "reading" && kept !== "failed" && kept !== "vector") return kept;
   if (kept || !address || typeof createImageBitmap !== "function") return undefined;
   pictures.set(path, "reading");
   void address(path)
     .then((url) => fetch(url))
     .then((r) => r.blob())
-    .then((blob) => createImageBitmap(blob))
-    .then((bitmap) => pictures.set(path, bitmap))
+    .then(async (blob) => {
+      const svg = await svgIn(blob);
+      if (svg === undefined) return void pictures.set(path, await createImageBitmap(blob));
+      vectors.set(path, await vectorImage(svg));
+      pictures.set(path, "vector");
+    })
     .catch(() => pictures.set(path, "failed"))
     .finally(() => readListeners.forEach((changed) => changed()));
   return undefined;
+}
+
+// An SVG as an image a canvas draws from its vectors at whatever size it's drawn, given
+// its own size when it says only a viewBox, as a browser needs to draw it.
+function vectorImage(svg: string): Promise<HTMLImageElement> {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const size = svgSize(svg);
+  if (size) {
+    doc.documentElement.setAttribute("width", String(size.w));
+    doc.documentElement.setAttribute("height", String(size.h));
+  }
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(doc)], { type: "image/svg+xml" }));
+  return new Promise((done, failed) => {
+    const image = new Image();
+    image.onload = () => done(image);
+    image.onerror = failed;
+    image.src = url;
+  });
 }
 
 function orientedOf(path: string, p: ImageBitmap, turns: number, mirrored: boolean): CanvasImageSource & { width: number; height: number } {
@@ -459,7 +484,7 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
       });
     }
     const p = pictures.get(path);
-    return p !== "reading" && p !== "failed" ? p : undefined;
+    return p !== "reading" && p !== "failed" && p !== "vector" ? p : undefined;
   };
   const one = only ? layers.find((l) => l["id"] === only) : undefined;
   const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
@@ -497,6 +522,15 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
     if (isShape(l)) {
       const b = boxOf(l);
       paintShape(c, l, only ? { x: 0, y: 0, w: made.width, h: made.height } : at(b), b);
+      continue;
+    }
+    const v = vectors.get(str(l["picture"]));
+    if (v) {
+      const b = only ? { x: 0, y: 0, w: made.width, h: made.height } : at(boxOf(l));
+      c.save();
+      c.globalAlpha = opacityOf(l);
+      c.drawImage(v, b.x, b.y, b.w, b.h);
+      c.restore();
       continue;
     }
     const seen = looks.get(l);
@@ -724,27 +758,26 @@ export function Collage({
     }
   });
   // Pictures dropped or pasted: the first on a collage with nothing on it fills it, and
-  // the rest are as big as they are, smaller where they wouldn't fit, centered where
-  // they were let go, each a little further along; all one step to undo. The last of
-  // them is picked once it's made, so it's ready to be worked on; the same as the
-  // desktop's.
+  // the rest, and every SVG, are as big as they are, smaller where they wouldn't fit,
+  // centered where they were let go, each a little further along; all one step to
+  // undo. The last of them is picked once it's made, so it's ready to be worked on;
+  // the same as the desktop's.
   const addPictures = async (given: File[], on?: Point) => {
     if (!add || !paste || !("picture" in fields) || !files) return;
     const top = layers[layers.length - 1];
     let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
     let covered = layers.length > 0, at = 0, first = true;
     for (const file of given) {
-      let size: { w: number; h: number };
-      try {
-        const bitmap = await createImageBitmap(file);
-        size = { w: bitmap.width, h: bitmap.height };
-        bitmap.close();
-      } catch {
+      const size = await pictureSize(file);
+      if (!size) {
         say({ text: `${file.name} isn't a picture this can read.`, problem: true });
         continue;
       }
       let b: Box;
-      if (!covered) {
+      // An SVG is drawing, not a photograph: it comes in at its own size, fitted, never
+      // covering the collage.
+      const vector = (await svgIn(file)) !== undefined;
+      if (!covered && !vector) {
         b = sitting("fill", size.w, size.h, W, H);
         covered = true;
       } else {
@@ -1042,7 +1075,13 @@ export function Collage({
       } else {
         const path = str(l["picture"]);
         const p = pictureOf(path, address);
-        if (p) {
+        const v = vectors.get(path);
+        if (v) {
+          c.save();
+          c.globalAlpha = opacityOf(l);
+          c.drawImage(v, b.x, b.y, b.w, b.h);
+          c.restore();
+        } else if (p) {
           const shown = orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0);
           if (w.crop && w.crop.id === l["id"]) {
             // Being cropped: the whole picture faint, what's kept as it will be.
@@ -1293,7 +1332,7 @@ export function Collage({
       pickRow(id);
       if (e.detail >= 2) {
         if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
-        else if (isPicture(l) && crop) w.crop = cropBegun(l);
+        else if (isPicture(l) && !vectors.has(str(l["picture"])) && crop) w.crop = cropBegun(l);
         redraw((n) => n + 1);
         return;
       }
