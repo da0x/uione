@@ -20,7 +20,7 @@ import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import type { ButtonProps, ComponentSet } from "@uione/react";
+import type { ButtonProps, ChoiceProps, ComponentSet, OptionsProps } from "@uione/react";
 import { Surface } from "@uione/react";
 import { highlight, highlightCodeBlocks } from "./highlight.js";
 import { MarkdownField, MarkdownText } from "./markdown.js";
@@ -329,6 +329,76 @@ export function labelHue(label: string): number {
   let hash = 0;
   for (const c of label.trim().toLowerCase()) hash = (hash * 31 + c.codePointAt(0)!) >>> 0;
   return hash % 360;
+}
+
+// A tool that opens its choices in a panel under it, over everything, closed by Esc or a
+// press anywhere else.
+function Options({ label, icon, tool, open, onToggle, onClose, children }: OptionsProps) {
+  const at = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => !at.current?.contains(e.target as Node) && onClose();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("pointerdown", away, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("pointerdown", away, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [open, onClose]);
+  const large = tool === "large";
+  return (
+    <span ref={at} className="relative inline-flex">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onToggle}
+        title={label}
+        className={`inline-flex items-center justify-center rounded-control border border-transparent text-xs text-ink transition-colors hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent ${
+          large ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : "h-8 min-w-8 gap-1 px-1.5"
+        } ${open ? "border-accent/50 bg-accent-soft text-accent" : ""}`}
+      >
+        {icon && buttonIcons[icon]}
+        <span className="whitespace-nowrap leading-none">{label}</span>
+      </button>
+      {open && (
+        <div role="menu" aria-label={label} className="absolute left-0 top-full z-50 mt-1 flex w-72 flex-col gap-0.5 rounded-[10px] border border-line bg-surface p-1.5 shadow-lg">
+          {children}
+        </div>
+      )}
+    </span>
+  );
+}
+
+// One of a tool's choices: what it gives drawn small, its words, and what it's for.
+function Choice({ label, about, swatch, icon, pressed, disabled, onClick }: ChoiceProps) {
+  const page = swatch?.startsWith("page ") ? swatch.slice(5).split(" ").map(Number) : undefined;
+  const scale = page && page[0]! > 0 && page[1]! > 0 ? 24 / Math.max(page[0]!, page[1]!) : 0;
+  const drawn = page ? (
+    <span aria-hidden="true" className="rounded-[2px] border-[1.25px] border-ink bg-surface" style={{ width: page[0]! * scale, height: page[1]! * scale }} />
+  ) : swatch ? (
+    <span aria-hidden="true" className="size-5 rounded-full border border-line" style={{ backgroundColor: swatch }} />
+  ) : icon ? (
+    buttonIcons[icon]
+  ) : null;
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={Boolean(pressed)}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-sunken disabled:opacity-40 ${pressed ? "bg-accent-soft" : ""}`}
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center">{drawn}</span>
+      <span className="flex min-w-0 flex-col">
+        <span className={`text-sm leading-tight ${pressed ? "font-semibold text-accent" : "text-ink"}`}>{label}</span>
+        {about && <span className="text-xs leading-tight text-muted">{about}</span>}
+      </span>
+    </button>
+  );
 }
 
 export const radix: ComponentSet = {
@@ -2198,6 +2268,9 @@ export const radix: ComponentSet = {
   // A toolbar's group: its tools, then its name under them, and a line after it; a
   // small one's tools in rows as long as it says, or two rows, read a row at a time,
   // the first the longer.
+  Options,
+  Choice,
+
   Group: ({ name, small, across, atEnd, children }) => (
     <div role="group" aria-label={name} data-at-end={atEnd ? "" : undefined} className="flex flex-col items-center justify-between gap-0.5 border-r border-line px-2 last:border-r-0 [&:has(>div:empty)]:hidden">
       <div

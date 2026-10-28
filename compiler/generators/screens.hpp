@@ -93,6 +93,7 @@ namespace one::generators::screens {
     // and words' color; what strokes, its stroke; and how wide, its stroke_width.
     struct collage_colors {
         std::set<std::string> fills, strokes, widths;
+        std::string width, height;  // and the view's values it's as big as
     };
 
     // What a button is drawn as in a toolbar, when it has no icon and gives a color: a
@@ -102,6 +103,18 @@ namespace one::generators::screens {
     // collage's color, is drawn clear: "none", or "line none" for a stroke.
     inline std::string swatch_of(const language::button_item& button, const collage_colors& colors = {}) {
         if (button.icon || button.given.empty()) return "";
+        // A page, "page 1920 1080", drawn as one of that shape: one giving the collage's
+        // width and height, each a number.
+        if (button.given.size() == 2 && !colors.width.empty()) {
+            std::string w, h;
+            for (const auto& v : button.given) {
+                auto* n = std::get_if<language::literal_expression>(&v.value->node);
+                if (!n || n->type != language::literal_expression::kind::number) continue;
+                if (v.name == colors.width) w = n->value;
+                if (v.name == colors.height) h = n->value;
+            }
+            if (!w.empty() && !h.empty()) return "page " + w + " " + h;
+        }
         const auto& first = button.given.front();
         bool stroke = colors.strokes.contains(first.name);
         if (auto* name = std::get_if<language::name_expression>(&first.value->node); name && name->name.text() == "none" && (stroke || colors.fills.contains(first.name))) {

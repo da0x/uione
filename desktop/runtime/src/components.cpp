@@ -211,6 +211,45 @@ namespace one::desktop::runtime {
 		if (!off) {
 			for (const auto& k : b.keys) p.on_key(k, run);
 		}
+		// Among a tool's options, a choice: what it gives drawn small, a page of its shape
+		// or its icon, then its words and what it's for under them; tinted while it's what
+		// holds now, and closing the options once it's chosen.
+		if (const auto& open = p.in_options()) {
+			const auto& t = current_theme();
+			std::string swatch = b.swatch, icon = b.icon;
+			desktop::view drawn = desktop::drawing([swatch, icon](desktop::canvas& c, desktop::rect area) {
+				                      const auto& th = current_theme();
+				                      if (swatch.starts_with("page ")) {
+					                      double w = 0, h = 0;
+					                      std::sscanf(swatch.c_str() + 5, "%lf %lf", &w, &h);
+					                      if (w <= 0 || h <= 0) return;
+					                      float s = static_cast<float>(std::min(area.width / w, area.height / h)) * 0.86f;
+					                      float pw = static_cast<float>(w) * s, ph = static_cast<float>(h) * s;
+					                      c.box({area.x + (area.width - pw) / 2, area.y + (area.height - ph) / 2, pw, ph}, {.fill = th.surface, .border = th.ink, .border_width = 1.25f, .radius = 2});
+				                      } else if (desktop::has_icon(icon)) {
+					                      desktop::draw_icon(c, icon, {area.x + 4, area.y + 4, area.width - 8, area.height - 8}, th.ink);
+				                      }
+			                      })
+			                          .width(32)
+			                          .height(32)
+			                          .grow(0);
+			auto label_style = t.body();
+			label_style.weight = b.pressed ? 600 : 400;
+			std::vector<desktop::view> words;
+			words.push_back(desktop::text(label_now, label_style));
+			if (!b.about.empty()) words.push_back(desktop::text(b.about, t.quiet()));
+			desktop::color tint = t.accent;
+			tint.alpha = 0.1f;
+			return desktop::row(std::move(drawn), desktop::column(std::move(words)).spacing(0).grow())
+			    .spacing(10)
+			    .align(align::center)
+			    .padding(edges(6, 8))
+			    .background({.fill = b.pressed ? tint : desktop::color{0, 0, 0, 0}, .radius = 6})
+			    .on_click([run, open = *open] {
+				    run();
+				    open.set(false);
+			    });
+		}
 		// In a toolbar's group, a tool: its icon over its words, or its icon alone, or a
 		// circle of the color it gives.
 		if (auto small = p.in_group()) {

@@ -65,6 +65,7 @@ namespace one::language {
         drawn_by{"region", "a layout's region", everywhere},
         drawn_by{"layout.workspace", "a workspace, filling the window", everywhere},
         drawn_by{"group", "a toolbar's group", everywhere},
+        drawn_by{"options", "a tool that opens its choices, each with what it's for", everywhere},
         drawn_by{"toggle", "a toggle", everywhere},
         drawn_by{"undo", "undo and redo", everywhere},
         drawn_by{"messages", "messages", everywhere},
@@ -259,9 +260,10 @@ namespace one::language {
                             case content_block::kind::region: use("region"); break;
                             case content_block::kind::heading: use("heading"); break;
                             case content_block::kind::group: use("group"); break;
+                            case content_block::kind::options: use("options"); break;
                         }
                         if (!n.hue.empty()) use("section.color");
-                        if (n.icon) use("section.icon");
+                        if (n.icon && n.type != content_block::kind::options) use("section.icon");
                         if (n.steps) use("section.steps");
                         items(n.items, out);
                     } else if constexpr (std::is_same_v<T, content_text>) {

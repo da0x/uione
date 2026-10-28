@@ -368,6 +368,10 @@ namespace one::desktop {
 	};
 	view picker(state<std::string> chosen, std::vector<option> options, state<bool> open, std::string placeholder = "Choose…");
 
+	// A trigger, laid out as it is, and while `open` holds a panel under it, over
+	// everything else, as a menu is: closed by Esc, or a press anywhere but on it.
+	view popover(view trigger, view panel, state<bool> open);
+
 	// One of a few choices, side by side, each with a round button before what it
 	// says: picked with a click, or with the arrows, Space or Enter once it has the
 	// keyboard, which it takes as one; on_pick is told the one picked.

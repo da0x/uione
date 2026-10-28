@@ -2846,7 +2846,7 @@ namespace one::language {
                 }
                 if (!block) continue;
                 bool section = block->type == content_block::kind::section;
-                if (block->icon) {
+                if (block->icon && block->type != content_block::kind::options) {
                     if (!landing || !section) error(block->icon_where, "an icon is drawn beside a front page's section's title" + (landing ? std::string() : elsewhere));
                     else icon(block->icon, block->icon_where);
                 }
@@ -3400,6 +3400,14 @@ namespace one::language {
                             if (!std::holds_alternative<content_link>(inside.node)) {
                                 error(inside.where, "a menu holds links, like link /settings \"General\"");
                             }
+                        }
+                    }
+                    // A tool's options, in a toolbar, each a button.
+                    if (block->type == content_block::kind::options) {
+                        if (!in_toolbar_) error(item.where, "options are a tool in a workspace's toolbar, so they go in one of its groups");
+                        icon(block->icon, block->icon_where);
+                        for (const auto& inside : block->items) {
+                            if (!std::holds_alternative<button_item>(inside.node)) error(inside.where, "options are buttons, each a choice, like drawing::resize \"Square\" { width = 1080  height = 1080 }");
                         }
                     }
                     screen_items(ns, block->items, route);

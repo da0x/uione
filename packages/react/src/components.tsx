@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, setPicked as pickRow, useInGroup, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, setPicked as pickRow, useInGroup, useInOptions, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -1053,6 +1053,7 @@ export function Command({
   pressed,
   thenOpen,
   swatch,
+  about,
 }: {
   name: string;
   id?: string;
@@ -1065,6 +1066,7 @@ export function Command({
   pressed?: boolean; // drawn pressed, like a choice already made
   thenOpen?: string; // a route like /:poster, opened with what it made
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff
+  about?: string; // among a tool's options, what it's for, said beside it
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -1085,9 +1087,27 @@ export function Command({
       if (made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
     });
   };
+  const closeOptions = useInOptions();
   useKeys(keys, run, shown && !off && !runner.busy(name));
   if (!shown) return null;
   const words = says ?? label(action(name));
+  // Among a tool's options, a choice, closing them once it's chosen.
+  if (closeOptions) {
+    return (
+      <ui.Choice
+        label={words}
+        about={about}
+        swatch={swatch}
+        icon={icon}
+        pressed={pressed}
+        disabled={runner.busy(name)}
+        onClick={() => {
+          run();
+          closeOptions();
+        }}
+      />
+    );
+  }
   return (
     <ui.Button
       kind={icon || tool ? "secondary" : "primary"}

@@ -203,6 +203,20 @@ namespace one::desktop::runtime {
 		return desktop::row(desktop::spacer(), std::move(drawn)).align(align::stretch).grow();
 	}
 
+	desktop::view options(page& p, std::string label, std::string icon, std::function<std::vector<desktop::view>()> build) {
+		auto open = p.kept<bool>("options " + label);
+		// Its lines built as choices, closing it once one's chosen.
+		auto was = p.in_options();
+		auto in_group = p.in_group();
+		p.in_options(open), p.in_group(std::nullopt);
+		auto lines = build();
+		p.in_options(was), p.in_group(in_group);
+		std::erase_if(lines, [](const desktop::view& v) { return !v.get(); });
+		auto flip = [open] { open.set(!open.peek()); };
+		desktop::view trigger = p.in_group() ? tool(p, icon, label, {}, flip, open.get()) : desktop::tool_button(desktop::has_icon(icon) ? icon : "", label, flip, {.on = open.get()});
+		return desktop::popover(std::move(trigger), desktop::column(std::move(lines)).spacing(2).align(align::stretch), open);
+	}
+
 	desktop::view tool_column(page& p, std::function<std::vector<desktop::view>()> build) {
 		auto was = p.in_group();
 		p.in_group(true);

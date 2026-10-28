@@ -2441,6 +2441,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `side` does there. With the site's bar out of sight, a workspace's `bar` has the
   app's name in the middle, in the theme's heading font, as a window's title is,
   its own lines at the start, and the switch between light and dark at the end.
+- `options "Page" icon page { ... }` in a toolbar's group is a tool that opens its
+  buttons in a panel under it, over everything, each a choice: what it gives drawn
+  small, its words, and what it's for under them, said by `about`, as in
+  `drawing::resize "Landscape" about "16:9, for screens" { width = 1920  height = 1080 }`.
+  One giving the screen's collage its width and height is drawn as a page of that
+  shape. The choice that already holds is tinted, and choosing one closes the panel,
+  as Esc or a press anywhere else does. A terminal lists the choices after the name.
 - `group "Rotate" { ... }` in a toolbar is a named part of it, its name under its
   buttons and a line after it. Its buttons and links are tools: an icon over its words, or,
   in a `small` group, `group "Rotate" small { ... }`, an icon alone, in two rows

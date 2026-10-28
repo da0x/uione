@@ -67,6 +67,26 @@ export function Group({ name, small = false, across, atEnd = false, children }: 
   );
 }
 
+// options "Page" icon page { ... }: a tool that opens its lines, each a choice drawn with
+// what it's for, closing once one's chosen. The same as the desktop's.
+const InOptions = createContext<(() => void) | undefined>(undefined);
+export function useInOptions(): (() => void) | undefined {
+  return useContext(InOptions);
+}
+export function Options({ label, icon, children }: { label: string; icon?: string; children?: ReactNode }) {
+  const ui = useUI();
+  const tool = useTool();
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
+  return (
+    <ui.Options label={label} icon={icon} tool={tool} open={open} onToggle={() => setOpen((was) => !was)} onClose={close}>
+      <InGroup.Provider value={undefined}>
+        <InOptions.Provider value={close}>{children}</InOptions.Provider>
+      </InGroup.Provider>
+    </ui.Options>
+  );
+}
+
 // A workspace's tools, a column down its side: each a small tool, its words its hint.
 export function Tools({ children }: { children?: ReactNode }) {
   return <InGroup.Provider value={{ small: true }}>{children}</InGroup.Provider>;

@@ -48,9 +48,12 @@ namespace {
 	// out, to give one part the keyboard, say.
 	void matches_golden(const std::string& name, one::desktop::size size, const std::function<one::desktop::view()>& build,
 	                    const std::function<void(one::desktop::element&)>& placed = {}) {
+		// Kept until it's drawn, as a window keeps its own: what's drawn last, like an open
+		// popover, is drawn after the rest.
+		std::unique_ptr<one::desktop::element> root;
 		auto drawn = one::desktop::offscreen::draw(size, 1, tested_theme().page, [&](one::desktop::canvas& c) {
 			one::desktop::detail::theme_in_use() = &tested_theme();
-			auto root = build().take();
+			root = build().take();
 			root->place({0, 0, static_cast<float>(size.width), static_cast<float>(size.height)});
 			if (placed) placed(*root);
 			root->paint(c);
@@ -1362,6 +1365,26 @@ TEST("a toolbar's choices of one enum are pressed one at a time, the first until
 	CHECK(key(nav, one::desktop::key_event{.symbol = 'v', .text = "v"}));
 	CHECK(nav.current().chosen("/ tool", "select") == "select");
 	CHECK(data.runs().empty());
+}
+
+TEST("a tool's options open over the work, each a choice with what it's for, a page's shape drawn as a page") {
+	memory_source data;
+	data.on("studio::poster::resize", [](const value&, memory_source&) -> answer { return "p1"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     return workspace(p, region{"toolbar", along(group(p, "Page", false, false, [&] {
+			                                      return tools(options(p, "Page", "fit", [&] {
+				                                      return tools(command(p, {.command = "studio::poster::resize", .label = "Landscape", .swatch = "page 1920 1080", .pressed = true, .about = "16:9, for screens"}),
+				                                                   command(p, {.command = "studio::poster::resize", .label = "Portrait", .swatch = "page 1080 1920", .about = "9:16, for stories"}));
+			                                      }));
+		                                      }))},
+		                                      region{"main", items(text({words("The posters")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().kept<bool>("options Page").set(true);
+	matches_golden("toolbar-options", {420, 300}, [&] { return drawn(nav); });
 }
 
 TEST("a toolbar's form button is a tool like the others, and the form it opens is shown over the work") {

@@ -664,7 +664,7 @@ namespace one::language {
         // part of the screen's layout, like main or side, named in title.
         // A heading's items sit on the screen's title row, at its end. A group is a
         // named part of a workspace's toolbar, with a line between it and the next.
-        enum class kind { hero, section, menu, region, heading, group };
+        enum class kind { hero, section, menu, region, heading, group, options };
         kind type = kind::section;
         std::string title;
         std::optional<std::string> anchor;
@@ -674,6 +674,8 @@ namespace one::language {
         location icon_where;
         bool steps = false;  // section "How we work" as steps: its sections are done in order
         location steps_where;
+        // options "Page" icon page { ... }: a tool that opens its lines, each a choice
+        // drawn with what it's for, over everything until one's chosen.
         bool small = false;   // group "Rotate" small: its buttons are icons, their words said when pointed at
         int across = 0;       // group "Align" small rows of 3: this many in each row, rather than two rows, the first the longer
         location across_where;
@@ -828,6 +830,7 @@ namespace one::language {
         expression_ptr pressed_when;          // on when layer.weight >= 700: drawn pressed while it holds
         std::optional<std::string> then_open;  // then open /:poster: where what it made is opened
         location then_where;
+        std::optional<std::string> about;  // about "For slides and video": what it's for, said beside it among options
     };
 
     // collage poster_page.layers size width height { ... }: a picture made of layers, as

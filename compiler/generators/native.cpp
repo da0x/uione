@@ -476,6 +476,7 @@ namespace one::generators {
                 if (part == "stroke") out.strokes.insert(field);
                 if (part == "stroke_width") out.widths.insert(field);
             }
+            out.width = collage_->width, out.height = collage_->height;
             return out;
         }
 
@@ -750,7 +751,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = screens::full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                 if (const language::form_item* f = screens::model::form_for(ns, screen, command)) tools.push_back(form(parts, ns, *f, &button));
                 else tools.push_back(command_of(parts, ns, button));
             }
@@ -818,6 +819,7 @@ namespace one::generators {
             if (button.pressed_when) out += ", .pressed = " + condition(parts, ns, *button.pressed_when);
             else if (!same.empty() && same != "-") out += ", .pressed = " + same;
             if (button.then_open) out += ", .then_open = " + str(model_.full_route(ns, *button.then_open));
+            if (button.about) out += ", .about = " + str(*button.about);
             return out + "})";
         }
 
@@ -1664,6 +1666,12 @@ namespace one::generators {
                     }
                 }
                 if (grouped) {
+                } else if (auto* o = std::get_if<language::content_block>(&item.node); o && o->type == language::content_block::kind::options) {
+                    // A tool that opens its lines, each a choice drawn with what it's for.
+                    bool alone = std::exchange(each_alone_, true);
+                    auto inside = alternatives(items(parts, ns, o->items, screen));
+                    each_alone_ = alone;
+                    code = "options(p, " + str(o->title) + ", " + str(o->icon.value_or("")) + ", [&] { return tools(" + joined_items(inside) + "); })";
                 } else if (auto* g = std::get_if<language::content_block>(&item.node); g && g->type == language::content_block::kind::group) {
                     // A toolbar's group: its lines built as tools; the first at its end
                     // takes the toolbar's far end.

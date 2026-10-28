@@ -1490,7 +1490,7 @@ namespace one::language {
             while (in_block()) {
                 // A button on the notice: a command on its row, its words, and what it's given.
                 if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::scope) {
-                    button_item button{parse_qualified_name("a command on its row, like task::finish"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
+                    button_item button{parse_qualified_name("a command on its row, like task::finish"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                     if (at(token_kind::string)) button.label = advance().text;
                     parse_given(button.given);
                     n.buttons.push_back(std::move(button));
@@ -1645,6 +1645,20 @@ namespace one::language {
                 region.items = parse_screen_block();
                 end_line();
                 screen_item item{where, std::move(region)};
+                item.when = std::move(when);
+                return item;
+            }
+            // options "Page" icon page when ... { ... }: a tool that opens its lines.
+            if (at_word("options") && string_follows) {
+                advance();
+                content_block options;
+                options.type = content_block::kind::options;
+                options.title = advance().text;
+                parse_icon(options.icon, options.icon_where);
+                expression_ptr when = shown_while();
+                options.items = parse_screen_block();
+                end_line();
+                screen_item item{where, std::move(options)};
                 item.when = std::move(when);
                 return item;
             }
@@ -2164,7 +2178,7 @@ namespace one::language {
                         // move issue::move along project_page.steps: how a card is moved.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                             // Without along, it goes along the steps its workflow writes.
                             if (at_word("along")) {
                                 advance();
@@ -2652,7 +2666,7 @@ namespace one::language {
                         // move issue::move along board_page.steps: a card let go in another region moves there.
                         if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
                             advance();
-                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
+                            button_item move{parse_qualified_name("the command that moves a card, like issue::move"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                             if (at_word("along")) {
                                 advance();
                                 move.along = parse_qualified_name("the view whose list of steps it goes along, like board_page");
@@ -3088,7 +3102,7 @@ namespace one::language {
                     fail(where, "'" + name.text() + "' isn't a screen element; a button names its "
                                 "command in full, like book::create");
                 }
-                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
+                button_item button{std::move(name), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                 if (at_word("along")) {
                     advance();
                     button.along = parse_qualified_name("the view whose list of steps it goes along, like project_page");
@@ -3102,6 +3116,11 @@ namespace one::language {
                     advance();
                     button.icon_where = peek().where;
                     button.icon = expect(token_kind::identifier, "the icon it's drawn as, like edit").text;
+                }
+                // about "For slides and video": what it's for, said beside it among options.
+                if (at_word("about") && peek(1).kind == token_kind::string) {
+                    advance();
+                    button.about = advance().text;
                 }
                 parse_keys(button.keys);
                 // { by = 2 }: what it's sent, each a field and a value worked out as it's pressed.

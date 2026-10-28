@@ -275,6 +275,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | ("main" | "side" | "bar" | "toolbar" | "tools" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
                  | "group" STRING "small"? ("rows" "of" NUMBER)? ("at" "end")? ("when" expression)? screen_block END
+                 /* a tool in a toolbar that opens its buttons, each a choice drawn with what it's for */
+                 | "options" STRING ("icon" NAME)? ("when" expression)? screen_block END
                  /* a picture made of layers, as big as two of the view's values say */
                  | "collage" qualified "." NAME ("size" NAME NAME)? "{" NEWLINE? collage_line* "}" END
                  /* the screen's collage's layers as a list, topmost first, each hidden or shown, previewed, ordered and deleted */
@@ -333,7 +335,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "component" NAME END
                  /* a button, and the form it opens, issue::update "Edit" form "Save" { title } */
                  /* layer::scale "2×" { by = 2 }: what it's sent; on when: drawn pressed; then open: what it made, opened */
-                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? key* given? ("on" "when" expression)? ("when" condition)?
+                 | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? ("about" STRING)? key* given? ("on" "when" expression)? ("when" condition)?
                                     ("then" "open" ROUTE)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? board_line* "}")? END
                  /* a list's rows on the days a date of theirs says, a week side by side, or a month's grid while it

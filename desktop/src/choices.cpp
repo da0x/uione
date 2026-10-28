@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <format>
+#include <map>
 #include <set>
 
 #include "one/desktop/ui.hpp"
@@ -315,6 +316,66 @@ namespace one::desktop {
 			double scale_ = 0;
 		};
 
+		// The popovers open as the window was last laid out, by their open state: where
+		// each is, its trigger and its panel.
+		struct open_popover {
+			state<bool> open;
+			std::vector<rect> on;      // where it is: its trigger and its panel
+			element* panel = nullptr;  // as last laid out
+		};
+		std::map<const void*, open_popover>& open_popovers() {
+			thread_local std::map<const void*, open_popover> open;
+			return open;
+		}
+
+		// A trigger, and under it while it's open a panel drawn over everything else.
+		class popover_element : public element {
+		public:
+			explicit popover_element(state<bool> open) : open_(std::move(open)) {}
+			// Gone, it's no longer open anywhere, unless a newer one's taken its place.
+			~popover_element() override {
+				auto& open = open_popovers();
+				auto it = open.find(&open_.peek());
+				if (it != open.end() && children.size() > 1 && it->second.panel == children[1].get()) open.erase(it);
+			}
+			popover_element(const popover_element&) = delete;
+			popover_element& operator=(const popover_element&) = delete;
+
+			extent measure_content(float width) override { return children.empty() ? extent{} : children[0]->measure(width); }
+			void place_content(const rect& area) override {
+				if (children.empty()) return;
+				children[0]->place(area);
+				if (children.size() < 2) return open_popovers().erase(&open_.peek()), void();
+				extent e = children[1]->measure(320);
+				children[1]->place({frame.x, frame.bottom() + 4, std::max(e.width, 220.f), e.height});
+				open_popovers()[&open_.peek()] = {open_, {frame, children[1]->frame}, children[1].get()};
+			}
+			void paint_content(canvas& c) override {
+				if (children.empty()) return;
+				children[0]->paint(c);
+				if (children.size() < 2) return;
+				// Its panel last, over everything, with a shadow under it.
+				element* panel = children[1].get();
+				c.later([panel](canvas& over) {
+					const theme& t = current_theme();
+					color shade = color::hex(0x000000);
+					shade.alpha = 0.18f;
+					over.shadow(panel->frame, 10, 16, shade, {0, 4});
+					over.box(panel->frame, {.fill = t.surface, .border = t.line, .border_width = 1, .radius = 10});
+					panel->paint(over);
+				});
+			}
+			element* hit(point at) override {
+				if (children.size() > 1) {
+					if (element* found = children[1]->hit(at)) return found;
+				}
+				return element::hit(at);
+			}
+
+		private:
+			state<bool> open_;
+		};
+
 		// Pickers whose list just closed, by their open state, to be given the keyboard back.
 		std::set<const void*>& closing() {
 			thread_local std::set<const void*> pickers;
@@ -322,6 +383,41 @@ namespace one::desktop {
 		}
 
 	}  // namespace
+
+	namespace detail {
+		void close_popovers_outside(point at) {
+			auto& open = open_popovers();
+			for (auto it = open.begin(); it != open.end();) {
+				bool on = std::ranges::any_of(it->second.on, [&](const rect& r) { return r.contains(at); });
+				if (!on && it->second.open.peek()) it->second.open.set(false);
+				it = on ? std::next(it) : open.erase(it);
+			}
+		}
+
+		element* popover_hit(point at) {
+			for (auto& [key, o] : open_popovers()) {
+				if (o.open.peek() && o.panel && o.on.size() > 1 && o.on[1].contains(at)) return o.panel->hit(at);
+			}
+			return nullptr;
+		}
+	}  // namespace detail
+
+	view popover(view trigger, view panel, state<bool> open) {
+		auto e = std::make_unique<popover_element>(open);
+		e->children.push_back(std::move(trigger).take());
+		if (open.get()) {
+			e->children.push_back(std::move(panel)
+			                          .padding(6)
+			                          .on_key([open](const key_event& k) {
+				                          if (!k.is(keys::escape)) return false;
+				                          open.set(false);
+				                          return true;
+			                          })
+			                          .take());
+		}
+		for (auto& child : e->children) child->parent = e.get();
+		return view(std::move(e));
+	}
 
 	view toggle(state<bool> on, std::string label) { return view(std::make_unique<toggle_element>(std::move(on), std::move(label))); }
 

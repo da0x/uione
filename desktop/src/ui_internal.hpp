@@ -35,6 +35,13 @@ namespace one::desktop::detail {
 	// each element adopting what its match kept.
 	void reconcile(element& now, element& before);
 
+	// Open popovers that a press at `at` isn't on, closed, as a press elsewhere closes a
+	// menu.
+	void close_popovers_outside(point at);
+	// What an open popover's panel has at `at`, over everything else; none when it's
+	// not on one.
+	element* popover_hit(point at);
+
 	// In tree order: the focusable elements, and the one focused.
 	void focusables(element& root, std::vector<element*>& into);
 	element* focused_in(element& root);

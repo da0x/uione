@@ -136,6 +136,22 @@ export const plain: ComponentSet = {
     </div>
   ),
 
+  Options: ({ label, open, onToggle, children }) => (
+    <span>
+      <button type="button" aria-expanded={open} onClick={onToggle}>
+        {label}
+      </button>
+      {open && <div role="menu">{children}</div>}
+    </span>
+  ),
+
+  Choice: ({ label, about, pressed, disabled, onClick }) => (
+    <button type="button" role="menuitemradio" aria-checked={Boolean(pressed)} disabled={disabled} onClick={onClick}>
+      {label}
+      {about && <small> {about}</small>}
+    </button>
+  ),
+
   Messages: ({ text, problem }) => (
     <span role="status" data-problem={problem ? "" : undefined}>
       {text}

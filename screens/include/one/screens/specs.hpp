@@ -64,10 +64,11 @@ namespace one::screens {
 		std::string id = "";  // what it acts on, sent as id
 		bool when = true;     // whether it applies now, like Follow for someone who doesn't
 		std::string icon = "";
-		std::string swatch = "";              // in a toolbar, drawn as a circle of this color, like #ffffff
+		std::string swatch = "";              // in a toolbar, drawn as a circle of this color, like #ffffff, or a page, like page 1920 1080
 		std::vector<std::string> keys = {};  // run by these too, like ctrl+s, while it's shown
 		bool pressed = false;                // drawn pressed, like a choice already made
 		std::string then_open = "";          // a route like /:poster, opened with what it made
+		std::string about = "";              // among options, what it's for, said beside it
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what

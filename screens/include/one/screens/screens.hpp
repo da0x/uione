@@ -219,6 +219,10 @@ namespace one::screens {
 		// buttons drawn as tools.
 		std::optional<bool> in_group() const { return in_group_; }
 		void in_group(std::optional<bool> small) { in_group_ = small; }
+		// Whether what's being built is a tool's options, each a choice drawn with what
+		// it's for: whether they're open, which a choice made closes.
+		const std::optional<state<bool>>& in_options() const { return in_options_; }
+		void in_options(std::optional<state<bool>> open) { in_options_ = std::move(open); }
 		// Whether what's being built in a toolbar doesn't apply now: drawn, so the
 		// toolbar keeps its shape, but it can't be pressed. Built by `build` while
 		// `holds` doesn't, and while what it's in doesn't apply either.
@@ -262,6 +266,7 @@ namespace one::screens {
 		bool fill_ = false;
 		std::vector<std::pair<std::string, std::function<void()>>> keys_;
 		std::optional<bool> in_group_;
+		std::optional<state<bool>> in_options_;
 		bool off_ = false;
 		std::map<std::string, std::any> kept_;
 		state<std::map<std::string, int>> running_;          // commands on their way, by name

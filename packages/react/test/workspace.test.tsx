@@ -8,7 +8,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
+import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
 import { usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -123,6 +123,26 @@ describe("a workspace", () => {
       </Tools>
     ));
     expect(screen.getByRole("button", { name: "Pen" }).getAttribute("title")).toBe("Pen (P)");
+  });
+
+  it("opens a tool's options, each a choice with what it's for, closing once one's chosen", async () => {
+    const source = memorySource({ commands: { "studio::poster::resize": () => ({ id: "p1" }) } });
+    renderScreen(source, () => (
+      <Group name="Page">
+        <Options label="Page" icon="fit">
+          <Command name="studio::poster::resize" label="Wide" about="16:9, for screens" swatch="page 1920 1080" given={{ width: 1920, height: 1080 }} />
+          <Command name="studio::poster::resize" label="Tall" given={{ width: 1080, height: 1920 }} pressed />
+        </Options>
+      </Group>
+    ));
+    expect(screen.queryByText("16:9, for screens")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Page" }));
+    expect(screen.getByText("16:9, for screens")).toBeTruthy();
+    expect(screen.getByRole("menuitemradio", { name: /Tall/ }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /Wide/ }));
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::poster::resize", input: { width: 1920, height: 1080 } });
+    expect(screen.queryByText("16:9, for screens")).toBeNull();
   });
 
   it("says what an undo took back, and why a command was turned down", async () => {

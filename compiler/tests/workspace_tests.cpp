@@ -583,6 +583,41 @@ TEST_CASE("a toolbar's color buttons are drawn as what they give: a fill as a ci
     }
 }
 
+TEST_CASE("a tool's options open its lines, each a choice with what it's for, a page's shape drawn as a page of it") {
+    std::string body = R"(		layout workspace
+		toolbar {
+			group "Page" {
+				options "Page" icon fit {
+					poster::resize "Wide" about "16:9, for screens" { width = 1920  height = 1080 }
+					poster::resize "Tall" { width = 1080  height = 1920 }
+				}
+			}
+		}
+		main {
+			collage poster_page.layers size width height {
+			}
+		}
+)";
+    std::string source = collage_screen(body);
+    source.replace(source.find("\tcommand poster::create\n"), 0, "\tcommand poster::resize {\n\t\tchanges width height\n\t}\n");
+    CHECK(messages(source).empty());
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Options label="Page" icon="fit">)") != std::string::npos);
+    CHECK(web.find(R"(label="Wide" swatch="page 1920 1080")") != std::string::npos);
+    CHECK(web.find(R"(about="16:9, for screens")") != std::string::npos);
+    CHECK(native.find(R"(options(p, "Page", "fit", [&] { return tools()") != std::string::npos);
+    CHECK(native.find(R"(.swatch = "page 1080 1920")") != std::string::npos);
+    CHECK(native.find(R"(.about = "16:9, for screens")") != std::string::npos);
+    // In a toolbar, and only buttons.
+    std::string outside = collage_screen("\t\toptions \"Page\" {\n\t\t\ttext \"Hi\"\n\t\t}\n");
+    CHECK(messages(outside) == std::vector<std::string>{"44: options are a tool in a workspace's toolbar, so they go in one of its groups",
+                                                        "45: options are buttons, each a choice, like drawing::resize \"Square\" { width = 1080  height = 1080 }"});
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

@@ -95,6 +95,13 @@ namespace one::terminal::runtime {
 		return terminal::flow(std::move(tools)).spacing(1);
 	}
 
+	terminal::view options(page&, std::string label, std::string, std::function<std::vector<terminal::view>()> build) {
+		auto lines = build();
+		std::erase_if(lines, [](const terminal::view& v) { return !v.get(); });
+		lines.insert(lines.begin(), terminal::text(label + ":", dim()));
+		return terminal::flow(std::move(lines)).spacing(1);
+	}
+
 	terminal::view tool_column(page& p, std::function<std::vector<terminal::view>()> build) {
 		auto was = p.in_group();
 		p.in_group(true);

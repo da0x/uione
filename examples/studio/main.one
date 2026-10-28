@@ -302,6 +302,14 @@ namespace studio at / {
 				poster::update "Match colors" icon magic { matched = 0 } on when poster_page.matched == 1 when poster_page.matched == 1
 				poster::update "Match colors" icon magic { matched = 1 } when poster_page.matched != 1
 			}
+			// Its shape, each choice drawn as a page of it, with what it's for.
+			group "Shape" {
+				options "Shape" icon fit {
+					poster::update "Landscape" about "16:9, for screens" { width = 1920  height = 1080 }
+					poster::update "Square" about "1:1, for posts" { width = 1080  height = 1080 }
+					poster::update "Portrait" about "9:16, for stories" { width = 1080  height = 1920 }
+				}
+			}
 			group "Picture" {
 				copy poster_page as picture "Copy" icon copy key ctrl+shift+c
 				save poster_page as picture "Save" icon save key ctrl+s

@@ -105,7 +105,8 @@ namespace one::desktop {
 		// Which element the pointer is over, and those it's within, marked as hovered.
 		void point_to(window::state& w, std::optional<one::desktop::point> at) {
 			if (!w.root) return;
-			element* over = at ? w.root->hit(*at) : nullptr;
+			element* over = at ? detail::popover_hit(*at) : nullptr;
+			if (at && !over) over = w.root->hit(*at);
 			each_element(*w.root, [](element& e) {
 				e.hovered = false;
 				point_at_list(e, std::nullopt);
@@ -231,7 +232,9 @@ namespace one::desktop {
 		bring_up_to_date(w);
 		in_window context(w);
 		if (!w.root) return;
-		element* target = w.root->hit(at);
+		detail::close_popovers_outside(at);
+		element* target = detail::popover_hit(at);
+		if (!target) target = w.root->hit(at);
 		w.pressed = target;
 		w.dragging = nullptr;
 		for (element* e = target; e; e = e->parent) {

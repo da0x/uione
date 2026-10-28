@@ -1127,6 +1127,18 @@ namespace one::generators {
                 if (auto* block = std::get_if<language::content_block>(&item.node); block && block->type == language::content_block::kind::heading) {
                     continue;  // drawn on the title row, before the rest
                 }
+                if (auto* o = std::get_if<language::content_block>(&item.node); o && o->type == language::content_block::kind::options) {
+                    // A tool that opens its lines, each a choice drawn with what it's for.
+                    parts.components.insert("Options");
+                    shown_while(out, parts, ns, item, [&] {
+                        out.open("<Options label=" + web_detail::js_string(o->title) + (o->icon ? " icon=" + web_detail::js_string(*o->icon) : "") + ">");
+                        bool was = std::exchange(in_group_, true);
+                        screen_items(out, parts, ns, o->items, screen);
+                        in_group_ = was;
+                        out.close("</Options>");
+                    });
+                    continue;
+                }
                 if (auto* group = std::get_if<language::content_block>(&item.node); group && group->type == language::content_block::kind::group) {
                     parts.components.insert("Group");
                     shown_while(out, parts, ns, item, [&] {
@@ -1358,6 +1370,7 @@ namespace one::generators {
                                           : !same.empty() && same != "-" ? " pressed={" + same + "}"
                                                                           : "";
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
+                    if (button->about) then += " about=" + web_detail::js_string(*button->about);
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     if (std::string swatch = screens::swatch_of(*button, collage_colors(ns)); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
@@ -1874,6 +1887,7 @@ namespace one::generators {
                 if (part == "stroke") out.strokes.insert(field);
                 if (part == "stroke_width") out.widths.insert(field);
             }
+            out.width = collage_->width, out.height = collage_->height;
             return out;
         }
 
@@ -2449,7 +2463,7 @@ namespace one::generators {
                 auto* named = std::get_if<language::name_expression>(&column.value->node);
                 if (!named || named->name.parts.size() != 2) continue;
                 std::string command = full_command(ns, named->name);
-                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}};
+                language::button_item button{named->name, column.label, nullptr, std::nullopt, "", column.icon, {}, {}, {}, nullptr, std::nullopt, {}, std::nullopt};
                 stream jsx("\t");
                 if (const language::form_item* form = form_for(ns, screen, command)) {
                     this->form(jsx, parts, ns, *form, &button);

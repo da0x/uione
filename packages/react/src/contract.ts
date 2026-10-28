@@ -680,6 +680,31 @@ export interface GroupProps {
   children: ReactNode;
 }
 
+// A tool that opens its choices over everything, as a menu does: drawn as a tool, and
+// while `open` its choices under it, closed by Esc or a press elsewhere.
+export interface OptionsProps {
+  label: string;
+  icon?: string;
+  tool?: "large" | "small";
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+// One of a tool's choices: what it gives drawn small, a page of its shape like "page
+// 1920 1080", a color, or its icon; its words, and what it's for under them; tinted
+// while it's what holds now.
+export interface ChoiceProps {
+  label: string;
+  about?: string;
+  swatch?: string;
+  icon?: string;
+  pressed?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}
+
 // What was just done, like "Undid place", or why a command was turned down, said
 // until the next.
 export interface MessagesProps {
@@ -791,6 +816,8 @@ export interface ComponentSet {
   Button: ComponentType<ButtonProps>;
   Actions: ComponentType<ActionsProps>;
   Group: ComponentType<GroupProps>;
+  Options: ComponentType<OptionsProps>;
+  Choice: ComponentType<ChoiceProps>;
   Messages: ComponentType<MessagesProps>;
   Layout: ComponentType<LayoutProps>;
   Dialog: ComponentType<DialogProps>;
