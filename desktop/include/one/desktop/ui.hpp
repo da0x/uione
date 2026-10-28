@@ -316,6 +316,7 @@ namespace one::desktop {
 		bool off = false;  // drawn faint, and it can't be pressed
 		std::optional<color> swatch = {};  // drawn as a circle of this color, its words said when pointed at
 		bool clear = false;                // or of no color, a checkerboard in its circle
+		float line = 0;                    // drawn instead as a stroke, a line this wide, as a stroke color or width is
 	};
 	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or

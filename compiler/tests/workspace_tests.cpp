@@ -544,6 +544,40 @@ TEST_CASE("a collage's objects held in layers: each naming its layer, the layers
     CHECK(messages(wrong) == std::vector<std::string>{"49: each item names its layer by depth, so it's a field pointing at layer, like depth  layer"});
 }
 
+TEST_CASE("a toolbar's color buttons are drawn as what they give: a fill as a circle, a stroke as a line, a width as a line that wide, and none clear") {
+    std::string source = collage_screen(R"(		pick layer from poster_page.layers
+		layout workspace
+		toolbar {
+			group "Paint" small {
+				layer::paint "Blue" { fill = "#2e86de" }
+				layer::paint "No fill" { fill = none }
+				layer::paint "Ink" { stroke = "#1d1d1f" }
+				layer::paint "No stroke" { stroke = none  stroke_width = 0 }
+				layer::paint "Wide" { stroke_width = 4 }
+			}
+		}
+		main {
+			collage poster_page.layers size width height {
+				over layer {
+				}
+			}
+		}
+)");
+    source.replace(source.find("\t\tx        number"), 0, "\t\tfill     text\n\t\tstroke   text\n\t\tstroke_width  number = 0\n");
+    source.replace(source.find("around  x  y  w  h"), 0, "fill  stroke  stroke_width  ");
+    source.replace(source.find("\tcommand layer::create\n"), 0, "\tcommand layer::paint {\n\t\tchanges fill stroke stroke_width\n\t}\n");
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    for (const auto& [label, swatch] : {std::pair{"Blue", "#2e86de"}, {"No fill", "none"}, {"Ink", "line #1d1d1f"}, {"No stroke", "line none"}, {"Wide", "width 4"}}) {
+        CAPTURE(label);
+        CHECK(web.find(std::string("label=\"") + label + "\" swatch=\"" + swatch + "\"") != std::string::npos);
+        CHECK(native.find(std::string(".label = \"") + label + "\"") != std::string::npos);
+        CHECK(native.find(std::string(".swatch = \"") + swatch + "\"") != std::string::npos);
+    }
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

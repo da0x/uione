@@ -89,22 +89,31 @@ namespace one::generators::screens {
     // What a name written inside a namespace refers to, in full. A command written
     // as entity::action, or a view written by its name alone, is in the same
     // namespace; one written with its namespace stays as written.
-    // The color a button is drawn as, a circle of it, in a toolbar: one with no icon
-    // whose one given value is a color written #rrggbb, like White's { color = "#ffffff" };
-    // or none, drawn clear, a checkerboard in its circle, when its first given value is
-    // none for one of the `colors`, the fields the screen's collage keeps colors in, like
-    // None's { fill = none }.
-    inline std::string swatch_of(const language::button_item& button, const std::set<std::string>& colors = {}) {
+    // The fields the screen's collage keeps its parts' colors in: what fills, its fill
+    // and words' color; what strokes, its stroke; and how wide, its stroke_width.
+    struct collage_colors {
+        std::set<std::string> fills, strokes, widths;
+    };
+
+    // What a button is drawn as in a toolbar, when it has no icon and gives a color: a
+    // circle of it, like White's { color = "#ffffff" }, its first given value a color
+    // written #rrggbb; or a line of it, "line #rrggbb", where it's a collage's stroke; or
+    // a line as wide as it gives, "width 4", for a collage's stroke_width. None, for a
+    // collage's color, is drawn clear: "none", or "line none" for a stroke.
+    inline std::string swatch_of(const language::button_item& button, const collage_colors& colors = {}) {
         if (button.icon || button.given.empty()) return "";
-        if (auto* name = std::get_if<language::name_expression>(&button.given.front().value->node); name && name->name.text() == "none" && colors.contains(button.given.front().name)) {
-            return "none";
+        const auto& first = button.given.front();
+        bool stroke = colors.strokes.contains(first.name);
+        if (auto* name = std::get_if<language::name_expression>(&first.value->node); name && name->name.text() == "none" && (stroke || colors.fills.contains(first.name))) {
+            return stroke ? "line none" : "none";
         }
         if (button.given.size() != 1) return "";
-        auto* literal = std::get_if<language::literal_expression>(&button.given.front().value->node);
+        auto* literal = std::get_if<language::literal_expression>(&first.value->node);
+        if (literal && literal->type == language::literal_expression::kind::number && colors.widths.contains(first.name)) return "width " + literal->value;
         if (!literal || literal->type != language::literal_expression::kind::string) return "";
         const std::string& v = literal->value;
         bool hex = v.size() == 7 && v[0] == '#' && std::all_of(v.begin() + 1, v.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
-        return hex ? v : "";
+        return hex ? (stroke ? "line " + v : v) : "";
     }
 
     inline std::string full_command(const std::string& ns, const language::qualified_name& name) {

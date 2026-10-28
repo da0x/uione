@@ -214,11 +214,20 @@ namespace one::desktop::runtime {
 		// In a toolbar's group, a tool: its icon over its words, or its icon alone, or a
 		// circle of the color it gives.
 		if (auto small = p.in_group()) {
+			// A color as a circle of it, or clear; a stroke's as a line of it; a width as a
+			// line that wide, in ink.
 			std::optional<desktop::color> swatch;
-			if (b.swatch.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(b.swatch.c_str() + 1, nullptr, 16)));
-			bool clear = b.swatch == "none";
+			std::string color = b.swatch.starts_with("line ") ? b.swatch.substr(5) : b.swatch;
+			float line = b.swatch.starts_with("line ") ? 2.f : 0.f;
+			if (b.swatch.starts_with("width ")) {
+				line = std::clamp(std::strtof(b.swatch.c_str() + 6, nullptr), 1.f, 6.f);
+				color = "";
+				swatch = current_theme().ink;
+			}
+			if (color.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(color.c_str() + 1, nullptr, 16)));
+			bool clear = color == "none";
 			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch || clear ? hint_of(label_now, b.keys) : label_now, std::move(run),
-			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear});
+			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear, .line = line});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;

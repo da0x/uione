@@ -449,12 +449,14 @@ namespace one::generators {
         }
 
         // What a collage and its buttons name it by: its pick, or the screen's address.
-        // The fields the screen's collage keeps colors in, its fill, stroke and words' color.
-        std::set<std::string> collage_colors(const std::string& ns) const {
-            std::set<std::string> out;
+        // The fields the screen's collage keeps its parts' colors in, and its stroke's width.
+        screens::collage_colors collage_colors(const std::string& ns) const {
+            screens::collage_colors out;
             if (!collage_) return out;
             for (const auto& [part, field] : model_.collage_fields(ns, *collage_)) {
-                if (part == "fill" || part == "stroke" || part == "color") out.insert(field);
+                if (part == "fill" || part == "color") out.fills.insert(field);
+                if (part == "stroke") out.strokes.insert(field);
+                if (part == "stroke_width") out.widths.insert(field);
             }
             return out;
         }

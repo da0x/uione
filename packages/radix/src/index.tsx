@@ -1987,7 +1987,16 @@ export const radix: ComponentSet = {
     const words = typeof children === "string" ? children : undefined;
     // A color it gives, drawn as a circle of it, outlined so white shows; none, a gray
     // and white checkerboard in its circle, as clear is shown.
-    const drawn = swatch ? (
+    // A stroke's color or width, "line #rrggbb", "line none" or "width 4", as a short
+    // slanted line of it, dotted for none.
+    const line = swatch?.startsWith("line ") ? 2 : swatch?.startsWith("width ") ? Math.min(6, Math.max(1, Number(swatch.slice(6)))) : 0;
+    const stroked = swatch?.startsWith("line ") ? swatch.slice(5) : swatch?.startsWith("width ") ? "currentColor" : undefined;
+    const drawn = line ? (
+      <svg aria-hidden="true" viewBox="0 0 24 16" width="24" height="16">
+        {stroked === "#ffffff" && <path d="M4 13L20 3" stroke="var(--color-line, #d8dce3)" strokeWidth={line + 2} strokeLinecap="round" />}
+        <path d="M4 13L20 3" stroke={stroked === "none" ? "var(--color-muted, #5b6577)" : stroked} strokeWidth={stroked === "none" ? 1.5 : line} strokeLinecap="round" strokeDasharray={stroked === "none" ? "2 3" : undefined} />
+      </svg>
+    ) : swatch ? (
       <span
         aria-hidden="true"
         className="size-4 rounded-full border border-line"

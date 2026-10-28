@@ -648,7 +648,7 @@ namespace one::desktop {
 				if (flat_ && tool_.large) return {std::max({44.f, small_words().width(), large_icon()}), large_icon() + 4 + small_words().height()};
 				// A small one with no icon is its words, as a scale like 1.5× is; with one or
 				// without, as tall as its words would be, so every small one is.
-				if (flat_ && (tool_.swatch || tool_.clear)) return {18, small_height()};
+				if (flat_ && (tool_.swatch || tool_.clear)) return {tool_.line > 0 ? 24.f : 18.f, small_height()};
 				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), small_height()};
 				if (flat_) return {18, small_height()};
 				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
@@ -707,6 +707,25 @@ namespace one::desktop {
 					draw_icon(c, icon_, {area.x + (area.width - size) / 2, area.y, size, size}, ink);
 					const auto& words = small_words();
 					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + size + 4});
+					return;
+				}
+				// A stroke: a short slanted line of its color, as wide as it says.
+				if (tool_.line > 0) {
+					point from{area.x + area.width / 2 - 8, area.y + area.height / 2 + 5}, to{area.x + area.width / 2 + 8, area.y + area.height / 2 - 5};
+					if (tool_.swatch) {
+						color ink = *tool_.swatch;
+						if (tool_.off) ink.alpha *= 0.35f;
+						// White on white is outlined, as a white circle is.
+						if (ink.red > 0.9f && ink.green > 0.9f && ink.blue > 0.9f) c.line(from, to, tool_.line + 2, t.line);
+						c.line(from, to, tool_.line, ink);
+					} else {
+						// No stroke: a thin dotted line.
+						for (int i = 0; i < 6; i += 2) {
+							float a = i / 6.f, b = (i + 1) / 6.f;
+							c.line({from.x + (to.x - from.x) * a, from.y + (to.y - from.y) * a}, {from.x + (to.x - from.x) * b, from.y + (to.y - from.y) * b}, 1.5f, t.muted);
+						}
+					}
+					if (hovered) tooltip(c, t);
 					return;
 				}
 				if (tool_.swatch) {
