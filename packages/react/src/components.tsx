@@ -1326,6 +1326,16 @@ function readHere(at: number): number {
   return dateOnly(d) ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime() : at;
 }
 
+// Whether two values a button compares are the same: two times at the same moment,
+// like a task's due and tomorrow, and anything else as itself.
+export function sameValue(a: unknown, b: unknown): boolean {
+  if (a instanceof Date || b instanceof Date) {
+    const at = (v: unknown) => (v instanceof Date ? v.getTime() : typeof v === "string" ? Date.parse(v) : Number.NaN);
+    return at(a) === at(b);
+  }
+  return a === b;
+}
+
 // Whether a row's time is before or after one a filter names, as one like updated_at >
 // 7 days ago asks with updated_at>=-7d, or due < tomorrow with due<d+1. A row with no
 // time is kept by neither.

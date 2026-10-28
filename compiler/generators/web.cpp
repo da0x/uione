@@ -1312,7 +1312,8 @@ namespace one::generators {
                                 now = "(" + variable + ".data?.[" + web_detail::js_string(v.name) + "] ?? null)";
                             }
                         }
-                        same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + now + " === " + value;
+                        if (!now.empty() && same != "-") parts.components.insert("sameValue");
+                        same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + "sameValue(" + now + ", " + value + ")";
                     }
                     if (!given.empty()) given = " given={{ " + given + " }}";
                     std::string pressed = button->pressed_when ? " pressed={" + condition(parts, ns, *button->pressed_when) + "}"

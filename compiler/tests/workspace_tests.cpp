@@ -218,7 +218,7 @@ TEST_CASE("a pick is read, picked from a table, and acted on, on the web and the
     CHECK(web.find(R"(<Command name="studio::layer::scale" id={pickedLayer?.id as string | undefined} label="Twice" given={{ "by": 2 }} when={pickedLayer !== null} />)") != std::string::npos);
     CHECK(web.find(R"(keys={["delete"]})") != std::string::npos);
     // One on the poster the address names is pressed while the poster already says so.
-    CHECK(web.find(R"(given={{ "tint": "ink" }} pressed={(posterPage.data?.["tint"] ?? null) === "ink"})") != std::string::npos);
+    CHECK(web.find(R"(given={{ "tint": "ink" }} pressed={sameValue((posterPage.data?.["tint"] ?? null), "ink")})") != std::string::npos);
     CHECK(native.find(R"(value picked_layer = picked(p, "/:poster layer", poster_page, "layers");)") != std::string::npos);
     CHECK(native.find(R"(.pick = "/:poster layer")") != std::string::npos);
     CHECK(native.find(R"(.empty = "Nothing on it yet")") != std::string::npos);

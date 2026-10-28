@@ -26,6 +26,7 @@ import {
   holds,
   keptByTime,
   timeNamed,
+  sameValue,
   markdownOf,
   phrase,
   memorySource,
@@ -949,6 +950,14 @@ describe("filters by time", () => {
     expect(keptByTime(new Date(now - 40 * 60 * 1000), ">", "-30m", now)).toBe(false);
     expect(keptByTime(undefined, ">", "-7d", now)).toBe(false);
     expect(keptByTime(twoDaysAgo, ">", "seven days", now)).toBe(false);
+  });
+
+  it("says two times are the same when they're the same moment, as a button pressed while it holds asks", () => {
+    expect(sameValue(new Date(Date.UTC(2026, 9, 28)), timeNamed("d+0", new Date(2026, 9, 28, 15).getTime()))).toBe(true);
+    expect(sameValue(new Date(Date.UTC(2026, 9, 28)), "2026-10-28T00:00:00.000Z")).toBe(true);
+    expect(sameValue(new Date(Date.UTC(2026, 9, 28)), new Date(Date.UTC(2026, 9, 29)))).toBe(false);
+    expect(sameValue("ink", "ink")).toBe(true);
+    expect(sameValue(null, "ink")).toBe(false);
   });
 
   it("keeps a time before or after a day the calendar names, on the reader's calendar", () => {
