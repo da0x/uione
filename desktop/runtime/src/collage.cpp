@@ -2134,12 +2134,11 @@ namespace one::desktop::runtime {
 				       c.text(laid, {area.x, area.y + (area.height - laid.height()) / 2});
 			       },
 			                        {.on_press = [pick, rename, renaming, started, id, name](desktop::point, int clicks) {
-				                         if (clicks >= 2 && !rename.empty()) {
-					                         started.set(name);
-					                         renaming.set(id);
-				                         } else {
-					                         pick();
-				                         }
+				                         // A double-click writes it; a single press is its row's, to pick or drag.
+				                         if (clicks < 2 || rename.empty()) return false;
+				                         started.set(name);
+				                         renaming.set(id);
+				                         pick();
 				                         return true;
 			                         }})
 			    .height(tall)
@@ -2181,6 +2180,30 @@ namespace one::desktop::runtime {
 			    .on_click(std::move(pick));
 		}
 
+		// A list of layers' header, thin: its name, and a + that makes a new layer on top,
+		// Layer and the next number, when it can.
+		desktop::view layers_header(page& p, const layers_spec& spec, const std::vector<value>& groups) {
+			const auto& t = current_theme();
+			desktop::text_style said = t.quiet();
+			said.weight = 600;
+			std::vector<desktop::view> header;
+			header.push_back(desktop::text("Layers", said));
+			header.push_back(desktop::spacer());
+			if (!spec.create.empty()) {
+				double top = 0;
+				for (const auto& g : groups) top = std::max(top, g["depth"].as_double());
+				std::string name = "Layer " + std::to_string(groups.size() + 1);
+				header.push_back(desktop::tool_button("add", "New layer", [&p, spec, name, top] {
+					value made = value(std::map<std::string, value>{{"name", name}, {"depth", top + 1}});
+					if (!spec.create_parent.empty()) made.fields[spec.create_parent] = value(spec.subject);
+					p.run(spec.create, made, [&p, pick = spec.pick](const answer& a) {
+						if (a && !pick.empty()) p.pick(pick, *a);
+					});
+				}, {.tiny = true}));
+			}
+			return desktop::row(std::move(header)).align(align::center).padding(edges(0, 4, 2, 4));
+		}
+
 		// The layers a collage's objects are held in, topmost first: each its eye, a
 		// preview of its objects, its name, up, down and delete, and, opened, its
 		// objects under it, topmost first, each its preview and name, and delete.
@@ -2194,6 +2217,8 @@ namespace one::desktop::runtime {
 			std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 			std::string picked_object = spec.object_pick.empty() ? "" : p.picked_id(spec.object_pick);
 			std::vector<desktop::view> rows;
+			std::vector<bool> movable;
+			std::vector<std::size_t> layer_of;  // each row's layer, by its place lowest first
 			for (std::size_t i = groups.size(); i-- > 0;) {
 				const value& g = groups[i];
 				std::string id = g["id"].as_string();
@@ -2245,6 +2270,7 @@ namespace one::desktop::runtime {
 				rows.push_back(list_row(std::move(row), id == picked, 0, [&p, pick = spec.pick, id] {
 					if (!pick.empty()) p.pick(pick, id);
 				}));
+				movable.push_back(!spec.order.empty()), layer_of.push_back(i);
 				if (!open.get()) continue;
 				for (std::size_t j = held.size(); j-- > 0;) {
 					const value& o = held[j];
@@ -2263,9 +2289,14 @@ namespace one::desktop::runtime {
 						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
 						if (!spec.pick.empty()) p.pick(spec.pick, id);
 					}));
+					movable.push_back(false), layer_of.push_back(i);
 				}
 			}
-			return desktop::column(std::move(rows)).spacing(2).align(align::stretch);
+			// A layer held and dragged goes where it's let go, in one step.
+			auto list = desktop::reorderable(std::move(rows), std::move(movable), [&p, command = spec.order, ordered, layer_of](std::size_t from, std::size_t to) {
+				moved(p, command, ordered, layer_of[from], layer_of[to], {});
+			});
+			return desktop::column(layers_header(p, spec, groups), std::move(list).spacing(2).align(align::stretch)).spacing(4).align(align::stretch);
 		}
 	}  // namespace
 
@@ -2310,7 +2341,13 @@ namespace one::desktop::runtime {
 				if (!pick.empty()) p.pick(pick, id);
 			}));
 		}
-		return desktop::column(std::move(rows)).spacing(2).align(align::stretch);
+		// A layer held and dragged goes where it's let go, in one step; rows are topmost first.
+		std::vector<bool> movable(rows.size(), !spec.order.empty());
+		std::size_t count = all.size();
+		auto list = desktop::reorderable(std::move(rows), std::move(movable), [&p, spec, layers, count](std::size_t from, std::size_t to) {
+			moved(p, spec.order, layers, count - 1 - from, count - 1 - to, spec.fields);
+		});
+		return desktop::column(layers_header(p, spec, {}), std::move(list).spacing(2).align(align::stretch)).spacing(4).align(align::stretch);
 	}
 
 }  // namespace one::desktop::runtime

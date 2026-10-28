@@ -1013,6 +1013,72 @@ namespace one::desktop {
 			return view(std::make_unique<E>(std::forward<A>(arguments)...));
 		}
 
+		// A column whose movable rows are dragged to another's place.
+		class reorder_element : public stack_element {
+		public:
+			reorder_element(std::vector<bool> movable, std::function<void(std::size_t, std::size_t)> moved)
+			    : stack_element(false), movable_(std::move(movable)), moved_(std::move(moved)) {}
+
+			bool press(point at, int) override {
+				from_ = row_at(at);
+				if (!from_ || !(*from_ < movable_.size() && movable_[*from_])) return from_.reset(), false;
+				start_ = at, moving_ = false;
+				return true;
+			}
+			void drag(point at) override {
+				if (!from_) return;
+				if (std::abs(at.y - start_.y) > 4) moving_ = true;
+				now_ = at;
+			}
+			void release(point at, element*) override {
+				auto from = std::exchange(from_, std::nullopt);
+				if (!from || !std::exchange(moving_, false)) return;
+				if (auto to = target(at); to && *to != *from) moved_(*from, *to);
+			}
+
+		protected:
+			void paint_content(canvas& c) override {
+				stack_element::paint_content(c);
+				if (!from_ || !moving_) return;
+				// The row being moved shaded where it was, and a line where it'll go.
+				const theme& t = current_theme();
+				color shade = t.accent;
+				shade.alpha = 0.08f;
+				c.box(children[*from_]->frame, {.fill = shade, .radius = 4});
+				if (auto to = target(now_)) {
+					const rect& r = children[*to]->frame;
+					float y = *to > *from_ ? r.bottom() : r.y;
+					c.box({r.x, y - 1, r.width, 2}, {.fill = t.accent, .radius = 1});
+				}
+			}
+
+		private:
+			std::optional<std::size_t> row_at(point at) const {
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					if (children[i]->frame.contains(at)) return i;
+				}
+				return std::nullopt;
+			}
+			// The movable row whose middle is nearest the pointer.
+			std::optional<std::size_t> target(point at) const {
+				std::optional<std::size_t> best;
+				float nearest = 0;
+				for (std::size_t i = 0; i < children.size(); ++i) {
+					if (i >= movable_.size() || !movable_[i]) continue;
+					const rect& r = children[i]->frame;
+					float d = std::abs(r.y + r.height / 2 - at.y);
+					if (!best || d < nearest) best = i, nearest = d;
+				}
+				return best;
+			}
+
+			std::vector<bool> movable_;
+			std::function<void(std::size_t, std::size_t)> moved_;
+			std::optional<std::size_t> from_;
+			point start_{}, now_{};
+			bool moving_ = false;
+		};
+
 	}  // namespace
 
 	view text(std::string words, std::optional<text_style> style) {
@@ -1020,6 +1086,13 @@ namespace one::desktop {
 	}
 
 	view text(std::vector<text_span> spans) { return made<text_element>(std::move(spans)); }
+
+	view reorderable(std::vector<view> rows, std::vector<bool> movable, std::function<void(std::size_t from, std::size_t to)> moved) {
+		auto e = std::make_unique<reorder_element>(std::move(movable), std::move(moved));
+		e->children = taken(rows);
+		adopt_children(*e);
+		return view(std::move(e));
+	}
 
 	view column(std::vector<view> children) {
 		auto e = std::make_unique<stack_element>(false);

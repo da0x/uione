@@ -2325,7 +2325,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   by its place, in one step to undo; and delete. A press on a row picks the layer,
   as the collage does. A hidden layer isn't drawn, picked, snapped to or saved, and
   the collage's `hidden` part is any number but 0 while it's hidden. A row's delete
-  shows only while the row is pointed at. `rename layer::rename` lets a name be
+  shows only while the row is pointed at, and with `order` a row held and dragged
+  goes where it's let go, a line showing where. A thin header names the list, with a +
+  that makes a new layer on top, Layer and the next number, by the layers' create. `rename layer::rename` lets a name be
   double-clicked and written in place, Enter or leaving it keeping it and Esc putting
   it away; a command on the collage's objects renames an object, kept in its `name`
   part, which the list shows in place of what it is. A terminal lists them by name,

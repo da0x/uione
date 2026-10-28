@@ -1984,6 +1984,9 @@ export function Layers({
   objectPick,
   rename,
   objectRename,
+  create,
+  createParent,
+  subject,
 }: {
   view: ViewState;
   list: string;
@@ -2005,6 +2008,11 @@ export function Layers({
   // The commands a name written in place is sent to: a layer's, and an object's.
   rename?: string;
   objectRename?: string;
+  // A new layer made from its header's +, by the layers' create, named what the view is
+  // per by `createParent`.
+  create?: string;
+  createParent?: string;
+  subject?: string;
 }) {
   const ui = useUI();
   const files = useFiles();
@@ -2015,6 +2023,8 @@ export function Layers({
   // The row pointed at, whose delete shows; and the name being written in place.
   const [hovered, setHovered] = useState("");
   const [renaming, setRenaming] = useState<{ id: string; words: string; command: string; mapped: boolean } | undefined>();
+  // A row held and dragged: where it began, which row it is, and the row it's over.
+  const [dragging, setDragging] = useState<{ id: string; y: number; moving: boolean; over?: string } | undefined>();
   const data = view.status === "live" ? partsOf((view.data ?? {}) as Row, objects ?? list, fields) : {};
   const layers = (data[list] as Row[] | undefined) ?? [];
   const W = num(data[width]), H = num(data[height]);
@@ -2085,6 +2095,53 @@ export function Layers({
     );
   };
   const hover = (id: string) => ({ onMouseEnter: () => setHovered(id), onMouseLeave: () => setHovered((was) => (was === id ? "" : was)) });
+  // A row held and dragged goes where it's let go, in one step: past a few pixels it
+  // moves, a line showing where; a press let go where it began is a click. `ids` are the
+  // movable rows' ids, topmost first, and `move` takes their places in that order. The
+  // same as the desktop's.
+  const draggable = (id: string, ids: string[], move: (from: number, to: number) => void) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      if (!order || e.button !== 0) return;
+      setDragging({ id, y: e.clientY, moving: false });
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!dragging) return;
+      const moving = dragging.moving || Math.abs(e.clientY - dragging.y) > 4;
+      // The row under the pointer, of those that move.
+      const under = (document.elementsFromPoint?.(e.clientX, e.clientY) ?? []).map((n) => n.closest("[data-row]")?.getAttribute("data-row")).find((one) => one && ids.includes(one));
+      if (moving !== dragging.moving || under !== dragging.over) setDragging({ ...dragging, moving, over: under ?? dragging.over });
+    },
+    onPointerUp: () => {
+      const was = dragging;
+      setDragging(undefined);
+      if (!was?.moving || !was.over || was.over === was.id) return;
+      move(ids.indexOf(was.id), ids.indexOf(was.over));
+    },
+    "data-row": id,
+    style: dragging?.moving && dragging.over === id && dragging.id !== id ? { boxShadow: `inset 0 ${ids.indexOf(id) > ids.indexOf(dragging.id) ? -2 : 2}px 0 var(--color-accent, #2457d6)` } : undefined,
+  });
+  const merged = (base: React.CSSProperties, extra?: React.CSSProperties): React.CSSProperties => ({ ...base, ...extra });
+  // Its header, thin: its name, and a + that makes a new layer on top.
+  const header = (top: number, count: number) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 4px", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-muted)" }}>
+      <span>Layers</span>
+      {create && (
+        <ui.Button
+          kind="secondary"
+          icon="add"
+          tool="tiny"
+          hint="New layer"
+          onClick={() => {
+            const made: Row = { name: `Layer ${count + 1}`, depth: top + 1 };
+            if (createParent) made[createParent] = subject;
+            void runner.reply(create, made).then((reply) => reply?.id && pick && setPicked(pick, reply.id));
+          }}
+        >
+          New layer
+        </ui.Button>
+      )}
+    </div>
+  );
   // Shown only while its row is pointed at, keeping its place so nothing moves.
   const onHover = (id: string): React.CSSProperties => ({ display: "flex", visibility: hovered === id ? "visible" : "hidden" });
   // The layers objects are held in, topmost first: each its eye, a preview of its
@@ -2094,8 +2151,13 @@ export function Layers({
     const groups = [...layers].sort((a, b) => num(a["depth"]) - num(b["depth"]));
     const held = ((data[objects] as Row[] | undefined) ?? []).filter((o) => !hiddenLayer(o));
     const send = (command: string, input: Row) => runner.reply(command, input);
+    const ids = [...groups].reverse().map((g) => str(g["id"]));
+    const moveLayer = (from: number, to: number) =>
+      depthsMoved(groups, groups.length - 1 - from, groups.length - 1 - to).forEach(([moved, depth], n) => void send(order!, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }));
     return (
-      <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div>
+      {header(groups.reduce((most, g) => Math.max(most, num(g["depth"])), 0), groups.length)}
+      <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2, userSelect: "none" }}>
         {groups
           .map((g, i) => ({ g, i }))
           .reverse()
@@ -2104,7 +2166,7 @@ export function Layers({
             const mine = held.filter((o) => str(o[objectLayer]) === id);
             const flip = () => setOpen((was) => (was.has(id) ? new Set([...was].filter((one) => one !== id)) : new Set([...was, id])));
             const rows = [
-              <div key={id} role="listitem" aria-current={id === picked || undefined} onClick={() => pick && setPicked(pick, id)} style={rowStyle(id === picked, 0)} {...hover(id)}>
+              <div key={id} role="listitem" aria-current={id === picked || undefined} onClick={() => pick && setPicked(pick, id)} {...hover(id)} {...draggable(id, ids, moveLayer)} style={merged(rowStyle(id === picked, 0), draggable(id, ids, moveLayer).style)}>
                 <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
                   {/* Opened or closed by a small chevron, so its name keeps its room. */}
                   <button type="button" aria-label={opened ? "Close" : "Open"} title={opened ? "Close" : "Open"} onClick={flip} style={{ width: 16, padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer" }}>
@@ -2182,14 +2244,18 @@ export function Layers({
             return rows;
           })}
       </div>
+      </div>
     );
   }
   const move = (from: number, to: number) => {
     depthsMoved(layers, from, to).forEach(([id, depth], i) => void send(order!, i === 0 ? { id, depth } : { id, depth, "one:history": "joined" }));
   };
 
+  const ids = [...layers].reverse().map((l) => str(l["id"]));
   return (
-    <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <div>
+    {header(0, 0)}
+    <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2, userSelect: "none" }}>
       {layers
         .map((l, i) => ({ l, i }))
         .reverse()
@@ -2203,6 +2269,7 @@ export function Layers({
               aria-current={isPicked || undefined}
               onClick={() => pick && setPicked(pick, id)}
               {...hover(id)}
+              {...draggable(id, ids, (from, to) => move(layers.length - 1 - from, layers.length - 1 - to))}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -2212,6 +2279,7 @@ export function Layers({
                 cursor: pick ? "pointer" : undefined,
                 border: `1px solid ${isPicked ? "var(--color-accent, #2457d6)" : "transparent"}`,
                 background: isPicked ? "var(--color-sunken, #f1f3f6)" : undefined,
+                ...draggable(id, ids, () => {}).style,
               }}
             >
               {hide && (
@@ -2246,6 +2314,7 @@ export function Layers({
             </div>
           );
         })}
+    </div>
     </div>
   );
 }

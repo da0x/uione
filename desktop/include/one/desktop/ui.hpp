@@ -236,6 +236,11 @@ namespace one::desktop {
 
 	// Children one under another, or side by side.
 	view column(std::vector<view> children);
+	// Rows one under another, those `movable` says moved to another's place by a press
+	// held and dragged, a line showing where it'll go: `moved` is told which row went
+	// where, by their places among all of them. A press let go where it began is a
+	// click, as it would be anywhere else.
+	view reorderable(std::vector<view> rows, std::vector<bool> movable, std::function<void(std::size_t from, std::size_t to)> moved);
 	view row(std::vector<view> children);
 	template <std::convertible_to<view>... V>
 	view column(V&&... children) {

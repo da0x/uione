@@ -430,6 +430,9 @@ namespace one::screens {
 		std::string objects = "", object_layer = "", object_remove = "", object_pick = "";
 		// And the commands a name written in place is sent to: a layer's, and an object's.
 		std::string rename = "", object_rename = "";
+		// A new layer made from its header's +, by the layers' create, named what the view
+		// is per by `create_parent`.
+		std::string create = "", create_parent = "", subject = "";
 	};
 
 	// A list's rows as one upright sheet of paper, written on in place, as a page of a

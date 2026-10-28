@@ -1427,6 +1427,21 @@ namespace one::generators {
                         bool on_object = held && object && entity_of_command(command) == object;
                         line += std::string(on_object ? " objectRename=" : " rename=") + web_detail::js_string(command);
                     }
+                    // A new layer from its header's +, as the collage makes one.
+                    if (const language::entity_declaration* group = held ? listed(ns, c.view.text(), l->list) : nullptr) {
+                        std::string create = web_detail::join(ns, group->name + "::create");
+                        if (entity_of_command(create)) {
+                            line += " create=" + web_detail::js_string(create);
+                            if (auto per = per_entity(view)) {
+                                for (const auto& f : group->fields) {
+                                    if (f.type && f.type->text() == *per) {
+                                        parts.params.insert(*per);
+                                        line += " createParent=" + web_detail::js_string(f.name) + " subject={" + web_detail::js_name(*per + "_id") + "}";
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (l->hide) line += " hide=" + web_detail::js_string(full_command(ns, *l->hide));
                     if (l->order) line += " order=" + web_detail::js_string(full_command(ns, *l->order));
                     if (l->remove) line += " remove=" + web_detail::js_string(full_command(ns, *l->remove));

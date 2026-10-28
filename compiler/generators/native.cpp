@@ -393,6 +393,17 @@ namespace one::generators {
                 bool on_object = held && object && model_.entity_of_command(command) == object;
                 out += std::string(on_object ? ", .object_rename = " : ", .rename = ") + str(command);
             }
+            // A new layer from its header's +, as the collage makes one.
+            if (const language::entity_declaration* group = held ? model_.listed(ns, c.view.text(), l.list) : nullptr) {
+                std::string create = screens::join(ns, group->name + "::create");
+                if (model_.entity_of_command(create)) {
+                    out += ", .create = " + str(create);
+                    auto per = model_.per_entity(view);
+                    for (const auto& f : group->fields) {
+                        if (per && f.type && f.type->text() == *per) out += ", .create_parent = " + str(f.name) + ", .subject = " + id_of(parts, *per);
+                    }
+                }
+            }
             return out + "})";
         }
 
