@@ -1341,6 +1341,22 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a toolbar's form button is a tool like the others, and the form it opens is shown over the work") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	auto rename = [] { return form_spec{.command = "studio::poster::update", .fields = {{.name = "title", .label = "Title"}}, .button = true, .opener = "Rename", .key = "rename", .icon = "edit"}; };
+	s.screens.push_back({"Studio", "/", "", [rename](page& p) {
+		                     return workspace(p, region{"toolbar", along(group(p, "Poster", false, false, [&] { return tools(form(p, rename())); }))},
+		                                      region{"main", items(text({words("The posters")}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	matches_golden("toolbar-form", {420, 220}, [&] { return drawn(nav); });
+	form_model(nav.current(), rename()).set_open(true);
+	matches_golden("toolbar-form-open", {420, 220}, [&] { return drawn(nav); });
+}
+
 TEST("in a toolbar, a group that doesn't apply now is there, off, its keys doing nothing, and of tools with the same words the one that holds is drawn") {
 	memory_source data;
 	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return "p1"; });

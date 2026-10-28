@@ -145,6 +145,14 @@ namespace one::desktop::runtime {
 		// Work that fills its place, like a collage, is as big as it; anything else, like
 		// a gallery of cards, scrolls when there's more of it than there's room for.
 		auto main = taken("main");
+		// A form opened from a toolbar's button, over its work, as a page has one under
+		// its title.
+		if (auto around = p.take_around(); !around.under.empty()) {
+			std::vector<desktop::view> opened;
+			for (auto& v : around.under) opened.push_back(std::move(v));
+			if (main.get()) opened.push_back(std::move(main).grow());
+			main = desktop::column(std::move(opened)).spacing(12).align(align::stretch).grow();
+		}
 		bool fills = main.get() && std::ranges::any_of(main.get()->children, [](const auto& c) { return c && c->grow > 0; });
 		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(12, 12)).grow());
 		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12))).grow());

@@ -30,6 +30,11 @@ namespace one::desktop::runtime {
 		const auto& t = current_theme();
 		if (!model.open()) {
 			std::string opens = model.opens();
+			// In a toolbar's group, a tool like the others there, large or small as it is.
+			if (auto small = p.in_group()) {
+				bool off = p.off();
+				return desktop::tool_button(desktop::has_icon(spec.icon) ? spec.icon : "", opens, [model] { model.set_open(true); }, {.large = !*small, .off = off});
+			}
 			// A button with an icon is a quiet one, as on the web, beside the page's main
 			// ones: one of the web's icons is drawn as just that, named when pointed at.
 			if (desktop::has_icon(spec.icon)) {
@@ -89,6 +94,11 @@ namespace one::desktop::runtime {
 		// Opened from its button, it goes under the title, across the page, in its button's place.
 		if (spec.button) {
 			p.under_title(std::move(panel));
+			// In a toolbar's group, its tool stays, pressed while the form's open, and
+			// puts it away pressed again.
+			if (auto small = p.in_group()) {
+				return desktop::tool_button(desktop::has_icon(spec.icon) ? spec.icon : "", model.opens(), [model] { model.set_open(false); }, {.large = !*small, .on = true});
+			}
 			return {};
 		}
 		return panel;
