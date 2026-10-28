@@ -186,6 +186,13 @@ namespace one::screens::collage {
 	};
 	line drawn_line(point from, point to, bool straight, double click, double width, double height);
 
+	// A path written with its points where they are, in SVG path notation, M, L, C and
+	// Z, as an SVG broken apart gives each of its shapes: the box its points are in,
+	// curves' control points too; and its points as fractions of a box, as a layer
+	// keeps them.
+	box path_bounds(std::string_view absolute);
+	std::string path_fractions(std::string_view absolute, box in);
+
 	// A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a
 	// 100 by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is
 	// left out.

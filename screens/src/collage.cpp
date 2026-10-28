@@ -514,6 +514,67 @@ namespace one::screens::collage {
 		return {b, "M " + in(from) + " L " + in(end)};
 	}
 
+	namespace {
+		// Each command and number of a path, in order: a command as its letter, a
+		// number as itself.
+		template <class Command, class Number>
+		void each_of(std::string_view points, Command command, Number number) {
+			for (std::size_t at = 0; at < points.size();) {
+				char c = points[at];
+				if (c == 'M' || c == 'L' || c == 'C' || c == 'Z') {
+					command(c);
+					++at;
+					continue;
+				}
+				if (std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '.') {
+					std::size_t end = at + 1;
+					while (end < points.size() && (std::isdigit(static_cast<unsigned char>(points[end])) || points[end] == '.' || points[end] == 'e' ||
+					                               (points[end] == '-' && points[end - 1] == 'e'))) {
+						++end;
+					}
+					double n = 0;
+					try {
+						n = std::stod(std::string(points.substr(at, end - at)));
+					} catch (...) {
+						n = 0;
+					}
+					number(n);
+					at = end;
+					continue;
+				}
+				++at;
+			}
+		}
+	}  // namespace
+
+	box path_bounds(std::string_view absolute) {
+		double left = 0, top = 0, right = 0, bottom = 0, x = 0;
+		bool across = true, any = false;
+		each_of(absolute, [&](char) { across = true; },
+		        [&](double n) {
+			        if (across) {
+				        x = n;
+			        } else if (!any) {
+				        left = right = x, top = bottom = n, any = true;
+			        } else {
+				        left = std::min(left, x), right = std::max(right, x), top = std::min(top, n), bottom = std::max(bottom, n);
+			        }
+			        across = !across;
+		        });
+		return {left, top, right - left, bottom - top};
+	}
+
+	std::string path_fractions(std::string_view absolute, box in) {
+		std::string out;
+		bool across = true;
+		each_of(absolute, [&](char c) { out += (out.empty() ? "" : " ") + std::string(1, c), across = true; },
+		        [&](double n) {
+			        out += " " + said(across ? (in.w > 0 ? (n - in.x) / in.w : 0.5) : (in.h > 0 ? (n - in.y) / in.h : 0.5));
+			        across = !across;
+		        });
+		return out;
+	}
+
 	std::string svg_element(const shape& s, double x, double y, double w, double h) {
 		std::string drawn = std::format(R"(fill="{}" stroke="{}" stroke-width="{}")", paint(s.fill), paint(s.stroke), said(s.stroke_width));
 		if (s.kind == "ellipse") return std::format(R"(<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {}/>)", said(x + w / 2), said(y + h / 2), said(w / 2), said(h / 2), drawn);

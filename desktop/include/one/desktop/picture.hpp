@@ -25,6 +25,19 @@
 
 namespace one::desktop {
 
+	// One shape of an SVG broken apart, as the pinned nanosvg reads it: its path, its
+	// points where they are in the SVG's own units, with its transforms applied, in SVG
+	// path notation, M, C and Z; its fill and stroke, each #rrggbb or none, a gradient's
+	// its first stop's color; its stroke's width; and how much of it shows.
+	struct svg_shape {
+		std::string path;
+		std::string fill = "none", stroke = "none";
+		double stroke_width = 0;
+		double opacity = 1;
+	};
+	// Its shapes, lowest first, those it says aren't seen left out.
+	std::vector<svg_shape> svg_shapes(std::string_view svg);
+
 	class canvas;
 
 	class picture {

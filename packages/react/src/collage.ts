@@ -571,6 +571,49 @@ export function drawnLine(from: Point, to: Point, straight: boolean, click: numb
 // A color as it may be written into SVG: #rrggbb, or none for anything else.
 const paint = (written: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : "none");
 
+// Each command and number of a path, in order: a command as its letter, a number as
+// itself.
+function eachOf(points: string, command: (c: string) => void, number: (n: number) => void) {
+  for (const token of points.match(/[MLCZ]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/g) ?? []) {
+    if (/^[MLCZ]$/.test(token)) command(token);
+    else number(Number(token) || 0);
+  }
+}
+
+// A path written with its points where they are, in SVG path notation, M, L, C and Z,
+// as an SVG broken apart gives each of its shapes: the box its points are in, curves'
+// control points too; and its points as fractions of a box, as a layer keeps them.
+export function pathBounds(absolute: string): Box {
+  let left = 0, top = 0, right = 0, bottom = 0, x = 0, across = true, any = false;
+  eachOf(
+    absolute,
+    () => (across = true),
+    (n) => {
+      if (across) x = n;
+      else if (!any) (left = right = x), (top = bottom = n), (any = true);
+      else (left = Math.min(left, x)), (right = Math.max(right, x)), (top = Math.min(top, n)), (bottom = Math.max(bottom, n));
+      across = !across;
+    },
+  );
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+export function pathFractions(absolute: string, b: Box): string {
+  const out: string[] = [];
+  let across = true;
+  eachOf(
+    absolute,
+    (c) => {
+      out.push(c);
+      across = true;
+    },
+    (n) => {
+      out.push(said(across ? (b.w > 0 ? (n - b.x) / b.w : 0.5) : b.h > 0 ? (n - b.y) / b.h : 0.5));
+      across = !across;
+    },
+  );
+  return out.join(" ");
+}
+
 // A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a 100
 // by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is left out.
 export function pathIn(points: string, x: number, y: number, w: number, h: number): string {

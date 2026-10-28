@@ -352,6 +352,28 @@ TEST("an SVG file is read as an SVG, never as pixels it isn't: known by what it 
 	CHECK(read->rgba()[3] == 255);
 }
 
+TEST("an SVG broken apart is its shapes, lowest first, their paths with their transforms applied, their colors, and how much of each shows") {
+	auto shapes = one::desktop::svg_shapes(R"svg(<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">
+		<rect x="0" y="0" width="10" height="10" fill="#2e86de" fill-opacity="0.5"/>
+		<g transform="translate(20 5)" opacity="0.5"><circle cx="5" cy="5" r="5" fill="none" stroke="#e4572e" stroke-width="2"/></g>
+		<rect width="5" height="5" display="none"/>
+	</svg>)svg");
+	CHECK(shapes.size() == 2);
+	if (shapes.size() != 2) return;
+	CHECK(shapes[0].path.starts_with("M 0 0 C "));
+	CHECK(shapes[0].path.ends_with(" Z"));
+	CHECK(shapes[0].fill == "#2e86de");
+	CHECK(shapes[0].stroke == "none");
+	CHECK(std::abs(shapes[0].opacity - 0.5) < 0.01);
+	CHECK(shapes[1].fill == "none");
+	CHECK(shapes[1].stroke == "#e4572e");
+	CHECK(shapes[1].stroke_width == 2);
+	CHECK(std::abs(shapes[1].opacity - 0.5) < 0.01);
+	// The circle, moved by its group, from 20 to 30 across.
+	CHECK(shapes[1].path.find(" 30 ") != std::string::npos);
+	CHECK(one::desktop::svg_shapes("not an svg").empty());
+}
+
 TEST("a screenshot with no desktop to ask says so, rather than waiting or failing badly") {
 	const char* was = std::getenv("DBUS_SESSION_BUS_ADDRESS");
 	std::string kept = was ? was : "";
