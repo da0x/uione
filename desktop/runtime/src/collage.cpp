@@ -1851,7 +1851,10 @@ namespace one::desktop::runtime {
 			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
 			if (!is_words(l)) {
 				std::string shape = l["shape"].as_string();
-				name = is_picture(l) ? (vector_here(p, l).empty() ? "Picture" : "SVG") : shape == "ellipse" ? "Ellipse" : shape == "path" ? "Path" : "Rectangle";
+				// A path of two points is a line.
+				std::string points = l["points"].as_string();
+				bool line = std::ranges::count(points, 'L') == 1 && points.find('C') == std::string::npos;
+				name = is_picture(l) ? (vector_here(p, l).empty() ? "Picture" : "SVG") : shape == "ellipse" ? "Ellipse" : shape == "path" ? (line ? "Line" : "Path") : "Rectangle";
 			}
 			if (name.size() > 28) name = name.substr(0, 27) + "…";
 			auto said = hidden ? t.quiet() : t.body();

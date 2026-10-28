@@ -1734,8 +1734,10 @@ export function Layers({
   const nameOf = (l: Row) => {
     if (isWords(l)) return str(l["words"]).split("\n")[0]!;
     if (isPicture(l)) return pictures.get(str(l["picture"])) === "vector" ? "SVG" : "Picture";
-    const shape = str(l["shape"]);
-    return shape === "ellipse" ? "Ellipse" : shape === "path" ? "Path" : "Rectangle";
+    // A path of two points is a line.
+    const shape = str(l["shape"]), points = str(l["points"]);
+    const line = (points.match(/L/g) ?? []).length === 1 && !points.includes("C");
+    return shape === "ellipse" ? "Ellipse" : shape === "path" ? (line ? "Line" : "Path") : "Rectangle";
   };
   return (
     <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
