@@ -2193,11 +2193,15 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     them are one step to undo. Words pasted are made words in the middle. A `paste
     "Paste" icon paste key ctrl+v` button pastes what's on the clipboard, by a press
     or by its key; like every key, Control+V pastes only where a line says it. And
-    `screenshot "Screenshot" icon screenshot` adds a picture of the screen. A web page
+    `screenshot "Screenshot" icon screenshot` adds a picture of the screen, and `add
+    pictures "Pictures" icon picture` adds those chosen in the device's own file
+    chooser: the desktop's, through its portal, or the browser's, which on a phone
+    offers its photos and its camera too. A web page
     reads the clipboard only when the browser lets it, and can't read a picture
     dragged from another site, so it says to save it first; it shows the screenshot
     button only where the browser can share the screen. A terminal can't be dropped
-    on, so its paste button asks for the picture's path, and it takes no screenshots.
+    on, so its paste button asks for the picture's path, and it takes no screenshots
+    and chooses no files.
     A picture whose own size isn't kept yet, like one kept before the fields were,
     has it filled in from the picture as it's turned, by the layer's `update`, never
     a step undo takes back, so a collage with `picture_width` and `picture_height`
@@ -2260,8 +2264,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   - `progress`: a thin bar across its top, as far along as it's been read.
   - `paste`: pictures pasted or dropped on it are picture blocks after the caret's,
     made by its `add`, the file in its `picture` and its own size in `picture_width`
-    and `picture_height`; a `paste "Photo"` button anywhere on the screen pastes the
-    clipboard's. A picture runs as much of the page's width as its `width` says, from 0
+    and `picture_height`; a `paste "Paste"` button anywhere on the screen pastes the
+    clipboard's, and an `add pictures "Photo" icon picture` button opens the device's
+    own file chooser, showing only pictures, and puts those chosen there. A picture runs as much of the page's width as its `width` says, from 0
     to 1, its corners as round as its `corners` says, a share of its shorter side, and
     Enter in its caption goes on in text.
   - Each part is kept in the field named like it; one kept in another says so, like

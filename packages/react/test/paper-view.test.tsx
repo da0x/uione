@@ -220,6 +220,7 @@ describe("a paper", () => {
     await waitFor(() => expect(links[1]!.getAttribute("aria-current")).toBe("location"));
     fireEvent.click(links[2]!);
     expect(document.activeElement).toBe(blocks(drawn)[3]);
+    expect(document.getSelection()!.anchorOffset).toBe(0);
     // A heading is ruled under, across the line.
     expect((drawn.container.querySelector("[data-kind=heading]") as HTMLElement).style.borderBottom).toContain("1px solid");
   });
@@ -354,6 +355,13 @@ describe("a paper", () => {
     const box = photo.firstElementChild as HTMLElement;
     expect(parseFloat(box.style.width) / parseFloat(box.style.height)).toBeCloseTo(2);
     expect(blocks(drawn)[1]!.textContent).toBe("A caption");
+    // Pressed, it's picked, its caret in the caption, and ringed so that shows; and not
+    // once the caret's elsewhere.
+    act(() => blocks(drawn)[0]!.focus());
+    await waitFor(() => expect(box.style.outline).toBe(""));
+    fireEvent.mouseDown(box);
+    expect(document.activeElement).toBe(blocks(drawn)[1]);
+    await waitFor(() => expect(box.style.outline).toContain("solid"));
     // A picture dropped while the caret's in the first block goes after it.
     fireEvent.focus(blocks(drawn)[0]!);
     const file = new File(["a"], "a.png", { type: "image/png" });
@@ -362,6 +370,71 @@ describe("a paper", () => {
     const made = source.runs.find((r) => r.command === "studio::passage::create")!.input as Record<string, unknown>;
     expect(made).toMatchObject({ kind: "picture", picture_width: 400, picture_height: 200, position: 1.5, poster: "p1" });
     expect(source.uploads.map((u) => u.file.name)).toEqual(["a.png"]);
+  });
+
+  it("makes a tall picture no taller than a page has room for, with a line of caption, narrower instead", async () => {
+    const source = memorySource({ files: true });
+    source.set("studio::notes_page", { passages: [
+      { id: "p1", kind: "picture", words: "", position: 1, align: "center", picture: "tower.png", picture_width: 400, picture_height: 1600, width: 1, corners: 0 },
+    ] }, "p1");
+    const all = { ...parts, picture: "picture", picture_width: "picture_width", picture_height: "picture_height", width: "width", corners: "corners" };
+    function Notes() {
+      const page = useView("studio::notes_page", "p1");
+      return <Paper view={page} list="passages" fields={all} />;
+    }
+    const only = defineScreen({ title: "Notes", route: "/" }, () => <Notes />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("[data-kind=picture]")).not.toBeNull());
+    const box = drawn.container.querySelector("[data-kind=picture]")!.firstElementChild as HTMLElement;
+    const w = parseFloat(box.style.width), h = parseFloat(box.style.height);
+    // A letter page 816 wide is 1056 tall, an inch of margin each side, and the gap and
+    // the caption's line are under it, as large as the reader has the words.
+    expect(h).toBeLessThan(1056 - 144);
+    expect(h).toBeGreaterThan(1056 - 144 - 2 * (8 + 21));
+    expect(h / w).toBeCloseTo(4);
+  });
+
+  it("opens the device's file chooser for pictures from an add pictures button, and makes those chosen picture blocks after the caret's", async () => {
+    globalThis.createImageBitmap = (async () => ({ width: 300, height: 300, close() {} })) as unknown as typeof createImageBitmap;
+    const source = memorySource({ files: true, commands: { "studio::passage::create": () => ({ id: "b9" }) } });
+    source.set("studio::notes_page", { passages: [
+      { id: "b1", kind: "text", words: "Before", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "After", position: 2, align: "left" },
+    ] }, "p1");
+    const all = { ...parts, picture: "picture", picture_width: "picture_width", picture_height: "picture_height" };
+    function Notes() {
+      const page = useView("studio::notes_page", "p1");
+      return (
+        <>
+          <PaperButton paper="/ paper" label="Photo" chooses />
+          <Paper name="/ paper" view={page} list="passages" fields={all} add="studio::passage::create" parent="poster" subject="p1" paste />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Notes", route: "/" }, () => <Notes />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(blocks(drawn).length).toBe(2));
+    fireEvent.focus(blocks(drawn)[0]!);
+    // The chooser is a file input for pictures, opened by the press, and gone once chosen.
+    let opened: HTMLInputElement | undefined;
+    const click = HTMLInputElement.prototype.click;
+    HTMLInputElement.prototype.click = function (this: HTMLInputElement) {
+      opened = this;
+    };
+    try {
+      fireEvent.click(drawn.getByRole("button", { name: "Photo" }));
+    } finally {
+      HTMLInputElement.prototype.click = click;
+    }
+    expect(opened).toMatchObject({ type: "file", accept: "image/*", multiple: true });
+    const file = new File(["a"], "beach.jpg", { type: "image/jpeg" });
+    Object.defineProperty(opened!, "files", { value: [file] });
+    fireEvent.change(opened!);
+    expect(opened!.isConnected).toBe(false);
+    await waitFor(() => expect(source.runs.some((r) => r.command === "studio::passage::create")).toBe(true));
+    const made = source.runs.find((r) => r.command === "studio::passage::create")!.input as Record<string, unknown>;
+    expect(made).toMatchObject({ kind: "picture", picture_width: 300, picture_height: 300, position: 1.5, poster: "p1" });
+    expect(source.uploads.map((u) => u.file.name)).toEqual(["beach.jpg"]);
   });
 
   it("shows how far along it's been read, across its top", async () => {

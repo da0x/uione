@@ -34,6 +34,7 @@
 #include <ember.hpp>
 
 #include "one/desktop/runtime/components.hpp"
+#include "one/desktop/files.hpp"
 #include "one/desktop/screenshot.hpp"
 
 namespace one::desktop::runtime {
@@ -948,6 +949,12 @@ namespace one::desktop::runtime {
 			shot.set("");
 			add_pictures(p, spec, layers, width, height, {taken}, std::nullopt);
 		}
+		// Pictures chosen from files, added like any dropped.
+		if (auto chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key); !chosen.get().empty()) {
+			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
+			chosen.set({});
+			add_pictures(p, spec, layers, width, height, files, std::nullopt);
+		}
 		// What its buttons asked of it: a crop begun, words written, or words added.
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
@@ -969,6 +976,16 @@ namespace one::desktop::runtime {
 						if (!taken) return told.set(taken.error());
 						told.set("");
 						shot.set(taken->string());
+					});
+				}).detach();
+			} else if (does == "add pictures" && spec.paste) {
+				// The desktop's own file chooser, which waits on the person, away from the
+				// window's thread, handed back as the screenshot is.
+				std::thread([told = p.told(), chosen = p.kept<std::vector<std::string>>("collage chosen " + spec.key)] {
+					auto files = desktop::chosen_files({.title = "Add pictures", .pictures = true, .several = true});
+					post([told, chosen, files] {
+						if (!files) return told.set(files.error());
+						chosen.set(std::vector<std::string>(files->begin(), files->end()));
 					});
 				}).detach();
 			} else if (does == "copy" || does == "copy picked" || does == "save" || does == "save picked") {

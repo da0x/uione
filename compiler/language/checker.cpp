@@ -3604,7 +3604,7 @@ namespace one::language {
                     icon(does->icon, does->icon_where);
                     keys(does->keys);
                     using kind = collage_button::kind;
-                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot;
+                    bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures;
                     if (does->of) {
                         // Copied or saved: the collage's view, all of it, or its pick, one layer.
                         bool named = std::ranges::any_of(collages_, [&](const collage_item* c) { return c->view.text() == *does->of || (c->over && *c->over == *does->of); });
@@ -3613,8 +3613,8 @@ namespace one::language {
                             error(does->of_where, *does->of + " isn't a collage on this screen, or its pick; a picture is made of one" + like);
                         }
                     }
-                    // A picture pasted can go into the screen's paper too, when it says paste.
-                    bool into_paper = does->does == kind::paste && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
+                    // A picture pasted or chosen can go into the screen's paper too, when it says paste.
+                    bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
                     bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         return does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : takes_pictures ? c->paste : c->add.has_value();
                     });

@@ -135,8 +135,8 @@ namespace one::terminal::runtime {
 	terminal::view picture_of(page&, const std::string&, bool, float) { return {}; }
 
 	terminal::view collage_button(page& p, collage_ask ask) {
-		// What needs pictures drawn, or a screen of its own, isn't here.
-		if (ask.does == "crop" || ask.does == "screenshot" || ask.does.starts_with("copy") || ask.does.starts_with("save")) return {};
+		// What needs pictures drawn, a screen of its own, or a file chooser, isn't here.
+		if (ask.does == "crop" || ask.does == "screenshot" || ask.does == "add pictures" || ask.does.starts_with("copy") || ask.does.starts_with("save")) return {};
 		auto asked = p.kept<std::string>("collage do " + ask.key);
 		auto press = [asked, does = ask.does] { asked.set(does); };
 		for (const auto& k : ask.keys) p.on_key(k, press);

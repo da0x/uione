@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "one/desktop/editing.hpp"
+#include "one/desktop/files.hpp"
 #include "one/desktop/runtime/components.hpp"
 #include "paper/kinds.hpp"
 
@@ -338,6 +339,7 @@ namespace one::desktop::runtime {
 					laid l{.b = blocks_[i], .look = kind.words_look(at), .words = {}, .own = {}};
 					l.look.size *= size();
 					l.page_width = w;
+					l.page_room = w * letter_shape - 2 * m;
 					bool here = editing_block(i) && !spec_.read_only;
 					std::string words = here ? s_->edit.text() : l.b.words;
 					float indent = kind.indent() * size();
@@ -829,6 +831,19 @@ namespace one::desktop::runtime {
 		auto pasting = p.kept<bool>("paper paste " + ask.key);
 		std::function<void()> press = [asked, given = ask.fields] { asked.set(given); };
 		if (ask.pastes) press = [pasting] { pasting.set(true); };
+		// Pictures chosen in the desktop's own file chooser, which waits on the person,
+		// away from the window's thread, and handed back to the paper.
+		if (ask.chooses) {
+			press = [told = p.told(), chosen = p.kept<std::vector<std::string>>("paper chosen " + ask.key), title = ask.label] {
+				std::thread([told, chosen, title] {
+					auto files = desktop::chosen_files({.title = title, .pictures = true, .several = true});
+					post([told, chosen, files] {
+						if (!files) return told.set(files.error());
+						chosen.set(std::vector<std::string>(files->begin(), files->end()));
+					});
+				}).detach();
+			};
+		}
 		bool off = p.in_group() && p.off();
 		if (!off) {
 			for (const auto& k : ask.keys) p.on_key(k, press);
@@ -915,14 +930,14 @@ namespace one::desktop::runtime {
 				}
 			}
 		}
-		// A heading picked in the outline: the caret at its end, and it brought into view.
+		// A heading picked in the outline: the caret at its start, and it brought into view.
 		if (!s->jump.empty()) {
 			for (const auto& b : blocks) {
 				if (b.id != s->jump) continue;
 				s->at = b.id;
 				s->first = false;
 				s->edit = editing(b.words, true);
-				s->edit.end(false);
+				s->edit.start(false);
 				s->show_caret = s->jumped = true;
 				if (!spec.pick.empty()) p.pick(spec.pick, s->at);
 			}
@@ -963,6 +978,12 @@ namespace one::desktop::runtime {
 		if (auto asked = p.kept<bool>("paper paste " + spec.key); asked.get()) {
 			asked.set(false);
 			if (!made->pasted_pictures()) p.told().set("There's no picture on the clipboard to paste.");
+		}
+		// Pictures chosen by a button, after the caret.
+		if (auto chosen = p.kept<std::vector<std::string>>("paper chosen " + spec.key); !chosen.get().empty()) {
+			std::vector<std::filesystem::path> files(chosen.peek().begin(), chosen.peek().end());
+			chosen.set({});
+			made->add_pictures(files);
 		}
 		// What an insert button asked of it.
 		if (auto asked = p.kept<std::optional<value>>("paper insert " + spec.key); asked.get()) {

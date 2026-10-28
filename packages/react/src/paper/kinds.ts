@@ -35,6 +35,7 @@ export interface Parts {
 export interface ShowingAsked {
   parts: Parts;
   across: number; // how wide its place is
+  tall: number; // how tall a page's room for blocks is, which none should be taller than
   words: string;
   focused: boolean;
   readOnly: boolean;

@@ -297,3 +297,22 @@ export function useSayingState() {
   const [said, say] = useState<{ text: string; problem?: boolean } | undefined>();
   return { said, say };
 }
+
+// add pictures "Photo": the device's own file chooser, opened by a press, showing only
+// pictures; on a phone, its photos and its camera too. The input is in the page while
+// it's open, as some phones only tell a chosen file to one that is.
+export function choosePictures(chosen: (files: File[]) => void): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.multiple = true;
+  input.hidden = true;
+  input.addEventListener("change", () => {
+    const files = [...(input.files ?? [])];
+    input.remove();
+    if (files.length > 0) chosen(files);
+  });
+  input.addEventListener("cancel", () => input.remove());
+  document.body.appendChild(input);
+  input.click();
+}

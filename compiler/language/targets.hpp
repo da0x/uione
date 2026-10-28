@@ -90,6 +90,7 @@ namespace one::language {
         drawn_by{"collage.crop", "cropping a collage's picture", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
+        drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
         drawn_by{"collage.copy", "a collage copied as a picture", "web desktop"},
         drawn_by{"collage.save", "a collage saved as a picture", "web desktop"},
         drawn_by{"collage.preview", "a collage's preview", "web desktop"},
@@ -385,6 +386,7 @@ namespace one::language {
                             : n.does == kind::edit_words ? "collage.write"
                             : n.does == kind::paste      ? "collage.paste"
                             : n.does == kind::screenshot ? "collage.screenshot"
+                            : n.does == kind::add_pictures ? "pictures.choose"
                             : n.does == kind::copy       ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                                                          : "collage.add");

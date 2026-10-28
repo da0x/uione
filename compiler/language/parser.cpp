@@ -1679,10 +1679,12 @@ namespace one::language {
             bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
                               peek(3).kind == token_kind::identifier && peek(3).text == "picture";
             bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) || as_picture ||
-                                ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words");
+                                ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
+                                (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
             if (collage_does) {
                 collage_button button;
                 std::string first = advance().text;
+                bool pictures = first == "add" && peek().text == "pictures";
                 if (first == "edit" || first == "add") advance();
                 if (as_picture) {
                     button.of_where = peek().where;
@@ -1695,6 +1697,7 @@ namespace one::language {
                               : first == "copy"       ? collage_button::kind::copy
                               : first == "save"       ? collage_button::kind::save
                               : first == "edit"       ? collage_button::kind::edit_words
+                              : pictures              ? collage_button::kind::add_pictures
                                                       : collage_button::kind::add_words;
                 if (at(token_kind::string)) button.label = advance().text;
                 parse_icon(button.icon, button.icon_where);

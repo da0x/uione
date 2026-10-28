@@ -1516,6 +1516,12 @@ TEST("a paper's picture is as wide as it says, its own shape, its corners as rou
 	// From the start of the text below, Left goes to the end of the caption.
 	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::home, .text = ""}));
 	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::left, .text = ""}));
+	// With the caret in its caption, the picture is ringed in the accent.
+	matches_golden("paper-picture-picked", {900, 640}, [&] { return drawn(nav); });
+	root = built(nav);
+	page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
 	CHECK(page->handle_key(one::desktop::key_event{.symbol = 'x', .text = "x"}));
 	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::left, .text = ""}));
 	CHECK(page->handle_key(one::desktop::key_event{.symbol = one::desktop::keys::enter, .text = ""}));

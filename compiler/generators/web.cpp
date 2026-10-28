@@ -148,7 +148,7 @@ namespace one::generators {
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;        // what its collage buttons name its collage by
         std::string paper_key_;          // and its insert buttons its paper
-        bool screen_pastes_into_paper_ = false;  // its paste buttons paste into its paper, as it has no collage that pastes
+        bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
@@ -172,6 +172,11 @@ namespace one::generators {
         static std::string full_view(const std::string& ns, const std::string& name) { return screens::full_view(ns, name); }
         static bool names_parameter(const std::string& route, const std::string& name) { return screens::names_parameter(route, name); }
         std::set<std::string> inputs_of(const std::string& command) const { return model_.inputs_of(command); }
+        // A paste or add pictures button that goes into the screen's paper.
+        bool into_paper(const language::collage_button& b) const {
+            using kind = language::collage_button::kind;
+            return screen_pastes_into_paper_ && (b.does == kind::paste || b.does == kind::add_pictures);
+        }
         std::optional<std::string> edit_view(const std::string& ns, const language::entity_declaration& entity, const language::form_item& form) const {
             return model_.edit_view(ns, entity, form);
         }
@@ -1401,12 +1406,13 @@ namespace one::generators {
                                  (insert->icon ? " icon=" + web_detail::js_string(*insert->icon) : "") + keys_of(insert->keys) +
                                  (insert->sizes ? " sizes={" + std::to_string(insert->sizes) + "}" : " given={{ " + given + " }}") + " />");
                     });
-                } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && does->does == language::collage_button::kind::paste && screen_pastes_into_paper_) {
-                    // Paste into the screen's paper: what's on the clipboard, after the caret.
+                } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
+                    // Paste into the screen's paper, or pictures chosen from files: after the caret.
                     parts.components.insert("PaperButton");
+                    bool chooses = does->does == language::collage_button::kind::add_pictures;
                     shown_while(out, parts, ns, item, [&] {
                         out.line("<PaperButton paper=" + web_detail::js_string(paper_key_) + " label=" + web_detail::js_string(language::label_of(*does)) +
-                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + " pastes />");
+                                 (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + (chooses ? " chooses />" : " pastes />"));
                     });
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     // What it asks of the screen's collage, by what names it.

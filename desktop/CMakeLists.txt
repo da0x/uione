@@ -83,7 +83,9 @@ add_library(one_desktop
 	src/gpu.cpp
 	src/offscreen.cpp
 	src/folder.cpp
+	src/portal.cpp
 	src/screenshot.cpp
+	src/files.cpp
 	src/picture.cpp
 	src/renderer.cpp
 	src/seat.cpp

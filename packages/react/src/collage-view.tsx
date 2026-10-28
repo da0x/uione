@@ -22,7 +22,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, hintOf, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, choosePictures, hintOf, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -471,7 +471,7 @@ function minuteNow(): string {
 }
 
 // What a collage's buttons ask of it, by what names it: crop, edit, add, paste, a
-// screenshot, a copy or a save.
+// screenshot, a copy or a save. Pictures chosen from files are handed over as a paste's are.
 const asked = new Map<string, string>();
 const askListeners = new Set<() => void>();
 function ask(name: string, does: string) {
@@ -479,18 +479,26 @@ function ask(name: string, does: string) {
   askListeners.forEach((changed) => changed());
 }
 
-// What a Paste line's ctrl+v pasted, handed to its collage as it came: a browser gives
-// a paste's pictures with the paste itself, without asking to read the clipboard.
+// What a Paste line's ctrl+v pasted, or an add pictures button chose, handed to its
+// collage as it came: a browser gives a paste's pictures with the paste itself,
+// without asking to read the clipboard.
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
   // Pasting with ctrl+v takes what's pasted; its other keys, and a press, read the clipboard.
   const byPaste = does === "paste" && (keys ?? []).includes("ctrl+v") && !off;
-  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, () => ask(collage, does), !off);
+  const press = () =>
+    does === "add pictures"
+      ? choosePictures((files) => {
+          pastes.set(collage, { files, words: "" });
+          ask(collage, "pasted");
+        })
+      : ask(collage, does);
+  useKeys(byPaste ? keys!.filter((k) => k !== "ctrl+v") : keys, press, !off);
   useEffect(() => {
     if (!byPaste) return;
     const pasted = (e: ClipboardEvent) => {
@@ -508,7 +516,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
   // A screenshot is taken where the browser can share the screen, and only there.
   if (does === "screenshot" && typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getDisplayMedia !== "function") return null;
   return (
-    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={() => ask(collage, does)}>
+    <ui.Button kind="secondary" icon={icon} tool={tool} disabled={off} hint={hintOf(label, keys)} onClick={press}>
       {label}
     </ui.Button>
   );

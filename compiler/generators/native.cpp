@@ -1317,7 +1317,7 @@ namespace one::generators {
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
         std::string collage_key_;     // what its collage buttons name its collage by
         std::string paper_key_;       // and its insert buttons its paper
-        bool screen_pastes_into_paper_ = false;  // its paste buttons paste into its paper, as it has no collage that pastes
+        bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
@@ -1326,6 +1326,12 @@ namespace one::generators {
             std::string view, list, entity;
         };
         std::map<std::string, pick_of> picks_;
+
+        // A paste or add pictures button that goes into the screen's paper.
+        bool into_paper(const language::collage_button& b) const {
+            using kind = language::collage_button::kind;
+            return screen_pastes_into_paper_ && (b.does == kind::paste || b.does == kind::add_pictures);
+        }
 
         stream pages_file(const page_set& pages) const {
             namespace fs = std::filesystem;
@@ -1641,10 +1647,11 @@ namespace one::generators {
                     code = std::string(insert->sizes ? "paper_size(p, " : "paper_button(p, ") + "{.key = " + str(paper_key_) + ", .label = " + str(insert->label.value_or("Insert")) + ", .icon = " + str(insert->icon.value_or("")) +
                            (insert->keys.empty() ? "" : ", .keys = " + keys_of(insert->keys)) + ", .fields = value(std::map<std::string, value>{" + given + "})" +
                            (insert->sizes ? ", .sizes = " + std::to_string(insert->sizes) : "") + "})";
-                } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && does->does == language::collage_button::kind::paste && screen_pastes_into_paper_) {
-                    // Paste into the screen's paper: what's on the clipboard, after the caret.
+                } else if (auto* does = std::get_if<language::collage_button>(&item.node); does && into_paper(*does)) {
+                    // Paste into the screen's paper, or pictures chosen from files: after the caret.
+                    bool chooses = does->does == language::collage_button::kind::add_pictures;
                     code = "paper_button(p, {.key = " + str(paper_key_) + ", .label = " + str(language::label_of(*does)) + ", .icon = " + str(does->icon.value_or("")) +
-                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + ", .pastes = true})";
+                           (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + (chooses ? ", .chooses = true})" : ", .pastes = true})");
                 } else if (auto* does = std::get_if<language::collage_button>(&item.node)) {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +

@@ -16,6 +16,7 @@
 
 #include "check.hpp"
 #include "one/desktop/icons.hpp"
+#include "one/desktop/files.hpp"
 #include "one/desktop/screenshot.hpp"
 #include "one/desktop/canvas.hpp"
 #include "one/desktop/editing.hpp"
@@ -327,6 +328,17 @@ TEST("a screenshot with no desktop to ask says so, rather than waiting or failin
 	else unsetenv("DBUS_SESSION_BUS_ADDRESS");
 	CHECK(!shot);
 	if (!shot) CHECK(!shot.error().empty());
+}
+
+TEST("files chosen with no desktop to ask says so, rather than waiting or failing badly") {
+	const char* was = std::getenv("DBUS_SESSION_BUS_ADDRESS");
+	std::string kept = was ? was : "";
+	setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent/one-tests-bus", 1);
+	auto chosen = one::desktop::chosen_files({.title = "Add pictures", .pictures = true, .several = true});
+	if (was) setenv("DBUS_SESSION_BUS_ADDRESS", kept.c_str(), 1);
+	else unsetenv("DBUS_SESSION_BUS_ADDRESS");
+	CHECK(!chosen);
+	if (!chosen) CHECK(!chosen.error().empty());
 }
 
 TEST("text is laid out alike on several threads at once") {

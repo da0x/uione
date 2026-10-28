@@ -48,6 +48,7 @@ namespace one::desktop::runtime::paper_kinds {
 		float words_y = 0;                           // its words, down from its box's top
 		bool raw = true;                             // its words drawn, rather than only what its kind draws
 		float page_width = 0;                        // of the page it's on
+		float page_room = 0;                         // and how tall its room for blocks is, which none should be taller than
 		std::any own;                                // what its kind keeps
 	};
 
