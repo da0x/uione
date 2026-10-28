@@ -9,12 +9,17 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { App, Cards, Collage, CollageButton, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
-import { setPicked } from "../src/workspace.js";
+import { setPicked, usePickedId } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
 
 // Each of a collage's parts in the field named like it, as an app's are by default.
 const parts = ["x", "y", "w", "h", "depth", "picture", "picture_width", "picture_height", "crop_x", "crop_y", "crop_w", "crop_h", "turns", "mirrored", "words", "size", "color", "weight", "around"];
 const namedLikeParts = Object.fromEntries(parts.map((part) => [part, part]));
+
+// What's picked, said so a test can read it.
+function Picked() {
+  return <p data-testid="picked">{usePickedId("/ layer") ?? ""}</p>;
+}
 
 function renderCollage(source: MemorySource, pasteKeys?: string[]) {
   function Poster() {
@@ -22,7 +27,8 @@ function renderCollage(source: MemorySource, pasteKeys?: string[]) {
     return (
       <>
         {pasteKeys && <CollageButton collage="/ collage" does="paste" label="Paste" keys={pasteKeys} />}
-        <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} add="studio::layer::create" parent="poster" subject="p1" name="/ collage" paste />
+        <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} add="studio::layer::create" parent="poster" subject="p1" name="/ collage" pick="/ layer" paste />
+        <Picked />
       </>
     );
   }
@@ -38,7 +44,7 @@ describe("things coming into a collage", () => {
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
   });
 
-  it("fills itself with the first picture dropped, fits the rest, and keeps them one step", async () => {
+  it("fills itself with the first picture dropped, fits the rest, keeps them one step, and picks the last", async () => {
     const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
     source.set("studio::poster_page", { width: 200, height: 100, layers: [] }, "p1");
     const drawn = renderCollage(source);
@@ -50,6 +56,8 @@ describe("things coming into a collage", () => {
     expect(first!["one:history"]).toBeUndefined();
     expect(second).toMatchObject({ x: 0, y: 0, w: 200, h: 100, "one:history": "joined" });
     expect(source.uploads.map((u) => u.file.name)).toEqual(["a.png", "b.png"]);
+    // The last of them picked once it's made, ready to be worked on.
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l"));
   });
 
   it("fills in the own size of a picture kept before it was, as it's turned, never to be undone, in whichever fields keep it", async () => {

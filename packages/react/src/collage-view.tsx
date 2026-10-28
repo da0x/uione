@@ -653,7 +653,9 @@ export function Collage({
   });
   // Pictures dropped or pasted: the first on a collage with nothing on it fills it, and
   // the rest are as big as they are, smaller where they wouldn't fit, centered where
-  // they were let go, each a little further along; all one step to undo.
+  // they were let go, each a little further along; all one step to undo. The last of
+  // them is picked once it's made, so it's ready to be worked on; the same as the
+  // desktop's.
   const addPictures = async (given: File[], on?: Point) => {
     if (!add || !paste || !("picture" in fields) || !files) return;
     const top = layers[layers.length - 1];
@@ -686,7 +688,8 @@ export function Collage({
       if ("picture_width" in fields) (made["picture_width"] = size.w), (made["picture_height"] = size.h);
       if (!first) made["one:history"] = "joined";
       first = false;
-      await send(add, made);
+      const reply = await send(add, made);
+      if (reply?.id && pick) setPicked(pick, reply.id);
     }
   };
   // Words pasted: a layer of them in the middle, a twelfth of its height.

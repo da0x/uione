@@ -1905,7 +1905,7 @@ TEST("a collage fills in the own size of a picture kept before it was, as it's t
 	CHECK(data.runs()[1].fields["image_height"].as_double() == 900);
 }
 
-TEST("a picture coming into a collage with nothing on it fills it, and one coming in after is its own size, fitted, in the middle") {
+TEST("a picture coming into a collage with nothing on it fills it, and one coming in after is its own size, fitted, in the middle, each picked once it's made") {
 	memory_source data;
 	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
 	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return std::string("l1"); });
@@ -1936,6 +1936,8 @@ TEST("a picture coming into a collage with nothing on it fills it, and one comin
 	CHECK(first["picture_width"].as_double() == 900);
 	CHECK(first["picture_height"].as_double() == 560);
 	CHECK(data.uploads() == std::vector<std::string>{taken});
+	// Picked once it's made, ready to be worked on.
+	CHECK(p.picked_id("/ layer") == "l1");
 	// Once there's something on it, the next is as big as it is, in the middle, on top.
 	data.set("studio::poster_page", "p1",
 	         value(fields{{"width", 1600}, {"height", 900}, {"layers", list{value(fields{{"id", "l1"}, {"depth", 0}, {"x", 0}, {"y", 0}, {"w", 1600}, {"h", 900}})}}}));

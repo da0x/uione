@@ -541,7 +541,8 @@ namespace one::desktop::runtime {
 
 		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
 		// and the rest are as big as they are, smaller where they wouldn't fit, centered
-		// where they were let go, each a little further along; all one step to undo.
+		// where they were let go, each a little further along; all one step to undo. The
+		// last of them is picked once it's made, so it's ready to be worked on.
 		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
 		                  std::optional<model::point> on) {
 			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
@@ -571,7 +572,11 @@ namespace one::desktop::runtime {
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
 				if (spec.fields.contains("picture_width")) made.fields["picture_width"] = value(pw), made.fields["picture_height"] = value(ph);
 				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
-				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file.string()}}}, [](const answer&) {}, false);
+				p.run(spec.add, collage_fields_of(made, spec.fields), attached_files{{spec.fields.at("picture"), {file.string()}}},
+				      [&p, pick = spec.pick](const answer& a) {
+					      if (a && !pick.empty()) p.pick(pick, *a);
+				      },
+				      false);
 			}
 		}
 
