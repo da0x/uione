@@ -672,6 +672,32 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 			bool close = true;
 			for (std::size_t i = 0; i < 3; ++i) close = close && std::abs(rgb[i] - n(k["expect"], i)) <= k["close"].as_double();
 			check::verify(close, "shifted", std::format("{}: {} {} {}", note, rgb[0], rgb[1], rgb[2]));
+		} else if (what == "svg_document") {
+			std::vector<c::saved_layer> layers;
+			for (const auto& l : k["layers"].as_array()) {
+				c::saved_layer saved;
+				saved.kind = l["kind"].as_string();
+				saved.at = box_of(l["box"]);
+				if (!l["opacity"].is_null()) saved.opacity = l["opacity"].as_double();
+				if (const auto& shape = l["shape"]; !shape.is_null()) {
+					saved.drawn = {shape["kind"].as_string(), shape["points"].as_string(), shape["fill"].as_string(), shape["stroke"].as_string(), shape["stroke_width"].as_double(),
+					               shape["corners"].as_double()};
+				}
+				saved.words = l["words"].as_string(), saved.color = l["color"].as_string(), saved.family = l["family"].as_string();
+				if (!l["size"].is_null()) saved.size = l["size"].as_double();
+				if (!l["weight"].is_null()) saved.weight = static_cast<int>(l["weight"].as_integer());
+				saved.italic = !l["italic"].is_null() && l["italic"].as_bool();
+				saved.href = l["href"].as_string();
+				if (!l["crop"].is_null()) saved.crop = box_of(l["crop"]);
+				if (!l["turns"].is_null()) saved.turns = static_cast<int>(l["turns"].as_integer());
+				saved.mirrored = !l["mirrored"].is_null() && l["mirrored"].as_bool();
+				if (!l["corners"].is_null()) saved.corners = l["corners"].as_double();
+				saved.svg = l["svg"].as_string();
+				if (!l["natural"].is_null()) saved.natural = box_of(l["natural"]);
+				layers.push_back(std::move(saved));
+			}
+			std::string got = c::svg_document(width, height, layers);
+			check::verify(got == k["svg"].as_string(), "svg_document", note + ": " + got);
 		} else if (what == "svg") {
 			const auto& said = k["shape"];
 			c::shape s{said["kind"].as_string(), said["points"].as_string(), said["fill"].as_string(), said["stroke"].as_string(), said["stroke_width"].as_double(),

@@ -199,6 +199,34 @@ namespace one::screens::collage {
 	// `reach` on each side, so none of it is cut off.
 	std::string svg_alone(const shape& s, double w, double h, double reach);
 
+	// A layer as a saved drawing holds it, in the collage's own units, `kind` saying
+	// which it is: a shape; words, a line each, the top of their first at its top; a
+	// picture's pixels, by an address that holds them, like a data: one, what its crop
+	// keeps of them, mirrored then turned a quarter clockwise as many times as `turns`,
+	// its corners round as far as they say; or an SVG's own text, `natural` its own
+	// size, stretched to its box.
+	struct saved_layer {
+		std::string kind = "shape";  // shape, words, picture or svg
+		box at;
+		double opacity = 1;
+		shape drawn = {};
+		std::string words = "", color = "", family = "";
+		double size = 0;
+		int weight = 700;
+		bool italic = false;
+		std::string href = "";
+		box crop = {0, 0, 1, 1};
+		int turns = 0;
+		bool mirrored = false;
+		double corners = 0;
+		std::string svg = "";
+		box natural = {};
+	};
+
+	// A drawing saved as SVG: `width` by `height` in its own units, its layers lowest
+	// first, from its vectors, nothing behind them, so it's clear wherever nothing is.
+	std::string svg_document(double width, double height, const std::vector<saved_layer>& layers);
+
 	// How far a collage matching its colors moves each picture's: its cast all the way,
 	// so the same face in two lights looks alike, and the rest most of the way.
 	inline constexpr double matching = 0.85, matching_cast = 1;

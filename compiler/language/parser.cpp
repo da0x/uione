@@ -1716,7 +1716,7 @@ namespace one::language {
             bool alone = peek(1).kind != token_kind::scope &&
                          (peek(1).kind != token_kind::identifier || peek(1).text == "icon" || peek(1).text == "key" || peek(1).text == "when");
             bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
-                              peek(3).kind == token_kind::identifier && peek(3).text == "picture";
+                              peek(3).kind == token_kind::identifier && (peek(3).text == "picture" || peek(3).text == "svg");
             bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot")) && alone) || as_picture ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
@@ -1728,7 +1728,8 @@ namespace one::language {
                 if (as_picture) {
                     button.of_where = peek().where;
                     button.of = advance().text;
-                    advance(), advance();
+                    advance();
+                    button.svg = advance().text == "svg";
                 }
                 button.does = first == "crop"         ? collage_button::kind::crop
                               : first == "paste"      ? collage_button::kind::paste

@@ -108,6 +108,17 @@ describe("things coming into a collage", () => {
     expect(source.runs[0]!.input).toMatchObject({ words: "Hello", size: 50, poster: "p1" });
   });
 
+  it("takes an SVG's text pasted, as a drawing program copies one, as that SVG, not as words", async () => {
+    const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
+    source.set("studio::poster_page", { width: 200, height: 100, layers: [] }, "p1");
+    renderCollage(source, ["ctrl+v"]);
+    const svg = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20"/></svg>';
+    fireEvent.paste(document.body, { clipboardData: { files: [], getData: () => svg } });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]!.input).toMatchObject({ w: 40, h: 20, picture_width: 40, picture_height: 20 });
+    expect(source.runs[0]!.input).not.toHaveProperty("words");
+  });
+
   it("takes no paste no line asks for, as a key is only ever a line's", async () => {
     const source = memorySource({ files: true, commands: { "studio::layer::create": () => ({ id: "l" }) } });
     source.set("studio::poster_page", { width: 1200, height: 600, layers: [] }, "p1");

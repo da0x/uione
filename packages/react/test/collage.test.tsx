@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -15,6 +15,26 @@ interface Case {
   what: string;
   shape?: { kind: string; points: string; fill: string; stroke: string; stroke_width: number; corners: number }; // svg: a shape's parts
   svg?: string;
+  // svg_document: each layer as it's saved
+  layers?: {
+    kind: "shape" | "words" | "picture" | "svg";
+    box: Numbers;
+    opacity?: number;
+    shape?: { kind: string; points: string; fill: string; stroke: string; stroke_width: number; corners: number };
+    words?: string;
+    color?: string;
+    family?: string;
+    size?: number;
+    weight?: number;
+    italic?: boolean;
+    href?: string;
+    crop?: Numbers;
+    turns?: number;
+    mirrored?: boolean;
+    corners?: number;
+    svg?: string;
+    natural?: Numbers;
+  }[];
   covered?: Numbers[]; // harmonic_fill: x, y and three channels of each covered cell
   cells?: Numbers[]; // halo: x, y and three channels of each of the picture's cells; stats_of: three channels of each
   weight?: number;
@@ -189,6 +209,29 @@ describe("where a collage's layers go", () => {
         const got = shifted({ gain: s.gain as [number, number, number], offset: s.offset as [number, number, number], from: s.from, to: s.to }, k.rgb![0]!, k.rgb![1]!, k.rgb![2]!);
         const want = k.expect as unknown as number[]; // one color, red, green and blue
         for (let i = 0; i < 3; i++) expect(Math.abs(got[i] - want[i]!)).toBeLessThanOrEqual(k.close!);
+        break;
+      }
+      case "svg_document": {
+        const layers = k.layers!.map((l) => ({
+          kind: l.kind,
+          at: boxOf(l.box),
+          opacity: l.opacity,
+          drawn: l.shape && { kind: l.shape.kind, points: l.shape.points, fill: l.shape.fill, stroke: l.shape.stroke, strokeWidth: l.shape.stroke_width, corners: l.shape.corners },
+          words: l.words,
+          color: l.color,
+          family: l.family,
+          size: l.size,
+          weight: l.weight,
+          italic: l.italic,
+          href: l.href,
+          crop: l.crop && boxOf(l.crop),
+          turns: l.turns,
+          mirrored: l.mirrored,
+          corners: l.corners,
+          svg: l.svg,
+          natural: l.natural && boxOf(l.natural),
+        }));
+        expect(svgDocument(b.width, b.height, layers)).toBe(k.svg);
         break;
       }
       case "svg": {

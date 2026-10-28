@@ -283,7 +283,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* what the screen's collage does: crops its picked picture, writes its picked words, adds words,
                     pastes what's on the clipboard, adds a screenshot or pictures chosen from the device's files, or copies
                     or saves it, or its picked layer, as a picture; paste and add pictures go into a paper that says paste */
-                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | ("copy" | "save") NAME "as" "picture") STRING? ("icon" NAME)? key* ("when" expression)? END
+                 | ("crop" | "edit" "words" | "add" "words" | "add" "pictures" | "paste" | "screenshot" | ("copy" | "save") NAME "as" ("picture" | "svg")) STRING? ("icon" NAME)? key* ("when" expression)? END
                  /* what the screen does as it's opened, the first of its lines that applies: the first row of a
                     view's list the condition holds for opened, the row named by what it's of; or a command run */
                  | "on" "open" ("open" ROUTE "for" qualified ("." NAME)? ("where" expression)? ("when" expression)? END | screen_item)

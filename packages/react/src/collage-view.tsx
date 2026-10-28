@@ -16,8 +16,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
-import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import type { Box, ColorShift, ColorStats, Guided, Lines, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgSize } from "./vectors.js";
 import type { ViewState } from "./data.js";
@@ -542,6 +542,44 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
   return made;
 }
 
+// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as big as
+// that layer. Pictures are read first, and held in it as data: addresses. The same as
+// the desktop's.
+async function svgOf(layers: Row[], W: number, H: number, address: ((path: string) => Promise<string>) | undefined, only?: string): Promise<string> {
+  const one = only ? layers.find((l) => l["id"] === only) : undefined;
+  const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
+  const saved: SavedLayer[] = [];
+  for (const l of layers) {
+    if (only && l["id"] !== only) continue;
+    const b = boxOf(l);
+    const at = { x: b.x - area.x, y: b.y - area.y, w: b.w, h: b.h };
+    const opacity = opacityOf(l);
+    if (isWords(l)) {
+      saved.push({ kind: "words", at, opacity, words: str(l["words"]), color: str(l["color"]), family: wordsFamily(), size: num(l["size"]), weight: weightOf(l), italic: num(l["italic"]) !== 0 });
+    } else if (isShape(l)) {
+      const drawn = { kind: str(l["shape"]) || "rectangle", points: str(l["points"]), fill: str(l["fill"]), stroke: str(l["stroke"]), strokeWidth: str(l["stroke"]) ? num(l["stroke_width"]) : 0, corners: num(l["corners"]) };
+      saved.push({ kind: "shape", at, opacity, drawn });
+    } else if (address) {
+      const path = str(l["picture"]);
+      const blob = await address(path).then((url) => fetch(url)).then((r) => r.blob()).catch(() => undefined);
+      if (!blob) continue;
+      const svg = await svgIn(blob);
+      if (svg !== undefined) {
+        const natural = svgSize(svg);
+        saved.push({ kind: "svg", at, opacity, svg, natural: natural && { x: 0, y: 0, w: natural.w, h: natural.h } });
+      } else {
+        const href = await new Promise<string>((done) => {
+          const reader = new FileReader();
+          reader.onload = () => done(String(reader.result));
+          reader.readAsDataURL(blob);
+        });
+        saved.push({ kind: "picture", at, opacity, href, crop: cropOf(l), turns: num(l["turns"]), mirrored: num(l["mirrored"]) !== 0, corners: num(l["corners"]) });
+      }
+    }
+  }
+  return svgDocument(area.w, area.h, saved);
+}
+
 // What a collage's preview is drawn from, apart from the preview itself.
 function fingerprint(data: Row, previewInto: string): string {
   const plain = { ...data };
@@ -577,7 +615,7 @@ function ask(name: string, does: string) {
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -797,8 +835,11 @@ export function Collage({
       if (reply?.id && pick) setPicked(pick, reply.id);
     }
   };
-  // Words pasted: a layer of them in the middle, a twelfth of its height.
+  // Words pasted: a layer of them in the middle, a twelfth of its height; or, when
+  // they're an SVG's, as a drawing program copies one, that SVG, as one dropped is.
   const addWords = (words: string) => {
+    const start = words.replace(/^\uFEFF/, "").trimStart();
+    if (paste && start.startsWith("<") && words.includes("<svg")) return void addPictures([new File([words], "pasted.svg", { type: "image/svg+xml" })]);
     if (!add || !("words" in fields)) return;
     const size = Math.max(8, Math.round(H / 12));
     const m = measured(words, size, "700");
@@ -907,6 +948,30 @@ export function Collage({
       w.crop = cropBegun(chosen);
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
+    } else if (asking.startsWith("copy svg") || asking.startsWith("save svg")) {
+      // As SVG, from its vectors: copied as its text, which drawing programs paste, or saved.
+      const one = asking.endsWith("picked"), copying = asking.startsWith("copy");
+      if (one && !chosen) say({ text: "Pick a layer first." });
+      else if (layers.length === 0 || W <= 0 || H <= 0) say({ text: copying ? "There's nothing to copy yet." : "There's nothing to save yet." });
+      else {
+        const svg = svgOf(layers, W, H, address, one ? picked : undefined);
+        if (copying) {
+          void svg
+            .then((text) => navigator.clipboard.writeText(text))
+            .then(() => say({ text: one ? "Copied the layer as SVG. Paste it anywhere." : "Copied the drawing as SVG. Paste it anywhere." }))
+            .catch(() => say({ text: "This browser didn't let the page copy.", problem: true }));
+        } else {
+          const title = str(data["title"]) || str(data["name"]) || site.name;
+          void svg.then((text) => {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(new Blob([text], { type: "image/svg+xml" }));
+            link.download = `${fileNameOf(one ? `${title} layer` : title)}-${minuteNow()}.svg`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            say({ text: `Saved ${link.download} in your downloads.` });
+          });
+        }
+      }
     } else if (asking.startsWith("copy") || asking.startsWith("save")) {
       // Copied for another program to paste, or saved: all of it, or the picked layer.
       const one = asking.endsWith("picked"), copying = asking.startsWith("copy");

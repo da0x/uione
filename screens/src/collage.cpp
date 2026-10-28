@@ -522,6 +522,78 @@ namespace one::screens::collage {
 		return std::format(R"(<rect x="{}" y="{}" width="{}" height="{}" rx="{}" {}/>)", said(x), said(y), said(w), said(h), said(round), drawn);
 	}
 
+	namespace {
+		// Words as XML holds them.
+		std::string escaped(std::string_view words) {
+			std::string out;
+			for (char c : words) {
+				if (c == '&') out += "&amp;";
+				else if (c == '<') out += "&lt;";
+				else if (c == '>') out += "&gt;";
+				else if (c == '"') out += "&quot;";
+				else out += c;
+			}
+			return out;
+		}
+
+		// An SVG's own element, with what may come before it, like <?xml ...?>, left out.
+		std::string_view own_element(std::string_view svg) {
+			std::size_t at = svg.find("<svg");
+			if (at == std::string_view::npos) return {};
+			std::size_t end = svg.rfind("</svg>");
+			if (end == std::string_view::npos || end < at) {
+				std::size_t closed = svg.find("/>", at);
+				return closed == std::string_view::npos ? std::string_view{} : svg.substr(at, closed + 2 - at);
+			}
+			return svg.substr(at, end + 6 - at);
+		}
+
+		std::string saved(const saved_layer& l, std::size_t index) {
+			const box& b = l.at;
+			if (l.kind == "shape") return svg_element(l.drawn, b.x, b.y, b.w, b.h);
+			if (l.kind == "words") {
+				std::string out = std::format(R"(<text x="{}" y="{}" font-family="{}" font-size="{}" font-weight="{}"{} fill="{}" dominant-baseline="text-before-edge">)", said(b.x), said(b.y),
+				                              escaped(l.family), said(l.size), l.weight, l.italic ? R"( font-style="italic")" : "", paint(l.color) == "none" ? "#ffffff" : l.color);
+				std::size_t line = 0, start = 0;
+				while (true) {
+					std::size_t end = l.words.find('\n', start);
+					std::string_view said_line = std::string_view(l.words).substr(start, end == std::string::npos ? std::string::npos : end - start);
+					out += std::format(R"(<tspan x="{}" y="{}">{}</tspan>)", said(b.x), said(b.y + static_cast<double>(line) * l.size * 1.2), escaped(said_line));
+					if (end == std::string::npos) break;
+					start = end + 1, ++line;
+				}
+				return out + "</text>";
+			}
+			if (l.kind == "svg") {
+				double w = l.natural.w > 0 ? l.natural.w : b.w, h = l.natural.h > 0 ? l.natural.h : b.h;
+				return std::format(R"(<svg x="{}" y="{}" width="{}" height="{}" viewBox="0 0 {} {}" preserveAspectRatio="none">{}</svg>)", said(b.x), said(b.y), said(b.w), said(b.h), said(w),
+				                   said(h), own_element(l.svg));
+			}
+			// A picture: the unit square its pixels fill, mirrored and turned in it, seen
+			// through its crop and stretched to its box.
+			std::string turned;
+			if (l.turns % 4) turned += std::format("rotate({} 0.5 0.5)", 90 * (l.turns % 4));
+			if (l.mirrored) turned += std::string(turned.empty() ? "" : " ") + "translate(1 0) scale(-1 1)";
+			std::string out = std::format(R"(<svg x="{}" y="{}" width="{}" height="{}" viewBox="{} {} {} {}" preserveAspectRatio="none"><image width="1" height="1" preserveAspectRatio="none"{} href="{}"/></svg>)",
+			                              said(b.x), said(b.y), said(b.w), said(b.h), said(l.crop.x), said(l.crop.y), said(l.crop.w), said(l.crop.h),
+			                              turned.empty() ? "" : R"( transform=")" + turned + "\"", escaped(l.href));
+			double round = std::min(std::clamp(l.corners, 0.0, 0.5) * std::min(b.w, b.h), std::min(b.w, b.h) / 2);
+			if (round <= 0) return out;
+			return std::format(R"svg(<clipPath id="corners-{}"><rect x="{}" y="{}" width="{}" height="{}" rx="{}"/></clipPath><g clip-path="url(#corners-{})">{}</g>)svg", index, said(b.x), said(b.y),
+			                   said(b.w), said(b.h), said(round), index, out);
+		}
+	}  // namespace
+
+	std::string svg_document(double width, double height, const std::vector<saved_layer>& layers) {
+		std::string out = std::format(R"(<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="0 0 {} {}">)", said(width), said(height), said(width), said(height)) + "\n";
+		for (std::size_t i = 0; i < layers.size(); ++i) {
+			std::string one = saved(layers[i], i);
+			if (layers[i].opacity < 1) one = std::format(R"(<g opacity="{}">{}</g>)", said(std::max(0.0, layers[i].opacity)), one);
+			out += one + "\n";
+		}
+		return out + "</svg>\n";
+	}
+
 	std::string svg_alone(const shape& s, double w, double h, double reach) {
 		return std::format(R"(<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="{} {} {} {}">{}</svg>)", said(w + 2 * reach), said(h + 2 * reach), said(-reach),
 		                   said(-reach), said(w + 2 * reach), said(h + 2 * reach), svg_element(s, 0, 0, w, h));

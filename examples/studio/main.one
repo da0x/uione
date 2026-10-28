@@ -292,6 +292,7 @@ namespace studio at / {
 			group "Picture" {
 				copy poster_page as picture "Copy" icon copy key ctrl+shift+c
 				save poster_page as picture "Save" icon save key ctrl+s
+				save poster_page as svg "Save SVG" icon save
 			}
 		}
 		main {

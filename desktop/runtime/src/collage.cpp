@@ -667,7 +667,12 @@ namespace one::desktop::runtime {
 		void paste(page& p, const collage_spec& spec, const value& layers, double width, double height) {
 			if (auto files = desktop::clipboard_files(); !files.empty()) add_pictures(p, spec, layers, width, height, files, std::nullopt);
 			else if (auto bytes = desktop::clipboard_picture()) add_pictures(p, spec, layers, width, height, {kept_for_now(*bytes)}, std::nullopt);
-			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) add_words(p, spec, layers, width, height, *words);
+			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) {
+				// An SVG's text, as a drawing program copies one, is that SVG, as one dropped is.
+				std::vector<std::uint8_t> bytes(words->begin(), words->end());
+				if (desktop::picture::is_svg(bytes)) add_pictures(p, spec, layers, width, height, {kept_for_now(bytes)}, std::nullopt);
+				else add_words(p, spec, layers, width, height, *words);
+			}
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
 		}
 
@@ -1031,6 +1036,86 @@ namespace one::desktop::runtime {
 			}).detach();
 		}
 
+		// Bytes as base64, as a data: address holds them.
+		std::string base64(const std::string& bytes) {
+			static constexpr char digits[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+			std::string out;
+			out.reserve((bytes.size() + 2) / 3 * 4);
+			for (std::size_t i = 0; i < bytes.size(); i += 3) {
+				std::uint32_t n = static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[i])) << 16;
+				if (i + 1 < bytes.size()) n |= static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[i + 1])) << 8;
+				if (i + 2 < bytes.size()) n |= static_cast<unsigned char>(bytes[i + 2]);
+				out += digits[(n >> 18) & 63];
+				out += digits[(n >> 12) & 63];
+				out += i + 1 < bytes.size() ? digits[(n >> 6) & 63] : '=';
+				out += i + 2 < bytes.size() ? digits[n & 63] : '=';
+			}
+			return out;
+		}
+
+		// A picture's file as a data: address, its kind told from its first bytes.
+		std::string data_address(const std::filesystem::path& file) {
+			std::ifstream in(file, std::ios::binary);
+			std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			std::string kind = bytes.starts_with("\x89PNG") ? "image/png"
+			                   : bytes.starts_with("\xFF\xD8") ? "image/jpeg"
+			                   : bytes.starts_with("GIF8") ? "image/gif"
+			                   : bytes.starts_with("BM") ? "image/bmp"
+			                   : bytes.size() > 12 && bytes.substr(8, 4) == "WEBP" ? "image/webp"
+			                                                                       : "application/octet-stream";
+			return "data:" + kind + ";base64," + base64(bytes);
+		}
+
+		// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as
+		// big as that layer.
+		std::string svg_of(page& p, const value& layers, double width, double height, const std::string& only) {
+			std::vector<model::saved_layer> saved;
+			model::box area{0, 0, width, height};
+			for (const auto& l : layers.as_array()) {
+				if (!only.empty() && l["id"].as_string() == only) area = box_of(l);
+			}
+			for (const auto& l : layers.as_array()) {
+				if (!only.empty() && l["id"].as_string() != only) continue;
+				model::box b = box_of(l);
+				model::saved_layer one{.at = {b.x - area.x, b.y - area.y, b.w, b.h}, .opacity = opacity_of(l)};
+				if (is_words(l)) {
+					one.kind = "words", one.words = l["words"].as_string(), one.color = l["color"].as_string(), one.family = current_theme().text_family;
+					one.size = l["size"].as_double(), one.weight = weight_of(l), one.italic = italic_of(l);
+				} else if (is_shape(l)) {
+					one.kind = "shape";
+					one.drawn = {l["shape"].as_string().empty() ? "rectangle" : l["shape"].as_string(), l["points"].as_string(), l["fill"].as_string(), l["stroke"].as_string(),
+					             l["stroke"].as_string().empty() ? 0 : l["stroke_width"].as_double(), l["corners"].as_double()};
+				} else if (std::string svg = vector_here(p, l); !svg.empty()) {
+					one.kind = "svg", one.svg = svg;
+					if (auto size = desktop::picture::svg_size(svg)) one.natural = {0, 0, size->first, size->second};
+				} else if (auto file = p.file_here(l["picture"].as_string())) {
+					one.kind = "picture", one.href = data_address(*file), one.crop = crop_of(l);
+					one.turns = static_cast<int>(l["turns"].as_double()), one.mirrored = l["mirrored"].as_double() != 0, one.corners = l["corners"].as_double();
+				} else {
+					continue;
+				}
+				saved.push_back(std::move(one));
+			}
+			return model::svg_document(area.w, area.h, saved);
+		}
+
+		// A drawing saved as an SVG in the app's folder in Pictures, as a picture is.
+		void save_svg(page& p, std::string svg, const std::string& name) {
+			std::filesystem::path folder = saving_folder();
+			std::string stem = std::format("{}-{:%Y-%m-%d-%H%M}", file_name_of(name),
+			                               std::chrono::zoned_time(std::chrono::current_zone(), std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now())));
+			std::filesystem::path file = folder / (stem + ".svg");
+			for (int n = 2; std::filesystem::exists(file); ++n) file = folder / std::format("{}-{}.svg", stem, n);
+			std::error_code error;
+			std::filesystem::create_directories(folder, error);
+			std::ofstream out(file, std::ios::binary);
+			out << svg;
+			if (!out) return p.problem().set("The drawing couldn't be saved in " + folder.string() + ".");
+			std::string said = std::format("Saved {} in {}.", file.filename().string(), file.parent_path().string());
+			p.kept<std::pair<std::string, std::string>>("said of a file").set({said, file.string()});
+			p.told().set(said);
+		}
+
 		// What a collage's preview is drawn from, apart from the preview itself.
 		std::string fingerprint(const value& data, const std::string& preview_into) {
 			value plain = data;
@@ -1185,6 +1270,19 @@ namespace one::desktop::runtime {
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));
 					});
 				}).detach();
+			} else if (does == "copy svg" || does == "copy svg picked" || does == "save svg" || does == "save svg picked") {
+				// As SVG, from its vectors: copied as its text, which drawing programs paste, or saved.
+				bool one = does.ends_with("picked"), copying = does.starts_with("copy");
+				if (one && !chosen) p.told().set("Pick a layer first.");
+				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
+				else if (copying) {
+					desktop::copy_text(svg_of(p, layers, width, height, one ? picked : ""));
+					p.told().set(one ? "Copied the layer as SVG. Paste it anywhere." : "Copied the drawing as SVG. Paste it anywhere.");
+				} else {
+					std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
+					if (name.empty()) name = app_name();
+					save_svg(p, svg_of(p, layers, width, height, one ? picked : ""), one ? name + " layer" : name);
+				}
 			} else if (does == "copy" || does == "copy picked" || does == "save" || does == "save picked") {
 				// Copied for another program to paste, or saved: all of it, or the picked layer.
 				bool one = does.ends_with("picked"), copying = does.starts_with("copy");

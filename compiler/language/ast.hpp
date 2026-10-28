@@ -929,6 +929,7 @@ namespace one::language {
         // copy layer as picture, save poster_page as picture: the picked layer, or all of it.
         std::optional<std::string> of;
         location of_where;
+        bool svg = false;  // as svg: from its vectors, an SVG, rather than a picture of it
         std::optional<std::string> label;
         std::optional<std::string> icon;
         location icon_where;
@@ -969,8 +970,8 @@ namespace one::language {
             case kind::add_pictures: return "add pictures";
             case kind::paste: return "paste";
             case kind::screenshot: return "screenshot";
-            case kind::copy: return picked ? "copy picked" : "copy";
-            case kind::save: return picked ? "save picked" : "save";
+            case kind::copy: return std::string(b.svg ? "copy svg" : "copy") + (picked ? " picked" : "");
+            case kind::save: return std::string(b.svg ? "save svg" : "save") + (picked ? " picked" : "");
         }
         return "";
     }

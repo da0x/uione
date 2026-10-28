@@ -603,3 +603,79 @@ export function svgElement(s: Shape, x: number, y: number, w: number, h: number)
 export function svgAlone(s: Shape, w: number, h: number, reach: number): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${said(w + 2 * reach)}" height="${said(h + 2 * reach)}" viewBox="${said(-reach)} ${said(-reach)} ${said(w + 2 * reach)} ${said(h + 2 * reach)}">${svgElement(s, 0, 0, w, h)}</svg>`;
 }
+
+// A layer as a saved drawing holds it, in the collage's own units, `kind` saying which
+// it is: a shape; words, a line each, the top of their first at its top; a picture's
+// pixels, by an address that holds them, like a data: one, what its crop keeps of them,
+// mirrored then turned a quarter clockwise as many times as `turns`, its corners round
+// as far as they say; or an SVG's own text, `natural` its own size, stretched to its box.
+export interface SavedLayer {
+  kind: "shape" | "words" | "picture" | "svg";
+  at: Box;
+  opacity?: number;
+  drawn?: Shape;
+  words?: string;
+  color?: string;
+  family?: string;
+  size?: number;
+  weight?: number;
+  italic?: boolean;
+  href?: string;
+  crop?: Box;
+  turns?: number;
+  mirrored?: boolean;
+  corners?: number;
+  svg?: string;
+  natural?: Box;
+}
+
+// Words as XML holds them.
+const escaped = (words: string) => words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// An SVG's own element, with what may come before it, like <?xml ...?>, left out.
+function ownElement(svg: string): string {
+  const at = svg.indexOf("<svg");
+  if (at < 0) return "";
+  const end = svg.lastIndexOf("</svg>");
+  if (end < at) {
+    const closed = svg.indexOf("/>", at);
+    return closed < 0 ? "" : svg.slice(at, closed + 2);
+  }
+  return svg.slice(at, end + 6);
+}
+
+function saved(l: SavedLayer, index: number): string {
+  const b = l.at;
+  if (l.kind === "shape") return svgElement(l.drawn ?? { kind: "rectangle", points: "", fill: "none", stroke: "none", strokeWidth: 0, corners: 0 }, b.x, b.y, b.w, b.h);
+  if (l.kind === "words") {
+    const size = l.size ?? 0;
+    const lines = (l.words ?? "").split("\n").map((line, i) => `<tspan x="${said(b.x)}" y="${said(b.y + i * size * 1.2)}">${escaped(line)}</tspan>`);
+    const color = paint(l.color ?? "") === "none" ? "#ffffff" : l.color;
+    return `<text x="${said(b.x)}" y="${said(b.y)}" font-family="${escaped(l.family ?? "")}" font-size="${said(size)}" font-weight="${l.weight ?? 700}"${l.italic ? ' font-style="italic"' : ""} fill="${color}" dominant-baseline="text-before-edge">${lines.join("")}</text>`;
+  }
+  if (l.kind === "svg") {
+    const w = l.natural && l.natural.w > 0 ? l.natural.w : b.w, h = l.natural && l.natural.h > 0 ? l.natural.h : b.h;
+    return `<svg x="${said(b.x)}" y="${said(b.y)}" width="${said(b.w)}" height="${said(b.h)}" viewBox="0 0 ${said(w)} ${said(h)}" preserveAspectRatio="none">${ownElement(l.svg ?? "")}</svg>`;
+  }
+  // A picture: the unit square its pixels fill, mirrored and turned in it, seen through
+  // its crop and stretched to its box.
+  const turns = (((l.turns ?? 0) % 4) + 4) % 4, crop = l.crop ?? { x: 0, y: 0, w: 1, h: 1 };
+  const turned = [turns ? `rotate(${90 * turns} 0.5 0.5)` : "", l.mirrored ? "translate(1 0) scale(-1 1)" : ""].filter(Boolean).join(" ");
+  const out =
+    `<svg x="${said(b.x)}" y="${said(b.y)}" width="${said(b.w)}" height="${said(b.h)}" viewBox="${said(crop.x)} ${said(crop.y)} ${said(crop.w)} ${said(crop.h)}" preserveAspectRatio="none">` +
+    `<image width="1" height="1" preserveAspectRatio="none"${turned ? ` transform="${turned}"` : ""} href="${escaped(l.href ?? "")}"/></svg>`;
+  const round = Math.min(Math.min(Math.max(l.corners ?? 0, 0), 0.5) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
+  if (round <= 0) return out;
+  return `<clipPath id="corners-${index}"><rect x="${said(b.x)}" y="${said(b.y)}" width="${said(b.w)}" height="${said(b.h)}" rx="${said(round)}"/></clipPath><g clip-path="url(#corners-${index})">${out}</g>`;
+}
+
+// A drawing saved as SVG: `width` by `height` in its own units, its layers lowest first,
+// from its vectors, nothing behind them, so it's clear wherever nothing is.
+export function svgDocument(width: number, height: number, layers: SavedLayer[]): string {
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" width="${said(width)}" height="${said(height)}" viewBox="0 0 ${said(width)} ${said(height)}">\n`;
+  layers.forEach((l, i) => {
+    const one = saved(l, i);
+    out += ((l.opacity ?? 1) < 1 ? `<g opacity="${said(Math.max(0, l.opacity ?? 1))}">${one}</g>` : one) + "\n";
+  });
+  return out + "</svg>\n";
+}

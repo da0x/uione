@@ -2273,6 +2273,14 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     says where, with Show in folder to open it there, drawing it away from the
     window's thread so the window never waits; a web page downloads it. A web page
     copies a picture only when the browser lets it.
+  - `save poster_page as svg "Save SVG" icon save` saves it as an SVG instead, from
+    its vectors, the same file on both targets: its shapes as SVG's own, its words as
+    text, its SVG layers as their own vectors, and its pictures held in it, cropped,
+    turned and rounded as they're shown. It's as big as the collage in its own units,
+    with nothing behind its layers, so it's clear wherever nothing is. `copy layer as
+    svg` copies one as SVG's text, which drawing programs paste. A picture's halo,
+    what fills around it and matched colors are drawn effects, so an SVG leaves them
+    out. A terminal doesn't save or copy one yet.
 - `paper document_page.blocks { ... }` shows a list's rows as one upright sheet of
   paper, letter-shaped, that's typed on in place, as a word processor's page is
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).

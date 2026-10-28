@@ -100,6 +100,7 @@ namespace one::language {
         drawn_by{"calendar.move", "a calendar's row dragged to another day", "web desktop"},
         drawn_by{"collage.copy", "a collage copied as a picture", "web desktop"},
         drawn_by{"collage.save", "a collage saved as a picture", "web desktop"},
+        drawn_by{"collage.svg", "a collage saved or copied as SVG", "web desktop"},
         drawn_by{"collage.preview", "a collage's preview", "web desktop"},
         drawn_by{"collage.match_colors", "matching a collage's colors", "web desktop"},
         drawn_by{"button.given", "a button's given values", everywhere},
@@ -403,6 +404,7 @@ namespace one::language {
                             : n.does == kind::copy       ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                                                          : "collage.add");
+                        if (n.svg) use("collage.svg");
                         if (!n.keys.empty()) use("key");
                     }
                 },

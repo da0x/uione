@@ -7,7 +7,7 @@
 # target starts with everything here and is done when none of its lines are left.
 # A terminal draws no pictures, so it can't show one alone, on a card or a table's
 # row, crop one in place, match a collage's colors, or copy, save or keep a picture of
-# a collage, and it has no screen of its own to take a screenshot of, nor pictures to
+# a collage, nor save or copy one as SVG yet, and it has no screen of its own to take a screenshot of, nor pictures to
 # choose from files, a calendar's rows are moved by its commands, not dragged, and what's
 # said as a row's time comes is the bell and its words, without buttons. A paper is
 # written on in place, which a terminal doesn't do yet, and a collage's layer is drawn
@@ -22,6 +22,7 @@ terminal collage.match_colors
 terminal collage.preview
 terminal collage.save
 terminal collage.screenshot
+terminal collage.svg
 terminal pictures.choose
 terminal calendar.move
 terminal notify.buttons

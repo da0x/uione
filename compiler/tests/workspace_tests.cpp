@@ -627,6 +627,18 @@ TEST_CASE("a collage is copied or saved as a picture, all of it or its picked la
     CHECK(web.find(R"(preview="studio::poster::preview" previewInto="preview" previewWide={480})") != std::string::npos);
     CHECK(native.find(R"(collage_ask{.key = "/posters/:poster layer", .does = "copy picked", .label = "Copy", .icon = "copy"})") != std::string::npos);
     CHECK(native.find(R"(.preview = "studio::poster::preview", .preview_into = "preview", .preview_wide = 480})") != std::string::npos);
+
+    // As SVG, from its vectors, all of it or the picked layer.
+    auto as_svg = built(on_screen(R"(		pick layer from poster_page.layers
+		save poster_page as svg "Save SVG" icon save
+		collage poster_page.layers size width height {
+			over layer {
+				copy layer as svg "Copy SVG" icon copy
+			}
+		}
+)"));
+    CHECK(as_svg["web/src/screens/main.tsx"].find(R"(does="save svg" label="Save SVG")") != std::string::npos);
+    CHECK(as_svg["desktop/src/screens/main.cpp"].find(R"(.does = "copy svg picked", .label = "Copy SVG")") != std::string::npos);
 }
 
 TEST_CASE("cards show a file each row holds as a picture on top, fitted in or filling its place") {
