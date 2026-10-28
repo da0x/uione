@@ -208,7 +208,7 @@ describe("a shift made ready", () => {
     const plain = { gain: [1.1, 0.9, 1] as [number, number, number], offset: [-5, 0, 4] as [number, number, number] };
     for (const s of [toned, plain]) {
       const shift = colorShifter(s);
-      let worst = 0;
+      let worst = 0, opaque = true;
       for (let r = 0; r < 256; r += 5) {
         for (let g = 0; g < 256; g += 7) {
           for (let b = 0; b < 256; b += 11) {
@@ -216,11 +216,12 @@ describe("a shift made ready", () => {
             shift(pixel);
             const want = shifted(s, r, g, b).map((v) => Math.max(0, Math.min(255, Math.round(v))));
             for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(pixel[k]! - want[k]!));
-            expect(pixel[3]).toBe(255);
+            opaque = opaque && pixel[3] === 255;
           }
         }
       }
       expect(worst).toBeLessThanOrEqual(1);
+      expect(opaque).toBe(true);
     }
   });
 });
