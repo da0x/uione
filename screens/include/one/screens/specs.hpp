@@ -360,10 +360,12 @@ namespace one::screens {
 	// draw layer::create { fill = "#2e86de" } when tool == tool::box: a drag on the
 	// collage makes a layer by `command`, as big as the drag, given `fields`, while
 	// `when` holds; then each choice its when reads, by its key, goes back to its first.
+	// By "line", it's a line from where the drag began to where it ended, as a path.
 	struct collage_draw {
 		std::string command;
 		value fields = {};
 		bool when = true;
+		std::string by = "";
 		std::vector<std::pair<std::string, std::string>> back = {};
 	};
 

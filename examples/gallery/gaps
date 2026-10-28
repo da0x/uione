@@ -17,6 +17,7 @@ terminal picture
 terminal collage.copy
 terminal collage.crop
 terminal collage.draw
+terminal collage.draw_line
 terminal collage.match_colors
 terminal collage.preview
 terminal collage.save

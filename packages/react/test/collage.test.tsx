@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -43,6 +43,8 @@ interface Case {
   from?: Numbers;
   to?: Numbers;
   square?: boolean;
+  straight?: boolean;
+  points?: string;
   click?: number;
   by?: Numbers;
   corner?: number;
@@ -109,6 +111,11 @@ describe("where a collage's layers go", () => {
       case "cropped":
         expect(same(cropped(boxOf(k.kept!), k.edges!, k.by![0]!, k.by![1]!, boxOf(k.whole!)), boxOf(k.box!))).toBe(true);
         break;
+      case "drawn_line": {
+        const got = drawnLine({ x: k.from![0]!, y: k.from![1]! }, { x: k.to![0]!, y: k.to![1]! }, k.straight!, k.click!, b.width, b.height);
+        expect([same(got.at, boxOf(k.box!)), got.points]).toEqual([true, k.points]);
+        break;
+      }
       case "drawn":
         expect(same(drawn({ x: k.from![0]!, y: k.from![1]! }, { x: k.to![0]!, y: k.to![1]! }, k.square!, k.click!, b.width, b.height), boxOf(k.box!))).toBe(true);
         break;

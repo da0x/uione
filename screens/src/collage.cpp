@@ -491,6 +491,29 @@ namespace one::screens::collage {
 		return out;
 	}
 
+	line drawn_line(point from, point to, bool straight, double click, double width, double height) {
+		double dx = to.x - from.x, dy = to.y - from.y;
+		if (std::abs(dx) <= click && std::abs(dy) <= click) {
+			double half = std::min(width, height) / 10;
+			from.x -= half, dx = 2 * half, dy = 0;
+		} else if (straight) {
+			double across = std::abs(dx), down = std::abs(dy), slant = 0.41421356;  // tan 22.5 degrees
+			if (down <= across * slant) dy = 0;
+			else if (across <= down * slant) dx = 0;
+			else {
+				double side = std::max(across, down);
+				dx = dx < 0 ? -side : side;
+				dy = dy < 0 ? -side : side;
+			}
+		}
+		point end{from.x + dx, from.y + dy};
+		box b{std::min(from.x, end.x), std::min(from.y, end.y), std::abs(dx), std::abs(dy)};
+		if (b.w < 1) b.x += b.w / 2 - 0.5, b.w = 1;
+		if (b.h < 1) b.y += b.h / 2 - 0.5, b.h = 1;
+		auto in = [&](point p) { return said((p.x - b.x) / b.w) + " " + said((p.y - b.y) / b.h); };
+		return {b, "M " + in(from) + " L " + in(end)};
+	}
+
 	std::string svg_element(const shape& s, double x, double y, double w, double h) {
 		std::string drawn = std::format(R"(fill="{}" stroke="{}" stroke-width="{}")", paint(s.fill), paint(s.stroke), said(s.stroke_width));
 		if (s.kind == "ellipse") return std::format(R"(<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {}/>)", said(x + w / 2), said(y + h / 2), said(w / 2), said(h / 2), drawn);

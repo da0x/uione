@@ -868,11 +868,14 @@ namespace one::language {
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
         // draw layer::create { shape = shape::ellipse } when tool == tool::ellipse: a drag
         // on it makes a layer as big as the drag, given these values, while its when
-        // holds; the first whose when holds draws. The choices its when reads go back to
-        // their first once it's drawn.
+        // holds; the first whose when holds draws. By line, it's a line from where the
+        // drag began to where it ended, kept as a path's points. The choices its when
+        // reads go back to their first once it's drawn.
         struct drawing {
             qualified_name command;
             std::vector<field_value> given;
+            std::optional<std::string> by;
+            location by_where;
             expression_ptr when;
         };
         std::vector<drawing> draws;

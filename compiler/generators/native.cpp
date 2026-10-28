@@ -316,7 +316,7 @@ namespace one::generators {
                     }
                     draws += (draws.empty() ? "" : ", ") + std::string("collage_draw{.command = ") + str(screens::full_command(ns, d.command)) +
                              (given.empty() ? "" : ", .fields = value(std::map<std::string, value>{" + given + "})") + (d.when ? ", .when = " + condition(parts, ns, *d.when) : "") +
-                             (back.empty() ? "" : ", .back = {" + back + "}") + "}";
+                             (d.by ? ", .by = " + str(*d.by) : "") + (back.empty() ? "" : ", .back = {" + back + "}") + "}";
                 }
                 out += ", .draws = {" + draws + "}";
             }

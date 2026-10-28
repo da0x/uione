@@ -2196,6 +2196,14 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     whose `when` holds draws. Once it's drawn, the choices of toggles its `when` reads
     go back to their first, so a tool goes back to Select. A terminal has no pointer
     to drag, so it doesn't draw.
+
+    With `by line`, as in `draw layer::create { shape = shape::path  stroke = "#1d1d1f"
+    stroke_width = 4 } by line when tool == tool::line`, it's a line from where the
+    drag began to where it ended, kept in the layer's `points` as a path of two
+    points, its box a pixel wide where it's straight across or down. Shift keeps it
+    across, down or at 45 degrees; a click alone makes a line across a fifth of the
+    collage's shorter side. A path is picked by a press within 6 pixels of its box, so
+    a thin line can be.
   - `crop layer::crop`: a picked picture is cropped in place, as a press twice on it
     or a `crop "Crop" icon crop key c` button begins: the whole picture faint around
     what's kept, its edges and corners trimming it, a drag inside moving it, and one on

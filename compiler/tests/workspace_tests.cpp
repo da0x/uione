@@ -413,14 +413,27 @@ TEST_CASE("a collage's layer is drawn by a drag while its draw's when holds, giv
     CHECK(web.find(R"( draws={[{ command: "studio::layer::create", given: { "around": "edges" }, when: ((chosenTool === "box")), back: [["/posters/:poster tool", "move"]] }]})") != std::string::npos);
     CHECK(native.find(R"(.draws = {collage_draw{.command = "studio::layer::create", .fields = value(std::map<std::string, value>{{"around", value("edges")}}), .when = )") != std::string::npos);
     CHECK(native.find(R"(.back = {{"/posters/:poster tool", "move"}}})") != std::string::npos);
+    // By line, kept as a path's points.
+    std::string lined = with_tools(collage_screen("\t\ttoggle tool::move \"Move\"\n\t\ttoggle tool::box \"Line\"\n\t\tcollage poster_page.layers size width height {\n"
+                                                  "\t\t\tdraw layer::create by line when tool == tool::box\n\t\t}\n"));
+    lined.replace(lined.find("\t\tx        number"), 0, "\t\tpoints   text\n");
+    lined.replace(lined.find("around  x  y  w  h"), 0, "points  ");
+    auto by_line = built(lined);
+    CHECK(by_line["web/src/screens/main.tsx"].find(R"(when: ((chosenTool === "box")), by: "line", back:)") != std::string::npos);
+    CHECK(by_line["desktop/src/screens/main.cpp"].find(R"(.by = "line", .back =)") != std::string::npos);
     CHECK(messages(with_tools(collage_screen(R"(		collage poster_page.layers size width height {
 			draw layer::delete
 			draw poster::create
 			draw layer::create { tint = "#ffffff" }
+			draw layer::create by line
+			draw layer::create by curve
 		}
 )"))) == std::vector<std::string>{"50: a drag on the collage makes one of its layers, so draw names layer::create",
                                    "51: a drag on the collage makes one of its layers, so draw names layer::create",
-                                   "52: entity layer has no field tint to be given"});
+                                   "52: entity layer has no field tint to be given",
+                                   "53: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field",
+                                   "54: a drag draws a box, or by line a line; there's no by curve",
+                                   "54: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field"});
 }
 
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {

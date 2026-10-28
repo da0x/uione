@@ -175,6 +175,17 @@ namespace one::screens::collage {
 		double corners = 0;
 	};
 
+	// A line drawn by a drag from `from` to `to`, as a path: its box, a pixel wide
+	// where it's straight across or down, and its two points in it. With `straight`, it
+	// goes across, down or at 45 degrees, whichever it's nearest. A drag no further
+	// than `click` is a click, which draws a line across a fifth of the collage's
+	// shorter side, centered on it.
+	struct line {
+		box at;
+		std::string points;
+	};
+	line drawn_line(point from, point to, bool straight, double click, double width, double height);
+
 	// A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a
 	// 100 by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is
 	// left out.

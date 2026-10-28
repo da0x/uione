@@ -519,6 +519,12 @@
         25
       ]
     },
+    {"what": "drawn_line", "note": "down and to the right, corner to corner", "from": [100, 100], "to": [300, 200], "straight": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100], "points": "M 0 0 L 1 1"},
+    {"what": "drawn_line", "note": "down and to the left, from the box's top right", "from": [300, 100], "to": [100, 200], "straight": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100], "points": "M 1 0 L 0 1"},
+    {"what": "drawn_line", "note": "straight, nearest across, a pixel tall", "from": [100, 100], "to": [300, 130], "straight": true, "click": 4, "size": [1000, 600], "box": [100, 99.5, 200, 1], "points": "M 0 0.5 L 1 0.5"},
+    {"what": "drawn_line", "note": "straight, nearest down, a pixel wide", "from": [100, 100], "to": [110, 300], "straight": true, "click": 4, "size": [1000, 600], "box": [99.5, 100, 1, 200], "points": "M 0.5 0 L 0.5 1"},
+    {"what": "drawn_line", "note": "straight, nearest 45 degrees, up and to the right", "from": [100, 100], "to": [180, 30], "straight": true, "click": 4, "size": [1000, 600], "box": [100, 20, 80, 80], "points": "M 0 1 L 1 0"},
+    {"what": "drawn_line", "note": "a click, a line across a fifth of the shorter side", "from": [500, 300], "to": [501, 301], "straight": false, "click": 4, "size": [1000, 600], "box": [440, 299.5, 120, 1], "points": "M 0 0.5 L 1 0.5"},
     {"what": "drawn", "from": [100, 100], "to": [300, 200], "square": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100]},
     {"what": "drawn", "from": [300, 200], "to": [100, 100], "square": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100]},
     {"what": "drawn", "from": [100, 100], "to": [300, 150], "square": true, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 200]},

@@ -1419,7 +1419,8 @@ namespace one::generators {
                                 if (choices_.contains(name)) back += (back.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(route_ + " " + name) + ", " + web_detail::js_string(choices_.at(name)) + "]";
                             }
                             draws += (draws.empty() ? "" : ", ") + std::string("{ command: ") + web_detail::js_string(full_command(ns, d.command)) + ", given: { " + given + " }" +
-                                     (d.when ? ", when: " + condition(parts, ns, *d.when) : "") + (back.empty() ? "" : ", back: [" + back + "]") + " }";
+                                     (d.when ? ", when: " + condition(parts, ns, *d.when) : "") + (d.by ? ", by: " + web_detail::js_string(*d.by) : "") +
+                                     (back.empty() ? "" : ", back: [" + back + "]") + " }";
                         }
                         line += " draws={[" + draws + "]}";
                     }

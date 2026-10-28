@@ -28,16 +28,18 @@ namespace studio at / {
 		showing     date    // the day it's shown, and when, if it's at a time of day
 	}
 
-	// What a press on a poster does: picks and moves, or draws a box.
+	// What a press on a poster does: picks and moves, or draws a box or a line.
 	enum tool {
 		move
 		box
+		line
 	}
 
 	// What a poster is made of: pictures, words and boxes, lowest first. Around a
 	// picture is nothing, its edges drawn out or its edge color to the poster's edges,
 	// or the rest filled from every harmonized picture together, it melted into that;
-	// its corners are square, or trimmed round. A box is filled with its color.
+	// its corners are square, or trimmed round. A box is filled with its color, and a
+	// line is a path of two points, stroked.
 	entity layer {
 		poster   poster  required
 		depth    number  = 0
@@ -58,6 +60,10 @@ namespace studio at / {
 		w        number  = 400
 		h        number  = 300
 		fill     text
+		shape    enum    rectangle | ellipse | path = shape::rectangle
+		points   text
+		stroke   text
+		stroke_width  number  = 0
 	}
 
 	// A poster's notes, written as a page: each block a title, a heading, a paragraph,
@@ -138,7 +144,7 @@ namespace studio at / {
 		title  color  width  height  matched
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill
+			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width
 		}
 	}
 
@@ -256,6 +262,7 @@ namespace studio at / {
 			group "Tools" {
 				toggle tool::move "Move" icon check key v
 				toggle tool::box "Box" icon square key b
+				toggle tool::line "Line" icon edit key l
 			}
 			group "Insert" {
 				paste "Paste" icon paste key ctrl+v
@@ -291,6 +298,7 @@ namespace studio at / {
 			collage poster_page.layers size width height {
 				add layer::create
 				draw layer::create { fill = "#2e86de" } when tool == tool::box
+				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 6 } by line when tool == tool::line
 				place layer::place
 				crop layer::crop
 				write layer::write

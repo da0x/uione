@@ -222,6 +222,28 @@ describe("a layer drawn on a collage", () => {
     await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("drawn"));
     expect(drawn.getByTestId("tool").textContent).toBe("move");
   });
+
+  it("makes a line from where the drag began to where it ended, by line, kept as a path's points in its box", async () => {
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "line" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, points: "points" }} parent="poster" subject="p1"
+          draws={[{ command: "studio::layer::create", given: { shape: "path" }, by: "line" }]} />
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    fireEvent.pointerDown(canvas, { clientX: 332, clientY: 132, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 232, clientY: 182, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 132, clientY: 232, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]!.input).toMatchObject({ x: 100, y: 100, w: 200, h: 100, points: "M 1 0 L 0 1", shape: "path", poster: "p1" });
+  });
 });
 
 describe("a collage's preview", () => {

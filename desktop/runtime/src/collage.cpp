@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <format>
 #include <map>
 #include <memory>
@@ -59,6 +60,13 @@ namespace one::desktop::runtime {
 		bool is_picture(const value& layer) { return !layer["picture"].as_string().empty(); }
 		bool is_words(const value& layer) { return !is_picture(layer) && !layer["words"].as_string().empty(); }
 		bool is_shape(const value& layer) { return !is_picture(layer) && !is_words(layer); }
+
+		// Where a press reaches a layer, as drawn: its box, or a path's 6 pixels around it,
+		// so a thin line can be picked. The same as the web's.
+		model::box reached(const value& layer, model::box b) {
+			if (!is_shape(layer) || layer["shape"].as_string() != "path") return b;
+			return {b.x - 6, b.y - 6, b.w + 12, b.h + 12};
+		}
 
 		// How much of a layer shows: all of it, unless its opacity says less.
 		float opacity_of(const value& layer) { return layer["opacity"].is_null() ? 1.f : std::clamp(static_cast<float>(layer["opacity"].as_double()), 0.f, 1.f); }
@@ -430,6 +438,7 @@ namespace one::desktop::runtime {
 			};
 			std::optional<writing> editing;
 			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
+			std::optional<model::line> line;    // or a line, as far as the drag has gone
 			std::vector<std::pair<desktop::rect, std::size_t>> tools;
 			model::box on_board(const model::box& b) const {
 				return {board.x + b.x * scale, board.y + b.y * scale, b.w * scale, b.h * scale};
@@ -605,10 +614,11 @@ namespace one::desktop::runtime {
 		// A layer drawn, on top of the rest, picked once it's made; then the choices its
 		// when read go back to their first, as a tool goes back to Select. The same as
 		// the web's.
-		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b) {
+		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b, std::optional<std::string> points = std::nullopt) {
 			const collage_draw* d = drawing_now(spec);
 			if (!d) return;
 			value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+			if (points) made.fields["points"] = value(*points);
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 			const auto& all = layers.as_array();
 			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
@@ -1340,6 +1350,12 @@ namespace one::desktop::runtime {
 				model::box d = w->on_board(*w->drawing);
 				c.box({static_cast<float>(d.x), static_cast<float>(d.y), static_cast<float>(d.w), static_cast<float>(d.h)}, {.border = t.accent, .border_width = 1.5f});
 			}
+			if (w->line) {
+				model::box d = w->on_board(w->line->at);
+				double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+				std::sscanf(w->line->points.c_str(), "M %lf %lf L %lf %lf", &x0, &y0, &x1, &y1);
+				c.line({static_cast<float>(d.x + x0 * d.w), static_cast<float>(d.y + y0 * d.h)}, {static_cast<float>(d.x + x1 * d.w), static_cast<float>(d.y + y1 * d.h)}, 1.5f, t.accent);
+			}
 			if (layers.as_array().empty() && !full && !spec.empty.empty()) {
 				auto said = desktop::lay_out(desktop::text_span{spec.empty, t.quiet()}, bw - 32, c.scale());
 				c.text(said, {board.x + (bw - said.width()) / 2, board.y + (bh - said.height()) / 2});
@@ -1451,8 +1467,9 @@ namespace one::desktop::runtime {
 			        }
 			        // While something's to be drawn, a press on the collage starts drawing it,
 			        // over whatever's there.
-			        if (drawing_now(spec) && w->board.contains(at)) {
-				        w->now = {.what = gesture::drawing, .id = "", .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+			        if (const collage_draw* d = drawing_now(spec); d && w->board.contains(at)) {
+				        // Its id says how it's drawn: a box, or by line.
+				        w->now = {.what = gesture::drawing, .id = d->by, .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
 				        return true;
 			        }
 			        // A corner of the picked layer resizes it: a picture with its shape kept,
@@ -1480,7 +1497,7 @@ namespace one::desktop::runtime {
 					        auto [mw, mh] = measured(all[i]["words"].as_string(), all[i]["size"].as_double(), weight_of(all[i]), italic_of(all[i]));
 					        b.w = mw, b.h = mh;
 				        }
-				        if (!w->on_board(b).contains(on)) continue;
+				        if (!reached(all[i], w->on_board(b)).contains(on)) continue;
 				        std::string id = all[i]["id"].as_string();
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        if (clicks >= 2) {
@@ -1502,7 +1519,9 @@ namespace one::desktop::runtime {
 		        [w, width, height, snap = spec.snap](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
 			        if (w->now.what == gesture::drawing) {
-				        w->drawing = model::drawn(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
+				        bool line = w->now.id == "line";
+				        if (line) w->line = model::drawn_line(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
+				        else w->drawing = model::drawn(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
 				        return;
 			        }
 			        if (w->now.what == gesture::shifting) return shift_crop(*w, at);
@@ -1517,8 +1536,13 @@ namespace one::desktop::runtime {
 			        if (w->now.what == gesture::none) return;
 			        if (w->now.what == gesture::drawing) {
 				        gesture g = std::exchange(w->now, {});
-				        w->drawing.reset();
-				        draw_layer(p, spec, layers, model::drawn(w->on_collage(g.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height));
+				        w->drawing.reset(), w->line.reset();
+				        if (g.id == "line") {
+					        auto line = model::drawn_line(w->on_collage(g.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
+					        draw_layer(p, spec, layers, line.at, line.points);
+				        } else {
+					        draw_layer(p, spec, layers, model::drawn(w->on_collage(g.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height));
+				        }
 				        return;
 			        }
 			        if (w->now.what == gesture::shifting || w->now.what == gesture::cropping) {
@@ -1575,7 +1599,7 @@ namespace one::desktop::runtime {
 			        }
 			        const auto& all = layers.as_array();
 			        for (std::size_t i = all.size(); i-- > 0;) {
-				        if (w->on_board(where_is(all[i], *w)).contains(on)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
+				        if (reached(all[i], w->on_board(where_is(all[i], *w))).contains(on)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
 			        }
 			        return desktop::cursor::normal;
 		        },

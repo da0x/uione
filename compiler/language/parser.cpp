@@ -2392,6 +2392,11 @@ namespace one::language {
                         collage_item::drawing draw;
                         draw.command = parse_qualified_name("the command a drag on it makes a layer by, like layer::create");
                         parse_given(draw.given);
+                        if (at_word("by")) {
+                            advance();
+                            draw.by_where = peek().where;
+                            draw.by = expect(token_kind::identifier, "how it's drawn, like by line").text;
+                        }
                         if (at_word("when")) {
                             advance();
                             draw.when = parse_expression();

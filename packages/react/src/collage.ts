@@ -537,6 +537,37 @@ function said(n: number): string {
   return out === "-0" ? "0" : out;
 }
 
+// A line drawn by a drag from `from` to `to`, as a path: its box, a pixel wide where
+// it's straight across or down, and its two points in it. With `straight`, it goes
+// across, down or at 45 degrees, whichever it's nearest. A drag no further than `click`
+// is a click, which draws a line across a fifth of the collage's shorter side, centered
+// on it.
+export function drawnLine(from: Point, to: Point, straight: boolean, click: number, width: number, height: number): { at: Box; points: string } {
+  let dx = to.x - from.x, dy = to.y - from.y;
+  let start = from;
+  if (Math.abs(dx) <= click && Math.abs(dy) <= click) {
+    const half = Math.min(width, height) / 10;
+    start = { x: from.x - half, y: from.y };
+    dx = 2 * half;
+    dy = 0;
+  } else if (straight) {
+    const across = Math.abs(dx), down = Math.abs(dy), slant = 0.41421356; // tan 22.5 degrees
+    if (down <= across * slant) dy = 0;
+    else if (across <= down * slant) dx = 0;
+    else {
+      const side = Math.max(across, down);
+      dx = dx < 0 ? -side : side;
+      dy = dy < 0 ? -side : side;
+    }
+  }
+  const end = { x: start.x + dx, y: start.y + dy };
+  const b = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w: Math.abs(dx), h: Math.abs(dy) };
+  if (b.w < 1) (b.x += b.w / 2 - 0.5), (b.w = 1);
+  if (b.h < 1) (b.y += b.h / 2 - 0.5), (b.h = 1);
+  const inside = (p: Point) => `${said((p.x - b.x) / b.w)} ${said((p.y - b.y) / b.h)}`;
+  return { at: b, points: `M ${inside(start)} L ${inside(end)}` };
+}
+
 // A color as it may be written into SVG: #rrggbb, or none for anything else.
 const paint = (written: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : "none");
 

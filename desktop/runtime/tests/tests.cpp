@@ -1779,7 +1779,7 @@ TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is
 	matches_golden("collage", {900, 560}, [&] { return drawn(nav); });
 }
 
-TEST("a collage draws a layer as big as the drag, given what its draw says, picks it, and sets the choice its when read back to the first") {
+TEST("a collage draws a layer as big as the drag, given what its draw says, picks it, and sets the choice its when read back to the first; by line, a line, picked from near it") {
 	memory_source data;
 	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
 	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return "drawn"; });
@@ -1827,6 +1827,42 @@ TEST("a collage draws a layer as big as the drag, given what its draw says, pick
 	CHECK(sent["poster"].as_string() == "p1");
 	CHECK(nav.current().picked_id("/ layer") == "drawn");
 	CHECK(nav.current().chosen("/ tool", "move") == "move");
+	// By line, a path from where the drag began to where it ended, picked within reach.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"shape", "path"}, {"points", "M 0 0.5 L 1 0.5"}, {"stroke", "#1d1d1f"}, {"stroke_width", 2}, {"x", 100}, {"y", 699.5}, {"w", 800}, {"h", 1}})}}}));
+	s.screens.clear();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     bool line = p.chosen("/ tool", "move") == "line";
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts,
+		                                                                         .pick = "/ layer", .subject = "p1", .fills = true,
+		                                                                         .draws = {collage_draw{.command = "studio::layer::create", .when = line, .by = "line", .back = {{"/ tool", "move"}}}},
+		                                                                         .parent = "poster"}))});
+	                     }});
+	navigator lines(s, data);
+	lines.open("/");
+	lines.current().choose("/ tool", "line");
+	root = built(lines);
+	board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	CHECK(board->press({origin.x + 100 * scale, origin.y + 400 * scale}, 1));
+	board->drag({origin.x + 200 * scale, origin.y + 300 * scale});
+	board->release({origin.x + 300 * scale, origin.y + 200 * scale}, board);
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() < 2) return;
+	const auto& line = data.runs().back().fields;
+	CHECK(line["points"].as_string() == "M 0 1 L 1 0");
+	CHECK(std::abs(line["x"].as_double() - 100) < 0.5);
+	CHECK(std::abs(line["w"].as_double() - 200) < 0.5);
+	// A press just above the line, on the line drawn before, picks it.
+	root = built(lines);
+	board = drawing(*root);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	CHECK(board->press({origin.x + 500 * scale, origin.y + 700 * scale - 4}, 1));
+	CHECK(lines.current().picked_id("/ layer") == "l1");
 }
 
 TEST("a collage crops its picked picture in place, the background too, kept with Enter, and words picked are written where they are, kept with Enter") {
