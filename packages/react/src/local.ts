@@ -167,16 +167,19 @@ interface Listener {
   last: string; // what it was told last, as JSON, so it's told only of a change
 }
 
-// When something was made or last changed, kept as RFC 3339 text so times are in
-// order as text, handed to screens as a time, as a server's are.
+// Times, like when something was made or last changed, or when a task is due, kept as
+// RFC 3339 text so they're in order as text, handed to screens as times, as a
+// server's are. The same as the desktop's.
+const rfc3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 function timesAsTimes(v: unknown): unknown {
+  if (typeof v === "string" && rfc3339.test(v)) {
+    const at = Date.parse(v);
+    return Number.isNaN(at) ? v : new Date(at);
+  }
   if (Array.isArray(v)) return v.map(timesAsTimes);
   if (v === null || typeof v !== "object" || v instanceof Date) return v;
   const out: Record<string, unknown> = {};
-  for (const [name, field] of Object.entries(v as Record<string, unknown>)) {
-    const at = (name === "created_at" || name === "updated_at") && typeof field === "string" ? Date.parse(field) : NaN;
-    out[name] = Number.isNaN(at) ? timesAsTimes(field) : new Date(at);
-  }
+  for (const [name, field] of Object.entries(v as Record<string, unknown>)) out[name] = timesAsTimes(field);
   return out;
 }
 

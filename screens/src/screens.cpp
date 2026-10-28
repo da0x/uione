@@ -355,22 +355,78 @@ namespace one::screens {
 	    : source_(from), screen_(screen), screen_title_(std::move(screen_title)), address_(std::move(address)), params_(std::move(params)), query_(std::move(query)),
 	      opener_(std::move(opener)), replacer_(std::move(replacer)) {}
 
-	namespace {
-		// Whether a time is before or after one counted from now, like -7d.
-		bool kept_by_time(const value& held, const std::string& op, const std::string& offset) {
-			if (!held.is_time() || offset.size() < 3 || (offset[0] != '-' && offset[0] != '+')) return false;
-			char unit = offset.back();
-			double hours = unit == 'm' ? 1.0 / 60 : unit == 'h' ? 1 : unit == 'd' ? 24 : unit == 'w' ? 24 * 7 : 0;
-			if (hours == 0) return false;
-			double count = 0;
-			try {
-				count = std::stod(offset.substr(1, offset.size() - 2));
-			} catch (...) {
-				return false;
+	std::optional<std::chrono::system_clock::time_point> time_named(std::string_view said, std::chrono::system_clock::time_point now) {
+		auto number = [](std::string_view digits) -> std::optional<int> {
+			if (digits.empty()) return std::nullopt;
+			int n = 0;
+			for (char c : digits) {
+				if (c < '0' || c > '9') return std::nullopt;
+				n = n * 10 + (c - '0');
 			}
-			auto then = std::chrono::system_clock::now() + std::chrono::duration_cast<std::chrono::system_clock::duration>(
-			                                                     std::chrono::duration<double, std::ratio<3600>>((offset[0] == '-' ? -1 : 1) * count * hours));
-			auto at = held.as_time();
+			return n;
+		};
+		// Counted from now: +10m, -7d.
+		if (said.size() >= 3 && (said[0] == '+' || said[0] == '-')) {
+			char unit = said.back();
+			double hours = unit == 'm' ? 1.0 / 60 : unit == 'h' ? 1 : unit == 'd' ? 24 : unit == 'w' ? 24 * 7 : 0;
+			auto count = number(said.substr(1, said.size() - 2));
+			if (hours == 0 || !count) return std::nullopt;
+			return now + std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::duration<double, std::ratio<3600>>((said[0] == '-' ? -1 : 1) * *count * hours));
+		}
+		// By the calendar: d+1, w+0, M+1, then @09:00 when it's at a time of day.
+		if (said.size() < 3 || (said[0] != 'd' && said[0] != 'w' && said[0] != 'M') || (said[1] != '+' && said[1] != '-')) return std::nullopt;
+		std::string_view span = said.substr(2), clock;
+		if (auto at = span.find('@'); at != std::string_view::npos) clock = span.substr(at + 1), span = span.substr(0, at);
+		auto count = number(span);
+		if (!count) return std::nullopt;
+		int on = said[1] == '-' ? -*count : *count, hour = 0, minute = 0;
+		if (!clock.empty()) {
+			auto colon = clock.find(':');
+			auto h = number(clock.substr(0, colon)), m = colon == std::string_view::npos ? std::optional<int>(0) : number(clock.substr(colon + 1));
+			if (!h || !m || *h > 23 || *m > 59) return std::nullopt;
+			hour = *h, minute = *m;
+		}
+		using namespace std::chrono;
+		const std::chrono::time_zone* zone = screens::time_zone();
+		local_days today = floor<days>(zone->to_local(now));
+		local_days start = today + days(on);
+		if (said[0] == 'w') start = today - days((weekday(today).c_encoding() + 6) % 7) + days(7 * on);  // from Monday
+		if (said[0] == 'M') {
+			year_month_day ymd(today);
+			start = local_days(year_month_day(ymd.year() / ymd.month() / 1) + months(on));
+		}
+		// A day alone is kept at midnight UTC, so it's that day wherever it's read.
+		if (clock.empty()) return sys_days(start.time_since_epoch());
+		return zone->to_sys(start + hours(hour) + minutes(minute), choose::earliest);
+	}
+
+	std::chrono::system_clock::time_point as_read_here(std::chrono::system_clock::time_point at) {
+		using namespace std::chrono;
+		auto day = floor<days>(at);
+		if (at != day) return at;
+		return screens::time_zone()->to_sys(local_days(day.time_since_epoch()), choose::earliest);
+	}
+
+	value time_value(std::string_view said) {
+		auto at = time_named(said);
+		if (!at) return value();
+		auto since = at->time_since_epoch();
+		auto seconds = std::chrono::floor<std::chrono::seconds>(since);
+		value out;
+		out.type = value::kind::time;
+		out.time.seconds = seconds.count();
+		out.time.nanos = static_cast<std::int32_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(since - seconds).count());
+		return out;
+	}
+
+	namespace {
+		// Whether a time is before or after one a filter names, like -7d or d+1.
+		bool kept_by_time(const value& held, const std::string& op, const std::string& offset) {
+			auto named = time_named(offset);
+			if (!held.is_time() || !named) return false;
+			// A day alone is compared as the reader's day.
+			auto at = as_read_here(std::chrono::time_point_cast<std::chrono::system_clock::duration>(held.as_time()));
+			auto then = as_read_here(*named);
 			return op == "<" ? at < then : op == ">" ? at > then : op == "<=" ? at <= then : at >= then;
 		}
 

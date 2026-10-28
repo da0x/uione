@@ -25,6 +25,7 @@ import {
   done,
   holds,
   keptByTime,
+  timeNamed,
   markdownOf,
   phrase,
   memorySource,
@@ -548,7 +549,7 @@ describe("a list in a form and a table", () => {
 
 describe("a form that changes something already stored", () => {
   it("starts from what's stored, keeps what's typed, and sends which one it changes", async () => {
-    const source = memorySource({ views: { "library::book_page": { title: "Dune", author: "Herbert", due_at: new Date(2026, 9, 30) } } });
+    const source = memorySource({ views: { "library::book_page": { title: "Dune", author: "Herbert", due_at: new Date(Date.UTC(2026, 9, 30)) } } });
     renderScreen(source, () => (
       <Form command="library::book::update" fields={["title", "author", { name: "due_at", type: "date" }]} from={useView("library::book_page")} id="b1" />
     ));
@@ -558,13 +559,14 @@ describe("a form that changes something already stored", () => {
 
     fireEvent.change(title, { target: { value: "Dune Messiah" } });
     // A change arriving from elsewhere doesn't overwrite what's being typed.
-    act(() => source.set("library::book_page", { title: "Dune (2nd)", author: "Herbert", due_at: new Date(2026, 9, 30) }));
+    act(() => source.set("library::book_page", { title: "Dune (2nd)", author: "Herbert", due_at: new Date(Date.UTC(2026, 9, 30)) }));
     expect(title.value).toBe("Dune Messiah");
 
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     await waitFor(() =>
       expect(source.runs).toEqual([
-        { command: "library::book::update", input: { title: "Dune Messiah", author: "Herbert", due_at: "2026-10-30", id: "b1" } },
+        // A day alone, at midnight UTC, so it's that day wherever it's read.
+        { command: "library::book::update", input: { title: "Dune Messiah", author: "Herbert", due_at: new Date(Date.UTC(2026, 9, 30)), id: "b1" } },
       ]),
     );
     expect(title.value).toBe("Dune Messiah"); // an update keeps its values, unlike a create
@@ -947,6 +949,28 @@ describe("filters by time", () => {
     expect(keptByTime(new Date(now - 40 * 60 * 1000), ">", "-30m", now)).toBe(false);
     expect(keptByTime(undefined, ">", "-7d", now)).toBe(false);
     expect(keptByTime(twoDaysAgo, ">", "seven days", now)).toBe(false);
+  });
+
+  it("keeps a time before or after a day the calendar names, on the reader's calendar", () => {
+    // A Wednesday afternoon, where the reader is.
+    const now = new Date(2026, 9, 28, 15, 30).getTime();
+    // A day alone, at midnight UTC so it's that day wherever it's read; a time of day
+    // where the reader is.
+    expect(timeNamed("d+0", now)).toEqual(new Date(Date.UTC(2026, 9, 28)));
+    expect(timeNamed("d+1@09:00", now)).toEqual(new Date(2026, 9, 29, 9, 0));
+    expect(timeNamed("d-1", now)).toEqual(new Date(Date.UTC(2026, 9, 27)));
+    expect(timeNamed("w+0", now)).toEqual(new Date(Date.UTC(2026, 9, 26)));
+    expect(timeNamed("w+1", now)).toEqual(new Date(Date.UTC(2026, 10, 2)));
+    expect(timeNamed("M+1", now)).toEqual(new Date(Date.UTC(2026, 10, 1)));
+    expect(timeNamed("+10m", now)).toEqual(new Date(now + 10 * 60 * 1000));
+    expect(timeNamed("sometime", now)).toBeNull();
+    // Due before tomorrow: today, at 4:30 pm, and the day before; not tomorrow morning.
+    expect(keptByTime(new Date(2026, 9, 28, 16, 30), "<", "d+1", now)).toBe(true);
+    expect(keptByTime(new Date(2026, 9, 27, 9, 0), "<", "d+1", now)).toBe(true);
+    expect(keptByTime(new Date(2026, 9, 29, 9, 0), "<", "d+1", now)).toBe(false);
+    // A day alone is the reader's day: today's is kept, tomorrow's isn't.
+    expect(keptByTime(new Date(Date.UTC(2026, 9, 28)), "<", "d+1", now)).toBe(true);
+    expect(keptByTime(new Date(Date.UTC(2026, 9, 29)), "<", "d+1", now)).toBe(false);
   });
 });
 

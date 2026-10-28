@@ -98,7 +98,8 @@ namespace one::screens {
 		// separated by commas, and anything else as it reads.
 		std::string as_field(const value& v) {
 			if (v.is_time() && v.time.seconds % 86400 == 0 && v.time.nanos == 0) return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(v.as_time()));
-			if (v.is_time()) return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(std::chrono::zoned_time(time_zone(), v.as_time()).get_local_time()));
+			// Any other time, with its time of day where it's read: 2026-10-28 09:00.
+			if (v.is_time()) return std::format("{:%Y-%m-%d %H:%M}", std::chrono::floor<std::chrono::minutes>(std::chrono::zoned_time(time_zone(), v.as_time()).get_local_time()));
 			if (v.is_array()) {
 				std::string out;
 				for (const auto& item : v.items) out += (out.empty() ? "" : ", ") + as_field(item);
@@ -137,6 +138,26 @@ namespace one::screens {
 		// list or several choices as the list of them, and anything else as it's written.
 		value as_input(const std::string& written, const std::string& type) {
 			if (type == "boolean") return value(written == "true");
+			// A day alone at midnight UTC, so it's that day wherever it's read, like
+			// 2026-10-28; a day and a time of day, that time where it's read, like
+			// 2026-10-28 9:00.
+			if (type == "date") {
+				using namespace std::chrono;
+				std::istringstream in(written);
+				year_month_day day{};
+				in >> parse("%F", day);
+				if (in.fail() || !day.ok()) return written.empty() ? value() : value(written);
+				int hour = 0, minute = 0;
+				char colon = 0;
+				in >> std::ws;
+				if (in.peek() == 'T') in.get();
+				bool timed = static_cast<bool>(in >> hour >> colon >> minute) && colon == ':' && hour >= 0 && hour < 24 && minute >= 0 && minute < 60;
+				sys_seconds at = timed ? floor<seconds>(time_zone()->to_sys(local_days(day) + hours(hour) + minutes(minute), choose::earliest)) : sys_days(day);
+				value out;
+				out.type = value::kind::time;
+				out.time.seconds = at.time_since_epoch().count();
+				return out;
+			}
 			// A number as a number, and nothing for an empty box.
 			if (type == "number" || type == "slider") {
 				char* end = nullptr;

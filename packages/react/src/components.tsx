@@ -1286,15 +1286,45 @@ export interface RowAction {
   form?: { fields: (string | FieldSpec)[]; submit?: string };
 }
 
-// Whether a row's time is before or after one counted from now, as a filter like
-// updated_at > 7 days ago asks with updated_at>=-7d: minutes, hours, days or weeks, ago (-)
-// or from now (+). A row with no time is kept by neither.
+// A time a screen names, worked out as it's read: counted from now, minutes, hours,
+// days or weeks, ago (-) or from now (+), like +10m or -7d; or by the calendar, d for a
+// day, w for a week from Monday and M for a month, each at its start on the reader's
+// calendar and so many on, like d+1 for tomorrow and w+1 for next week, and at a time
+// of day when it says one, like d+1@09:00. A day without a time is a day alone, kept
+// at midnight UTC so it's that day wherever it's read. Null for anything else. The same
+// as the desktop's.
+export function timeNamed(said: string, now = Date.now()): Date | null {
+  const counted = /^([+-])(\d+)([mhdw])$/.exec(said);
+  if (counted) {
+    const hours = { m: 1 / 60, h: 1, d: 24, w: 24 * 7 }[counted[3] as "m" | "h" | "d" | "w"];
+    return new Date(now + (counted[1] === "-" ? -1 : 1) * Number(counted[2]) * hours * 3600 * 1000);
+  }
+  const named = /^([dwM])([+-]\d+)(?:@(\d{2}):(\d{2}))?$/.exec(said);
+  if (!named) return null;
+  const on = Number(named[2]), today = new Date(now);
+  const at = new Date(today.getFullYear(), today.getMonth(), today.getDate(), Number(named[3] ?? 0), Number(named[4] ?? 0));
+  if (named[1] === "d") at.setDate(at.getDate() + on);
+  else if (named[1] === "w") at.setDate(at.getDate() - ((at.getDay() + 6) % 7) + 7 * on);
+  else at.setMonth(at.getMonth() + on, 1);
+  return named[3] === undefined ? new Date(Date.UTC(at.getFullYear(), at.getMonth(), at.getDate())) : at;
+}
+
+// A time as the reader's: a day alone, at midnight UTC, the start of that day where
+// it's read; any other time as it is.
+function readHere(at: number): number {
+  const d = new Date(at);
+  return dateOnly(d) ? new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()).getTime() : at;
+}
+
+// Whether a row's time is before or after one a filter names, as one like updated_at >
+// 7 days ago asks with updated_at>=-7d, or due < tomorrow with due<d+1. A row with no
+// time is kept by neither.
 export function keptByTime(held: unknown, op: string, offset: string, now = Date.now()): boolean {
-  const counted = /^([+-])(\d+)([mhdw])$/.exec(offset);
-  const at = held instanceof Date ? held.getTime() : typeof held === "string" || typeof held === "number" ? new Date(held).getTime() : Number.NaN;
-  if (!counted || Number.isNaN(at)) return false;
-  const hours = { m: 1 / 60, h: 1, d: 24, w: 24 * 7 }[counted[3] as "m" | "h" | "d" | "w"];
-  const then = now + (counted[1] === "-" ? -1 : 1) * Number(counted[2]) * hours * 3600 * 1000;
+  const named = timeNamed(offset, now)?.getTime();
+  const read = held instanceof Date ? held.getTime() : typeof held === "string" || typeof held === "number" ? new Date(held).getTime() : Number.NaN;
+  if (named === undefined || Number.isNaN(read)) return false;
+  // A day alone is compared as the reader's day.
+  const at = readHere(read), then = readHere(named);
   return op === "<" ? at < then : op === ">" ? at > then : op === "<=" ? at <= then : at >= then;
 }
 
@@ -2741,13 +2771,13 @@ export interface FieldSpec {
 }
 
 // What a field shows for a value from a view: a date as 2026-09-30, the way a date
-// input takes it, a list separated by commas, files a path a line, and anything
-// else as text.
+// input takes it, and a time of day after it when it has one, 2026-09-30T09:00; a list
+// separated by commas, files a path a line, and anything else as text.
 function asField(value: unknown, type?: string): string {
   if (value instanceof Date) {
     const pad = (n: number) => String(n).padStart(2, "0");
     if (dateOnly(value)) return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
-    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
   }
   if (Array.isArray(value)) return value.map((item) => asField(item)).join(type === "files" ? "\n" : ", ");
   return value === null || value === undefined ? "" : String(value);
@@ -2758,6 +2788,14 @@ function asField(value: unknown, type?: string): string {
 // several choices ticked, as the list of what's between them.
 function asInput(value: string, type: string | undefined): unknown {
   if (type === "boolean") return value === "true";
+  // A day alone at midnight UTC, so it's that day wherever it's read; a day and a time
+  // of day, that time where the reader is.
+  if (type === "date") {
+    const day = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?$/.exec(value.trim());
+    if (!day) return value.trim() === "" ? undefined : value;
+    const [y, m, d] = [Number(day[1]), Number(day[2]) - 1, Number(day[3])];
+    return day[4] === undefined ? new Date(Date.UTC(y, m, d)) : new Date(y, m, d, Number(day[4]), Number(day[5]));
+  }
   // A number as one, and nothing for an empty box.
   if (type === "number" || type === "slider") return value.trim() === "" ? undefined : Number.isNaN(Number(value)) ? value : Number(value);
   if (type === "files") return value.split("\n").filter((path) => path !== "");

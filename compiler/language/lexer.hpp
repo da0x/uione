@@ -161,6 +161,10 @@ namespace one::language {
                 if (current() == '.' && is_digit(following())) {
                     step();
                     while (is_digit(current())) step();
+                } else if (current() == ':' && is_digit(following())) {
+                    // A time of day, like 9:30.
+                    step();
+                    while (is_digit(current())) step();
                 }
                 return make(token_kind::number, std::string(source_.substr(begin, pos_ - begin)), where, begin);
             }

@@ -36,31 +36,33 @@ namespace one::local {
 
 	namespace {
 
-		// When something was made or last changed, kept as RFC 3339 text so times are in
-		// order as text, handed to screens as a time, as a server's are.
+		// Times, like when something was made or last changed, or when a task is due, kept
+		// as RFC 3339 text so they're in order as text, handed to screens as times, as a
+		// server's are. The same as the web's.
 		void times_as_times(value& v) {
+			if (v.is_string()) {
+				// Only what's written as RFC 3339 is, like 2026-10-25T12:00:00.123Z.
+				const std::string& text = v.as_string();
+				if (text.size() < 20 || text[4] != '-' || text[10] != 'T' || text.back() != 'Z') return;
+				std::istringstream in(text);
+				std::chrono::sys_time<std::chrono::nanoseconds> at;
+				in >> std::chrono::parse("%FT%TZ", at);
+				if (in.fail()) return;
+				auto since = at.time_since_epoch();
+				auto whole = std::chrono::floor<std::chrono::seconds>(since);
+				value t;
+				t.type = value::kind::time;
+				t.time.seconds = whole.count();
+				t.time.nanos = static_cast<std::int32_t>((since - whole).count());
+				v = std::move(t);
+				return;
+			}
 			if (v.is_array()) {
 				for (auto& item : v.items) times_as_times(item);
 				return;
 			}
 			if (!v.is_map()) return;
-			for (auto& [name, field] : v.fields) {
-				if ((name == "created_at" || name == "updated_at") && field.is_string()) {
-					std::istringstream in(field.as_string());
-					std::chrono::sys_time<std::chrono::nanoseconds> at;
-					in >> std::chrono::parse("%FT%TZ", at);
-					if (in.fail()) continue;
-					auto since = at.time_since_epoch();
-					auto whole = std::chrono::floor<std::chrono::seconds>(since);
-					value t;
-					t.type = value::kind::time;
-					t.time.seconds = whole.count();
-					t.time.nanos = static_cast<std::int32_t>((since - whole).count());
-					field = std::move(t);
-				} else {
-					times_as_times(field);
-				}
-			}
+			for (auto& [name, field] : v.fields) times_as_times(field);
 		}
 
 	}  // namespace

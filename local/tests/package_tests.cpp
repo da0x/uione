@@ -211,7 +211,7 @@ TEST("a page per book copies the book, counts and lists its loans, and is missin
 	CHECK(loans.size() == 3);
 	CHECK(loans[0]["number"].as_integer() == 3);
 	CHECK(loans[2]["number"].as_integer() == 1);
-	CHECK(!loans[0]["returned_at"].as_string().empty());
+	CHECK(loans[0]["returned_at"].is_time());  // a time, handed to screens as one
 	CHECK(a.view("library::book_page", "NOT-0000").is_null());
 }
 

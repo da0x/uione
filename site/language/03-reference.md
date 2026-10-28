@@ -129,7 +129,15 @@ Words for values that aren't written out:
 - `true` and `false`;
 - a time counted from now, like `10 minutes from now` or `2 days ago`, in minutes,
   hours, days or weeks: from the moment a command runs, or in a filter, from when
-  it's opened.
+  it's opened;
+- a day by the calendar: `today`, `tomorrow`, `yesterday`, and `this week`, `next
+  week`, `last week`, `this month`, `next month` and `last month`, each from its
+  start, a week from Monday; alone, a day with no time of day, kept at midnight UTC
+  so it's that day wherever it's read, and with `at`, that time where it's read:
+  `tomorrow at 9:00`, `today at 18:30`. A filter keeps `due < tomorrow`, today's and
+  what's overdue, on the reader's calendar; a button's `{ due = next week }` sets it
+  as it's pressed. In a command on a server, the calendar is UTC's. `today.planned`,
+  a view named `today`, is still a name.
 
 ## Keywords
 

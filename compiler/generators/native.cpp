@@ -412,6 +412,8 @@ namespace one::generators {
                 if (name->name.parts.size() == 2) return "value(" + str(name->name.parts.back()) + ")";  // a choice, like status::open
             }
             if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
+                // A time named, like tomorrow at 9:00, worked out as it's read.
+                if (literal->type == language::literal_expression::kind::time) return "time_value(" + str(literal->value) + ")";
                 return literal->type == language::literal_expression::kind::number ? "value(" + literal->value + ")" : "value(" + str(literal->value) + ")";
             }
             return otherwise;

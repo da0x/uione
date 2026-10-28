@@ -5,7 +5,8 @@
 // everywhere: a dialog in the middle of a wide screen, and the whole screen on a
 // phone, its title and × held at the top and only what's under them scrolling. It
 // sits above the page's header, Escape or the × closes it, and focus goes back to
-// whatever opened it.
+// whatever opened it. A form in it is typed into at once, its first field taking the
+// keyboard, as the desktop's does.
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useRef } from "react";
@@ -15,14 +16,20 @@ export function Sheet({ open, title, onClose, children }: { open: boolean; title
   // What had focus when it opened, like the button that opened it, which gets it
   // back when it closes; it's opened by any button, not only one of its own.
   const opener = useRef<HTMLElement | null>(null);
+  const content = useRef<HTMLDivElement | null>(null);
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[2px]" />
         <Dialog.Content
           aria-describedby={undefined}
-          onOpenAutoFocus={() => {
+          ref={content}
+          onOpenAutoFocus={(e) => {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const field = content.current?.querySelector<HTMLElement>("input:not([type=hidden]), textarea, select");
+            if (!field) return;
+            e.preventDefault();
+            field.focus();
           }}
           onCloseAutoFocus={(e) => {
             if (!opener.current?.isConnected) return;

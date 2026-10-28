@@ -128,6 +128,34 @@ TEST("a page reads what moved where it went, as a board renamed is, all the way 
 	CHECK(read().data["title"].as_string() == "Third");
 }
 
+TEST("a time named by the calendar is that day, week or month's start where it's read, at a time of day when it says, the same as the web's") {
+	using namespace std::chrono;
+	auto at = [](int y, unsigned m, unsigned d, int h = 0, int min = 0) { return sys_days(year(y) / month(m) / day(d)) + hours(h) + minutes(min); };
+	use_time_zone("America/Los_Angeles");
+	// A Wednesday afternoon there, which is Thursday morning in UTC.
+	auto now = at(2026, 10, 29, 0, 30);
+	auto local = [&](int y, unsigned m, unsigned d, int h = 0, int min = 0) { return at(y, m, d, h, min) + hours(7); };  // PDT is 7 hours behind
+	// A day alone, at midnight UTC so it's that day wherever it's read; a time of day
+	// where the reader is.
+	CHECK(time_named("d+0", now) == at(2026, 10, 28));
+	CHECK(time_named("d+1@09:00", now) == local(2026, 10, 29, 9));
+	CHECK(time_named("d-1", now) == at(2026, 10, 27));
+	CHECK(time_named("w+0", now) == at(2026, 10, 26));
+	CHECK(time_named("w+1", now) == at(2026, 11, 2));
+	CHECK(time_named("M+1", now) == at(2026, 11, 1));
+	// Read here, a day alone is the start of that day where it's read.
+	CHECK(as_read_here(at(2026, 10, 28)) == local(2026, 10, 28));
+	CHECK(as_read_here(at(2026, 11, 2)) == at(2026, 11, 2) + hours(8));  // after the clocks go back
+	CHECK(as_read_here(local(2026, 10, 29, 9)) == local(2026, 10, 29, 9));
+	CHECK(time_named("+10m", now) == now + minutes(10));
+	CHECK(!time_named("sometime", now));
+	CHECK(!time_named("d+1@25:00", now));
+	use_time_zone("UTC");
+	CHECK(time_named("d+0", now) == at(2026, 10, 29));
+	CHECK(time_value("d+1").is_time());
+	CHECK(time_value("never").is_null());
+}
+
 TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
 	value due;
 	due.type = value::kind::time;

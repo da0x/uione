@@ -878,6 +878,11 @@ namespace one::generators {
                 return web_detail::js_string(name->name.parts.back());  // a choice, like status::open
             }
             if (auto* literal = std::get_if<language::literal_expression>(&e.node)) {
+                // A time named, like tomorrow at 9:00, worked out as it's read.
+                if (literal->type == language::literal_expression::kind::time) {
+                    parts.components.insert("timeNamed");
+                    return "timeNamed(" + web_detail::js_string(literal->value) + ")";
+                }
                 return literal->type == language::literal_expression::kind::number ? literal->value : web_detail::js_string(literal->value);
             }
             return "false";

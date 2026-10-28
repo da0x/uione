@@ -1803,6 +1803,27 @@ export const radix: ComponentSet = {
                   </option>
                 ))}
               </select>
+            ) : field.type === "date" ? (
+              // A day, and a time of day if it has one, as 2026-10-28 or 2026-10-28T09:00.
+              <div className="flex gap-2">
+                <input
+                  id={`${id}-${field.name}`}
+                  name={field.name}
+                  type="date"
+                  value={field.value.slice(0, 10)}
+                  onChange={(event) => field.onChange(event.target.value === "" ? "" : event.target.value + (field.value.includes("T") ? field.value.slice(10) : ""))}
+                  aria-describedby={field.hint ? `${id}-${field.name}-hint` : undefined}
+                  className="h-10 min-w-0 flex-1 rounded-control border border-control-line/60 bg-surface px-3 text-base shadow-panel transition-colors hover:border-control-line focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none sm:text-sm"
+                />
+                <input
+                  type="time"
+                  aria-label={`${field.label}, at`}
+                  value={field.value.includes("T") ? field.value.slice(11, 16) : ""}
+                  disabled={field.value === ""}
+                  onChange={(event) => field.onChange(field.value.slice(0, 10) + (event.target.value === "" ? "" : "T" + event.target.value))}
+                  className="h-10 w-32 rounded-control border border-control-line/60 bg-surface px-3 text-base shadow-panel transition-colors hover:border-control-line focus-visible:border-accent focus-visible:ring-4 focus-visible:ring-accent-soft focus-visible:outline-none disabled:opacity-50 sm:text-sm"
+                />
+              </div>
             ) : (
               <input
                 id={`${id}-${field.name}`}
@@ -1851,8 +1872,8 @@ export const radix: ComponentSet = {
       // A tool in a workspace's toolbar: flat, tinted while it's on; large, its icon
       // over its words, as tall as two small ones stacked, as a group of them is, so
       // the toolbar stays as tall whichever groups it shows; small, its icon alone, or
-      // its words when it has none.
-      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8" : "size-8 text-xs";
+      // its words when it has none, as wide as they are.
+      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
       // Pressed, it acts on what's being worked on and leaves the keyboard, and any
       // caret, with it; Tab still reaches it.
       return (

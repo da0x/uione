@@ -719,6 +719,24 @@ TEST_CASE("a time counted from now goes anywhere a value does, in minutes too") 
     CHECK(when.value == "+10m");
 }
 
+TEST_CASE("a day by the calendar goes anywhere a value does, at a time of day too, and a view named today is still a name") {
+    auto f = parse_ok("command task::plan {\n\tdue = tomorrow at 9:00\n\tstart = today\n\tweek = next week\n\tmonth = last month at 18:30\n\tsoon = today.planned\n}\n");
+    const auto& command = std::get<command_declaration>(f.declarations[0].node);
+    auto said = [&](std::size_t i) {
+        const auto& set = std::get<assign_statement>(command.body[i].node);
+        auto* literal = std::get_if<literal_expression>(&set.value->node);
+        return literal && literal->type == literal_expression::kind::time ? literal->value : std::string("not a time");
+    };
+    CHECK(said(0) == "d+1@09:00");
+    CHECK(said(1) == "d+0");
+    CHECK(said(2) == "w+1");
+    CHECK(said(3) == "M-1@18:30");
+    CHECK(said(4) == "not a time");
+    auto out = parse_errors("command task::plan {\n\tdue = tomorrow at 25:00\n}\n");
+    REQUIRE(!out.empty());
+    CHECK(out[0].message == "a time of day is hours and minutes on a 24-hour clock, like 9:00 or 18:30");
+}
+
 TEST_CASE("a workflow says who works its stages, its steps, and how long a claim lasts") {
     auto f = parse_ok("define workflow issue by stage {\n\tworked by worked_by\n\tsteps step\n\tlease 2 hours\n}\n");
     const auto& w = std::get<define_workflow_declaration>(f.declarations[0].node);

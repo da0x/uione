@@ -23,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,20 @@ namespace one::screens {
 	// A value as a person reads it: a number without needless decimals, a list
 	// joined, a time as a date or, today, as its time, and nothing for nothing.
 	std::string show(const value& v);
+
+	// A time a screen names, worked out as it's read: counted from now, like +10m or
+	// -7d; or by the calendar, d for a day, w for a week from Monday and M for a month,
+	// each at its start on this machine's calendar and so many on, like d+1 for
+	// tomorrow and w+1 for next week, and at a time of day when it says one, like
+	// d+1@09:00. A day without a time is a day alone, kept at midnight UTC so it's that
+	// day wherever it's read. None for anything else.
+	std::optional<std::chrono::system_clock::time_point> time_named(std::string_view said,
+	                                                                std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
+	// And as a value, a time, or none.
+	value time_value(std::string_view said);
+	// A time as the reader's: a day alone, at midnight UTC, the start of that day where
+	// it's read; any other time as it is.
+	std::chrono::system_clock::time_point as_read_here(std::chrono::system_clock::time_point at);
 	// The zone times are said in: the reader's own, unless one's named, as tests do.
 	const std::chrono::time_zone* time_zone();
 	void use_time_zone(const std::string& name);

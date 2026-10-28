@@ -382,6 +382,9 @@ timeline_line  ::= "new" "when" expression END
    command, a time is counted from when it runs: held_until = 10 minutes from now */
 filter         ::= NAME "==" expression | NAME ("<" | ">" | "<=" | ">=") time
 time           ::= NUMBER ("minute" | "minutes" | "hour" | "hours" | "day" | "days" | "week" | "weeks") ("ago" | "from" "now")
+                 /* a day, a week from Monday or a month by the calendar where it's read, alone or at a time of
+                    day on a 24-hour clock: due < tomorrow, remind_at = tomorrow at 9:00 */
+                 | ("today" | "tomorrow" | "yesterday" | ("this" | "next" | "last") ("week" | "month")) ("at" CLOCK)?
 built_in       ::= "now" | "me" | "none" | "true" | "false"
 qualified      ::= NAME ("::" NAME)*
 

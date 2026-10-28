@@ -3600,6 +3600,37 @@ namespace one::language {
             return nullptr;
         }
 
+        // today, tomorrow and yesterday; this, next and last week or month: a day, a week
+        // from Monday or a month, at its start on the calendar where it's read, and at a
+        // time of day after at, like tomorrow at 9:00. As a time's offset writes it: d+1,
+        // w+0, M-1, then @09:00. today.planned, a view named so, is still a name.
+        std::optional<std::string> parse_calendar() {
+            std::string said;
+            bool named = peek(1).kind == token_kind::dot || peek(1).kind == token_kind::scope || peek(1).kind == token_kind::left_paren;
+            if ((at_word("today") || at_word("tomorrow") || at_word("yesterday")) && !named) {
+                said = at_word("today") ? "d+0" : at_word("tomorrow") ? "d+1" : "d-1";
+                advance();
+            } else if ((at_word("this") || at_word("next") || at_word("last")) && peek(1).kind == token_kind::identifier && (peek(1).text == "week" || peek(1).text == "month")) {
+                std::string shift = at_word("this") ? "+0" : at_word("next") ? "+1" : "-1";
+                advance();
+                said = (advance().text == "week" ? "w" : "M") + shift;
+            } else {
+                return std::nullopt;
+            }
+            if (at_word("at") && peek(1).kind == token_kind::number) {
+                advance();
+                const token& clock = advance();
+                std::string text = clock.text;
+                auto colon = text.find(':');
+                std::string hour = text.substr(0, colon), minute = colon == std::string::npos ? "00" : text.substr(colon + 1);
+                if (hour.size() > 2 || minute.size() != 2 || std::stoi(hour) > 23 || std::stoi(minute) > 59 || text.find('.') != std::string::npos) {
+                    fail(clock.where, "a time of day is hours and minutes on a 24-hour clock, like 9:00 or 18:30");
+                }
+                said += "@" + std::string(hour.size() == 1 ? "0" : "") + hour + ":" + minute;
+            }
+            return said;
+        }
+
         // 10 minutes from now, or 2 days ago, outside a filter: said in full, so a
         // number and a word after it are never taken for one by mistake.
         bool counted_from_now() {
@@ -3630,6 +3661,10 @@ namespace one::language {
                     fail_expecting("ago or from now, like " + amount + " " + unit.text + " ago");
                 }
                 e->node = literal_expression{literal_expression::kind::time, sign + amount + unit_of(unit.text)};
+            } else if (auto day = parse_calendar()) {
+                e->node = literal_expression{literal_expression::kind::time, *day};
+            } else if (at(token_kind::number) && peek().text.find(':') != std::string::npos) {
+                fail_expecting("a day before a time of day, like tomorrow at " + peek().text);
             } else if (at(token_kind::number)) {
                 e->node = literal_expression{literal_expression::kind::number, advance().text};
             } else if (at_word("match") && peek(1).kind == token_kind::identifier) {

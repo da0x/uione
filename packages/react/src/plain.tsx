@@ -879,6 +879,23 @@ export const plain: ComponentSet = {
                     </option>
                   ))}
                 </select>
+              ) : field.type === "date" ? (
+                // A day, and a time of day if it has one, as 2026-10-28 or 2026-10-28T09:00.
+                <span>
+                  <input
+                    {...common}
+                    type="date"
+                    value={field.value.slice(0, 10)}
+                    onChange={(event) => field.onChange(event.target.value === "" ? "" : event.target.value + (field.value.includes("T") ? field.value.slice(10) : ""))}
+                  />
+                  <input
+                    type="time"
+                    aria-label={`${field.label}, at`}
+                    value={field.value.includes("T") ? field.value.slice(11, 16) : ""}
+                    disabled={field.value === ""}
+                    onChange={(event) => field.onChange(field.value.slice(0, 10) + (event.target.value === "" ? "" : "T" + event.target.value))}
+                  />
+                </span>
               ) : (
                 <input
                   {...common}

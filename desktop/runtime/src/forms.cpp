@@ -68,7 +68,7 @@ namespace one::desktop::runtime {
 				field_parts.push_back(desktop::column(std::move(each)).spacing(4));
 			} else {
 				bool several = f.type == "markdown";
-				std::string placeholder = f.type == "date" ? "YYYY-MM-DD" : f.type == "list" ? "Separated by commas" : "";
+				std::string placeholder = f.type == "date" ? "YYYY-MM-DD, and a time if it has one, like 9:00" : f.type == "list" ? "Separated by commas" : "";
 				field_parts.push_back(desktop::field(model.written(f), {.placeholder = placeholder, .multiline = several, .lines = several ? 6 : 1}));
 			}
 			if (!f.hint.empty()) field_parts.push_back(desktop::text(f.hint, t.quiet()));

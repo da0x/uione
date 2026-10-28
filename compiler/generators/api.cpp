@@ -2011,8 +2011,21 @@ namespace one::generators {
         }
 
         // 10 minutes from now, or 2 days ago: a time counted from when the command runs.
+        // Or tomorrow, next week or this month at 9:00: on the server, by the calendar in
+        // UTC, as the other days a server counts are.
         std::string counted(const std::string& offset) {
             counts_time_ = true;
+            if (offset[0] == 'd' || offset[0] == 'w' || offset[0] == 'M') {
+                auto at = offset.find('@');
+                std::string on = offset.substr(1, at == std::string::npos ? std::string::npos : at - 1);
+                std::string hour = "0", minute = "0";
+                if (at != std::string::npos) hour = std::to_string(std::stoi(offset.substr(at + 1, 2))), minute = std::to_string(std::stoi(offset.substr(at + 4, 2)));
+                std::string day = offset[0] == 'd'   ? "c.Now().UTC().Day()" + on
+                                  : offset[0] == 'w' ? "c.Now().UTC().Day()-(int(c.Now().UTC().Weekday())+6)%7+7*(" + on + ")"
+                                                     : "1";
+                std::string month = offset[0] == 'M' ? "c.Now().UTC().Month()+time.Month(" + on + ")" : "c.Now().UTC().Month()";
+                return "time.Date(c.Now().UTC().Year(), " + month + ", " + day + ", " + hour + ", " + minute + ", 0, 0, time.UTC)";
+            }
             static const std::map<char, std::string> units{{'m', "time.Minute"}, {'h', "time.Hour"}, {'d', "24 * time.Hour"}, {'w', "7 * 24 * time.Hour"}};
             std::string sign = offset.substr(0, 1) == "-" ? "-" : "";
             std::string amount = offset.substr(1, offset.size() - 2);
