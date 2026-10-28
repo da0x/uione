@@ -323,6 +323,27 @@ namespace one::generators {
             return out + "})";
         }
 
+        // calendar planner.tasks by due { ... }: its rows on their days, picked as the
+        // screen picks them, and moved by its command.
+        std::string calendar(screen_parts& parts, const std::string& ns, const language::calendar_item& c) {
+            std::string view = screens::full_view(ns, c.view.text());
+            std::string list = c.list.empty() ? "rows" : c.list;
+            std::string out = "calendar(p, {.view = " + view_variable(parts, view) + ", .list = " + str(list) + ", .by = " + str(c.by);
+            if (c.month) out += ", .month = " + condition(parts, ns, *c.month);
+            std::string columns;
+            for (const auto& column : c.columns) {
+                std::string field = screens::text_of(*column.value);
+                columns += (columns.empty() ? "" : ", ") + std::string("{") + str(field) + ", " + str(column.label.value_or(screens::label(field))) + "}";
+            }
+            out += ", .columns = {" + columns + "}";
+            if (c.move) out += ", .move = " + str(screens::full_command(ns, *c.move));
+            if (std::string tint = tint_of(ns, c.view, c.list, c.tint); !tint.empty()) out += ", .tint = " + tint;
+            for (const auto& [name, of] : picks_) {
+                if (of.view == view && of.list == list) out += ", .pick = " + str(route_ + " " + name);
+            }
+            return out + ", .key = " + str(route_ + " " + list) + "})";
+        }
+
         // paper document_page.blocks { ... }: its blocks' parts as the fields keeping them, its
         // commands, and the screen's pick of its blocks, which the caret's block is.
         std::string paper(screen_parts& parts, const std::string& ns, const language::paper_item& paper) {
@@ -1625,6 +1646,8 @@ namespace one::generators {
                     code = monitor(parts, ns, *m);
                 } else if (auto* b = std::get_if<language::board_item>(&item.node)) {
                     code = board(parts, ns, *b, screen);
+                } else if (auto* c = std::get_if<language::calendar_item>(&item.node)) {
+                    code = calendar(parts, ns, *c);
                 } else if (auto* c = std::get_if<language::canvas_item>(&item.node)) {
                     code = canvas(parts, ns, *c);
                 } else if (auto* c = std::get_if<language::pipeline_item>(&item.node)) {

@@ -164,6 +164,8 @@ namespace one::desktop::runtime {
 	desktop::view form(page& p, form_spec spec);
 	desktop::view table(page& p, table_spec spec);
 	desktop::view board(page& p, board_spec spec);
+	// A list's rows on the days a date of theirs says (see calendar_spec).
+	desktop::view calendar(page& p, calendar_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
 	desktop::view collage(page& p, collage_spec spec);
 	// A list's rows as one sheet of paper, written on in place: each a block of words

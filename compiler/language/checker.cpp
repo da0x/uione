@@ -3574,6 +3574,8 @@ namespace one::language {
                     verify_grid(ns, *grid, route);
                 } else if (auto* board = std::get_if<board_item>(&item.node)) {
                     verify_board(ns, *board, route);
+                } else if (auto* calendar = std::get_if<calendar_item>(&item.node)) {
+                    verify_calendar(ns, *calendar, route);
                 } else if (auto* canvas = std::get_if<canvas_item>(&item.node)) {
                     verify_canvas(ns, *canvas, route);
                 } else if (auto* picture = std::get_if<picture_item>(&item.node)) {
@@ -3877,6 +3879,36 @@ namespace one::language {
                     error(board.move->command.where, "a board's cards are " + card->name + "s, so they're moved by a command on " + card->name + ", like " + card->name + "::move");
                 }
                 verify_along(ns, *board.move, route);
+            }
+        }
+
+        // calendar planner.tasks by due { ... }: its rows hold the date placing each on its
+        // day, and are moved to another by a command on what they are.
+        void verify_calendar(const std::string& ns, const calendar_item& calendar, const std::string& route) {
+            if (calendar.month) verify_condition(ns, *calendar.month, route);
+            const view_each* rows = named_list(ns, calendar.view, calendar.list, route);
+            if (!rows) return;
+            const entity_declaration* row = listed_entity(ns, *rows);
+            if (!row) return;
+            const field* by = find_field(*row, calendar.by);
+            if (!by) {
+                error(calendar.by_where, "entity " + row->name + " has no field " + calendar.by + nearest(calendar.by, field_names(*row)));
+            } else if (!by->type || by->type->text() != "date") {
+                error(calendar.by_where, row->name + "." + calendar.by + " places each on its day, so it's a date, like due  date");
+            } else if (!in_rows(*rows, calendar.by)) {
+                error(calendar.by_where, "view " + calendar.view.text() + " has no " + calendar.by + " in its " + (calendar.list.empty() ? std::string("rows") : calendar.list) + "; add it to the list's block");
+            }
+            verify_tint(ns, *rows, calendar.view.text(), calendar.tint, calendar.tint_where);
+            if (calendar.columns.empty()) error(calendar.view.where, "a calendar's rows show something, their title first, like title");
+            for (const auto& shown : calendar.columns) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*rows, key)) error(shown.where, "view " + calendar.view.text() + " has no " + key + " in its " + (calendar.list.empty() ? std::string("rows") : calendar.list) + "; add it to the list's block");
+            }
+            if (calendar.move) {
+                verify_command_use(ns, *calendar.move);
+                if (calendar.move->parts.size() == 2 && calendar.move->parts[0] != row->name) {
+                    error(calendar.move_where, "a calendar's rows are " + row->name + "s, so they're moved by a command on " + row->name + ", like " + row->name + "::plan");
+                }
             }
         }
 

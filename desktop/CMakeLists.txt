@@ -112,6 +112,7 @@ if(ONE_DESKTOP_RUNTIME)
 	add_library(one_desktop_runtime
 		runtime/src/between.cpp
 		runtime/src/board.cpp
+		runtime/src/calendar.cpp
 		runtime/src/canvas.cpp
 		runtime/src/collage.cpp
 		runtime/src/charts.cpp

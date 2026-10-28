@@ -784,6 +784,63 @@ TEST("a board: its columns, cards tinted by priority with their labels and peopl
 	matches_golden("board", {1000, 600}, [&] { return drawn(nav); });
 }
 
+TEST("a calendar: a week of days, each row on its day, a day alone first, the one picked marked, and one moved keeping its time of day") {
+	using namespace std::chrono;
+	memory_source data;
+	auto at = [](int d, int h = -1, int m = 0) {
+		value t;
+		t.type = value::kind::time;
+		auto day = sys_days(year(2026) / September / d);
+		t.time.seconds = (h < 0 ? sys_seconds(day) : sys_seconds(day + hours(h) + minutes(m))).time_since_epoch().count();
+		return t;
+	};
+	auto task = [&](std::string id, std::string title, value due, std::string priority) {
+		return value(fields{{"id", std::move(id)}, {"title", std::move(title)}, {"due", std::move(due)}, {"priority", std::move(priority)}});
+	};
+	data.set("orbit::planner", "",
+	         value(fields{{"tasks", list{task("t1", "Call the bank", at(15, 9, 30), "normal"), task("t2", "Water plants", at(15), "low"), task("t3", "Dentist", at(17, 14), "high"),
+	                                     task("t4", "Pay rent", at(18), "high")}}}));
+	site s{.name = "orbit", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Calendar", "/", "", [](page& p) {
+		                     return calendar(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .columns = {{"title", "Title"}}, .move = "orbit::task::plan",
+		                                         .tint = tint_spec{"priority", {"high", "normal", "low"}}, .pick = "/ task", .key = "/ tasks"});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	// The week of Monday, September 14, 2026, read in UTC.
+	nav.current().kept<std::string>("calendar / tasks").set("2026-09-16");
+	nav.current().pick("/ task", "t3");
+	matches_golden("calendar-week", {1000, 420}, [&] { return drawn(nav); });
+	auto& p = nav.current();
+	auto model = calendar_of(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .columns = {{"title", "Title"}}, .key = "/ tasks"});
+	CHECK(model.days.size() == 7);
+	if (model.days.size() != 7) return;
+	CHECK(model.days[0].date == "2026-09-14");
+	CHECK(model.days[0].weekday == "Mon");
+	CHECK(model.days[1].cards.size() == 2);
+	if (model.days[1].cards.size() != 2) return;
+	CHECK(model.days[1].cards[0].title == "Water plants");  // a day alone first
+	CHECK(model.days[1].cards[1].time == "09:30");
+	// Moved to Friday, at the same time of day; a day alone stays one.
+	calendar_move(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .move = "orbit::task::plan", .key = "/ tasks"}, "t1", "2026-09-18");
+	calendar_move(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .move = "orbit::task::plan", .key = "/ tasks"}, "t2", "2026-09-16");
+	CHECK(data.runs().size() == 2);
+	if (data.runs().size() != 2) return;
+	CHECK(data.runs()[0].command == "orbit::task::plan");
+	CHECK(data.runs()[0].fields["due"].time.seconds == at(18, 9, 30).time.seconds);
+	CHECK(data.runs()[1].fields["due"].time.seconds == at(16).time.seconds);
+	// A month's grid: from the Monday before the first, to the Sunday after the last.
+	calendar_go(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .month = true, .key = "/ tasks"}, 0);
+	p.kept<std::string>("calendar / tasks").set("2026-09-16");
+	auto month = calendar_of(p, {.view = p.view("orbit::planner", ""), .list = "tasks", .by = "due", .month = true, .columns = {{"title", "Title"}}, .key = "/ tasks"});
+	CHECK(month.title == "September 2026");
+	CHECK(month.days.size() == 35);
+	CHECK(month.days.front().date == "2026-08-31");
+	CHECK(!month.days.front().in_month);
+	CHECK(month.days.back().date == "2026-10-04");
+}
+
 // Started by publish, whose agents stop when it quits: closing the window asks first
 // while one is working on a card, naming it, Esc puts the question away, and closing
 // again closes it; with nothing worked on, or agents that don't stop with it, it closes.

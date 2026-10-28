@@ -91,6 +91,9 @@ namespace one::language {
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
+        drawn_by{"calendar", "a list's rows on the days a date of theirs says, a week side by side", "web desktop terminal"},
+        drawn_by{"calendar.month", "a calendar as a month's grid while a condition holds", "web desktop terminal"},
+        drawn_by{"calendar.move", "a calendar's row dragged to another day", "web desktop"},
         drawn_by{"collage.copy", "a collage copied as a picture", "web desktop"},
         drawn_by{"collage.save", "a collage saved as a picture", "web desktop"},
         drawn_by{"collage.preview", "a collage's preview", "web desktop"},
@@ -374,6 +377,10 @@ namespace one::language {
                         if (n.warm) use("paper.warm");
                         if (n.spread) use("paper.spread");
                         if (n.read_only) use("paper.read_only");
+                    } else if constexpr (std::is_same_v<T, calendar_item>) {
+                        use("calendar");
+                        if (n.month) use("calendar.month");
+                        if (n.move) use("calendar.move");
                     } else if constexpr (std::is_same_v<T, paper_insert>) {
                         use(n.sizes ? "paper.size" : "paper.insert");
                         if (!n.keys.empty()) use("key");

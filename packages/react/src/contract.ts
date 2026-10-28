@@ -258,6 +258,41 @@ export interface BoardProps {
   onColumn?: (column: string) => void;
 }
 
+// A calendar: what it's on, like October 2026, and the ways back, to today and on; its
+// days, a week side by side or a month's grid, each with the rows on it, a day alone
+// first, then by their time of day, each picked with a click and dragged to another
+// day (decision 0023).
+export interface CalendarProps {
+  status: ViewStatus;
+  title: string;
+  month: boolean;
+  days: CalendarDay[];
+  error?: string;
+  back: { label: string; onClick: () => void }; // like Last week
+  next: { label: string; onClick: () => void };
+  onToday: () => void;
+  onMove?: (card: string, date: string) => void; // absent when no row can be moved
+}
+
+export interface CalendarDay {
+  date: string; // 2026-10-28
+  label: string; // Wed 28, or 28 in a month's grid
+  today: boolean;
+  inMonth: boolean; // in a month's grid, a day of that month, not one around it
+  cards: CalendarCard[];
+  more: number; // how many more there are than it shows, in a month's grid
+}
+
+export interface CalendarCard {
+  id: string;
+  title: ReactNode;
+  time: string; // like 09:00, or nothing for a day alone
+  details: ReactNode[];
+  tone?: number; // how urgent it is, 1 the most, up to 5, as a table's row
+  picked?: boolean;
+  onPick?: () => void;
+}
+
 // A pipeline, like a release's: a lane for each kind of card, in the order their stages
 // come, and in it a row for each card, its kind's stages along it, each done, the one
 // it's at now, one still to come, or the one it failed in.
@@ -716,6 +751,7 @@ export interface ComponentSet {
   Table: ComponentType<TableProps>;
   Grid: ComponentType<GridProps>;
   Board: ComponentType<BoardProps>;
+  Calendar: ComponentType<CalendarProps>;
   Canvas: ComponentType<CanvasProps>;
   Pipeline: ComponentType<PipelineProps>;
   Toolbar: ComponentType<ToolbarProps>;

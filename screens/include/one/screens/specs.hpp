@@ -228,6 +228,21 @@ namespace one::screens {
 		std::string pick = "";  // the screen's pick of its cards, by name: a card's click picks it
 	};
 
+	// A list's rows on the days a date of theirs says: a week of days side by side, or a
+	// month's grid while month holds; one dragged to another day sent to move with its
+	// date there, its time of day kept (decision 0023).
+	struct calendar_spec {
+		state<view_state> view;
+		std::string list;
+		std::string by;               // the date placing a row on its day, like due
+		bool month = false;           // a month's grid, or a week
+		std::vector<column> columns = {};  // what a row shows, its title first
+		std::string move = "";        // the command a row dragged to another day is sent to
+		std::optional<tint_spec> tint = std::nullopt;
+		std::string pick = "";        // the screen's pick of its rows, by name: a row's click picks it
+		std::string key = "";         // what keeps the day it's on apart from another calendar's
+	};
+
 	// A pipeline: a list's rows in a lane for each kind its `lanes` field says, each a
 	// row of the stages of `over` its kind goes through, as their `path` field lists.
 	struct pipeline_spec {

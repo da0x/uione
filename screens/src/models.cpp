@@ -916,6 +916,125 @@ namespace one::screens {
 		return at.string();
 	}
 
+	namespace {
+		// The day a calendar is on: the one it's been gone to, or today, where it's read.
+		std::chrono::local_days calendar_day_of(page_base& p, const calendar_spec& spec) {
+			using namespace std::chrono;
+			std::string kept = p.kept<std::string>("calendar " + spec.key).get();
+			local_days today = floor<days>(time_zone()->to_local(system_clock::now()));
+			if (kept.empty()) return today;
+			std::istringstream in(kept);
+			year_month_day day{};
+			in >> parse("%F", day);
+			return in.fail() ? today : local_days(day);
+		}
+	}  // namespace
+
+	calendar_model calendar_of(page_base& p, const calendar_spec& spec) {
+		using namespace std::chrono;
+		calendar_model out;
+		out.month = spec.month;
+		const view_state& v = spec.view.get();
+		if (v.status == status::loading) out.loading = true;
+		if (v.status == status::failed) out.error = v.error.empty() ? "This couldn't be read." : v.error;
+		local_days on = calendar_day_of(p, spec);
+		local_days today = floor<days>(time_zone()->to_local(system_clock::now()));
+		year_month_day shown(on);
+		// From Monday: the week it's on, or the weeks a month's days fall in.
+		local_days first = on, final;
+		if (spec.month) {
+			local_days start = local_days(shown.year() / shown.month() / 1);
+			local_days end = local_days(year_month_day_last(shown.year(), month_day_last(shown.month())));
+			first = start - days((weekday(start).c_encoding() + 6) % 7);
+			final = end + days(6 - (weekday(end).c_encoding() + 6) % 7);
+			out.title = std::format("{:%B %Y}", start);
+		} else {
+			first = on - days((weekday(on).c_encoding() + 6) % 7);
+			final = first + days(6);
+			std::string day = std::format("{:%b %e, %Y}", first);
+			if (auto doubled = day.find("  "); doubled != std::string::npos) day.erase(doubled, 1);
+			out.title = "Week of " + day;
+		}
+		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
+		std::string title = spec.columns.empty() ? "title" : spec.columns.front().field;
+		// Each row on its day, as it's read here: a day alone that day wherever it's read.
+		struct placed {
+			local_days day;
+			std::optional<local_time<minutes>> at;
+			const value* row;
+		};
+		std::vector<placed> rows;
+		for (const auto& row : rows_of(v, spec.list)) {
+			const value& when = field_of(row, spec.by);
+			if (!when.is_time()) continue;
+			auto at = time_point_cast<system_clock::duration>(when.as_time());
+			bool alone = floor<days>(at) == at;
+			local_time<minutes> here = floor<minutes>(alone ? local_days(floor<days>(at).time_since_epoch()) : time_zone()->to_local(at));
+			rows.push_back({floor<days>(here), alone ? std::nullopt : std::optional(here), &row});
+		}
+		std::stable_sort(rows.begin(), rows.end(), [](const placed& a, const placed& b) {
+			if (a.at.has_value() != b.at.has_value()) return !a.at.has_value();
+			return a.at && b.at && *a.at < *b.at;
+		});
+		for (local_days d = first; d <= final; d += days(1)) {
+			year_month_day ymd(d);
+			calendar_day day{std::format("{:%F}", d), std::format("{:%a}", weekday(d)), static_cast<int>(static_cast<unsigned>(ymd.day())), d == today,
+			                 !spec.month || ymd.month() == shown.month(), {}};
+			for (const auto& r : rows) {
+				if (r.day != d) continue;
+				const value& row = *r.row;
+				calendar_card card{row["id"].as_string(), show(field_of(row, title)), {}, r.at ? std::format("{:%H:%M}", *r.at) : "", tone_of(row, spec.tint),
+				                   row["id"].as_string() == picked};
+				for (std::size_t i = 1; i < spec.columns.size(); ++i) {
+					if (std::string said = show(field_of(row, spec.columns[i].field)); !said.empty()) card.details.push_back(said);
+				}
+				day.cards.push_back(std::move(card));
+			}
+			out.days.push_back(std::move(day));
+		}
+		return out;
+	}
+
+	void calendar_go(page_base& p, const calendar_spec& spec, int by) {
+		using namespace std::chrono;
+		auto kept = p.kept<std::string>("calendar " + spec.key);
+		if (by == 0) return kept.set("");
+		local_days on = calendar_day_of(p, spec);
+		if (spec.month) {
+			year_month_day day(on);
+			on = local_days(year_month_day(day.year() / day.month() / 1) + months(by));
+		} else {
+			on += days(7 * by);
+		}
+		kept.set(std::format("{:%F}", on));
+	}
+
+	void calendar_move(page_base& p, const calendar_spec& spec, const std::string& row, const std::string& date) {
+		using namespace std::chrono;
+		if (spec.move.empty()) return;
+		std::istringstream in(date);
+		year_month_day day{};
+		in >> parse("%F", day);
+		if (in.fail()) return;
+		value when;
+		for (const auto& r : rows_of(spec.view.get(), spec.list)) {
+			if (r["id"].as_string() == row) when = field_of(r, spec.by);
+		}
+		// A day alone stays one; a time of day stays the same, on the day it's moved to.
+		sys_seconds to = sys_days(local_days(day).time_since_epoch());
+		if (when.is_time()) {
+			auto at = time_point_cast<system_clock::duration>(when.as_time());
+			if (floor<days>(at) != at) {
+				auto here = time_zone()->to_local(at);
+				to = floor<seconds>(time_zone()->to_sys(local_days(day) + (floor<seconds>(here) - floor<days>(here)), choose::earliest));
+			}
+		}
+		value moved;
+		moved.type = value::kind::time;
+		moved.time.seconds = to.time_since_epoch().count();
+		p.run(spec.move, value(std::map<std::string, value>{{"id", row}, {spec.by, moved}}));
+	}
+
 	board_model board_of(page_base& p, const board_spec& spec) {
 		board_model out;
 		out.key = "board:" + spec.list;

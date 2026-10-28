@@ -1163,6 +1163,99 @@ export const radix: ComponentSet = {
       </p>
     </div>
   ),
+  // A calendar: what it's on, beside the ways back, to today and on; then its days, a
+  // week side by side or a month's grid, today's in the accent, each with its rows, a
+  // day alone first, each picked with a click or Enter and dragged to another day,
+  // where it's outlined while a row is carried over it.
+  Calendar: function RadixCalendar({ status, title, month, days, error, back, next, onToday, onMove }) {
+    const [over, setOver] = useState<string>();
+    const tool = "inline-flex size-8 items-center justify-center rounded-control text-ink hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent";
+    return (
+      <div aria-busy={status === "loading"} className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <h2 className="mr-auto text-lg font-semibold" style={{ fontFamily: "var(--font-heading, var(--font-sans))" }}>
+            {title}
+          </h2>
+          <button type="button" aria-label={back.label} title={back.label} onClick={back.onClick} className={tool}>
+            {buttonIcons["previous"]}
+          </button>
+          <button type="button" onClick={onToday} className={`${pressable} ${button.secondary}`}>
+            Today
+          </button>
+          <button type="button" aria-label={next.label} title={next.label} onClick={next.onClick} className={tool}>
+            {buttonIcons["next"]}
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+        <div className={`grid min-h-0 flex-1 grid-cols-7 gap-2 ${month ? "auto-rows-fr" : ""}`}>
+          {days.map((day) => (
+            <section
+              key={day.date}
+              aria-label={day.date}
+              onDragOver={(event) => {
+                if (!onMove) return;
+                event.preventDefault();
+                if (over !== day.date) setOver(day.date);
+              }}
+              onDragLeave={() => over === day.date && setOver(undefined)}
+              onDrop={(event) => {
+                if (!onMove) return;
+                event.preventDefault();
+                setOver(undefined);
+                onMove(event.dataTransfer.getData("text/plain"), day.date);
+              }}
+              className={`flex min-h-24 min-w-0 flex-col gap-1.5 rounded-box border p-2 ${day.inMonth ? "bg-surface" : "bg-sunken"} ${
+                over === day.date ? "border-accent ring-2 ring-accent/30" : "border-line"
+              }`}
+            >
+              <h3 className={`text-xs ${day.today ? "font-semibold text-accent" : day.inMonth ? "text-muted" : "text-muted/60"}`}>{day.label}</h3>
+              <ul className="flex flex-col gap-1.5">
+                {day.cards.map((card) => (
+                  <li
+                    key={card.id}
+                    tabIndex={card.onPick ? 0 : undefined}
+                    aria-selected={card.onPick ? card.picked === true : undefined}
+                    draggable={onMove ? true : undefined}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", card.id);
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onClick={card.onPick}
+                    onKeyDown={(event) => {
+                      if (card.onPick && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        card.onPick();
+                      }
+                    }}
+                    className={`relative overflow-hidden rounded-control border bg-surface py-1.5 pr-2 pl-2.5 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+                      card.picked ? "border-accent ring-2 ring-accent/30" : "border-line"
+                    } ${onMove ? "cursor-grab active:cursor-grabbing" : card.onPick ? "cursor-pointer" : ""}`}
+                  >
+                    {edged(card.tone) && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ background: edged(card.tone) }} />}
+                    {card.time && <span className="block text-xs text-muted tabular-nums">{card.time}</span>}
+                    <span className="block leading-snug">{card.title}</span>
+                    {card.details.length > 0 && (
+                      <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
+                        {card.details.map((detail, i) => (
+                          <span key={i}>{detail}</span>
+                        ))}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {day.more > 0 && <p className="text-xs text-muted">{day.more} more</p>}
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  },
+
   Board: function RadixBoard({ status, columns, error, onMove, onArrange, search, tools, filtered, column, onColumn }) {
     const [dragged, setDragged] = useState<{ card: string; from: string; reaches: string[] }>();
     const [over, setOver] = useState<string>();

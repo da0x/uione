@@ -608,6 +608,51 @@ export const plain: ComponentSet = {
       />
     </div>
   ),
+  // A calendar: what it's on and the ways back and on, then each day, a region named
+  // by it, its rows a list, each picked with a click; a row is dragged to another day.
+  Calendar: ({ status, title, days, error, back, next, onToday, onMove }) => (
+    <div aria-busy={status === "loading"}>
+      <h2>{title}</h2>
+      <button type="button" onClick={back.onClick}>
+        {back.label}
+      </button>
+      <button type="button" onClick={onToday}>
+        Today
+      </button>
+      <button type="button" onClick={next.onClick}>
+        {next.label}
+      </button>
+      {error && <p role="alert">{error}</p>}
+      {days.map((day) => (
+        <section
+          key={day.date}
+          aria-label={day.date}
+          data-today={day.today ? "" : undefined}
+          onDragOver={(event) => onMove && event.preventDefault()}
+          onDrop={(event) => onMove && onMove(event.dataTransfer.getData("text/plain"), day.date)}
+        >
+          <h3>{day.label}</h3>
+          <ul>
+            {day.cards.map((card) => (
+              <li
+                key={card.id}
+                aria-selected={card.onPick ? card.picked === true : undefined}
+                onClick={card.onPick}
+                draggable={onMove ? true : undefined}
+                onDragStart={(event) => event.dataTransfer.setData("text/plain", card.id)}
+              >
+                {card.time && <time>{card.time}</time>} {card.title}
+                {card.details.map((detail, i) => (
+                  <span key={i}> · {detail}</span>
+                ))}
+              </li>
+            ))}
+          </ul>
+          {day.more > 0 && <p>{day.more} more</p>}
+        </section>
+      ))}
+    </div>
+  ),
   Board: ({ status, columns, error, onMove, onArrange, search, tools, filtered }) => (
     <>
       {filtered && (

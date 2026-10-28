@@ -2202,6 +2202,62 @@ namespace one::language {
                 end_line();
                 return {where, std::move(board), std::move(shown_when)};
             }
+            // calendar planner.tasks by due { ... }: a list's rows on their days.
+            if (at_word("calendar") && peek(1).kind == token_kind::identifier && (peek(2).kind == token_kind::dot || (peek(2).kind == token_kind::identifier && peek(2).text == "by"))) {
+                advance();
+                calendar_item calendar;
+                calendar.view = parse_qualified_name("the view whose list it shows, like planner");
+                // A list of the view's, or the view's own, like posters.
+                if (at(token_kind::dot)) {
+                    advance();
+                    calendar.list = expect(token_kind::identifier, "the view's list, like tasks").text;
+                }
+                if (!at_word("by")) fail_expecting("by and the date placing each on its day, like by due");
+                advance();
+                calendar.by_where = peek().where;
+                calendar.by = expect(token_kind::identifier, "the date placing each on its day, like due").text;
+                expression_ptr shown_when = shown_while();
+                if (at(token_kind::left_brace)) {
+                    advance();
+                    while (in_block()) {
+                        // month when month: a month's grid while it holds, a week otherwise.
+                        if (at_word("month") && peek(1).kind == token_kind::identifier && peek(1).text == "when") {
+                            advance();
+                            advance();
+                            calendar.month = parse_expression();
+                            end_line();
+                            continue;
+                        }
+                        // move task::plan: what one dragged to another day is sent to.
+                        if (at_word("move") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::scope) {
+                            advance();
+                            calendar.move_where = peek().where;
+                            calendar.move = parse_qualified_name("the command a row dragged to another day is sent to, like task::plan");
+                            end_line();
+                            continue;
+                        }
+                        if (at_word("tint") && peek(1).kind == token_kind::identifier && peek(1).text == "by") {
+                            advance();
+                            advance();
+                            calendar.tint_where = peek().where;
+                            calendar.tint = expect(token_kind::identifier, "the field whose choice colors it, like priority").text;
+                            end_line();
+                            continue;
+                        }
+                        while (!at_line_end()) {
+                            table_column column;
+                            column.where = peek().where;
+                            column.value = parse_postfix();
+                            if (at(token_kind::string)) column.label = advance().text;
+                            calendar.columns.push_back(std::move(column));
+                        }
+                        end_line();
+                    }
+                    expect(token_kind::right_brace, "'}'");
+                }
+                end_line();
+                return {where, std::move(calendar), std::move(shown_when)};
+            }
             if (at_word("pipeline") && peek(1).kind != token_kind::scope) {
                 advance();
                 pipeline_item pipeline;

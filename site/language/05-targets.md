@@ -78,7 +78,7 @@ boards.one:13:4: error: a board's move … along isn't drawn by the terminal app
 The web and the desktop draw every element and every kind of field. A terminal draws
 no pictures and has no screen of its own, so it can't show a picture on a card or a
 table's row, crop a collage's picture, copy, save or keep a picture of a collage, or
-take a screenshot or choose pictures from files, and it isn't written on in place, so it has no paper; everything
+take a screenshot or choose pictures from files, or drag a calendar's row to another day, and it isn't written on in place, so it has no paper; everything
 else it draws in its own way, a collage as a list of its layers. A landing design is drawn as a plain screen on the desktop and in a
 terminal.
 

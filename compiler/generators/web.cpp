@@ -1233,6 +1233,26 @@ namespace one::generators {
                     shown_while(out, parts, ns, item, [&] { this->monitor(out, parts, ns, *monitor); });
                 } else if (auto* board = std::get_if<language::board_item>(&item.node)) {
                     shown_while(out, parts, ns, item, [&] { this->board(out, parts, ns, *board, screen); });
+                } else if (auto* calendar = std::get_if<language::calendar_item>(&item.node)) {
+                    // A list's rows on their days, picked as the screen picks them, and moved by its command.
+                    parts.components.insert("Calendar");
+                    std::string view = full_view(ns, calendar->view.text());
+                    std::string list = calendar->list.empty() ? "rows" : calendar->list;
+                    std::string line = "<Calendar view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(list) + " by=" + web_detail::js_string(calendar->by);
+                    if (calendar->month) line += " month={" + condition(parts, ns, *calendar->month) + "}";
+                    std::string columns;
+                    for (const auto& column : calendar->columns) {
+                        std::string field = web_detail::text_of(*column.value);
+                        columns += (columns.empty() ? "" : ", ") + web_detail::js_string(field) + ": " + web_detail::js_string(column.label.value_or(web_detail::label(field)));
+                    }
+                    line += " columns={{ " + columns + " }}";
+                    if (calendar->move) line += " move=" + web_detail::js_string(full_command(ns, *calendar->move));
+                    line += tint_on(ns, calendar->view, calendar->list, calendar->tint);
+                    for (const auto& [name, of] : picks_) {
+                        if (of.view == view && of.list == list) line += " pick=" + web_detail::js_string(route_ + " " + name);
+                    }
+                    line += " name=" + web_detail::js_string(route_ + " " + list) + " />";
+                    shown_while(out, parts, ns, item, [&] { out.line(line); });
                 } else if (auto* canvas = std::get_if<language::canvas_item>(&item.node)) {
                     shown_while(out, parts, ns, item, [&] { this->canvas(out, parts, ns, *canvas); });
                 } else if (auto* pipeline = std::get_if<language::pipeline_item>(&item.node)) {

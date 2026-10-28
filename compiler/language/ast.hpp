@@ -1052,6 +1052,24 @@ namespace one::language {
         location status_where;
     };
 
+    // calendar planner.tasks by due { month when month  move task::plan  tint by priority
+    // title }: a list's rows on the days a date of theirs says, a week of days side by
+    // side, or a month's grid while month's condition holds; one dragged to another
+    // day is sent to the move command with its date there, its time of day kept
+    // (decision 0023).
+    struct calendar_item {
+        qualified_name view;
+        std::string list;  // or none for the view's own, its rows
+        std::string by;  // the date placing a row on its day, like due
+        location by_where;
+        expression_ptr month;  // month when month: a month's grid while it holds
+        std::optional<qualified_name> move;
+        location move_where;
+        std::optional<std::string> tint;
+        location tint_where;
+        std::vector<table_column> columns;  // what a row shows, its title first
+    };
+
     // canvas board_page.issues by stage over board_page.stages link /:project/:issue { ... }:
     // a list's rows as cards placed anywhere on a surface that pans and zooms, each
     // where its fields say, dragged and resized, and placed by a command once let go.
@@ -1274,7 +1292,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item, paper_item, paper_insert>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item, paper_item, paper_insert, calendar_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.

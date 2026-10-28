@@ -28,6 +28,7 @@ relevant record before changing what it covers.
 | [0020](0020-a-screen-may-act-as-it-opens.md) | A screen may act as it's opened |
 | [0021](0021-every-picture-in-a-collage-is-a-layer.md) | Every picture in a collage is a layer like the rest |
 | [0022](0022-a-paper-is-a-page-written-in-place.md) | A paper is a page written on in place |
+| [0023](0023-a-calendar-is-a-list-on-its-days.md) | A calendar is a list on its days |
 
 ## Writing one
 

@@ -628,6 +628,45 @@ namespace one::terminal::runtime {
 
 	// A board in a terminal: its columns one after another, each its cards, as there's
 	// no room for them side by side; m on a card offers where it may go.
+	terminal::view calendar(page& p, calendar_spec spec) {
+		auto model = calendar_of(p, spec);
+		if (model.loading) return quiet("Loading…");
+		std::vector<terminal::view> parts;
+		// What it's on, and the ways back, to today and on, Page Up and Page Down too.
+		auto back = [&p, spec] { calendar_go(p, spec, -1); };
+		auto on = [&p, spec] { calendar_go(p, spec, 1); };
+		p.on_key("page_up", back);
+		p.on_key("page_down", on);
+		parts.push_back(terminal::row(terminal::text(model.title, {.bold = true}), terminal::button("‹", back), terminal::button("Today", [&p, spec] { calendar_go(p, spec, 0); }),
+		                              terminal::button("›", on))
+		                    .spacing(1));
+		if (!model.error.empty()) parts.push_back(terminal::text(model.error, colored(color::red)));
+		// Each day in turn, today's bold, those around a month's left out; its rows under
+		// it, each picked with Enter.
+		for (const auto& day : model.days) {
+			if (!day.in_month) continue;
+			if (model.month && day.cards.empty()) continue;
+			parts.push_back(terminal::text(std::format("{} {}", day.weekday, day.day), {.bold = day.today}));
+			if (day.cards.empty()) {
+				parts.push_back(quiet("  Nothing"));
+				continue;
+			}
+			std::vector<terminal::list_row> rows;
+			for (const auto& card : day.cards) {
+				std::string said = (card.time.empty() ? "" : card.time + " ") + card.title;
+				for (const auto& d : card.details) said += " · " + d;
+				rows.push_back({card.id, terminal::text((card.picked ? "› " : "  ") + said)});
+			}
+			terminal::list_options options;
+			if (!spec.pick.empty()) {
+				options.on_open = [&p, name = spec.pick](const std::string& row) { p.pick(name, row); };
+				options.start = p.picked_id(spec.pick);
+			}
+			parts.push_back(terminal::list(std::move(rows), std::move(options)));
+		}
+		return terminal::column(std::move(parts));
+	}
+
 	terminal::view board(page& p, board_spec spec) {
 		auto model = board_of(p, spec);
 		if (model.loading) return quiet("Loading…");

@@ -25,6 +25,7 @@ namespace studio at / {
 		// Whether its pictures' colors are matched, so they look like one picture.
 		matched     number  = 0
 		preview     file
+		showing     date    // the day it's shown, and when, if it's at a time of day
 	}
 
 	// What a poster is made of: pictures and words, lowest first. Around a picture is
@@ -109,6 +110,9 @@ namespace studio at / {
 	}
 
 	// Opened once more: counted, but never a step undo takes back.
+	// Shown on another day, as a calendar's poster dragged there is.
+	command poster::schedule { changes showing }
+
 	command poster::view {
 		changes views
 		apart from undo
@@ -118,7 +122,7 @@ namespace studio at / {
 	view posters {
 		each poster {
 			order by created_at descending
-			title  color  views  preview  width  height
+			title  color  views  preview  width  height  showing
 			first_layer = first(layer where layer.poster == poster.id).id
 		}
 	}
@@ -186,6 +190,32 @@ namespace studio at / {
 	screen "New poster" /new {
 		on open open /posters/:poster for posters where poster.first_layer == none && poster.width == screen.width && poster.height == screen.height
 		on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster
+	}
+
+	// The posters on the days they're shown, a week or, while it says, a month at a time.
+	screen "Schedule" /schedule {
+		layout workspace
+		pick poster from posters
+		bar {
+			link / "Posters" icon gallery key escape
+		}
+		toolbar {
+			group "Poster" {
+				poster::schedule "Today" icon sun { showing = today }
+				poster::schedule "Tomorrow at 9" { showing = tomorrow at 9:00 }
+			}
+			group "View" at end {
+				toggle month "Month" icon calendar key m
+			}
+		}
+		main {
+			calendar posters by showing {
+				month when month
+				move poster::schedule
+				title
+				color
+			}
+		}
 	}
 
 	// Every poster as it looks, from the preview it keeps of itself.

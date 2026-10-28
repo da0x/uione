@@ -303,6 +303,36 @@ namespace one::screens {
 	// Moves a card to a column, shown there at once and back if it's turned down.
 	void move_card(page_base& p, const board_spec& spec, const std::string& card, const std::string& to);
 
+	// A calendar: the days it shows, a week's or a month's from Monday, each with the
+	// rows on it, those that are a day alone first, then by their time of day.
+	struct calendar_card {
+		std::string id, title;
+		std::vector<std::string> details;
+		std::string time;  // its time of day, like 09:00, or nothing for a day alone
+		int tone = 3;
+		bool picked = false;
+	};
+	struct calendar_day {
+		std::string date;     // 2026-10-28
+		std::string weekday;  // Wed
+		int day = 1;          // 28
+		bool today = false;
+		bool in_month = true;  // in a month's grid, a day of that month, not one around it
+		std::vector<calendar_card> cards;
+	};
+	struct calendar_model {
+		std::string title;  // October 2026, or the week of Oct 26, 2026
+		bool month = false, loading = false;
+		std::vector<calendar_day> days;
+		std::string error;
+	};
+	calendar_model calendar_of(page_base& p, const calendar_spec& spec);
+	// The calendar a week or a month on, or back, by -1 or 1; or back to today, by 0.
+	void calendar_go(page_base& p, const calendar_spec& spec, int by);
+	// A row moved to another day, like 2026-10-30: sent to the move command with its date
+	// there, a day alone or at the same time of day.
+	void calendar_move(page_base& p, const calendar_spec& spec, const std::string& row, const std::string& date);
+
 	// A pipeline: a lane for each kind, in the order their stages come, each a row for
 	// a card of that kind: the stages it goes through, each done, the one it's at now,
 	// one still to come, or the one it failed in.

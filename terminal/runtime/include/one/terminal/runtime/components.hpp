@@ -140,6 +140,8 @@ namespace one::terminal::runtime {
 	terminal::view form(page& p, form_spec spec);
 	terminal::view table(page& p, table_spec spec);
 	terminal::view board(page& p, board_spec spec);
+	// A list's rows on their days, each day in turn with its rows under it.
+	terminal::view calendar(page& p, calendar_spec spec);
 	terminal::view canvas_board(page& p, canvas_spec spec);
 	terminal::view pipeline_board(page& p, pipeline_spec spec);
 	terminal::view cards(page& p, cards_spec spec);

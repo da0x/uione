@@ -327,6 +327,9 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | NAME ("::" NAME)+ ("along" qualified "." NAME | STRING? ("icon" NAME)? key* given? ("on" "when" expression)? ("when" condition)?
                                     ("then" "open" ROUTE)? ("form" STRING? "{" NEWLINE? form_line* "}")?) END
                  | "board" qualified "." NAME "by" NAME ("over" qualified "." NAME)? ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? board_line* "}")? END
+                 /* a list's rows on the days a date of theirs says, a week side by side, or a month's grid while it
+                    says; one picked with a click, and dragged to another day sent to move, its time of day kept */
+                 | "calendar" qualified ("." NAME)? "by" NAME ("when" expression)? ("{" NEWLINE? calendar_line* "}")? END
                  /* a lane for each kind of card, each a row of its kind's stages, the one it's at highlighted */
                  | "pipeline" qualified "." NAME "by" NAME "over" qualified "." NAME ("link" ROUTE)? ("when" expression)? ("{" NEWLINE? pipeline_line* "}")? END
                  /* cards placed anywhere, dragged and resized, placed by a command once let go */
@@ -340,6 +343,7 @@ series         ::= NAME ("." NAME)? STRING ("percent" | "bytes" | "rate")?
 monitor_line   ::= ("title" field_path | "status" field_path | "since" field_path | "doing" field_path
                    | "progress" field_path "of" field_path | "seen" field_path NUMBER | "chart" series) END
 field_path     ::= NAME ("." NAME)*
+calendar_line  ::= ("month" "when" expression | "move" qualified | "tint" "by" NAME | column+) END
 board_line     ::= ("move" qualified ("along" qualified "." NAME)? | "chime" "when" NAME "has" NAME | "status" "by" NAME | "tint" "by" NAME | "reorder" NAME | track | "search" (NAME ("." NAME)*)+ | NAME "::" NAME STRING? ("icon" NAME)? | column+) END
 tabs_over      ::= "over" qualified "." NAME
 condition      ::= expression | "{" NEWLINE? (expression END)+ "}"

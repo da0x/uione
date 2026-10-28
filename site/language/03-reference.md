@@ -2004,6 +2004,18 @@ form step::update "Save" {
   The card shows in its new column at once, and goes back if the move fails.
   `move task::move` alone, with no `along` and no workflow writing steps, lets a card
   go to any column from any other, as a personal board's do.
+- `calendar planner.tasks by due { ... }` shows a list's rows on the days a date of
+  theirs says, as read on the reader's calendar: a week from Monday, its days side by
+  side, or, while `month when month` holds, a month's grid, its first few rows a day
+  and how many more. On a day, the rows that are a day alone come first, then the
+  rest by their time of day. It says what it's on, like October 2026, beside the ways
+  back, to today and on, and Page Up and Page Down go a week or a month at a time. A
+  row is picked with a click when the screen picks a row of its list; with `move
+  task::plan`, one dragged to another day is sent to that command with its date
+  there, a day alone staying one and a time of day kept. `tint by priority` colors it
+  as a board's card, and what it shows are its columns, its title first. A view's own
+  list is shown by the view's name alone, `calendar posters by showing` (decision
+  0023).
 - A table and a board of the same list, one right after the other, are one: the
   person picks which they see with a switch in the toolbar, and their pick is
   remembered. The board takes the table's search and toolbar when it has none.

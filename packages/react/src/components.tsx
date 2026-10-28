@@ -14,6 +14,7 @@ import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, u
 import { hintOf, setPicked as pickRow, useInGroup, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
+import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
 import { fileName, useAuth, useFiles, useRunner, useSearch } from "./data.js";
 import type { CommandInput, ViewState } from "./data.js";
 import { action, dateOnly, label, runningTime, shortAddress, show, useLinks, useUI } from "./ui.js";
@@ -1799,6 +1800,103 @@ export interface BoardMove {
 // for each of the over list's things, in its order, and each card in the one its
 // field names. With a move, a card goes to a column a step from its own leads to,
 // for one of the person's roles; it's shown there at once, and back if the move fails.
+// What day each calendar is on, by its name, while the page is open: today until it's
+// been gone from.
+const calendarDays = new Map<string, string>();
+const calendarListeners = new Set<() => void>();
+function useCalendarDay(name: string): [Date, (to: Date | undefined) => void] {
+  const kept = useSyncExternalStore(
+    (changed) => {
+      calendarListeners.add(changed);
+      return () => calendarListeners.delete(changed);
+    },
+    () => calendarDays.get(name),
+    () => undefined,
+  );
+  const go = (to: Date | undefined) => {
+    if (to) calendarDays.set(name, dateOf(to));
+    else calendarDays.delete(name);
+    calendarListeners.forEach((changed) => changed());
+  };
+  return [kept ? dayOf(kept) : new Date(), go];
+}
+
+// A list's rows on the days a date of theirs says: a week of days side by side, or a
+// month's grid while month holds, its first few rows a day and how many more; one
+// picked with a click, and dragged to another day sent to move with its date there,
+// its time of day kept (decision 0023). The same as the desktop's.
+export function Calendar({
+  view,
+  list,
+  by,
+  month = false,
+  columns,
+  move,
+  tint,
+  pick,
+  name,
+}: {
+  view: ViewState;
+  list: string; // the rows, like tasks
+  by: string; // the date placing a row on its day, like due
+  month?: boolean; // a month's grid, or a week
+  columns: Record<string, string>; // what a row shows, its title first
+  move?: string; // the command a row dragged to another day is sent to
+  tint?: Tint;
+  pick?: string; // the screen's pick of its rows, by name: a row's click picks it
+  name: string; // what keeps the day it's on apart from another calendar's
+}) {
+  const ui = useUI();
+  const links = useLinks();
+  const runner = useConfirmedRunner();
+  const pickedId = usePickedId(pick ?? "");
+  const [on, go] = useCalendarDay(name);
+  const back = () => go(calendarGo(on, month, -1));
+  const next = () => go(calendarGo(on, month, 1));
+  useKeys(["page_up"], back);
+  useKeys(["page_down"], next);
+  const rows = view.status === "live" ? rowsOf(view.data?.[list]) : [];
+  const shown = calendarOf(rows, (row) => row[by], on, month);
+  const [title, ...rest] = Object.keys(columns);
+  return (
+    <ui.Calendar
+      status={view.status}
+      title={shown.title}
+      month={month}
+      error={move ? runner.error(move) : undefined}
+      back={{ label: month ? "Last month" : "Last week", onClick: back }}
+      next={{ label: month ? "Next month" : "Next week", onClick: next }}
+      onToday={() => go(undefined)}
+      onMove={
+        move
+          ? (card, date) => {
+              const row = rows.find((r) => r.id === card);
+              void runner.run(move, { id: card, [by]: movedTo(row?.[by], date) });
+            }
+          : undefined
+      }
+      days={shown.days.map((day) => {
+        const cards = month ? day.cards.slice(0, 3) : day.cards;
+        return {
+          date: day.date,
+          label: month ? String(day.day) : `${day.weekday} ${day.day}`,
+          today: day.today,
+          inMonth: day.inMonth,
+          more: day.cards.length - cards.length,
+          cards: cards.map(({ row, time }) => ({
+            id: row.id,
+            title: title ? cellOf(ui, links, row, title, {}) : row.id,
+            time,
+            details: rest.map((key) => cellOf(ui, links, row, key, {})).filter((detail) => detail !== ""),
+            tone: toneOf(row, tint),
+            ...(pick ? { picked: row.id === pickedId, onPick: () => pickRow(pick, row.id) } : {}),
+          })),
+        };
+      })}
+    />
+  );
+}
+
 export function Board({
   view,
   list,
