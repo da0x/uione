@@ -4,8 +4,9 @@
 // A collage: a picture made of layers, as big as its view says, drawn scaled to fit
 // with room around it, or at its own size on black filling the screen (decision
 // 0021). Pictures are cropped, turned and mirrored as each layer says, what's around
-// each drawn as it says, its edges drawn out, its edge color, a blend of it, or it
-// melted into what's under it, and words drawn over a soft shadow. A click picks a
+// each drawn as it says, its edges drawn out or its edge color, or, harmonized, what's
+// under them all filled from theirs together, each melting into it, and words drawn
+// over a soft shadow. A click picks a
 // layer, framed with its corners and the buttons over it; a picked layer is moved, or
 // resized by a corner with its shape kept unless Shift is held, snapped unless Alt
 // is. A picture is cropped in place, its whole picture faint around what's kept, and
@@ -296,16 +297,20 @@ function paintWords(c: CanvasRenderingContext2D, l: Row, said: string, size: num
   });
 }
 
-// With around blend, the board filled from a picture's edges (harmonic fill): it drawn
-// small where it is, each cell it doesn't cover settled between the colors around
-// it, and the result drawn as big as the collage, smooth as it is. Worked out again
-// only when the picture, or where it is, changes.
-const blends = new Map<string, HTMLCanvasElement>();
-function blendOf(l: Row, seen: Look, W: number, H: number): HTMLCanvasElement | undefined {
-  if (W <= 0 || H <= 0) return undefined;
-  const b = boxOf(l), kept = seen.picture;
-  const key = `${seen.key} ${b.x} ${b.y} ${b.w} ${b.h} ${W} ${H}`;
-  const known = blends.get(key);
+// Whether a layer is harmonized: blend, as kept before the two were one, is too.
+const harmonizes = (l: Row) => str(l["around"]) === "harmonize" || str(l["around"]) === "blend";
+
+// With around harmonize, what's under the collage's pictures filled from all the
+// harmonized ones together (harmonic fill): each drawn small where it is, the one on top
+// where they overlap, and every gap settled between the colors around it, so past the
+// outermost each one's colors carry on to the edge, and between two they cross from one
+// to the other. Drawn as big as the collage, smooth as it is, under all of them; worked
+// out again only when one of them, or where it is, changes. The same as the desktop's.
+const fills = new Map<string, HTMLCanvasElement>();
+function harmonizedOf(under: { l: Row; seen: Look }[], W: number, H: number): HTMLCanvasElement | undefined {
+  if (under.length === 0 || W <= 0 || H <= 0) return undefined;
+  const key = `${W} ${H} ` + under.map(({ l, seen }) => { const b = boxOf(l); return `${seen.key} ${b.x} ${b.y} ${b.w} ${b.h}`; }).join(" ");
+  const known = fills.get(key);
   if (known) return known;
   const gw = 320, gh = Math.max(1, Math.round((320 * H) / W)), s = gw / W;
   const small = document.createElement("canvas");
@@ -313,11 +318,14 @@ function blendOf(l: Row, seen: Look, W: number, H: number): HTMLCanvasElement | 
   small.height = gh;
   const c = small.getContext("2d", { willReadFrequently: true });
   if (!c) return undefined;
-  c.drawImage(kept, b.x * s, b.y * s, b.w * s, b.h * s);
+  for (const { l, seen } of under) {
+    const b = boxOf(l);
+    c.drawImage(seen.picture, b.x * s, b.y * s, b.w * s, b.h * s);
+  }
   const pixels = c.getImageData(0, 0, gw, gh);
   const cells = gw * gh, colors = new Float64Array(cells * 3), covered: boolean[] = new Array(cells);
   for (let i = 0; i < cells; i++) {
-    // Only a cell the picture covers whole is its color; one its edge crosses is part
+    // Only a cell a picture covers whole is its color; one an edge crosses is part
     // picture, part nothing, and would leave a seam of the two.
     covered[i] = pixels.data[i * 4 + 3]! >= 250;
     for (let k = 0; k < 3; k++) colors[i * 3 + k] = pixels.data[i * 4 + k]!;
@@ -328,8 +336,8 @@ function blendOf(l: Row, seen: Look, W: number, H: number): HTMLCanvasElement | 
     pixels.data[i * 4 + 3] = 255;
   }
   c.putImageData(pixels, 0, 0);
-  if (blends.size > 16) blends.clear();
-  blends.set(key, small);
+  if (fills.size > 8) fills.clear();
+  fills.set(key, small);
   return small;
 }
 
@@ -375,16 +383,12 @@ function haloOf(l: Row, seen: Look): Halo | undefined {
   return drawn;
 }
 
-// A picture layer drawn at `b`, the collage's `board` W by H: what's around it first,
-// over what's under it, as its around says, then it, then its halo when it's
-// harmonized.
-function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Box, b: Box, W: number, H: number) {
+// A picture layer drawn at `b`, the collage's `board`: what's around it first, over
+// what's under it, as its around says, then it, then its halo when it's harmonized.
+// Without `effects`, as while something's being moved or cropped, it alone.
+function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Box, b: Box, effects = true) {
   const around = str(l["around"]), kept = seen.picture;
-  if (around === "edges" || around === "color") paintAround(c, seen.key, kept, board, b, around);
-  else if (around === "blend") {
-    const blend = blendOf(l, seen, W, H);
-    if (blend) c.drawImage(blend, board.x, board.y, board.w, board.h);
-  }
+  if (effects && (around === "edges" || around === "color")) paintAround(c, seen.key, kept, board, b, around);
   // Its corners trimmed round as far as its corners say, a share of its shorter side.
   const radius = Math.min(num(l["corners"]) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
   if (radius > 0) {
@@ -395,8 +399,8 @@ function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Bo
     c.drawImage(kept, b.x, b.y, b.w, b.h);
     c.restore();
   } else c.drawImage(kept, b.x, b.y, b.w, b.h);
-  // Blended too, so its edge melts into what's filled from it, as seamless.
-  const h = around === "harmonize" || around === "blend" ? haloOf(l, seen) : undefined;
+  // So its edge melts into what's filled from it, as seamless.
+  const h = effects && harmonizes(l) ? haloOf(l, seen) : undefined;
   if (h) {
     const gx = h.growX * b.w, gy = h.growY * b.h;
     c.drawImage(h.picture, b.x - gx, b.y - gy, b.w + 2 * gx, b.h + 2 * gy);
@@ -434,6 +438,17 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
   // Every picture read first, so matching measures them all.
   if (matching) for (const l of layers) if (!isWords(l)) await read(str(l["picture"]));
   const shifts = shiftsOf(layers, matching, address);
+  const looks = new Map<Row, Look>();
+  for (const l of layers) {
+    if (isWords(l) || (only && l["id"] !== only)) continue;
+    const path = str(l["picture"]);
+    const p = await read(path);
+    if (p) looks.set(l, lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts));
+  }
+  if (!only) {
+    const fill = harmonizedOf(layers.filter((l) => harmonizes(l) && looks.has(l)).map((l) => ({ l, seen: looks.get(l)! })), W, H);
+    if (fill) c.drawImage(fill, board.x, board.y, board.w, board.h);
+  }
   for (const l of layers) {
     if (only && l["id"] !== only) continue;
     if (isWords(l)) {
@@ -441,13 +456,11 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
       paintWords(c, l, str(l["words"]), num(l["size"]) * scale, b.x, b.y);
       continue;
     }
-    const path = str(l["picture"]);
-    const p = await read(path);
-    if (!p) continue;
-    const seen = lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts);
+    const seen = looks.get(l);
+    if (!seen) continue;
     // A layer copied alone is drawn without what it would leave around it.
     if (only) c.drawImage(seen.picture, 0, 0, made.width, made.height);
-    else paintPicture(c, l, seen, board, at(boxOf(l)), W, H);
+    else paintPicture(c, l, seen, board, at(boxOf(l)));
   }
   return made;
 }
@@ -925,6 +938,22 @@ export function Collage({
     c.beginPath();
     c.rect(board.x, board.y, bw, bh);
     c.clip();
+    // While something's moved, resized or cropped, its pictures alone, nothing worked out
+    // from where they are drawn around them, so what's being done is plain to see.
+    const effects = !w.now && !w.crop;
+    const lookHere = (l: Row) => {
+      const path = str(l["picture"]);
+      const p = pictureOf(path, address);
+      return p ? lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts, shownLargest) : undefined;
+    };
+    if (effects) {
+      const under = layers.filter((l) => !isWords(l) && harmonizes(l)).flatMap((l) => {
+        const seen = lookHere(l);
+        return seen ? [{ l, seen }] : [];
+      });
+      const fill = harmonizedOf(under, W, H);
+      if (fill) c.drawImage(fill, board.x, board.y, bw, bh);
+    }
     for (const l of layers) {
       let b = onBoard(whereIs(l));
       if (isWords(l)) {
@@ -965,7 +994,7 @@ export function Collage({
             b = kept;
           } else {
             // Only what its crop keeps, its colors as matched, and what's around it as it says.
-            paintPicture(c, l, lookOf(l, shown, shifts, shownLargest), board, b, W, H);
+            paintPicture(c, l, lookOf(l, shown, shifts, shownLargest), board, b, effects);
           }
         }
       }

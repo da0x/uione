@@ -319,7 +319,7 @@ namespace {
 		picture  file
 		picture_width   number  = 0
 		picture_height  number  = 0
-		around   enum clear | edges | color | blend | harmonize = around::clear
+		around   enum clear | edges | color | harmonize = around::clear
 		x        number  = 0
 		y        number  = 0
 		w        number  = 400

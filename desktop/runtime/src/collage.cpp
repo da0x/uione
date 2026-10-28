@@ -4,9 +4,9 @@
 // A collage: a picture made of layers, as big as it says, drawn scaled to fit on the
 // workspace with room around it, or at its own size on black filling the screen
 // (decision 0021). Pictures are cropped, turned and mirrored as each layer says, the
-// rest of the collage filled around one from its edges, its edge color or a blend of
-// it as it says, or it melted into what's under it; words are drawn over a soft
-// shadow. A click picks a layer, framed with its corners and the buttons over it; a
+// rest of the collage filled around one from its edges or its edge color as it says,
+// or, harmonized, what's under them all filled from theirs together, each melting into
+// it; words are drawn over a soft shadow. A click picks a layer, framed with its corners and the buttons over it; a
 // picked layer is moved, or resized by a corner with its shape kept unless Shift is
 // held, snapped unless Alt is. A picture is cropped in place,
 // its whole picture faint around what's kept, and words are written where they are,
@@ -275,7 +275,13 @@ namespace one::desktop::runtime {
 			        key};
 		}
 
-		// With around harmonize or blend, a picture's halo: worked out small, its own
+		// Whether a layer is harmonized: blend, as kept before the two were one, is too.
+		bool harmonizes(const value& layer) {
+			std::string around = layer["around"].as_string();
+			return around == "harmonize" || around == "blend";
+		}
+
+		// With around harmonize, a picture's halo: worked out small, its own
 		// colors spread past its edges and fading into what's under it (model::halo), and
 		// drawn over it, as much bigger as `grow_x` and `grow_y` say, each a share of its
 		// width and height.
@@ -287,9 +293,8 @@ namespace one::desktop::runtime {
 		std::optional<halo_drawn> halo_of(const value& layer, const look& seen) {
 			const double feather = model::halo_reach;
 			model::box b = box_of(layer);
-			// Blended too, so its edge melts into what's filled from it, as seamless.
-			std::string around = layer["around"].as_string();
-			if ((around != "harmonize" && around != "blend") || b.w <= 0 || b.h <= 0 || !seen.picture) return std::nullopt;
+			// So its edge melts into what's filled from it, as seamless.
+			if (!harmonizes(layer) || b.w <= 0 || b.h <= 0 || !seen.picture) return std::nullopt;
 			int sw = b.w >= b.h ? 64 : std::max(1, static_cast<int>(std::lround(64 * b.w / b.h)));
 			int sh = b.w >= b.h ? std::max(1, static_cast<int>(std::lround(64 * b.h / b.w))) : 64;
 			int reach = std::max(4, static_cast<int>(std::lround(feather * std::min(sw, sh))));
@@ -601,25 +606,29 @@ namespace one::desktop::runtime {
 			else p.told().set("There's nothing to paste. Copy a picture or some words first.");
 		}
 
-		// With around blend, the rest of the collage filled from a picture's edges
-		// (harmonic fill): it drawn small where it is, each gap settled between the colors
-		// around it, and the result drawn as big as the collage, smooth as it is. Worked out
-		// again only when the picture, or where it is, changes.
-		desktop::picture blended(const value& layer, const look& seen, double width, double height) {
-			if (layer["around"].as_string() != "blend" || width <= 0 || height <= 0 || !seen.picture) return {};
-			model::box b = box_of(layer);
-			static kept_by<desktop::picture> made(16);
-			return made.get(std::format("{} {} {} {} {} {} {}", seen.key, b.x, b.y, b.w, b.h, width, height), [&] {
+		// With around harmonize, what's under the collage's pictures filled from all the
+		// harmonized ones together (harmonic fill): each drawn small where it is, the one on
+		// top where they overlap, and every gap settled between the colors around it, so
+		// past the outermost each one's colors carry on to the edge, and between two they
+		// cross from one to the other. Drawn as big as the collage, smooth as it is, under
+		// all of them; worked out again only when one of them, or where it is, changes.
+		desktop::picture harmonized(const std::vector<std::pair<model::box, look>>& under, double width, double height) {
+			if (under.empty() || width <= 0 || height <= 0) return {};
+			std::string key = std::format("{} {}", width, height);
+			for (const auto& [b, seen] : under) key += std::format(" {} {} {} {} {}", seen.key, b.x, b.y, b.w, b.h);
+			static kept_by<desktop::picture> made(8);
+			return made.get(key, [&] {
 				int gw = 320, gh = std::max(1, static_cast<int>(std::lround(320 * height / width)));
 				double s = gw / width;
-				// The cells the picture covers whole are its color; one its edge crosses is part
-				// picture, part nothing, and would leave a seam of the two.
-				int left = std::max(0, static_cast<int>(std::ceil(b.x * s))), right = std::min(gw, static_cast<int>(std::floor((b.x + b.w) * s)));
-				int top = std::max(0, static_cast<int>(std::ceil(b.y * s))), bottom = std::min(gh, static_cast<int>(std::floor((b.y + b.h) * s)));
 				std::size_t cells = static_cast<std::size_t>(gw) * gh;
 				std::vector<double> colors(cells * 3, 0);
 				std::vector<bool> covered(cells, false);
-				if (right > left && bottom > top) {
+				for (const auto& [b, seen] : under) {
+					// The cells a picture covers whole are its color; one its edge crosses is
+					// part picture, part nothing, and would leave a seam of the two.
+					int left = std::max(0, static_cast<int>(std::ceil(b.x * s))), right = std::min(gw, static_cast<int>(std::floor((b.x + b.w) * s)));
+					int top = std::max(0, static_cast<int>(std::ceil(b.y * s))), bottom = std::min(gh, static_cast<int>(std::floor((b.y + b.h) * s)));
+					if (right <= left || bottom <= top || !seen.picture) continue;
 					model::box part{(left / s - b.x) / b.w, (top / s - b.y) / b.h, (right - left) / s / b.w, (bottom - top) / s / b.h};
 					auto small = averaged(small_of(seen), part, right - left, bottom - top);
 					for (int y = top; y < bottom; ++y) {
@@ -706,22 +715,21 @@ namespace one::desktop::runtime {
 			};
 		}
 
-		// All a picture layer is drawn from: its look, its halo and what its blend fills
-		// the collage with; its colors measured on the way, so matching finds them known.
+		// All a picture layer is drawn from: its look and its halo; its colors measured on
+		// the way, so matching finds them known.
 		struct ready_layer {
 			look seen;
 			std::optional<halo_drawn> halo;
-			desktop::picture blend;
 		};
 
 		// In the window, a picture whose colors are moved is moved no larger than this,
 		// as it's never shown larger; saved, it's moved whole.
 		constexpr int shown_largest = 2048;
 
-		ready_layer made_ready(const std::filesystem::path& file, const value& layer, std::optional<model::color_shift> shift, double width, double height, int largest = 0) {
+		ready_layer made_ready(const std::filesystem::path& file, const value& layer, std::optional<model::color_shift> shift, int largest = 0) {
 			if (look kept = kept_look(file, layer); kept.picture) (void)stats_kept(kept, 1);
 			look seen = look_at(file, layer, shift ? &*shift : nullptr, largest);
-			return {seen, halo_of(layer, seen), blended(layer, seen, width, height)};
+			return {seen, halo_of(layer, seen)};
 		}
 
 		// A picture layer as the window draws it: ready, or made ready away from the
@@ -737,7 +745,7 @@ namespace one::desktop::runtime {
 			if (!file) return std::nullopt;
 			std::optional<model::color_shift> shift;
 			if (auto found = shifts.find(layer["id"].as_string()); found != shifts.end()) shift = found->second;
-			if (!posting()) return made_ready(*file, layer, shift, width, height);
+			if (!posting()) return made_ready(*file, layer, shift);
 			model::box b = box_of(layer);
 			std::string key = std::format("{} {} {} {} {} {} {} {}", kept_key(*file, layer), layer["around"].as_string(), b.x, b.y, b.w, b.h, width, height);
 			if (shift) {
@@ -759,7 +767,7 @@ namespace one::desktop::runtime {
 				std::lock_guard hold(preparing);
 				if (!last_only && working.insert(key).second) {
 					std::thread([key, id, file = *file, layer, shift, width, height, woken] {
-						ready_layer made = made_ready(file, layer, shift, width, height, shown_largest);
+						ready_layer made = made_ready(file, layer, shift, shown_largest);
 						readied.get(key, [&] { return made; });
 						{
 							std::lock_guard hold(preparing);
@@ -777,15 +785,25 @@ namespace one::desktop::runtime {
 		// A picture layer drawn at `on` in the window, `board` the collage there: what's
 		// around it first, as its around says, over what's under it; then it, its corners
 		// trimmed round as far as its corners say, a share of its shorter side; then,
-		// when it's harmonized, its halo.
-		void paint_picture(desktop::canvas& c, desktop::rect board, desktop::rect on, const value& layer, const look& seen, const desktop::picture& blend,
-		                   const std::optional<halo_drawn>& halo) {
+		// when it's harmonized, its halo. Without `effects`, as while something's being
+		// moved or cropped, it alone.
+		void paint_picture(desktop::canvas& c, desktop::rect board, desktop::rect on, const value& layer, const look& seen, const std::optional<halo_drawn>& halo,
+		                   bool effects = true) {
 			std::string around = layer["around"].as_string();
 			const desktop::picture& kept = seen.picture;
-			if (blend) c.picture(blend, board, {0, 0, 1, 1});
-			else if (around == "edges" || around == "color") paint_around(c, board, on, seen.key, kept, around);
+			if (effects && (around == "edges" || around == "color")) paint_around(c, board, on, seen.key, kept, around);
 			c.picture(kept, on, {0, 0, 1, 1}, 1, static_cast<float>(layer["corners"].as_double()) * std::min(on.width, on.height));
-			if (halo) paint_halo(c, *halo, on);
+			if (effects && halo) paint_halo(c, *halo, on);
+		}
+
+		// What's under the harmonized pictures of those ready, in the order they're drawn.
+		std::vector<std::pair<model::box, look>> harmonized_of(const value& layers, const std::map<std::string, ready_layer>& ready) {
+			std::vector<std::pair<model::box, look>> out;
+			for (const auto& l : layers.as_array()) {
+				if (is_words(l) || !harmonizes(l)) continue;
+				if (auto found = ready.find(l["id"].as_string()); found != ready.end() && found->second.seen.picture) out.emplace_back(box_of(l), found->second.seen);
+			}
+			return out;
 		}
 
 		// What drawing it whole needs, gathered on the window's thread: its pictures, read,
@@ -796,10 +814,11 @@ namespace one::desktop::runtime {
 			double width = 0, height = 0, scale = 1;
 			std::string only, family;
 			std::map<std::string, ready_layer> pictures;  // each picture layer's, by its id
+			desktop::picture fill;                        // and what's under the harmonized ones
 		};
 
 		whole gathered(page& p, const value& layers, double width, double height, double scale, bool matching, const std::string& only = "") {
-			whole all{layers, width, height, scale, only, current_theme().text_family, {}};
+			whole all{layers, width, height, scale, only, current_theme().text_family, {}, {}};
 			auto shifts = shifts_of(p, layers, matching, measured_now);
 			for (const auto& l : layers.as_array()) {
 				if (is_words(l)) continue;
@@ -807,10 +826,9 @@ namespace one::desktop::runtime {
 				if (!file) continue;
 				std::optional<model::color_shift> shift;
 				if (auto found = shifts.find(l["id"].as_string()); found != shifts.end()) shift = found->second;
-				ready_layer made = made_ready(*file, l, shift, width, height);
-				if (!only.empty()) made.blend = {};
-				all.pictures.emplace(l["id"].as_string(), std::move(made));
+				all.pictures.emplace(l["id"].as_string(), made_ready(*file, l, shift));
 			}
+			if (only.empty()) all.fill = harmonized(harmonized_of(layers, all.pictures), width, height);
 			return all;
 		}
 
@@ -830,6 +848,7 @@ namespace one::desktop::runtime {
 				};
 				desktop::rect board = at({0, 0, width, height});
 				if (all.only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
+				if (all.fill) c.picture(all.fill, board, {0, 0, 1, 1});
 				for (const auto& layer : layers.as_array()) {
 					std::string id = layer["id"].as_string();
 					if (!all.only.empty() && id != all.only) continue;
@@ -841,7 +860,7 @@ namespace one::desktop::runtime {
 					auto found = all.pictures.find(id);
 					if (found == all.pictures.end() || !found->second.seen.picture) continue;
 					const ready_layer& ready = found->second;
-					paint_picture(c, board, at(box_of(layer)), layer, ready.seen, ready.blend, ready.halo);
+					paint_picture(c, board, at(box_of(layer)), layer, ready.seen, ready.halo);
 				}
 			});
 		}
@@ -1192,8 +1211,14 @@ namespace one::desktop::runtime {
 			std::optional<desktop::rect> framed;
 			float framed_radius = 0;  // a picture's frame follows its corners, round as they are
 			bool framed_words = false, chosen_picture = false;
+			// While something's moved, resized or cropped, its pictures alone, nothing worked
+			// out from where they are drawn around them, so what's being done is plain to see.
+			bool effects = w->now.what == gesture::none && !w->crop;
 			{
 				auto inside = c.clip(board);
+				if (effects) {
+					if (desktop::picture fill = harmonized(harmonized_of(layers, ready), width, height)) c.picture(fill, board, {0, 0, 1, 1});
+				}
 				for (const auto& layer : layers.as_array()) {
 					std::string id = layer["id"].as_string();
 					model::box b = where_is(layer, *w);
@@ -1229,7 +1254,7 @@ namespace one::desktop::runtime {
 							c.picture(shown, on, as_rect(from));
 						}
 					} else if (auto made = ready.find(id); made != ready.end()) {
-						paint_picture(c, board, on, layer, made->second.seen, made->second.blend, made->second.halo);
+						paint_picture(c, board, on, layer, made->second.seen, made->second.halo, effects);
 					}
 					if (id == picked && !full) {
 						framed = on, chosen_picture = true;

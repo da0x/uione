@@ -31,10 +31,13 @@ of it. The first picture to come into an empty collage fills it.
 - `clear`, the default: nothing.
 - `edges` or `color`: the rest of the collage drawn out from its edges, or in its
   edge color, over the layers under it.
-- `blend`: the rest of the collage filled from its edges by a harmonic fill.
-- `harmonize`: it melts into what's under it, its own colors spread a little past
-  its edges and fading, its edges softened under them. It reaches only so far, so
-  what's under it shows beyond that.
+- `harmonize`: what's under the pictures filled from every harmonized one's colors
+  together by a harmonic fill, so past the outermost each one's colors carry on and
+  between two they cross from one to the other; each melts into that, its own colors
+  spread a little past its edges and fading, its edges softened under them. This
+  first was two choices, `blend`, the rest filled from one picture's edges alone, and
+  `harmonize`, the melting alone; two blended pictures each filled the whole collage
+  and the one on top hid the other. A layer kept as `blend` is drawn harmonized.
 
 **Its corners are a part of it too, `corners`**: square at 0, or trimmed round as far
 as that share of its shorter side, with no line drawn along them.
@@ -51,7 +54,7 @@ Every picture behaves the same wherever it is in the stack, and the collage's
 runtimes lose the background's special cases: its placement, its sliding, its
 crop, and the picking of it when nothing else is under the pointer.
 
-The halo and the blend are worked out from the picture's own pixels, averaged on
+The halo and the fill are worked out from the pictures' own pixels, averaged on
 the processor, so they're the same on any thread and in a picture saved or copied.
 
 An app's data from before needs moving: its lowest picture's box worked out from

@@ -320,7 +320,7 @@ examples/studio/main.one	add pictures "Pictures" icon picture	pictures	keyword
 examples/studio/main.one	save poster_page as picture "Save" icon save key ctrl+s	save	keyword
 examples/studio/main.one	keep preview poster::preview into preview 480 wide	wide	keyword
 examples/studio/main.one	keep preview poster::preview into preview 480 wide	keep	keyword
-examples/studio/main.one	around   enum    clear | edges | color | blend | harmonize = around::clear	blend	plain
+examples/studio/main.one	around   enum    clear | edges | color | harmonize = around::clear	harmonize	plain
 examples/studio/main.one	on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster	on	keyword
 examples/studio/main.one	on open poster::create { width = screen.width  height = screen.height } then open /posters/:poster	open	keyword
 editors/fixtures/body.one	stacked by position	stacked	keyword

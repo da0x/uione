@@ -2132,12 +2132,14 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   machine. Every picture is a layer like any other, and its `around` says what's
   drawn around it, over the layers under it: nothing with `clear`, the default; the
   rest of the collage drawn out from its edges with `edges`, or in its edge color
-  with `color`; with `blend`, the rest of the collage filled from its edges, each
-  color settling between the ones around it (a harmonic fill), its edges softened
-  into that as `harmonize` softens them; and with
-  `harmonize`, it melted into what's under it, its own colors spread past its edges
-  about a seventh of its shorter side and fading as they go, its edges softened under
-  them. Its `corners` trim it round, as far as that share of its shorter side, with
+  with `color`; and with `harmonize`, what's under the pictures filled from every
+  harmonized one's colors together, each color settling between the ones around it
+  (a harmonic fill), so past the outermost each one's colors carry on to the
+  collage's edges and between two they cross from one to the other, each picture
+  melted into that, its own colors spread past its edges about a seventh of its
+  shorter side and fading as they go. While a layer's being moved, resized or
+  cropped, its pictures are drawn alone, nothing drawn around them, so what's being
+  done is plain to see. Its `corners` trim it round, as far as that share of its shorter side, with
   no line drawn along them; at 0, the default, they're square. A click picks a
   layer, nothing when it's on nothing, and Esc lets it go.
   - `place layer::place`: a picked layer is moved, or resized by a corner with its
@@ -2181,7 +2183,7 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     image  sized image_width image_height`, `cropped to left top width height`,
     `turned quarters`, `mirrored flipped`, `around margin`, `rounded roundness`, and `words caption  sized
     letters  colored ink  weighing boldness  slanted lean`. The checker holds each to its type:
-    numbers, a file, text, and `around` choices from `clear edges color blend
+    numbers, a file, text, and `around` choices from `clear edges color
     harmonize`. Cropping needs the crop's four, and writing needs
     `words` and `size`. The runtimes know only the parts; which field keeps each
     is handed to them by the compiler.
@@ -2379,8 +2381,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - A button may say what it's sent, in braces after its words, icon and keys, each a
   field or an input of its command and a value worked out as it's pressed, from
   what the screen reads: `layer::scale "2×" { by = 2 }`, `layer::write "Larger" {
-  size = layer.size * 1.2 }`, `layer::arrange "Blend" icon blend { around =
-  around::blend }`. It's drawn pressed while what it would set is already so, on
+  size = layer.size * 1.2 }`, `layer::arrange "Harmonize" icon harmonize {
+  around = around::harmonize }`. It's drawn pressed while what it would set is already so, on
   the row picked or the entity the address names, or while `on when ...` holds, like
   `on when layer.weight >= 700`.
 - `then open /posters/:poster` after a button that makes something opens it, its id

@@ -1464,7 +1464,7 @@ namespace one::language {
             {"x", "number", true}, {"y", "number", true}, {"w", "number", true}, {"h", "number", true},
             {"depth", "number"}, {"picture", "file"}, {"picture_width", "number"}, {"picture_height", "number"},
             {"crop_x", "number"}, {"crop_y", "number"}, {"crop_w", "number"}, {"crop_h", "number"},
-            {"turns", "number"}, {"mirrored", "number"}, {"around", "clear edges color blend harmonize"}, {"corners", "number"},
+            {"turns", "number"}, {"mirrored", "number"}, {"around", "clear edges color harmonize"}, {"corners", "number"},
             {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"}, {"italic", "number"},
         };
         return all;

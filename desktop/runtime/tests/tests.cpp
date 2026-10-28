@@ -1760,7 +1760,7 @@ TEST("a picture cropped is drawn by the part it keeps, and around edges draws th
 	matches_golden("collage-cropped-edges", {900, 560}, [&] { return drawn(nav); });
 }
 
-TEST("around blend fills the rest of the collage from a picture's edges, each color settling between the ones around it, and what's over it is drawn over it") {
+TEST("around harmonize fills the rest of the collage from a picture's edges, each color settling between the ones around it, and what's over it is drawn over it, as blend kept before did") {
 	struct kept_here : memory_source {
 		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return golden_folder / kept; }
 	} data;
@@ -1779,6 +1779,55 @@ TEST("around blend fills the rest of the collage from a picture's edges, each co
 	navigator nav(s, data);
 	nav.open("/");
 	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
+}
+
+TEST("harmonized pictures fill what's under them together: past the outermost, each one's color carries on, and between two they cross from one to the other") {
+	std::filesystem::path folder = std::filesystem::temp_directory_path() / "uione-harmonize-across-test";
+	std::filesystem::create_directories(folder);
+	auto solid = [&](const std::string& name, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+		std::vector<std::uint8_t> pixels(100 * 100 * 4);
+		for (std::size_t i = 0; i < pixels.size(); i += 4) pixels[i] = r, pixels[i + 1] = g, pixels[i + 2] = b, pixels[i + 3] = 255;
+		CHECK(one::desktop::picture::of(100, 100, std::move(pixels)).write_png(folder / name).has_value());
+	};
+	solid("blue.png", 40, 80, 220);
+	solid("green.png", 60, 180, 90);
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	// A blue square on the left and a green one on the right, both harmonized.
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"picture", "blue.png"}, {"around", "harmonize"}, {"x", 250}, {"y", 300}, {"w", 300}, {"h", 300}}),
+	                                      value(fields{{"id", "l2"}, {"picture", "green.png"}, {"around", "harmonize"}, {"x", 1050}, {"y", 300}, {"w", 300}, {"h", 300}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto drawn_now = one::desktop::offscreen::draw({900, 560}, 1, tested_theme().page, [&](one::desktop::canvas& c) {
+		one::desktop::detail::theme_in_use() = &tested_theme();
+		auto root = drawn(nav).take();
+		root->place({0, 0, 900, 560});
+		root->paint(c);
+	});
+	auto at = [&](int x, int y) { return &drawn_now.rgba[(static_cast<std::size_t>(y) * 900 + x) * 4]; };
+	// Left of the blue, blue; right of the green, green; halfway between, some of each.
+	const std::uint8_t* left = at(70, 280);
+	const std::uint8_t* right = at(830, 280);
+	const std::uint8_t* middle = at(450, 280);
+	CHECK(std::abs(left[2] - 220) <= 12);
+	CHECK(std::abs(right[1] - 180) <= 12);
+	CHECK(middle[2] > 100);
+	CHECK(middle[2] < 200);
+	CHECK(middle[1] > 90);
+	CHECK(middle[1] < 170);
+	matches_golden("collage-harmonize-across", {900, 560}, [&] { return drawn(nav); });
+	std::filesystem::remove_all(folder);
 }
 
 TEST("around harmonize melts a picture into what's under it, its own colors spread past its edges and fading, and one that's clear stays sharp, its corners trimmed round") {

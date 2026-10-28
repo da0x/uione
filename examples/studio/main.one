@@ -28,9 +28,9 @@ namespace studio at / {
 	}
 
 	// What a poster is made of: pictures and words, lowest first. Around a picture is
-	// nothing, its edges drawn out or its edge color to the poster's edges, a blend of
-	// it into the rest, or it melted into what's under it; its corners are square, or
-	// trimmed round.
+	// nothing, its edges drawn out or its edge color to the poster's edges, or the rest
+	// filled from every harmonized picture together, it melted into that; its corners
+	// are square, or trimmed round.
 	entity layer {
 		poster   poster  required
 		depth    number  = 0
@@ -41,7 +41,7 @@ namespace studio at / {
 		crop_y   number  = 0
 		crop_w   number  = 1
 		crop_h   number  = 1
-		around   enum    clear | edges | color | blend | harmonize = around::clear
+		around   enum    clear | edges | color | harmonize = around::clear
 		corners  number  = 0
 		words    text
 		size     number  = 64
@@ -223,7 +223,6 @@ namespace studio at / {
 				layer::arrange "Clear" icon clear { around = around::clear }
 				layer::arrange "Edges" icon edges { around = around::edges }
 				layer::arrange "Edge color" icon color { around = around::color }
-				layer::arrange "Blend" icon blend { around = around::blend }
 				layer::arrange "Harmonize" icon harmonize { around = around::harmonize }
 			}
 			group "Corners" small when layer.picture != none {
