@@ -131,6 +131,8 @@ namespace one::desktop::runtime {
 	// A small one's tools are laid in rows `across` long, or, when it's 0, in two rows, the
 	// first the longer.
 	desktop::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<desktop::view>()> build, int across = 0);
+	// A workspace's tools, a column down its left side, each a small tool, its words its hint.
+	desktop::view tool_column(page& p, std::function<std::vector<desktop::view>()> build);
 	// A group's lines, each its own.
 	template <std::convertible_to<desktop::view>... V>
 	std::vector<desktop::view> tools(V&&... each) {

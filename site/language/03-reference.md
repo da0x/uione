@@ -2374,8 +2374,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   `layout` setting says otherwise.
 - `layout workspace` lays a screen out as a drawing app is, filling the window with
   nothing of the site around it: `bar { ... }` along the top, `toolbar { ... }` under
-  it, `main { ... }` for the work, `side when layers { ... }` beside it while a
-  toggle's on, and `status { ... }` along the bottom. Any region may say `when`, as
+  it, `tools { ... }` in a column down the left, `main { ... }` for the work, `side
+  when layers { ... }` beside it while a toggle's on, and `status { ... }` along the
+  bottom. Each of a workspace's `tools` is an icon alone, its words said when it's
+  pointed at, as a drawing app's tools are, like `toggle tool::pen "Pen" icon pen
+  key p`; a terminal lays them in a row under the toolbar. Any region may say `when`, as
   `side` does there. With the site's bar out of sight, a workspace's `bar` has the
   app's name in the middle, in the theme's heading font, as a window's title is,
   its own lines at the start, and the switch between light and dark at the end.

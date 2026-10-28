@@ -1954,7 +1954,15 @@ namespace one::generators {
                         bool across = layout == "workspace" && region.title != "main" && region.title != "side";
                         bool alone = std::exchange(each_alone_, across);
                         bool quiet = std::exchange(quiet_, layout == "workspace" && region.title == "status");
-                        std::string drawn = std::string(across ? "along(" : "items(") + joined_items(items(parts, ns, region.items, s->items)) + ")";
+                        std::string drawn;
+                        if (layout == "workspace" && region.title == "tools") {
+                            // A workspace's tools, a column of them down its side, each a small tool.
+                            bool grouping = std::exchange(in_group_, true);
+                            drawn = "tool_column(p, [&] { return tools(" + joined_items(alternatives(items(parts, ns, region.items, s->items))) + "); })";
+                            in_group_ = grouping;
+                        } else {
+                            drawn = std::string(across ? "along(" : "items(") + joined_items(items(parts, ns, region.items, s->items)) + ")";
+                        }
                         each_alone_ = alone;
                         quiet_ = quiet;
                         // side when layers: there only while it holds.

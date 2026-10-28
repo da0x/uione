@@ -8,7 +8,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
+import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
 import { usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -114,6 +114,15 @@ describe("a workspace", () => {
     expect(screen.getByText("Drawing with pen")).toBeTruthy();
     fireEvent.keyDown(window, { key: "v" });
     expect(pressed()).toEqual(["Select"]);
+  });
+
+  it("draws a workspace's tools as small tools, each its words and key said as its hint", () => {
+    renderScreen(memorySource(), () => (
+      <Tools>
+        <Choose name="/ tool" choice="pen" first="pen" label="Pen" keys={["p"]} />
+      </Tools>
+    ));
+    expect(screen.getByRole("button", { name: "Pen" }).getAttribute("title")).toBe("Pen (P)");
   });
 
   it("says what an undo took back, and why a command was turned down", async () => {

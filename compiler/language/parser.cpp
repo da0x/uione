@@ -1636,7 +1636,7 @@ namespace one::language {
             // menu { link /settings "General" ... }: links down the side of the screen.
             // main { ... }: one region of the screen's layout, and side when layers { ... }
             // one shown while something holds.
-            bool region_word = at_word("main") || at_word("side") || at_word("bar") || at_word("toolbar") || at_word("status");
+            bool region_word = at_word("main") || at_word("side") || at_word("bar") || at_word("toolbar") || at_word("tools") || at_word("status");
             if (region_word && (peek(1).kind == token_kind::left_brace || (peek(1).kind == token_kind::identifier && peek(1).text == "when"))) {
                 content_block region;
                 region.type = content_block::kind::region;

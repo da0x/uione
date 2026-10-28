@@ -67,6 +67,11 @@ export function Group({ name, small = false, across, atEnd = false, children }: 
   );
 }
 
+// A workspace's tools, a column down its side: each a small tool, its words its hint.
+export function Tools({ children }: { children?: ReactNode }) {
+  return <InGroup.Provider value={{ small: true }}>{children}</InGroup.Provider>;
+}
+
 // keys
 
 // ctrl+shift+z as people read it, Ctrl+Shift+Z.

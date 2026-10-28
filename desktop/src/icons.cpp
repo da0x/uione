@@ -131,6 +131,12 @@ namespace one::desktop {
 			    {"edges", {box(5, 5, 6, 6, 1), path("M1.5 8H5M11 8h3.5M8 1.5V5M8 11v3.5")}},
 			    {"clear", {box(5, 5, 6, 6, 1), path("M1.5 4V1.5H4M12 1.5h2.5V4M14.5 12v2.5H12M4 14.5H1.5V12")}},
 			    {"square", {path("M3 13V3h10")}},
+			    // A drawing app's tools: pointing and picking, and drawing a rectangle, an
+			    // ellipse or a line.
+			    {"pointer", {path("M4 2.5v10.5l2.8-2.8 1.9 4.3 1.8-.8-1.9-4.3H13z")}},
+			    {"rectangle", {path("M2.5 4h11v8h-11z")}},
+			    {"ellipse", {path("M14 8A6 4.5 0 1 1 2 8 6 4.5 0 1 1 14 8z")}},
+			    {"line", {path("M3 13L13 3")}},
 			    {"italic", {path("M7 3h5M4 13h5M10 3L6 13")}},
 			    // The faces a page is set in, for the writing it is: a book, plain modern
 			    // letters, a lyric's quill, and a typewriter.

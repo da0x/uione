@@ -430,6 +430,26 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M3 13V3h10" />
     </svg>
   ),
+  pointer: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 2.5v10.5l2.8-2.8 1.9 4.3 1.8-.8-1.9-4.3H13z" />
+    </svg>
+  ),
+  rectangle: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 4h11v8h-11z" />
+    </svg>
+  ),
+  ellipse: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 8A6 4.5 0 1 1 2 8 6 4.5 0 1 1 14 8z" />
+    </svg>
+  ),
+  line: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 13L13 3" />
+    </svg>
+  ),
   rounded: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 13V8a5 5 0 0 1 5-5h5" />

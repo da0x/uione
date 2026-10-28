@@ -370,6 +370,17 @@ namespace {
 
 }  // namespace
 
+TEST_CASE("a workspace's tools are a column of small tools down its left side, on the web and the desktop alike") {
+    auto files = built(screen("\t\tlayout workspace\n\t\ttools {\n\t\t\ttoggle list \"List\" icon layers key l\n\t\t}\n\t\tmain {\n\t\t\ttext \"The posters\"\n\t\t}\n"));
+    CAPTURE(files["web/src/screens/main.tsx"]);
+    CAPTURE(files["desktop/src/screens/main.cpp"]);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(<Region name="tools">)") != std::string::npos);
+    CHECK(files["web/src/screens/main.tsx"].find(R"(<Tools>)") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(region{"tools", tool_column(p, [&] { return tools(toggle(p, "/ list", "List", "layers", std::vector<std::string>{"l"})); })})") != std::string::npos);
+    CHECK(messages(screen("\t\ttools {\n\t\t\ttoggle list \"List\"\n\t\t}\n")) ==
+          std::vector<std::string>{"22: layout single has no region tools; its regions are main"});
+}
+
 TEST_CASE("a table reordered descending shows its rows highest first, on the web and the desktop alike") {
     std::string source = layered_screen(R"(		table poster_page.layers {
 			size

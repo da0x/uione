@@ -142,6 +142,11 @@ namespace one::desktop::runtime {
 			}
 		}
 		std::vector<desktop::view> middle;
+		// Its tools in a column down its left side, as a drawing app's are.
+		if (auto tools = taken("tools"); tools.get()) {
+			middle.push_back(std::move(tools).padding(edges(8, 6)).background({.fill = t.surface}));
+			middle.push_back(desktop::spacer().grow(0).width(1).background({.fill = t.line}));
+		}
 		// Work that fills its place, like a collage, is as big as it; anything else, like
 		// a gallery of cards, scrolls when there's more of it than there's room for.
 		auto main = taken("main");
@@ -196,6 +201,16 @@ namespace one::desktop::runtime {
 		auto drawn = desktop::column(std::move(laid), desktop::spacer(), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
 		if (!at_end) return drawn;
 		return desktop::row(desktop::spacer(), std::move(drawn)).align(align::stretch).grow();
+	}
+
+	desktop::view tool_column(page& p, std::function<std::vector<desktop::view>()> build) {
+		auto was = p.in_group();
+		p.in_group(true);
+		auto tools = build();
+		p.in_group(was);
+		std::erase_if(tools, [](const desktop::view& v) { return !v.get(); });
+		if (tools.empty()) return {};
+		return desktop::column(std::move(tools)).spacing(2).align(align::center);
 	}
 
 	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys) {

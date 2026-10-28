@@ -67,7 +67,7 @@ namespace one::terminal::runtime {
 			return found == by.end() ? terminal::view() : std::move(found->second);
 		};
 		std::vector<terminal::view> parts;
-		for (const char* across : {"bar", "toolbar"}) {
+		for (const char* across : {"bar", "toolbar", "tools"}) {
 			if (auto v = taken(across); v.get()) {
 				parts.push_back(std::move(v));
 				parts.push_back(terminal::divider());
@@ -92,6 +92,16 @@ namespace one::terminal::runtime {
 		std::erase_if(tools, [](const terminal::view& v) { return !v.get(); });
 		if (tools.empty()) return {};
 		tools.insert(tools.begin(), terminal::text(name + ":", dim()));
+		return terminal::flow(std::move(tools)).spacing(1);
+	}
+
+	terminal::view tool_column(page& p, std::function<std::vector<terminal::view>()> build) {
+		auto was = p.in_group();
+		p.in_group(true);
+		auto tools = build();
+		p.in_group(was);
+		std::erase_if(tools, [](const terminal::view& v) { return !v.get(); });
+		if (tools.empty()) return {};
 		return terminal::flow(std::move(tools)).spacing(1);
 	}
 

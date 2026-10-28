@@ -231,7 +231,7 @@ screen_place   ::= "under" ROUTE STRING END
                  | "layout" NAME END
 /* under /:project/boards/:board "{issue_page.board.title}": the page above it, though its
    address doesn't say so; layout two_columns: how its regions are laid out, or layout
-   workspace: filling the window, with a bar, a toolbar, main, side and a status line */
+   workspace: filling the window, with a bar, a toolbar, tools down its left, main, side and a status line */
 /* landing waveform | studio | aurora | grid | relay | constellation: a front page drawn in one of uione's designs */
 screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
@@ -269,7 +269,7 @@ paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
-                 | ("main" | "side" | "bar" | "toolbar" | "status") ("when" expression)? screen_block END
+                 | ("main" | "side" | "bar" | "toolbar" | "tools" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
                  | "group" STRING "small"? ("rows" "of" NUMBER)? ("at" "end")? ("when" expression)? screen_block END
                  /* a picture made of layers, as big as two of the view's values say */

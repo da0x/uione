@@ -946,7 +946,7 @@ namespace one::language {
         // there isn't.
         static const std::vector<std::string>* regions_of(const std::string& layout) {
             static const std::map<std::string, std::vector<std::string>> layouts{
-                {"single", {"main"}}, {"two_columns", {"main", "side"}}, {"workspace", {"bar", "toolbar", "main", "side", "status"}}};
+                {"single", {"main"}}, {"two_columns", {"main", "side"}}, {"workspace", {"bar", "toolbar", "tools", "main", "side", "status"}}};
             auto found = layouts.find(layout);
             return found == layouts.end() ? nullptr : &found->second;
         }
@@ -3308,7 +3308,7 @@ namespace one::language {
                 "connect", "shield", "cloud", "chart",     "spark",    "people",   "lock",   "globe",   "layers",  "crop",     "copy",       "raise",
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
-                "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic", "align_left", "align_center", "align_right",
+                "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
                 "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }

@@ -442,7 +442,17 @@ namespace one::generators {
                         // side when layers: there only while it holds.
                         if (item->when) items.open("{" + condition(parts, ns, *item->when) + " && (");
                         items.open("<Region name=" + web_detail::js_string(region.title) + ">");
-                        screen_items(items, parts, ns, region.items, s->items);
+                        if (layout == "workspace" && region.title == "tools") {
+                            // A workspace's tools, a column of them down its side, each a small tool.
+                            parts.components.insert("Tools");
+                            items.open("<Tools>");
+                            bool was = std::exchange(in_group_, true);
+                            screen_items(items, parts, ns, region.items, s->items);
+                            in_group_ = was;
+                            items.close("</Tools>");
+                        } else {
+                            screen_items(items, parts, ns, region.items, s->items);
+                        }
                         items.close("</Region>");
                         if (item->when) items.close(")}");
                     }

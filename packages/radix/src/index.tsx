@@ -2127,7 +2127,8 @@ export const radix: ComponentSet = {
   // Two columns: what the page is about, wide, and what's said of it, narrow, beside
   // it on a wide screen and after it on a phone. Any other layout is one column.
   // A workspace, filling the window: its bar along the top, its toolbar under it,
-  // the work beside what's at its side, and a status line along the bottom.
+  // its tools down the left, the work beside what's at its side, and a status line
+  // along the bottom.
   Layout: ({ name, regions, site }) =>
     name === "workspace" ? (
       <div className="fixed inset-0 flex min-h-0 flex-col bg-sunken text-ink">
@@ -2151,6 +2152,12 @@ export const radix: ComponentSet = {
           </div>
         )}
         <div className="flex min-h-0 flex-1">
+          {regions.tools && (
+            // Its tools in a column down its left side, as a drawing app's are.
+            <div role="toolbar" aria-orientation="vertical" className="flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-line bg-surface py-2">
+              {regions.tools}
+            </div>
+          )}
           <main className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-3">{regions.main}</main>
           {regions.side && <aside className="w-72 shrink-0 overflow-y-auto border-l border-line bg-surface p-3">{regions.side}</aside>}
         </div>

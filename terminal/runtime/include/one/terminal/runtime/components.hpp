@@ -98,6 +98,8 @@ namespace one::terminal::runtime {
 		return along(std::move(all));
 	}
 	terminal::view group(page& p, std::string name, bool small, bool at_end, std::function<std::vector<terminal::view>()> build);
+	// A workspace's tools, in a row of their own under its toolbar.
+	terminal::view tool_column(page& p, std::function<std::vector<terminal::view>()> build);
 	template <std::convertible_to<terminal::view>... V>
 	std::vector<terminal::view> tools(V&&... each) {
 		std::vector<terminal::view> all;
