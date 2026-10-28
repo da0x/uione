@@ -16,7 +16,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -707,6 +707,7 @@ interface Placed {
   editing?: { id: string; words: string; caret: number; fresh: boolean };
   drawing?: Box; // a layer being drawn, as big as the drag so far
   line?: { at: Box; points: string }; // or a line, as far as the drag has gone
+  hand?: Point[]; // or what a drag by hand has gone through
   // A path being reshaped: its outline as it was, and as it is now, by its id.
   reshapeFrom?: string;
   reshaped?: { id: string; outline: string };
@@ -719,7 +720,9 @@ export interface CollageDraw {
   command: string;
   given?: Record<string, unknown>;
   when?: boolean;
-  by?: "line"; // a line from where the drag began to where it ended, as a path
+  // By line, a line from where the drag began to where it ended; by hand, what it went
+  // through; each kept as a path.
+  by?: "line" | "hand";
   back?: [string, string][];
 }
 
@@ -1324,6 +1327,18 @@ export function Collage({
       c.lineWidth = 1.5;
       c.strokeRect(d.x, d.y, d.w, d.h);
     }
+    // What a drag by hand has gone through so far.
+    if (w.hand && w.now?.what === "drawing" && w.hand.length > 1) {
+      c.strokeStyle = accent;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      w.hand.forEach((h, i) => {
+        const at = onBoard({ x: h.x, y: h.y, w: 0, h: 0 });
+        if (i === 0) c.moveTo(at.x, at.y);
+        else c.lineTo(at.x, at.y);
+      });
+      c.stroke();
+    }
     if (w.line) {
       const d = onBoard(w.line.at);
       const [, x0, y0, , x1, y1] = w.line.points.split(" ").map(Number);
@@ -1521,6 +1536,7 @@ export function Collage({
     // whatever's there.
     if (draws.some((d) => d.when !== false) && inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) {
       w.now = { what: "drawing", id: "", from: { x: 0, y: 0, w: 0, h: 0 }, at: p, corner: 0, edges: 0 };
+      w.hand = [onCollage(p)];
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
@@ -1586,7 +1602,8 @@ export function Collage({
       return;
     }
     if (g.what === "drawing") {
-      if (drawingNow()?.by === "line") w.line = drawnLine(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
+      if (drawingNow()?.by === "hand") w.hand?.push(onCollage(p));
+      else if (drawingNow()?.by === "line") w.line = drawnLine(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
       else w.drawing = drawn(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
     } else if (g.what === "shifting" && w.crop) {
       const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale;
@@ -1627,7 +1644,16 @@ export function Collage({
     if (g.what === "drawing") {
       w.now = undefined;
       w.drawing = w.line = undefined;
-      if (drawingNow()?.by === "line") {
+      if (drawingNow()?.by === "hand") {
+        // What it went through, only as much as keeps its shape, as one curve.
+        const hand = [...(w.hand ?? []), onCollage(at(e))];
+        w.hand = undefined;
+        const outline = freehand(hand, 4 / w.scale);
+        if (outline) {
+          const { points, box } = reshapedAs(outline);
+          void drawLayer(box, points);
+        }
+      } else if (drawingNow()?.by === "line") {
         const line = drawnLine(onCollage(g.at), onCollage(at(e)), e.shiftKey, 4 / w.scale, W, H);
         drawLayer(line.at, line.points);
       } else drawLayer(drawn(onCollage(g.at), onCollage(at(e)), e.shiftKey, 4 / w.scale, W, H));

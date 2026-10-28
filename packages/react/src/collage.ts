@@ -653,6 +653,41 @@ function flattened(absolute: string): { run: Point[]; closed: boolean }[] {
   return runs;
 }
 
+// The points that keep a line's shape, by Ramer, Douglas and Peucker: the farthest from
+// the line between the ends kept while it's further than `tolerance`.
+function keptOf(all: Point[], first: number, last: number, tolerance: number, keep: boolean[]) {
+  if (last <= first + 1) return;
+  const vx = all[last]!.x - all[first]!.x, vy = all[last]!.y - all[first]!.y, length = Math.hypot(vx, vy);
+  let farthest = -1, at = first;
+  for (let i = first + 1; i < last; i++) {
+    const d = length > 0 ? Math.abs(vy * (all[i]!.x - all[first]!.x) - vx * (all[i]!.y - all[first]!.y)) / length : Math.hypot(all[i]!.x - all[first]!.x, all[i]!.y - all[first]!.y);
+    if (d > farthest) (farthest = d), (at = i);
+  }
+  if (farthest <= tolerance) return;
+  keep[at] = true;
+  keptOf(all, first, at, tolerance, keep);
+  keptOf(all, at, last, tolerance, keep);
+}
+
+// A line drawn by hand, from the points a drag went through: only those that keep its
+// shape, the rest within `tolerance` of the line between them left out, joined by a
+// smooth curve through each, as a path where it is, M and C. Nothing for fewer than two.
+export function freehand(drawn: Point[], tolerance: number): string {
+  const all = drawn.filter((p, i) => i === 0 || p.x !== drawn[i - 1]!.x || p.y !== drawn[i - 1]!.y);
+  if (all.length < 2) return "";
+  const keep = all.map((_, i) => i === 0 || i === all.length - 1);
+  keptOf(all, 0, all.length - 1, tolerance, keep);
+  const kept = all.filter((_, i) => keep[i]);
+  // Each piece a curve whose ends lean toward the points either side, as a Catmull-Rom
+  // spline is drawn with cubic curves.
+  let out = `M ${said(kept[0]!.x)} ${said(kept[0]!.y)}`;
+  for (let i = 0; i + 1 < kept.length; i++) {
+    const before = kept[Math.max(0, i - 1)]!, from = kept[i]!, to = kept[i + 1]!, after = kept[Math.min(kept.length - 1, i + 2)]!;
+    out += ` C ${said(from.x + (to.x - before.x) / 6)} ${said(from.y + (to.y - before.y) / 6)} ${said(to.x - (after.x - from.x) / 6)} ${said(to.y - (after.y - from.y) / 6)} ${said(to.x)} ${said(to.y)}`;
+  }
+  return out;
+}
+
 // A path's nodes, where it is, written as pathIn writes it: where each of its segments
 // ends, M, L and C alike, in order.
 export function pathNodes(absolute: string): Point[] {

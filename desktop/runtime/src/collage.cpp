@@ -474,6 +474,7 @@ namespace one::desktop::runtime {
 			std::optional<writing> editing;
 			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
 			std::optional<model::line> line;    // or a line, as far as the drag has gone
+			std::vector<model::point> hand;     // or what a drag by hand has gone through
 			// A path being reshaped: its outline as it was, and as it is now, by its id.
 			std::string reshape_from;
 			std::optional<std::pair<std::string, std::string>> reshaped;
@@ -1664,6 +1665,11 @@ namespace one::desktop::runtime {
 				model::box d = w->on_board(*w->drawing);
 				c.box({static_cast<float>(d.x), static_cast<float>(d.y), static_cast<float>(d.w), static_cast<float>(d.h)}, {.border = t.accent, .border_width = 1.5f});
 			}
+			// What a drag by hand has gone through so far.
+			for (std::size_t i = 1; i < w->hand.size() && w->now.what == gesture::drawing; ++i) {
+				model::box a = w->on_board({w->hand[i - 1].x, w->hand[i - 1].y, 0, 0}), b = w->on_board({w->hand[i].x, w->hand[i].y, 0, 0});
+				c.line({static_cast<float>(a.x), static_cast<float>(a.y)}, {static_cast<float>(b.x), static_cast<float>(b.y)}, 1.5f, t.accent);
+			}
 			if (w->line) {
 				model::box d = w->on_board(w->line->at);
 				double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
@@ -1784,6 +1790,7 @@ namespace one::desktop::runtime {
 			        if (const collage_draw* d = drawing_now(spec); d && w->board.contains(at)) {
 				        // Its id says how it's drawn: a box, or by line.
 				        w->now = {.what = gesture::drawing, .id = d->by, .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+				        w->hand = {w->on_collage(at)};
 				        return true;
 			        }
 			        // A node of the picked path reshapes it.
@@ -1853,6 +1860,10 @@ namespace one::desktop::runtime {
 				        return;
 			        }
 			        if (w->now.what == gesture::drawing) {
+				        if (w->now.id == "hand") {
+					        w->hand.push_back(w->on_collage(at));
+					        return;
+				        }
 				        bool line = w->now.id == "line";
 				        if (line) w->line = model::drawn_line(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
 				        else w->drawing = model::drawn(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
@@ -1883,6 +1894,16 @@ namespace one::desktop::runtime {
 			        if (w->now.what == gesture::drawing) {
 				        gesture g = std::exchange(w->now, {});
 				        w->drawing.reset(), w->line.reset();
+				        if (g.id == "hand") {
+					        // What it went through, only as much as keeps its shape, as one curve.
+					        auto hand = std::exchange(w->hand, {});
+					        hand.push_back(w->on_collage(at));
+					        std::string outline = model::freehand(hand, 4 / w->scale);
+					        if (outline.empty()) return;
+					        auto [points, b] = reshaped_as(outline);
+					        draw_layer(p, spec, layers, b, points);
+					        return;
+				        }
 				        if (g.id == "line") {
 					        auto line = model::drawn_line(w->on_collage(g.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
 					        draw_layer(p, spec, layers, line.at, line.points);

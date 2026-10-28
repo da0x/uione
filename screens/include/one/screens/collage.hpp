@@ -193,6 +193,12 @@ namespace one::screens::collage {
 	box path_bounds(std::string_view absolute);
 	std::string path_fractions(std::string_view absolute, box in);
 
+	// A line drawn by hand, from the points a drag went through: only those that keep its
+	// shape, the rest within `tolerance` of the line between them left out, joined by a
+	// smooth curve through each, as a path where it is, M and C. Nothing for fewer than
+	// two.
+	std::string freehand(const std::vector<point>& drawn, double tolerance);
+
 	// A path's nodes, where it is, written as path_in writes it: where each of its
 	// segments ends, M, L and C alike, in order.
 	std::vector<point> path_nodes(std::string_view absolute);

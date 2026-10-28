@@ -443,7 +443,7 @@ TEST_CASE("a collage's layer is drawn by a drag while its draw's when holds, giv
                                    "51: a drag on the collage makes one of its layers, so draw names layer::create",
                                    "52: entity layer has no field tint to be given",
                                    "53: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field",
-                                   "54: a drag draws a box, or by line a line; there's no by curve",
+                                   "54: a drag draws a box, by line a line, or by hand what it goes through; there's no by curve",
                                    "54: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field"});
 }
 

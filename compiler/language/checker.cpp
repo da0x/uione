@@ -4169,7 +4169,7 @@ namespace one::language {
                     verify_condition(ns, *v.value, route);
                 }
                 if (draw.when) verify_condition(ns, *draw.when, route);
-                if (draw.by && *draw.by != "line") error(draw.by_where, "a drag draws a box, or by line a line; there's no by " + *draw.by);
+                if (draw.by && *draw.by != "line" && *draw.by != "hand") error(draw.by_where, "a drag draws a box, by line a line, or by hand what it goes through; there's no by " + *draw.by);
                 if (draw.by && !kept.contains("points")) error(draw.by_where, "a line is kept as a path's points, which " + layer->name + " doesn't have; add points text to it, or say its field");
                 if (!has({"x", "y", "w", "h"})) error(draw.command.where, "a drawn layer is as big as the drag, kept in its x y w h, which " + layer->name + " doesn't have");
             }

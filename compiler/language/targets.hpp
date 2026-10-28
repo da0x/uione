@@ -92,6 +92,7 @@ namespace one::language {
         drawn_by{"collage.crop", "cropping a collage's picture", "web desktop"},
         drawn_by{"collage.draw", "a collage's layers drawn by a drag", "web desktop"},
         drawn_by{"collage.draw_line", "a collage's lines drawn by a drag", "web desktop"},
+        drawn_by{"collage.draw_hand", "a collage's paths drawn by hand", "web desktop"},
         drawn_by{"collage.reshape", "a collage's paths reshaped by their nodes", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
@@ -377,7 +378,8 @@ namespace one::language {
                         if (n.crop) use("collage.crop");
                         if (!n.draws.empty()) use("collage.draw");
                         if (n.reshape) use("collage.reshape");
-                        if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by.has_value(); })) use("collage.draw_line");
+                        if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "line"; })) use("collage.draw_line");
+                        if (std::ranges::any_of(n.draws, [](const auto& d) { return d.by == "hand"; })) use("collage.draw_hand");
                         if (n.paste) use("collage.paste");
                         if (n.preview) use("collage.preview");
                         if (n.match_colors) use("collage.match_colors");

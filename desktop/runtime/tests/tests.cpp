@@ -1963,6 +1963,48 @@ TEST("around harmonize fills the rest of the collage from a picture's edges, eac
 	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
 }
 
+TEST("a collage's path drawn by hand is what the drag went through, only as much as keeps its shape, as one curve") {
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return "drawn"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .fills = true,
+		                                                                         .draws = {collage_draw{.command = "studio::layer::create", .by = "hand"}}}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	CHECK(board->press(on(100, 100), 1));
+	board->drag(on(300, 301));
+	board->drag(on(500, 500));
+	board->release(on(900, 100), board);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const auto& sent = data.runs().back().fields;
+	CHECK(std::abs(sent["x"].as_double() - 100) < 1);
+	CHECK(std::abs(sent["w"].as_double() - 800) < 1);
+	std::string points = sent["points"].as_string();
+	CHECK(std::ranges::count(points, 'C') == 2);
+}
+
 TEST("a collage's path is picked by its stroke alone, shows its nodes, and is reshaped by one dragged, its box worked out again") {
 	memory_source data;
 	data.set("studio::poster_page", "p1",

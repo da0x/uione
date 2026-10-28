@@ -2202,8 +2202,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     drag began to where it ended, kept in the layer's `points` as a path of two
     points, its box a pixel wide where it's straight across or down. Shift keeps it
     across, down or at 45 degrees; a click alone makes a line across a fifth of the
-    collage's shorter side. A path is picked by a press within 6 pixels of its box, so
-    a thin line can be.
+    collage's shorter side.
+
+    With `by hand`, as a pencil draws, it's what the drag went through: only the
+    points that keep its shape, those within 4 pixels of the line between their
+    neighbors left out, joined by one smooth curve through each, kept in its
+    `points` as a path. A click alone draws nothing.
   - `in drawing_page.layers by layer`: its rows are objects held in layers, as a
     drawing program's are: the rows of another list of its view, each with its
     `name` and `depth`, each object naming its own by a field that points at one.

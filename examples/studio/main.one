@@ -33,6 +33,7 @@ namespace studio at / {
 		move
 		box
 		line
+		pencil
 	}
 
 	// What a poster is made of: pictures, words and boxes, lowest first. Around a
@@ -271,7 +272,8 @@ namespace studio at / {
 			group "Tools" {
 				toggle tool::move "Move" icon check key v
 				toggle tool::box "Box" icon square key b
-				toggle tool::line "Line" icon edit key l
+				toggle tool::line "Line" icon line key l
+				toggle tool::pencil "Pencil" icon edit key p
 			}
 			group "Insert" {
 				paste "Paste" icon paste key ctrl+v
@@ -312,6 +314,7 @@ namespace studio at / {
 				add layer::create
 				draw layer::create { fill = "#2e86de" } when tool == tool::box
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 6 } by line when tool == tool::line
+				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 4 } by hand when tool == tool::pencil
 				place layer::place
 				reshape layer::reshape
 				crop layer::crop

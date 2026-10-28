@@ -18,6 +18,7 @@ terminal collage.copy
 terminal collage.crop
 terminal collage.draw
 terminal collage.draw_line
+terminal collage.draw_hand
 terminal collage.reshape
 terminal collage.match_colors
 terminal collage.preview

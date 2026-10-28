@@ -240,8 +240,9 @@ collage_line   ::= ("place" qualified | "reshape" qualified | "add" qualified | 
                   /* its objects held in layers, another list of its view, each naming its own by a field */
                   | "in" qualified "." NAME "by" NAME
                   /* a drag on it makes a layer as big as the drag, given these values, while the when holds;
-                     by line, a line from where the drag began to where it ended, kept as a path's points */
-                  | "draw" qualified given? ("by" "line")? ("when" expression)?
+                     by line, a line from where the drag began to where it ended, and by hand what it went
+                     through, kept as a path's points */
+                  | "draw" qualified given? ("by" ("line" | "hand"))? ("when" expression)?
                   /* pictures dropped or pasted are made by add, in the layer's picture */
                   | "paste"
                   /* the fields playing its parts, each kept in the field named like it unless one of these says another */

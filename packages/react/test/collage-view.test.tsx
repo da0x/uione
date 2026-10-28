@@ -284,6 +284,29 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::reshape", input: { id: "l1", points: "M 0 0 L 1 1", x: 100, y: 150, w: 200, h: 50 } });
   });
 
+  it("makes a path by hand of what the drag went through, only as much as keeps its shape, as one curve", async () => {
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, points: "points" }} parent="poster" subject="p1" draws={[{ command: "studio::layer::create", given: { shape: "path" }, by: "hand" }]} />;
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    // From 100 100 down to 200 200 and up to 300 100, a little wobble on the way down.
+    fireEvent.pointerDown(canvas, { clientX: 132, clientY: 132, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 182, clientY: 182.5, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 232, clientY: 232, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 332, clientY: 132, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]!.input).toMatchObject({ shape: "path", x: 100, y: 100, w: 200 });
+    // Three points kept, so two curves.
+    expect((source.runs[0]!.input as { points: string }).points.match(/C/g)?.length).toBe(2);
+  });
+
   it("makes a line from where the drag began to where it ended, by line, kept as a path's points in its box", async () => {
     const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "line" }) } });
     source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");

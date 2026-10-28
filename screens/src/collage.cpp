@@ -627,6 +627,52 @@ namespace one::screens::collage {
 		}
 	}  // namespace
 
+	namespace {
+		// The points that keep a line's shape, by Ramer, Douglas and Peucker: the farthest
+		// from the line between the ends kept while it's further than `tolerance`.
+		void kept_of(const std::vector<point>& all, std::size_t first, std::size_t last, double tolerance, std::vector<bool>& keep) {
+			if (last <= first + 1) return;
+			double vx = all[last].x - all[first].x, vy = all[last].y - all[first].y, length = std::hypot(vx, vy);
+			double farthest = -1;
+			std::size_t at = first;
+			for (std::size_t i = first + 1; i < last; ++i) {
+				double d = length > 0 ? std::abs(vy * (all[i].x - all[first].x) - vx * (all[i].y - all[first].y)) / length : std::hypot(all[i].x - all[first].x, all[i].y - all[first].y);
+				if (d > farthest) farthest = d, at = i;
+			}
+			if (farthest <= tolerance) return;
+			keep[at] = true;
+			kept_of(all, first, at, tolerance, keep);
+			kept_of(all, at, last, tolerance, keep);
+		}
+	}  // namespace
+
+	std::string freehand(const std::vector<point>& drawn, double tolerance) {
+		std::vector<point> all;
+		for (const auto& p : drawn) {
+			if (all.empty() || all.back().x != p.x || all.back().y != p.y) all.push_back(p);
+		}
+		if (all.size() < 2) return {};
+		std::vector<bool> keep(all.size(), false);
+		keep.front() = keep.back() = true;
+		kept_of(all, 0, all.size() - 1, tolerance, keep);
+		std::vector<point> kept;
+		for (std::size_t i = 0; i < all.size(); ++i) {
+			if (keep[i]) kept.push_back(all[i]);
+		}
+		// Each piece a curve whose ends lean toward the points either side, as a
+		// Catmull-Rom spline is drawn with cubic curves.
+		std::string out = "M " + said(kept[0].x) + " " + said(kept[0].y);
+		for (std::size_t i = 0; i + 1 < kept.size(); ++i) {
+			const point& before = kept[i == 0 ? 0 : i - 1];
+			const point& from = kept[i];
+			const point& to = kept[i + 1];
+			const point& after = kept[i + 2 < kept.size() ? i + 2 : i + 1];
+			out += " C " + said(from.x + (to.x - before.x) / 6) + " " + said(from.y + (to.y - before.y) / 6) + " " + said(to.x - (after.x - from.x) / 6) + " " +
+			       said(to.y - (after.y - from.y) / 6) + " " + said(to.x) + " " + said(to.y);
+		}
+		return out;
+	}
+
 	std::vector<point> path_nodes(std::string_view absolute) {
 		std::vector<point> out;
 		for (const auto& c : commands_of(absolute)) {
