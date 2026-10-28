@@ -40,6 +40,10 @@ namespace one::desktop::runtime {
 			std::string at;         // the block the caret is in, by its id
 			bool first = false;     // the caret is on an empty page, where its first block will be
 			editing edit{"", true};  // that block's words, being written
+			// The selection's other end when it runs into other blocks: the block, by its id,
+			// and the place in its words. The caret's block is then chosen from its edge
+			// nearest that end to the caret, so what's typed there selects as it would alone.
+			std::optional<std::pair<std::string, std::size_t>> from;
 			// Words typed, by block, until the view has them; and what of them was sent.
 			std::map<std::string, std::string> written, sent;
 			// A block being made at this position, or with this id once it's answered, which
@@ -182,6 +186,7 @@ namespace one::desktop::runtime {
 			}
 			void commit(std::string text, std::size_t erase_before, std::size_t erase_after) override {
 				s_->composing.clear();
+				erase_across();
 				changed([&] {
 					s_->edit.erase_around(erase_before, erase_after);
 					s_->edit.type(text);
@@ -193,8 +198,29 @@ namespace one::desktop::runtime {
 				if (!here || spec_.read_only) return false;
 				s_->show_caret = true;
 				bool word = e.control, extend = e.shift;
+				// Across blocks: copied, cut or erased all at once, what's typed or pasted then
+				// in its place; moved without Shift, the caret goes to the end it moved toward.
+				if (auto r = across()) {
+					bool printable = !e.control && !e.alt && !e.super && !e.text.empty() && static_cast<unsigned char>(e.text[0]) >= 0x20 && e.text[0] != 0x7f;
+					bool pastes = e.control && !e.alt && (e.symbol == 'v' || e.symbol == 'V');
+					if (e.control && !e.alt && (e.symbol == 'c' || e.symbol == 'C')) return copy_text(chosen_words()), true;
+					if (e.control && !e.alt && (e.symbol == 'x' || e.symbol == 'X')) return copy_text(chosen_words()), erase_across(), true;
+					if (e.is(keys::backspace) || e.is(keys::delete_key)) return erase_across(), true;
+					if (printable || pastes || e.is(keys::enter) || e.is(keys::keypad_enter)) {
+						erase_across();
+					} else if (!e.shift && !e.control && (e.is(keys::left) || e.is(keys::right) || e.is(keys::up) || e.is(keys::down))) {
+						spot to = e.is(keys::left) || e.is(keys::up) ? r->first : r->second;
+						enter_block(to.block, to.at);
+						s_->aim = -1;
+						tick_.set(tick_.peek() + 1);
+						return true;
+					}
+					here = current();
+					if (!here) return false;
+				}
 				std::size_t caret = s_->edit.caret(), size = s_->edit.text().size();
 				bool selecting = s_->edit.selecting();
+				std::size_t i = index();
 				if ((e.is(keys::enter) || e.is(keys::keypad_enter)) && !e.control) {
 					if (e.shift) return typed("\n");
 					// As its kind says: split, a new line, or out of it, its empty last line taken away.
@@ -213,19 +239,42 @@ namespace one::desktop::runtime {
 					return changed([&] { s_->edit.erase_forward(word); });
 				}
 				if (e.is(keys::left)) {
-					if (!selecting && !extend && caret == 0) return go_to(index() - 1, false), true;
+					if (!selecting && !extend && caret == 0) return go_to(i - 1, false), true;
+					// With Shift at a block's start, the selection runs on into the one before.
+					if (extend && caret == 0 && i > 0) return extend_to(i - 1, blocks_[i - 1].words.size()), true;
+					if (!extend) s_->from.reset();
 					return moved([&] { s_->edit.left(word, extend); });
 				}
 				if (e.is(keys::right)) {
-					if (!selecting && !extend && caret == size) return go_to(index() + 1, true), true;
+					if (!selecting && !extend && caret == size) return go_to(i + 1, true), true;
+					if (extend && caret == size && i + 1 < blocks_.size()) return extend_to(i + 1, 0), true;
+					if (!extend) s_->from.reset();
 					return moved([&] { s_->edit.right(word, extend); });
 				}
 				if (e.is(keys::up) || e.is(keys::down)) return by_line(e.is(keys::up) ? -1 : 1, extend), true;
-				if (e.is(keys::home)) return moved([&] { e.control ? s_->edit.start(extend) : line_edge(false, extend); });
-				if (e.is(keys::end)) return moved([&] { e.control ? s_->edit.end(extend) : line_edge(true, extend); });
+				if (e.is(keys::home) || e.is(keys::end)) {
+					bool end = e.is(keys::end);
+					// With Control, to the page's start or end; with Shift too, chosen to there.
+					if (e.control && !blocks_.empty()) {
+						if (extend) return end ? extend_to(blocks_.size() - 1, blocks_.back().words.size()) : extend_to(0, 0), true;
+						return go_to(end ? blocks_.size() - 1 : 0, !end), true;
+					}
+					if (!extend) s_->from.reset();
+					return moved([&] { line_edge(end, extend); });
+				}
 				if (e.control && !e.alt) {
 					switch (e.symbol) {
-						case 'a': return moved([&] { s_->edit.select_all(); });
+						case 'a':
+							// Once to choose the block's words, twice the whole page's.
+							if (blocks_.size() > 1 && (s_->from || (s_->edit.selection().first == 0 && s_->edit.selection().second == size))) {
+								s_->from.reset();
+								extend_to(blocks_.size() - 1, blocks_.back().words.size());
+								s_->from = std::pair{blocks_.front().id, std::size_t{0}};
+								s_->edit.move_to(0, false);
+								s_->edit.move_to(s_->edit.text().size(), true);
+								return true;
+							}
+							return moved([&] { s_->edit.select_all(); });
 						case 'c':
 							if (selecting) copy_text(s_->edit.selected());
 							return true;
@@ -242,6 +291,7 @@ namespace one::desktop::runtime {
 						case 'Z':
 						case 'y':
 							// Undone by the page, with what's typed sent first so it's undone too.
+							s_->from.reset();
 							send_all();
 							return false;
 					}
@@ -255,6 +305,9 @@ namespace one::desktop::runtime {
 				if (spec_.read_only) return false;
 				auto [i, offset] = hit_block(at);
 				if (i >= shown_.size()) return true;
+				// With Shift, the selection runs from where it was to here, across blocks too.
+				if (clicks == 1 && held().shift && !s_->first) return extend_to(i, offset), true;
+				s_->from.reset();
 				if (i != index()) enter_block(i, offset);
 				if (clicks == 2) s_->edit.select_word(offset);
 				else if (clicks == 3) s_->edit.select_line(offset);
@@ -266,7 +319,9 @@ namespace one::desktop::runtime {
 
 			void drag(point at) override {
 				auto [i, offset] = hit_block(at);
-				if (i != index()) return;
+				if (i >= shown_.size() || s_->first) return;
+				// Dragged into another block, the selection runs on into it.
+				if (i != index() || s_->from) return extend_to(i, offset);
 				s_->edit.move_to(offset, true);
 				tick_.set(tick_.peek() + 1);
 			}
@@ -410,8 +465,9 @@ namespace one::desktop::runtime {
 				if (l.words && l.raw) {
 					float scale = static_cast<float>(l.words->scale());
 					const auto& lines = l.words->lines();
-					if (here && s_->edit.selecting()) {
-						auto [from, to] = s_->edit.selection();
+					auto chosen_here = focused && !spec_.read_only ? chosen_in(i) : std::nullopt;
+					if (chosen_here && chosen_here->first < chosen_here->second) {
+						auto [from, to] = *chosen_here;
 						color chosen = t.accent;
 						chosen.alpha = 0.22f;
 						auto start = l.words->caret(from), finish = l.words->caret(to);
@@ -432,6 +488,15 @@ namespace one::desktop::runtime {
 					}
 				}
 				kind.paint_front(c, l, {x, o.y + l.y}, at);
+				// A block drawn as more than its words, like an equation or a picture, is tinted
+				// whole while a selection across blocks takes it in.
+				if (focused && !spec_.read_only && (!l.raw || (l.own.has_value() && i != index()))) {
+					if (auto r = across(); r && i >= r->first.block && i <= r->second.block) {
+						color chosen = t.accent;
+						chosen.alpha = 0.22f;
+						c.box({o.x + l.x, o.y + l.y, l.width, l.height}, {.fill = chosen});
+					}
+				}
 				if (here) {
 					auto [cx, cy, ch] = caret_place();
 					c.box({cx - 0.75f, cy, 1.5f, ch}, {.fill = t.ink});
@@ -483,9 +548,104 @@ namespace one::desktop::runtime {
 				return {best, l.words->offset_at((at.x - o.x - l.x) * scale, y)};
 			}
 
+			// A place in the page's words: a block, by its index, and a place in its words.
+			struct spot {
+				std::size_t block = 0, at = 0;
+			};
+
+			std::size_t index_of(const std::string& id) const {
+				for (std::size_t i = 0; i < blocks_.size(); ++i) {
+					if (blocks_[i].id == id) return i;
+				}
+				return blocks_.size();
+			}
+
+			// A selection running across blocks, its first end and its last, if there is one.
+			std::optional<std::pair<spot, spot>> across() const {
+				if (!s_->from || s_->first) return std::nullopt;
+				std::size_t a = index_of(s_->from->first), i = index();
+				if (a >= blocks_.size() || i >= blocks_.size() || a == i) return std::nullopt;
+				spot there{a, std::min(s_->from->second, blocks_[a].words.size())}, here{i, s_->edit.caret()};
+				return a < i ? std::pair{there, here} : std::pair{here, there};
+			}
+
+			// What's chosen of a block's words, from where to where, if any of them are.
+			std::optional<std::pair<std::size_t, std::size_t>> chosen_in(std::size_t k) const {
+				if (auto r = across()) {
+					if (k < r->first.block || k > r->second.block) return std::nullopt;
+					std::size_t size = k == index() ? s_->edit.text().size() : blocks_[k].words.size();
+					return std::pair{k == r->first.block ? r->first.at : 0, k == r->second.block ? r->second.at : size};
+				}
+				if (k == index() && s_->edit.selecting()) return s_->edit.selection();
+				return std::nullopt;
+			}
+
+			// The words chosen across blocks, a line between each block's.
+			std::string chosen_words() const {
+				auto r = across();
+				if (!r) return s_->edit.selected();
+				std::string out;
+				for (std::size_t k = r->first.block; k <= r->second.block; ++k) {
+					auto [from, to] = *chosen_in(k);
+					const std::string& words = k == index() ? s_->edit.text() : blocks_[k].words;
+					if (k > r->first.block) out += '\n';
+					out += words.substr(from, to - from);
+				}
+				return out;
+			}
+
+			// The selection's moving end put in block k, at a place in its words: back in the
+			// block it began in, a selection there alone; in another, one across blocks.
+			void extend_to(std::size_t k, std::size_t at) {
+				if (k >= blocks_.size() || s_->first) return;
+				auto anchor = s_->from ? *s_->from : std::pair{s_->at, s_->edit.anchor()};
+				std::size_t a = index_of(anchor.first);
+				if (a >= blocks_.size()) return;
+				if (k != index()) enter_block(k, 0);
+				std::size_t size = s_->edit.text().size();
+				if (k == a) {
+					s_->edit.move_to(std::min(anchor.second, size), false);
+				} else {
+					s_->edit.move_to(k > a ? 0 : size, false);
+					s_->from = anchor;
+				}
+				s_->edit.move_to(std::min(at, size), true);
+				tick_.set(tick_.peek() + 1);
+			}
+
+			// The selection across blocks taken away, as one step: the first block's words
+			// before it and the last's after it made one, and the blocks between and the last
+			// deleted; the caret where it was.
+			void erase_across() {
+				auto r = across();
+				if (!r || spec_.remove.empty()) return;
+				auto [first, last] = *r;
+				std::string head = (first.block == index() ? s_->edit.text() : blocks_[first.block].words).substr(0, first.at);
+				const std::string& end = last.block == index() ? s_->edit.text() : blocks_[last.block].words;
+				std::string words = head + end.substr(std::min(last.at, end.size()));
+				block& kept = blocks_[first.block];
+				s_->from.reset();
+				s_->written[kept.id] = words;
+				s_->sent[kept.id] = words;
+				p_.run(spec_.write, collage_fields_of(value(fields{{"id", kept.id}, {"words", words}}), spec_.fields));
+				for (std::size_t k = first.block + 1; k <= last.block; ++k) {
+					s_->written.erase(blocks_[k].id);
+					p_.run(spec_.remove, value(fields{{"id", blocks_[k].id}, {"one:history", "joined"}}));
+				}
+				kept.words = words;
+				blocks_.erase(blocks_.begin() + static_cast<std::ptrdiff_t>(first.block) + 1, blocks_.begin() + static_cast<std::ptrdiff_t>(last.block) + 1);
+				s_->at = kept.id;
+				s_->edit = editing(words, true);
+				s_->edit.move_to(head.size(), false);
+				s_->aim = -1;
+				if (!spec_.pick.empty()) p_.pick(spec_.pick, s_->at);
+				tick_.set(tick_.peek() + 1);
+			}
+
 			// Moved into another block, the one left sent as it's written.
 			void enter_block(std::size_t i, std::size_t caret) {
 				leave();
+				s_->from.reset();
 				if (i >= blocks_.size()) return;
 				s_->at = blocks_[i].id;
 				s_->first = false;
@@ -507,7 +667,8 @@ namespace one::desktop::runtime {
 				const auto& w = *shown_[i].words;
 				auto c = w.caret(s_->edit.caret());
 				const auto& line = w.lines()[std::min(c.line, w.lines().size() - 1)];
-				s_->edit.move_to(w.offset_at(end ? 1e9f : -1e9f, line.top + line.height / 2), extend);
+				// Just past the line's ends, as a far-off x is too far for a float to tell its places apart.
+				s_->edit.move_to(w.offset_at(end ? line.left + line.width + 1 : line.left - 1, line.top + line.height / 2), extend);
 			}
 
 			// A line up or down, as near the caret's x as there is; past a block's first
@@ -522,14 +683,13 @@ namespace one::desktop::runtime {
 				std::size_t last = w.lines().empty() ? 0 : w.lines().size() - 1;
 				bool leaves = direction < 0 ? c.line == 0 : c.line >= last;
 				if (!leaves) {
+					if (!extend) s_->from.reset();
 					const auto& line = w.lines()[c.line + direction];
 					s_->edit.move_to(w.offset_at(s_->aim, line.top + line.height / 2), extend);
-				} else if (extend) {
-					direction < 0 ? s_->edit.start(true) : s_->edit.end(true);
 				} else {
 					std::size_t to = direction < 0 ? i - 1 : i + 1;
-					if (direction < 0 && i == 0) return s_->edit.start(false);
-					if (to >= shown_.size()) return s_->edit.end(false);
+					if (direction < 0 && i == 0) return s_->edit.start(extend);
+					if (to >= shown_.size()) return s_->edit.end(extend);
 					float aim = s_->aim;
 					const laid& next = shown_[to];
 					std::size_t offset = next.b.words.size();
@@ -538,7 +698,9 @@ namespace one::desktop::runtime {
 						std::size_t n = direction < 0 ? lines.size() - 1 : 0;
 						offset = next.words->offset_at(aim, lines[n].top + lines[n].height / 2);
 					}
-					enter_block(to, offset);
+					// With Shift, the selection runs on into it.
+					if (extend) extend_to(to, offset);
+					else enter_block(to, offset);
 					s_->aim = aim;
 				}
 				tick_.set(tick_.peek() + 1);

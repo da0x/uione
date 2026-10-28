@@ -437,6 +437,39 @@ describe("a paper", () => {
     expect(source.uploads.map((u) => u.file.name)).toEqual(["beach.jpg"]);
   });
 
+  it("runs a selection across blocks with Shift, copies it a line a block, and erases it as one step, the blocks between deleted", async () => {
+    const source = sourceWith([
+      { id: "b1", kind: "title", words: "A harbor", position: 1, align: "left" },
+      { id: "b2", kind: "text", words: "The light was warm.", position: 2, align: "left" },
+      { id: "b3", kind: "text", words: "The boats were still.", position: 3, align: "left" },
+    ]);
+    const drawn = renderPaper(source);
+    await waitFor(() => expect(blocks(drawn).length).toBe(3));
+    const [title, middle, last] = blocks(drawn) as [HTMLElement, HTMLElement, HTMLElement];
+    // From after "A " to the title's end, then on into the next block, and the one after.
+    act(() => title.focus());
+    fireEvent.focus(title);
+    document.getSelection()!.setBaseAndExtent(title.firstChild!, 2, title.firstChild!, 8);
+    fireEvent.keyDown(title, { key: "ArrowRight", shiftKey: true });
+    expect(document.activeElement).toBe(middle);
+    fireEvent.focus(middle);
+    fireEvent.keyDown(middle, { key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+    fireEvent.focus(last);
+    // The caret's block is chosen from its start; Shift and Right moves the caret on in it.
+    document.getSelection()!.setBaseAndExtent(last.firstChild!, 0, last.firstChild!, 9);
+    const copied: Record<string, string> = {};
+    fireEvent.copy(last, { clipboardData: { setData: (type: string, words: string) => (copied[type] = words) } });
+    expect(copied["text/plain"]).toBe("harbor\nThe light was warm.\nThe boats");
+    fireEvent.keyDown(last, { key: "Backspace" });
+    await waitFor(() => expect(source.runs.length).toBe(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::passage::write", input: { id: "b1", words: "A  were still." } });
+    expect(source.runs[1]).toMatchObject({ command: "studio::passage::delete", input: { id: "b2", "one:history": "joined" } });
+    expect(source.runs[2]).toMatchObject({ command: "studio::passage::delete", input: { id: "b3", "one:history": "joined" } });
+    expect(title.textContent).toBe("A  were still.");
+    expect(document.activeElement).toBe(title);
+  });
+
   it("shows how far along it's been read, across its top", async () => {
     const source = sourceWith([{ id: "b1", kind: "text", words: "Words", position: 1, align: "left" }]);
     function Notes() {

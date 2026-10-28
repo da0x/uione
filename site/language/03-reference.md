@@ -2241,6 +2241,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     the first words typed on an empty page make its first block, a title. Each is one
     step undo takes back.
   - `delete block::delete`: Backspace at a block's start joins it to the one before.
+    A selection runs on across blocks, dragged or with Shift and the arrows, Control
+    and Shift and Home or End to the page's ends, and Control and A twice for all of it;
+    it's copied a line a block, and erased, typed over or pasted over as one step, the
+    first block's words before it and the last's after it made one and the blocks between
+    deleted.
   - A math block shows its words while the caret's in it, and its equation, set, once
     the caret leaves; it keeps the room of the larger, so the page doesn't move. In a
     code block, Enter starts a new line, and Enter on an empty last line leaves it for

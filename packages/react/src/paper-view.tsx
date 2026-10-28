@@ -10,7 +10,7 @@
 // the toolbar acts on. The desktop's paper keeps the same rules.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import type { CSSProperties, KeyboardEvent } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
@@ -238,6 +238,70 @@ function placeCaret(el: HTMLElement, at: number): void {
   selection.collapseToEnd();
 }
 
+// The text node and the place in it that a place in an element's words is.
+function pointIn(el: HTMLElement, at: number): [Node, number] {
+  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let left = at, last: Node | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0;
+    if (left <= length) return [node, left];
+    left -= length;
+    last = node;
+  }
+  return last ? [last, last.textContent?.length ?? 0] : [el, 0];
+}
+
+// A selection in an element's words, from one place to another, the caret at the second.
+function selectIn(el: HTMLElement, from: number, to: number): void {
+  el.focus({ preventScroll: true });
+  const selection = el.ownerDocument.getSelection();
+  if (!selection) return;
+  const [a, ai] = pointIn(el, from), [b, bi] = pointIn(el, to);
+  selection.setBaseAndExtent(a, ai, b, bi);
+}
+
+// Where a selection's ends are in an element's words: where it began, and the caret.
+function endsIn(el: HTMLElement): { anchor: number; focus: number } {
+  const selection = el.ownerDocument.getSelection();
+  if (!selection || !selection.anchorNode || !el.contains(selection.anchorNode)) return { anchor: 0, focus: 0 };
+  const count = (node: Node, offset: number) => {
+    const before = el.ownerDocument.createRange();
+    before.selectNodeContents(el);
+    before.setEnd(node, offset);
+    return before.toString().length;
+  };
+  return { anchor: count(selection.anchorNode, selection.anchorOffset), focus: selection.focusNode ? count(selection.focusNode, selection.focusOffset) : 0 };
+}
+
+// The caret's own box, where a selection's moving end is.
+function focusBox(el: HTMLElement): DOMRect {
+  const selection = el.ownerDocument.getSelection();
+  if (selection?.focusNode && el.contains(selection.focusNode)) {
+    const range = el.ownerDocument.createRange();
+    range.setStart(selection.focusNode, selection.focusOffset);
+    const rects = range.getClientRects?.();
+    if (rects && rects.length > 0) return rects[0]!;
+  }
+  return caretBox(el);
+}
+
+// The word around a place in some words, as a double press picks it.
+function wordAround(words: string, at: number): [number, number] {
+  const letter = /[\p{L}\p{N}_'’]/u;
+  let from = at, to = at;
+  while (from > 0 && letter.test(words[from - 1]!)) from--;
+  while (to < words.length && letter.test(words[to]!)) to++;
+  return from === to ? [at, Math.min(words.length, at + 1)] : [from, to];
+}
+
+// How a selection across blocks is drawn in the blocks the caret isn't in: the words
+// highlighted, as the browser draws one, and a block shown as more than its words, like
+// an equation or a picture, tinted whole.
+const acrossLook = `
+::highlight(one-paper-across) { background-color: color-mix(in srgb, var(--color-accent, #2457d6) 24%, transparent); }
+.one-paper [data-whole][data-chosen]::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--color-accent, #2457d6) 22%, transparent); pointer-events: none; }
+`;
+
 // The place in an element's words nearest a point, as the browser finds it.
 function offsetAt(el: HTMLElement, x: number, y: number): number | undefined {
   const doc = el.ownerDocument as Document & {
@@ -262,8 +326,8 @@ function offsetAt(el: HTMLElement, x: number, y: number): number | undefined {
 function caretBox(el: HTMLElement): DOMRect {
   const selection = el.ownerDocument.getSelection();
   if (selection && selection.rangeCount > 0) {
-    const rects = selection.getRangeAt(0).getClientRects();
-    if (rects.length > 0) return rects[0]!;
+    const rects = selection.getRangeAt(0).getClientRects?.();
+    if (rects && rects.length > 0) return rects[0]!;
   }
   return el.getBoundingClientRect();
 }
@@ -328,6 +392,12 @@ export function Paper({
   const opened = useRef(false);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const caretBlock = useRef<string | undefined>(undefined);
+  // The selection's other end when it runs into other blocks: the block, by its id, and
+  // the place in its words. The caret's block is then chosen from its edge nearest that
+  // end to the caret, so the browser draws and moves that part as it would alone.
+  const across = useRef<{ id: string; at: number } | null>(null);
+  const dragging = useRef(false);
+  const pointer = useRef("mouse");  // what last pressed it: a mouse, a finger or a pen
   const firstMaking = useRef(false);  // an empty page's first block asked for, and not yet adopted
   const firstSent = useRef("");       // the words it was asked for with
   const firstId = useRef<string | undefined>(undefined);
@@ -571,8 +641,153 @@ export function Paper({
     const b = shown[i];
     const el = b && elements.current.get(b.id);
     if (!el) return;
+    clearAcross();
     placeCaret(el, at === "start" ? 0 : at === "end" ? wordsOf(el).length : at);
   };
+
+  // A selection running across blocks, its first end and its last, each a block's index
+  // and a place in its words; the same as the desktop's.
+  const caretIndex = () => shown.findIndex((b) => b.id === caretBlock.current);
+  const acrossNow = () => {
+    const other = across.current;
+    const i = caretIndex();
+    const a = other ? shown.findIndex((b) => b.id === other.id) : -1;
+    const el = i >= 0 ? elements.current.get(shown[i]!.id) : undefined;
+    if (!other || a < 0 || !el || a === i) return null;
+    const there = { block: a, at: other.at }, here = { block: i, at: endsIn(el).focus };
+    return a < i ? { first: there, last: here } : { first: here, last: there };
+  };
+  const chosenIn = (k: number, r: NonNullable<ReturnType<typeof acrossNow>>): [number, number] => {
+    const el = elements.current.get(shown[k]!.id);
+    const size = el ? wordsOf(el).length : 0;
+    return [k === r.first.block ? Math.min(r.first.at, size) : 0, k === r.last.block ? Math.min(r.last.at, size) : size];
+  };
+  const chosenWords = (r: NonNullable<ReturnType<typeof acrossNow>>) => {
+    const out: string[] = [];
+    for (let k = r.first.block; k <= r.last.block; k++) {
+      const el = elements.current.get(shown[k]!.id);
+      const [from, to] = chosenIn(k, r);
+      out.push(el ? wordsOf(el).slice(from, to) : "");
+    }
+    return out.join("\n");
+  };
+  // Drawn in the blocks the caret isn't in, where the browser has the highlights to draw it.
+  const paintAcross = () => {
+    const r = acrossNow();
+    for (const el of elements.current.values()) delete el.parentElement?.dataset["chosen"];
+    const highlights = (globalThis as { CSS?: { highlights?: Map<string, unknown> } }).CSS?.highlights;
+    const Highlight = (globalThis as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
+    if (!r) return void highlights?.delete("one-paper-across");
+    const ranges: Range[] = [];
+    for (let k = r.first.block; k <= r.last.block; k++) {
+      const el = elements.current.get(shown[k]!.id);
+      if (!el) continue;
+      if (el.parentElement) el.parentElement.dataset["chosen"] = "";
+      if (k === caretIndex()) continue;
+      const [from, to] = chosenIn(k, r);
+      const range = el.ownerDocument.createRange();
+      const [a, ai] = pointIn(el, from), [b, bi] = pointIn(el, to);
+      range.setStart(a, ai);
+      range.setEnd(b, bi);
+      ranges.push(range);
+    }
+    if (highlights && Highlight) highlights.set("one-paper-across", new Highlight(...ranges));
+  };
+  function clearAcross() {
+    if (!across.current) return;
+    across.current = null;
+    paintAcross();
+  }
+  // The selection's moving end put in block k, at a place in its words: back in the block
+  // it began in, a selection there alone; in another, one across blocks.
+  const extendTo = (k: number, at: number) => {
+    const target = shown[k];
+    const el = target && elements.current.get(target.id);
+    const i = caretIndex(), now = i >= 0 ? elements.current.get(shown[i]!.id) : undefined;
+    if (!el || !now || !target.id) return;
+    const anchor = across.current ?? { id: shown[i]!.id, at: endsIn(now).anchor };
+    const a = shown.findIndex((b) => b.id === anchor.id);
+    if (a < 0) return;
+    const size = wordsOf(el).length;
+    across.current = null;
+    if (k === a) selectIn(el, Math.min(anchor.at, size), Math.min(at, size));
+    else selectIn(el, k > a ? 0 : size, Math.min(at, size));
+    caretBlock.current = target.id;
+    if (k !== a) across.current = anchor;
+    paintAcross();
+  };
+  // The selection across blocks taken away, as one step, and what's typed or pasted put
+  // in its place: the first block's words before it, those, and the last's after it
+  // made one, and the blocks between and the last deleted.
+  const eraseAcross = (put = "") => {
+    const r = acrossNow();
+    if (!r || !remove) return false;
+    const first = shown[r.first.block]!, firstEl = elements.current.get(first.id);
+    const lastEl = elements.current.get(shown[r.last.block]!.id);
+    if (!firstEl || !lastEl) return false;
+    const head = wordsOf(firstEl).slice(0, r.first.at), tail = wordsOf(lastEl).slice(r.last.at);
+    const words = head + put + tail;
+    across.current = null;
+    firstEl.textContent = words;
+    written.current.set(first.id, words);
+    sent.current.set(first.id, words);
+    going.current = { id: first.id, at: head.length + put.length };
+    void run(write, fieldsOf({ id: first.id, words }, fields));
+    for (let k = r.first.block + 1; k <= r.last.block; k++) {
+      written.current.delete(shown[k]!.id);
+      void run(remove, { id: shown[k]!.id, "one:history": "joined" });
+    }
+    paintAcross();
+    placeCaret(firstEl, head.length + put.length);
+    return true;
+  };
+  useLayoutEffect(() => {
+    if (across.current) paintAcross();
+  });
+  // Pressed with a mouse: the caret put where it's pressed, a word chosen by a double
+  // press and the block's words by a triple, and dragged, a selection that runs on into
+  // other blocks; with Shift, from where it was to there. A finger or a pen leaves it to
+  // the browser.
+  const pressed = (i: number) => (e: MouseEvent<HTMLElement>) => {
+    if (pointer.current !== "mouse" || e.button !== 0 || readOnly) return;
+    const el = e.currentTarget;
+    const at = offsetAt(el, e.clientX, e.clientY);
+    if (at === undefined) return;
+    e.preventDefault();
+    if (e.shiftKey && caretIndex() >= 0) return extendTo(i, at);
+    clearAcross();
+    const words = wordsOf(el);
+    if (e.detail === 2) selectIn(el, ...wordAround(words, at));
+    else if (e.detail >= 3) selectIn(el, 0, words.length);
+    else placeCaret(el, at);
+    dragging.current = e.detail === 1;
+  };
+  useEffect(() => {
+    const moved = (e: globalThis.MouseEvent) => {
+      if (!dragging.current) return;
+      if (!(e.buttons & 1)) return void (dragging.current = false);
+      // The block nearest the pointer, down the page, and the place in it nearest it.
+      let k = -1, nearest = Infinity;
+      shown.forEach((b, n) => {
+        const box = elements.current.get(b.id)?.getBoundingClientRect();
+        if (!box) return;
+        const away = e.clientY < box.top ? box.top - e.clientY : e.clientY > box.bottom ? e.clientY - box.bottom : 0;
+        if (away < nearest) (nearest = away), (k = n);
+      });
+      const el = k >= 0 ? elements.current.get(shown[k]!.id) : undefined;
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      const at = offsetAt(el, Math.min(Math.max(e.clientX, box.left + 1), box.right - 1), Math.min(Math.max(e.clientY, box.top + 1), box.bottom - 1));
+      extendTo(k, at ?? (e.clientY < box.top ? 0 : wordsOf(el).length));
+    };
+    const let_go = () => void (dragging.current = false);
+    document.addEventListener("mousemove", moved);
+    document.addEventListener("mouseup", let_go);
+    return () => {
+      document.removeEventListener("mousemove", moved);
+      document.removeEventListener("mouseup", let_go);
+    };
+  });
 
   // Enter: the words after the caret made a block of their own after this one, of the
   // same kind when they're the middle of it, or text after its end.
@@ -623,9 +838,82 @@ export function Paper({
 
   const keyDown = (i: number) => (e: KeyboardEvent<HTMLElement>) => {
     const el = e.currentTarget;
+    const control = e.ctrlKey || e.metaKey;
+    // Across blocks: erased all at once, what's typed then in its place; moved without
+    // Shift, the caret goes to the end it moved toward. Copied and cut as the page is.
+    const r = acrossNow();
+    if (r) {
+      const printable = e.key.length === 1 && !control && !e.altKey;
+      if (e.key === "Backspace" || e.key === "Delete" || printable) {
+        e.preventDefault();
+        eraseAcross(printable ? e.key : "");
+        return;
+      }
+      if (e.key === "Enter" && !control) {
+        e.preventDefault();
+        eraseAcross();
+        const at = shown[r.first.block] && elements.current.get(shown[r.first.block]!.id);
+        if (at && !e.shiftKey) split(r.first.block, at);
+        return;
+      }
+      if (!e.shiftKey && !control && e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        const to = e.key === "ArrowLeft" || e.key === "ArrowUp" ? r.first : r.last;
+        goTo(to.block, to.at);
+        return;
+      }
+    }
     const words = wordsOf(el);
     const { start, end } = caretIn(el);
-    const control = e.ctrlKey || e.metaKey;
+    const { focus } = endsIn(el);
+    // With Control, to the page's start or end; with Shift too, chosen to there.
+    if (control && !e.altKey && (e.key === "Home" || e.key === "End") && shown.length > 0) {
+      e.preventDefault();
+      const last = shown.length - 1, toEnd = e.key === "End";
+      const lastEl = elements.current.get(shown[last]!.id);
+      if (e.shiftKey) extendTo(toEnd ? last : 0, toEnd ? (lastEl ? wordsOf(lastEl).length : 0) : 0);
+      else goTo(toEnd ? last : 0, toEnd ? "end" : "start");
+      return;
+    }
+    // Once to choose the block's words, twice the whole page's.
+    if (control && !e.altKey && !e.shiftKey && (e.key === "a" || e.key === "A") && shown.length > 1 && (r || (start === 0 && end === words.length))) {
+      e.preventDefault();
+      const last = shown.length - 1, lastEl = elements.current.get(shown[last]!.id);
+      if (!lastEl || !shown[0]!.id) return;
+      across.current = null;
+      selectIn(lastEl, 0, wordsOf(lastEl).length);
+      caretBlock.current = shown[last]!.id;
+      if (last > 0) across.current = { id: shown[0]!.id, at: 0 };
+      paintAcross();
+      return;
+    }
+    // With Shift past a block's edge, the selection runs on into the next block.
+    if (e.shiftKey && !control && !e.altKey) {
+      if (e.key === "ArrowLeft" && focus === 0 && i > 0) {
+        e.preventDefault();
+        const before = elements.current.get(shown[i - 1]!.id);
+        return extendTo(i - 1, before ? wordsOf(before).length : 0);
+      }
+      if (e.key === "ArrowRight" && focus === words.length && i + 1 < shown.length) {
+        e.preventDefault();
+        return extendTo(i + 1, 0);
+      }
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        const up = e.key === "ArrowUp";
+        const to = up ? i - 1 : i + 1;
+        const next = shown[to] && elements.current.get(shown[to]!.id);
+        if (!next) return;
+        const caret = focusBox(el), box = el.getBoundingClientRect();
+        const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
+        const leaves = up ? caret.top - box.top < line * 0.8 : box.bottom - caret.bottom < line * 0.8;
+        if (!leaves) return;
+        e.preventDefault();
+        const into = next.getBoundingClientRect();
+        const at = offsetAt(next, caret.left, up ? into.bottom - line / 2 : into.top + line / 2);
+        return extendTo(to, at ?? (up ? wordsOf(next).length : 0));
+      }
+    }
+    if (!e.shiftKey && !control && (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End")) clearAcross();
     if (control && !e.altKey && (e.key === "z" || e.key === "Z" || e.key === "y")) {
       // Undone by the app, with what's typed sent first so it's undone too.
       e.preventDefault();
@@ -756,6 +1044,7 @@ export function Paper({
                     e.preventDefault();
                     const el = elements.current.get(b.id);
                     if (!el) return;
+                    clearAcross();
                     placeCaret(el, 0);
                     el.scrollIntoView?.({ block: "start", behavior: "smooth" });
                   }}
@@ -788,7 +1077,29 @@ export function Paper({
       onScroll={(e) => {
         if (progress && fills) readTo(e.currentTarget.scrollTop, e.currentTarget.scrollHeight - e.currentTarget.clientHeight);
       }}
+      onPointerDownCapture={(e) => {
+        pointer.current = e.pointerType;
+      }}
+      onCopyCapture={(e) => {
+        const r = acrossNow();
+        if (!r) return;
+        e.preventDefault();
+        e.clipboardData.setData("text/plain", chosenWords(r));
+      }}
+      onCutCapture={(e) => {
+        const r = acrossNow();
+        if (!r) return;
+        e.preventDefault();
+        e.clipboardData.setData("text/plain", chosenWords(r));
+        eraseAcross();
+      }}
       onPasteCapture={(e) => {
+        // Over a selection across blocks, what's pasted takes its place.
+        if (acrossNow() && e.clipboardData.files.length === 0) {
+          e.preventDefault();
+          eraseAcross(e.clipboardData.getData("text/plain"));
+          return;
+        }
         // A picture pasted is a picture block after the caret's; words are typed.
         const pictures = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
         if (!paste || pictures.length === 0) return;
@@ -819,6 +1130,7 @@ export function Paper({
           style={{ position: "sticky", top: 0, height: 3, width: `${past * 100}%`, background: "var(--color-accent, #2457d6)", zIndex: 2 }}
         />
       )}
+      <style>{acrossLook}</style>
       <div style={{ ...sheet, ...(warm ? warmPaper : {}) }}>
         {sheets}
         {shown.map((b, i) => (
@@ -840,6 +1152,7 @@ export function Paper({
             }}
             onInput={(el) => typed(b, el)}
             onKeyDown={keyDown(i)}
+            onMouseDown={pressed(i)}
             onFocus={() => {
               caretBlock.current = b.id;
               setWritingIn(b.id);
@@ -877,6 +1190,7 @@ function PaperBlock({
   element,
   onInput,
   onKeyDown,
+  onMouseDown,
   onFocus,
   onBlur,
   typing,
@@ -891,6 +1205,7 @@ function PaperBlock({
   element: (el: HTMLElement | null) => void;
   onInput: (el: HTMLElement) => void;
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+  onMouseDown: (e: MouseEvent<HTMLElement>) => void;
   onFocus: () => void;
   onBlur: () => void;
   typing: () => boolean;
@@ -951,6 +1266,7 @@ function PaperBlock({
       ref={box}
       style={{ ...look, position: "absolute", top: place.top, left: place.left, width: place.width, display: "grid", boxSizing: "border-box" }}
       data-kind={block.kind}
+      data-whole={showing.raw === false || showing.before ? "" : undefined}
     >
       {hint !== undefined && words === "" && (
         <div aria-hidden style={{ position: "absolute", inset: 0, textAlign: align, opacity: 0.45, pointerEvents: "none", color: "var(--color-muted, #5b6577)" }}>
@@ -975,6 +1291,7 @@ function PaperBlock({
           onInput(e.currentTarget);
         }}
         onKeyDown={onKeyDown}
+        onMouseDown={onMouseDown}
         onFocus={() => {
           setFocused(true);
           onFocus();

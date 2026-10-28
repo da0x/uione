@@ -43,11 +43,15 @@ namespace {
 		return t;
 	}
 
-	void matches_golden(const std::string& name, one::desktop::size size, const std::function<one::desktop::view()>& build) {
+	// Drawn and held to its golden image; `placed` is told of what's drawn once it's laid
+	// out, to give one part the keyboard, say.
+	void matches_golden(const std::string& name, one::desktop::size size, const std::function<one::desktop::view()>& build,
+	                    const std::function<void(one::desktop::element&)>& placed = {}) {
 		auto drawn = one::desktop::offscreen::draw(size, 1, tested_theme().page, [&](one::desktop::canvas& c) {
 			one::desktop::detail::theme_in_use() = &tested_theme();
 			auto root = build().take();
 			root->place({0, 0, static_cast<float>(size.width), static_cast<float>(size.height)});
+			if (placed) placed(*root);
 			root->paint(c);
 		});
 		auto file = golden_folder / (name + ".png");
@@ -1530,6 +1534,67 @@ TEST("a paper's picture is as wide as it says, its own shape, its corners as rou
 	CHECK(data.runs().back().command == "studio::passage::create");
 	CHECK(data.runs().back().fields["kind"].as_string() == "text");
 	CHECK(data.runs().back().fields["words"].as_string() == "x");
+}
+
+TEST("a paper's selection runs across blocks with Shift, is drawn in each, and is erased as one step, the blocks between deleted") {
+	memory_source data;
+	auto block = [](std::string id, std::string kind, std::string words, double position) {
+		return value(fields{{"id", std::move(id)}, {"kind", std::move(kind)}, {"words", std::move(words)}, {"position", position}, {"align", "left"}});
+	};
+	data.set("studio::notes_page", "p1",
+	         value(fields{{"passages", list{block("b1", "title", "A harbor at dusk", 1), block("b2", "text", "The light was warm and low over the water.", 2),
+	                                        block("b3", "text", "The boats were still.", 3)}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Notes", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(paper(p, {.view = p.view("studio::notes_page", "p1"), .list = "passages",
+		                                                                        .fields = {{"words", "words"}, {"kind", "kind"}, {"align", "align"}, {"position", "position"}},
+		                                                                        .write = "studio::passage::write", .add = "studio::passage::create", .remove = "studio::passage::delete", .key = "/ paper"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	std::function<one::desktop::element*(one::desktop::element&)> sheet = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.entry() && e.frame.width > 400) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = sheet(*child)) return found;
+		}
+		return nullptr;
+	};
+	// Laid out as a window would, so a line's end is where it's drawn.
+	auto root = built(nav);
+	root->place({0, 0, 900, 520});
+	auto* page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	auto key = [&](std::uint32_t symbol, bool shift = false, bool control = false) { return page->handle_key(one::desktop::key_event{.symbol = symbol, .text = "", .shift = shift, .control = control}); };
+	// From after "A " in the title, Shift and Down twice, then Shift and End: into the last block's end.
+	CHECK(key(one::desktop::keys::home, false, true));
+	CHECK(key(one::desktop::keys::right));
+	CHECK(key(one::desktop::keys::right));
+	CHECK(key(one::desktop::keys::down, true));
+	CHECK(key(one::desktop::keys::down, true));
+	CHECK(key(one::desktop::keys::end, true));
+	// Drawn with the keyboard, as a selection is shown only then.
+	matches_golden("paper-across", {900, 520}, [&] { return drawn(nav); }, [&](one::desktop::element& drawn_root) {
+		if (auto* on = sheet(drawn_root)) on->focused = true;
+	});
+	root = built(nav);
+	root->place({0, 0, 900, 520});
+	page = sheet(*root);
+	CHECK(page != nullptr);
+	if (!page) return;
+	CHECK(page->handle_key(one::desktop::key_event{.symbol = 'x', .text = "x"}));
+	auto runs = data.runs();
+	CHECK(runs.size() == 3);
+	if (runs.size() != 3) return;
+	CHECK(runs[0].command == "studio::passage::write");
+	CHECK(runs[0].fields["id"].as_string() == "b1");
+	CHECK(runs[0].fields["words"].as_string() == "A ");
+	CHECK(runs[1].command == "studio::passage::delete");
+	CHECK(runs[1].fields["id"].as_string() == "b2");
+	CHECK(runs[1].fields["one:history"].as_string() == "joined");
+	CHECK(runs[2].fields["id"].as_string() == "b3");
+	CHECK(runs[2].fields["one:history"].as_string() == "joined");
 }
 
 TEST("a paper is set in its document's face: a book's serif, the app's own face, a lyric's warmer serif, or a typewriter's") {
