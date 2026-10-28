@@ -43,8 +43,10 @@ own to measure, so it reads a common one, 1920 by 1080.
 An app that opens into work, like a wallpaper maker, is written in the language,
 the same on every target.
 
-A command run on open is a step like any other. One that shouldn't be undone says
-`apart from undo` itself.
+A command run on open stands apart from undo, as if sent `"one:history": "apart"`.
+The person didn't do it, so Undo is off until they do something, rather than on at once
+with a step that would take away the page they opened onto. This replaces the first
+version of this decision, which made it a step like any other.
 
 An app that opens into work reuses what's there rather than tidying it away: the
 first line finds a piece of work nothing's been done to, so opening again doesn't

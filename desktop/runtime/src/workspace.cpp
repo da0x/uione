@@ -37,9 +37,10 @@ namespace one::desktop::runtime {
 
 		// A line drawn as a tool in a toolbar's group: large, its icon over its words;
 		// small, its icon alone, its words and its key said when it's pointed at.
-		desktop::view tool(page& p, const std::string& icon, const std::string& words, const std::vector<std::string>& keys, std::function<void()> run, bool on) {
+		desktop::view tool(page& p, const std::string& icon, const std::string& words, const std::vector<std::string>& keys, std::function<void()> run, bool on, bool off = false) {
 			bool small = p.in_group().value_or(false);
-			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", small ? hint_of(words, keys) : words, std::move(run), {.large = !small, .on = on && !p.off(), .off = p.off()});
+			off = off || p.off();
+			return desktop::tool_button(desktop::has_icon(icon) ? icon : "", small ? hint_of(words, keys) : words, std::move(run), {.large = !small, .on = on && !off, .off = off});
 		}
 
 	}  // namespace
@@ -199,16 +200,20 @@ namespace one::desktop::runtime {
 
 	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys) {
 		std::string command = redo ? "one::redo" : "one::undo";
+		// Off while there's nothing to take back, or again, as the source's history says;
+		// a source that doesn't say leaves it on.
+		const view_state& kept = *p.view("one::history", "");
+		bool none = kept.status == status::ready && kept.data[redo ? "redo" : "undo"].as_string().empty();
 		auto take = [&p, command, redo] {
 			if (p.running(command)) return;
 			p.run(command, value::map(), [told = p.told(), redo](const answer& a) {
 				if (a) told.set(std::string(redo ? "Redid " : "Undid ") + step_words(*a) + ".");
 			});
 		};
-		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, take);
+		if (!(p.in_group() && p.off()) && !none) for (const auto& k : keys) p.on_key(k, take);
 		if (label.empty()) label = redo ? "Redo" : "Undo";
-		if (p.in_group()) return tool(p, icon, label, keys, take, false);
-		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take);
+		if (p.in_group()) return tool(p, icon, label, keys, take, false, none);
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), take, {.off = none});
 	}
 
 	desktop::view messages(page& p) {

@@ -34,7 +34,8 @@ export function OnOpen({ ready, lines }: { ready: boolean; lines: OpeningLine[] 
       if (line.when === false) continue;
       if (line.run) {
         const { name, id, given, thenOpen } = line.run;
-        void runner.reply(name, { ...(given ?? {}), ...(id === undefined ? {} : { id }) }).then((made) => {
+        // What a screen does as it's opened isn't the person's to undo (decision 0020).
+        void runner.reply(name, { ...(given ?? {}), ...(id === undefined ? {} : { id }), "one:history": "apart" }).then((made) => {
           if (made?.id && thenOpen) void navigate(opening(thenOpen, made.id), { replace: true });
         });
         return;

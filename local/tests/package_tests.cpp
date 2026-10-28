@@ -260,10 +260,17 @@ TEST("undo takes back each step, redo takes it again, and both are kept, so the 
 	a.ok("library::book::create", book("Dune", "SCI-0001"));
 	a.ok("library::book::update", value(fields{{"id", "SCI-0001"}, {"title", "Dune Messiah"}}));
 	CHECK(title() == "Dune Messiah");
+	// Its own view says what undo and redo would take back, so their buttons can be off.
+	value history;
+	auto listening = a.source->listen("one::history", "", [&](const one::screens::view_state& v) { history = v.data; });
+	CHECK(history["undo"].as_string() == "library::book::update");
+	CHECK(history["redo"].as_string() == "");
 	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::update"));
 	CHECK(title() == "Dune");
+	CHECK(history["redo"].as_string() == "library::book::update");
 	CHECK(a.run("one::undo", value::map()) == one::screens::answer("library::book::create"));
 	CHECK(title() == "gone");
+	CHECK(history["undo"].as_string() == "");
 	CHECK(!a.run("one::undo", value::map()));  // nothing left to take back
 	a.ok("one::redo", value::map());
 	a.ok("one::redo", value::map());

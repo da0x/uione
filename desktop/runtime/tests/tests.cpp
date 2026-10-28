@@ -2017,7 +2017,7 @@ TEST("a collage is copied or saved, whole or a layer at a time, drawn away from 
 	std::filesystem::remove_all(pictures);
 }
 
-TEST("on open, a screen opens the first row its condition holds for in its place, or else runs a command and opens what it made") {
+TEST("on open, a screen opens the first row its condition holds for in its place, or else runs a command, apart from undo, and opens what it made") {
 	memory_source data;
 	data.set("studio::posters", "", value(fields{{"rows", list{value(fields{{"id", "p1"}, {"width", 1280}}), value(fields{{"id", "p2"}, {"width", 1920}})}}}));
 	data.on("studio::poster::create", [](const value&, memory_source&) -> answer { return std::string("p9"); });
@@ -2042,6 +2042,8 @@ TEST("on open, a screen opens the first row its condition holds for in its place
 	(void)drawn(nav);
 	(void)drawn(nav);
 	CHECK(data.runs().size() == 1);
+	// Never a step undo takes back: the person didn't do it.
+	if (!data.runs().empty()) CHECK(data.runs().front().fields["one:history"].as_string() == "apart");
 	CHECK(nav.current().address() == "/posters/p9");
 }
 

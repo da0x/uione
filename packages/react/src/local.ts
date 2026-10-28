@@ -219,6 +219,10 @@ export function localSource(options: LocalOptions): LocalSource {
   }
 
   const built = (view: string, subject: string): ViewState => {
+    // The source's own view of its history: the command the next undo takes back and
+    // the one the next redo takes again, empty when there's none, so an Undo button can
+    // be off when there's nothing to undo. The same as the desktop's.
+    if (view === "one::history") return { status: "live", data: { undo: undoing[undoing.length - 1]?.command ?? "", redo: redoing[redoing.length - 1]?.command ?? "" } };
     const build = views.get(view);
     if (!build) return { status: "denied", data: undefined };
     // What a view is per that's gone reads as a document that isn't there.

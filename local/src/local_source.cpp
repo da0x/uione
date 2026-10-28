@@ -66,6 +66,15 @@ namespace one::local {
 	}  // namespace
 
 	screens::view_state local_source::build(const std::string& view, const std::string& subject) const {
+		// The source's own view of its history: the command the next undo takes back and
+		// the one the next redo takes again, empty when there's none, so an Undo button
+		// can be off when there's nothing to undo.
+		if (view == "one::history") {
+			value said = value::map();
+			said.fields["undo"] = value(undoing_.empty() ? std::string() : undoing_.back().command);
+			said.fields["redo"] = value(redoing_.empty() ? std::string() : redoing_.back().command);
+			return {screens::status::ready, std::move(said), ""};
+		}
 		auto found = views_.find(view);
 		if (found == views_.end()) return {screens::status::failed, value::map(), "there's no view " + view};
 		std::optional<value> built = found->second(store_, subject);

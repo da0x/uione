@@ -246,10 +246,16 @@ describe("undo and redo", () => {
     await a.ok("library::book::create", book("Dune", "SCI-0001"));
     await a.ok("library::book::update", { id: "SCI-0001", title: "Dune Messiah" });
     expect(title()).toBe("Dune Messiah");
+    // Its own view says what undo and redo would take back, so their buttons can be off.
+    let history: Row | undefined;
+    a.source.subscribe("one::history", undefined, (state) => (history = state.data as Row));
+    expect(history).toEqual({ undo: "library::book::update", redo: "" });
     expect(await a.run("one::undo")).toEqual({ id: "library::book::update" });
     expect(title()).toBe("Dune");
+    expect(history).toEqual({ undo: "library::book::create", redo: "library::book::update" });
     expect(await a.run("one::undo")).toEqual({ id: "library::book::create" });
     expect(title()).toBe("gone");
+    expect(history).toEqual({ undo: "", redo: "library::book::create" });
     expect(await a.run("one::undo")).toEqual({ error: "There's nothing to undo." });
     await a.ok("one::redo");
     await a.ok("one::redo");

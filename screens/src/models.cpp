@@ -446,7 +446,10 @@ namespace one::screens {
 				auto shown = command_of(p, *line.run);
 				if (!shown) continue;
 				std::string then = line.run->then_open;
-				p.run(line.run->command, shown->fields, [&p, then](const answer& made) {
+				// What a screen does as it's opened isn't the person's to undo (decision 0020).
+				value fields = shown->fields;
+				fields.fields["one:history"] = value("apart");
+				p.run(line.run->command, fields, [&p, then](const answer& made) {
 					if (made && !then.empty()) p.open_instead(then.substr(0, then.rfind(':')) + *made);
 				});
 				return false;

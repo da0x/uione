@@ -103,6 +103,10 @@ namespace one::terminal::runtime {
 
 	terminal::view history(page& p, bool redo, std::string label, std::string, std::vector<std::string> keys) {
 		std::string command = redo ? "one::redo" : "one::undo";
+		if (label.empty()) label = redo ? "Redo" : "Undo";
+		// Dim while there's nothing to take back, or again, as the source's history says.
+		const view_state& kept = *p.view("one::history", "");
+		if (kept.status == status::ready && kept.data[redo ? "redo" : "undo"].as_string().empty()) return terminal::text(label, terminal::dim());
 		auto take = [&p, command, redo] {
 			if (p.running(command)) return;
 			p.run(command, value::map(), [told = p.told(), redo](const answer& a) {
@@ -110,7 +114,6 @@ namespace one::terminal::runtime {
 			});
 		};
 		for (const auto& k : keys) p.on_key(k, take);
-		if (label.empty()) label = redo ? "Redo" : "Undo";
 		return terminal::button(label, take);
 	}
 

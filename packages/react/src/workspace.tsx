@@ -8,7 +8,7 @@
 
 import { Children, createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { useRunner } from "./data.js";
+import { useRunner, useView } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useSaying } from "./said.js";
 import { useUI } from "./ui.js";
@@ -203,7 +203,11 @@ export function History({ redo = false, label, icon, keys }: { redo?: boolean; l
     const step = await runner.reply(command);
     if (step) say({ text: `${redo ? "Redid" : "Undid"} ${stepWords(step.id)}.` });
   }, [runner, command, redo, say]);
-  const off = useOff();
+  // Off while there's nothing to take back, or again, as the source's history says; a
+  // source that doesn't say leaves it on.
+  const kept = useView("one::history");
+  const none = kept.status === "live" && !(kept.data as Record<string, unknown> | undefined)?.[redo ? "redo" : "undo"];
+  const off = useOff() || none;
   useKeys(keys, () => void take(), !off);
   return (
     <ui.Button kind="secondary" icon={icon} tool={tool} hint={hintOf(words, keys)} disabled={off || runner.busy(command)} onClick={() => void take()}>

@@ -154,7 +154,7 @@ describe("a workspace", () => {
     await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
   });
 
-  it("on open, opens the first row its condition holds for, or else runs a command and opens what it made", async () => {
+  it("on open, opens the first row its condition holds for, or else runs a command, apart from undo, and opens what it made", async () => {
     function Where() {
       return <p>At {useLocation().pathname}</p>;
     }
@@ -183,6 +183,7 @@ describe("a workspace", () => {
     none.set("studio::posters", { rows: [] });
     render(<App name="studio" screens={[opening, poster]} ui={plain} data={none} location="/" />);
     await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
-    expect(none.runs).toEqual([{ command: "studio::poster::create", input: { width: 1920 } }]);
+    // Never a step undo takes back: the person didn't do it.
+    expect(none.runs).toEqual([{ command: "studio::poster::create", input: { width: 1920, "one:history": "apart" } }]);
   });
 });
