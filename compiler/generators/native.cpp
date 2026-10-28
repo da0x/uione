@@ -715,6 +715,7 @@ namespace one::generators {
             if (std::string may = allowed(parts, ns, command); !may.empty()) out += ", .allowed = " + may;
             if (!after.empty()) out += ", .after = " + str(after);
             if (button && button->icon) out += ", .icon = " + str(*button->icon);
+            if (button && button->then_open) out += ", .then_open = " + str(model_.full_route(ns, *button->then_open));
             return out + "})";
         }
 

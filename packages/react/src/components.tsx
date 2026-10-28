@@ -928,7 +928,16 @@ function useConfirmedRunner() {
     }
     return runner.run(command, input);
   };
-  return { run, busy: runner.busy, error: runner.error, clear: runner.clear };
+  // And run so what it answers is had, like the id of what it made.
+  const reply = async (command: string, input: CommandInput = {}, about: CommandInput = input) => {
+    const question = questions.get(command);
+    if (question !== undefined && !(await ask(fill(question, about)))) {
+      runner.clear(command);
+      return undefined;
+    }
+    return runner.reply(command, input);
+  };
+  return { run, reply, busy: runner.busy, error: runner.error, clear: runner.clear };
 }
 
 // Asks before `command` runs, wherever on the screen it's run from.
@@ -2823,6 +2832,7 @@ export function Form({
   onDone,
   icon,
   after,
+  thenOpen,
 }: {
   command: string;
   fields: (string | FieldSpec)[];
@@ -2838,6 +2848,7 @@ export function Form({
   onDone?: () => void; // called once what it sent is done, like closing the dialog a row's button opened it in
   icon?: string; // the button that opens it drawn as this, like edit, its words still naming it
   after?: string; // where to go once it's done, like the page above one it deleted the subject of; its :parameters are the page's
+  thenOpen?: string; // a route like /boards/:board, opened with what it made
 }) {
   const ui = useUI();
   const auth = useAuth();
@@ -2901,7 +2912,9 @@ export function Form({
     if (sending) return;
     const typed = Object.fromEntries(specs.map((f) => [f.name, asInput(values[f.name] ?? "", f.type)]));
     const input = { ...typed, ...given };
-    if (await runner.run(command, id === undefined ? input : { ...input, id })) {
+    const sent = id === undefined ? input : { ...input, id };
+    const made = thenOpen ? await runner.reply(command, sent) : undefined;
+    if (thenOpen ? made !== undefined : await runner.run(command, sent)) {
       if (from) {
         setSent(stored);
         setTouched(false);
@@ -2912,6 +2925,8 @@ export function Form({
       setOpen(false);
       onDone?.();
       if (after !== undefined) void navigate(filled(after));
+      // What it made, opened, like a board made from New board.
+      if (thenOpen && made?.id) void navigate(thenOpen.replace(/:[a-z_]+\*?$/, encodeURIComponent(made.id)));
     }
   };
 

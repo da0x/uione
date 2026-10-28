@@ -2660,6 +2660,7 @@ namespace one::generators {
                 if (button->label) opens += " opener=" + web_detail::js_string(*button->label);
                 if (button->icon) opens += " icon=" + web_detail::js_string(*button->icon);
                 if (button->when) opens += " when={" + condition(parts, ns, *button->when) + "}";
+                if (button->then_open) opens += " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open));
             }
             out.line("<Form command=" + web_detail::js_string(command) + " fields={[" + fields + "]}" + edit + given + submit + opens + authenticated + allowed(parts, ns, command) +
                      " />");

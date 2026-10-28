@@ -624,7 +624,7 @@ namespace one::screens {
 		}
 		auto touched = page_.kept<bool>(key_ + ":touched", false);
 		auto opened = page_.kept<bool>(key_ + ":open", false);
-		std::string after = spec_.after;
+		std::string after = spec_.after, then = spec_.then_open;
 		auto on_done = spec_.on_done;
 		std::map<std::string, std::string> params = page_.params();
 		page_base* here = &page_;
@@ -641,6 +641,8 @@ namespace one::screens {
 			opened.set(false);
 			if (on_done) on_done();
 			if (!after.empty()) here->open(row_link(after, value::map(), params));
+			// What it made, opened, like a board made from New board.
+			if (!then.empty()) here->open(then.substr(0, then.rfind(':')) + *a);
 		}, true);
 	}
 

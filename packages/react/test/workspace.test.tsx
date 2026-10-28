@@ -7,7 +7,7 @@
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Command, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useToggled, useView } from "../src/index.js";
+import { App, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useToggled, useView } from "../src/index.js";
 import { usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -152,6 +152,21 @@ describe("a workspace", () => {
     render(<App name="studio" screens={[studio, poster]} ui={plain} data={source} location="/" />);
     fireEvent.click(screen.getByRole("button", { name: "New" }));
     await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
+  });
+
+  it("opens what a form opened from its button made, at the route it says", async () => {
+    const source = memorySource({ commands: { "studio::poster::create": () => ({ id: "p9" }) } });
+    function Where() {
+      return <p>At {useLocation().pathname}</p>;
+    }
+    const studio = defineScreen({ title: "Studio", route: "/" }, () => <Form command="studio::poster::create" fields={["title"]} button opener="New" thenOpen="/posters/:poster" />);
+    const poster = defineScreen({ title: "Poster", route: "/posters/:poster" }, () => <Where />);
+    render(<App name="studio" screens={[studio, poster]} ui={plain} data={source} location="/" />);
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Harbor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(screen.getByText(/^At/).textContent).toBe("At /posters/p9"));
+    expect(source.runs).toEqual([{ command: "studio::poster::create", input: { title: "Harbor" } }]);
   });
 
   it("on open, opens the first row its condition holds for, or else runs a command, apart from undo, and opens what it made", async () => {

@@ -138,6 +138,7 @@ namespace one::screens {
 		std::function<void()> on_done = {};  // once what it sent is done, like closing what it opened in
 		std::string key = "";  // what keeps what's typed apart from another form for the command; its id unless it says
 		std::string icon = "";  // drawn on the button opening it
+		std::string then_open = "";  // a route like /boards/:board, opened with what it made
 	};
 
 	// A field's choices, the first the most urgent, which color what shows it: the
