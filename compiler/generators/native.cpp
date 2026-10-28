@@ -347,6 +347,21 @@ namespace one::generators {
             return out + "})";
         }
 
+        // layers drawing_page.layers { ... }: the collage's layers as a list, read as it reads them.
+        std::string layers(screen_parts& parts, const std::string& ns, const language::layers_item& l, const language::collage_item& c) {
+            std::string view = screens::full_view(ns, c.view.text());
+            std::string out = "layer_list(p, {.view = " + view_variable(parts, view) + ", .list = " + str(c.list) + ", .width = " + str(c.width) + ", .height = " + str(c.height);
+            std::string kept;
+            for (const auto& [part, field] : model_.collage_fields(ns, c)) kept += (kept.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
+            out += ", .fields = {" + kept + "}";
+            if (c.clear) out += ", .clear = true";
+            if (c.over) out += ", .pick = " + str(route_ + " " + *c.over);
+            if (l.hide) out += ", .hide = " + str(screens::full_command(ns, *l.hide));
+            if (l.order) out += ", .order = " + str(screens::full_command(ns, *l.order));
+            if (l.remove) out += ", .remove = " + str(screens::full_command(ns, *l.remove));
+            return out + "})";
+        }
+
         // calendar planner.tasks by due { ... }: its rows on their days, picked as the
         // screen picks them, and moved by its command.
         std::string calendar(screen_parts& parts, const std::string& ns, const language::calendar_item& c) {
@@ -1403,6 +1418,7 @@ namespace one::generators {
         std::string paper_key_;       // and its insert buttons its paper
         bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
+        const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
         std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
@@ -1718,6 +1734,8 @@ namespace one::generators {
                     code = command_of(parts, ns, *b);
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     code = collage(parts, ns, *c);
+                } else if (auto* l = std::get_if<language::layers_item>(&item.node); l && collage_) {
+                    code = layers(parts, ns, *l, *collage_);
                 } else if (auto* paper_item = std::get_if<language::paper_item>(&item.node)) {
                     code = paper(parts, ns, *paper_item);
                 } else if (auto* picture = std::get_if<language::picture_item>(&item.node)) {
@@ -1855,6 +1873,7 @@ namespace one::generators {
                 at_end_said_ = false;
                 collage_key_ = route_ + " collage";
                 collage_over_.reset();
+                collage_ = nullptr;
                 paper_key_ = route_ + " paper";
                 screen_pastes_into_paper_ = false;
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
@@ -1867,10 +1886,10 @@ namespace one::generators {
                 for (const auto& item : s->items) {
                     if (auto* block = std::get_if<language::content_block>(&item.node)) {
                         for (const auto& inside : block->items) {
-                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = collage_key(*c), collage_over_ = c->over;
+                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = collage_key(*c), collage_over_ = c->over, collage_ = c;
                         }
                     }
-                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = collage_key(*c), collage_over_ = c->over;
+                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = collage_key(*c), collage_over_ = c->over, collage_ = c;
                 }
                 workspace_ = (s->layout ? *s->layout : model_.project.layout) == "workspace";
                 picks_.clear();

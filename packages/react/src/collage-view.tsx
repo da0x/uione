@@ -36,6 +36,8 @@ const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0
 // What a layer is: a picture, when it has one; words, when it has those; or else a shape,
 // as its parts say (decision 0025). The same as the desktop's.
 const isPicture = (l: Row) => str(l["picture"]) !== "";
+// Whether a layer is hidden: not drawn, picked or saved.
+const hiddenLayer = (l: Row) => l["hidden"] !== undefined && l["hidden"] !== null && num(l["hidden"]) !== 0;
 const isWords = (l: Row) => !isPicture(l) && str(l["words"]) !== "";
 const isShape = (l: Row) => !isPicture(l) && !isWords(l);
 
@@ -777,7 +779,8 @@ export function Collage({
   const kept = JSON.stringify(fields);
   const data = useMemo(() => (view.status === "live" ? partsOf((view.data ?? {}) as Row, list, fields) : {}), [view.status, view.data, list, kept]);
   const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
-  const layers = (data[list] as Row[] | undefined) ?? [];
+  // Those hidden aren't drawn, picked, snapped to or saved.
+  const layers = ((data[list] as Row[] | undefined) ?? []).filter((l) => !hiddenLayer(l));
   const W = num(data[width]), H = num(data[height]);
   const address = files ? (path: string) => files.address(path) : undefined;
   const chosen = layers.find((l) => l["id"] === picked);
@@ -1642,5 +1645,153 @@ function CropTools({ keep, away }: { keep: () => void; away: () => void }) {
         Put away
       </ui.Button>
     </>
+  );
+}
+
+// The depths its layers, lowest first, take after the one at `from` moves to `to`: each
+// its place in the order, so no two are ever at one depth. Only those that change, by
+// id. The same as the desktop's.
+export function depthsMoved(layers: Row[], from: number, to: number): [string, number][] {
+  if (from < 0 || to < 0 || from >= layers.length || to >= layers.length) return [];
+  const order = [...layers];
+  const [moving] = order.splice(from, 1);
+  order.splice(to, 0, moving!);
+  return order.flatMap((l, i) => (l["depth"] === undefined || l["depth"] === null || num(l["depth"]) !== i ? [[str(l["id"]), i] as [string, number]] : []));
+}
+
+// A layer alone, drawn where it is on its collage, in the collage's proportions, over a
+// checkerboard when it's clear: what a list of its layers shows of each.
+function LayerPreview({ layer, W, H, clear, hidden, address }: { layer: Row; W: number; H: number; clear: boolean; hidden: boolean; address?: (path: string) => Promise<string> }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const wide = 48, tall = W > 0 && H > 0 ? Math.min(48, Math.max(12, (wide * H) / W)) : 27;
+  const key = JSON.stringify(layer);
+  useEffect(() => {
+    const canvas = ref.current;
+    const c = canvas?.getContext("2d");
+    if (!canvas || !c || W <= 0 || H <= 0) return;
+    let live = true;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(wide * ratio);
+    canvas.height = Math.round(tall * ratio);
+    const shown = { ...layer };
+    delete shown["hidden"];
+    void drawnWhole([shown], W, H, (wide * ratio) / W, address, false, undefined, true).then((made) => {
+      if (!live) return;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = clear ? checkers(c) : "#fff";
+      c.fillRect(0, 0, canvas.width, canvas.height);
+      c.globalAlpha = hidden ? 0.35 : 1;
+      c.drawImage(made, 0, 0, canvas.width, canvas.height);
+      c.globalAlpha = 1;
+    });
+    return () => {
+      live = false;
+    };
+  }, [key, W, H, clear, hidden]);
+  return <canvas ref={ref} aria-hidden="true" style={{ width: wide, height: tall, flex: "none", border: "1px solid var(--color-line, #d8dce3)" }} />;
+}
+
+// layers drawing_page.layers { ... }: the layers of the screen's collage, topmost first,
+// each an eye that hides or shows it, its preview, its name, up and down, and delete. A
+// press on one picks it, as the collage does. The same as the desktop's.
+export function Layers({
+  view,
+  list,
+  width,
+  height,
+  fields,
+  clear = false,
+  pick,
+  hide,
+  order,
+  remove,
+}: {
+  view: ViewState;
+  list: string;
+  width: string;
+  height: string;
+  fields: Record<string, string>;
+  clear?: boolean;
+  pick?: string;
+  hide?: string;
+  order?: string;
+  remove?: string;
+}) {
+  const ui = useUI();
+  const files = useFiles();
+  const runner = useRunner();
+  const picked = usePickedId(pick ?? "") ?? "";
+  const data = view.status === "live" ? partsOf((view.data ?? {}) as Row, list, fields) : {};
+  const layers = (data[list] as Row[] | undefined) ?? [];
+  const W = num(data[width]), H = num(data[height]);
+  const address = files ? (path: string) => files.address(path) : undefined;
+  const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
+  if (view.status !== "live") return <p>Loading…</p>;
+  if (layers.length === 0) return <p style={{ color: "var(--color-muted)" }}>No layers yet.</p>;
+  const move = (from: number, to: number) => {
+    depthsMoved(layers, from, to).forEach(([id, depth], i) => void send(order!, i === 0 ? { id, depth } : { id, depth, "one:history": "joined" }));
+  };
+  const nameOf = (l: Row) => {
+    if (isWords(l)) return str(l["words"]).split("\n")[0]!;
+    if (isPicture(l)) return pictures.get(str(l["picture"])) === "vector" ? "SVG" : "Picture";
+    const shape = str(l["shape"]);
+    return shape === "ellipse" ? "Ellipse" : shape === "path" ? "Path" : "Rectangle";
+  };
+  return (
+    <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {layers
+        .map((l, i) => ({ l, i }))
+        .reverse()
+        .map(({ l, i }) => {
+          const id = str(l["id"]), hidden = hiddenLayer(l);
+          const isPicked = id === picked;
+          return (
+            <div
+              key={id}
+              role="listitem"
+              aria-current={isPicked || undefined}
+              onClick={() => pick && setPicked(pick, id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                padding: 4,
+                borderRadius: 6,
+                cursor: pick ? "pointer" : undefined,
+                border: `1px solid ${isPicked ? "var(--color-accent, #2457d6)" : "transparent"}`,
+                background: isPicked ? "var(--color-sunken, #f1f3f6)" : undefined,
+              }}
+            >
+              {hide && (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="small" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                    {hidden ? "Show" : "Hide"}
+                  </ui.Button>
+                </span>
+              )}
+              <LayerPreview layer={l} W={W} H={H} clear={clear} hidden={hidden} address={address} />
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: hidden ? "var(--color-muted)" : undefined }}>{nameOf(l)}</span>
+              {/* Its buttons act on it alone, without picking it too. */}
+              <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
+                {order && (
+                  <>
+                    <ui.Button kind="secondary" icon="raise" tool="small" hint="Up" disabled={i === layers.length - 1} onClick={() => move(i, i + 1)}>
+                      Up
+                    </ui.Button>
+                    <ui.Button kind="secondary" icon="lower" tool="small" hint="Down" disabled={i === 0} onClick={() => move(i, i - 1)}>
+                      Down
+                    </ui.Button>
+                  </>
+                )}
+                {remove && (
+                  <ui.Button kind="secondary" icon="delete" tool="small" hint="Delete" onClick={() => void send(remove, { id })}>
+                    Delete
+                  </ui.Button>
+                )}
+              </span>
+            </div>
+          );
+        })}
+    </div>
   );
 }

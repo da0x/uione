@@ -453,6 +453,26 @@ TEST_CASE("a clear collage has nothing behind its layers, on the web and the des
     CHECK(files["desktop/src/screens/main.cpp"].find(R"(.clear = true)") != std::string::npos);
 }
 
+TEST_CASE("a collage's layers are listed, each hidden or shown by its hidden, ordered by its depth, and deleted, on the web and the desktop alike") {
+    CHECK(messages(collage_screen("\t\tlayers poster_page.layers {\n\t\t\tdelete layer::delete\n\t\t}\n")) ==
+          std::vector<std::string>{"44: layers lists the layers of a collage on this screen, and none here is of poster_page.layers"});
+    CHECK(messages(collage_screen("\t\tcollage poster_page.layers size width height {\n\t\t}\n\t\tlayers poster_page.layers {\n\t\t\thide layer::update\n\t\t\torder layer::update\n"
+                                  "\t\t\tdelete poster::create\n\t\t}\n")) ==
+          std::vector<std::string>{"47: hide sets a layer's hidden, which layer doesn't have or the view doesn't read; add hidden number to it, and to the list's block",
+                                   "48: order sets a layer's depth, which layer doesn't have or the view doesn't read; add depth number to it, and to the list's block",
+                                   "49: the layers are layers, so delete names a command on layer"});
+    std::string fine = collage_screen("\t\tpick layer from poster_page.layers\n\t\tcollage poster_page.layers size width height {\n\t\t\tclear\n\t\t\tover layer {\n\t\t\t}\n\t\t}\n"
+                                      "\t\tlayers poster_page.layers {\n\t\t\thide layer::update\n\t\t\torder layer::update\n\t\t\tdelete layer::delete\n\t\t}\n");
+    fine.replace(fine.find("\t\tx        number"), 0, "\t\thidden   number  = 0\n");
+    fine.replace(fine.find("around  x  y  w  h"), 0, "hidden  depth  ");
+    CHECK(messages(fine).empty());
+    auto files = built(fine);
+    CAPTURE(files["web/src/screens/main.tsx"]);
+    CHECK(files["web/src/screens/main.tsx"].find(R"( clear pick="/posters/:poster layer" hide="studio::layer::update" order="studio::layer::update" remove="studio::layer::delete" />)") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.clear = true, .pick = "/posters/:poster layer", .hide = "studio::layer::update", .order = "studio::layer::update", .remove = "studio::layer::delete"})") !=
+          std::string::npos);
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

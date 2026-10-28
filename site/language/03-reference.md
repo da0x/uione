@@ -2285,6 +2285,17 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     svg` copies one as SVG's text, which drawing programs paste. A picture's halo,
     what fills around it and matched colors are drawn effects, so an SVG leaves them
     out. A terminal doesn't save or copy one yet.
+- `layers drawing_page.layers { hide layer::show  order layer::update  delete
+  layer::delete }` lists the layers of the screen's collage over the same list,
+  topmost first, as a drawing app's layers panel does, read as the collage reads
+  them. Each row is an eye that hides or shows the layer by `hide`, which sets its
+  `hidden`; its preview, in the collage's proportions, the layer alone drawn where
+  it is, over a checkerboard when the collage is `clear`; its name, its words' first
+  line or what it is; up and down by `order`, which renumbers every layer's `depth`
+  by its place, in one step to undo; and delete. A press on a row picks the layer,
+  as the collage does. A hidden layer isn't drawn, picked, snapped to or saved, and
+  the collage's `hidden` part is any number but 0 while it's hidden. A terminal lists
+  them by name, with their buttons.
 - `paper document_page.blocks { ... }` shows a list's rows as one upright sheet of
   paper, letter-shaped, that's typed on in place, as a word processor's page is
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).

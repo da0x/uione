@@ -360,6 +360,11 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8" />
     </svg>
   ),
+  eye_off: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8M2.5 2.5l11 11" />
+    </svg>
+  ),
   spread: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M1.5 3.5h5.5v9h-5.5zM9 3.5h5.5v9H9z" />

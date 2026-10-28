@@ -3309,7 +3309,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3597,6 +3597,8 @@ namespace one::language {
                     verify_picture(ns, *picture);
                 } else if (auto* collage = std::get_if<collage_item>(&item.node)) {
                     verify_collage(ns, *collage, route);
+                } else if (auto* layers = std::get_if<layers_item>(&item.node)) {
+                    verify_layers(ns, *layers, item.where, route);
                 } else if (auto* paper = std::get_if<paper_item>(&item.node)) {
                     verify_paper(ns, *paper, route);
                 } else if (auto* insert = std::get_if<paper_insert>(&item.node)) {
@@ -4204,6 +4206,32 @@ namespace one::language {
                     }
                 }
                 screen_items(ns, collage.tools, route);
+            }
+        }
+
+        // The layers of the screen's collage over the same list: each command on what its
+        // layers are, hiding them by their hidden and ordering them by their depth.
+        void verify_layers(const std::string& ns, const layers_item& l, location where, const std::string& route) {
+            const collage_item* collage = nullptr;
+            for (const auto* c : collages_) {
+                if (c->view.text() == l.view.text() && c->list == l.list) collage = c;
+            }
+            if (!collage) {
+                error(where, "layers lists the layers of a collage on this screen, and none here is of " + l.view.text() + "." + l.list);
+                return;
+            }
+            const view_each* rows = named_list(ns, collage->view, collage->list, route);
+            const entity_declaration* layer = rows ? listed_entity(ns, *rows) : nullptr;
+            if (!layer) return;
+            auto kept = language::collage_fields(*collage, rows);
+            for (const auto& [command, needs, line] : {std::tuple{&l.hide, "hidden", "hide"}, {&l.order, "depth", "order"}, {&l.remove, "", "delete"}}) {
+                if (!*command) continue;
+                verify_command_use(ns, **command);
+                const entity_declaration* on = find_command(ns, **command);
+                if (on && on != layer) error((*command)->where, "the layers are " + layer->name + "s, so " + line + " names a command on " + layer->name);
+                if (*needs && !kept.contains(needs)) {
+                    error((*command)->where, std::string(line) + " sets a layer's " + needs + ", which " + layer->name + " doesn't have or the view doesn't read; add " + needs + " number to it, and to the list's block");
+                }
             }
         }
 

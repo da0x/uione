@@ -1199,7 +1199,8 @@ namespace one::desktop::runtime {
 		if (v.status == status::failed) return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, current_theme().quiet());
 		// Read as its parts, whichever of the app's fields keep them.
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
-		const value layers = data[spec.list];
+		// Those hidden aren't drawn, picked, snapped to or saved.
+		const value layers = shown_layers(data[spec.list]);
 		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
 		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		bool full = fullscreen();
@@ -1794,6 +1795,92 @@ namespace one::desktop::runtime {
 		}
 		if (!spec.fills) return std::move(drawn).height(560);
 		return std::move(drawn).grow();
+	}
+
+	desktop::view layer_list(page& p, layers_spec spec) {
+		const auto& t = current_theme();
+		const view_state& v = *spec.view;
+		if (v.status == status::loading) return desktop::text("Loading…", t.quiet());
+		if (v.status == status::failed) return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, t.quiet());
+		const value data = collage_parts_of(v.data, spec.list, spec.fields);
+		const value& layers = data[spec.list];
+		const auto& all = layers.as_array();
+		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
+		if (all.empty()) return desktop::text("No layers yet.", t.quiet());
+		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
+		// Its preview as wide as this, as tall as the collage's proportions make it.
+		constexpr float wide = 48;
+		float tall = width > 0 && height > 0 ? std::clamp(static_cast<float>(wide * height / width), 12.f, 48.f) : wide * 9 / 16;
+		std::vector<desktop::view> rows;
+		// Topmost first, as it's seen.
+		for (std::size_t i = all.size(); i-- > 0;) {
+			const value& l = all[i];
+			std::string id = l["id"].as_string();
+			bool hidden = hidden_layer(l);
+			std::vector<desktop::view> row;
+			if (!spec.hide.empty()) {
+				row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide",
+				                                   [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(fields{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); }, {.on = !hidden}));
+			}
+			// The layer alone, drawn where it is on the collage, made once for each look of it.
+			desktop::picture drawn;
+			if (width > 0 && height > 0) {
+				static kept_by<desktop::picture> made(256);
+				std::string key = std::format("{} {} {} {}", ember::to_json(l), width, height, wide);
+				value shown = l;
+				shown.fields.erase("hidden");
+				value one = value(std::vector<value>{shown});
+				drawn = made.get(key, [&] {
+					auto alone = gathered(p, one, width, height, 2 * wide / width, false);
+					alone.clear = true;
+					return drawn_whole(alone);
+				});
+			}
+			bool clear = spec.clear;
+			row.push_back(desktop::drawing([drawn, clear, hidden](desktop::canvas& c, desktop::rect area) {
+				              const auto& th = current_theme();
+				              if (clear) paint_checkers(c, area);
+				              else c.box(area, {.fill = desktop::color::hex(0xffffff)});
+				              if (drawn) c.picture(drawn, area, {0, 0, 1, 1}, hidden ? 0.35f : 1.f);
+				              c.box(area, {.border = th.line, .border_width = 1});
+			              })
+			                  .width(wide)
+			                  .height(tall)
+			                  .grow(0));
+			// Its name: its words' first line, or what it is.
+			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
+			if (!is_words(l)) {
+				std::string shape = l["shape"].as_string();
+				name = is_picture(l) ? (vector_here(p, l).empty() ? "Picture" : "SVG") : shape == "ellipse" ? "Ellipse" : shape == "path" ? "Path" : "Rectangle";
+			}
+			if (name.size() > 28) name = name.substr(0, 27) + "…";
+			auto said = hidden ? t.quiet() : t.body();
+			row.push_back(desktop::text(std::move(name), said).width(0).grow());
+			if (!spec.order.empty()) {
+				auto move = [&p, spec, layers, i](std::size_t to) {
+					bool first = true;
+					for (const auto& [moved, depth] : depths_moved(layers, i, to)) {
+						value sent = collage_fields_of(value(fields{{"id", moved}, {"depth", depth}}), spec.fields);
+						if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+						p.run(spec.order, sent);
+					}
+				};
+				bool top = i + 1 == all.size(), bottom = i == 0;
+				row.push_back(desktop::tool_button("raise", "Up", [move, i] { move(i + 1); }, {.off = top}));
+				row.push_back(desktop::tool_button("lower", "Down", [move, i] { move(i - 1); }, {.off = bottom}));
+			}
+			if (!spec.remove.empty()) row.push_back(desktop::tool_button("delete", "Delete", [&p, spec, id] { p.run(spec.remove, value(fields{{"id", id}})); }));
+			bool is_picked = id == picked;
+			rows.push_back(desktop::row(std::move(row))
+			                   .spacing(4)
+			                   .align(align::center)
+			                   .padding(edges(4, 4))
+			                   .background({.fill = is_picked ? t.sunken : t.surface, .border = is_picked ? t.accent : t.surface, .border_width = 1, .radius = t.corners})
+			                   .on_click([&p, pick = spec.pick, id] {
+				                   if (!pick.empty()) p.pick(pick, id);
+			                   }));
+		}
+		return desktop::column(std::move(rows)).spacing(2).align(align::stretch);
 	}
 
 }  // namespace one::desktop::runtime

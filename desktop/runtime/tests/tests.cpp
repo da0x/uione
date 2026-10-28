@@ -30,7 +30,7 @@ namespace {
 	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
 	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"}, {"around", "around"}, {"corners", "corners"},
 	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}, {"shape", "shape"}, {"points", "points"}, {"fill", "fill"}, {"stroke", "stroke"},
-	    {"stroke_width", "stroke_width"}, {"opacity", "opacity"}};
+	    {"stroke_width", "stroke_width"}, {"opacity", "opacity"}, {"hidden", "hidden"}};
 
 	const std::filesystem::path golden_folder = ONE_DESKTOP_TESTS "/golden";
 
@@ -1961,6 +1961,30 @@ TEST("around harmonize fills the rest of the collage from a picture's edges, eac
 	navigator nav(s, data);
 	nav.open("/");
 	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
+}
+
+TEST("a collage's layers listed beside it, topmost first: each an eye, its preview in the collage's proportions, its name, up, down and delete; a hidden one isn't drawn") {
+	memory_source data;
+	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, double depth, double hidden = 0) {
+		return value(fields{{"id", std::move(id)}, {"shape", std::move(kind)}, {"x", x}, {"y", y}, {"w", w}, {"h", h}, {"fill", std::move(fill)}, {"depth", depth}, {"hidden", hidden}});
+	};
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{shape("s1", "rectangle", 100, 100, 600, 400, "#2e86de", 0), shape("s2", "ellipse", 800, 150, 600, 600, "#ffd23f", 1, 1),
+	                                      value(fields{{"id", "w1"}, {"words", "Harbor"}, {"size", 160}, {"x", 900}, {"y", 600}, {"w", 500}, {"h", 200}, {"color", "#e4572e"}, {"depth", 2}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .clear = true, .pick = "/ layer", .fills = true}))},
+		                                      region{"side", items(layer_list(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                          .fields = named_like_parts, .clear = true, .pick = "/ layer", .hide = "studio::layer::show",
+		                                                                          .order = "studio::layer::update", .remove = "studio::layer::delete"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().pick("/ layer", "s1");
+	matches_golden("collage-layers", {900, 420}, [&] { return drawn(nav); });
 }
 
 TEST("a collage's shapes: a rectangle rounded and stroked, an ellipse, a path, one half there, drawn smooth from their SVG, and picked as any layer is") {

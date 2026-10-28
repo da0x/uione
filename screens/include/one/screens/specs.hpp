@@ -404,6 +404,21 @@ namespace one::screens {
 		int preview_wide = 480;              // this many pixels wide
 	};
 
+	// layers drawing_page.layers { ... }: the layers of the screen's collage over the same
+	// list, topmost first, each an eye that hides or shows it by `hide`, its preview in
+	// the collage's proportions, the layer alone where it is, its name, up and down by
+	// `order`, which renumbers their depth, and delete by `remove`. A press on one picks
+	// it, as the collage does. Read through the collage's fields, as it reads them.
+	struct layers_spec {
+		state<view_state> view;
+		std::string list;
+		std::string width, height;
+		std::map<std::string, std::string> fields = {};
+		bool clear = false;
+		std::string pick = "";
+		std::string hide = "", order = "", remove = "";
+	};
+
 	// A list's rows as one upright sheet of paper, written on in place, as a page of a
 	// document is: each row a block, in the order its position says, set as its kind
 	// says (title, subtitle, heading, text, quote, math or code) and aligned left, center or
@@ -466,6 +481,38 @@ namespace one::screens {
 		std::vector<value> layers;
 		for (const auto& layer : data[list].as_array()) layers.push_back(as_parts(layer));
 		out.fields[list] = value(std::move(layers));
+		return out;
+	}
+
+	// Whether a layer, read as its parts, is hidden: not drawn, picked or saved.
+	inline bool hidden_layer(const value& layer) {
+		const value* hidden = layer.find("hidden");
+		return hidden && !hidden->is_null() && hidden->as_double() != 0;
+	}
+
+	// A collage's layers as it draws them: those not hidden, lowest first.
+	inline value shown_layers(const value& layers) {
+		std::vector<value> shown;
+		for (const auto& l : layers.as_array()) {
+			if (!hidden_layer(l)) shown.push_back(l);
+		}
+		return value(std::move(shown));
+	}
+
+	// The depths its layers, lowest first, take after the one at `from` moves to `to`:
+	// each its place in the order, so no two are ever at one depth. Only those that
+	// change, by id.
+	inline std::vector<std::pair<std::string, double>> depths_moved(const value& layers, std::size_t from, std::size_t to) {
+		std::vector<value> order = layers.as_array();
+		if (from >= order.size() || to >= order.size()) return {};
+		value moving = order[from];
+		order.erase(order.begin() + static_cast<std::ptrdiff_t>(from));
+		order.insert(order.begin() + static_cast<std::ptrdiff_t>(to), moving);
+		std::vector<std::pair<std::string, double>> out;
+		for (std::size_t i = 0; i < order.size(); ++i) {
+			const value* depth = order[i].find("depth");
+			if (!depth || depth->is_null() || depth->as_double() != static_cast<double>(i)) out.emplace_back(order[i]["id"].as_string(), static_cast<double>(i));
+		}
 		return out;
 	}
 

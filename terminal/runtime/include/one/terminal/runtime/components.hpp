@@ -115,6 +115,8 @@ namespace one::terminal::runtime {
 	// a picture by its place and words by what they say; Enter picks one, and the
 	// buttons over it follow.
 	terminal::view collage(page& p, collage_spec spec);
+	// A collage's layers as a list, topmost first, each with its buttons.
+	terminal::view layer_list(page& p, layers_spec spec);
 	// crop "Crop", edit words "Edit", add words "Text": asks the screen's collage; a
 	// terminal can't crop a picture it can't show, so it doesn't offer to.
 	terminal::view collage_button(page& p, collage_ask ask);

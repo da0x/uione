@@ -64,6 +64,7 @@ namespace studio at / {
 		points   text
 		stroke   text
 		stroke_width  number  = 0
+		hidden   number  = 0
 	}
 
 	// A poster's notes, written as a page: each block a title, a heading, a paragraph,
@@ -121,6 +122,10 @@ namespace studio at / {
 	command layer::arrange {
 		changes around corners
 	}
+	// Hidden or shown again.
+	command layer::show {
+		changes hidden
+	}
 
 	// Opened once more: counted, but never a step undo takes back.
 	// Shown on another day, as a calendar's poster dragged there is.
@@ -144,7 +149,7 @@ namespace studio at / {
 		title  color  width  height  matched
 		layers = each layer in poster {
 			order by depth
-			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width
+			picture  crop_x  crop_y  crop_w  crop_h  around  corners  words  size  weight  depth  x  y  w  h  fill  shape  points  stroke  stroke_width  hidden
 		}
 	}
 
@@ -294,6 +299,9 @@ namespace studio at / {
 				save poster_page as picture "Save" icon save key ctrl+s
 				save poster_page as svg "Save SVG" icon save
 			}
+			group "View" at end {
+				toggle layers "Layers" icon layers key ctrl+l
+			}
 		}
 		main {
 			collage poster_page.layers size width height {
@@ -316,6 +324,14 @@ namespace studio at / {
 					copy layer as picture "Copy" icon copy
 					layer::delete "Delete" icon delete key delete
 				}
+			}
+		}
+		// Its layers, topmost first, each hidden or shown, moved up or down, or deleted.
+		side when layers {
+			layers poster_page.layers {
+				hide layer::show
+				order layer::update
+				delete layer::delete
 			}
 		}
 		status {

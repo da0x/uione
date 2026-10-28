@@ -151,6 +151,7 @@ namespace one::generators {
         std::string paper_key_;          // and its insert buttons its paper
         bool screen_pastes_into_paper_ = false;  // its paste and add pictures buttons go into its paper, as it has no collage that pastes
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
+        const language::collage_item* collage_ = nullptr;  // and the collage itself, which its layers list
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
             std::string view, list, entity;
@@ -349,6 +350,7 @@ namespace one::generators {
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
                 collage_over_.reset();
+                collage_ = nullptr;
                 paper_key_ = route + " paper";
                 screen_pastes_into_paper_ = false;
                 std::function<void(const std::vector<language::screen_item>&)> papers = [&](const std::vector<language::screen_item>& inside) {
@@ -361,10 +363,10 @@ namespace one::generators {
                 for (const auto& item : s->items) {
                     if (auto* block = std::get_if<language::content_block>(&item.node)) {
                         for (const auto& inside : block->items) {
-                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over;
+                            if (auto* c = std::get_if<language::collage_item>(&inside.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over, collage_ = c;
                         }
                     }
-                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over;
+                    if (auto* c = std::get_if<language::collage_item>(&item.node)) collage_key_ = route + " " + (c->over ? *c->over : std::string("collage")), collage_over_ = c->over, collage_ = c;
                 }
                 picks_.clear();
                 for (const auto* pick : picks_in(s->items)) {
@@ -1396,6 +1398,21 @@ namespace one::generators {
                     if (paper->read_only) line += " readOnly={" + condition(parts, ns, *paper->read_only) + "}";
                     line += " name=" + web_detail::js_string(paper_key_);
                     if (workspace_) line += " fills";
+                    out.line(line + " />");
+                } else if (auto* l = std::get_if<language::layers_item>(&item.node); l && collage_) {
+                    // The collage's layers as a list, read as it reads them.
+                    parts.components.insert("Layers");
+                    const language::collage_item& c = *collage_;
+                    std::string view = full_view(ns, c.view.text());
+                    std::string kept;
+                    for (const auto& [part, field] : model_.collage_fields(ns, c)) kept += (kept.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
+                    std::string line = "<Layers view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(c.list) + " width=" + web_detail::js_string(c.width) +
+                                       " height=" + web_detail::js_string(c.height) + " fields={{ " + kept + " }}";
+                    if (c.clear) line += " clear";
+                    if (c.over) line += " pick=" + web_detail::js_string(route_ + " " + *c.over);
+                    if (l->hide) line += " hide=" + web_detail::js_string(full_command(ns, *l->hide));
+                    if (l->order) line += " order=" + web_detail::js_string(full_command(ns, *l->order));
+                    if (l->remove) line += " remove=" + web_detail::js_string(full_command(ns, *l->remove));
                     out.line(line + " />");
                 } else if (auto* c = std::get_if<language::collage_item>(&item.node)) {
                     // A picture made of layers, the buttons over the picked one inside it.

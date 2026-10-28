@@ -85,6 +85,7 @@ namespace one::language {
         drawn_by{"collage.place", "placing a collage's layers", everywhere},
         drawn_by{"collage.snap", "snapping a collage's layers", everywhere},
         drawn_by{"collage.clear", "a clear collage", everywhere},
+        drawn_by{"layers", "a collage's layers, each hidden or shown, previewed and ordered", everywhere},
         drawn_by{"collage.over", "buttons over a collage's picked layer", everywhere},
         drawn_by{"collage.add", "adding words to a collage", everywhere},
         drawn_by{"collage.write", "words written on a collage", everywhere},
@@ -362,6 +363,8 @@ namespace one::language {
                         if (!n.keys.empty()) use("key");
                     } else if constexpr (std::is_same_v<T, pick_item>) {
                         use("pick");
+                    } else if constexpr (std::is_same_v<T, layers_item>) {
+                        use("layers");
                     } else if constexpr (std::is_same_v<T, collage_item>) {
                         use("collage");
                         if (n.place) use("collage.place");

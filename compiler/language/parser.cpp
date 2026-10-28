@@ -2463,6 +2463,35 @@ namespace one::language {
                 end_line();
                 return {where, std::move(collage)};
             }
+            // layers drawing_page.layers { hide layer::show  order layer::update  delete layer::delete }:
+            // the screen's collage's layers as a list.
+            if (at_word("layers") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
+                advance();
+                layers_item layers;
+                layers.view = parse_qualified_name("the view whose list is the collage's layers, like drawing_page");
+                expect(token_kind::dot, "'.' and the list of its layers, like drawing_page.layers");
+                layers.list_where = peek().where;
+                layers.list = expect(token_kind::identifier, "the list of its layers, like layers").text;
+                expect(token_kind::left_brace, "'{' and what it does, like hide layer::show");
+                while (in_block()) {
+                    if (at_word("hide") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        layers.hide = parse_qualified_name("the command a layer hidden or shown is sent to, like layer::show");
+                    } else if (at_word("order") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        layers.order = parse_qualified_name("the command a layer's depth is sent to, like layer::update");
+                    } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        layers.remove = parse_qualified_name("the command that deletes a layer, like layer::delete");
+                    } else {
+                        fail_expecting("what the layers do, like hide layer::show, order layer::update or delete layer::delete");
+                    }
+                    end_line();
+                }
+                expect(token_kind::right_brace, "'}'");
+                end_line();
+                return {where, std::move(layers)};
+            }
             // paper document_page.blocks { write block::write  add block::create  delete block::delete }:
             // a list's rows as a sheet of paper, written on in place.
             if (at_word("paper") && peek(1).kind != token_kind::scope) {

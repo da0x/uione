@@ -172,6 +172,9 @@ namespace one::desktop::runtime {
 	desktop::view calendar(page& p, calendar_spec spec);
 	desktop::view canvas_board(page& p, canvas_spec spec);
 	desktop::view collage(page& p, collage_spec spec);
+	// A collage's layers as a list, topmost first: each hidden or shown, previewed, named,
+	// moved up or down and deleted.
+	desktop::view layer_list(page& p, layers_spec spec);
 	// A list's rows as one sheet of paper, written on in place: each a block of words
 	// set as its kind says and aligned as it says (see paper_spec).
 	desktop::view paper(page& p, paper_spec spec);

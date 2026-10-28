@@ -6,8 +6,8 @@
 // And going out: a small picture of it kept once changes settle, shown on cards, in
 // tables, and on its own. And a layer drawn by a drag.
 
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { App, Cards, Collage, CollageButton, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
+import { App, Cards, Collage, CollageButton, Layers, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
 import { setChosen, setPicked, useChosen, usePickedId } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
@@ -266,6 +266,52 @@ describe("a layer drawn on a collage", () => {
     fireEvent.pointerUp(canvas, { clientX: 132, clientY: 232, pointerId: 1 });
     await waitFor(() => expect(source.runs.length).toBe(1));
     expect(source.runs[0]!.input).toMatchObject({ x: 100, y: 100, w: 200, h: 100, points: "M 1 0 L 0 1", shape: "path", poster: "p1" });
+  });
+});
+
+describe("a collage's layers, listed", () => {
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
+  });
+
+  it("lists them topmost first, each hidden or shown, moved up a place by renumbering their depth, and picked by a press", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const source = memorySource({ commands: { "studio::layer::show": () => ({ id: "x" }), "studio::layer::update": () => ({ id: "x" }), "studio::layer::delete": () => ({ id: "x" }) } });
+    source.set("studio::poster_page", {
+      width: 1600,
+      height: 900,
+      layers: [
+        { id: "low", shape: "ellipse", depth: 0, x: 0, y: 0, w: 10, h: 10 },
+        { id: "mid", words: "Harbor\nat dusk", size: 40, depth: 0, hidden: 1, x: 0, y: 0, w: 10, h: 10 },
+        { id: "top", shape: "rectangle", depth: 2, x: 0, y: 0, w: 10, h: 10 },
+      ],
+    }, "p1");
+    function Drawer() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Layers view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, hidden: "hidden", shape: "shape" }} pick="/ layer" hide="studio::layer::show" order="studio::layer::update" remove="studio::layer::delete" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Drawer />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getAllByRole("listitem").length).toBe(3));
+    expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/Rectangle|Harbor|Ellipse/)?.[0])).toEqual(["Rectangle", "Harbor", "Ellipse"]);
+    // The hidden one is shown again; the lowest moves up a place, the rest renumbered.
+    const [top, middle, bottom] = drawn.getAllByRole("listitem");
+    fireEvent.click(within(middle!).getByRole("button", { name: "Show" }));
+    fireEvent.click(within(bottom!).getByRole("button", { name: "Up" }));
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::show", input: { id: "mid", hidden: 0 } });
+    // Mid is already at 0 and top at 2, so only the lowest, now in the middle, is sent.
+    expect(source.runs[1]).toMatchObject({ command: "studio::layer::update", input: { id: "low", depth: 1 } });
+    expect(drawn.getByTestId("picked").textContent).toBe("");
+    // The topmost can't go up, and a press on one picks it.
+    expect((within(top!).getByRole("button", { name: "Up" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(top!);
+    expect(drawn.getByTestId("picked").textContent).toBe("top");
   });
 });
 

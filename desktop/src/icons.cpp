@@ -113,6 +113,8 @@ namespace one::desktop {
 			    {"moon", {path("M13.5 9.5A5.5 5.5 0 1 1 6.5 2.5a4.5 4.5 0 0 0 7 7z")}},
 			    // Reading: an eye, read rather than written; and two pages side by side.
 			    {"eye", {path("M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8")}},
+			    // And not seen, as a layer hidden is: the eye struck through.
+			    {"eye_off", {path("M1.5 8A9 9 0 0 1 14.5 8 9 9 0 0 1 1.5 8zM10 8A2 2 0 1 1 6 8 2 2 0 1 1 10 8M2.5 2.5l11 11")}},
 			    {"spread", {path("M1.5 3.5h5.5v9h-5.5zM9 3.5h5.5v9H9z")}},
 			    // A warm reading mode: a cup of coffee.
 			    {"coffee", {path("M2.5 6.5h8.5v3.5a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 10zM11 7.5h1.25a1.75 1.75 0 0 1 0 3.5H11M5 2.5v2M8.5 2.5v2")}},

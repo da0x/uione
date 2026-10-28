@@ -167,7 +167,9 @@ namespace one::terminal::runtime {
 		if (v.status == status::loading) return terminal::text("Loading…", dim());
 		// Read as its parts, whichever of the app's fields keep them.
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
-		const auto& layers = data[spec.list].as_array();
+		// Those hidden aren't shown or picked.
+		const value shown = shown_layers(data[spec.list]);
+		const auto& layers = shown.as_array();
 		std::string chosen = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		// Words being written: a line to type them in, kept with Enter.
 		auto writing = p.kept<std::string>("collage writing " + spec.key);
@@ -258,6 +260,45 @@ namespace one::terminal::runtime {
 			}}));
 		}
 		return terminal::column(std::move(parts)).spacing(1);
+	}
+
+	terminal::view layer_list(page& p, layers_spec spec) {
+		const view_state& v = *spec.view;
+		if (v.status == status::loading) return terminal::text("Loading…", dim());
+		const value data = collage_parts_of(v.data, spec.list, spec.fields);
+		const value& layers = data[spec.list];
+		const auto& all = layers.as_array();
+		std::vector<terminal::view> rows;
+		// Topmost first, as it's seen: its name, then its buttons.
+		for (std::size_t i = all.size(); i-- > 0;) {
+			const value& l = all[i];
+			std::string id = l["id"].as_string();
+			bool hidden = hidden_layer(l);
+			std::string name = l["picture"].as_string().empty() ? l["words"].as_string().substr(0, l["words"].as_string().find('\n')) : "Picture";
+			if (name.empty()) name = l["shape"].as_string().empty() ? "Rectangle" : l["shape"].as_string();
+			std::vector<terminal::view> row;
+			row.push_back(terminal::text((id == p.picked_id(spec.pick) ? "> " : "  ") + name, hidden ? dim() : terminal::style{}));
+			if (!spec.hide.empty()) {
+				row.push_back(terminal::button(hidden ? "Show" : "Hide", [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(std::map<std::string, value>{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); }));
+			}
+			if (!spec.order.empty()) {
+				auto move = [&p, spec, layers, i](std::size_t to) {
+					bool first = true;
+					for (const auto& [moved, depth] : depths_moved(layers, i, to)) {
+						value sent = collage_fields_of(value(std::map<std::string, value>{{"id", moved}, {"depth", depth}}), spec.fields);
+						if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+						p.run(spec.order, sent);
+					}
+				};
+				if (i + 1 < all.size()) row.push_back(terminal::button("Up", [move, i] { move(i + 1); }));
+				if (i > 0) row.push_back(terminal::button("Down", [move, i] { move(i - 1); }));
+			}
+			if (!spec.remove.empty()) row.push_back(terminal::button("Delete", [&p, spec, id] { p.run(spec.remove, value(std::map<std::string, value>{{"id", id}})); }));
+			if (!spec.pick.empty()) row.push_back(terminal::button("Pick", [&p, pick = spec.pick, id] { p.pick(pick, id); }));
+			rows.push_back(terminal::flow(std::move(row)).spacing(1));
+		}
+		if (rows.empty()) return terminal::text("No layers yet.", dim());
+		return terminal::column(std::move(rows));
 	}
 
 }  // namespace one::terminal::runtime

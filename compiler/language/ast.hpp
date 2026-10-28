@@ -885,6 +885,18 @@ namespace one::language {
         std::vector<screen_item> tools;
     };
 
+    // layers drawing_page.layers { hide layer::show  order layer::update  delete layer::delete }:
+    // the layers of the screen's collage over the same list, topmost first, each an eye
+    // that hides or shows it by its hide, its preview in the collage's proportions, the
+    // layer alone drawn where it is, its name, up and down by its order, which renumbers
+    // their depth, and delete. A press on one picks it, as the collage does.
+    struct layers_item {
+        qualified_name view;
+        std::string list;
+        location list_where;
+        std::optional<qualified_name> hide, order, remove;
+    };
+
     // paper document_page.blocks { ... }: a list's rows as one upright sheet of paper,
     // written on in place (decision 0022). Its rows are its blocks, in the order their
     // position says, each set as its kind says and aligned as its align says. Each part
@@ -1323,7 +1335,7 @@ namespace one::language {
         location where;
         std::variant<content_block, content_text, content_link, table_item, form_item,
                      confirm_item, button_item, component_item, thread_item, timeline_item, copy_item, themes_item, details_item, grid_item, board_item, cards_item, chart_item, monitor_item,
-                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, collage_button, on_open_item, picture_item, paper_item, paper_insert, calendar_item>
+                     find_item, canvas_item, pipeline_item, toggle_item, history_item, messages_item, full_screen_item, pick_item, collage_item, layers_item, collage_button, on_open_item, picture_item, paper_item, paper_insert, calendar_item>
             node;
         // board … when board_page.style == style::kanban: shown only while it holds, so
         // one screen shows a list as a board or a canvas, as a field says.
@@ -1530,6 +1542,8 @@ namespace one::language {
             // A shape's, when it's neither a picture nor words (decision 0025): what it is, a path's
             // points, its fill and stroke, and how much of it shows.
             {"shape", "rectangle ellipse path"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
+            // Whether it's hidden: not drawn, picked or saved while it's anything but 0.
+            {"hidden", "number"},
         };
         return all;
     }
