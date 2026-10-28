@@ -19,6 +19,7 @@ import "@fontsource-variable/literata/wght-italic.css";
 import "@fontsource-variable/fraunces/wght.css";
 import "@fontsource-variable/fraunces/wght-italic.css";
 import { Children, Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
 import type { ButtonProps, ChoiceProps, ComponentSet, OptionsProps } from "@uione/react";
 import { Surface } from "@uione/react";
@@ -335,9 +336,18 @@ export function labelHue(label: string): number {
 // press anywhere else.
 function Options({ label, icon, tool, open, onToggle, onClose, children }: OptionsProps) {
   const at = useRef<HTMLSpanElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  // Drawn on the page itself, under its button, so nothing it's in, like a toolbar that
+  // scrolls, cuts it off.
+  const [under, setUnder] = useState<{ left: number; top: number } | undefined>();
+  useEffect(() => {
+    if (!open || !at.current) return setUnder(undefined);
+    const r = at.current.getBoundingClientRect();
+    setUnder({ left: r.left, top: r.bottom + 4 });
+  }, [open]);
   useEffect(() => {
     if (!open) return;
-    const away = (e: PointerEvent) => !at.current?.contains(e.target as Node) && onClose();
+    const away = (e: PointerEvent) => !at.current?.contains(e.target as Node) && !panel.current?.contains(e.target as Node) && onClose();
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("pointerdown", away, true);
     document.addEventListener("keydown", key, true);
@@ -363,11 +373,14 @@ function Options({ label, icon, tool, open, onToggle, onClose, children }: Optio
         {icon && buttonIcons[icon]}
         <span className="whitespace-nowrap leading-none">{label}</span>
       </button>
-      {open && (
-        <div role="menu" aria-label={label} className="absolute left-0 top-full z-50 mt-1 flex w-72 flex-col gap-0.5 rounded-[10px] border border-line bg-surface p-1.5 shadow-lg">
-          {children}
-        </div>
-      )}
+      {open &&
+        under &&
+        createPortal(
+          <div ref={panel} role="menu" aria-label={label} style={{ left: under.left, top: under.top }} className="fixed z-50 flex w-72 flex-col gap-0.5 rounded-[10px] border border-line bg-surface p-1.5 text-ink shadow-lg">
+            {children}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

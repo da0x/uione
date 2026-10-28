@@ -370,7 +370,7 @@ describe("a collage's layers, listed", () => {
     HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
   });
 
-  it("lists them topmost first, each hidden or shown, moved up a place by renumbering their depth, and picked by a press", async () => {
+  it("lists them topmost first, each hidden or shown, dragged up a place by renumbering their depth, and picked by a press", async () => {
     act(() => setPicked("/ layer", undefined));
     const source = memorySource({ commands: { "studio::layer::show": () => ({ id: "x" }), "studio::layer::update": () => ({ id: "x" }), "studio::layer::delete": () => ({ id: "x" }) } });
     source.set("studio::poster_page", {
@@ -395,17 +395,22 @@ describe("a collage's layers, listed", () => {
     const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
     await waitFor(() => expect(drawn.getAllByRole("listitem").length).toBe(3));
     expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/Rectangle|Harbor|Ellipse/)?.[0])).toEqual(["Rectangle", "Harbor", "Ellipse"]);
-    // The hidden one is shown again; the lowest moves up a place, the rest renumbered.
+    // The hidden one is shown again, by its eye beside its row.
     const [top, middle, bottom] = drawn.getAllByRole("listitem");
-    fireEvent.click(within(middle!).getByRole("button", { name: "Show" }));
-    fireEvent.click(within(bottom!).getByRole("button", { name: "Up" }));
+    fireEvent.click(within(middle!.parentElement!.parentElement!).getByRole("button", { name: "Show" }));
+    // The lowest held and dragged onto the middle one: moved up a place, the rest renumbered.
+    const under = document.elementsFromPoint;
+    document.elementsFromPoint = () => [middle!];
+    fireEvent.pointerDown(bottom!, { clientX: 10, clientY: 100, button: 0 });
+    fireEvent.pointerMove(bottom!, { clientX: 10, clientY: 60 });
+    fireEvent.pointerUp(bottom!, { clientX: 10, clientY: 60 });
+    document.elementsFromPoint = under;
     await waitFor(() => expect(source.runs.length).toBe(2));
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::show", input: { id: "mid", hidden: 0 } });
     // Mid is already at 0 and top at 2, so only the lowest, now in the middle, is sent.
     expect(source.runs[1]).toMatchObject({ command: "studio::layer::update", input: { id: "low", depth: 1 } });
     expect(drawn.getByTestId("picked").textContent).toBe("");
-    // The topmost can't go up, and a press on one picks it.
-    expect((within(top!).getByRole("button", { name: "Up" }) as HTMLButtonElement).disabled).toBe(true);
+    // A press on one picks it.
     fireEvent.click(top!);
     expect(drawn.getByTestId("picked").textContent).toBe("top");
   });
