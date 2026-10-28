@@ -2047,7 +2047,8 @@ export function Layers({
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap" as const,
-    fontSize: soft ? "0.8125rem" : "0.875rem",
+    fontSize: soft ? "0.75rem" : "0.8125rem",
+    fontWeight: 400,
     color: hidden || soft ? "var(--color-muted)" : undefined,
   });
   // A name in the list: a double-click, given a command to send it to, writes it in
@@ -2112,7 +2113,7 @@ export function Layers({
                     </svg>
                   </button>
                   {hide && (
-                    <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                    <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
                       {hidden ? "Show" : "Hide"}
                     </ui.Button>
                   )}
@@ -2215,7 +2216,7 @@ export function Layers({
             >
               {hide && (
                 <span onClick={(e) => e.stopPropagation()}>
-                  <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                  <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
                     {hidden ? "Show" : "Hide"}
                   </ui.Button>
                 </span>

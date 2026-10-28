@@ -2100,6 +2100,17 @@ namespace one::desktop::runtime {
 			    .grow(0);
 		}
 
+		// How a name in a list of layers is set: small and light, so the list stays quiet; a
+		// layer's in ink, an object's smaller and gray, and a hidden one's gray too.
+		desktop::text_style name_style(bool hidden, bool object) {
+			const auto& t = current_theme();
+			desktop::text_style style = t.quiet();
+			style.weight = 400;
+			if (object) style.size -= 1;
+			if (!hidden && !object) style.color = t.ink;
+			return style;
+		}
+
 		// A name in a list of layers, cut off at its room: a press picks its row, and a
 		// double-click, given a command to send it to, writes it in place, Enter keeping it.
 		desktop::view name_of_row(page& p, const std::string& id, std::string name, desktop::text_style style, const std::string& rename, std::function<void()> pick,
@@ -2205,14 +2216,14 @@ namespace one::desktop::runtime {
 				if (!spec.hide.empty()) {
 					row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide", [&p, command = spec.hide, id, hidden] {
 						p.run(command, value(std::map<std::string, value>{{"id", id}, {"hidden", hidden ? 0 : 1}}));
-					}, {.on = !hidden, .tiny = true}));
+					}, {.tiny = true}));
 				}
 				row.push_back(preview_of(p, value(held), width, height, spec.clear, hidden));
 				std::string name = g["name"].as_string().empty() ? "Layer" : g["name"].as_string();
 				auto pick_layer = [&p, pick = spec.pick, id] {
 					if (!pick.empty()) p.pick(pick, id);
 				};
-				row.push_back(name_of_row(p, id, std::move(name), hidden ? t.quiet() : t.body(), spec.rename, pick_layer));
+				row.push_back(name_of_row(p, id, std::move(name), name_style(hidden, false), spec.rename, pick_layer));
 				if (!spec.order.empty()) {
 					row.push_back(desktop::tool_button("raise", "Up", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i + 1, {}); }, {.off = i + 1 == groups.size(), .tiny = true}));
 					row.push_back(desktop::tool_button("lower", "Down", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i - 1, {}); }, {.off = i == 0, .tiny = true}));
@@ -2243,7 +2254,7 @@ namespace one::desktop::runtime {
 						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
 						if (!spec.pick.empty()) p.pick(spec.pick, id);
 					};
-					inside.push_back(name_of_row(p, object, object_name(p, o), t.quiet(), spec.object_rename, pick_object, spec.fields));
+					inside.push_back(name_of_row(p, object, object_name(p, o), name_style(hidden, true), spec.object_rename, pick_object, spec.fields));
 					if (!spec.object_remove.empty()) {
 						inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, object] { p.run(command, value(std::map<std::string, value>{{"id", object}})); },
 						                                      {.tiny = true, .on_hover = true}));
@@ -2280,13 +2291,13 @@ namespace one::desktop::runtime {
 			if (!spec.hide.empty()) {
 				row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide",
 				                                   [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(fields{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); },
-				                                   {.on = !hidden, .tiny = true}));
+				                                   {.tiny = true}));
 			}
 			row.push_back(preview_of(p, value(std::vector<value>{l}), width, height, spec.clear, hidden));
 			auto pick_row = [&p, pick = spec.pick, id] {
 				if (!pick.empty()) p.pick(pick, id);
 			};
-			row.push_back(name_of_row(p, id, object_name(p, l), hidden ? t.quiet() : t.body(), spec.rename, pick_row, spec.fields));
+			row.push_back(name_of_row(p, id, object_name(p, l), name_style(hidden, false), spec.rename, pick_row, spec.fields));
 			if (!spec.order.empty()) {
 				bool top = i + 1 == all.size(), bottom = i == 0;
 				row.push_back(desktop::tool_button("raise", "Up", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i + 1, spec.fields); }, {.off = top, .tiny = true}));
