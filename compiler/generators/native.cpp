@@ -449,6 +449,16 @@ namespace one::generators {
         }
 
         // What a collage and its buttons name it by: its pick, or the screen's address.
+        // The fields the screen's collage keeps colors in, its fill, stroke and words' color.
+        std::set<std::string> collage_colors(const std::string& ns) const {
+            std::set<std::string> out;
+            if (!collage_) return out;
+            for (const auto& [part, field] : model_.collage_fields(ns, *collage_)) {
+                if (part == "fill" || part == "stroke" || part == "color") out.insert(field);
+            }
+            return out;
+        }
+
         std::string collage_key(const language::collage_item& c) const { return route_ + " " + (c.over ? *c.over : std::string("collage")); }
 
         // The picks anywhere in a screen.
@@ -783,7 +793,7 @@ namespace one::generators {
             if (!on_pick.empty()) shown_when = shown_when.empty() ? "!none(" + on_pick + ")" : "(!none(" + on_pick + ") && " + shown_when + ")";
             if (!shown_when.empty()) out += ", .when = " + shown_when;
             if (button.icon) out += ", .icon = " + str(*button.icon);
-            if (std::string swatch = screens::swatch_of(button); !swatch.empty()) out += ", .swatch = " + str(swatch);
+            if (std::string swatch = screens::swatch_of(button, collage_colors(ns)); !swatch.empty()) out += ", .swatch = " + str(swatch);
             if (!button.keys.empty()) out += ", .keys = " + keys_of(button.keys);
             if (button.pressed_when) out += ", .pressed = " + condition(parts, ns, *button.pressed_when);
             else if (!same.empty() && same != "-") out += ", .pressed = " + same;

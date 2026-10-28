@@ -264,9 +264,10 @@ namespace one::desktop {
 		float s = std::min(area.width, area.height) / 16;
 		point origin{area.x + (area.width - 16 * s) / 2, area.y + (area.height - 16 * s) / 2};
 		auto at = [&](point p) { return point{origin.x + p.x * s, origin.y + p.y * s}; };
-		// Drawn in a fine line, half the usual 1.5, so they don't feel heavy.
+		// Drawn in a fine line, half the usual 1.5, so they don't feel heavy, and never
+		// more than a pixel, so a large tool's is as fine as a small one's.
 		const float weight = 0.75f;
-		float stroke = weight * s;
+		float stroke = std::min(weight * s, 1.f);
 		for (const auto& part : found->second) {
 			switch (part.shape) {
 				case icon_part::kind::rect: {

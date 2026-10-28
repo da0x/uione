@@ -216,8 +216,9 @@ namespace one::desktop::runtime {
 		if (auto small = p.in_group()) {
 			std::optional<desktop::color> swatch;
 			if (b.swatch.size() == 7) swatch = desktop::color::hex(static_cast<std::uint32_t>(std::strtoul(b.swatch.c_str() + 1, nullptr, 16)));
-			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch ? hint_of(label_now, b.keys) : label_now, std::move(run),
-			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch});
+			bool clear = b.swatch == "none";
+			return desktop::tool_button(desktop::has_icon(b.icon) ? b.icon : "", *small || swatch || clear ? hint_of(label_now, b.keys) : label_now, std::move(run),
+			                            {.large = !*small, .on = b.pressed && !off, .off = off, .swatch = swatch, .clear = clear});
 		}
 		if (desktop::has_icon(b.icon)) return desktop::icon_button(b.icon, label_now, std::move(run), b.primary);
 		if (std::string g = glyph_of(b.icon); !g.empty()) label_now = g + " " + label_now;

@@ -282,7 +282,8 @@ TEST("every icon a toolbar draws with draws something, its paths read whole") {
 		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
 		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 		std::size_t inked = 0;
-		for (std::size_t i = 3; i < drawn.rgba().size(); i += 4) inked += drawn.rgba()[i] > 128;
+		// Inked, if only partly: drawn large, its line is still a pixel at most.
+		for (std::size_t i = 3; i < drawn.rgba().size(); i += 4) inked += drawn.rgba()[i] > 64;
 		CHECK_SAYING(inked > 20, "the icon " + name + " draws " + std::to_string(inked) + " pixels");
 	}
 }

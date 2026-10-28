@@ -90,9 +90,16 @@ namespace one::generators::screens {
     // as entity::action, or a view written by its name alone, is in the same
     // namespace; one written with its namespace stays as written.
     // The color a button is drawn as, a circle of it, in a toolbar: one with no icon
-    // whose one given value is a color written #rrggbb, like White's { color = "#ffffff" }.
-    inline std::string swatch_of(const language::button_item& button) {
-        if (button.icon || button.given.size() != 1) return "";
+    // whose one given value is a color written #rrggbb, like White's { color = "#ffffff" };
+    // or none, drawn clear, a checkerboard in its circle, when its first given value is
+    // none for one of the `colors`, the fields the screen's collage keeps colors in, like
+    // None's { fill = none }.
+    inline std::string swatch_of(const language::button_item& button, const std::set<std::string>& colors = {}) {
+        if (button.icon || button.given.empty()) return "";
+        if (auto* name = std::get_if<language::name_expression>(&button.given.front().value->node); name && name->name.text() == "none" && colors.contains(button.given.front().name)) {
+            return "none";
+        }
+        if (button.given.size() != 1) return "";
         auto* literal = std::get_if<language::literal_expression>(&button.given.front().value->node);
         if (!literal || literal->type != language::literal_expression::kind::string) return "";
         const std::string& v = literal->value;

@@ -1359,7 +1359,7 @@ namespace one::generators {
                                                                           : "";
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
-                    if (std::string swatch = screens::swatch_of(*button); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
+                    if (std::string swatch = screens::swatch_of(*button, collage_colors(ns)); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + pressed + then + when + allowed(parts, ns, command) + " />");
                 } else if (auto* paper = std::get_if<language::paper_item>(&item.node)) {
                     // A list's rows as a sheet of paper, written on in place.
@@ -1841,6 +1841,16 @@ namespace one::generators {
             parts.picks.insert(name);
             view_variable(parts, picks_.at(name).view);
             return web_detail::js_name("picked_" + name);
+        }
+
+        // The fields the screen's collage keeps colors in, its fill, stroke and words' color.
+        std::set<std::string> collage_colors(const std::string& ns) const {
+            std::set<std::string> out;
+            if (!collage_) return out;
+            for (const auto& [part, field] : model_.collage_fields(ns, *collage_)) {
+                if (part == "fill" || part == "stroke" || part == "color") out.insert(field);
+            }
+            return out;
         }
 
         // The toggles over an enum anywhere in a screen, each by its enum, and the choice

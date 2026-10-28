@@ -3,11 +3,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <typeinfo>
+#include <vector>
 
 #include "one/desktop/ui.hpp"
 #include "one/desktop/icons.hpp"
+#include "one/desktop/picture.hpp"
 #include "ui_internal.hpp"
 
 namespace one::desktop {
@@ -153,6 +156,28 @@ namespace one::desktop {
 	}
 
 	namespace {
+
+		// A circle of no color, as a toolbar's swatch shows clear: a gray and white
+		// checkerboard, four squares across, its edge smooth; made once, larger than it's
+		// drawn so it stays sharp.
+		const picture& clear_circle() {
+			static const picture made = [] {
+				constexpr int side = 64;
+				std::vector<std::uint8_t> rgba(side * side * 4, 0);
+				for (int y = 0; y < side; ++y) {
+					for (int x = 0; x < side; ++x) {
+						float dx = x + 0.5f - side / 2.f, dy = y + 0.5f - side / 2.f;
+						float coverage = std::clamp(side / 2.f - std::sqrt(dx * dx + dy * dy) + 0.5f, 0.f, 1.f);
+						std::uint8_t shade = ((x / 16 + y / 16) % 2) ? 0xcc : 0xff;
+						std::size_t at = (static_cast<std::size_t>(y) * side + x) * 4;
+						rgba[at] = rgba[at + 1] = rgba[at + 2] = shade;
+						rgba[at + 3] = static_cast<std::uint8_t>(coverage * 255);
+					}
+				}
+				return picture::of(side, side, std::move(rgba));
+			}();
+			return made;
+		}
 
 		// Each child's parent, once a tree is put together.
 		void adopt_children(element& e) {
@@ -623,7 +648,7 @@ namespace one::desktop {
 				if (flat_ && tool_.large) return {std::max({44.f, small_words().width(), large_icon()}), large_icon() + 4 + small_words().height()};
 				// A small one with no icon is its words, as a scale like 1.5× is; with one or
 				// without, as tall as its words would be, so every small one is.
-				if (flat_ && tool_.swatch) return {18, small_height()};
+				if (flat_ && (tool_.swatch || tool_.clear)) return {18, small_height()};
 				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), small_height()};
 				if (flat_) return {18, small_height()};
 				// Drawn as an icon, as tall as its words would be, so it lines up with the buttons beside it.
@@ -688,6 +713,14 @@ namespace one::desktop {
 					color fill = *tool_.swatch;
 					if (tool_.off) fill.alpha *= 0.35f;
 					c.box({area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16}, {.fill = fill, .border = t.line, .border_width = 1, .radius = 8});
+					if (hovered) tooltip(c, t);
+					return;
+				}
+				// No color: a gray and white checkerboard in its circle, as clear is shown.
+				if (tool_.clear) {
+					rect circle{area.x + (area.width - 16) / 2, area.y + (area.height - 16) / 2, 16, 16};
+					c.picture(clear_circle(), circle, {0, 0, 1, 1}, tool_.off ? 0.35f : 1.f);
+					c.box(circle, {.border = t.line, .border_width = 1, .radius = 8});
 					if (hovered) tooltip(c, t);
 					return;
 				}

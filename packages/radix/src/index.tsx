@@ -1985,9 +1985,14 @@ export const radix: ComponentSet = {
   Button: ({ kind = "secondary", disabled, error, onClick, children, icon, tool, pressed: on, hint, swatch }) => {
     // Drawn as an icon, its words still name it, and show when it's pointed at.
     const words = typeof children === "string" ? children : undefined;
-    // A color it gives, drawn as a circle of it, outlined so white shows.
+    // A color it gives, drawn as a circle of it, outlined so white shows; none, a gray
+    // and white checkerboard in its circle, as clear is shown.
     const drawn = swatch ? (
-      <span aria-hidden="true" className="size-4 rounded-full border border-line" style={{ backgroundColor: swatch }} />
+      <span
+        aria-hidden="true"
+        className="size-4 rounded-full border border-line"
+        style={swatch === "none" ? { background: "repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 8px 8px" } : { backgroundColor: swatch }}
+      />
     ) : icon ? (
       buttonIcons[icon]
     ) : undefined;
@@ -1996,7 +2001,8 @@ export const radix: ComponentSet = {
       // over its words, as tall as two small ones stacked, as a group of them is, so
       // the toolbar stays as tall whichever groups it shows; small, its icon alone, or
       // its words when it has none, as wide as they are.
-      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
+      // A large one's icon is drawn as finely as a small one's, a pixel at most.
+      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
       // Pressed, it acts on what's being worked on and leaves the keyboard, and any
       // caret, with it; Tab still reaches it.
       return (
