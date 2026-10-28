@@ -2208,6 +2208,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     points that keep its shape, those within 4 pixels of the line between their
     neighbors left out, joined by one smooth curve through each, kept in its
     `points` as a path. A click alone draws nothing.
+
+    With `by points`, as a pen draws, it's a path node by node: a click puts down a
+    corner, and a press dragged puts down a smooth node, the curve leaving it the way
+    the drag went and coming into it the other. The next segment follows the pointer
+    until it's put down. Enter or a double-click ends the path where it is, a click on
+    its first node closes it, Backspace takes back the last node, and Esc drops it.
   - `in drawing_page.layers by layer`: its rows are objects held in layers, as a
     drawing program's are: the rows of another list of its view, each with its
     `name` and `depth`, each object naming its own by a field that points at one.

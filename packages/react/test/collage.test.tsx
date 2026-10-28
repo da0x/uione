@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -66,6 +66,8 @@ interface Case {
   straight?: boolean;
   path?: string;
   drawn?: Numbers[];
+  pen?: Numbers[];
+  closed?: boolean;
   tolerance?: number;
   nodes?: Numbers[];
   node?: number;
@@ -138,6 +140,9 @@ describe("where a collage's layers go", () => {
       }
       case "cropped":
         expect(same(cropped(boxOf(k.kept!), k.edges!, k.by![0]!, k.by![1]!, boxOf(k.whole!)), boxOf(k.box!))).toBe(true);
+        break;
+      case "pen_path":
+        expect(penPath(k.pen!.map(([x, y, handleX, handleY]) => ({ x: x!, y: y!, handleX: handleX!, handleY: handleY! })), k.closed!)).toBe(k.path);
         break;
       case "freehand":
         expect(freehand(k.drawn!.map(([x, y]) => ({ x: x!, y: y! })), k.tolerance!)).toBe(k.path);

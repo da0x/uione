@@ -16,8 +16,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
-import type { Box, ColorShift, ColorStats, Guided, Lines, Point, SavedLayer } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
 import type { ViewState } from "./data.js";
@@ -708,6 +708,8 @@ interface Placed {
   drawing?: Box; // a layer being drawn, as big as the drag so far
   line?: { at: Box; points: string }; // or a line, as far as the drag has gone
   hand?: Point[]; // or what a drag by hand has gone through
+  pen?: PenNode[]; // or the nodes a pen has put down so far
+  hover?: Point; // and where the pointer is, which the next segment follows
   // A path being reshaped: its outline as it was, and as it is now, by its id.
   reshapeFrom?: string;
   reshaped?: { id: string; outline: string };
@@ -721,8 +723,8 @@ export interface CollageDraw {
   given?: Record<string, unknown>;
   when?: boolean;
   // By line, a line from where the drag began to where it ended; by hand, what it went
-  // through; each kept as a path.
-  by?: "line" | "hand";
+  // through; by points, a path node by node, as a pen draws; each kept as a path.
+  by?: "line" | "hand" | "points";
   back?: [string, string][];
 }
 
@@ -1327,6 +1329,23 @@ export function Collage({
       c.lineWidth = 1.5;
       c.strokeRect(d.x, d.y, d.w, d.h);
     }
+    // A pen's path so far, the next segment following the pointer, and its nodes.
+    if (w.pen?.length) {
+      const shown = [...w.pen];
+      if (w.hover && w.now?.what !== "drawing") shown.push({ x: w.hover.x, y: w.hover.y, handleX: 0, handleY: 0 });
+      if (shown.length > 1) {
+        const { points, box } = reshapedAs(penPath(shown, false));
+        paintShape(c, { shape: "path", points, stroke: "#2457d6", stroke_width: 1.5 / scale }, onBoard(box), box);
+      }
+      c.strokeStyle = accent;
+      c.lineWidth = 1.5;
+      for (const n of w.pen) {
+        const at = onBoard({ x: n.x, y: n.y, w: 0, h: 0 });
+        c.fillStyle = "#fff";
+        c.fillRect(at.x - handle / 2, at.y - handle / 2, handle, handle);
+        c.strokeRect(at.x - handle / 2, at.y - handle / 2, handle, handle);
+      }
+    }
     // What a drag by hand has gone through so far.
     if (w.hand && w.now?.what === "drawing" && w.hand.length > 1) {
       c.strokeStyle = accent;
@@ -1398,6 +1417,23 @@ export function Collage({
     const watching = new ResizeObserver(() => paint());
     watching.observe(canvas);
     return () => watching.disconnect();
+  });
+
+  // A path being drawn by a pen: Enter ends it, Esc drops it, Backspace takes back its
+  // last node; put away when the pen is.
+  if (w.pen?.length && draws.find((one) => one.when !== false)?.by !== "points") w.pen = w.hover = undefined;
+  useEffect(() => {
+    const down = (k: KeyboardEvent) => {
+      if (!w.pen?.length) return;
+      if (k.key === "Enter") penDone(false);
+      else if (k.key === "Escape") (w.pen = w.hover = undefined), paint();
+      else if (k.key === "Backspace") w.pen.pop(), paint();
+      else return;
+      k.preventDefault();
+      k.stopPropagation();
+    };
+    window.addEventListener("keydown", down, true);
+    return () => window.removeEventListener("keydown", down, true);
   });
 
   // Words being written take every key: Enter or Esc keeps them, Shift+Enter starts a
@@ -1472,6 +1508,17 @@ export function Collage({
   // when read go back to their first, as a tool goes back to Select. The same as the
   // desktop's.
   const drawingNow = () => draws.find((one) => one.when !== false);
+  // The path a pen drew, ended where it is or closed: made a layer as a line drawn is,
+  // and the pen put away; fewer than two nodes draw nothing. The same as the desktop's.
+  const penDone = (closed: boolean) => {
+    const nodes = w.pen ?? [];
+    w.pen = w.hover = undefined;
+    if (nodes.length >= 2) {
+      const { points, box } = reshapedAs(penPath(nodes, closed));
+      void drawLayer(box, points);
+    }
+    paint();
+  };
   const drawLayer = async (b: Box, points?: string) => {
     const d = drawingNow();
     if (!d) return;
@@ -1531,6 +1578,21 @@ export function Collage({
       w.now = { what: "cropping", id: w.crop.id, from: w.crop.kept, at: p, corner: 0, edges: edgesAt };
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
+    }
+    // A pen puts down a node: a double-click ends its path, and a press on its first
+    // node closes it.
+    if (drawingNow()?.by === "points" && inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) {
+      const pen = w.pen ?? [];
+      if (e.detail >= 2 && pen.length) return penDone(false);
+      if (pen.length > 2) {
+        const first = onBoard({ x: pen[0]!.x, y: pen[0]!.y, w: 0, h: 0 });
+        if (Math.abs(first.x - p.x) <= handle && Math.abs(first.y - p.y) <= handle) return penDone(true);
+      }
+      const on = onCollage(p);
+      w.pen = [...pen, { x: on.x, y: on.y, handleX: 0, handleY: 0 }];
+      w.now = { what: "drawing", id: "points", from: { x: 0, y: 0, w: 0, h: 0 }, at: p, corner: 0, edges: 0 };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return paint();
     }
     // While something's to be drawn, a press on the collage starts drawing it, over
     // whatever's there.
@@ -1602,7 +1664,12 @@ export function Collage({
       return;
     }
     if (g.what === "drawing") {
-      if (drawingNow()?.by === "hand") w.hand?.push(onCollage(p));
+      if (g.id === "points") {
+        // A pen's node dragged from: its handle, the way the curve leaves it.
+        const node = w.pen?.[w.pen.length - 1], on = onCollage(p);
+        if (node) (node.handleX = on.x - node.x), (node.handleY = on.y - node.y);
+        w.hover = on;
+      } else if (drawingNow()?.by === "hand") w.hand?.push(onCollage(p));
       else if (drawingNow()?.by === "line") w.line = drawnLine(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
       else w.drawing = drawn(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
     } else if (g.what === "shifting" && w.crop) {
@@ -1639,6 +1706,11 @@ export function Collage({
         w.reshaped = undefined;
         paint();
       });
+      return paint();
+    }
+    if (g.what === "drawing" && g.id === "points") {
+      // A pen's node is put down; its path goes on until it's ended.
+      w.now = undefined;
       return paint();
     }
     if (g.what === "drawing") {
@@ -1785,7 +1857,12 @@ export function Collage({
         aria-label="A picture made of layers"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none" }}
         onPointerDown={press}
-        onPointerMove={(e) => (w.now ? move(e) : cursorAt(e))}
+        onPointerMove={(e) => {
+          if (w.now) return move(e);
+          // The next segment of a pen's path follows the pointer.
+          if (w.pen?.length) (w.hover = onCollage(at(e))), paint();
+          cursorAt(e);
+        }}
         onPointerUp={release}
         onPointerCancel={release}
       />

@@ -199,6 +199,17 @@ namespace one::screens::collage {
 	// two.
 	std::string freehand(const std::vector<point>& drawn, double tolerance);
 
+	// A node the pen put down: where it is, and its handle, where a drag from it went,
+	// from it; the curve leaves it that way and comes into it the other, so it's smooth.
+	// No handle, it's a corner.
+	struct pen_node {
+		double x = 0, y = 0;
+		double handle_x = 0, handle_y = 0;
+	};
+	// The path through them, where it is: a line between two corners, a curve where
+	// either has a handle; closed, back to the first and Z.
+	std::string pen_path(const std::vector<pen_node>& nodes, bool closed);
+
 	// A path's nodes, where it is, written as path_in writes it: where each of its
 	// segments ends, M, L and C alike, in order.
 	std::vector<point> path_nodes(std::string_view absolute);

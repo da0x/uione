@@ -284,6 +284,41 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::reshape", input: { id: "l1", points: "M 0 0 L 1 1", x: 100, y: 150, w: 200, h: 50 } });
   });
 
+  it("makes a path by points, as a pen draws: corners clicked, a smooth node dragged, ended by Enter or closed on its first node", async () => {
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, points: "points" }} draws={[{ command: "studio::layer::create", by: "points" }]} />;
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    const click = (x: number, y: number) => {
+      fireEvent.pointerDown(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1 });
+      fireEvent.pointerUp(canvas, { clientX: 32 + x, clientY: 32 + y, pointerId: 1 });
+    };
+    click(100, 100);
+    click(300, 100);
+    click(300, 300);
+    expect(source.runs).toEqual([]);
+    fireEvent.keyDown(window, { key: "Enter" });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    const open = (source.runs[0]!.input as { points: string }).points;
+    expect([open.match(/L/g)?.length, open.includes("Z")]).toEqual([2, false]);
+    click(100, 100);
+    fireEvent.pointerDown(canvas, { clientX: 32 + 300, clientY: 32 + 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 350, clientY: 32 + 100, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 350, clientY: 32 + 100, pointerId: 1 });
+    click(200, 250);
+    click(100, 100);
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    const closed = (source.runs[1]!.input as { points: string }).points;
+    expect([closed.includes("C"), closed.endsWith("Z")]).toEqual([true, true]);
+  });
+
   it("makes a path by hand of what the drag went through, only as much as keeps its shape, as one curve", async () => {
     const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
     source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");

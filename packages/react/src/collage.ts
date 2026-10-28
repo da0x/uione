@@ -688,6 +688,33 @@ export function freehand(drawn: Point[], tolerance: number): string {
   return out;
 }
 
+// A node the pen put down: where it is, and its handle, where a drag from it went, from
+// it; the curve leaves it that way and comes into it the other, so it's smooth. No
+// handle, it's a corner.
+export interface PenNode {
+  x: number;
+  y: number;
+  handleX: number;
+  handleY: number;
+}
+
+// The path through them, where it is: a line between two corners, a curve where either
+// has a handle; closed, back to the first and Z.
+export function penPath(nodes: PenNode[], closed: boolean): string {
+  if (nodes.length === 0) return "";
+  let out = `M ${said(nodes[0]!.x)} ${said(nodes[0]!.y)}`;
+  const segment = (a: PenNode, b: PenNode) => {
+    if (!a.handleX && !a.handleY && !b.handleX && !b.handleY) out += ` L ${said(b.x)} ${said(b.y)}`;
+    else out += ` C ${said(a.x + a.handleX)} ${said(a.y + a.handleY)} ${said(b.x - b.handleX)} ${said(b.y - b.handleY)} ${said(b.x)} ${said(b.y)}`;
+  };
+  for (let i = 1; i < nodes.length; i++) segment(nodes[i - 1]!, nodes[i]!);
+  if (closed && nodes.length > 2) {
+    segment(nodes[nodes.length - 1]!, nodes[0]!);
+    out += " Z";
+  }
+  return out;
+}
+
 // A path's nodes, where it is, written as pathIn writes it: where each of its segments
 // ends, M, L and C alike, in order.
 export function pathNodes(absolute: string): Point[] {

@@ -475,6 +475,8 @@ namespace one::desktop::runtime {
 			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
 			std::optional<model::line> line;    // or a line, as far as the drag has gone
 			std::vector<model::point> hand;     // or what a drag by hand has gone through
+			std::vector<model::pen_node> pen;   // or the nodes a pen has put down so far
+			std::optional<model::point> hover;  // and where the pointer is, which the next segment follows
 			// A path being reshaped: its outline as it was, and as it is now, by its id.
 			std::string reshape_from;
 			std::optional<std::pair<std::string, std::string>> reshaped;
@@ -760,6 +762,16 @@ namespace one::desktop::runtime {
 				if (a && !pick.empty()) p.pick(pick, *a);
 			});
 			for (const auto& [key, first] : d->back) p.choose(key, first);
+		}
+
+		// The path a pen drew, ended where it is or closed: made a layer as a line drawn is,
+		// and the pen put away; fewer than two nodes draw nothing.
+		void pen_done(page& p, const collage_spec& spec, const value& layers, placed& w, bool closed) {
+			auto nodes = std::exchange(w.pen, {});
+			w.hover.reset();
+			if (nodes.size() < 2) return;
+			auto [points, b] = reshaped_as(model::pen_path(nodes, closed));
+			draw_layer(p, spec, layers, b, points);
 		}
 
 		// Words pasted: a layer of them in the middle, a twelfth of its height.
@@ -1476,6 +1488,22 @@ namespace one::desktop::runtime {
 				});
 			}
 		}
+		// A path being drawn by a pen: Enter ends it, Esc drops it, Backspace takes back
+		// its last node; put away when the pen is.
+		if (!w->pen.empty()) {
+			const collage_draw* d = drawing_now(spec);
+			if (!d || d->by != "points") w->pen.clear(), w->hover.reset();
+		}
+		if (!w->pen.empty()) {
+			typing([&p, w, layers, spec](const key_event& k) {
+				if (w->pen.empty()) return false;
+				if (k.is(keys::enter)) pen_done(p, spec, layers, *w, false);
+				else if (k.is(keys::escape)) w->pen.clear(), w->hover.reset();
+				else if (k.is(keys::backspace)) w->pen.pop_back();
+				else return false;
+				return true;
+			});
+		}
 		// Words being written take every key; a crop is kept with Enter and put away
 		// with Esc, before anything else.
 		if (w->editing) {
@@ -1665,6 +1693,20 @@ namespace one::desktop::runtime {
 				model::box d = w->on_board(*w->drawing);
 				c.box({static_cast<float>(d.x), static_cast<float>(d.y), static_cast<float>(d.w), static_cast<float>(d.h)}, {.border = t.accent, .border_width = 1.5f});
 			}
+			// A pen's path so far, the next segment following the pointer, and its nodes.
+			if (!w->pen.empty()) {
+				auto shown = w->pen;
+				if (w->hover && w->now.what != gesture::drawing) shown.push_back({w->hover->x, w->hover->y, 0, 0});
+				if (shown.size() > 1) {
+					auto [points, b] = reshaped_as(model::pen_path(shown, false));
+					value drawn = value(fields{{"shape", "path"}, {"points", points}, {"stroke", "#2457d6"}, {"stroke_width", 1.5 / w->scale}});
+					paint_shape(c, as_rect(w->on_board(b)), b, drawn);
+				}
+				for (const auto& n : w->pen) {
+					model::box at = w->on_board({n.x, n.y, 0, 0});
+					c.box({static_cast<float>(at.x) - handle / 2, static_cast<float>(at.y) - handle / 2, handle, handle}, {.fill = desktop::color::hex(0xffffff), .border = t.accent, .border_width = 1.5f});
+				}
+			}
 			// What a drag by hand has gone through so far.
 			for (std::size_t i = 1; i < w->hand.size() && w->now.what == gesture::drawing; ++i) {
 				model::box a = w->on_board({w->hand[i - 1].x, w->hand[i - 1].y, 0, 0}), b = w->on_board({w->hand[i].x, w->hand[i].y, 0, 0});
@@ -1787,6 +1829,25 @@ namespace one::desktop::runtime {
 			        }
 			        // While something's to be drawn, a press on the collage starts drawing it,
 			        // over whatever's there.
+			        // A pen puts down a node: a double-click ends its path, and a press on its
+			        // first node closes it.
+			        if (const collage_draw* d = drawing_now(spec); d && d->by == "points" && w->board.contains(at)) {
+				        if (clicks >= 2 && !w->pen.empty()) {
+					        pen_done(p, spec, layers, *w, false);
+					        return true;
+				        }
+				        if (w->pen.size() > 2) {
+					        model::box first = w->on_board({w->pen.front().x, w->pen.front().y, 0, 0});
+					        if (std::abs(first.x - at.x) <= handle && std::abs(first.y - at.y) <= handle) {
+						        pen_done(p, spec, layers, *w, true);
+						        return true;
+					        }
+				        }
+				        model::point on = w->on_collage(at);
+				        w->pen.push_back({on.x, on.y, 0, 0});
+				        w->now = {.what = gesture::drawing, .id = "points", .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+				        return true;
+			        }
 			        if (const collage_draw* d = drawing_now(spec); d && w->board.contains(at)) {
 				        // Its id says how it's drawn: a box, or by line.
 				        w->now = {.what = gesture::drawing, .id = d->by, .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
@@ -1860,6 +1921,14 @@ namespace one::desktop::runtime {
 				        return;
 			        }
 			        if (w->now.what == gesture::drawing) {
+				        // A pen's node dragged from: its handle, the way the curve leaves it.
+				        if (w->now.id == "points") {
+					        if (w->pen.empty()) return;
+					        model::point on = w->on_collage(at);
+					        w->pen.back().handle_x = on.x - w->pen.back().x, w->pen.back().handle_y = on.y - w->pen.back().y;
+					        w->hover = on;
+					        return;
+				        }
 				        if (w->now.id == "hand") {
 					        w->hand.push_back(w->on_collage(at));
 					        return;
@@ -1894,6 +1963,8 @@ namespace one::desktop::runtime {
 			        if (w->now.what == gesture::drawing) {
 				        gesture g = std::exchange(w->now, {});
 				        w->drawing.reset(), w->line.reset();
+				        // A pen's node is put down; its path goes on until it's ended.
+				        if (g.id == "points") return;
 				        if (g.id == "hand") {
 					        // What it went through, only as much as keeps its shape, as one curve.
 					        auto hand = std::exchange(w->hand, {});
@@ -1957,6 +2028,8 @@ namespace one::desktop::runtime {
 				        return edges & 5 ? desktop::cursor::resize_across : desktop::cursor::resize_up_down;
 			        }
 			        if (w->editing) return desktop::cursor::text;
+			        // The next segment of a pen's path follows the pointer.
+			        if (!w->pen.empty()) w->hover = w->on_collage(at);
 			        if (drawing_now(spec) && w->board.contains(at)) return desktop::cursor::crosshair;
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() != picked || is_words(l) || is_path(l) || spec.place.empty()) continue;

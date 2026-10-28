@@ -582,6 +582,11 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 			auto got = c::path_bounds(k["path"].as_string());
 			std::string fractions = c::path_fractions(k["path"].as_string(), got);
 			check::verify(same(got, box_of(k["box"])) && fractions == k["points"].as_string(), "path_bounds", note + ": " + said(got) + " " + fractions);
+		} else if (what == "pen_path") {
+			std::vector<c::pen_node> nodes;
+			for (const auto& at : k["pen"].as_array()) nodes.push_back({n(at, 0), n(at, 1), n(at, 2), n(at, 3)});
+			auto got = c::pen_path(nodes, k["closed"].as_bool());
+			check::verify(got == k["path"].as_string(), "pen_path", note + ": " + got);
 		} else if (what == "freehand") {
 			std::vector<c::point> drawn;
 			for (const auto& at : k["drawn"].as_array()) drawn.push_back({n(at, 0), n(at, 1)});

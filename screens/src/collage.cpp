@@ -673,6 +673,24 @@ namespace one::screens::collage {
 		return out;
 	}
 
+	std::string pen_path(const std::vector<pen_node>& nodes, bool closed) {
+		if (nodes.empty()) return {};
+		std::string out = "M " + said(nodes[0].x) + " " + said(nodes[0].y);
+		auto segment = [&](const pen_node& a, const pen_node& b) {
+			if (a.handle_x == 0 && a.handle_y == 0 && b.handle_x == 0 && b.handle_y == 0) {
+				out += " L " + said(b.x) + " " + said(b.y);
+				return;
+			}
+			out += " C " + said(a.x + a.handle_x) + " " + said(a.y + a.handle_y) + " " + said(b.x - b.handle_x) + " " + said(b.y - b.handle_y) + " " + said(b.x) + " " + said(b.y);
+		};
+		for (std::size_t i = 1; i < nodes.size(); ++i) segment(nodes[i - 1], nodes[i]);
+		if (closed && nodes.size() > 2) {
+			segment(nodes.back(), nodes.front());
+			out += " Z";
+		}
+		return out;
+	}
+
 	std::vector<point> path_nodes(std::string_view absolute) {
 		std::vector<point> out;
 		for (const auto& c : commands_of(absolute)) {
