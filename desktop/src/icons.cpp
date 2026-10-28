@@ -75,6 +75,13 @@ namespace one::desktop {
 			    {"globe", {ring(8, 8, 6.25f), path("M1.75 8h12.5M8 1.75a9 9 0 0 1 0 12.5a9 9 0 0 1 0-12.5")}},
 			    // Layers stacked, what's built on what.
 			    {"layers", {path("M8 2l6 3-6 3-6-3z"), path("M2 8l6 3 6-3M2 11l6 3 6-3")}},
+			    // A month's page, its rings above; a bell that rings; a tray things come into;
+			    // and the ways back and on.
+			    {"calendar", {box(2, 3, 12, 11, 1.5f), path("M2 6.5h12M5.5 1.5v3M10.5 1.5v3")}},
+			    {"bell", {path("M4 11V7a4 4 0 0 1 8 0v4l1.25 1.5H2.75L4 11zM6.5 14a1.5 1.5 0 0 0 3 0")}},
+			    {"inbox", {path("M2 9.5l2-6.5h8l2 6.5v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zM2 9.5h3.5l1 1.5h3l1-1.5H14")}},
+			    {"previous", {path("M10 3L5 8l5 5")}},
+			    {"next", {path("M6 3l5 5-5 5")}},
 			    // A table of contents: headings, and what's under them set in.
 			    {"contents", {path("M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M2.5 12.5h11")}},
 			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise

@@ -278,7 +278,7 @@ TEST("a picture copied is on the clipboard as a PNG to paste, and text copied af
 TEST("every icon a toolbar draws with draws something, its paths read whole") {
 	for (std::string name : {"crop", "copy", "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "raise", "lower", "check", "close",
 	                         "paste", "save", "undo", "redo", "text", "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold",
-	                         "smaller", "larger", "fill", "fit", "stretch", "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic", "contents"}) {
+	                         "smaller", "larger", "fill", "fit", "stretch", "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic", "contents", "calendar", "bell", "inbox", "previous", "next"}) {
 		CHECK_SAYING(one::desktop::has_icon(name), "there's no icon " + name);
 		auto drawn = one::desktop::picture::drawn(32, 32, [&](one::desktop::canvas& c) { one::desktop::draw_icon(c, name, {0, 0, 32, 32}, one::desktop::color::hex(0x000000)); });
 		std::size_t inked = 0;
