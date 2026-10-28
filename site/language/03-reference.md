@@ -1994,6 +1994,8 @@ form step::update "Save" {
   or moved with Alt+← and Alt+→, to a column a step from its own leads to, for one
   of the person's roles; while it's dragged, the columns it can't go to are dimmed.
   The card shows in its new column at once, and goes back if the move fails.
+  `move task::move` alone, with no `along` and no workflow writing steps, lets a card
+  go to any column from any other, as a personal board's do.
 - A table and a board of the same list, one right after the other, are one: the
   person picks which they see with a switch in the toolbar, and their pick is
   remembered. The board takes the table's search and toolbar when it has none.

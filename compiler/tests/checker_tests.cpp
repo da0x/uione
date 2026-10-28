@@ -1670,6 +1670,15 @@ TEST_CASE("a board's columns are the stages written in the code when it says no 
     CHECK(std::ranges::contains(along, std::string("the board's columns are stage's choices, so its cards go along the steps the workflow writes; take out along")));
 }
 
+TEST_CASE("a board over a list of its columns moves its cards to any column when it says no steps") {
+    std::string source = "namespace yard {\nentity column {\n\ttitle  text\n}\nentity plate {\n\tname  text\n\tstage  column\n}\ncommand plate::move {\n\tby anyone signed in\n\tchanges stage\n}\n"
+                         "view yard_page {\n\tplates = each plate {\n\t\tname  stage\n\t}\n\tcolumns = each column {\n\t\ttitle\n\t}\n}\n"
+                         "screen \"Plates\" /plates {\n\tboard yard_page.plates by stage over yard_page.columns {\n\t\tname\n\t\tmove plate::move\n\t}\n}\n}\n";
+    auto out = check_source(source);
+    for (const auto& d : out) CAPTURE(d.message);
+    CHECK(out.empty());
+}
+
 // The top bar's order names namespaces, each once.
 TEST_CASE("the header's navigation names namespaces that are there") {
     const std::string pages = "namespace docs {\n\tscreen \"Docs\" / {\n\t\ttext \"Read me\"\n\t}\n}\n";

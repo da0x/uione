@@ -855,8 +855,9 @@ namespace one::generators {
             if (b.move && !b.move->along) {
                 std::string steps;
                 for (const auto& [from, to] : stages.steps) steps += (steps.empty() ? "" : ",") + std::string("{\"from\":") + quoted(from) + ",\"to\":" + quoted(to) + "}";
+                // With no steps written, a card goes to any column from any other.
                 out += ", .move = board_move{.command = " + str(screens::full_command(ns, b.move->command)) + ", .steps = " + fixed("{\"steps\":[" + steps + "]}") +
-                       ", .list = \"steps\"}";
+                       ", .list = \"steps\"" + (steps.empty() ? ", .anywhere = true" : "") + "}";
             } else if (b.move) {
                 std::string move = "board_move{.command = " + str(screens::full_command(ns, b.move->command)) + ", .steps = " +
                                    view_variable(parts, screens::full_view(ns, b.move->along->text())) + ", .list = " + str(b.move->along_list);

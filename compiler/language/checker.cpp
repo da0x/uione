@@ -3831,8 +3831,6 @@ namespace one::language {
                     error(board.by_where, "view " + board.view.text() + " has no " + board.by + " in its " + *board.list + "; add it to the list's block");
                 }
                 if (board.move && board.move->along) error(board.move->along->where, "the board's columns are " + board.by + "'s choices, so its cards go along the steps the workflow writes; take out along");
-            } else if (board.move && !board.move->along) {
-                error(board.move->command.where, "the board's columns are " + board.over.text() + "." + board.over_list + ", so say the steps a card goes along, like along project_page.steps");
             } else if (pointed(ns, *by) != column) {
                 error(board.by_where, card->name + "." + board.by + " is a card's column, so it points at a " + column->name + ", what " + board.over.text() + "." +
                                           board.over_list + " lists");

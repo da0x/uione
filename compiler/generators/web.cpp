@@ -1841,8 +1841,9 @@ namespace one::generators {
                 for (const auto& [from, to] : stages.steps) {
                     steps += (steps.empty() ? "" : ", ") + std::string("{ from: ") + web_detail::js_string(from) + ", to: " + web_detail::js_string(to) + " }";
                 }
+                // With no steps written, a card goes to any column from any other.
                 line += " move={{ command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: { status: \"live\", data: { steps: [" + steps +
-                        "] } }, list: \"steps\" }}";
+                        "] } }, list: \"steps\"" + (steps.empty() ? ", anywhere: true" : "") + " }}";
             } else if (board.move) {
                 std::string move = "command: " + web_detail::js_string(full_command(ns, board.move->command)) + ", steps: " +
                                    view_variable(parts, full_view(ns, board.move->along->text())) + ", list: " + web_detail::js_string(board.move->along_list);

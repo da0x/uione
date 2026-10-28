@@ -931,6 +931,12 @@ namespace one::screens {
 		auto reaches = [&](const std::string& at) {
 			std::vector<std::string> to;
 			if (!spec.move) return to;
+			if (spec.move->anywhere) {
+				for (const auto& thing : rows_of(over, spec.over_list)) {
+					if (thing["id"].as_string() != at) to.push_back(thing["id"].as_string());
+				}
+				return to;
+			}
 			for (const auto& step : rows_of(spec.move->steps.get(), spec.move->list)) {
 				if (step["from"].as_string() != at) continue;
 				if (!spec.move->held.empty() && std::ranges::none_of(field_of(step, spec.move->held).as_array(), [&](const value& r) { return mine.contains(r.as_string()); }))

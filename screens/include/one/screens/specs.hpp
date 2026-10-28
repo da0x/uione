@@ -196,6 +196,7 @@ namespace one::screens {
 		std::string within = "";  // the place they're held in, like the project's id
 		std::string place = "project";
 		std::string role = "role";
+		bool anywhere = false;  // or to any column from any other, as nothing says the steps
 	};
 	struct board_spec {
 		state<view_state> view;

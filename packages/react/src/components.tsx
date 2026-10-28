@@ -1753,6 +1753,7 @@ export interface BoardMove {
   within?: string; // where they're held, like the project
   place?: string;
   role?: string;
+  anywhere?: boolean; // or to any column from any other, as nothing says the steps
 }
 
 // A list's rows as cards in columns, like a project's issues in its stages: a column
@@ -1859,9 +1860,11 @@ export function Board({
       .map((other) => show(other[title ?? "title"]) || other.id);
   };
   const reaches = (at: unknown) =>
-    steps
-      .filter((step) => step.from === at && (!move?.held || (Array.isArray(step[move.held]) && (step[move.held] as unknown[]).some((r) => mine.has(r)))))
-      .map((step) => String(step.to));
+    move?.anywhere
+      ? things.map((thing) => thing.id).filter((id) => id !== at)
+      : steps
+          .filter((step) => step.from === at && (!move?.held || (Array.isArray(step[move.held]) && (step[move.held] as unknown[]).some((r) => mine.has(r)))))
+          .map((step) => String(step.to));
   useEffect(() => {
     setMoved((now) => {
       const settled = Object.keys(now).filter((id) => all.some((card) => card.id === id && card[by] === now[id]));

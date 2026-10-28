@@ -423,6 +423,23 @@ describe("a board", () => {
     expect(source.runs).toEqual([{ command: "projects::issue::move", input: { id: "ark-1", stage: "ark-triaged" } }]);
     expect(column("Triaged").textContent).toContain("Crash");
   });
+
+  it("offers a move to every other column when nothing says the steps", async () => {
+    const source = memorySource();
+    renderScreen(source, () => (
+      <Board
+        view={page}
+        list="issues"
+        by="stage"
+        over={page}
+        overList="stages"
+        columns={{ title: "Title" }}
+        move={{ command: "projects::issue::move", steps: { status: "live", data: { steps: [] } }, list: "steps", anywhere: true }}
+      />
+    ));
+    const card = screen.getByRole("region", { name: "Reported" }).querySelector("li")!;
+    expect([...card.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Move to Triaged", "Move to Closed"]);
+  });
 });
 
 describe("a board's cards", () => {
