@@ -84,6 +84,7 @@ namespace one::language {
         drawn_by{"paper.size", "a paper made larger or smaller", "web desktop"},
         drawn_by{"collage.place", "placing a collage's layers", everywhere},
         drawn_by{"collage.snap", "snapping a collage's layers", everywhere},
+        drawn_by{"collage.clear", "a clear collage", everywhere},
         drawn_by{"collage.over", "buttons over a collage's picked layer", everywhere},
         drawn_by{"collage.add", "adding words to a collage", everywhere},
         drawn_by{"collage.write", "words written on a collage", everywhere},
@@ -365,6 +366,7 @@ namespace one::language {
                         use("collage");
                         if (n.place) use("collage.place");
                         if (n.snap) use("collage.snap");
+                        if (n.clear) use("collage.clear");
                         if (n.over) use("collage.over");
                         if (n.add) use("collage.add");
                         if (n.write) use("collage.write");

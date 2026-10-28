@@ -2204,6 +2204,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     across, down or at 45 degrees; a click alone makes a line across a fifth of the
     collage's shorter side. A path is picked by a press within 6 pixels of its box, so
     a thin line can be.
+  - `clear`: nothing is behind its layers, as a drawing's page is. Where nothing is,
+    it's shown over a gray and white checkerboard, as drawing programs show what's
+    clear, and a picture or a preview of it is clear there too. Without it, its page
+    is white.
   - `crop layer::crop`: a picked picture is cropped in place, as a press twice on it
     or a `crop "Crop" icon crop key c` button begins: the whole picture faint around
     what's kept, its edges and corners trimming it, a drag inside moving it, and one on

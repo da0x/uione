@@ -2435,6 +2435,10 @@ namespace one::language {
                         if (!at_word("when")) fail_expecting("when, as in match colors when poster_page.matched == 1");
                         advance();
                         collage.match_colors = parse_expression();
+                    } else if (at_word("clear") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
+                        // clear: nothing behind its layers, as a drawing's page is.
+                        advance();
+                        collage.clear = true;
                     } else if (at_word("snap")) {
                         collage.snap_where = advance().where;
                         if (!at_word("to")) fail_expecting("to edges, as in snap to edges");

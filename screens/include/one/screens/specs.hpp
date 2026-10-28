@@ -382,6 +382,7 @@ namespace one::screens {
 		std::map<std::string, std::string> fields = {};
 		std::string place = "";  // the command a layer moved or resized is sent to, with x y w h
 		bool snap = false;       // to the collage's edges and middle, and every other layer's
+		bool clear = false;      // nothing behind its layers: shown over a checkerboard, saved clear
 		bool match_colors = false;  // its pictures' colors moved toward one another's, so they look like one picture
 		std::string empty = "";  // said while it has no layers
 		std::string pick = "";   // the screen's pick of its layers, which a click picks

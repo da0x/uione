@@ -305,6 +305,7 @@ namespace studio at / {
 				write layer::write
 				delete layer::delete
 				snap to edges
+				clear
 				match colors when poster_page.matched == 1
 				paste
 				keep preview poster::preview into preview 480 wide

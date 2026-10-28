@@ -1409,6 +1409,7 @@ namespace one::generators {
                     line += " fields={{ " + kept + " }}";
                     if (c->place) line += " place=" + web_detail::js_string(full_command(ns, *c->place));
                     if (c->snap) line += " snap";
+                    if (c->clear) line += " clear";
                     if (c->match_colors) line += " matchColors={" + condition(parts, ns, *c->match_colors) + "}";
                     if (c->empty) line += " empty=" + web_detail::js_string(*c->empty);
                     if (c->over) line += " pick=" + web_detail::js_string(route_ + " " + *c->over);

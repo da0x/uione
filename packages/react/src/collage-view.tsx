@@ -122,6 +122,21 @@ function measured(words: string, size: number, face: string): { w: number; h: nu
   return { w: Math.max(1, ...lines.map((l) => measurer!.measureText(l).width)), h: Math.max(1, size * 1.2 * lines.length) };
 }
 
+// Where a clear collage has nothing, a gray and white checkerboard, as drawing programs
+// show what's clear: squares 8 pixels on a side. The same as the desktop's.
+function checkers(c: CanvasRenderingContext2D): CanvasPattern | string {
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = 16;
+  const t = tile.getContext("2d");
+  if (!t) return "#fff";
+  t.fillStyle = "#fff";
+  t.fillRect(0, 0, 16, 16);
+  t.fillStyle = "#ccc";
+  t.fillRect(8, 0, 8, 8);
+  t.fillRect(0, 8, 8, 8);
+  return c.createPattern(tile, "repeat") ?? "#fff";
+}
+
 // Each picture read once, by what names it, and what's drawn from it: turned and
 // mirrored as a layer says, and its edge color. An SVG is "vector", never read as
 // pixels: it's drawn from its vectors, at the size it's shown.
@@ -473,7 +488,7 @@ function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Bo
 // The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
 // all of it, or only one layer, as big as that layer, cropped as it is. Pictures not
 // yet read are read first.
-async function drawnWhole(layers: Row[], W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, matching: boolean, only?: string): Promise<HTMLCanvasElement> {
+async function drawnWhole(layers: Row[], W: number, H: number, scale: number, address: ((path: string) => Promise<string>) | undefined, matching: boolean, only?: string, clear = false): Promise<HTMLCanvasElement> {
   const read = async (path: string) => {
     if (!pictures.has(path) || pictures.get(path) === "reading") {
       pictureOf(path, address);
@@ -494,7 +509,7 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
   const c = made.getContext("2d")!;
   const at = (b: Box): Box => ({ x: (b.x - area.x) * scale, y: (b.y - area.y) * scale, w: b.w * scale, h: b.h * scale });
   const board = at({ x: 0, y: 0, w: W, h: H });
-  if (!only) {
+  if (!only && !clear) {
     c.fillStyle = "#fff";
     c.fillRect(board.x, board.y, board.w, board.h);
   }
@@ -700,6 +715,7 @@ export function Collage({
   fields,
   place,
   snap = false,
+  clear = false,
   matchColors = false,
   empty,
   pick,
@@ -726,6 +742,7 @@ export function Collage({
   fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
   snap?: boolean;
+  clear?: boolean; // nothing behind its layers: shown over a checkerboard, saved clear
   matchColors?: boolean; // its pictures' colors moved toward one another's, so they look like one picture
   empty?: string;
   pick?: string; // the screen's pick of its layers
@@ -898,7 +915,7 @@ export function Collage({
       waiting = setTimeout(() => {
         if (w.now || w.crop || w.editing) return settle();
         drawnFrom.current = now;
-        void drawnWhole(layers, W, H, previewWide / W, address, Boolean(matchColors))
+        void drawnWhole(layers, W, H, previewWide / W, address, Boolean(matchColors), undefined, clear)
           .then((made) => new Promise<Blob | null>((done) => made.toBlob(done, "image/png")))
           .then(async (blob) => {
             if (!blob) return;
@@ -978,7 +995,7 @@ export function Collage({
       if (one && !chosen) say({ text: "Pick a layer first." });
       else if (layers.length === 0 || W <= 0 || H <= 0) say({ text: copying ? "There's nothing to copy yet." : "There's nothing to save yet." });
       else {
-        const png = drawnWhole(layers, W, H, 1, address, Boolean(matchColors), one ? picked : undefined).then(
+        const png = drawnWhole(layers, W, H, 1, address, Boolean(matchColors), one ? picked : undefined, clear).then(
           (made) => new Promise<Blob>((done, failed) => made.toBlob((b) => (b ? done(b) : failed(new Error("not drawn"))), "image/png")),
         );
         if (copying) {
@@ -1085,7 +1102,7 @@ export function Collage({
       c.shadowBlur = 14;
       c.shadowOffsetY = 2;
     }
-    c.fillStyle = "#fff";
+    c.fillStyle = clear ? checkers(c) : "#fff";
     c.fillRect(board.x, board.y, bw, bh);
     c.restore();
     const shifts = shiftsOf(layers, matchColors, address);

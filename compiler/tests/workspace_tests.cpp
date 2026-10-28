@@ -447,6 +447,12 @@ TEST_CASE("a collage's layer is drawn by a drag while its draw's when holds, giv
                                    "54: a line is kept as a path's points, which layer doesn't have; add points text to it, or say its field"});
 }
 
+TEST_CASE("a clear collage has nothing behind its layers, on the web and the desktop alike") {
+    auto files = built(collage_screen("\t\tcollage poster_page.layers size width height {\n\t\t\tclear\n\t\t}\n"));
+    CHECK(files["web/src/screens/main.tsx"].find(R"( clear )") != std::string::npos);
+    CHECK(files["desktop/src/screens/main.cpp"].find(R"(.clear = true)") != std::string::npos);
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

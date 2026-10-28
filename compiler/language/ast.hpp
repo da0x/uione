@@ -863,6 +863,7 @@ namespace one::language {
         int preview_wide = 480;
         location preview_where;
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
+        bool clear = false;                   // clear: nothing behind its layers, shown over a checkerboard, saved clear
         expression_ptr match_colors;          // match colors when poster_page.matched: its pictures' colors moved toward one another's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers

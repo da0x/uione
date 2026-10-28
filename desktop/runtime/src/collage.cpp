@@ -871,6 +871,27 @@ namespace one::desktop::runtime {
 			c.picture(drawn, {on.x - out, on.y - out, on.width + 2 * out, on.height + 2 * out}, {0, 0, 1, 1}, opacity_of(layer));
 		}
 
+		// Where a clear collage has nothing, a gray and white checkerboard, as drawing
+		// programs show what's clear: squares 8 window pixels on a side, made once for
+		// each size.
+		void paint_checkers(desktop::canvas& c, desktop::rect on) {
+			int w = std::max(1, static_cast<int>(std::lround(on.width * c.scale()))), h = std::max(1, static_cast<int>(std::lround(on.height * c.scale())));
+			int side = std::max(1, static_cast<int>(std::lround(8 * c.scale())));
+			static kept_by<desktop::picture> made(4);
+			desktop::picture drawn = made.get(std::format("{} {} {}", w, h, side), [&] {
+				std::vector<std::uint8_t> rgba(static_cast<std::size_t>(w) * h * 4, 255);
+				for (int y = 0; y < h; ++y) {
+					for (int x = 0; x < w; ++x) {
+						if ((x / side + y / side) % 2 == 0) continue;
+						std::size_t at = (static_cast<std::size_t>(y) * w + x) * 4;
+						rgba[at] = rgba[at + 1] = rgba[at + 2] = 0xcc;
+					}
+				}
+				return desktop::picture::of(w, h, std::move(rgba));
+			});
+			c.picture(drawn, on, {0, 0, 1, 1});
+		}
+
 		// An SVG layer drawn at `on`, from its vectors, by the pinned nanosvg, as many
 		// pixels as it's shown; made once for each size. Stretched to its box when that's
 		// shaped otherwise than it is.
@@ -915,13 +936,14 @@ namespace one::desktop::runtime {
 			value layers;
 			double width = 0, height = 0, scale = 1;
 			std::string only, family;
+			bool clear = false;  // nothing behind its layers
 			std::map<std::string, ready_layer> pictures;  // each picture layer's, by its id
 			std::map<std::string, std::string> vectors;   // and each SVG layer's text, by its id
 			desktop::picture fill;                        // and what's under the harmonized ones
 		};
 
 		whole gathered(page& p, const value& layers, double width, double height, double scale, bool matching, const std::string& only = "") {
-			whole all{layers, width, height, scale, only, current_theme().text_family, {}, {}, {}};
+			whole all{layers, width, height, scale, only, current_theme().text_family, false, {}, {}, {}};
 			auto shifts = shifts_of(p, layers, matching, measured_now);
 			for (const auto& l : layers.as_array()) {
 				if (!is_picture(l)) continue;
@@ -954,7 +976,7 @@ namespace one::desktop::runtime {
 					return desktop::rect{static_cast<float>((b.x - area.x) * scale), static_cast<float>((b.y - area.y) * scale), static_cast<float>(b.w * scale), static_cast<float>(b.h * scale)};
 				};
 				desktop::rect board = at({0, 0, width, height});
-				if (all.only.empty()) c.box(board, {.fill = desktop::color::hex(0xffffff)});
+				if (all.only.empty() && !all.clear) c.box(board, {.fill = desktop::color::hex(0xffffff)});
 				if (all.fill) c.picture(all.fill, board, {0, 0, 1, 1});
 				for (const auto& layer : layers.as_array()) {
 					std::string id = layer["id"].as_string();
@@ -1209,7 +1231,9 @@ namespace one::desktop::runtime {
 			// Read so the timer's settling draws it, as it's set from away from here.
 			if (now != drawn_from.peek() && still && settled.get() == now) {
 				drawn_from.set(now);
-				auto small = drawn_whole(gathered(p, layers, width, height, spec.preview_wide / width, spec.match_colors));
+				auto kept = gathered(p, layers, width, height, spec.preview_wide / width, spec.match_colors);
+				kept.clear = spec.clear;
+				auto small = drawn_whole(kept);
 				std::filesystem::path file = kept_for_now(small.png());
 				p.run(spec.preview, value(fields{{"id", spec.subject}, {"one:history", "apart"}}), attached_files{{spec.preview_into, {file.string()}}},
 				      [file](const answer&) { std::filesystem::remove(file); }, true);
@@ -1290,6 +1314,7 @@ namespace one::desktop::runtime {
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else {
 					auto all = gathered(p, layers, width, height, 1, spec.match_colors, one ? picked : "");
+					all.clear = spec.clear;
 					if (copying) {
 						// Drawn away from the window's thread, and put on the clipboard back on it.
 						p.told().set("Copying…");
@@ -1394,7 +1419,8 @@ namespace one::desktop::runtime {
 				shade.alpha = 0.18f;
 				c.shadow(board, 0, 14, shade, {0, 2});
 			}
-			c.box(board, {.fill = desktop::color::hex(0xffffff)});
+			if (spec.clear) paint_checkers(c, board);
+			else c.box(board, {.fill = desktop::color::hex(0xffffff)});
 			// Matched, its pictures' colors are measured first, so each is made ready once.
 			bool measuring = false;
 			auto shifts = posting() ? shifts_of(p, layers, spec.match_colors, measured_soon(woken), &measuring) : shifts_of(p, layers, spec.match_colors, measured_now);
