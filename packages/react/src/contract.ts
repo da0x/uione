@@ -663,7 +663,7 @@ export interface ButtonProps {
   icon?: string; // drawn instead of its words, which still name it, like edit
   // In a workspace's toolbar: large, its icon over its words, or small, its icon
   // alone, its words said when it's pointed at; either way, a flat tool, not a button.
-  tool?: "large" | "small";
+  tool?: "large" | "small" | "tiny"; // tiny: smaller still, as a list's row's buttons are
   pressed?: boolean; // a toggle, or a choice already made, drawn as pressed
   hint?: string; // said when it's pointed at, like "Undo (Ctrl+Z)"
   swatch?: string; // in a toolbar, drawn as a circle of this color, like #ffffff, its words said when it's pointed at

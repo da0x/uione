@@ -1420,6 +1420,13 @@ namespace one::generators {
                     } else if (c.over) {
                         line += " pick=" + web_detail::js_string(route_ + " " + *c.over);
                     }
+                    // A layer's rename, and an object's; where each row is an object, its own.
+                    const language::entity_declaration* object = listed(ns, c.view.text(), c.list);
+                    for (const auto& rename : l->renames) {
+                        std::string command = full_command(ns, rename);
+                        bool on_object = held && object && entity_of_command(command) == object;
+                        line += std::string(on_object ? " objectRename=" : " rename=") + web_detail::js_string(command);
+                    }
                     if (l->hide) line += " hide=" + web_detail::js_string(full_command(ns, *l->hide));
                     if (l->order) line += " order=" + web_detail::js_string(full_command(ns, *l->order));
                     if (l->remove) line += " remove=" + web_detail::js_string(full_command(ns, *l->remove));

@@ -2100,14 +2100,37 @@ namespace one::desktop::runtime {
 			    .grow(0);
 		}
 
-		// Words on one line, cut off at the edge of their room rather than running past it.
-		desktop::view one_line(std::string words, desktop::text_style style) {
+		// A name in a list of layers, cut off at its room: a press picks its row, and a
+		// double-click, given a command to send it to, writes it in place, Enter keeping it.
+		desktop::view name_of_row(page& p, const std::string& id, std::string name, desktop::text_style style, const std::string& rename, std::function<void()> pick,
+		                          const std::map<std::string, std::string>& fields = {}) {
+			auto renaming = p.kept<std::string>("layers renaming");
+			if (!rename.empty() && renaming.get() == id) {
+				auto written = p.kept<std::string>("layers name " + id);
+				return desktop::field(written, {.on_submit = [&p, rename, id, written, renaming, fields] {
+					        p.run(rename, collage_fields_of(value(std::map<std::string, value>{{"id", id}, {"name", written.peek()}}), fields));
+					        renaming.set("");
+				        }})
+				    .autofocus()
+				    .width(0)
+				    .grow();
+			}
+			auto started = p.kept<std::string>("layers name " + id);
 			float tall = style.size * 1.4f;
-			return desktop::drawing([words = std::move(words), style](desktop::canvas& c, desktop::rect area) {
+			return desktop::drawing([name, style](desktop::canvas& c, desktop::rect area) {
 				       auto kept = c.clip(area);
-				       auto laid = desktop::lay_out(desktop::text_span{words, style}, 100000, c.scale());
+				       auto laid = desktop::lay_out(desktop::text_span{name, style}, 100000, c.scale());
 				       c.text(laid, {area.x, area.y + (area.height - laid.height()) / 2});
-			       })
+			       },
+			                        {.on_press = [pick, rename, renaming, started, id, name](desktop::point, int clicks) {
+				                         if (clicks >= 2 && !rename.empty()) {
+					                         started.set(name);
+					                         renaming.set(id);
+				                         } else {
+					                         pick();
+				                         }
+				                         return true;
+			                         }})
 			    .height(tall)
 			    .width(0)
 			    .grow();
@@ -2116,6 +2139,7 @@ namespace one::desktop::runtime {
 		// An object's name in a list: its words' first line, or what it is.
 		std::string object_name(page& p, const value& l) {
 			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
+			if (!l["name"].as_string().empty()) return l["name"].as_string();
 			if (!is_words(l)) {
 				// A path of two points is a line.
 				std::string shape = l["shape"].as_string(), points = l["points"].as_string();
@@ -2181,14 +2205,17 @@ namespace one::desktop::runtime {
 				if (!spec.hide.empty()) {
 					row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide", [&p, command = spec.hide, id, hidden] {
 						p.run(command, value(std::map<std::string, value>{{"id", id}, {"hidden", hidden ? 0 : 1}}));
-					}, {.on = !hidden}));
+					}, {.on = !hidden, .tiny = true}));
 				}
 				row.push_back(preview_of(p, value(held), width, height, spec.clear, hidden));
 				std::string name = g["name"].as_string().empty() ? "Layer" : g["name"].as_string();
-				row.push_back(one_line(std::move(name), hidden ? t.quiet() : t.strong()));
+				auto pick_layer = [&p, pick = spec.pick, id] {
+					if (!pick.empty()) p.pick(pick, id);
+				};
+				row.push_back(name_of_row(p, id, std::move(name), hidden ? t.quiet() : t.body(), spec.rename, pick_layer));
 				if (!spec.order.empty()) {
-					row.push_back(desktop::tool_button("raise", "Up", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i + 1, {}); }, {.off = i + 1 == groups.size()}));
-					row.push_back(desktop::tool_button("lower", "Down", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i - 1, {}); }, {.off = i == 0}));
+					row.push_back(desktop::tool_button("raise", "Up", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i + 1, {}); }, {.off = i + 1 == groups.size(), .tiny = true}));
+					row.push_back(desktop::tool_button("lower", "Down", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i - 1, {}); }, {.off = i == 0, .tiny = true}));
 				}
 				if (!spec.remove.empty()) {
 					// Its objects go with it, in one step.
@@ -2202,7 +2229,7 @@ namespace one::desktop::runtime {
 						value gone = value(std::map<std::string, value>{{"id", id}});
 						if (!first) gone.fields["one:history"] = value("joined");
 						p.run(spec.remove, gone);
-					}));
+					}, {.tiny = true, .on_hover = true}));
 				}
 				rows.push_back(list_row(std::move(row), id == picked, 0, [&p, pick = spec.pick, id] {
 					if (!pick.empty()) p.pick(pick, id);
@@ -2212,10 +2239,14 @@ namespace one::desktop::runtime {
 					const value& o = held[j];
 					std::string object = o["id"].as_string();
 					std::vector<desktop::view> inside;
-					inside.push_back(preview_of(p, value(std::vector<value>{o}), width, height, spec.clear, hidden));
-					inside.push_back(one_line(object_name(p, o), hidden ? t.quiet() : t.body()));
+					auto pick_object = [&p, spec, id, object] {
+						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
+						if (!spec.pick.empty()) p.pick(spec.pick, id);
+					};
+					inside.push_back(name_of_row(p, object, object_name(p, o), t.quiet(), spec.object_rename, pick_object, spec.fields));
 					if (!spec.object_remove.empty()) {
-						inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, object] { p.run(command, value(std::map<std::string, value>{{"id", object}})); }));
+						inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, object] { p.run(command, value(std::map<std::string, value>{{"id", object}})); },
+						                                      {.tiny = true, .on_hover = true}));
 					}
 					rows.push_back(list_row(std::move(inside), object == picked_object, 28, [&p, spec, id, object] {
 						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
@@ -2248,16 +2279,22 @@ namespace one::desktop::runtime {
 			std::vector<desktop::view> row;
 			if (!spec.hide.empty()) {
 				row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide",
-				                                   [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(fields{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); }, {.on = !hidden}));
+				                                   [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(fields{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); },
+				                                   {.on = !hidden, .tiny = true}));
 			}
 			row.push_back(preview_of(p, value(std::vector<value>{l}), width, height, spec.clear, hidden));
-			row.push_back(one_line(object_name(p, l), hidden ? t.quiet() : t.body()));
+			auto pick_row = [&p, pick = spec.pick, id] {
+				if (!pick.empty()) p.pick(pick, id);
+			};
+			row.push_back(name_of_row(p, id, object_name(p, l), hidden ? t.quiet() : t.body(), spec.rename, pick_row, spec.fields));
 			if (!spec.order.empty()) {
 				bool top = i + 1 == all.size(), bottom = i == 0;
-				row.push_back(desktop::tool_button("raise", "Up", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i + 1, spec.fields); }, {.off = top}));
-				row.push_back(desktop::tool_button("lower", "Down", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i - 1, spec.fields); }, {.off = bottom}));
+				row.push_back(desktop::tool_button("raise", "Up", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i + 1, spec.fields); }, {.off = top, .tiny = true}));
+				row.push_back(desktop::tool_button("lower", "Down", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i - 1, spec.fields); }, {.off = bottom, .tiny = true}));
 			}
-			if (!spec.remove.empty()) row.push_back(desktop::tool_button("delete", "Delete", [&p, spec, id] { p.run(spec.remove, value(fields{{"id", id}})); }));
+			if (!spec.remove.empty()) {
+				row.push_back(desktop::tool_button("delete", "Delete", [&p, spec, id] { p.run(spec.remove, value(fields{{"id", id}})); }, {.tiny = true, .on_hover = true}));
+			}
 			rows.push_back(list_row(std::move(row), id == picked, 0, [&p, pick = spec.pick, id] {
 				if (!pick.empty()) p.pick(pick, id);
 			}));

@@ -512,6 +512,9 @@ TEST_CASE("a collage's objects held in layers: each naming its layer, the layers
 			layer  depth  x  y  w  h
 		}
 	}
+	command layer::rename {
+		changes name
+	}
 )";
     auto on_screen = [&](const std::string& body) { return project + drawing + "\n\tscreen \"Drawing\" /drawings/:drawing {\n" + body + "\t}\n}\n"; };
     const std::string fine = R"(		pick item from drawing_page.items
@@ -525,6 +528,7 @@ TEST_CASE("a collage's objects held in layers: each naming its layer, the layers
 		}
 		layers drawing_page.layers {
 			hide layer::show
+			rename layer::rename
 			delete layer::delete
 		}
 )";
@@ -538,10 +542,11 @@ TEST_CASE("a collage's objects held in layers: each naming its layer, the layers
     CHECK(native.find(R"(.layers = "layers", .layer = "layer", .layer_create = "studio::layer::create", .layer_parent = "drawing", .layer_pick = "/drawings/:drawing layer")") != std::string::npos);
     CHECK(web.find(R"(<Layers view={drawingPage} list="layers")") != std::string::npos);
     CHECK(web.find(R"(pick="/drawings/:drawing layer" objects="items" objectLayer="layer" objectRemove="studio::item::delete" objectPick="/drawings/:drawing item")") != std::string::npos);
-    CHECK(native.find(R"(.objects = "items", .object_layer = "layer", .object_remove = "studio::item::delete", .object_pick = "/drawings/:drawing item")") != std::string::npos);
+    CHECK(native.find(R"(.objects = "items", .object_layer = "layer", .object_remove = "studio::item::delete", .object_pick = "/drawings/:drawing item", .rename = "studio::layer::rename")") != std::string::npos);
+    CHECK(web.find(R"( rename="studio::layer::rename")") != std::string::npos);
     // Each object names its layer by a field pointing at one, read by the view.
     std::string wrong = on_screen("\t\tcollage drawing_page.items size width height {\n\t\t\tin drawing_page.layers by depth\n\t\t}\n");
-    CHECK(messages(wrong) == std::vector<std::string>{"49: each item names its layer by depth, so it's a field pointing at layer, like depth  layer"});
+    CHECK(messages(wrong) == std::vector<std::string>{"52: each item names its layer by depth, so it's a field pointing at layer, like depth  layer"});
 }
 
 TEST_CASE("a toolbar's color buttons are drawn as what they give: a fill as a circle, a stroke as a line, a width as a line that wide, and none clear") {

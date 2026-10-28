@@ -2324,8 +2324,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   line or what it is; up and down by `order`, which renumbers every layer's `depth`
   by its place, in one step to undo; and delete. A press on a row picks the layer,
   as the collage does. A hidden layer isn't drawn, picked, snapped to or saved, and
-  the collage's `hidden` part is any number but 0 while it's hidden. A terminal lists
-  them by name, with their buttons.
+  the collage's `hidden` part is any number but 0 while it's hidden. A row's delete
+  shows only while the row is pointed at. `rename layer::rename` lets a name be
+  double-clicked and written in place, Enter or leaving it keeping it and Esc putting
+  it away; a command on the collage's objects renames an object, kept in its `name`
+  part, which the list shows in place of what it is. A terminal lists them by name,
+  with their buttons.
 - `paper document_page.blocks { ... }` shows a list's rows as one upright sheet of
   paper, letter-shaped, that's typed on in place, as a word processor's page is
   ([decision 0022](https://github.com/da0x/uione/blob/main/docs/decisions/0022-a-paper-is-a-page-written-in-place.md)).

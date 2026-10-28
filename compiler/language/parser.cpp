@@ -2497,8 +2497,11 @@ namespace one::language {
                     } else if (at_word("delete") && peek(1).kind == token_kind::identifier) {
                         advance();
                         layers.remove = parse_qualified_name("the command that deletes a layer, like layer::delete");
+                    } else if (at_word("rename") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        layers.renames.push_back(parse_qualified_name("the command a name written is sent to, like layer::rename"));
                     } else {
-                        fail_expecting("what the layers do, like hide layer::show, order layer::update or delete layer::delete");
+                        fail_expecting("what the layers do, like hide layer::show, order layer::update, rename layer::rename or delete layer::delete");
                     }
                     end_line();
                 }

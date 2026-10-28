@@ -428,6 +428,8 @@ namespace one::screens {
 		// Its rows are the layers the collage's objects are held in: their list, the field
 		// each names its layer by, and how one's deleted, a layer's going with it.
 		std::string objects = "", object_layer = "", object_remove = "", object_pick = "";
+		// And the commands a name written in place is sent to: a layer's, and an object's.
+		std::string rename = "", object_rename = "";
 	};
 
 	// A list's rows as one upright sheet of paper, written on in place, as a page of a

@@ -904,6 +904,9 @@ namespace one::language {
         std::string list;
         location list_where;
         std::optional<qualified_name> hide, order, remove;
+        // rename layer::rename: a name double-clicked is written in place, a layer's, or,
+        // by a command on the collage's objects, an object's.
+        std::vector<qualified_name> renames;
     };
 
     // paper document_page.blocks { ... }: a list's rows as one upright sheet of paper,
@@ -1553,6 +1556,8 @@ namespace one::language {
             {"shape", "rectangle ellipse path"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
             // Whether it's hidden: not drawn, picked or saved while it's anything but 0.
             {"hidden", "number"},
+            // What it's called in a list of the layers, in place of what it is.
+            {"name", "text"},
         };
         return all;
     }

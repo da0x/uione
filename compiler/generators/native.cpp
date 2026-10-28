@@ -386,6 +386,13 @@ namespace one::generators {
                 if (c.remove) out += ", .object_remove = " + str(screens::full_command(ns, *c.remove));
                 if (c.over) out += ", .object_pick = " + str(route_ + " " + *c.over);
             }
+            // A layer's rename, and an object's; where each row is an object, its own.
+            const language::entity_declaration* object = model_.listed(ns, c.view.text(), c.list);
+            for (const auto& rename : l.renames) {
+                std::string command = screens::full_command(ns, rename);
+                bool on_object = held && object && model_.entity_of_command(command) == object;
+                out += std::string(on_object ? ", .object_rename = " : ", .rename = ") + str(command);
+            }
             return out + "})";
         }
 

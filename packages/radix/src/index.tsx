@@ -2011,7 +2011,7 @@ export const radix: ComponentSet = {
       // the toolbar stays as tall whichever groups it shows; small, its icon alone, or
       // its words when it has none, as wide as they are.
       // A large one's icon is drawn as finely as a small one's, a pixel at most.
-      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
+      const shape = tool === "large" ? "h-[4.125rem] min-w-[3.75rem] flex-col gap-1 px-2 py-2 text-xs [&>svg]:size-8 [&>svg_*]:[stroke-width:0.5]" : tool === "tiny" ? "size-5 [&>svg]:size-3.5" : drawn ? "size-8 text-xs" : "h-8 min-w-8 px-1.5 text-xs";
       // Pressed, it acts on what's being worked on and leaves the keyboard, and any
       // caret, with it; Tab still reaches it.
       return (
@@ -2021,7 +2021,7 @@ export const radix: ComponentSet = {
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClick}
           aria-pressed={on}
-          aria-label={tool === "small" && drawn ? words : undefined}
+          aria-label={tool !== "large" && drawn ? words : undefined}
           title={hint ?? words}
           className={`inline-flex items-center justify-center rounded-control border border-transparent transition-colors hover:bg-sunken focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40 ${shape} ${on ? "border-accent/50 bg-accent-soft font-semibold text-accent" : "text-ink"}`}
         >

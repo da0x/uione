@@ -317,6 +317,8 @@ namespace one::desktop {
 		std::optional<color> swatch = {};  // drawn as a circle of this color, its words said when pointed at
 		bool clear = false;                // or of no color, a checkerboard in its circle
 		float line = 0;                    // drawn instead as a stroke, a line this wide, as a stroke color or width is
+		bool tiny = false;                 // smaller still, its icon 14 pixels, as a list's row's buttons are
+		bool on_hover = false;             // drawn only while what it's in is pointed at, as a row's delete is
 	};
 	view tool_button(std::string icon, std::string label, std::function<void()> pressed, tool_options options = {});
 	// Words that go somewhere: in the accent color, underlined while pointed at or

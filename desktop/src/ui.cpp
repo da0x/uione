@@ -636,7 +636,7 @@ namespace one::desktop {
 			    : button_element(std::move(label), std::move(pressed), false, std::move(icon)) {
 				tool_ = tool;
 				flat_ = true;
-				padding = tool.large ? edges(6, 8) : edges(7, 7);
+				padding = tool.large ? edges(6, 8) : tool.tiny ? edges(3, 3) : edges(7, 7);
 			}
 
 			bool focusable() const override { return !tool_.off; }
@@ -648,6 +648,7 @@ namespace one::desktop {
 				if (flat_ && tool_.large) return {std::max({44.f, small_words().width(), large_icon()}), large_icon() + 4 + small_words().height()};
 				// A small one with no icon is its words, as a scale like 1.5× is; with one or
 				// without, as tall as its words would be, so every small one is.
+				if (flat_ && tool_.tiny) return {14, 14};
 				if (flat_ && (tool_.swatch || tool_.clear)) return {tool_.line > 0 ? 24.f : 18.f, small_height()};
 				if (flat_ && icon_.empty()) return {std::max(18.f, small_words().width()), small_height()};
 				if (flat_) return {18, small_height()};
@@ -693,6 +694,8 @@ namespace one::desktop {
 			// Flat, tinted while it's on and shaded while it's pointed at: a large one's icon
 			// over its words, a small one's alone, its words under it while pointed at.
 			void paint_tool(canvas& c, const theme& t) {
+				// Shown only while what it's in is pointed at.
+				if (tool_.on_hover && !(hovered || (parent && parent->hovered))) return;
 				float corners = std::min(t.corners, 6.f);
 				color tint = mixed(t.surface, t.accent, 0.16f);
 				if (tool_.on) c.box(frame, {.fill = hovered ? mixed(tint, t.ink, 0.06f) : tint, .border = mixed(t.surface, t.accent, 0.45f), .border_width = 1, .radius = corners});
@@ -751,7 +754,8 @@ namespace one::desktop {
 					c.text(words, {area.x + (area.width - words.width()) / 2, area.y + (area.height - words.height()) / 2});
 					return;
 				}
-				draw_icon(c, icon_, {area.x + (area.width - 18) / 2, area.y + (area.height - 18) / 2, 18, 18}, ink);
+				float size = tool_.tiny ? 14.f : 18.f;
+				draw_icon(c, icon_, {area.x + (area.width - size) / 2, area.y + (area.height - size) / 2, size, size}, ink);
 				if (hovered) tooltip(c, t);
 			}
 			// Its words in a dark tag under it, over whatever's there.

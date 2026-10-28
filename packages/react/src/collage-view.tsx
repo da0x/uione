@@ -1982,6 +1982,8 @@ export function Layers({
   objectLayer,
   objectRemove,
   objectPick,
+  rename,
+  objectRename,
 }: {
   view: ViewState;
   list: string;
@@ -2000,6 +2002,9 @@ export function Layers({
   objectLayer?: string;
   objectRemove?: string;
   objectPick?: string;
+  // The commands a name written in place is sent to: a layer's, and an object's.
+  rename?: string;
+  objectRename?: string;
 }) {
   const ui = useUI();
   const files = useFiles();
@@ -2007,6 +2012,9 @@ export function Layers({
   const picked = usePickedId(pick ?? "") ?? "";
   const pickedObject = usePickedId(objectPick ?? "") ?? "";
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+  // The row pointed at, whose delete shows; and the name being written in place.
+  const [hovered, setHovered] = useState("");
+  const [renaming, setRenaming] = useState<{ id: string; words: string; command: string; mapped: boolean } | undefined>();
   const data = view.status === "live" ? partsOf((view.data ?? {}) as Row, objects ?? list, fields) : {};
   const layers = (data[list] as Row[] | undefined) ?? [];
   const W = num(data[width]), H = num(data[height]);
@@ -2033,7 +2041,51 @@ export function Layers({
     border: `1px solid ${isPicked ? "var(--color-accent, #2457d6)" : "transparent"}`,
     background: isPicked ? "var(--color-sunken, #f1f3f6)" : undefined,
   });
-  const quiet = (hidden: boolean) => ({ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: hidden ? "var(--color-muted)" : undefined });
+  const quiet = (hidden: boolean, soft = false) => ({
+    flex: 1,
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
+    fontSize: soft ? "0.8125rem" : "0.875rem",
+    color: hidden || soft ? "var(--color-muted)" : undefined,
+  });
+  // A name in the list: a double-click, given a command to send it to, writes it in
+  // place, Enter or leaving it keeping it and Esc putting it away. The same as the
+  // desktop's.
+  const nameField = (id: string, name: string, style: React.CSSProperties, command: string | undefined, mapped: boolean) => {
+    if (renaming && renaming.id === id) {
+      const keep = () => {
+        const sent: Row = { id, name: renaming.words };
+        void runner.reply(renaming.command, renaming.mapped ? fieldsOf(sent, fields) : sent);
+        setRenaming(undefined);
+      };
+      return (
+        <input
+          autoFocus
+          aria-label="Name"
+          value={renaming.words}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setRenaming({ ...renaming, words: e.target.value })}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") keep();
+            else if (e.key === "Escape") setRenaming(undefined);
+          }}
+          onBlur={keep}
+          style={{ ...style, font: "inherit", fontSize: style.fontSize, padding: "0 2px", border: "1px solid var(--color-accent, #2457d6)", borderRadius: 4, background: "var(--color-surface, #fff)" }}
+        />
+      );
+    }
+    return (
+      <span style={style} onDoubleClick={command ? () => setRenaming({ id, words: name, command, mapped }) : undefined}>
+        {name}
+      </span>
+    );
+  };
+  const hover = (id: string) => ({ onMouseEnter: () => setHovered(id), onMouseLeave: () => setHovered((was) => (was === id ? "" : was)) });
+  // Shown only while its row is pointed at, keeping its place so nothing moves.
+  const onHover = (id: string): React.CSSProperties => ({ display: "flex", visibility: hovered === id ? "visible" : "hidden" });
   // The layers objects are held in, topmost first: each its eye, a preview of its
   // objects, its name, up, down and delete, and, opened, its objects under it. The same
   // as the desktop's.
@@ -2051,7 +2103,7 @@ export function Layers({
             const mine = held.filter((o) => str(o[objectLayer]) === id);
             const flip = () => setOpen((was) => (was.has(id) ? new Set([...was].filter((one) => one !== id)) : new Set([...was, id])));
             const rows = [
-              <div key={id} role="listitem" aria-current={id === picked || undefined} onClick={() => pick && setPicked(pick, id)} style={rowStyle(id === picked, 0)}>
+              <div key={id} role="listitem" aria-current={id === picked || undefined} onClick={() => pick && setPicked(pick, id)} style={rowStyle(id === picked, 0)} {...hover(id)}>
                 <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
                   {/* Opened or closed by a small chevron, so its name keeps its room. */}
                   <button type="button" aria-label={opened ? "Close" : "Open"} title={opened ? "Close" : "Open"} onClick={flip} style={{ width: 16, padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer" }}>
@@ -2060,39 +2112,41 @@ export function Layers({
                     </svg>
                   </button>
                   {hide && (
-                    <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="small" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                    <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
                       {hidden ? "Show" : "Hide"}
                     </ui.Button>
                   )}
                 </span>
                 <LayerPreview objects={mine} W={W} H={H} clear={clear} hidden={hidden} address={address} />
-                <strong style={quiet(hidden)}>{str(g["name"]) || "Layer"}</strong>
+                {nameField(id, str(g["name"]) || "Layer", quiet(hidden), rename, false)}
                 <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
                   {order && (
                     <>
-                      <ui.Button kind="secondary" icon="raise" tool="small" hint="Up" disabled={i === groups.length - 1} onClick={() => depthsMoved(groups, i, i + 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
+                      <ui.Button kind="secondary" icon="raise" tool="tiny" hint="Up" disabled={i === groups.length - 1} onClick={() => depthsMoved(groups, i, i + 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
                         Up
                       </ui.Button>
-                      <ui.Button kind="secondary" icon="lower" tool="small" hint="Down" disabled={i === 0} onClick={() => depthsMoved(groups, i, i - 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
+                      <ui.Button kind="secondary" icon="lower" tool="tiny" hint="Down" disabled={i === 0} onClick={() => depthsMoved(groups, i, i - 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
                         Down
                       </ui.Button>
                     </>
                   )}
                   {remove && (
-                    <ui.Button
-                      kind="secondary"
-                      icon="delete"
-                      tool="small"
-                      hint="Delete"
-                      onClick={() => {
-                        // Its objects go with it, in one step.
-                        const gone = objectRemove ? mine : [];
-                        gone.forEach((o, n) => void send(objectRemove!, n === 0 ? { id: str(o["id"]) } : { id: str(o["id"]), "one:history": "joined" }));
-                        void send(remove, gone.length ? { id, "one:history": "joined" } : { id });
-                      }}
-                    >
-                      Delete
-                    </ui.Button>
+                    <span style={onHover(id)}>
+                      <ui.Button
+                        kind="secondary"
+                        icon="delete"
+                        tool="tiny"
+                        hint="Delete"
+                        onClick={() => {
+                          // Its objects go with it, in one step.
+                          const gone = objectRemove ? mine : [];
+                          gone.forEach((o, n) => void send(objectRemove!, n === 0 ? { id: str(o["id"]) } : { id: str(o["id"]), "one:history": "joined" }));
+                          void send(remove, gone.length ? { id, "one:history": "joined" } : { id });
+                        }}
+                      >
+                        Delete
+                      </ui.Button>
+                    </span>
                   )}
                 </span>
               </div>,
@@ -2110,12 +2164,12 @@ export function Layers({
                       if (pick) setPicked(pick, id);
                     }}
                     style={rowStyle(object === pickedObject, 28)}
+                    {...hover(object)}
                   >
-                    <LayerPreview objects={[o]} W={W} H={H} clear={clear} hidden={hidden} address={address} />
-                    <span style={quiet(hidden)}>{nameOf(o)}</span>
+                    {nameField(object, str(o["name"]) || nameOf(o), quiet(hidden, true), objectRename, true)}
                     {objectRemove && (
-                      <span onClick={(e) => e.stopPropagation()}>
-                        <ui.Button kind="secondary" icon="delete" tool="small" hint="Delete" onClick={() => void runner.reply(objectRemove, { id: object })}>
+                      <span onClick={(e) => e.stopPropagation()} style={onHover(object)}>
+                        <ui.Button kind="secondary" icon="delete" tool="tiny" hint="Delete" onClick={() => void runner.reply(objectRemove, { id: object })}>
                           Delete
                         </ui.Button>
                       </span>
@@ -2147,6 +2201,7 @@ export function Layers({
               role="listitem"
               aria-current={isPicked || undefined}
               onClick={() => pick && setPicked(pick, id)}
+              {...hover(id)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -2160,29 +2215,31 @@ export function Layers({
             >
               {hide && (
                 <span onClick={(e) => e.stopPropagation()}>
-                  <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="small" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                  <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="tiny" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
                     {hidden ? "Show" : "Hide"}
                   </ui.Button>
                 </span>
               )}
               <LayerPreview objects={[l]} W={W} H={H} clear={clear} hidden={hidden} address={address} />
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: hidden ? "var(--color-muted)" : undefined }}>{nameOf(l)}</span>
+              {nameField(id, str(l["name"]) || nameOf(l), quiet(hidden), rename, true)}
               {/* Its buttons act on it alone, without picking it too. */}
               <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
                 {order && (
                   <>
-                    <ui.Button kind="secondary" icon="raise" tool="small" hint="Up" disabled={i === layers.length - 1} onClick={() => move(i, i + 1)}>
+                    <ui.Button kind="secondary" icon="raise" tool="tiny" hint="Up" disabled={i === layers.length - 1} onClick={() => move(i, i + 1)}>
                       Up
                     </ui.Button>
-                    <ui.Button kind="secondary" icon="lower" tool="small" hint="Down" disabled={i === 0} onClick={() => move(i, i - 1)}>
+                    <ui.Button kind="secondary" icon="lower" tool="tiny" hint="Down" disabled={i === 0} onClick={() => move(i, i - 1)}>
                       Down
                     </ui.Button>
                   </>
                 )}
                 {remove && (
-                  <ui.Button kind="secondary" icon="delete" tool="small" hint="Delete" onClick={() => void send(remove, { id })}>
-                    Delete
-                  </ui.Button>
+                  <span style={onHover(id)}>
+                    <ui.Button kind="secondary" icon="delete" tool="tiny" hint="Delete" onClick={() => void send(remove, { id })}>
+                      Delete
+                    </ui.Button>
+                  </span>
                 )}
               </span>
             </div>

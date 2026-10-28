@@ -278,7 +278,7 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  /* a picture made of layers, as big as two of the view's values say */
                  | "collage" qualified "." NAME ("size" NAME NAME)? "{" NEWLINE? collage_line* "}" END
                  /* the screen's collage's layers as a list, topmost first, each hidden or shown, previewed, ordered and deleted */
-                 | "layers" qualified "." NAME "{" NEWLINE? (("hide" | "order" | "delete") qualified END)* "}" END
+                 | "layers" qualified "." NAME "{" NEWLINE? (("hide" | "order" | "rename" | "delete") qualified END)* "}" END
                  /* a list's rows as a sheet of paper, written on in place */
                  | "paper" qualified "." NAME "{" NEWLINE? paper_line* "}" END
                  /* a block made after the one the screen's paper has the caret in, given these values */

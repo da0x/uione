@@ -425,9 +425,9 @@ describe("a collage's objects held in layers", () => {
     expect(currentLayer([], "")).toBe("");
   });
 
-  it("lists the layers topmost first, each opening to its objects, a layer deleted taking them with it in one step", async () => {
+  it("lists the layers topmost first, each opening to its objects, a layer deleted taking them with it in one step, and renames one written in place", async () => {
     act(() => setPicked("/ layer", undefined));
-    const source = memorySource({ commands: { "studio::layer::delete": () => ({ id: "x" }), "studio::item::delete": () => ({ id: "x" }) } });
+    const source = memorySource({ commands: { "studio::layer::delete": () => ({ id: "x" }), "studio::item::delete": () => ({ id: "x" }), "studio::layer::rename": () => ({ id: "x" }) } });
     source.set("studio::drawing_page", {
       width: 1600,
       height: 900,
@@ -436,13 +436,18 @@ describe("a collage's objects held in layers", () => {
     }, "d1");
     function Drawer() {
       const page = useView("studio::drawing_page", "d1");
-      return <Layers view={page} list="layers" width="width" height="height" fields={namedLikeParts} pick="/ layer" remove="studio::layer::delete" objects="items" objectLayer="layer" objectRemove="studio::item::delete" objectPick="/ item" />;
+      return (
+        <Layers view={page} list="layers" width="width" height="height" fields={namedLikeParts} pick="/ layer" remove="studio::layer::delete" rename="studio::layer::rename" objects="items" objectLayer="layer" objectRemove="studio::item::delete" objectPick="/ item" />
+      );
     }
     const only = defineScreen({ title: "Drawing", route: "/" }, () => <Drawer />);
     const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
     await waitFor(() => expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/logo|Backdrop/)?.[0])).toEqual(["logo", "Backdrop"]));
     fireEvent.click(within(drawn.getAllByRole("listitem")[0]!).getByRole("button", { name: "Open" }));
     expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/logo|Backdrop|Hi|Ellipse/)?.[0])).toEqual(["logo", "Hi", "Ellipse", "Backdrop"]);
+    // Its delete shows only while it's pointed at.
+    expect(within(drawn.getAllByRole("listitem")[0]!).queryByRole("button", { name: "Delete" })).toBeNull();
+    fireEvent.mouseEnter(drawn.getAllByRole("listitem")[0]!);
     fireEvent.click(within(drawn.getAllByRole("listitem")[0]!).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(source.runs.length).toBe(3));
     expect(source.runs.map((r) => [r.command, r.input])).toEqual([
@@ -450,6 +455,13 @@ describe("a collage's objects held in layers", () => {
       ["studio::item::delete", { id: "b", "one:history": "joined" }],
       ["studio::layer::delete", { id: "logo", "one:history": "joined" }],
     ]);
+    // A name double-clicked is written in place, Enter keeping it.
+    fireEvent.doubleClick(within(drawn.getAllByRole("listitem")[0]!).getByText("logo"));
+    const field = drawn.getByRole("textbox", { name: "Name" });
+    fireEvent.change(field, { target: { value: "Mark" } });
+    fireEvent.keyDown(field, { key: "Enter" });
+    await waitFor(() => expect(source.runs.length).toBe(4));
+    expect(source.runs[3]).toMatchObject({ command: "studio::layer::rename", input: { id: "logo", name: "Mark" } });
   });
 });
 

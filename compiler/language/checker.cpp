@@ -4243,17 +4243,32 @@ namespace one::language {
                 error(where, "layers lists the layers of a collage on this screen, and none here is of " + l.view.text() + "." + l.list);
                 return;
             }
+            // Renamed, a layer by its own name, an object by the collage's name part.
+            const view_each* objects = named_list(ns, collage->view, collage->list, route);
+            const entity_declaration* object = objects ? listed_entity(ns, *objects) : nullptr;
+            const view_each* named_rows = collage->in_list && *collage->in_list == l.list ? named_list(ns, collage->view, l.list, route) : nullptr;
+            const entity_declaration* group = named_rows ? listed_entity(ns, *named_rows) : nullptr;
+            for (const auto& rename : l.renames) {
+                verify_command_use(ns, rename);
+                const entity_declaration* on = find_command(ns, rename);
+                if (!on) continue;
+                if (group && on == group) {
+                    if (!in_rows(*named_rows, "name")) error(rename.where, "a layer's name is read from its row, and view " + collage->view.text() + " has no name in its " + l.list + "; add it to the list's block");
+                } else if (object && on == object) {
+                    if (!language::collage_fields(*collage, objects).contains("name")) error(rename.where, "an object's name is kept in its name, which " + object->name + " doesn't have or the view doesn't read; add name text to it, and to the list's block");
+                } else {
+                    error(rename.where, "rename names a command on the layers or their objects, like " + (group ? group->name : object ? object->name : std::string("layer")) + "::rename");
+                }
+            }
             // The layers its objects are held in: each hidden by its own hidden, and ordered by its depth.
             if (collage->in_list && *collage->in_list == l.list) {
-                const view_each* groups = named_list(ns, collage->view, l.list, route);
-                const entity_declaration* group = groups ? listed_entity(ns, *groups) : nullptr;
                 if (!group) return;
                 for (const auto& [command, needs, line] : {std::tuple{&l.hide, "hidden", "hide"}, {&l.order, "depth", "order"}, {&l.remove, "", "delete"}}) {
                     if (!*command) continue;
                     verify_command_use(ns, **command);
                     const entity_declaration* on = find_command(ns, **command);
                     if (on && on != group) error((*command)->where, "the layers are " + group->name + "s, so " + line + " names a command on " + group->name);
-                    if (*needs && !in_rows(*groups, needs)) {
+                    if (*needs && !in_rows(*named_rows, needs)) {
                         error((*command)->where, std::string(line) + " sets a layer's " + needs + ", which view " + collage->view.text() + " doesn't read in its " + l.list + "; add it to the list's block");
                     }
                 }
