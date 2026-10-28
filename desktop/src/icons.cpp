@@ -75,6 +75,8 @@ namespace one::desktop {
 			    {"globe", {ring(8, 8, 6.25f), path("M1.75 8h12.5M8 1.75a9 9 0 0 1 0 12.5a9 9 0 0 1 0-12.5")}},
 			    // Layers stacked, what's built on what.
 			    {"layers", {path("M8 2l6 3-6 3-6-3z"), path("M2 8l6 3 6-3M2 11l6 3 6-3")}},
+			    // A table of contents: headings, and what's under them set in.
+			    {"contents", {path("M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M2.5 12.5h11")}},
 			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise
 			    // or lower it among others, and keep what was done, or don't.
 			    {"crop", {path("M4.5 1.5v10h10M1.5 4.5h10v10")}},

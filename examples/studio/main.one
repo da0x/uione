@@ -298,6 +298,10 @@ namespace studio at / {
 				toggle spread "Two pages" icon spread
 				toggle coffee "Coffee" icon coffee
 			}
+			// Its contents in a drawer, as a poster's layers are.
+			group "View" at end {
+				toggle contents "Contents" icon contents
+			}
 		}
 		main {
 			paper notes_page.passages {
@@ -305,7 +309,7 @@ namespace studio at / {
 				add passage::create
 				delete passage::delete
 				empty "Title"
-				outline
+				outline when contents
 				progress
 				paste
 				warm when coffee

@@ -246,8 +246,9 @@ collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "wr
                   /* a small picture of it, drawn once changes settle, sent to a command on what the view is per */
                   | "keep" "preview" qualified "into" NAME NUMBER "wide") END
 paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "empty" STRING
-                  /* its title and headings listed beside it, the caret's section marked, each going there */
-                  | "outline"
+                  /* its title and headings listed beside it, the caret's section marked, each going there;
+                     with when, only while it holds, as a drawer a toggle opens */
+                  | "outline" ("when" expression)?
                   /* pictures pasted or dropped, made picture blocks by its add */
                   | "paste"
                   /* a bar across its top, as far along as it's been read */

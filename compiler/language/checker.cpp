@@ -3294,7 +3294,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "spread"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "spread", "contents"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -4024,7 +4024,7 @@ namespace one::language {
         // paper document_page.blocks: its blocks a list of rows with words and a position,
         // written, made and deleted by commands on what they are; write changes words.
         void verify_paper(const std::string& ns, const paper_item& paper, const std::string& route) {
-            for (const auto* holds : {&paper.warm, &paper.spread, &paper.read_only}) {
+            for (const auto* holds : {&paper.warm, &paper.spread, &paper.read_only, &paper.outline_when}) {
                 if (*holds) verify_condition(ns, **holds, route);
             }
             const view_each* blocks = named_list(ns, paper.view, paper.list, route);

@@ -406,6 +406,7 @@ namespace one::screens {
 		std::string empty = "";    // what an empty page says where its first words go
 		bool fills = false;        // in a workspace, as big as its region, scrolling
 		bool outline = false;      // its title and headings listed beside it, the caret's section marked, each going there
+		bool outline_drawer = false;  // and as a drawer at its side, there while outline holds, as a toggle says
 		bool paste = false;        // pictures pasted or dropped, made picture blocks after the caret
 		bool progress = false;     // a bar across its top, as far along as it's been read
 		bool warm = false;         // set on warm paper, as under a reading lamp: its page, sheet, ink and lines

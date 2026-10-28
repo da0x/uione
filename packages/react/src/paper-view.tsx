@@ -349,6 +349,7 @@ export function Paper({
   empty,
   name,
   outline = false,
+  outlineDrawer = false,
   warm = false,
   spread = false,
   readOnly = false,
@@ -369,6 +370,7 @@ export function Paper({
   empty?: string; // where an empty page's first words go
   name?: string; // what its insert buttons name it by
   outline?: boolean; // its title and headings listed beside it, the caret's section marked, each going there
+  outlineDrawer?: boolean; // and as a drawer at its side, there while outline is, as a toggle says
   warm?: boolean; // set on warm paper, as under a reading lamp: its page, sheet, ink and lines
   spread?: boolean; // its pages two at a time, side by side
   readOnly?: boolean; // read, not written on
@@ -1027,7 +1029,15 @@ export function Paper({
     if (b.id === writingIn) break;
   }
   const rail = outline ? (
-    <nav aria-label="On this page" style={{ width: 232, flexShrink: 0, padding: "28px 16px 16px 0", boxSizing: "border-box", ...(fills ? { overflowY: "auto" } : { position: "sticky", top: 0, alignSelf: "flex-start" }) }}>
+    <nav
+      aria-label="On this page"
+      style={
+        // As a drawer, it's the workspace's side, as wide and on the same surface.
+        outlineDrawer
+          ? { width: 288, flexShrink: 0, padding: 12, boxSizing: "border-box", overflowY: "auto", background: "var(--color-surface, #ffffff)", borderLeft: "1px solid var(--color-line, #dde2ea)", ...(fills ? { margin: "-12px -12px -12px 0" } : { position: "sticky", top: 0, alignSelf: "flex-start" }) }
+          : { width: 232, flexShrink: 0, padding: "28px 16px 16px 0", boxSizing: "border-box", ...(fills ? { overflowY: "auto" } : { position: "sticky", top: 0, alignSelf: "flex-start" }) }
+      }
+    >
       <p style={{ margin: "0 0 8px 12px", fontSize: 11, fontWeight: 600, color: "var(--color-muted, #5b6577)" }}>On this page</p>
       {listed.length === 0 ? (
         <p style={{ margin: "0 0 0 12px", fontSize: 13, color: "var(--color-muted, #5b6577)" }}>Headings show here as you write them.</p>
@@ -1166,6 +1176,15 @@ export function Paper({
     </div>
   );
   if (!rail) return page;
+  // A drawer takes its room from the page's, as the workspace's side does.
+  if (outlineDrawer) {
+    return (
+      <div style={{ display: "flex", ...(fills ? { height: "100%" } : {}) }}>
+        {page}
+        {rail}
+      </div>
+    );
+  }
   // Beside the page, and as much room on its other side, so the page stays in the
   // middle, as it is without one.
   return (

@@ -1133,7 +1133,9 @@ namespace one::desktop::runtime {
 				                     .on_click(std::move(go)));
 			}
 			if (listed.size() == 1) listed.push_back(desktop::text("Headings show here as you write them.", t.quiet()).padding(edges(0, 0, 0, 12)));
-			outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
+			// As a drawer, it's the workspace's side, as wide and on the same surface.
+			if (spec.outline_drawer) outline = desktop::scroll(desktop::column(std::move(listed)).padding(edges(12, 12))).width(288).grow(0).background({.fill = t.surface});
+			else outline = desktop::column(std::move(listed)).padding(edges(around_sheet, 16, 16, 0)).width(232);
 		}
 		auto made = std::make_unique<paper_element>(p, spec, s, std::move(blocks), tick, due);
 		// What a paste button asked of it: the clipboard's pictures after the caret.
@@ -1183,6 +1185,8 @@ namespace one::desktop::runtime {
 		}
 		if (spec.fills) shown = desktop::scroll(std::move(shown)).grow();
 		if (!outline) return shown;
+		// A drawer takes its room from the page's, as the workspace's side does.
+		if (spec.outline_drawer) return desktop::row(std::move(shown).grow(), std::move(*outline)).align(align::stretch).grow();
 		// Beside the page, and as much room on its other side, so the page stays in the
 		// middle of the window, as it is without one.
 		auto balance = desktop::column(std::vector<desktop::view>{}).width(232);

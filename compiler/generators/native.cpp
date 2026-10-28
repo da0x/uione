@@ -352,7 +352,7 @@ namespace one::generators {
             out += ", .key = " + str(paper_key_);
             if (paper.empty) out += ", .empty = " + str(*paper.empty);
             if (workspace_) out += ", .fills = true";
-            if (paper.outline) out += ", .outline = true";
+            if (paper.outline) out += ", .outline = " + (paper.outline_when ? condition(parts, ns, *paper.outline_when) + ", .outline_drawer = true" : std::string("true"));
             if (paper.paste) out += ", .paste = true";
             if (paper.progress) out += ", .progress = true";
             if (paper.warm) out += ", .warm = " + condition(parts, ns, *paper.warm);

@@ -2264,7 +2264,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     field, `document::set "Book" { face = face::book }`, pressed while it's so.
   - `outline`: its title and headings listed beside it, the section the caret is in
     marked, each putting the caret there and bringing it into view. It's always
-    there, so the page doesn't move as headings come and go.
+    there, so the page doesn't move as headings come and go. `outline when contents`
+    makes it a drawer at the page's side, there while a toggle says, as wide and on
+    the same surface as a workspace's `side`, so it opens as a list of layers does:
+    `toggle contents "Contents" icon contents`.
   - A heading is ruled under, across the whole line.
   - `progress`: a thin bar across its top, as far along as it's been read.
   - `paste`: pictures pasted or dropped on it are picture blocks after the caret's,

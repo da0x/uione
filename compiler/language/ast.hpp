@@ -886,6 +886,7 @@ namespace one::language {
         std::map<std::string, location> fields_where;
         std::optional<std::string> empty;      // empty "Title": where an empty page's first words go
         bool outline = false;                  // outline: its title and headings beside it, each going there
+        expression_ptr outline_when;           // outline when contents: and only while it holds, as a drawer
         bool paste = false;                    // paste: pictures pasted or dropped, made picture blocks by its add
         bool progress = false;                 // progress: a bar across its top, as far along as it's been read
         location paste_where;

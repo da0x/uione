@@ -2367,9 +2367,14 @@ namespace one::language {
                     } else if (at_word("empty") && peek(1).kind == token_kind::string) {
                         advance();
                         paper.empty = advance().text;
-                    } else if (at_word("outline") && ends(1)) {
+                    } else if (at_word("outline") && (ends(1) || (peek(1).kind == token_kind::identifier && peek(1).text == "when"))) {
+                        // outline, or outline when contents: beside it always, or as a drawer while it holds.
                         advance();
                         paper.outline = true;
+                        if (at_word("when")) {
+                            advance();
+                            paper.outline_when = parse_expression();
+                        }
                     } else if (at_word("progress") && ends(1)) {
                         // progress: a bar across its top, as far along as it's been read.
                         advance();

@@ -225,6 +225,25 @@ describe("a paper", () => {
     expect((drawn.container.querySelector("[data-kind=heading]") as HTMLElement).style.borderBottom).toContain("1px solid");
   });
 
+  it("is a drawer at its side while its outline says, there only then", async () => {
+    const source = sourceWith([{ id: "b1", kind: "title", words: "A harbor", position: 1, align: "left" }]);
+    function Notes({ open }: { open: boolean }) {
+      const page = useView("studio::notes_page", "p1");
+      return <Paper view={page} list="passages" fields={parts} write="studio::passage::write" outline={open} outlineDrawer />;
+    }
+    const closed = defineScreen({ title: "Notes", route: "/" }, () => <Notes open={false} />);
+    const shut = render(<App name="studio" screens={[closed]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(blocks(shut).length).toBe(1));
+    expect(shut.queryByRole("navigation", { name: "On this page" })).toBeNull();
+    shut.unmount();
+    const opened = defineScreen({ title: "Notes", route: "/" }, () => <Notes open />);
+    const open = render(<App name="studio" screens={[opened]} ui={plain} data={source} location="/" />);
+    const drawer = await waitFor(() => open.getByRole("navigation", { name: "On this page" }));
+    // As wide as a workspace's side, and nothing on the page's other side to balance it.
+    expect(drawer.style.width).toBe("288px");
+    expect(drawer.parentElement!.children.length).toBe(2);
+  });
+
   it("places blocks page by page: one that doesn't fit starts the next, and a heading goes with what it heads", () => {
     // Pages 100 tall with 10 of margin: 80 to write in.
     const text = (height: number) => ({ kind: "text", height });

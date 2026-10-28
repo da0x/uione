@@ -1326,7 +1326,7 @@ namespace one::generators {
                         if (picked.view == view && picked.list == paper->list) line += " pick=" + web_detail::js_string(route_ + " " + name);
                     }
                     if (paper->empty) line += " empty=" + web_detail::js_string(*paper->empty);
-                    if (paper->outline) line += " outline";
+                    if (paper->outline) line += paper->outline_when ? " outline={" + condition(parts, ns, *paper->outline_when) + "} outlineDrawer" : std::string(" outline");
                     if (paper->paste) line += " paste";
                     if (paper->progress) line += " progress";
                     if (paper->warm) line += " warm={" + condition(parts, ns, *paper->warm) + "}";
