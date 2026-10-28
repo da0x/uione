@@ -130,6 +130,20 @@ namespace one::screens::collage {
 		return {left, top, right - left, bottom - top};
 	}
 
+	box drawn(point from, point to, bool square, double click, double width, double height) {
+		double dx = to.x - from.x, dy = to.y - from.y;
+		if (std::abs(dx) <= click && std::abs(dy) <= click) {
+			double side = std::min(width, height) / 5;
+			return {from.x - side / 2, from.y - side / 2, side, side};
+		}
+		if (square) {
+			double side = std::max(std::abs(dx), std::abs(dy));
+			dx = dx < 0 ? -side : side;
+			dy = dy < 0 ? -side : side;
+		}
+		return {std::min(from.x, from.x + dx), std::min(from.y, from.y + dy), std::abs(dx), std::abs(dy)};
+	}
+
 	int corner_at(box r, point at, double handle) {
 		const point corners[] = {{r.x, r.y}, {r.x + r.w, r.y}, {r.x + r.w, r.y + r.h}, {r.x, r.y + r.h}};
 		for (int i = 0; i < 4; ++i) {

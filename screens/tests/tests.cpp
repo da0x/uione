@@ -578,6 +578,9 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		} else if (what == "cropped") {
 			auto got = c::cropped(box_of(k["kept"]), static_cast<int>(k["edges"].as_integer()), n(k["by"], 0), n(k["by"], 1), box_of(k["whole"]));
 			check::verify(same(got, box_of(k["box"])), "cropped", note + ": " + said(got));
+		} else if (what == "drawn") {
+			auto got = c::drawn({n(k["from"], 0), n(k["from"], 1)}, {n(k["to"], 0), n(k["to"], 1)}, k["square"].as_bool(), k["click"].as_double(), width, height);
+			check::verify(same(got, box_of(k["box"])), "drawn", note + ": " + said(got));
 		} else if (what == "corner_at") {
 			auto got = c::corner_at(box_of(k["box"]), {n(k["at"], 0), n(k["at"], 1)}, k["handle"].as_double());
 			check::verify(got == k["corner"].as_integer(), "corner_at", note);

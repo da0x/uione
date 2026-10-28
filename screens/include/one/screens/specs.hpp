@@ -357,6 +357,16 @@ namespace one::screens {
 		std::vector<std::string> keys = {};
 	};
 
+	// draw layer::create { fill = "#2e86de" } when tool == tool::box: a drag on the
+	// collage makes a layer by `command`, as big as the drag, given `fields`, while
+	// `when` holds; then each choice its when reads, by its key, goes back to its first.
+	struct collage_draw {
+		std::string command;
+		value fields = {};
+		bool when = true;
+		std::vector<std::pair<std::string, std::string>> back = {};
+	};
+
 	// A picture made of layers, as big as two of the view's values say, in its own
 	// pixels (decision 0021): its rows, lowest first, each placed by x y w h and drawn
 	// from picture, crop_x crop_y crop_w crop_h, turns, mirrored and around, words,
@@ -377,6 +387,7 @@ namespace one::screens {
 		std::string subject = "";               // the id of what the view is per
 		bool fills = false;                     // in a workspace, as big as its region; elsewhere 560 tall
 		std::string add = "";     // the command that makes a layer, sent `parent` = subject
+		std::vector<collage_draw> draws = {};  // what a drag on it draws, the first whose when holds
 		std::string crop = "";    // and the one a picture cropped is sent to, its crop and its place
 		std::string write = "";   // words written, or resized: their words, size and place
 		std::string remove = "";  // a layer deleted, like words written away to nothing

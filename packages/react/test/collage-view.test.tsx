@@ -4,12 +4,12 @@
 // Things coming into a collage: pictures dropped on it, the first covering it and the
 // rest at their own size where they were let go, all one step to undo; words pasted.
 // And going out: a small picture of it kept once changes settle, shown on cards, in
-// tables, and on its own.
+// tables, and on its own. And a layer drawn by a drag.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { App, Cards, Collage, CollageButton, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { MemorySource } from "../src/index.js";
-import { setPicked, usePickedId } from "../src/workspace.js";
+import { setChosen, setPicked, useChosen, usePickedId } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
 
 // Each of a collage's parts in the field named like it, as an app's are by default.
@@ -174,6 +174,53 @@ describe("a crop and words, in place", () => {
     expect(source.runs[0]!.command).toBe("studio::layer::write");
     expect(sent).toMatchObject({ id: "w1", words: "Harbor!", size: 96, x: 120, y: 600 });
     expect(sent["w"]).toBeGreaterThan(300);
+  });
+});
+
+describe("a layer drawn on a collage", () => {
+  beforeEach(() => {
+    // A canvas 1064 by 564, so a collage 1000 by 500 is drawn at its own size inside
+    // its margin of 32, with a context that draws nothing.
+    const nothing: unknown = new Proxy(() => nothing, { get: (_, key) => (key === "measureText" ? () => ({ width: 0 }) : nothing), set: () => true });
+    HTMLCanvasElement.prototype.getContext = (() => nothing) as unknown as HTMLCanvasElement["getContext"];
+    Object.defineProperty(HTMLCanvasElement.prototype, "clientWidth", { configurable: true, get: () => 1064 });
+    Object.defineProperty(HTMLCanvasElement.prototype, "clientHeight", { configurable: true, get: () => 564 });
+    HTMLCanvasElement.prototype.setPointerCapture = () => {};
+    if (!globalThis.PointerEvent) globalThis.PointerEvent = class extends MouseEvent {} as unknown as typeof PointerEvent;
+  });
+  afterEach(() => {
+    delete (HTMLCanvasElement.prototype as { clientWidth?: number }).clientWidth;
+    delete (HTMLCanvasElement.prototype as { clientHeight?: number }).clientHeight;
+  });
+
+  it("makes a layer as big as the drag, given what its draw says, picks it, and sets the choice its when read back to the first", async () => {
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "drawn" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [] }, "p1");
+    setChosen("/ tool", "box");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      const tool = useChosen("/ tool", "move");
+      return (
+        <>
+          <Collage view={page} list="layers" width="width" height="height" fields={namedLikeParts} parent="poster" subject="p1" pick="/ layer" name="/ layer"
+            draws={[{ command: "studio::layer::create", given: { fill: "#2e86de" }, when: tool === "box", back: [["/ tool", "move"]] }]} />
+          <p data-testid="tool">{tool}</p>
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    fireEvent.pointerDown(canvas, { clientX: 332, clientY: 232, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 232, clientY: 182, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 132, clientY: 132, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::create", input: { x: 100, y: 100, w: 200, h: 100, fill: "#2e86de", poster: "p1" } });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("drawn"));
+    expect(drawn.getByTestId("tool").textContent).toBe("move");
   });
 });
 

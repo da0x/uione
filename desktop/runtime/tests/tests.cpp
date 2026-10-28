@@ -1779,6 +1779,56 @@ TEST("a collage: its layers drawn as big as it is, scaled to fit; one pressed is
 	matches_golden("collage", {900, 560}, [&] { return drawn(nav); });
 }
 
+TEST("a collage draws a layer as big as the drag, given what its draw says, picks it, and sets the choice its when read back to the first") {
+	memory_source data;
+	data.set("studio::poster_page", "p1", value(fields{{"width", 1600}, {"height", 900}, {"layers", list{}}}));
+	data.on("studio::layer::create", [](const value&, memory_source&) -> answer { return "drawn"; });
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     bool box = p.chosen("/ tool", "move") == "box";
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height", .fields = named_like_parts,
+		                                                                         .pick = "/ layer", .subject = "p1", .fills = true,
+		                                                                         .draws = {collage_draw{.command = "studio::layer::create", .fields = value(std::map<std::string, value>{{"fill", value("#2e86de")}}),
+		                                                                                                .when = box, .back = {{"/ tool", "move"}}}},
+		                                                                         .parent = "poster"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().choose("/ tool", "box");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	// Dragged up and to the left, from (500, 400) to (100, 200) on the collage.
+	CHECK(board->press({origin.x + 500 * scale, origin.y + 400 * scale}, 1));
+	board->drag({origin.x + 300 * scale, origin.y + 300 * scale});
+	board->release({origin.x + 100 * scale, origin.y + 200 * scale}, board);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	const auto& sent = data.runs().back().fields;
+	CHECK(data.runs().back().command == "studio::layer::create");
+	CHECK(std::abs(sent["x"].as_double() - 100) < 0.5);
+	CHECK(std::abs(sent["y"].as_double() - 200) < 0.5);
+	CHECK(std::abs(sent["w"].as_double() - 400) < 0.5);
+	CHECK(std::abs(sent["h"].as_double() - 200) < 0.5);
+	CHECK(sent["fill"].as_string() == "#2e86de");
+	CHECK(sent["poster"].as_string() == "p1");
+	CHECK(nav.current().picked_id("/ layer") == "drawn");
+	CHECK(nav.current().chosen("/ tool", "move") == "move");
+}
+
 TEST("a collage crops its picked picture in place, the background too, kept with Enter, and words picked are written where they are, kept with Enter") {
 	memory_source data;
 	data.set("studio::poster_page", "p1",

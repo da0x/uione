@@ -2189,6 +2189,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   - `snap to edges`: what's dragged is drawn to the collage's edges and middle, and
     every other layer's, and evenly into a corner, with a line where it snaps, unless
     Alt is held.
+  - `draw layer::create { shape = shape::ellipse } when tool == tool::ellipse`: while
+    its `when` holds, a drag on the collage makes a layer as big as the drag, given
+    these values, on top of the rest, and picks it. Shift makes it square; a click
+    alone makes a square a fifth of the collage's shorter side. Of several, the first
+    whose `when` holds draws. Once it's drawn, the choices of toggles its `when` reads
+    go back to their first, so a tool goes back to Select. A terminal has no pointer
+    to drag, so it doesn't draw.
   - `crop layer::crop`: a picked picture is cropped in place, as a press twice on it
     or a `crop "Crop" icon crop key c` button begins: the whole picture faint around
     what's kept, its edges and corners trimming it, a drag inside moving it, and one on

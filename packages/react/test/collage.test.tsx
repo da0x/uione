@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -41,6 +41,9 @@ interface Case {
   across?: Numbers;
   down?: Numbers;
   from?: Numbers;
+  to?: Numbers;
+  square?: boolean;
+  click?: number;
   by?: Numbers;
   corner?: number;
   keep_shape?: boolean;
@@ -105,6 +108,9 @@ describe("where a collage's layers go", () => {
       }
       case "cropped":
         expect(same(cropped(boxOf(k.kept!), k.edges!, k.by![0]!, k.by![1]!, boxOf(k.whole!)), boxOf(k.box!))).toBe(true);
+        break;
+      case "drawn":
+        expect(same(drawn({ x: k.from![0]!, y: k.from![1]! }, { x: k.to![0]!, y: k.to![1]! }, k.square!, k.click!, b.width, b.height), boxOf(k.box!))).toBe(true);
         break;
       case "corner_at":
         expect(cornerAt(boxOf(k.box!), { x: k.at![0]!, y: k.at![1]! }, k.handle!)).toBe(k.corner);

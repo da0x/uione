@@ -866,6 +866,16 @@ namespace one::language {
         expression_ptr match_colors;          // match colors when poster_page.matched: its pictures' colors moved toward one another's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers
+        // draw layer::create { shape = shape::ellipse } when tool == tool::ellipse: a drag
+        // on it makes a layer as big as the drag, given these values, while its when
+        // holds; the first whose when holds draws. The choices its when reads go back to
+        // their first once it's drawn.
+        struct drawing {
+            qualified_name command;
+            std::vector<field_value> given;
+            expression_ptr when;
+        };
+        std::vector<drawing> draws;
         std::optional<std::string> over;      // over layer { ... }: buttons above the picked layer
         location over_where;
         std::vector<screen_item> tools;
@@ -975,6 +985,19 @@ namespace one::language {
             case kind::save: return "Save";
         }
         return "";
+    }
+
+    // The plain names a condition reads, once each, like tool in tool == tool::pen:
+    // of them, the choices a collage's draw sets back to their first once it's drawn.
+    inline void names_read(const expression& e, std::vector<std::string>& out) {
+        if (auto* name = std::get_if<name_expression>(&e.node); name && name->name.parts.size() == 1) {
+            if (std::ranges::find(out, name->name.text()) == out.end()) out.push_back(name->name.text());
+        } else if (auto* unary = std::get_if<unary_expression>(&e.node); unary && unary->operand) {
+            names_read(*unary->operand, out);
+        } else if (auto* binary = std::get_if<binary_expression>(&e.node)) {
+            if (binary->left) names_read(*binary->left, out);
+            if (binary->right) names_read(*binary->right, out);
+        }
     }
 
     // pick layer from poster_page.layers: a row of a view's list the screen holds, picked

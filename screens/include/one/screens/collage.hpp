@@ -70,6 +70,11 @@ namespace one::screens::collage {
 	// or smaller than the smallest.
 	box cropped(box kept, int edges, double dx, double dy, box whole);
 
+	// The box a drag draws from `from` to `to`, whichever way it went: square when
+	// `square`, as far as the longer side. A drag no further than `click` is a click,
+	// which draws a square a fifth of the collage's shorter side, centered on it.
+	box drawn(point from, point to, bool square, double click, double width, double height);
+
 	// The corner of a box a point is within `handle` of, 0 to 3 clockwise from the
 	// top left, or -1.
 	int corner_at(box r, point at, double handle);

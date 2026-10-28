@@ -2386,6 +2386,17 @@ namespace one::language {
                     } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.add = parse_qualified_name("the command that makes its layers, like layer::create");
+                    } else if (at_word("draw") && peek(1).kind == token_kind::identifier) {
+                        // draw layer::create { shape = shape::ellipse } when tool == tool::ellipse
+                        advance();
+                        collage_item::drawing draw;
+                        draw.command = parse_qualified_name("the command a drag on it makes a layer by, like layer::create");
+                        parse_given(draw.given);
+                        if (at_word("when")) {
+                            advance();
+                            draw.when = parse_expression();
+                        }
+                        collage.draws.push_back(std::move(draw));
                     } else if (at_word("crop") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.crop = parse_qualified_name("the command a picture cropped is sent to, like layer::crop");
@@ -2434,7 +2445,7 @@ namespace one::language {
                         collage.over = advance().text;
                         collage.tools = parse_screen_block();
                     } else {
-                        fail_expecting("what a collage does, like place layer::place, crop layer::crop, write layer::write, add layer::create, paste, snap to edges, empty \"...\", over layer { ... }, or a field playing one of its parts, like words caption");
+                        fail_expecting("what a collage does, like place layer::place, draw layer::create, crop layer::crop, write layer::write, add layer::create, paste, snap to edges, empty \"...\", over layer { ... }, or a field playing one of its parts, like words caption");
                     }
                     end_line();
                 }

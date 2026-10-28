@@ -300,6 +300,26 @@ namespace one::generators {
             if (per) out += ", .subject = " + id_of(parts, *per);
             if (workspace_) out += ", .fills = true";
             if (c.add) out += ", .add = " + str(screens::full_command(ns, *c.add));
+            if (!c.draws.empty()) {
+                std::string draws;
+                for (const auto& d : c.draws) {
+                    std::string given;
+                    for (const auto& v : d.given) {
+                        std::set<std::string> read;
+                        given += (given.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + condition_of(parts, ns, *v.value, read) + "}";
+                    }
+                    std::vector<std::string> names;
+                    if (d.when) language::names_read(*d.when, names);
+                    std::string back;
+                    for (const auto& name : names) {
+                        if (choices_.contains(name)) back += (back.empty() ? "" : ", ") + std::string("{") + str(route_ + " " + name) + ", " + str(choices_.at(name)) + "}";
+                    }
+                    draws += (draws.empty() ? "" : ", ") + std::string("collage_draw{.command = ") + str(screens::full_command(ns, d.command)) +
+                             (given.empty() ? "" : ", .fields = value(std::map<std::string, value>{" + given + "})") + (d.when ? ", .when = " + condition(parts, ns, *d.when) : "") +
+                             (back.empty() ? "" : ", .back = {" + back + "}") + "}";
+                }
+                out += ", .draws = {" + draws + "}";
+            }
             if (c.crop) out += ", .crop = " + str(screens::full_command(ns, *c.crop));
             if (c.write) out += ", .write = " + str(screens::full_command(ns, *c.write));
             if (c.remove) out += ", .remove = " + str(screens::full_command(ns, *c.remove));

@@ -16,14 +16,14 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverLayer, choosePictures, hintOf, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverLayer, choosePictures, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -582,7 +582,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "cropping" | "shifting";
+  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing";
   id: string;
   from: Box;
   at: Point;
@@ -605,6 +605,17 @@ interface Placed {
   guide?: Guided;
   crop?: { id: string; whole: Box; kept: Box };
   editing?: { id: string; words: string; caret: number; fresh: boolean };
+  drawing?: Box; // a layer being drawn, as big as the drag so far
+}
+
+// draw layer::create { fill = "#2e86de" } when tool == tool::box: a drag makes a layer
+// by `command`, as big as the drag, given these values, while `when` holds; then each
+// choice it read, by its key, goes back to its first.
+export interface CollageDraw {
+  command: string;
+  given?: Record<string, unknown>;
+  when?: boolean;
+  back?: [string, string][];
 }
 
 export function Collage({
@@ -621,6 +632,7 @@ export function Collage({
   subject,
   fills = false,
   add,
+  draws = [],
   crop,
   write,
   remove,
@@ -646,6 +658,7 @@ export function Collage({
   subject?: string; // the id of what the view is per, which its layers and preview are made on
   fills?: boolean; // in a workspace, as big as its region; elsewhere 560 tall
   add?: string; // the command that makes a layer, sent `parent` = subject
+  draws?: CollageDraw[]; // what a drag on it draws, the first whose when holds
   crop?: string; // the one a picture cropped is sent to, its crop and its place
   write?: string; // words written, or resized: their words, size and place
   remove?: string; // a layer deleted, like words written away to nothing
@@ -1065,6 +1078,13 @@ export function Collage({
       if (guide.guideX !== undefined) c.fillRect(board.x + guide.guideX * scale - 0.5, board.y, 1, bh);
       if (guide.guideY !== undefined) c.fillRect(board.x, board.y + guide.guideY * scale - 0.5, bw, 1);
     }
+    // A layer being drawn, as big as the drag so far.
+    if (w.drawing) {
+      const d = onBoard(w.drawing);
+      c.strokeStyle = accent;
+      c.lineWidth = 1.5;
+      c.strokeRect(d.x, d.y, d.w, d.h);
+    }
     if (layers.length === 0 && !full && empty) {
       c.fillStyle = style.getPropertyValue("--color-muted").trim() || "#5b6577";
       c.font = `13px ${wordsFamily()}`;
@@ -1166,6 +1186,22 @@ export function Collage({
     return to.at;
   };
   const pickRow = (id: string) => pick && setPicked(pick, id || undefined);
+  const onCollage = (p: Point): Point => ({ x: (p.x - w.board.x) / w.scale, y: (p.y - w.board.y) / w.scale });
+  // A layer drawn, on top of the rest, picked once it's made; then the choices its
+  // when read go back to their first, as a tool goes back to Select. The same as the
+  // desktop's.
+  const drawLayer = (b: Box) => {
+    const d = draws.find((one) => one.when !== false);
+    if (!d) return;
+    const made: Row = { x: b.x, y: b.y, w: b.w, h: b.h };
+    if (parent) made[parent] = subject;
+    const top = layers[layers.length - 1];
+    if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
+    void runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given }).then((reply) => {
+      if (reply?.id) pickRow(reply.id);
+    });
+    for (const [key, first] of d.back ?? []) setChosen(key, first);
+  };
   const keepCrop = () => {
     const e = w.crop;
     if (!e || !crop) return;
@@ -1212,6 +1248,13 @@ export function Collage({
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
+    // While something's to be drawn, a press on the collage starts drawing it, over
+    // whatever's there.
+    if (draws.some((d) => d.when !== false) && inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) {
+      w.now = { what: "drawing", id: "", from: { x: 0, y: 0, w: 0, h: 0 }, at: p, corner: 0, edges: 0 };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     // A corner of the picked layer resizes it: a picture with its shape kept, words by their size.
     if (chosen && (isWords(chosen) ? write : place)) {
       const b = whereIs(chosen);
@@ -1251,7 +1294,9 @@ export function Collage({
     const g = w.now;
     if (!g) return;
     const p = at(e);
-    if (g.what === "shifting" && w.crop) {
+    if (g.what === "drawing") {
+      w.drawing = drawn(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
+    } else if (g.what === "shifting" && w.crop) {
       const dx = (p.x - g.at.x) / w.scale, dy = (p.y - g.at.y) / w.scale;
       w.crop.whole = { ...g.from, x: g.from.x + dx, y: g.from.y + dy };
       w.crop.kept = { ...g.keptFrom!, x: g.keptFrom!.x + dx, y: g.keptFrom!.y + dy };
@@ -1268,6 +1313,13 @@ export function Collage({
     if (g.what === "shifting" || g.what === "cropping") {
       move(e);
       w.now = undefined;
+      return;
+    }
+    if (g.what === "drawing") {
+      w.now = undefined;
+      w.drawing = undefined;
+      drawLayer(drawn(onCollage(g.at), onCollage(at(e)), e.shiftKey, 4 / w.scale, W, H));
+      paint();
       return;
     }
     const to = goingTo(at(e), e);
@@ -1318,6 +1370,7 @@ export function Collage({
                   ? "ew-resize"
                   : "ns-resize";
     } else if (w.editing) cursor = "text";
+    else if (draws.some((d) => d.when !== false)) cursor = "crosshair";
     else {
       const corner = chosen && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";

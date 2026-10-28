@@ -237,6 +237,8 @@ screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
                   | "snap" "to" "edges" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
+                  /* a drag on it makes a layer as big as the drag, given these values, while the when holds */
+                  | "draw" qualified given? ("when" expression)?
                   /* pictures dropped or pasted are made by add, in the layer's picture */
                   | "paste"
                   /* the fields playing its parts, each kept in the field named like it unless one of these says another */

@@ -1404,6 +1404,25 @@ namespace one::generators {
                     if (c->over) line += " pick=" + web_detail::js_string(route_ + " " + *c->over);
                     if (workspace_) line += " fills";
                     if (c->add) line += " add=" + web_detail::js_string(full_command(ns, *c->add));
+                    // What a drag on it draws, the first whose when holds, and the choices
+                    // its when reads, each set back to its first once it's drawn.
+                    if (!c->draws.empty()) {
+                        std::string draws;
+                        for (const auto& d : c->draws) {
+                            std::set<std::string> read;
+                            std::string given;
+                            for (const auto& v : d.given) given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + condition_of(parts, ns, *v.value, read);
+                            std::vector<std::string> names;
+                            if (d.when) language::names_read(*d.when, names);
+                            std::string back;
+                            for (const auto& name : names) {
+                                if (choices_.contains(name)) back += (back.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(route_ + " " + name) + ", " + web_detail::js_string(choices_.at(name)) + "]";
+                            }
+                            draws += (draws.empty() ? "" : ", ") + std::string("{ command: ") + web_detail::js_string(full_command(ns, d.command)) + ", given: { " + given + " }" +
+                                     (d.when ? ", when: " + condition(parts, ns, *d.when) : "") + (back.empty() ? "" : ", back: [" + back + "]") + " }";
+                        }
+                        line += " draws={[" + draws + "]}";
+                    }
                     if (c->crop) line += " crop=" + web_detail::js_string(full_command(ns, *c->crop));
                     if (c->write) line += " write=" + web_detail::js_string(full_command(ns, *c->write));
                     if (c->remove) line += " remove=" + web_detail::js_string(full_command(ns, *c->remove));

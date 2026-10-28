@@ -395,6 +395,34 @@ TEST_CASE("a collage matches its pictures' colors while a condition holds, on th
           std::vector<std::string>{"45: view poster_page has no wide for the button to read"});
 }
 
+TEST_CASE("a collage's layer is drawn by a drag while its draw's when holds, given what it says, and the choices its when reads go back to their first") {
+    auto with_tools = [](std::string source) {
+        source.replace(source.find("\tentity poster"), 0, "\tenum tool {\n\t\tmove\n\t\tbox\n\t}\n\n");
+        return source;
+    };
+    auto files = built(with_tools(collage_screen(R"(		toggle tool::move "Move" key v
+		toggle tool::box "Box" key b
+		collage poster_page.layers size width height {
+			draw layer::create { around = around::edges } when tool == tool::box
+		}
+)")));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"( draws={[{ command: "studio::layer::create", given: { "around": "edges" }, when: ((chosenTool === "box")), back: [["/posters/:poster tool", "move"]] }]})") != std::string::npos);
+    CHECK(native.find(R"(.draws = {collage_draw{.command = "studio::layer::create", .fields = value(std::map<std::string, value>{{"around", value("edges")}}), .when = )") != std::string::npos);
+    CHECK(native.find(R"(.back = {{"/posters/:poster tool", "move"}}})") != std::string::npos);
+    CHECK(messages(with_tools(collage_screen(R"(		collage poster_page.layers size width height {
+			draw layer::delete
+			draw poster::create
+			draw layer::create { tint = "#ffffff" }
+		}
+)"))) == std::vector<std::string>{"50: a drag on the collage makes one of its layers, so draw names layer::create",
+                                   "51: a drag on the collage makes one of its layers, so draw names layer::create",
+                                   "52: entity layer has no field tint to be given"});
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

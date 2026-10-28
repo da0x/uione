@@ -152,6 +152,23 @@ export function cropped(kept: Box, edges: number, dx: number, dy: number, whole:
   return { x: left, y: top, w: right - left, h: bottom - top };
 }
 
+// The box a drag draws from `from` to `to`, whichever way it went: square when
+// `square`, as far as the longer side. A drag no further than `click` is a click, which
+// draws a square a fifth of the collage's shorter side, centered on it.
+export function drawn(from: Point, to: Point, square: boolean, click: number, width: number, height: number): Box {
+  let dx = to.x - from.x, dy = to.y - from.y;
+  if (Math.abs(dx) <= click && Math.abs(dy) <= click) {
+    const side = Math.min(width, height) / 5;
+    return { x: from.x - side / 2, y: from.y - side / 2, w: side, h: side };
+  }
+  if (square) {
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+    dx = dx < 0 ? -side : side;
+    dy = dy < 0 ? -side : side;
+  }
+  return { x: Math.min(from.x, from.x + dx), y: Math.min(from.y, from.y + dy), w: Math.abs(dx), h: Math.abs(dy) };
+}
+
 // The corner of a box a point is within `handle` of, 0 to 3 clockwise from the top
 // left, or -1.
 export function cornerAt(r: Box, at: Point, handle: number): number {

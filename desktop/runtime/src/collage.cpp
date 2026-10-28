@@ -396,7 +396,7 @@ namespace one::desktop::runtime {
 
 		// What the pointer is doing to a layer, from where it was and where the pointer was.
 		struct gesture {
-			enum { none, moving, resizing, cropping, shifting } what = none;
+			enum { none, moving, resizing, cropping, shifting, drawing } what = none;
 			std::string id;
 			model::box from;
 			desktop::point at;
@@ -429,6 +429,7 @@ namespace one::desktop::runtime {
 				std::size_t caret = std::string::npos;  // the byte it stands before
 			};
 			std::optional<writing> editing;
+			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
 			std::vector<std::pair<desktop::rect, std::size_t>> tools;
 			model::box on_board(const model::box& b) const {
 				return {board.x + b.x * scale, board.y + b.y * scale, b.w * scale, b.h * scale};
@@ -591,6 +592,32 @@ namespace one::desktop::runtime {
 				      },
 				      false);
 			}
+		}
+
+		// What a drag on it draws now: the first of its draws whose when holds, if any.
+		const collage_draw* drawing_now(const collage_spec& spec) {
+			for (const auto& d : spec.draws) {
+				if (d.when) return &d;
+			}
+			return nullptr;
+		}
+
+		// A layer drawn, on top of the rest, picked once it's made; then the choices its
+		// when read go back to their first, as a tool goes back to Select. The same as
+		// the web's.
+		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b) {
+			const collage_draw* d = drawing_now(spec);
+			if (!d) return;
+			value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+			const auto& all = layers.as_array();
+			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
+			value sent = collage_fields_of(made, spec.fields);
+			for (const auto& [name, given] : d->fields.fields) sent.fields[name] = given;
+			p.run(d->command, sent, [&p, pick = spec.pick](const answer& a) {
+				if (a && !pick.empty()) p.pick(pick, *a);
+			});
+			for (const auto& [key, first] : d->back) p.choose(key, first);
 		}
 
 		// Words pasted: a layer of them in the middle, a twelfth of its height.
@@ -1308,6 +1335,11 @@ namespace one::desktop::runtime {
 				if (w->guide_x) c.box({board.x + static_cast<float>(*w->guide_x) * scale - 0.5f, board.y, 1, bh}, {.fill = t.accent});
 				if (w->guide_y) c.box({board.x, board.y + static_cast<float>(*w->guide_y) * scale - 0.5f, bw, 1}, {.fill = t.accent});
 			}
+			// A layer being drawn, as big as the drag so far.
+			if (w->drawing) {
+				model::box d = w->on_board(*w->drawing);
+				c.box({static_cast<float>(d.x), static_cast<float>(d.y), static_cast<float>(d.w), static_cast<float>(d.h)}, {.border = t.accent, .border_width = 1.5f});
+			}
 			if (layers.as_array().empty() && !full && !spec.empty.empty()) {
 				auto said = desktop::lay_out(desktop::text_span{spec.empty, t.quiet()}, bw - 32, c.scale());
 				c.text(said, {board.x + (bw - said.width()) / 2, board.y + (bh - said.height()) / 2});
@@ -1417,6 +1449,12 @@ namespace one::desktop::runtime {
 				        w->now = {.what = gesture::cropping, .id = w->crop->id, .from = w->crop->kept, .at = at, .corner = 0, .edges = edges, .kept_from = {}};
 				        return true;
 			        }
+			        // While something's to be drawn, a press on the collage starts drawing it,
+			        // over whatever's there.
+			        if (drawing_now(spec) && w->board.contains(at)) {
+				        w->now = {.what = gesture::drawing, .id = "", .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
+				        return true;
+			        }
 			        // A corner of the picked layer resizes it: a picture with its shape kept,
 			        // words by their size.
 			        for (const auto& l : layers.as_array()) {
@@ -1463,6 +1501,10 @@ namespace one::desktop::runtime {
 		    .on_drag =
 		        [w, width, height, snap = spec.snap](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::drawing) {
+				        w->drawing = model::drawn(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
+				        return;
+			        }
 			        if (w->now.what == gesture::shifting) return shift_crop(*w, at);
 			        if (w->now.what == gesture::cropping) {
 				        if (w->crop) w->crop->kept = going_to(*w, at, width, height, false);
@@ -1473,6 +1515,12 @@ namespace one::desktop::runtime {
 		    .on_release =
 		        [&p, w, width, height, layers, spec](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::drawing) {
+				        gesture g = std::exchange(w->now, {});
+				        w->drawing.reset();
+				        draw_layer(p, spec, layers, model::drawn(w->on_collage(g.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height));
+				        return;
+			        }
 			        if (w->now.what == gesture::shifting || w->now.what == gesture::cropping) {
 				        if (w->now.what == gesture::shifting) shift_crop(*w, at);
 				        else if (w->crop) w->crop->kept = going_to(*w, at, width, height, false);
@@ -1518,6 +1566,7 @@ namespace one::desktop::runtime {
 				        return edges & 5 ? desktop::cursor::resize_across : desktop::cursor::resize_up_down;
 			        }
 			        if (w->editing) return desktop::cursor::text;
+			        if (drawing_now(spec) && w->board.contains(at)) return desktop::cursor::crosshair;
 			        for (const auto& l : layers.as_array()) {
 				        if (l["id"].as_string() != picked || is_words(l) || spec.place.empty()) continue;
 				        int corner = model::corner_at(w->on_board(where_is(l, *w)), on, handle);

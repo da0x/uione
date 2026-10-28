@@ -88,6 +88,7 @@ namespace one::language {
         drawn_by{"collage.add", "adding words to a collage", everywhere},
         drawn_by{"collage.write", "words written on a collage", everywhere},
         drawn_by{"collage.crop", "cropping a collage's picture", "web desktop"},
+        drawn_by{"collage.draw", "a collage's layers drawn by a drag", "web desktop"},
         drawn_by{"collage.paste", "pasting and dropping pictures on a collage", everywhere},
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
@@ -366,6 +367,7 @@ namespace one::language {
                         if (n.add) use("collage.add");
                         if (n.write) use("collage.write");
                         if (n.crop) use("collage.crop");
+                        if (!n.draws.empty()) use("collage.draw");
                         if (n.paste) use("collage.paste");
                         if (n.preview) use("collage.preview");
                         if (n.match_colors) use("collage.match_colors");

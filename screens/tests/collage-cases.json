@@ -519,6 +519,11 @@
         25
       ]
     },
+    {"what": "drawn", "from": [100, 100], "to": [300, 200], "square": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100]},
+    {"what": "drawn", "from": [300, 200], "to": [100, 100], "square": false, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 100]},
+    {"what": "drawn", "from": [100, 100], "to": [300, 150], "square": true, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 200]},
+    {"what": "drawn", "from": [300, 300], "to": [250, 100], "square": true, "click": 4, "size": [1000, 600], "box": [100, 100, 200, 200]},
+    {"what": "drawn", "from": [500, 500], "to": [502, 497], "square": false, "click": 4, "size": [1000, 600], "box": [440, 440, 120, 120]},
     {
       "what": "corner_at",
       "box": [

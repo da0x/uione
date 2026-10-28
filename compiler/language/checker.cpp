@@ -4154,6 +4154,20 @@ namespace one::language {
                     error((*command)->where, "a collage's layers are " + layer->name + "s, so " + line + " names a command on " + layer->name + ", like " + layer->name + "::" + like);
                 }
             }
+            // Drawn by a create on what its layers are, each value given one of their fields.
+            for (const auto& draw : collage.draws) {
+                verify_command_use(ns, draw.command);
+                const entity_declaration* on = find_command(ns, draw.command);
+                if (on && (on != layer || draw.command.parts.back() != "create")) {
+                    error(draw.command.where, "a drag on the collage makes one of its layers, so draw names " + layer->name + "::create");
+                }
+                for (const auto& v : draw.given) {
+                    if (!find_field(*layer, v.name)) error(v.where, "entity " + layer->name + " has no field " + v.name + " to be given" + nearest(v.name, field_names(*layer)));
+                    verify_condition(ns, *v.value, route);
+                }
+                if (draw.when) verify_condition(ns, *draw.when, route);
+                if (!has({"x", "y", "w", "h"})) error(draw.command.where, "a drawn layer is as big as the drag, kept in its x y w h, which " + layer->name + " doesn't have");
+            }
             // Pasted pictures are made by its add, the file in the layer's picture.
             if (collage.paste) {
                 if (!collage.add) error(collage.paste_where, "pasted pictures are made by the collage's add, so it says one too, like add " + layer->name + "::create");
