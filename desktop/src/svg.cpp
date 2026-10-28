@@ -26,6 +26,7 @@
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
 #pragma GCC diagnostic ignored "-Wsign-conversion"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #include <cmath>
 #include <cstdio>
 #include "nanosvg/nanosvg.h"
