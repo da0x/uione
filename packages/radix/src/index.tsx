@@ -1292,7 +1292,9 @@ export const radix: ComponentSet = {
                     <li
                       key={card.id}
                       draggable={draggable ? true : undefined}
-                      tabIndex={draggable && !card.link ? 0 : undefined}
+                      tabIndex={(draggable || card.onPick) && !card.link ? 0 : undefined}
+                      aria-selected={card.onPick ? card.picked === true : undefined}
+                      onClick={card.onPick}
                       onDragStart={() => setDragged({ card: card.id, from: column.id, reaches: card.reaches })}
                       onDragEnd={drop}
                       onDragOver={(event) => {
@@ -1322,6 +1324,12 @@ export const radix: ComponentSet = {
                           onArrange(card.id, up ? column.cards[place - 1].id : column.cards[place + 2]?.id);
                           return;
                         }
+                        // Enter or space picks it, as a click does.
+                        if (card.onPick && event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault();
+                          card.onPick();
+                          return;
+                        }
                         if (!onMove || !event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
                         const step = event.key === "ArrowLeft" ? -1 : 1;
                         for (let next = at + step; next >= 0 && next < columns.length; next += step) {
@@ -1331,9 +1339,9 @@ export const radix: ComponentSet = {
                           return;
                         }
                       }}
-                      className={`relative overflow-hidden rounded-control border border-line bg-surface py-2.5 pr-2.5 pl-3.5 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
-                        draggable ? "cursor-grab active:cursor-grabbing" : ""
-                      } ${dragged?.card === card.id ? "opacity-40" : ""}`}
+                      className={`relative overflow-hidden rounded-control border bg-surface py-2.5 pr-2.5 pl-3.5 text-sm shadow-panel focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-hidden ${
+                        card.picked ? "border-accent ring-2 ring-accent/30" : "border-line"
+                      } ${draggable ? "cursor-grab active:cursor-grabbing" : card.onPick ? "cursor-pointer" : ""} ${dragged?.card === card.id ? "opacity-40" : ""}`}
                     >
                       {/* How urgent it is, an edge down its left side. */}
                       {edged(card.tone) && <span data-edge="" aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ background: edged(card.tone) }} />}

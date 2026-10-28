@@ -628,7 +628,7 @@ export const plain: ComponentSet = {
             </h3>
             <ul>
               {column.cards.map((card, at) => (
-                <li key={card.id}>
+                <li key={card.id} aria-selected={card.onPick ? card.picked === true : undefined} onClick={card.onPick}>
                   {card.link ? <a {...card.link}>{card.title}</a> : card.title}
                   {card.details.length > 0 && (
                     <span data-details="">

@@ -683,7 +683,11 @@ namespace one::terminal::runtime {
 					}
 				}
 				terminal::list_options options;
-				if (!spec.link.empty()) {
+				// The screen's pick of its cards: Enter picks one, and the one picked is chosen.
+				if (!spec.pick.empty()) {
+					options.on_open = [&p, name = spec.pick](const std::string& card) { p.pick(name, card); };
+					options.start = p.picked_id(spec.pick);
+				} else if (!spec.link.empty()) {
 					options.on_open = [&p, links](const std::string& card) {
 						if (auto found = links.find(card); found != links.end() && !found->second.empty()) p.open(found->second);
 					};

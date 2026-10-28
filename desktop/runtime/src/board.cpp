@@ -60,6 +60,7 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::row(desktop::column(std::move(offer)).spacing(8).padding(14).width(360).background({.fill = t.surface, .border = t.accent, .border_width = 1.5f, .radius = t.corners})));
 		}
 		std::vector<desktop::view> lanes;
+		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);  // drawn in the accent
 		std::map<std::string, std::vector<std::string>> reaching;  // where each card may go
 		for (const auto& column : model.columns) {
 			for (const auto& card : column.cards) reaching[card.id] = card.reaches;
@@ -103,7 +104,10 @@ namespace one::desktop::runtime {
 				auto drawn = desktop::row(std::move(shown))
 				                 .spacing(10)
 				                 .padding(edges(10, 12, 10, tone ? 0.f : 12.f))
-				                 .background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = std::min(t.corners, 8.f)});
+				                 .background({.fill = t.surface,
+				                              .border = card.id == picked ? t.accent : t.line,
+				                              .border_width = card.id == picked ? 2.f : 1.f,
+				                              .radius = std::min(t.corners, 8.f)});
 				// A card with somewhere to go is dragged there.
 				if (spec.move && !card.reaches.empty()) drawn = desktop::drag_source(std::move(drawn), card.id);
 				cards_shown.push_back({card.id, std::move(drawn)});
@@ -120,7 +124,11 @@ namespace one::desktop::runtime {
 				lane.push_back(desktop::text("Nothing here", t.quiet()).padding(edges(4, 8)));
 			} else {
 				desktop::list_options options;
-				if (!spec.link.empty()) {
+				// The screen's pick of its cards: a click picks one, and the one picked is chosen.
+				if (!spec.pick.empty()) {
+					options.on_open = [&p, name = spec.pick](const std::string& card) { p.pick(name, card); };
+					options.start = p.picked_id(spec.pick);
+				} else if (!spec.link.empty()) {
 					options.on_open = [&p, links](const std::string& card) {
 						if (auto found = links.find(card); found != links.end() && !found->second.empty()) p.open(found->second);
 					};

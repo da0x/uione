@@ -1797,6 +1797,10 @@ namespace one::generators {
             if (!board.chime_field.empty()) line += " notifyBy={{ field: " + web_detail::js_string(board.chime_field) + ", has: " + web_detail::js_string(board.chime_word) + " }}";
             if (!board.status_field.empty()) line += " statusBy=" + web_detail::js_string(board.status_field);
             if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) line += " waitsOn=" + web_detail::js_string(waits);
+            // A card picked with a click, when the screen picks one of this list.
+            for (const auto& [name, of] : picks_) {
+                if (of.view == full_view(ns, board.view.text()) && of.list == *board.list) line += " pick=" + web_detail::js_string(route_ + " " + name);
+            }
             if (!stages.statuses.empty()) {
                 std::string statuses;
                 for (const auto& [stage, status] : stages.statuses) statuses += (statuses.empty() ? "" : ", ") + stage + ": " + web_detail::js_string(status);

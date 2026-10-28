@@ -421,6 +421,9 @@ export interface BoardCard {
   // waiting, working, done or failed.
   status?: { is: "inactive" | "waiting" | "working" | "success" | "failed"; words: string };
   progress?: { step: number; steps: number }; // how far it is in its stage, as its holder says, like 2 of 5
+  // Picked with a click, when the screen picks a card of the board, as a table's row is.
+  picked?: boolean;
+  onPick?: () => void;
 }
 
 // Where a page is among the pages above it, like Projects › tracker › Product:

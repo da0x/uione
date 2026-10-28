@@ -844,6 +844,11 @@ namespace one::generators {
             }
             std::string out = "board(p, {.view = " + view_variable(parts, screens::full_view(ns, b.view.text())) + ", .list = " + str(*b.list) + ", .by = " + str(b.by) +
                               ", .over = " + over + ", .over_list = " + str(written ? "stages" : b.over_list);
+            // A card picked with a click, when the screen picks one of this list.
+            std::string picks;
+            for (const auto& [name, of] : picks_) {
+                if (of.view == screens::full_view(ns, b.view.text()) && of.list == *b.list) picks = route_ + " " + name;
+            }
             if (written) out += ", .shown = \"title\"";
             for (const auto& column : written ? std::vector<std::string>{} : model_.listed_columns(ns, b.over.text(), b.over_list)) {
                 if (column == "title") out += ", .shown = \"title\"";
@@ -885,6 +890,7 @@ namespace one::generators {
                 out += ", .statuses = {" + statuses + "}";
             }
             if (std::string waits = model_.waits_on(ns, entity); !waits.empty()) out += ", .waits_on = " + str(waits);
+            if (!picks.empty()) out += ", .pick = " + str(picks);
             // Its buttons, like New issue, above it, as a table has them beside its search.
             if (std::string tools = buttons(parts, ns, b.columns, screen); !tools.empty()) return "items(" + tools + ", " + out + "}))";
             return out + "})";

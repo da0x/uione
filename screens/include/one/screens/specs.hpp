@@ -224,6 +224,7 @@ namespace one::screens {
 		// The field listing what a card waits on: while any isn't in a column whose status
 		// is success, it's waiting, saying on what.
 		std::string waits_on = "";
+		std::string pick = "";  // the screen's pick of its cards, by name: a card's click picks it
 	};
 
 	// A pipeline: a list's rows in a lane for each kind its `lanes` field says, each a

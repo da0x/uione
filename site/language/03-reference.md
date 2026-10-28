@@ -2375,7 +2375,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
 - `full screen "Full screen" icon fullscreen key f11` fills the screen with the
   window, and back. A terminal is already its whole window, so it draws nothing.
 - `pick layer from poster_page.layers` names a row of a view's list that the screen
-  holds, picked with a click on a table of that list, `pick poster from posters` for
+  holds, picked with a click on a table or a board of that list, the one picked
+  marked and its link no longer followed by the click, `pick poster from posters` for
   a view's own list. The screen reads it by its name, `text "{layer.size}" when layer
   != none`, and a button for a command on its entity, like `layer::delete "Delete"`,
   acts on the row picked, and is there only while one is. What's picked lives as

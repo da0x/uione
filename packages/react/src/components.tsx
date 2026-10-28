@@ -1786,6 +1786,7 @@ export function Board({
   notifyBy,
   statusBy,
   waitsOn,
+  pick,
 }: {
   view: ViewState;
   list: string; // the cards, like issues
@@ -1813,6 +1814,7 @@ export function Board({
   statuses?: Record<string, string>; // a column's status, the dot its cards show unless they say
   notifyBy?: { field: string; has: string }; // columns kept as records: the field that lists how they notify
   statusBy?: string; // and the field that's their status
+  pick?: string; // the screen's pick of its cards, by name: a card's click picks it
   waitsOn?: string; // the field listing what a card waits on: while any hasn't succeeded, it's waiting, saying on what
 }) {
   const ui = useUI();
@@ -1842,6 +1844,7 @@ export function Board({
     (row) => !wanted || search.some((field) => show(typeof row[field] === "string" ? (choices[field]?.[row[field] as string] ?? row[field]) : row[field]).toLowerCase().includes(wanted)),
   );
   const things = rowsOf(over.data?.[overList]);
+  const pickedId = usePickedId(pick ?? "");
   // On a phone, the stage shown is in the path, the same part as its table's tab, so
   // /in_progress opens on it either way.
   const startOf = sharedStart(things.map((thing) => thing.id));
@@ -1931,6 +1934,7 @@ export function Board({
               id: card.id,
               title: title ? cellOf(ui, links, card, title, { choices, labels, pictures, people }) : card.id,
               link: link ? links(rowLink(link, card, params, keyed, named)) : undefined,
+              ...(pick ? { picked: card.id === pickedId, onPick: () => pickRow(pick, card.id) } : {}),
               // A number said as one, like #12; and who's working it apart, by name
               // and picture.
               details: rest

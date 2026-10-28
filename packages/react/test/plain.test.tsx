@@ -9,6 +9,7 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { App, Board, Canvas, Cards, Details, Diagram, Form, Grid, Hero, Landing, Link, Live, Overline, Section, Statement, Text, Timeline, Steps, Switched, Table, allows, listChoices, memorySource, screen as defineScreen, useView } from "../src/index.js";
 import type { LandingProps, MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
+import { usePickedId } from "../src/workspace.js";
 
 function renderScreen(source: MemorySource, body: () => ReactNode) {
   const only = defineScreen({ title: "Test", route: "/" }, body);
@@ -439,6 +440,35 @@ describe("a board", () => {
     ));
     const card = screen.getByRole("region", { name: "Reported" }).querySelector("li")!;
     expect([...card.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Move to Triaged", "Move to Closed"]);
+  });
+});
+
+describe("a board's cards, picked", () => {
+  it("are picked with a click when the screen picks one, the one picked marked", async () => {
+    const page = {
+      status: "live" as const,
+      data: {
+        stages: [{ id: "s1", title: "To do" }],
+        tasks: [
+          { id: "t1", title: "Pack", stage: "s1" },
+          { id: "t2", title: "Ship", stage: "s1" },
+        ],
+      },
+    };
+    function Picked() {
+      return <p data-testid="picked">{usePickedId("/ task") ?? ""}</p>;
+    }
+    renderScreen(memorySource(), () => (
+      <>
+        <Board view={page} list="tasks" by="stage" over={page} overList="stages" columns={{ title: "Title" }} pick="/ task" />
+        <Picked />
+      </>
+    ));
+    const card = (name: string) => within(screen.getByRole("region", { name: "To do" })).getByText(name).closest("li")!;
+    await act(async () => fireEvent.click(card("Ship")));
+    expect(screen.getByTestId("picked").textContent).toBe("t2");
+    expect(card("Ship").getAttribute("aria-selected")).toBe("true");
+    expect(card("Pack").getAttribute("aria-selected")).toBe("false");
   });
 });
 
