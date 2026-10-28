@@ -208,6 +208,9 @@ namespace one::generators {
                 return picked(parts, name->name.text());
             }
             // A toggle of the screen's, like layers: whether it's on.
+            if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 1 && choices_.contains(name->name.text())) {
+                return chosen(name->name.text());
+            }
             if (auto* name = std::get_if<language::name_expression>(&e.node); name && name->name.parts.size() == 1 && toggles_.contains(name->name.text())) {
                 return "p.toggled(" + str(route_ + " " + name->name.text()) + ")";
             }
@@ -415,6 +418,24 @@ namespace one::generators {
             return out;
         }
 
+        // The toggles over an enum anywhere in a screen, each by its enum, and the choice
+        // it starts at: the first of them the screen shows.
+        static std::map<std::string, std::string> choices_in(const std::vector<language::screen_item>& items) {
+            std::map<std::string, std::string> out;
+            for (const auto& item : items) {
+                if (auto* t = std::get_if<language::toggle_item>(&item.node); t && t->choice) out.emplace(t->name, *t->choice);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    for (auto& [name, first] : choices_in(block->items)) out.emplace(name, first);
+                }
+            }
+            return out;
+        }
+
+        // What a toggle over an enum has chosen, like tool::pen, as a value.
+        std::string chosen(const std::string& name) const {
+            return "value(p.chosen(" + str(route_ + " " + name) + ", " + str(choices_.at(name)) + "))";
+        }
+
         // key ctrl+z key ctrl+y: the keys a line is run by, as a list.
         static std::string keys_of(const std::vector<language::key_chord>& keys) {
             std::string all;
@@ -426,6 +447,7 @@ namespace one::generators {
         std::string plain_value(const language::expression& e, const std::string& otherwise) {
             if (auto* name = std::get_if<language::name_expression>(&e.node)) {
                 const std::string word = name->name.text();
+                if (name->name.parts.size() == 1 && choices_.contains(word)) return chosen(word);
                 if (name->name.parts.size() == 1 && toggles_.contains(word)) return "value(p.toggled(" + str(route_ + " " + word) + "))";
                 if (word == "true" || word == "false") return "value(" + word + ")";
                 if (word == "none") return "value()";
@@ -679,6 +701,16 @@ namespace one::generators {
                     if (auto holding = model_.view_holding(ns, entity->name, v.name)) now = "at(" + view_variable(parts, *holding) + ", " + str(v.name) + ")";
                 }
                 same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + "same(" + now + ", " + value + ")";
+            }
+            // A create sends what the page's address names, as a create form does.
+            if (entity && command.substr(command.rfind("::") + 2) == "create") {
+                for (const auto& field : entity->fields) {
+                    if (!field.type || field.type->parts.size() != 1) continue;
+                    const std::string& points = field.type->parts[0];
+                    bool written = std::ranges::any_of(button.given, [&](const auto& v) { return v.name == field.name; });
+                    if (written || !screens::names_parameter(route_, points) || !model_.entity_named(ns, points)) continue;
+                    given += (given.empty() ? "" : ", ") + std::string("{") + str(field.name) + ", value(" + id_of(parts, points) + ")}";
+                }
             }
             if (!given.empty()) out += ", .fields = value(std::map<std::string, value>{" + given + "})";
             if (!may.empty()) out += ", .allowed = " + may;
@@ -1352,6 +1384,7 @@ namespace one::generators {
         std::optional<std::string> collage_over_;  // and the pick over it, which they may name
         bool at_end_said_ = false;    // a group at the toolbar's end has been written
         std::set<std::string> toggles_;  // the screen's toggles, which its whens read
+        std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
         // and its picks, each the view and list it picks a row of, and that list's entity
         struct pick_of {
             std::string view, list, entity;
@@ -1689,6 +1722,10 @@ namespace one::generators {
                     std::string what = language::asked_of(*does, collage_over_), label = language::label_of(*does);
                     code = "collage_button(p, {.key = " + str(collage_key_) + ", .does = " + str(what) + ", .label = " + str(label) + ", .icon = " + str(does->icon.value_or("")) +
                            (does->keys.empty() ? "" : ", .keys = " + keys_of(does->keys)) + "})";
+                } else if (auto* t = std::get_if<language::toggle_item>(&item.node); t && t->choice) {
+                    // One of an enum's choices, pressed while it's the one.
+                    code = "choose(p, " + str(route_ + " " + t->name) + ", " + str(*t->choice) + ", " + str(choices_.at(t->name)) + ", " +
+                           str(t->label ? *t->label : screens::label(*t->choice)) + ", " + str(t->icon.value_or("")) + ", " + (t->keys.empty() ? "{}" : keys_of(t->keys)) + ")";
                 } else if (auto* t = std::get_if<language::toggle_item>(&item.node)) {
                     code = "toggle(p, " + str(route_ + " " + t->name) + ", " + str(t->label ? *t->label : screens::label(t->name)) + ", " + str(t->icon.value_or("")) + ", " +
                            (t->keys.empty() ? "{}" : keys_of(t->keys)) + ")";
@@ -1793,6 +1830,7 @@ namespace one::generators {
                 auto from_screen = bodies.from(f.path, where.line);
                 route_ = model_.full_route(ns, s->route);
                 toggles_ = toggles_in(s->items);
+                choices_ = choices_in(s->items);
                 at_end_said_ = false;
                 collage_key_ = route_ + " collage";
                 collage_over_.reset();

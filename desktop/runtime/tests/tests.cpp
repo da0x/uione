@@ -1342,6 +1342,28 @@ TEST("a workspace: its bar, the app's name in its middle and light and dark at i
 	matches_golden("workspace", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a toolbar's choices of one enum are pressed one at a time, the first until another's chosen by a press or its key") {
+	memory_source data;
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Studio", "/", "", [](page& p) {
+		                     return workspace(p, region{"toolbar", along(group(p, "Tools", false, false, [&] {
+			                                      return tools(choose(p, "/ tool", "select", "select", "Select", "check", {"v"}), choose(p, "/ tool", "pen", "select", "Pen", "edit", {"p"}));
+		                                      }))},
+		                                      region{"main", items(text({words("Drawing with " + p.chosen("/ tool", "select"))}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	(void)drawn(nav);
+	CHECK(nav.current().chosen("/ tool", "select") == "select");
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'p', .text = "p"}));
+	CHECK(nav.current().chosen("/ tool", "select") == "pen");
+	(void)drawn(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = 'v', .text = "v"}));
+	CHECK(nav.current().chosen("/ tool", "select") == "select");
+	CHECK(data.runs().empty());
+}
+
 TEST("a toolbar's form button is a tool like the others, and the form it opens is shown over the work") {
 	memory_source data;
 	site s{.name = "studio", .id = "org.uione.runtime-tests"};

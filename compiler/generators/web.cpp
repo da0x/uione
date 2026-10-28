@@ -143,6 +143,7 @@ namespace one::generators {
         std::string screen_path_;        // the file whose screens are being written
         std::string route_;              // the address of the screen being written, like /projects/:project
         std::set<std::string> toggles_;  // its toggles, like layers, which its whens read
+        std::map<std::string, std::string> choices_;  // and those over an enum, by it, each to the choice it starts at
         bool in_group_ = false;          // writing a toolbar group's lines, each its own tool
         bool workspace_ = false;         // the screen being written is laid out as a workspace
         std::optional<std::string> row_named_;  // the row an on open line's where reads, by what it's of
@@ -304,6 +305,7 @@ namespace one::generators {
             bool optional_page = false;
             bool viewer = false;  // a button's when reads who's reading, as me
             std::set<std::string> toggles;  // the toggles its whens read, like layers
+            std::set<std::string> choices;  // and the choices of toggles over an enum, like tool
             std::set<std::string> picks;    // the picks it reads, like layer
             // It shows something its address says after its own, like a tab, a page of
             // rows, or a board rather than a table: /tracker/boards/main/board/in_progress.
@@ -343,6 +345,7 @@ namespace one::generators {
                 std::string route = full_route(ns, s->route);
                 route_ = route;
                 toggles_ = toggles_in(s->items);
+                choices_ = choices_in(s->items);
                 workspace_ = (s->layout ? *s->layout : layout_) == "workspace";
                 collage_key_ = route + " collage";
                 collage_over_.reset();
@@ -564,6 +567,12 @@ namespace one::generators {
                         const auto& of = picks_.at(pick);
                         bodies.line("const " + web_detail::js_name("picked_" + pick) + " = usePicked(" + web_detail::js_string(route + " " + pick) + ", " +
                                     view_variable(parts, of.view) + ", " + web_detail::js_string(of.list) + ");");
+                    }
+                    // Each choice of toggles over an enum its whens read, as it is now.
+                    for (const auto& choice : parts.choices) {
+                        components.insert("useChosen");
+                        bodies.line("const " + web_detail::js_name("chosen_" + choice) + " = useChosen(" + web_detail::js_string(route + " " + choice) + ", " +
+                                    web_detail::js_string(choices_.at(choice)) + ");");
                     }
                     // Each toggle its whens read, on or off as the person left it.
                     for (const auto& toggle : parts.toggles) {
@@ -870,6 +879,11 @@ namespace one::generators {
                 }
                 // What's picked, like layer: its row, or null while there's none.
                 if (name->name.parts.size() == 1 && picks_.contains(word)) return picked(parts, word);
+                // A choice of the screen's toggles over an enum, like tool: the one it's at.
+                if (name->name.parts.size() == 1 && choices_.contains(word)) {
+                    parts.choices.insert(word);
+                    return web_detail::js_name("chosen_" + word);
+                }
                 // A toggle of the screen's, like layers: whether it's on.
                 if (name->name.parts.size() == 1 && toggles_.contains(word)) {
                     parts.toggles.insert(word);
@@ -1315,6 +1329,18 @@ namespace one::generators {
                         if (!now.empty() && same != "-") parts.components.insert("sameValue");
                         same = now.empty() || same == "-" ? "-" : (same.empty() ? "" : same + " && ") + "sameValue(" + now + ", " + value + ")";
                     }
+                    // A create sends what the page's address names, as a create form does,
+                    // like the drawing a layer made at /drawings/:drawing is on.
+                    if (entity && command.substr(command.rfind("::") + 2) == "create") {
+                        for (const auto& field : entity->fields) {
+                            if (!field.type || field.type->parts.size() != 1) continue;
+                            const std::string& points = field.type->parts[0];
+                            bool written = std::ranges::any_of(button->given, [&](const auto& v) { return v.name == field.name; });
+                            if (written || !names_parameter(route_, points) || !entity_named(ns, points)) continue;
+                            parts.params.insert(points);
+                            given += (given.empty() ? "" : ", ") + web_detail::js_string(field.name) + ": " + web_detail::js_name(points + "_id");
+                        }
+                    }
                     if (!given.empty()) given = " given={{ " + given + " }}";
                     std::string pressed = button->pressed_when ? " pressed={" + condition(parts, ns, *button->pressed_when) + "}"
                                           : !same.empty() && same != "-" ? " pressed={" + same + "}"
@@ -1448,6 +1474,12 @@ namespace one::generators {
                         out.line("<CollageButton collage=" + web_detail::js_string(collage_key_) + " does=" + web_detail::js_string(what) + " label=" + web_detail::js_string(label) +
                                  (does->icon ? " icon=" + web_detail::js_string(*does->icon) : "") + keys_of(does->keys) + " />");
                     });
+                } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node); toggle && toggle->choice) {
+                    // One of an enum's choices, pressed while it's the one.
+                    parts.components.insert("Choose");
+                    out.line("<Choose name=" + web_detail::js_string(route_ + " " + toggle->name) + " choice=" + web_detail::js_string(*toggle->choice) + " first=" +
+                             web_detail::js_string(choices_.at(toggle->name)) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(*toggle->choice)) +
+                             (toggle->icon ? " icon=" + web_detail::js_string(*toggle->icon) : "") + keys_of(toggle->keys) + " />");
                 } else if (auto* toggle = std::get_if<language::toggle_item>(&item.node)) {
                     parts.components.insert("Toggle");
                     out.line("<Toggle name=" + web_detail::js_string(route_ + " " + toggle->name) + " label=" + web_detail::js_string(toggle->label ? *toggle->label : web_detail::label(toggle->name)) +
@@ -1734,6 +1766,19 @@ namespace one::generators {
             parts.picks.insert(name);
             view_variable(parts, picks_.at(name).view);
             return web_detail::js_name("picked_" + name);
+        }
+
+        // The toggles over an enum anywhere in a screen, each by its enum, and the choice
+        // it starts at: the first of them the screen shows.
+        static std::map<std::string, std::string> choices_in(const std::vector<language::screen_item>& items) {
+            std::map<std::string, std::string> out;
+            for (const auto& item : items) {
+                if (auto* t = std::get_if<language::toggle_item>(&item.node); t && t->choice) out.emplace(t->name, *t->choice);
+                if (auto* block = std::get_if<language::content_block>(&item.node)) {
+                    for (auto& [name, first] : choices_in(block->items)) out.emplace(name, first);
+                }
+            }
+            return out;
         }
 
         // The toggles anywhere in a screen, by their names.

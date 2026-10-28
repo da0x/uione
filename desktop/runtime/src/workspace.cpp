@@ -206,6 +206,14 @@ namespace one::desktop::runtime {
 		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), flip, {.on = on});
 	}
 
+	desktop::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string icon, std::vector<std::string> keys) {
+		bool on = p.chosen(name, first) == choice;
+		auto pick = [&p, name, choice] { p.choose(name, choice); };
+		if (!(p.in_group() && p.off())) for (const auto& k : keys) p.on_key(k, pick);
+		if (p.in_group()) return tool(p, icon, label, keys, pick, on);
+		return desktop::tool_button(desktop::has_icon(icon) ? icon : "", hint_of(label, keys), pick, {.on = on});
+	}
+
 	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys) {
 		std::string command = redo ? "one::redo" : "one::undo";
 		// Off while there's nothing to take back, or again, as the source's history says;

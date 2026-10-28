@@ -105,6 +105,8 @@ namespace one::terminal::runtime {
 		return all;
 	}
 	terminal::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys);
+	// toggle tool::pen: one of an enum's choices, marked while it's the one the page has.
+	terminal::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string icon, std::vector<std::string> keys);
 	terminal::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys);
 	terminal::view messages(page& p);
 	// A collage, as a terminal can show one: its layers a list, the background first,

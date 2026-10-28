@@ -205,6 +205,10 @@ namespace one::screens {
 		// as the person left it on this machine (decision 0017); and turning it.
 		bool toggled(const std::string& name);
 		void toggle(const std::string& name);
+		// What a choice of toggles over an enum is at, like the tool a drawing's in: `first`
+		// until another's chosen, for as long as the page is open.
+		std::string chosen(const std::string& name, const std::string& first) { return kept<std::string>("choice " + name, first).get(); }
+		void choose(const std::string& name, const std::string& choice) { kept<std::string>("choice " + name).set(choice); }
 
 		// The row of a list it picked, by its id, named by the screen's address and the
 		// pick's name; an empty id picks none.

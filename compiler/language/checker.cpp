@@ -198,6 +198,7 @@ namespace one::language {
         std::set<std::string> conflicted_;
         std::string layout_;  // the project's layout for its screens, when it says one
         std::set<std::string> toggles_;  // the toggles of the screen being checked, read by its whens
+        std::map<std::string, std::set<std::string>> choices_;  // and those over an enum, each choice pressed
         std::map<std::string, const view_each*> picks_;  // and its picks, each the list it picks a row of
         std::vector<const collage_item*> collages_;      // and its collages, which its collage buttons act on
         std::vector<const paper_item*> papers_;          // and its papers, which its insert buttons act on
@@ -2729,10 +2730,24 @@ namespace one::language {
             }
             // Its toggles, each named once, so its whens can read them wherever they are.
             toggles_.clear();
+            choices_.clear();
             std::function<void(const std::vector<screen_item>&)> toggles = [&](const std::vector<screen_item>& inside) {
                 for (const auto& item : inside) {
-                    if (auto* t = std::get_if<toggle_item>(&item.node); t && !toggles_.insert(t->name).second) {
-                        error(t->name_where, "toggle " + t->name + " is here twice; a screen has one of each");
+                    if (auto* t = std::get_if<toggle_item>(&item.node)) {
+                        // One of an enum's choices: the enum's, each choice once, and none on or off alone.
+                        if (t->choice) {
+                            qualified_name type{{t->name}, t->name_where};
+                            const enum_declaration* en = find(ns, type, &scope::enums);
+                            if (!en) error(t->name_where, "there's no enum " + t->name + " for this toggle to choose from " + in_namespace(ns));
+                            else if (std::ranges::find(en->choices, *t->choice) == en->choices.end())
+                                error(t->name_where, "enum " + t->name + " has no choice " + *t->choice + nearest(*t->choice, en->choices));
+                            if (toggles_.contains(t->name) && !choices_.contains(t->name)) error(t->name_where, "toggle " + t->name + " is on or off elsewhere here, so it can't be one of a choice too");
+                            else if (!choices_[t->name].insert(*t->choice).second) error(t->name_where, "toggle " + t->name + "::" + *t->choice + " is here twice; a screen has one of each");
+                            toggles_.insert(t->name);
+                        } else if (!toggles_.insert(t->name).second) {
+                            error(t->name_where, choices_.contains(t->name) ? "toggle " + t->name + " is one of a choice elsewhere here, so it can't be on or off alone too"
+                                                                            : "toggle " + t->name + " is here twice; a screen has one of each");
+                        }
                     }
                     if (auto* block = std::get_if<content_block>(&item.node)) toggles(block->items);
                 }

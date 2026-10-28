@@ -101,6 +101,12 @@ namespace one::terminal::runtime {
 		return terminal::button((p.toggled(name) ? "[x] " : "[ ] ") + label, flip);
 	}
 
+	terminal::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string, std::vector<std::string> keys) {
+		auto pick = [&p, name, choice] { p.choose(name, choice); };
+		for (const auto& k : keys) p.on_key(k, pick);
+		return terminal::button((p.chosen(name, first) == choice ? "(•) " : "( ) ") + label, pick);
+	}
+
 	terminal::view history(page& p, bool redo, std::string label, std::string, std::vector<std::string> keys) {
 		std::string command = redo ? "one::redo" : "one::undo";
 		if (label.empty()) label = redo ? "Redo" : "Undo";

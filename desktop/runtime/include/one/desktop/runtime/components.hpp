@@ -140,6 +140,8 @@ namespace one::desktop::runtime {
 	}
 	// toggle layers "Layers": on or off, as the person left it.
 	desktop::view toggle(page& p, std::string name, std::string label, std::string icon, std::vector<std::string> keys);
+	// toggle tool::pen: one of an enum's choices, pressed while it's the one the page has.
+	desktop::view choose(page& p, std::string name, std::string choice, std::string first, std::string label, std::string icon, std::vector<std::string> keys);
 	// undo "Undo", or redo: the page's last step, said in its messages.
 	desktop::view history(page& p, bool redo, std::string label, std::string icon, std::vector<std::string> keys);
 	// What was just done, or why something was turned down.

@@ -2396,6 +2396,12 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   button pressed while it's on, that the screen reads by its name: `side when
   layers`, `text "Shown" when layers`. Each person's is remembered on the device
   they use, and never stored or sent (decision 0017).
+- `toggle tool::pen "Pen" icon edit key p` is one of an enum's choices. The
+  screen's toggles over one enum are one choice, pressed one at a time: the first
+  shown until another is chosen, by a press or its key. The screen reads it as the
+  enum, `when tool == tool::pen`, and it lasts as long as the page is open, as a
+  pick does. A screen doesn't mix a toggle on or off alone with one of a choice of
+  the same name.
 - `undo "Undo" icon undo key ctrl+z` takes back the page's last step, and `redo
   "Redo" icon redo key ctrl+y` takes it again, each said in the screen's messages,
   like "Undid place". They need `storage local`, for now (decision 0018).

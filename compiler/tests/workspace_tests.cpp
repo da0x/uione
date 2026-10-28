@@ -107,6 +107,18 @@ TEST_CASE("a key is any of ctrl, shift and alt, then a key, and a toggle is name
                                    "25: a button's when compares a view's fields with values, like issue_page.status == status::open"});
 }
 
+TEST_CASE("a toggle may be one of an enum's choices, pressed one at a time, and its whens compare the enum with a choice") {
+    std::string chosen = screen("\t\ttoggle tool::select \"Select\" key v\n\t\ttoggle tool::pen \"Pen\" key p\n\t\tposter::create \"New\" when tool == tool::pen\n");
+    chosen.replace(chosen.find("\tentity poster"), 0, "\tenum tool {\n\t\tselect\n\t\tpen\n\t}\n\n");
+    CHECK(messages(chosen).empty());
+    std::string wrong = screen("\t\ttoggle tool::brush \"Brush\"\n\t\ttoggle shade::dark \"Dark\"\n\t\ttoggle tool::pen \"Pen\"\n\t\ttoggle tool::pen \"Again\"\n\t\ttoggle tool \"Tool\"\n");
+    wrong.replace(wrong.find("\tentity poster"), 0, "\tenum tool {\n\t\tselect\n\t\tpen\n\t}\n\n");
+    CHECK(messages(wrong) == std::vector<std::string>{"27: enum tool has no choice brush",
+                                                      "28: there's no enum shade for this toggle to choose from in namespace studio",
+                                                      "30: toggle tool::pen is here twice; a screen has one of each",
+                                                      "31: toggle tool is one of a choice elsewhere here, so it can't be on or off alone too"});
+}
+
 TEST_CASE("two lines always shown can't share a key, as the first would always take it; shown at different times, they can") {
     CHECK(messages(screen("\t\tposter::create \"New\" key ctrl+n\n\t\tlink / \"Home\" key ctrl+n\n")) ==
           std::vector<std::string>{"23: ctrl+n already runs the line at 22, which is always shown too; say when each is shown, or give this one another key"});
@@ -225,6 +237,18 @@ TEST_CASE("a pick is read, picked from a table, and acted on, on the web and the
     CHECK(native.find(R"(words(show(field_of(picked_layer, "size"))))") != std::string::npos);
     CHECK(native.find(R"(command(p, {.command = "studio::layer::scale", .label = "Twice", .fields = value(std::map<std::string, value>{{"by", value(2)}}), .id = picked_layer["id"].as_string(), .when = !none(picked_layer)})") != std::string::npos);
     CHECK(native.find(R"(.pressed = same(at(poster_page, "tint"), value("ink")))") != std::string::npos);
+}
+
+TEST_CASE("a create button sends what the page's address names, as a create form does, beside what it's given") {
+    std::string source = layered_screen("\t\tlayer::create \"Layer\" { size = 20 }\n");
+    source.replace(source.find("\tcommand layer::delete"), 0, "\tcommand layer::create\n");
+    auto files = built(source);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Command name="studio::layer::create" label="Layer" given={{ "size": 20, "poster": posterId }} />)") != std::string::npos);
+    CHECK(native.find(R"(.fields = value(std::map<std::string, value>{{"size", value(20)}, {"poster", value(poster_id)}}))") != std::string::npos);
 }
 
 TEST_CASE("a status line's words are quiet on the desktop, as its messages are, and as the web's status line draws them") {

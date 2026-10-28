@@ -1781,6 +1781,10 @@ namespace one::language {
                 toggle_item toggle;
                 toggle.name_where = peek().where;
                 toggle.name = advance().text;
+                if (at(token_kind::scope)) {
+                    advance();
+                    toggle.choice = expect(token_kind::identifier, "one of the enum's choices, like tool::pen").text;
+                }
                 if (at(token_kind::string)) toggle.label = advance().text;
                 parse_icon(toggle.icon, toggle.icon_where);
                 parse_keys(toggle.keys);

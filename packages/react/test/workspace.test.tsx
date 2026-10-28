@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // A workspace's parts: keys that run what's on a line, a toolbar's groups drawing
-// their buttons as tools, toggles remembered and read by name, undo and redo said in
-// the messages, and a command turned down said there too.
+// their buttons as tools, toggles remembered and read by name, an enum's choices pressed
+// one at a time, undo and redo said in the messages, and a command turned down said
+// there too.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
-import { App, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useToggled, useView } from "../src/index.js";
+import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Toggle, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
 import { usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
@@ -92,6 +93,27 @@ describe("a workspace", () => {
     expect(screen.getByText("The list")).toBeTruthy();
     fireEvent.keyDown(window, { key: "l" });
     expect(screen.queryByText("The list")).toBeNull();
+  });
+
+  it("presses one of an enum's choices at a time, its first until another's chosen, by a press or its key", () => {
+    function Tools() {
+      const tool = useChosen("/ tool", "select");
+      return (
+        <>
+          <Choose name="/ tool" choice="select" first="select" label="Select" keys={["v"]} />
+          <Choose name="/ tool" choice="pen" first="select" label="Pen" keys={["p"]} />
+          <p>Drawing with {tool}</p>
+        </>
+      );
+    }
+    renderScreen(memorySource(), () => <Tools />);
+    const pressed = () => screen.getAllByRole("button").filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.textContent);
+    expect(pressed()).toEqual(["Select"]);
+    fireEvent.click(screen.getByRole("button", { name: "Pen" }));
+    expect(pressed()).toEqual(["Pen"]);
+    expect(screen.getByText("Drawing with pen")).toBeTruthy();
+    fireEvent.keyDown(window, { key: "v" });
+    expect(pressed()).toEqual(["Select"]);
   });
 
   it("says what an undo took back, and why a command was turned down", async () => {

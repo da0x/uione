@@ -184,6 +184,40 @@ export function Toggle({ name, label, icon, keys }: { name: string; label: strin
   );
 }
 
+// toggle tool::pen: one of an enum's choices, pressed while it's the one the page has;
+// the screen's toggles over one enum are one choice, its first until another's chosen,
+// for as long as the page is open, as a pick is.
+const chosenNow = new Map<string, string>();
+const choosing = new Set<() => void>();
+export function useChosen(name: string, first: string): string {
+  return useSyncExternalStore(
+    (changed) => {
+      choosing.add(changed);
+      return () => choosing.delete(changed);
+    },
+    () => chosenNow.get(name) ?? first,
+    () => first,
+  );
+}
+export function setChosen(name: string, choice: string) {
+  chosenNow.set(name, choice);
+  choosing.forEach((changed) => changed());
+}
+
+export function Choose({ name, choice, first, label, icon, keys }: { name: string; choice: string; first: string; label: string; icon?: string; keys?: string[] }) {
+  const ui = useUI();
+  const tool = useTool() ?? "small";
+  const on = useChosen(name, first) === choice;
+  const off = useOff();
+  const pick = useCallback(() => setChosen(name, choice), [name, choice]);
+  useKeys(keys, pick, !off);
+  return (
+    <ui.Button kind="secondary" icon={icon} tool={tool} pressed={on && !off} disabled={off} hint={hintOf(label, keys)} onClick={pick}>
+      {label}
+    </ui.Button>
+  );
+}
+
 // undo and redo
 
 // The command a step was, as words: studio::layer::place is "place".

@@ -994,6 +994,9 @@ namespace one::language {
     struct toggle_item {
         std::string name;
         location name_where;
+        // toggle tool::pen: one of an enum's choices, pressed while it's the one; the
+        // screen's toggles over one enum are one choice, its first until another's pressed.
+        std::optional<std::string> choice;
         std::optional<std::string> label;
         std::optional<std::string> icon;
         location icon_where;

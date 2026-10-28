@@ -288,8 +288,9 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "picture" NAME "." NAME ("fit" | "fill")? ("when" expression)? END
                  /* a row of a view's list the screen holds, picked with a click, read by its name */
                  | "pick" NAME "from" qualified ("." NAME)? END
-                 /* something on or off, read by its name, like side when layers */
-                 | "toggle" NAME STRING? ("icon" NAME)? key* END
+                 /* something on or off, read by its name, like side when layers; or one of an
+                    enum's choices, pressed one at a time, like when tool == tool::pen */
+                 | "toggle" NAME ("::" NAME)? STRING? ("icon" NAME)? key* END
                  /* the page's last step taken back, or taken again, for a project kept on its machine */
                  | ("undo" | "redo") STRING? ("icon" NAME)? key* END
                  /* what was just done, or why a command was turned down */
