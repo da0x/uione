@@ -299,6 +299,44 @@ namespace one::screens {
 		std::function<View(basic_page<View>&)> build = {};
 	};
 
+	// notify planner.reminders at remind_at { title  task::finish "Done" }: whatever
+	// screen is open, a row whose time has come, said once by the system with what it
+	// shows and its buttons, each acting on the row (decision 0024).
+	struct notice_button {
+		std::string command, label;
+		std::function<value()> given = {};  // what it's sent besides the row, worked out as it's pressed
+	};
+	struct notice_spec {
+		std::string view, list, at;  // like orbit::planner, reminders and remind_at
+		std::vector<std::string> shown;  // what it says, its first line first, like title
+		std::vector<notice_button> buttons = {};
+	};
+
+	// A notice due: what it says, and the row its buttons act on.
+	struct notice_due {
+		std::size_t spec = 0;
+		std::string row, title, body;
+	};
+
+	// A site's notices, watched apart from any screen: each view listened to, and what's
+	// been said remembered on this machine, so each is said once, a time that passed
+	// while the app was closed said when it's next open.
+	class notice_watch {
+	public:
+		notice_watch(source& from, std::vector<notice_spec> specs);
+		// What's come due by now and isn't said yet, marked said.
+		std::vector<notice_due> due(std::chrono::system_clock::time_point now = std::chrono::system_clock::now());
+		// One of a notice's buttons pressed: its command run on the row, with what it's given.
+		void press(const notice_due& notice, std::size_t button);
+		const std::vector<notice_spec>& specs() const { return specs_; }
+
+	private:
+		source& from_;
+		std::vector<notice_spec> specs_;
+		std::vector<view_state> latest_;
+		std::vector<listening> listening_;
+	};
+
 	// What the app remembers across its runs for whoever runs it, like the way each
 	// board was last shown: names and values, kept in ~/.local/state/<app>/remembered
 	// ($XDG_STATE_HOME's, when it's set). Until the app says which it is, nothing is
@@ -331,6 +369,7 @@ namespace one::screens {
 		// The addresses the top bar lists first, in this order, like /projects and /docs;
 		// the other screens follow in their own order.
 		std::vector<std::string> navigation = {};
+		std::vector<notice_spec> notices = {};  // said whatever screen is open (decision 0024)
 	};
 
 	// A site's screens in the top bar's order: those at its navigation's addresses

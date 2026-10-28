@@ -29,6 +29,7 @@ relevant record before changing what it covers.
 | [0021](0021-every-picture-in-a-collage-is-a-layer.md) | Every picture in a collage is a layer like the rest |
 | [0022](0022-a-paper-is-a-page-written-in-place.md) | A paper is a page written on in place |
 | [0023](0023-a-calendar-is-a-list-on-its-days.md) | A calendar is a list on its days |
+| [0024](0024-a-notice-is-said-when-a-rows-time-comes.md) | A notice is said when a row's time comes |
 
 ## Writing one
 

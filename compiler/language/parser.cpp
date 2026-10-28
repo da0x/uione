@@ -386,6 +386,7 @@ namespace one::language {
             }
             if (word == "function") return {where, parse_function()};
             if (word == "screen") return {where, parse_screen()};
+            if (word == "notify" && peek(1).kind == token_kind::identifier) return {where, parse_notify()};
             if (word == "picker") return {where, parse_picker()};
             if (word == "enum") return {where, parse_enum()};
             if (word == "webhook") return {where, parse_webhook()};
@@ -1469,6 +1470,44 @@ namespace one::language {
             function.body = parse_statement_block();
             end_line();
             return function;
+        }
+
+        // notify planner.reminders at remind_at { title  task::finish "Done" }: what's said
+        // when a row's time comes, and the buttons on it.
+        notify_declaration parse_notify() {
+            advance();
+            notify_declaration n;
+            n.view = parse_qualified_name("the view whose rows it tells of, like planner");
+            if (at(token_kind::dot)) {
+                advance();
+                n.list = expect(token_kind::identifier, "the view's list, like reminders").text;
+            }
+            if (!at_word("at")) fail_expecting("at and the date saying when, like at remind_at");
+            advance();
+            n.at_where = peek().where;
+            n.at = expect(token_kind::identifier, "the date saying when, like remind_at").text;
+            expect(token_kind::left_brace, "'{' and what it says, like { title }");
+            while (in_block()) {
+                // A button on the notice: a command on its row, its words, and what it's given.
+                if (peek().kind == token_kind::identifier && peek(1).kind == token_kind::scope) {
+                    button_item button{parse_qualified_name("a command on its row, like task::finish"), std::nullopt, nullptr, std::nullopt, "", std::nullopt, {}, {}, {}, nullptr, std::nullopt, {}};
+                    if (at(token_kind::string)) button.label = advance().text;
+                    parse_given(button.given);
+                    n.buttons.push_back(std::move(button));
+                    end_line();
+                    continue;
+                }
+                while (!at_line_end()) {
+                    table_column column;
+                    column.where = peek().where;
+                    column.value = parse_postfix();
+                    n.shown.push_back(std::move(column));
+                }
+                end_line();
+            }
+            expect(token_kind::right_brace, "'}'");
+            end_line();
+            return n;
         }
 
         screen_declaration parse_screen() {

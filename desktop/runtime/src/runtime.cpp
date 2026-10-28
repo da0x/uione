@@ -21,6 +21,7 @@
 #include <optional>
 #include <thread>
 
+#include "one/desktop/notices.hpp"
 #include "one/desktop/runtime/components.hpp"
 
 namespace one::desktop::runtime {
@@ -298,6 +299,44 @@ namespace one::desktop::runtime {
 
 	bool posting() { return posting_to.load() != nullptr; }
 
+	namespace {
+		// A site's notices, said by the desktop whatever screen is open (decision 0024):
+		// what's due looked at once the views have come, and every quarter minute after,
+		// each button pressed on one acting on its row back on the window's thread.
+		class notices_said {
+		public:
+			notices_said(const site& s, screens::source& from) : name_(s.name), watch_(std::make_shared<screens::notice_watch>(from, s.notices)) {
+				std::thread([watch = std::weak_ptr(watch_), on = on_, name = name_] {
+					for (int waited = 0; *on; ++waited) {
+						std::this_thread::sleep_for(std::chrono::seconds(1));
+						if (waited % 15 != 2) continue;
+						post([watch, name] {
+							if (auto w = watch.lock()) look(w, name);
+						});
+					}
+				}).detach();
+			}
+			~notices_said() { *on_ = false; }
+
+		private:
+			static void look(const std::shared_ptr<screens::notice_watch>& watch, const std::string& name) {
+				for (auto& due : watch->due()) {
+					std::vector<desktop::notice_action> actions;
+					const auto& buttons = watch->specs()[due.spec].buttons;
+					for (std::size_t i = 0; i < buttons.size(); ++i) actions.push_back({std::to_string(i), buttons[i].label});
+					desktop::notify(name, due.title, due.body, std::move(actions), [weak = std::weak_ptr(watch), due](const std::string& key) {
+						post([weak, due, key] {
+							if (auto w = weak.lock()) w->press(due, static_cast<std::size_t>(std::stoul(key)));
+						});
+					});
+				}
+			}
+			std::string name_;
+			std::shared_ptr<screens::notice_watch> watch_;
+			std::shared_ptr<std::atomic<bool>> on_ = std::make_shared<std::atomic<bool>>(true);
+		};
+	}  // namespace
+
 	int run(const site& s, desktop::app& app, screens::source& from, const std::string& address) {
 		posting_to = &app;
 		screens::remembered::open(s.id);  // what this app remembers between runs, like how each board was shown
@@ -312,6 +351,8 @@ namespace one::desktop::runtime {
 		});
 		navigator nav(s, from);
 		if (!nav.open(address) && !nav.open(s.screens.empty() ? "/" : s.screens.front().route)) return 2;
+		std::optional<notices_said> notices;
+		if (!s.notices.empty()) notices.emplace(s, from);
 		door handed_to(s.id, app, nav);
 		shown_in = &window;
 		window.show([&] {

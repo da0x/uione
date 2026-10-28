@@ -4428,6 +4428,50 @@ namespace one::language {
         // once "2026-10-07 workflows" { each project { ... } }: each step's body is
         // checked as an update's on its entity, and may name what's already stored, as
         // role::developer, as well as what it makes. A where picks by a field's value.
+        // notify planner.reminders at remind_at { ... }: its view is the app's, not one per
+        // something, whose rows hold the date saying when, and its buttons are commands on
+        // what they are.
+        void verify(const std::string& ns, location, const notify_declaration& n) {
+            snake(n.view);
+            const view_declaration* view = find(ns, n.view, &scope::views);
+            if (view && view->per && *view->per != "user") {
+                error(n.view.where, "view " + n.view.text() + " has one document per " + *view->per + ", so it can't say what's due whatever screen is open; notify from a view of everything, like planner");
+                return;
+            }
+            const view_each* rows = named_list(ns, n.view, n.list, "");
+            if (!rows) return;
+            const entity_declaration* row = listed_entity(ns, *rows);
+            if (!row) return;
+            std::string list = n.list.empty() ? "rows" : n.list;
+            const field* at = find_field(*row, n.at);
+            if (!at) {
+                error(n.at_where, "entity " + row->name + " has no field " + n.at + nearest(n.at, field_names(*row)));
+            } else if (!at->type || at->type->text() != "date") {
+                error(n.at_where, row->name + "." + n.at + " says when it's told, so it's a date, like remind_at  date");
+            } else if (!in_rows(*rows, n.at)) {
+                error(n.at_where, "view " + n.view.text() + " has no " + n.at + " in its " + list + "; add it to the list's block");
+            }
+            if (n.shown.empty()) error(n.view.where, "a notice says something of its row, its first line first, like title");
+            for (const auto& shown : n.shown) {
+                std::string key = written(*shown.value);
+                if (!in_rows(*rows, key)) error(shown.where, "view " + n.view.text() + " has no " + key + " in its " + list + "; add it to the list's block");
+            }
+            for (const auto& button : n.buttons) {
+                verify_command_use(ns, button.command);
+                if (button.command.parts.size() == 2 && button.command.parts[0] != row->name) {
+                    error(button.command.where, "a notice's buttons act on its row, a " + row->name + ", so each is a command on " + row->name + ", like " + row->name + "::finish");
+                }
+                verify_given(ns, button, "");
+                // Said whatever screen is open, it reads no screen: its values are written out.
+                for (const auto& v : button.given) {
+                    auto* name = std::get_if<name_expression>(&v.value->node);
+                    bool written_out = std::holds_alternative<literal_expression>(v.value->node) ||
+                                       (name && (name->name.parts.size() == 2 || name->name.text() == "none" || name->name.text() == "true" || name->name.text() == "false"));
+                    if (!written_out) error(v.where, "a notice's button is given values written out, like remind_at = 10 minutes from now, as it reads no screen");
+                }
+            }
+        }
+
         void verify(const std::string& ns, location where, const once_declaration& o) {
             std::string what = o.signin ? "on signin" : "once \"" + o.name + "\"";
             if (ns.empty()) {

@@ -149,7 +149,18 @@ namespace one::terminal::runtime {
 		const char* stops = std::getenv("ONE_QUIT_STOPS_AGENTS");
 		bool stops_agents = stops && *stops && std::string(stops) != "0";
 		quit_now = [&app] { app.quit(); };
-		int ended = app.run([&] { return drawn(nav); }, [&](const key_press& e) { return key(nav, e, stops_agents); });
+		// The site's notices, said as the terminal's bell and a line, whatever screen is
+		// open, each time it's drawn (decision 0024).
+		std::optional<screens::notice_watch> notices;
+		if (!s.notices.empty()) notices.emplace(from, s.notices);
+		int ended = app.run(
+		    [&] {
+			    if (notices) {
+				    for (const auto& due : notices->due()) screens::chime(due.title);
+			    }
+			    return drawn(nav);
+		    },
+		    [&](const key_press& e) { return key(nav, e, stops_agents); });
 		asking_to_quit.set(std::nullopt);
 		quit_now = nullptr;
 		if (colored && (s.look.colors || screens::tried_themes::theme().peek())) draw_terminal_in(std::nullopt);

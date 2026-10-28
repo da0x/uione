@@ -45,7 +45,7 @@
 file           ::= declaration* EOF
 
 declaration    ::= import | project | namespace | format | enum_type | entity | command | view | role | define_role | extend_role | define_service | define_theme | define_workflow | define_agent
-                 | function | screen | picker | webhook | backend | once | signin | settings | header | footer
+                 | function | screen | notify | picker | webhook | backend | once | signin | settings | header | footer
 
 /* import one: a library a file uses, like uione's own, which says what a project may say */
 import         ::= "import" NAME END
@@ -358,6 +358,10 @@ picker         ::= "picker" NAME "from" NAME END
 
 /* webhook */
 
+/* what's said whatever screen is open once a row's time comes: what it shows, its first line first, and
+   buttons acting on the row, given values written out */
+notify         ::= "notify" qualified ("." NAME)? "at" NAME "{" NEWLINE? notify_line* "}" END
+notify_line    ::= (NAME "::" NAME STRING? given? | column+) END
 webhook        ::= "webhook" NAME ROUTE ("as" NAME)? "{" NEWLINE? webhook_line* "}" END
 webhook_line   ::= "for" NAME ("by" NAME)? END
                  | "on" NAME block END

@@ -293,6 +293,21 @@ export interface CalendarCard {
   onPick?: () => void;
 }
 
+// What's said as rows' times come, whatever screen is open (decision 0024): each a
+// title, what's under it, and buttons acting on its row, kept in a corner of the page
+// until a button's pressed or it's put away.
+export interface NoticesProps {
+  notices: Notice[];
+}
+
+export interface Notice {
+  key: string;
+  title: string;
+  body: string;
+  buttons: { label: string; onClick: () => void }[];
+  onClose: () => void;
+}
+
 // A pipeline, like a release's: a lane for each kind of card, in the order their stages
 // come, and in it a row for each card, its kind's stages along it, each done, the one
 // it's at now, one still to come, or the one it failed in.
@@ -752,6 +767,7 @@ export interface ComponentSet {
   Grid: ComponentType<GridProps>;
   Board: ComponentType<BoardProps>;
   Calendar: ComponentType<CalendarProps>;
+  Notices: ComponentType<NoticesProps>;
   Canvas: ComponentType<CanvasProps>;
   Pipeline: ComponentType<PipelineProps>;
   Toolbar: ComponentType<ToolbarProps>;

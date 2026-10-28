@@ -1415,6 +1415,18 @@ namespace one::language {
         std::vector<screen_item> items;
     };
 
+    // notify planner.reminders at remind_at { title  task::finish "Done" }: whatever
+    // screen is open, a row's time come, said once by the system with what it shows
+    // and its buttons, each acting on the row (decision 0024).
+    struct notify_declaration {
+        qualified_name view;
+        std::string list;  // or none for the view's own, its rows
+        std::string at;    // the date saying when, like remind_at
+        location at_where;
+        std::vector<table_column> shown;    // what it says, its first line first, like title
+        std::vector<button_item> buttons;  // on the notice, each acting on its row
+    };
+
     struct declaration {
         location where;
         std::variant<project_declaration, namespace_declaration, format_declaration,
@@ -1423,7 +1435,7 @@ namespace one::language {
                      webhook_declaration, backend_declaration, enum_declaration, roles_declaration, once_declaration,
                      import_declaration, settings_declaration, footer_declaration, header_declaration, define_role_declaration,
                      define_service_declaration, theme_declaration, define_workflow_declaration, define_agent_declaration, extend_role_declaration,
-                     extend_command_declaration>
+                     extend_command_declaration, notify_declaration>
             node;
     };
 

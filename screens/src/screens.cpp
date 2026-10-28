@@ -774,4 +774,60 @@ namespace one::screens {
 		return value(std::move(all));
 	}
 
+	notice_watch::notice_watch(source& from, std::vector<notice_spec> specs) : from_(from), specs_(std::move(specs)), latest_(specs_.size()) {
+		for (std::size_t i = 0; i < specs_.size(); ++i) {
+			listening_.push_back(from_.listen(specs_[i].view, "", [this, i](const view_state& v) { latest_[i] = v; }));
+		}
+	}
+
+	std::vector<notice_due> notice_watch::due(std::chrono::system_clock::time_point now) {
+		std::vector<notice_due> out;
+		// What's been said, each its row and its time, so a time moved later is said again,
+		// a tab between each.
+		std::set<std::string> said;
+		std::string kept = remembered::get("notices said").value_or("");
+		for (std::size_t at = 0; at < kept.size();) {
+			std::size_t end = kept.find('\t', at);
+			if (end == std::string::npos) end = kept.size();
+			if (end > at) said.insert(kept.substr(at, end - at));
+			at = end + 1;
+		}
+		std::set<std::string> still;  // what's said of rows still there, so the rest is forgotten
+		bool changed = false;
+		for (std::size_t i = 0; i < specs_.size(); ++i) {
+			const auto& spec = specs_[i];
+			if (latest_[i].status != status::ready) continue;
+			for (const auto& row : rows_of(latest_[i], spec.list)) {
+				const value& when = field_of(row, spec.at);
+				if (!when.is_time()) continue;
+				std::string mark = row["id"].as_string() + "@" + std::to_string(when.time.seconds);
+				if (as_read_here(std::chrono::time_point_cast<std::chrono::system_clock::duration>(when.as_time())) > now) continue;
+				still.insert(mark);
+				if (said.contains(mark)) continue;
+				notice_due notice{i, row["id"].as_string(), spec.shown.empty() ? "" : show(field_of(row, spec.shown.front())), ""};
+				for (std::size_t s = 1; s < spec.shown.size(); ++s) {
+					if (std::string line = show(field_of(row, spec.shown[s])); !line.empty()) notice.body += (notice.body.empty() ? "" : "\n") + line;
+				}
+				out.push_back(std::move(notice));
+				changed = true;
+			}
+		}
+		bool forgetting = std::ranges::any_of(said, [&](const std::string& mark) { return !still.contains(mark); }) && std::ranges::all_of(latest_, [](const view_state& v) { return v.status == status::ready; });
+		if (changed || forgetting) {
+			std::string written;
+			for (const auto& mark : still) written += mark + "\t";
+			remembered::set("notices said", written);
+		}
+		return out;
+	}
+
+	void notice_watch::press(const notice_due& notice, std::size_t button) {
+		if (notice.spec >= specs_.size() || button >= specs_[notice.spec].buttons.size()) return;
+		const auto& b = specs_[notice.spec].buttons[button];
+		value fields = b.given ? b.given() : value::map();
+		if (!fields.is_map()) fields = value::map();
+		fields.fields["id"] = value(notice.row);
+		from_.run(b.command, fields, [](const answer&) {});
+	}
+
 }  // namespace one::screens

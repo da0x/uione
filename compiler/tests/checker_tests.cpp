@@ -1670,6 +1670,27 @@ TEST_CASE("a board's columns are the stages written in the code when it says no 
     CHECK(std::ranges::contains(along, std::string("the board's columns are stage's choices, so its cards go along the steps the workflow writes; take out along")));
 }
 
+TEST_CASE("a notice is of a view of the whole app, at a date, its buttons commands on its row given values written out") {
+    auto source = [](const std::string& notify) {
+        return "namespace orbit {\nentity task {\n\ttitle  text\n\tremind_at  date\n\tpriority  text\n}\ncommand task::remind {\n\tby anyone signed in\n\tchanges remind_at\n}\n"
+               "view planner {\n\treminders = each task {\n\t\ttitle  remind_at  priority\n\t}\n}\nview task_page per task {\n\ttitle  remind_at\n}\n" + notify + "}\n";
+    };
+    auto said = [](const diagnostics& out) {
+        std::vector<std::string> messages;
+        for (const auto& d : out) messages.push_back(d.message);
+        return messages;
+    };
+    auto fine = said(check_source(source("notify planner.reminders at remind_at {\n\ttitle\n\ttask::remind \"Later\" { remind_at = 10 minutes from now }\n}\n")));
+    CAPTURE(fine);
+    CHECK(fine.empty());
+    auto per = said(check_source(source("notify task_page at remind_at {\n\ttitle\n}\n")));
+    CHECK(std::ranges::contains(per, std::string("view task_page has one document per task, so it can't say what's due whatever screen is open; notify from a view of everything, like planner")));
+    auto not_a_date = said(check_source(source("notify planner.reminders at priority {\n\ttitle\n}\n")));
+    CHECK(std::ranges::contains(not_a_date, std::string("task.priority says when it's told, so it's a date, like remind_at  date")));
+    auto read = said(check_source(source("notify planner.reminders at remind_at {\n\ttitle\n\ttask::remind \"Later\" { remind_at = planner.when }\n}\n")));
+    CHECK(std::ranges::contains(read, std::string("a notice's button is given values written out, like remind_at = 10 minutes from now, as it reads no screen")));
+}
+
 TEST_CASE("a board over a list of its columns moves its cards to any column when it says no steps") {
     std::string source = "namespace yard {\nentity column {\n\ttitle  text\n}\nentity plate {\n\tname  text\n\tstage  column\n}\ncommand plate::move {\n\tby anyone signed in\n\tchanges stage\n}\n"
                          "view yard_page {\n\tplates = each plate {\n\t\tname  stage\n\t}\n\tcolumns = each column {\n\t\ttitle\n\t}\n}\n"

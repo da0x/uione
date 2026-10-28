@@ -2887,11 +2887,50 @@ namespace one::generators {
             }
         }
 
+        // notify planner.reminders at remind_at { ... }: each said whatever screen is open,
+        // its buttons given values written out, worked out as they're pressed.
+        std::string notices_of(bool& timed) const {
+            std::string out;
+            std::function<void(const std::string&, const std::vector<language::declaration>&)> walk = [&](const std::string& ns, const std::vector<language::declaration>& all) {
+                for (const auto& d : all) {
+                    if (auto* n = std::get_if<language::namespace_declaration>(&d.node)) walk(web_detail::join(ns, n->name), n->declarations);
+                    auto* n = std::get_if<language::notify_declaration>(&d.node);
+                    if (!n) continue;
+                    std::string shown, buttons;
+                    for (const auto& s : n->shown) shown += (shown.empty() ? "" : ", ") + web_detail::js_string(web_detail::text_of(*s.value));
+                    for (const auto& b : n->buttons) {
+                        std::string given;
+                        for (const auto& v : b.given) {
+                            std::string value = "null";
+                            if (auto* literal = std::get_if<language::literal_expression>(&v.value->node)) {
+                                if (literal->type == language::literal_expression::kind::time) timed = true, value = "timeNamed(" + web_detail::js_string(literal->value) + ")";
+                                else value = literal->type == language::literal_expression::kind::number ? literal->value : web_detail::js_string(literal->value);
+                            } else if (auto* name = std::get_if<language::name_expression>(&v.value->node)) {
+                                std::string word = name->name.text();
+                                value = word == "true" || word == "false" ? word : word == "none" ? "null" : web_detail::js_string(name->name.parts.back());
+                            }
+                            given += (given.empty() ? "" : ", ") + web_detail::js_string(v.name) + ": " + value;
+                        }
+                        std::string label = b.label.value_or(web_detail::label(b.command.parts.back()));
+                        buttons += (buttons.empty() ? "" : ", ") + std::string("{ command: ") + web_detail::js_string(full_command(ns, b.command)) + ", label: " + web_detail::js_string(label) +
+                                   (given.empty() ? "" : ", given: () => ({ " + given + " })") + " }";
+                    }
+                    out += (out.empty() ? "" : ", ") + std::string("{ view: ") + web_detail::js_string(full_view(ns, n->view.text())) + ", list: " +
+                           web_detail::js_string(n->list.empty() ? "rows" : n->list) + ", at: " + web_detail::js_string(n->at) + ", shown: [" + shown + "]" +
+                           (buttons.empty() ? "" : ", buttons: [" + buttons + "]") + " }";
+                }
+            };
+            for (const auto& f : files_) walk("", f.declarations);
+            return out;
+        }
+
         stream app_tsx(const std::vector<screen_import>& screens) const {
             stream out;
             auto from = out.from(project_.path, project_.line);
             out.generated_from(source_name());
-            out.line("import { App } from \"@uione/react\";");
+            bool timed = false;
+            std::string notices = notices_of(timed);
+            out.line(timed ? "import { App, timeNamed } from \"@uione/react\";" : "import { App } from \"@uione/react\";");
             if (local_) {
                 out.line("import { localSource } from \"@uione/react/local\";");
             } else {
@@ -2955,7 +2994,8 @@ namespace one::generators {
                 for (const auto& address : model_.navigation(files_)) navigation += (navigation.empty() ? "" : ", ") + web_detail::js_string(address);
                 if (!navigation.empty()) footer += ", navigation: [" + navigation + "]";
                 out.line("export const site = { name: " + web_detail::js_string(title_.empty() ? name_ : title_) + icon + ", screens: [" + names + "], ui: " + ui_ +
-                         ", data" + offered + (analytics_ && !local_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") + " };");
+                         ", data" + offered + (analytics_ && !local_ ? ", analytics" : "") + badges + footer + (display_ ? ", display: true" : "") +
+                         (notices.empty() ? "" : ", notices: [" + notices + "]") + " };");
             }
             out.line();
             out.open("export default function Site() {");

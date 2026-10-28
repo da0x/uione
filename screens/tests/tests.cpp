@@ -428,6 +428,44 @@ TEST("a form's files are uploaded as it's sent and added to what's attached, and
 // The themes some seeds make, as palettes.txt holds them for @uione/react's palette.ts
 // too: a seed, a scheme, then each role's light and dark, a line each. With
 // ONE_PALETTE_GOLDEN=write it's written from what's made now.
+TEST("a notice is said once its row's time has come, each row once at its time, and its button acts on the row") {
+	using namespace std::chrono;
+	use_time_zone("UTC");
+	memory_source data;
+	auto at = [](int h, int m = 0) {
+		value t;
+		t.type = value::kind::time;
+		t.time.seconds = sys_seconds(sys_days(year(2026) / October / 28) + hours(h) + minutes(m)).time_since_epoch().count();
+		return t;
+	};
+	auto task = [](std::string id, std::string title, value when) { return value(fields{{"id", std::move(id)}, {"title", std::move(title)}, {"remind_at", std::move(when)}}); };
+	data.set("orbit::planner", "", value(fields{{"reminders", list{task("t1", "Call the bank", at(9)), task("t2", "Dentist", at(14))}}}));
+	data.on("orbit::task::remind", [](const value&, memory_source&) -> answer { return std::string("t1"); });
+	// Nothing's remembered past the run, as no app says which it is.
+	notice_watch watch(data, {notice_spec{.view = "orbit::planner",
+	                                      .list = "reminders",
+	                                      .at = "remind_at",
+	                                      .shown = {"title"},
+	                                      .buttons = {notice_button{"orbit::task::remind", "In 10 minutes", [] { return value(fields{{"remind_at", value("later")}}); }}}}});
+	auto now = sys_days(year(2026) / October / 28) + hours(10);
+	auto due = watch.due(now);
+	CHECK(due.size() == 1);
+	if (due.size() != 1) return;
+	CHECK(due[0].title == "Call the bank");
+	CHECK(due[0].row == "t1");
+	CHECK(watch.due(now).empty());  // said once
+	CHECK(watch.due(now + hours(5)).size() == 1);  // the dentist's, once it's time
+	// Moved later, it's said again then.
+	data.set("orbit::planner", "", value(fields{{"reminders", list{task("t1", "Call the bank", at(11)), task("t2", "Dentist", at(14))}}}));
+	CHECK(watch.due(now + hours(5)).size() == 1);
+	watch.press(due[0], 0);
+	CHECK(data.runs().size() == 1);
+	if (data.runs().empty()) return;
+	CHECK(data.runs()[0].command == "orbit::task::remind");
+	CHECK(data.runs()[0].fields["id"].as_string() == "t1");
+	CHECK(data.runs()[0].fields["remind_at"].as_string() == "later");
+}
+
 TEST("a seed and a scheme make one theme, written as palettes.txt says, wherever it's made") {
 	std::string made;
 	for (std::uint32_t seed : {1u, 2u, 3u, 7u, 42u, 1000u, 48213u, 99991u, 4294967295u}) {

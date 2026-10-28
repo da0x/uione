@@ -92,6 +92,8 @@ namespace one::language {
         drawn_by{"collage.screenshot", "a screenshot added to a collage", "web desktop"},
         drawn_by{"pictures.choose", "pictures chosen from the device's files, onto a collage or a paper", "web desktop"},
         drawn_by{"calendar", "a list's rows on the days a date of theirs says, a week side by side", "web desktop terminal"},
+        drawn_by{"notify", "a row whose time has come said by the system, whatever screen is open", "web desktop terminal"},
+        drawn_by{"notify.buttons", "buttons on what the system says, acting on its row", "web desktop"},
         drawn_by{"calendar.month", "a calendar as a month's grid while a condition holds", "web desktop terminal"},
         drawn_by{"calendar.move", "a calendar's row dragged to another day", "web desktop"},
         drawn_by{"collage.copy", "a collage copied as a picture", "web desktop"},
@@ -422,6 +424,9 @@ namespace one::language {
                 } else if (auto* f = std::get_if<footer_declaration>(&d.node)) {
                     out.push_back({"footer", d.where});
                     items(f->items, out);
+                } else if (auto* n = std::get_if<notify_declaration>(&d.node)) {
+                    out.push_back({"notify", d.where});
+                    if (!n->buttons.empty()) out.push_back({"notify.buttons", d.where});
                 }
             }
         }

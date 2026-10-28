@@ -86,6 +86,7 @@ add_library(one_desktop
 	src/portal.cpp
 	src/screenshot.cpp
 	src/files.cpp
+	src/notices.cpp
 	src/picture.cpp
 	src/renderer.cpp
 	src/seat.cpp

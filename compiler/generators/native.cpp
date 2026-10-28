@@ -1974,6 +1974,21 @@ namespace one::generators {
                             bodies.line("s.badges.push_back({" + str(full) + ", " + str(b.value) + ", " + str(screens::label(b.value)) + "});");
                         }
                     }
+                    // notify planner.reminders at remind_at { ... }: said whatever screen is open.
+                    if (auto* n = std::get_if<language::notify_declaration>(&d.node)) {
+                        auto from = bodies.from(files_path(d), d.where.line);
+                        std::string shown, buttons;
+                        for (const auto& s : n->shown) shown += (shown.empty() ? "" : ", ") + str(screens::text_of(*s.value));
+                        for (const auto& b : n->buttons) {
+                            std::string given;
+                            for (const auto& v : b.given) given += (given.empty() ? "" : ", ") + std::string("{") + str(v.name) + ", " + plain_value(*v.value, "value()") + "}";
+                            std::string label = b.label.value_or(screens::label(b.command.parts.back()));
+                            buttons += (buttons.empty() ? "" : ", ") + std::string("notice_button{") + str(screens::full_command(ns, b.command)) + ", " + str(label) +
+                                       (given.empty() ? "" : ", [] { return value(std::map<std::string, value>{" + given + "}); }") + "}";
+                        }
+                        bodies.line("s.notices.push_back({.view = " + str(screens::full_view(ns, n->view.text())) + ", .list = " + str(n->list.empty() ? "rows" : n->list) +
+                                    ", .at = " + str(n->at) + ", .shown = {" + shown + "}" + (buttons.empty() ? "" : ", .buttons = {" + buttons + "}") + "});");
+                    }
                     if (auto* f = std::get_if<language::footer_declaration>(&d.node)) {
                         auto from = bodies.from(files_path(d), d.where.line);
                         screen_path_ = files_path(d);

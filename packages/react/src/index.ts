@@ -15,6 +15,7 @@ export { OnOpen, screenSize } from "./opening.js";
 export type { OpeningLine } from "./opening.js";
 export type { Said, Saying } from "./said.js";
 export type { AppProps, Screen, SiteFooter, ScreenInfo, TitlePart, Badge } from "./app.js";
+export type { NoticeSpec } from "./notices.js";
 
 export { Actions, Board, Calendar, Canvas, Cards, Picture, Chart, Monitor, Pipeline, Code, Command, Copy, Details, Files, Find, Landing, useAddressState, toneOf, Diagram, Grid, Layout, Region, Confirm, Form, Hero, Link, Live, Markdown, Menu, Pages, Overline, Section, Statement, Steps, Switched, Table, Text, Themes, Thread, Timeline, useTriedTheme, changed, csvOf, done, holds, keptByTime, timeNamed, allows, isNone, listChoices, listHas, markdownOf, ordered, phrase, divided, remainder } from "./components.js";
 export type { BoardMove, CopiedField, Tally, CopiedList, DocPage, FieldSpec, GridCommand, RowAction } from "./components.js";

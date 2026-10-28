@@ -1163,6 +1163,36 @@ export const radix: ComponentSet = {
       </p>
     </div>
   ),
+  // What's said as rows' times come, in the page's corner, the newest last: each its
+  // title, what's under it, its buttons, and a way to put it away.
+  Notices: ({ notices }) => (
+    <aside aria-label="Notices" className="fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2">
+      {notices.map((n) => (
+        <section key={n.key} role="status" aria-label={n.title} className="flex flex-col gap-2 rounded-box border border-line bg-surface p-3 text-sm shadow-raised">
+          <div className="flex items-start gap-2">
+            <span aria-hidden="true" className="mt-0.5 text-accent">
+              {buttonIcons["bell"]}
+            </span>
+            <strong className="mr-auto leading-snug">{n.title}</strong>
+            <button type="button" aria-label="Put away" onClick={n.onClose} className="-mt-1 -mr-1 flex size-6 items-center justify-center rounded-control text-muted hover:text-ink">
+              ×
+            </button>
+          </div>
+          {n.body && <p className="pl-6 text-muted whitespace-pre-line">{n.body}</p>}
+          {n.buttons.length > 0 && (
+            <div className="flex flex-wrap gap-2 pl-6">
+              {n.buttons.map((b, i) => (
+                <button key={b.label} type="button" onClick={b.onClick} className={`${pressable} ${i === 0 ? button.primary : button.secondary} !px-3 !py-1.5`}>
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </aside>
+  ),
+
   // A calendar: what it's on, beside the ways back, to today and on; then its days, a
   // week side by side or a month's grid, today's in the accent, each with its rows, a
   // day alone first, each picked with a click or Enter and dragged to another day,

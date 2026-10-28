@@ -13,6 +13,8 @@ import { buildLinks } from "./contract.js";
 import { DataProvider, useAuth, useAuthorize, useShownOnce, useView } from "./data.js";
 import type { CommandInput, DataSource, ViewState } from "./data.js";
 import { partsOf } from "./keys.js";
+import { Notices } from "./notices.js";
+import type { NoticeSpec } from "./notices.js";
 import { SayingContext } from "./said.js";
 import type { Said } from "./said.js";
 import { Rest, UIContext, useLinks, useUI } from "./ui.js";
@@ -56,6 +58,7 @@ export interface AppProps {
   // The addresses the navigation lists first, in this order, like ["/projects", "/docs"];
   // the other screens follow in their own order.
   navigation?: readonly string[];
+  notices?: readonly NoticeSpec[]; // said as rows' times come, whatever screen is open (decision 0024)
 }
 
 // Screens in the navigation's order: those at its addresses first, by where each is
@@ -249,7 +252,7 @@ export function accentOf(color: string): string {
   return `:root${any} { ${light} } @media (prefers-color-scheme: dark) { :root${any}:not([data-theme="light"]) { ${dark} } } :root${any}[data-theme="dark"] { ${dark} }`;
 }
 
-export function App({ name, icon, screens: given, ui, data, location, authentication = true, analytics, color, badges = [], build, footer, display = false, navigation = noNavigation }: AppProps) {
+export function App({ name, icon, screens: given, ui, data, location, authentication = true, analytics, color, badges = [], build, footer, display = false, navigation = noNavigation, notices }: AppProps) {
   const screens = useMemo(() => inNavigation(given, navigation), [given, navigation]);
   const routes = (
     <>
@@ -279,6 +282,7 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
           )}
         </SignInProvider>
         <KeyShown />
+        {notices && notices.length > 0 && <Notices name={name} notices={notices} />}
       </DataProvider>
       </BuildSpec.Provider>
       </DisplaySpec.Provider>

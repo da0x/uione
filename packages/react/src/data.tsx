@@ -142,7 +142,7 @@ export function useSearch(): DataSource["search"] {
   return useContext(DataContext)?.search;
 }
 
-function useSource(): DataSource {
+export function useSource(): DataSource {
   const source = useContext(DataContext);
   if (!source) throw new Error("uione: views and commands need an App with a data source");
   return source;

@@ -218,6 +218,14 @@ namespace studio at / {
 		}
 	}
 
+	// A poster's showing, said when it comes, whatever screen is open, with a way to put
+	// it off a day.
+	notify posters at showing {
+		title
+		color
+		poster::schedule "Tomorrow" { showing = tomorrow }
+	}
+
 	// Every poster as it looks, from the preview it keeps of itself.
 	screen "Gallery" /gallery {
 		link / "Posters" icon gallery key escape

@@ -608,6 +608,26 @@ export const plain: ComponentSet = {
       />
     </div>
   ),
+  // What's said as rows' times come: each a note, its title, what's under it, its
+  // buttons, and a way to put it away.
+  Notices: ({ notices }) => (
+    <aside aria-label="Notices">
+      {notices.map((n) => (
+        <section key={n.key} role="status" aria-label={n.title}>
+          <strong>{n.title}</strong>
+          {n.body && <p>{n.body}</p>}
+          {n.buttons.map((b) => (
+            <button key={b.label} type="button" onClick={b.onClick}>
+              {b.label}
+            </button>
+          ))}
+          <button type="button" aria-label="Put away" onClick={n.onClose}>
+            ×
+          </button>
+        </section>
+      ))}
+    </aside>
+  ),
   // A calendar: what it's on and the ways back and on, then each day, a region named
   // by it, its rows a list, each picked with a click; a row is dragged to another day.
   Calendar: ({ status, title, days, error, back, next, onToday, onMove }) => (

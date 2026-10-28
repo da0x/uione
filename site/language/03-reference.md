@@ -2621,6 +2621,33 @@ issue::verify "Verify" when {
   people write is drawn safely: it can't add markup or scripts to the page, and
   images in it are shown as links.
 
+## notify
+
+What's said whatever screen is open, once a row's time comes (decision 0024):
+
+```one
+notify planner.reminders at remind_at {
+	title
+	board.title
+	task::finish "Done"
+	task::remind "In 10 minutes" { remind_at = 10 minutes from now }
+}
+```
+
+- It names a view of the whole app, not one per something, and a list of it, or the
+  view by itself for its own, and the date saying when each row is due. Keep in the
+  view only what should be said, like `where done_at == none`.
+- What it shows of a row, its first line first, is said as the title and what's
+  under it, with its buttons, each a command on the row, given values written out,
+  like `10 minutes from now` or `tomorrow at 9:00`, worked out as it's pressed.
+- Each row is said once at its time, remembered on the machine; a time moved later is
+  said again then, and one that passed while the app was closed is said when it's next
+  open.
+- The desktop says it as its own notifications do, its buttons on it; the web puts it
+  in the page's corner, and lets the browser say it too once the person allows it,
+  which it asks the first time they press one; a terminal rings its bell and says it.
+  It's said only while the app is running.
+
 ## picker
 
 How other features choose one of these entities. A form field whose type is an
