@@ -30,6 +30,7 @@ relevant record before changing what it covers.
 | [0022](0022-a-paper-is-a-page-written-in-place.md) | A paper is a page written on in place |
 | [0023](0023-a-calendar-is-a-list-on-its-days.md) | A calendar is a list on its days |
 | [0024](0024-a-notice-is-said-when-a-rows-time-comes.md) | A notice is said when a row's time comes |
+| [0025](0025-a-collage-layer-may-be-a-shape.md) | A collage's layer may be a shape, drawn by a pinned copy of nanosvg |
 
 ## Writing one
 

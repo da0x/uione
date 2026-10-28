@@ -666,6 +666,12 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 			bool close = true;
 			for (std::size_t i = 0; i < 3; ++i) close = close && std::abs(rgb[i] - n(k["expect"], i)) <= k["close"].as_double();
 			check::verify(close, "shifted", std::format("{}: {} {} {}", note, rgb[0], rgb[1], rgb[2]));
+		} else if (what == "svg") {
+			const auto& said = k["shape"];
+			c::shape s{said["kind"].as_string(), said["points"].as_string(), said["fill"].as_string(), said["stroke"].as_string(), said["stroke_width"].as_double(),
+			           said["corners"].as_double()};
+			std::string got = c::svg_element(s, n(k["box"], 0), n(k["box"], 1), n(k["box"], 2), n(k["box"], 3));
+			check::verify(got == k["svg"].as_string(), "svg", note + ": " + got);
 		} else {
 			check::verify(false, "a case of something known", note);
 		}

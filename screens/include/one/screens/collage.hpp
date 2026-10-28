@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -154,6 +155,33 @@ namespace one::screens::collage {
 	// 255; how strong its colors are is moved half as far, never past a quarter more or
 	// a fifth less; one too even to tell, or nearly gray, is left as it is.
 	std::vector<color_shift> matched(const std::vector<color_stats>& pictures, double strength, double cast);
+
+	// A layer that's neither a picture nor words is a shape, as its parts say (decision
+	// 0025): a rectangle, its corners rounded as far as corners says, a share of its
+	// shorter side; an ellipse; or a path through its points, in SVG path notation, M, L,
+	// C and Z, each point a fraction of its box from its top left. Each is filled and
+	// stroked as it says, a color written #rrggbb or none, its stroke as wide as it says
+	// in the collage's pixels, half of it outside its outline as SVG draws it.
+	struct shape {
+		std::string kind = "rectangle";  // rectangle, ellipse or path
+		std::string points;
+		std::string fill = "none", stroke = "none";
+		double stroke_width = 0;
+		double corners = 0;
+	};
+
+	// A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a
+	// 100 by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is
+	// left out.
+	std::string path_in(std::string_view points, double x, double y, double w, double h);
+
+	// The shape as one SVG element in the box at x y, w by h: <rect>, <ellipse> or <path>,
+	// what a saved drawing holds and what the desktop draws.
+	std::string svg_element(const shape& s, double x, double y, double w, double h);
+
+	// As a whole SVG document, w by h and as much more around as its stroke reaches,
+	// `reach` on each side, so none of it is cut off.
+	std::string svg_alone(const shape& s, double w, double h, double reach);
 
 	// How far a collage matching its colors moves each picture's: its cast all the way,
 	// so the same face in two lights looks alike, and the rest most of the way.

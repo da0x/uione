@@ -319,6 +319,21 @@ TEST("a font an app brings, from its bytes, is offered with the system's, and te
 	CHECK(one::desktop::lay_out(one::desktop::text_span{"After", body}, 0, 1).width() > 0);
 }
 
+TEST("an SVG document is drawn by the pinned nanosvg, an ellipse filled inside and clear at its corners, its edge smooth") {
+	auto drawn = one::desktop::picture::from_svg(R"(<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><ellipse cx="20" cy="10" rx="20" ry="10" fill="#2e86de"/></svg>)", 80, 40);
+	CHECK(drawn.width() == 80);
+	CHECK(drawn.height() == 40);
+	auto at = [&](int x, int y) { return &drawn.rgba()[(static_cast<std::size_t>(y) * 80 + x) * 4]; };
+	CHECK(at(40, 20)[2] == 0xde);
+	CHECK(at(40, 20)[3] == 255);
+	CHECK(at(1, 1)[3] == 0);
+	// Its edge is neither all in nor all out somewhere.
+	bool smooth = false;
+	for (int x = 0; x < 40; ++x) smooth = smooth || (at(x, 20)[3] > 0 && at(x, 20)[3] < 255);
+	CHECK(smooth);
+	CHECK(!one::desktop::picture::from_svg("not an svg", 10, 10));
+}
+
 TEST("a screenshot with no desktop to ask says so, rather than waiting or failing badly") {
 	const char* was = std::getenv("DBUS_SESSION_BUS_ADDRESS");
 	std::string kept = was ? was : "";

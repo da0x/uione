@@ -2162,8 +2162,17 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   shorter side and fading as they go. While a layer's being moved, resized or
   cropped, its pictures are drawn alone, nothing drawn around them, so what's being
   done is plain to see. Its `corners` trim it round, as far as that share of its shorter side, with
-  no line drawn along them; at 0, the default, they're square. A click picks a
-  layer, nothing when it's on nothing, and Esc lets it go.
+  no line drawn along them; at 0, the default, they're square. A layer that's
+  neither a picture nor words is a shape (decision 0025): its `shape` a `rectangle`,
+  rounded as its `corners` say, an `ellipse`, or a `path` through its `points`, SVG
+  path notation of `M`, `L`, `C` and `Z` with each point a fraction of its box from
+  its top left; filled with its `fill` and stroked with its `stroke`, each `#rrggbb` or
+  none, its `stroke_width` in the collage's pixels, half outside its outline as SVG
+  draws it. Any layer shows as much as its `opacity` says, from 0 to 1. A shape is
+  resized freely, its shape kept only with Shift, the other way from a picture; the
+  desktop draws it from its SVG with a pinned copy of nanosvg, and the web with its
+  canvas's paths. A click picks a layer, nothing when it's on nothing, and Esc lets it
+  go.
   - `place layer::place`: a picked layer is moved, or resized by a corner with its
     shape kept unless Shift is held, and the command is sent its `x y w h`; the arrows
     nudge it, by ten with Shift. In a terminal, its layers are a list, and Alt with
@@ -2205,8 +2214,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     image  sized image_width image_height`, `cropped to left top width height`,
     `turned quarters`, `mirrored flipped`, `around margin`, `rounded roundness`, and `words caption  sized
     letters  colored ink  weighing boldness  slanted lean`. The checker holds each to its type:
-    numbers, a file, text, and `around` choices from `clear edges color
-    harmonize`. Cropping needs the crop's four, and writing needs
+    numbers, a file, text, `around` choices from `clear edges color
+    harmonize`, and `shape` choices from `rectangle ellipse path`. Cropping needs the crop's four, and writing needs
     `words` and `size`. The runtimes know only the parts; which field keeps each
     is handed to them by the compiler.
   - `paste`: pictures dropped on it, or pasted, are made layers by its `add`, each

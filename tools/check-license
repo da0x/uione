@@ -50,6 +50,9 @@ marker() {
 		# stb's pictures, another project's, public domain, pinned by their sha256 in
 		# desktop/CMakeLists.txt and kept exactly as fetched.
 		stb_image.h|stb_image_write.h) case "$1" in desktop/src/stb/*) echo exempt ;; esac ;;
+		# nanosvg's shapes, another project's, under the zlib license beside them, pinned
+		# by their sha256 in desktop/CMakeLists.txt and kept exactly as fetched.
+		nanosvg.h|nanosvgrast.h|nanosvg-license.txt) case "$1" in desktop/src/nanosvg/*) echo exempt ;; esac ;;
 		*.one|*.go|*.ts|*.tsx|*.js|*.mjs|*.cpp|*.hpp|*.hpp.in|*.h|*.rules|*.vert|*.frag) echo '//' ;;
 		*.vim) echo '"' ;;
 		# CSS and the EBNF grammar have only block comments: the header sits inside

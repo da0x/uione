@@ -1496,6 +1496,9 @@ namespace one::language {
             {"crop_x", "number"}, {"crop_y", "number"}, {"crop_w", "number"}, {"crop_h", "number"},
             {"turns", "number"}, {"mirrored", "number"}, {"around", "clear edges color harmonize"}, {"corners", "number"},
             {"words", "text"}, {"size", "number"}, {"color", "text"}, {"weight", "number"}, {"italic", "number"},
+            // A shape's, when it's neither a picture nor words (decision 0025): what it is, a path's
+            // points, its fill and stroke, and how much of it shows.
+            {"shape", "rectangle ellipse path"}, {"points", "text"}, {"fill", "text"}, {"stroke", "text"}, {"stroke_width", "number"}, {"opacity", "number"},
         };
         return all;
     }

@@ -54,7 +54,14 @@ namespace one::desktop::runtime {
 			return {or_else("crop_x", 0), or_else("crop_y", 0), or_else("crop_w", 1), or_else("crop_h", 1)};
 		}
 
-		bool is_words(const value& layer) { return layer["picture"].as_string().empty(); }
+		// What a layer is: a picture, when it has one; words, when it has those; or else a
+		// shape, as its parts say (decision 0025).
+		bool is_picture(const value& layer) { return !layer["picture"].as_string().empty(); }
+		bool is_words(const value& layer) { return !is_picture(layer) && !layer["words"].as_string().empty(); }
+		bool is_shape(const value& layer) { return !is_picture(layer) && !is_words(layer); }
+
+		// How much of a layer shows: all of it, unless its opacity says less.
+		float opacity_of(const value& layer) { return layer["opacity"].is_null() ? 1.f : std::clamp(static_cast<float>(layer["opacity"].as_double()), 0.f, 1.f); }
 
 		desktop::rect as_rect(const model::box& b) { return {static_cast<float>(b.x), static_cast<float>(b.y), static_cast<float>(b.w), static_cast<float>(b.h)}; }
 
@@ -396,6 +403,7 @@ namespace one::desktop::runtime {
 			int corner = 0;
 			int edges = 0;                           // a crop's edges dragged, or none to move it
 			model::box kept_from = {};               // while a crop's picture shifts, what's kept as it was
+			bool free = false;                       // a shape, resized freely, its shape kept only with Shift
 		};
 
 		// Where the collage was last drawn in the window, and how much smaller than
@@ -464,7 +472,7 @@ namespace one::desktop::runtime {
 			if (g.what == gesture::cropping && w.crop) return model::cropped(g.from, g.edges, dx, dy, w.crop->whole);
 			model::guided to;
 			if (g.what == gesture::moving) to = model::moved(g.from, dx, dy, w.lines, width, height, close, snaps);
-			else to = model::resized(g.from, g.corner, dx, dy, !desktop::held().shift, w.lines, close, snaps);
+			else to = model::resized(g.from, g.corner, dx, dy, g.free ? desktop::held().shift : !desktop::held().shift, w.lines, close, snaps);
 			w.guide_x = to.guide_x, w.guide_y = to.guide_y, w.corner = to.corner;
 			return to.at;
 		}
@@ -659,7 +667,7 @@ namespace one::desktop::runtime {
 			std::vector<std::string> ids;
 			std::vector<model::color_stats> stats;
 			for (const auto& l : layers.as_array()) {
-				if (is_words(l)) continue;
+				if (!is_picture(l)) continue;
 				auto file = p.file_here(l["picture"].as_string());
 				model::box b = box_of(l);
 				if (!file || b.w <= 0 || b.h <= 0) continue;
@@ -782,6 +790,25 @@ namespace one::desktop::runtime {
 			return shown.empty() ? std::nullopt : readied.peek(shown);
 		}
 
+		// A shape layer drawn at `on`, its box `b` in the collage's pixels: from its SVG, by
+		// the pinned nanosvg, as many pixels as it's shown, and as much more around as its
+		// stroke reaches; made once for each look and size.
+		void paint_shape(desktop::canvas& c, desktop::rect on, model::box b, const value& layer) {
+			if (b.w <= 0 && b.h <= 0) return;
+			model::shape s{layer["shape"].as_string().empty() ? "rectangle" : layer["shape"].as_string(), layer["points"].as_string(), layer["fill"].as_string(),
+			               layer["stroke"].as_string(), layer["stroke"].as_string().empty() ? 0 : layer["stroke_width"].as_double(), layer["corners"].as_double()};
+			double per = b.w > 0 ? on.width / b.w : on.height / b.h;  // window pixels a collage pixel
+			double reach = s.stroke_width / 2 + 1;
+			double device = per * c.scale();
+			int pw = std::max(1, static_cast<int>(std::lround((b.w + 2 * reach) * device))), ph = std::max(1, static_cast<int>(std::lround((b.h + 2 * reach) * device)));
+			std::string svg = model::svg_alone(s, b.w, b.h, reach);
+			static kept_by<desktop::picture> made(128);
+			desktop::picture drawn = made.get(std::format("{} {} {}", svg, pw, ph), [&] { return desktop::picture::from_svg(svg, pw, ph); });
+			if (!drawn) return;
+			float out = static_cast<float>(reach * per);
+			c.picture(drawn, {on.x - out, on.y - out, on.width + 2 * out, on.height + 2 * out}, {0, 0, 1, 1}, opacity_of(layer));
+		}
+
 		// A picture layer drawn at `on` in the window, `board` the collage there: what's
 		// around it first, as its around says, over what's under it; then it, its corners
 		// trimmed round as far as its corners say, a share of its shorter side; then,
@@ -792,7 +819,7 @@ namespace one::desktop::runtime {
 			std::string around = layer["around"].as_string();
 			const desktop::picture& kept = seen.picture;
 			if (effects && (around == "edges" || around == "color")) paint_around(c, board, on, seen.key, kept, around);
-			c.picture(kept, on, {0, 0, 1, 1}, 1, static_cast<float>(layer["corners"].as_double()) * std::min(on.width, on.height));
+			c.picture(kept, on, {0, 0, 1, 1}, opacity_of(layer), static_cast<float>(layer["corners"].as_double()) * std::min(on.width, on.height));
 			if (effects && halo) paint_halo(c, *halo, on);
 		}
 
@@ -800,7 +827,7 @@ namespace one::desktop::runtime {
 		std::vector<std::pair<model::box, look>> harmonized_of(const value& layers, const std::map<std::string, ready_layer>& ready) {
 			std::vector<std::pair<model::box, look>> out;
 			for (const auto& l : layers.as_array()) {
-				if (is_words(l) || !harmonizes(l)) continue;
+				if (!is_picture(l) || !harmonizes(l)) continue;
 				if (auto found = ready.find(l["id"].as_string()); found != ready.end() && found->second.seen.picture) out.emplace_back(box_of(l), found->second.seen);
 			}
 			return out;
@@ -821,7 +848,7 @@ namespace one::desktop::runtime {
 			whole all{layers, width, height, scale, only, current_theme().text_family, {}, {}};
 			auto shifts = shifts_of(p, layers, matching, measured_now);
 			for (const auto& l : layers.as_array()) {
-				if (is_words(l)) continue;
+				if (!is_picture(l)) continue;
 				auto file = p.file_here(l["picture"].as_string());
 				if (!file) continue;
 				std::optional<model::color_shift> shift;
@@ -855,6 +882,10 @@ namespace one::desktop::runtime {
 					if (is_words(layer)) {
 						desktop::rect on = at(box_of(layer));
 						paint_words(c, layer, layer["words"].as_string(), layer["size"].as_double() * scale, {on.x, on.y}, std::string::npos, all.family);
+						continue;
+					}
+					if (is_shape(layer)) {
+						paint_shape(c, at(box_of(layer)), box_of(layer), layer);
 						continue;
 					}
 					auto found = all.pictures.find(id);
@@ -1046,7 +1077,7 @@ namespace one::desktop::runtime {
 		if (auto asked = p.kept<std::string>("collage do " + spec.key); !asked.get().empty()) {
 			std::string does = asked.peek();
 			asked.set("");
-			if (does == "crop" && chosen && !is_words(*chosen) && !spec.crop.empty()) {
+			if (does == "crop" && chosen && is_picture(*chosen) && !spec.crop.empty()) {
 				w->crop = crop_begun(*chosen);
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
@@ -1146,7 +1177,7 @@ namespace one::desktop::runtime {
 		if (chosen && !w->crop && !w->editing) {
 			auto asked = p.kept<std::string>("collage do " + spec.key);
 			for (const auto& a : spec.asks) {
-				bool fits = a.does == "crop" ? !is_words(*chosen) : a.does == "edit" ? is_words(*chosen) : true;
+				bool fits = a.does == "crop" ? is_picture(*chosen) : a.does == "edit" ? is_words(*chosen) : true;
 				if (!fits) continue;
 				for (const auto& k : a.keys) p.on_key(k, [asked, does = a.does] { asked.set(does); });
 			}
@@ -1197,7 +1228,7 @@ namespace one::desktop::runtime {
 			bool waiting = false;
 			for (const auto& layer : layers.as_array()) {
 				std::string id = layer["id"].as_string();
-				if (is_words(layer) || (w->crop && w->crop->id == id) || !p.file_here(layer["picture"].as_string())) continue;
+				if (!is_picture(layer) || (w->crop && w->crop->id == id) || !p.file_here(layer["picture"].as_string())) continue;
 				if (auto made = ready_of(p, layer, shifts, width, height, woken, measuring)) ready.emplace(id, std::move(*made));
 				else waiting = true;
 			}
@@ -1244,6 +1275,11 @@ namespace one::desktop::runtime {
 						continue;
 					}
 					desktop::rect on = as_rect(w->on_board(b));
+					if (is_shape(layer)) {
+						paint_shape(c, on, b, layer);
+						if (id == picked && !full) framed = on, chosen_picture = true;
+						continue;
+					}
 					if (w->crop && w->crop->id == id) {
 						// Being cropped: the whole picture faint, what's kept as it will be.
 						if (desktop::picture shown = layer_picture(p, layer)) {
@@ -1344,7 +1380,7 @@ namespace one::desktop::runtime {
 				        for (const auto& l : layers.as_array()) {
 					        if (l["id"].as_string() != picked) continue;
 					        for (const auto& a : spec.asks) {
-						        bool fits = a.does == "crop" ? !is_words(l) : a.does == "edit" ? is_words(l) : true;
+						        bool fits = a.does == "crop" ? is_picture(l) : a.does == "edit" ? is_words(l) : true;
 						        if (fits) fitting.push_back(a.does);
 					        }
 				        }
@@ -1392,7 +1428,7 @@ namespace one::desktop::runtime {
 					        b.w = mw, b.h = mh;
 				        }
 				        if (int corner = model::corner_at(w->on_board(b), on, handle); corner >= 0) {
-					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .edges = 0, .kept_from = {}};
+					        w->now = {.what = gesture::resizing, .id = picked, .from = b, .at = at, .corner = corner, .edges = 0, .kept_from = {}, .free = is_shape(l)};
 					        snap_lines(layers, width, height, *w, picked);
 					        return true;
 				        }
@@ -1411,7 +1447,7 @@ namespace one::desktop::runtime {
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        if (clicks >= 2) {
 					        if (is_words(all[i]) && !spec.write.empty()) w->editing = placed::writing{id, all[i]["words"].as_string(), false};
-					        else if (!is_words(all[i]) && !spec.crop.empty()) w->crop = crop_begun(all[i]);
+					        else if (is_picture(all[i]) && !spec.crop.empty()) w->crop = crop_begun(all[i]);
 					        return true;
 				        }
 				        if (!spec.place.empty()) {

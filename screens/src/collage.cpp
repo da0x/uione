@@ -4,7 +4,9 @@
 #include "one/screens/collage.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <format>
 
 namespace one::screens::collage {
 
@@ -426,6 +428,66 @@ namespace one::screens::collage {
 			}
 		}
 		return out;
+	}
+
+	namespace {
+		// A number as SVG writes it: no more decimals than it needs, up to three.
+		std::string said(double n) {
+			std::string out = std::format("{:.3f}", std::abs(n) < 0.0005 ? 0.0 : n);
+			while (out.back() == '0') out.pop_back();
+			if (out.back() == '.') out.pop_back();
+			return out;
+		}
+
+		// A color as it may be written into SVG: #rrggbb, or none for anything else.
+		std::string paint(const std::string& written) {
+			bool hex = written.size() == 7 && written[0] == '#' &&
+			           std::all_of(written.begin() + 1, written.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+			return hex ? written : "none";
+		}
+	}  // namespace
+
+	std::string path_in(std::string_view points, double x, double y, double w, double h) {
+		std::string out;
+		bool across = true;  // the next number is a point's x
+		for (std::size_t at = 0; at < points.size();) {
+			char c = points[at];
+			if (c == 'M' || c == 'L' || c == 'C' || c == 'Z') {
+				out += (out.empty() ? "" : " ") + std::string(1, c);
+				across = true;
+				++at;
+				continue;
+			}
+			if (std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '.') {
+				std::size_t end = at + 1;
+				while (end < points.size() && (std::isdigit(static_cast<unsigned char>(points[end])) || points[end] == '.' || points[end] == 'e')) ++end;
+				double n = 0;
+				try {
+					n = std::stod(std::string(points.substr(at, end - at)));
+				} catch (...) {
+					n = 0;
+				}
+				out += " " + said(across ? x + n * w : y + n * h);
+				across = !across;
+				at = end;
+				continue;
+			}
+			++at;  // a space or a comma between them
+		}
+		return out;
+	}
+
+	std::string svg_element(const shape& s, double x, double y, double w, double h) {
+		std::string drawn = std::format(R"(fill="{}" stroke="{}" stroke-width="{}")", paint(s.fill), paint(s.stroke), said(s.stroke_width));
+		if (s.kind == "ellipse") return std::format(R"(<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {}/>)", said(x + w / 2), said(y + h / 2), said(w / 2), said(h / 2), drawn);
+		if (s.kind == "path") return std::format(R"(<path d="{}" {}/>)", path_in(s.points, x, y, w, h), drawn);
+		double round = std::clamp(s.corners, 0.0, 0.5) * std::min(w, h);
+		return std::format(R"(<rect x="{}" y="{}" width="{}" height="{}" rx="{}" {}/>)", said(x), said(y), said(w), said(h), said(round), drawn);
+	}
+
+	std::string svg_alone(const shape& s, double w, double h, double reach) {
+		return std::format(R"(<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" viewBox="{} {} {} {}">{}</svg>)", said(w + 2 * reach), said(h + 2 * reach), said(-reach),
+		                   said(-reach), said(w + 2 * reach), said(h + 2 * reach), svg_element(s, 0, 0, w, h));
 	}
 
 } // namespace one::screens::collage

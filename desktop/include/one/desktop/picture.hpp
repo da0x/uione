@@ -18,6 +18,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace one::desktop {
@@ -42,6 +43,10 @@ namespace one::desktop {
 		// Drawn with no window, as a canvas in one is, `width` × `height` pixels on
 		// nothing: what a drawing app saves, or keeps as a small preview of its work.
 		static picture drawn(int width, int height, const std::function<void(canvas&)>& paint);
+		// An SVG document drawn, `width` × `height` pixels, its width stretched to them, its
+		// edges smooth, by the pinned nanosvg (decision 0025): what a collage's shapes are
+		// drawn from. Nothing when it can't be read.
+		static picture from_svg(std::string_view svg, int width, int height);
 
 		int width() const { return pixels_ ? pixels_->width : 0; }
 		int height() const { return pixels_ ? pixels_->height : 0; }

@@ -7,12 +7,14 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { colorShifter, cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
 interface Case {
   what: string;
+  shape?: { kind: string; points: string; fill: string; stroke: string; stroke_width: number; corners: number }; // svg: a shape's parts
+  svg?: string;
   covered?: Numbers[]; // harmonic_fill: x, y and three channels of each covered cell
   cells?: Numbers[]; // halo: x, y and three channels of each of the picture's cells; stats_of: three channels of each
   weight?: number;
@@ -174,6 +176,11 @@ describe("where a collage's layers go", () => {
         const got = shifted({ gain: s.gain as [number, number, number], offset: s.offset as [number, number, number], from: s.from, to: s.to }, k.rgb![0]!, k.rgb![1]!, k.rgb![2]!);
         const want = k.expect as unknown as number[]; // one color, red, green and blue
         for (let i = 0; i < 3; i++) expect(Math.abs(got[i] - want[i]!)).toBeLessThanOrEqual(k.close!);
+        break;
+      }
+      case "svg": {
+        const s = k.shape!;
+        expect(svgElement({ kind: s.kind, points: s.points, fill: s.fill, stroke: s.stroke, strokeWidth: s.stroke_width, corners: s.corners }, k.box![0]!, k.box![1]!, k.box![2]!, k.box![3]!)).toBe(k.svg);
         break;
       }
       default:

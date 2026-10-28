@@ -71,6 +71,17 @@ foreach(pinned "stb_image.h=594c2fe35d49488b4382dbfaec8f98366defca819d916ac95bec
 		message(FATAL_ERROR "src/stb/${name} isn't the copy pinned at nothings/stb 003501f; its sha256 is ${found}")
 	endif()
 endforeach()
+# nanosvg, pinned the same way (decision 0025): what draws a collage's shapes.
+foreach(pinned "nanosvg.h=e34fd5d084be106cea972d19ce5d27fd96d17ba89f8d06bdceee058420c8b2b0"
+               "nanosvgrast.h=79a9c5f4db19debf9f3a648a1589e96d92854f245a5cb4f3d823f263785234d8")
+	string(REPLACE "=" ";" pinned "${pinned}")
+	list(GET pinned 0 name)
+	list(GET pinned 1 expected)
+	file(SHA256 ${CMAKE_CURRENT_SOURCE_DIR}/src/nanosvg/${name} found)
+	if(NOT found STREQUAL expected)
+		message(FATAL_ERROR "src/nanosvg/${name} isn't the copy pinned at memononen/nanosvg 239e102; its sha256 is ${found}")
+	endif()
+endforeach()
 
 add_library(one_desktop
 	src/app.cpp
@@ -88,6 +99,7 @@ add_library(one_desktop
 	src/files.cpp
 	src/notices.cpp
 	src/picture.cpp
+	src/svg.cpp
 	src/renderer.cpp
 	src/seat.cpp
 	src/icons.cpp

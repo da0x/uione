@@ -16,7 +16,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
@@ -32,7 +32,42 @@ const num = (v: unknown, otherwise = 0) => (typeof v === "number" && Number.isFi
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 const boxOf = (l: Row): Box => ({ x: num(l["x"]), y: num(l["y"]), w: num(l["w"]), h: num(l["h"]) });
 const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0), w: num(l["crop_w"], 1), h: num(l["crop_h"], 1) });
-const isWords = (l: Row) => str(l["picture"]) === "";
+// What a layer is: a picture, when it has one; words, when it has those; or else a shape,
+// as its parts say (decision 0025). The same as the desktop's.
+const isPicture = (l: Row) => str(l["picture"]) !== "";
+const isWords = (l: Row) => !isPicture(l) && str(l["words"]) !== "";
+const isShape = (l: Row) => !isPicture(l) && !isWords(l);
+
+// How much of a layer shows: all of it, unless its opacity says less.
+const opacityOf = (l: Row) => (l["opacity"] === undefined || l["opacity"] === null ? 1 : Math.min(1, Math.max(0, num(l["opacity"]))));
+
+// A shape layer drawn at `b` on the canvas, its box in the collage's pixels `kept`: its
+// path, rectangle or ellipse filled and stroked as it says, a color #rrggbb or none, its
+// stroke as wide as it says in the collage's pixels, half outside its outline.
+function paintShape(c: CanvasRenderingContext2D, l: Row, b: Box, kept: Box) {
+  const per = kept.w > 0 ? b.w / kept.w : kept.h > 0 ? b.h / kept.h : 0;
+  if (per <= 0) return;
+  const color = (written: unknown) => (typeof written === "string" && /^#[0-9a-fA-F]{6}$/.test(written) ? written : undefined);
+  const fill = color(l["fill"]), stroke = color(l["stroke"]);
+  const width = num(l["stroke_width"]) * per;
+  const kind = str(l["shape"]) || "rectangle";
+  const outline = new Path2D();
+  if (kind === "ellipse") outline.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, 2 * Math.PI);
+  else if (kind === "path") outline.addPath(new Path2D(pathIn(str(l["points"]), b.x, b.y, b.w, b.h)));
+  else outline.roundRect(b.x, b.y, b.w, b.h, Math.min(Math.max(num(l["corners"]), 0), 0.5) * Math.min(b.w, b.h));
+  c.save();
+  c.globalAlpha = opacityOf(l);
+  if (fill) {
+    c.fillStyle = fill;
+    c.fill(outline);
+  }
+  if (stroke && width > 0) {
+    c.strokeStyle = stroke;
+    c.lineWidth = width;
+    c.stroke(outline);
+  }
+  c.restore();
+}
 const colorOf = (written: string, otherwise: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : otherwise);
 const weightOf = (l: Row) => num(l["weight"], 700);
 // Words' face, as a canvas's font says it: italic when they are, and their weight.
@@ -197,7 +232,7 @@ function shiftsOf(layers: Row[], matching: boolean, address: ((path: string) => 
   if (!matching) return out;
   const ids: string[] = [], stats: ColorStats[] = [];
   for (const l of layers) {
-    if (isWords(l)) continue;
+    if (!isPicture(l)) continue;
     const shown = shownOf(l, address), b = boxOf(l);
     if (!shown || b.w <= 0 || b.h <= 0) continue;
     const colors = statsKept(l, keptOf(l, shown), b.w * b.h);
@@ -388,6 +423,8 @@ function haloOf(l: Row, seen: Look): Halo | undefined {
 // Without `effects`, as while something's being moved or cropped, it alone.
 function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Box, b: Box, effects = true) {
   const around = str(l["around"]), kept = seen.picture;
+  c.save();
+  c.globalAlpha = opacityOf(l);
   if (effects && (around === "edges" || around === "color")) paintAround(c, seen.key, kept, board, b, around);
   // Its corners trimmed round as far as its corners say, a share of its shorter side.
   const radius = Math.min(num(l["corners"]) * Math.min(b.w, b.h), Math.min(b.w, b.h) / 2);
@@ -405,6 +442,7 @@ function paintPicture(c: CanvasRenderingContext2D, l: Row, seen: Look, board: Bo
     const gx = h.growX * b.w, gy = h.growY * b.h;
     c.drawImage(h.picture, b.x - gx, b.y - gy, b.w + 2 * gx, b.h + 2 * gy);
   }
+  c.restore();
 }
 
 // The collage drawn on a canvas of its own, `scale` times its own size, as it's kept:
@@ -436,11 +474,11 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
     c.fillRect(board.x, board.y, board.w, board.h);
   }
   // Every picture read first, so matching measures them all.
-  if (matching) for (const l of layers) if (!isWords(l)) await read(str(l["picture"]));
+  if (matching) for (const l of layers) if (isPicture(l)) await read(str(l["picture"]));
   const shifts = shiftsOf(layers, matching, address);
   const looks = new Map<Row, Look>();
   for (const l of layers) {
-    if (isWords(l) || (only && l["id"] !== only)) continue;
+    if (!isPicture(l) || (only && l["id"] !== only)) continue;
     const path = str(l["picture"]);
     const p = await read(path);
     if (p) looks.set(l, lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts));
@@ -454,6 +492,11 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
     if (isWords(l)) {
       const b = at(boxOf(l));
       paintWords(c, l, str(l["words"]), num(l["size"]) * scale, b.x, b.y);
+      continue;
+    }
+    if (isShape(l)) {
+      const b = boxOf(l);
+      paintShape(c, l, only ? { x: 0, y: 0, w: made.width, h: made.height } : at(b), b);
       continue;
     }
     const seen = looks.get(l);
@@ -546,6 +589,7 @@ interface Gesture {
   corner: number;
   edges: number;
   keptFrom?: Box;
+  free?: boolean; // a shape, resized freely, its shape kept only with Shift
 }
 
 // Where the collage was last drawn, how much smaller than itself, what the pointer is
@@ -811,7 +855,7 @@ export function Collage({
   useEffect(() => {
     if (!asking || !name) return;
     asked.delete(name);
-    if (asking === "crop" && chosen && !isWords(chosen) && crop) {
+    if (asking === "crop" && chosen && isPicture(chosen) && crop) {
       w.crop = cropBegun(chosen);
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
@@ -947,7 +991,7 @@ export function Collage({
       return p ? lookOf(l, orientedOf(path, p, ((num(l["turns"]) % 4) + 4) % 4, num(l["mirrored"]) !== 0), shifts, shownLargest) : undefined;
     };
     if (effects) {
-      const under = layers.filter((l) => !isWords(l) && harmonizes(l)).flatMap((l) => {
+      const under = layers.filter((l) => isPicture(l) && harmonizes(l)).flatMap((l) => {
         const seen = lookHere(l);
         return seen ? [{ l, seen }] : [];
       });
@@ -978,6 +1022,8 @@ export function Collage({
           c.fillStyle = accent;
           c.fillRect(b.x + c.measureText(before[line]!).width, b.y + line * size * 1.2, 2, size * 1.2);
         }
+      } else if (isShape(l)) {
+        paintShape(c, l, b, whereIs(l));
       } else {
         const path = str(l["picture"]);
         const p = pictureOf(path, address);
@@ -1115,7 +1161,7 @@ export function Collage({
     const to =
       g.what === "moving"
         ? moved(g.from, dx, dy, w.lines, W, H, close, snaps)
-        : resized(g.from, g.corner, dx, dy, !e.shiftKey, w.lines, close, snaps);
+        : resized(g.from, g.corner, dx, dy, g.free ? e.shiftKey : !e.shiftKey, w.lines, close, snaps);
     w.guide = to;
     return to.at;
   };
@@ -1171,7 +1217,7 @@ export function Collage({
       const b = whereIs(chosen);
       const corner = cornerAt(onBoard(b), p, handle);
       if (corner >= 0) {
-        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0 };
+        w.now = { what: "resizing", id: picked, from: b, at: p, corner, edges: 0, free: isShape(chosen) };
         w.lines = linesFor(picked);
         e.currentTarget.setPointerCapture(e.pointerId);
         return;
@@ -1187,7 +1233,7 @@ export function Collage({
       pickRow(id);
       if (e.detail >= 2) {
         if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
-        else if (!isWords(l) && crop) w.crop = cropBegun(l);
+        else if (isPicture(l) && crop) w.crop = cropBegun(l);
         redraw((n) => n + 1);
         return;
       }

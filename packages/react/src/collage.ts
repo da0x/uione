@@ -497,3 +497,61 @@ export function matched(pictures: ColorStats[], strength: number, cast: number):
   });
   return out;
 }
+
+// A layer that's neither a picture nor words is a shape, as its parts say (decision
+// 0025): a rectangle, its corners rounded as far as corners says, a share of its
+// shorter side; an ellipse; or a path through its points, in SVG path notation, M, L, C
+// and Z, each point a fraction of its box from its top left. Each is filled and stroked
+// as it says, a color written #rrggbb or none, its stroke as wide as it says in the
+// collage's pixels, half of it outside its outline as SVG draws it. The same as the
+// desktop's.
+export interface Shape {
+  kind: string; // rectangle, ellipse or path
+  points: string;
+  fill: string;
+  stroke: string;
+  strokeWidth: number;
+  corners: number;
+}
+
+// A number as SVG writes it: no more decimals than it needs, up to three.
+function said(n: number): string {
+  const out = (Math.abs(n) < 0.0005 ? 0 : n).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return out === "-0" ? "0" : out;
+}
+
+// A color as it may be written into SVG: #rrggbb, or none for anything else.
+const paint = (written: string) => (/^#[0-9a-fA-F]{6}$/.test(written) ? written : "none");
+
+// A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a 100
+// by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is left out.
+export function pathIn(points: string, x: number, y: number, w: number, h: number): string {
+  const out: string[] = [];
+  let across = true;
+  for (const token of points.match(/[MLCZ]|-?[0-9.]+(?:e-?[0-9]+)?/g) ?? []) {
+    if (/[MLCZ]/.test(token)) {
+      out.push(token);
+      across = true;
+      continue;
+    }
+    const n = Number(token) || 0;
+    out.push(said(across ? x + n * w : y + n * h));
+    across = !across;
+  }
+  return out.join(" ");
+}
+
+// The shape as one SVG element in the box at x y, w by h: <rect>, <ellipse> or <path>.
+export function svgElement(s: Shape, x: number, y: number, w: number, h: number): string {
+  const drawn = `fill="${paint(s.fill)}" stroke="${paint(s.stroke)}" stroke-width="${said(s.strokeWidth)}"`;
+  if (s.kind === "ellipse") return `<ellipse cx="${said(x + w / 2)}" cy="${said(y + h / 2)}" rx="${said(w / 2)}" ry="${said(h / 2)}" ${drawn}/>`;
+  if (s.kind === "path") return `<path d="${pathIn(s.points, x, y, w, h)}" ${drawn}/>`;
+  const round = Math.min(Math.max(s.corners, 0), 0.5) * Math.min(w, h);
+  return `<rect x="${said(x)}" y="${said(y)}" width="${said(w)}" height="${said(h)}" rx="${said(round)}" ${drawn}/>`;
+}
+
+// As a whole SVG document, w by h and as much more around as its stroke reaches,
+// `reach` on each side, so none of it is cut off.
+export function svgAlone(s: Shape, w: number, h: number, reach: number): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${said(w + 2 * reach)}" height="${said(h + 2 * reach)}" viewBox="${said(-reach)} ${said(-reach)} ${said(w + 2 * reach)} ${said(h + 2 * reach)}">${svgElement(s, 0, 0, w, h)}</svg>`;
+}

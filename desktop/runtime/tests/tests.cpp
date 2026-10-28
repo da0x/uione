@@ -29,7 +29,8 @@ namespace {
 	// Each of a collage's parts in the field named like it, as an app's are by default.
 	const std::map<std::string, std::string> named_like_parts = {{"x", "x"}, {"y", "y"}, {"w", "w"}, {"h", "h"}, {"depth", "depth"}, {"picture", "picture"}, {"picture_width", "picture_width"}, {"picture_height", "picture_height"},
 	    {"crop_x", "crop_x"}, {"crop_y", "crop_y"}, {"crop_w", "crop_w"}, {"crop_h", "crop_h"}, {"turns", "turns"}, {"mirrored", "mirrored"}, {"around", "around"}, {"corners", "corners"},
-	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}};
+	    {"words", "words"}, {"size", "size"}, {"color", "color"}, {"weight", "weight"}, {"shape", "shape"}, {"points", "points"}, {"fill", "fill"}, {"stroke", "stroke"},
+	    {"stroke_width", "stroke_width"}, {"opacity", "opacity"}};
 
 	const std::filesystem::path golden_folder = ONE_DESKTOP_TESTS "/golden";
 
@@ -1852,6 +1853,30 @@ TEST("around harmonize fills the rest of the collage from a picture's edges, eac
 	navigator nav(s, data);
 	nav.open("/");
 	matches_golden("collage-blend", {900, 560}, [&] { return drawn(nav); });
+}
+
+TEST("a collage's shapes: a rectangle rounded and stroked, an ellipse, a path, one half there, drawn smooth from their SVG, and picked as any layer is") {
+	memory_source data;
+	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, std::string stroke, double width, double corners = 0,
+	                double opacity = 1, std::string points = "") {
+		return value(fields{{"id", std::move(id)}, {"shape", std::move(kind)}, {"x", x}, {"y", y}, {"w", w}, {"h", h}, {"fill", std::move(fill)}, {"stroke", std::move(stroke)},
+		                    {"stroke_width", width}, {"corners", corners}, {"opacity", opacity}, {"points", std::move(points)}});
+	};
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{shape("s1", "rectangle", 100, 100, 600, 400, "#2e86de", "#1d1d1f", 12, 0.1), shape("s2", "ellipse", 800, 150, 600, 300, "#ffd23f", "none", 0),
+	                                      shape("s3", "rectangle", 500, 400, 600, 300, "#e4572e", "", 0, 0, 0.5),
+	                                      shape("s4", "path", 200, 600, 500, 250, "none", "#2ecc71", 16, 0, 1, "M 0 1 C 0.25 0 0.75 0 1 1")}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .place = "studio::layer::place", .pick = "/ layer", .fills = true}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().pick("/ layer", "s2");
+	matches_golden("collage-shapes", {900, 560}, [&] { return drawn(nav); });
 }
 
 TEST("harmonized pictures fill what's under them together: past the outermost, each one's color carries on, and between two they cross from one to the other") {
