@@ -332,6 +332,58 @@ namespace one::screens::collage {
 		to_rgb(ycc, rgb);
 	}
 
+	color_shifter::color_shifter(const color_shift& s) {
+		for (int c = 0; c < 3; ++c) {
+			gain_[c] = s.gain[c], offset_[c] = s.offset[c];
+			for (int v = 0; v < 256; ++v) {
+				double rgb[3] = {0, 0, 0}, ycc[3];
+				rgb[c] = v;
+				to_ycc(rgb, ycc);
+				for (int k = 0; k < 3; ++k) share_[c][k][v] = ycc[k];
+			}
+		}
+		// Brightness reaches past 0 to 255 only by rounding, so the tables cover that
+		// and a step either side.
+		std::size_t places = 257 * steps + 1;
+		bright_.resize(places), follow_.resize(places);
+		bool toned = s.from.size() >= 2 && s.from.size() == s.to.size();
+		for (std::size_t i = 0; i < places; ++i) {
+			double y = static_cast<double>(i) / steps - 1;
+			if (!toned) {
+				bright_[i] = y * s.gain[0] + s.offset[0], follow_[i] = 1;
+				continue;
+			}
+			const auto& from = s.from;
+			const auto& to = s.to;
+			std::size_t at = 0;
+			while (at + 2 < from.size() && y > from[at + 1]) ++at;
+			double span = from[at + 1] - from[at];
+			double made = span > 1e-9 ? to[at] + (to[at + 1] - to[at]) * (y - from[at]) / span : to[at] + (y - from[at]);
+			if (y < from.front()) made = to.front() + (y - from.front());
+			if (y > from.back()) made = to.back() + (y - from.back());
+			bright_[i] = made;
+			follow_[i] = std::clamp((made + 16) / (y + 16), 0.5, 2.0);
+		}
+	}
+
+	void color_shifter::shift(std::uint8_t* pixels, std::size_t count, std::size_t stride) const {
+		for (std::size_t n = 0; n < count; ++n, pixels += stride) {
+			double ycc[3];
+			for (int k = 0; k < 3; ++k) ycc[k] = share_[0][k][pixels[0]] + share_[1][k][pixels[1]] + share_[2][k][pixels[2]];
+			// The curve's places either side of this brightness, and straight between.
+			double at = std::clamp((ycc[0] + 1) * steps, 0.0, static_cast<double>(bright_.size() - 2));
+			std::size_t below = static_cast<std::size_t>(at);
+			double part = at - static_cast<double>(below);
+			double bright = bright_[below] + (bright_[below + 1] - bright_[below]) * part;
+			double follow = follow_[below] + (follow_[below + 1] - follow_[below]) * part;
+			ycc[0] = bright;
+			for (int c = 1; c < 3; ++c) ycc[c] = ycc[c] * follow * gain_[c] + offset_[c];
+			double rgb[3];
+			to_rgb(ycc, rgb);
+			for (int c = 0; c < 3; ++c) pixels[c] = static_cast<std::uint8_t>(std::clamp(std::lround(rgb[c]), 0L, 255L));
+		}
+	}
+
 	std::vector<color_shift> matched(const std::vector<color_stats>& pictures, double strength, double cast) {
 		double total = 0, mean[3] = {0, 0, 0}, spread[3] = {0, 0, 0};
 		for (const auto& p : pictures) {

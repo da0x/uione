@@ -434,6 +434,32 @@ TEST("a theme from a palette is written as a project says one, to paste in") {
 	}
 }
 
+TEST("a shift made ready moves a picture's colors as shifted moves each one, to within rounding") {
+	namespace c = one::screens::collage;
+	c::color_shift toned;
+	toned.gain[1] = 0.8, toned.gain[2] = 1.2, toned.offset[1] = 6, toned.offset[2] = -9;
+	toned.from = {0, 40, 128, 200, 255}, toned.to = {10, 60, 120, 210, 250};
+	c::color_shift plain;
+	plain.gain[0] = 1.1, plain.offset[0] = -5, plain.gain[1] = 0.9, plain.offset[2] = 4;
+	for (const auto* s : {&toned, &plain}) {
+		c::color_shifter ready(*s);
+		int worst = 0;
+		for (int r = 0; r < 256; r += 5) {
+			for (int g = 0; g < 256; g += 7) {
+				for (int b = 0; b < 256; b += 11) {
+					std::uint8_t pixel[4] = {static_cast<std::uint8_t>(r), static_cast<std::uint8_t>(g), static_cast<std::uint8_t>(b), 255};
+					ready.shift(pixel, 1);
+					double rgb[3] = {static_cast<double>(r), static_cast<double>(g), static_cast<double>(b)};
+					c::shifted(*s, rgb);
+					for (int k = 0; k < 3; ++k) worst = std::max(worst, std::abs(pixel[k] - static_cast<int>(std::clamp(std::lround(rgb[k]), 0L, 255L))));
+					CHECK(pixel[3] == 255);
+				}
+			}
+		}
+		CHECK(worst <= 1);
+	}
+}
+
 TEST("a collage's layers go where collage-cases.json says, as they do on the web") {
 	namespace c = one::screens::collage;
 	std::ifstream in(std::filesystem::path(__FILE__).parent_path() / "collage-cases.json");

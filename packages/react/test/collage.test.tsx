@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { colorShifter, cornerAt, cropEdgesAt, cropped, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -178,6 +178,29 @@ describe("where a collage's layers go", () => {
       }
       default:
         throw new Error(`there's no case of ${k.what}`);
+    }
+  });
+});
+
+describe("a shift made ready", () => {
+  it("moves a picture's colors as shifted moves each one, to within rounding, as the desktop's does", () => {
+    const toned = { gain: [1, 0.8, 1.2] as [number, number, number], offset: [0, 6, -9] as [number, number, number], from: [0, 40, 128, 200, 255], to: [10, 60, 120, 210, 250] };
+    const plain = { gain: [1.1, 0.9, 1] as [number, number, number], offset: [-5, 0, 4] as [number, number, number] };
+    for (const s of [toned, plain]) {
+      const shift = colorShifter(s);
+      let worst = 0;
+      for (let r = 0; r < 256; r += 5) {
+        for (let g = 0; g < 256; g += 7) {
+          for (let b = 0; b < 256; b += 11) {
+            const pixel = new Uint8ClampedArray([r, g, b, 255]);
+            shift(pixel);
+            const want = shifted(s, r, g, b).map((v) => Math.max(0, Math.min(255, Math.round(v))));
+            for (let k = 0; k < 3; k++) worst = Math.max(worst, Math.abs(pixel[k]! - want[k]!));
+            expect(pixel[3]).toBe(255);
+          }
+        }
+      }
+      expect(worst).toBeLessThanOrEqual(1);
     }
   });
 });

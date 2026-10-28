@@ -226,11 +226,34 @@ namespace one::desktop::runtime {
 			return out;
 		}
 
-		// A picture as it's drawn: what its crop keeps, its colors moved as its shift says,
-		// worked out once on the processor.
-		look look_at(const std::filesystem::path& file, const value& layer, const model::color_shift* shift) {
+		// A picture no more than `largest` on its longer side, each pixel the average of
+		// those it covers, made once; as it is when it's that small already.
+		look no_larger(const look& seen, int largest) {
+			int pw = seen.picture.width(), ph = seen.picture.height();
+			if (largest <= 0 || std::max(pw, ph) <= largest) return seen;
+			std::string key = std::format("{} at most {}", seen.key, largest);
+			static kept_by<desktop::picture> made(32);
+			return {made.get(key,
+			                 [&] {
+				                 double s = static_cast<double>(largest) / std::max(pw, ph);
+				                 int w = std::max(1, static_cast<int>(std::lround(pw * s))), h = std::max(1, static_cast<int>(std::lround(ph * s)));
+				                 auto colors = averaged(seen.picture, {0, 0, 1, 1}, w, h);
+				                 std::vector<std::uint8_t> pixels(static_cast<std::size_t>(w) * h * 4, 255);
+				                 for (std::size_t i = 0; i < static_cast<std::size_t>(w) * h; ++i) {
+					                 for (std::size_t c = 0; c < 3; ++c) pixels[i * 4 + c] = static_cast<std::uint8_t>(std::clamp(std::lround(colors[i * 3 + c]), 0L, 255L));
+				                 }
+				                 return desktop::picture::of(w, h, std::move(pixels));
+			                 }),
+			        key};
+		}
+
+		// A picture as it's drawn: what its crop keeps, no more than `largest` on its
+		// longer side when that says, its colors moved as its shift says, worked out once
+		// on the processor, its rows shared among its cores.
+		look look_at(const std::filesystem::path& file, const value& layer, const model::color_shift* shift, int largest = 0) {
 			look seen = kept_look(file, layer);
 			if (!seen.picture || !shift) return seen;
+			seen = no_larger(seen, largest);
 			const auto& m = *shift;
 			std::string key = std::format("{} {:.3f} {:.3f} {:.3f} {:.1f} {:.1f} {:.1f}", seen.key, m.gain[0], m.gain[1], m.gain[2], m.offset[0], m.offset[1], m.offset[2]);
 			for (double t : m.to) key += std::format(" {:.1f}", t);
@@ -238,11 +261,15 @@ namespace one::desktop::runtime {
 			return {made.get(key,
 			                 [&] {
 				                 std::vector<std::uint8_t> pixels = seen.picture.rgba();
-				                 for (std::size_t i = 0; i + 3 < pixels.size(); i += 4) {
-					                 double rgb[3] = {static_cast<double>(pixels[i]), static_cast<double>(pixels[i + 1]), static_cast<double>(pixels[i + 2])};
-					                 model::shifted(m, rgb);
-					                 for (std::size_t c = 0; c < 3; ++c) pixels[i + c] = static_cast<std::uint8_t>(std::clamp(std::lround(rgb[c]), 0L, 255L));
+				                 model::color_shifter shifter(m);
+				                 std::size_t count = pixels.size() / 4;
+				                 std::size_t parts = std::clamp<std::size_t>(std::thread::hardware_concurrency(), 1, 16);
+				                 std::size_t each = (count + parts - 1) / parts;
+				                 std::vector<std::thread> sharing;
+				                 for (std::size_t start = 0; start < count; start += each) {
+					                 sharing.emplace_back([&, start] { shifter.shift(pixels.data() + start * 4, std::min(each, count - start)); });
 				                 }
+				                 for (auto& t : sharing) t.join();
 				                 return desktop::picture::of(seen.picture.width(), seen.picture.height(), std::move(pixels));
 			                 }),
 			        key};
@@ -612,7 +639,7 @@ namespace one::desktop::runtime {
 		// the collage it covers, so the larger lead; from its colors as `measure` says
 		// them; while one's aren't known yet, nothing's matched.
 		template <class Measure>
-		std::map<std::string, model::color_shift> shifts_of(page& p, const value& layers, bool matching, Measure measure) {
+		std::map<std::string, model::color_shift> shifts_of(page& p, const value& layers, bool matching, Measure measure, bool* unknown = nullptr) {
 			std::map<std::string, model::color_shift> out;
 			if (!matching) return out;
 			std::vector<std::string> ids;
@@ -623,7 +650,10 @@ namespace one::desktop::runtime {
 				model::box b = box_of(l);
 				if (!file || b.w <= 0 || b.h <= 0) continue;
 				std::optional<model::color_stats> known = measure(*file, l, b.w * b.h);
-				if (!known) return out;
+				if (!known) {
+					if (unknown) *unknown = true;
+					return out;
+				}
 				ids.push_back(l["id"].as_string());
 				stats.push_back(*known);
 			}
@@ -645,6 +675,32 @@ namespace one::desktop::runtime {
 			return known;
 		}
 
+		// As known already, and what isn't measured away from the window's thread, once,
+		// `woken` changed when it is so the window draws again: so a matched picture is
+		// made ready once, with its colors moved, not first as it was.
+		template <class Woken>
+		auto measured_soon(Woken woken) {
+			return [woken](const std::filesystem::path& file, const value& layer, double weight) {
+				auto known = measured_already(file, layer, weight);
+				if (known) return known;
+				static std::mutex measuring;
+				static std::set<std::string> working;
+				std::string key = kept_key(file, layer);
+				std::lock_guard hold(measuring);
+				if (working.insert(key).second) {
+					std::thread([file, layer, key, woken] {
+						(void)measured_now(file, layer, 1);
+						{
+							std::lock_guard hold(measuring);
+							working.erase(key);
+						}
+						post([woken] { woken.set(woken.peek() + 1); });
+					}).detach();
+				}
+				return known;
+			};
+		}
+
 		// All a picture layer is drawn from: its look, its halo and what its blend fills
 		// the collage with; its colors measured on the way, so matching finds them known.
 		struct ready_layer {
@@ -653,18 +709,25 @@ namespace one::desktop::runtime {
 			desktop::picture blend;
 		};
 
-		ready_layer made_ready(const std::filesystem::path& file, const value& layer, std::optional<model::color_shift> shift, double width, double height) {
+		// In the window, a picture whose colors are moved is moved no larger than this,
+		// as it's never shown larger; saved, it's moved whole.
+		constexpr int shown_largest = 2048;
+
+		ready_layer made_ready(const std::filesystem::path& file, const value& layer, std::optional<model::color_shift> shift, double width, double height, int largest = 0) {
 			if (look kept = kept_look(file, layer); kept.picture) (void)stats_kept(kept, 1);
-			look seen = look_at(file, layer, shift ? &*shift : nullptr);
+			look seen = look_at(file, layer, shift ? &*shift : nullptr, largest);
 			return {seen, halo_of(layer, seen), blended(layer, seen, width, height)};
 		}
 
 		// A picture layer as the window draws it: ready, or made ready away from the
 		// window's thread and shown once it is, `woken` changed then so the window draws
 		// again; meanwhile, the last made ready for that layer, or nothing yet. With no
-		// window to wake, as when it's drawn to a file, it's made ready now.
+		// window to wake, as when it's drawn to a file, it's made ready now. While
+		// `last_only`, as while the colors it would be matched by are being measured, only
+		// the last made ready is shown, and nothing's made.
 		template <class Woken>
-		std::optional<ready_layer> ready_of(page& p, const value& layer, const std::map<std::string, model::color_shift>& shifts, double width, double height, Woken woken) {
+		std::optional<ready_layer> ready_of(page& p, const value& layer, const std::map<std::string, model::color_shift>& shifts, double width, double height, Woken woken,
+		                                    bool last_only = false) {
 			auto file = p.file_here(layer["picture"].as_string());
 			if (!file) return std::nullopt;
 			std::optional<model::color_shift> shift;
@@ -689,9 +752,9 @@ namespace one::desktop::runtime {
 			std::string shown;
 			{
 				std::lock_guard hold(preparing);
-				if (working.insert(key).second) {
+				if (!last_only && working.insert(key).second) {
 					std::thread([key, id, file = *file, layer, shift, width, height, woken] {
-						ready_layer made = made_ready(file, layer, shift, width, height);
+						ready_layer made = made_ready(file, layer, shift, width, height, shown_largest);
 						readied.get(key, [&] { return made; });
 						{
 							std::lock_guard hold(preparing);
@@ -1100,7 +1163,9 @@ namespace one::desktop::runtime {
 				c.shadow(board, 0, 14, shade, {0, 2});
 			}
 			c.box(board, {.fill = desktop::color::hex(0xffffff)});
-			auto shifts = shifts_of(p, layers, spec.match_colors, posting() ? measured_already : measured_now);
+			// Matched, its pictures' colors are measured first, so each is made ready once.
+			bool measuring = false;
+			auto shifts = posting() ? shifts_of(p, layers, spec.match_colors, measured_soon(woken), &measuring) : shifts_of(p, layers, spec.match_colors, measured_now);
 			// Each picture as it's ready to be drawn; while one never has been, the
 			// collage's last picture of itself, its preview, stands in for all of it, so
 			// it shows at once, as it was, and then as it is.
@@ -1109,7 +1174,7 @@ namespace one::desktop::runtime {
 			for (const auto& layer : layers.as_array()) {
 				std::string id = layer["id"].as_string();
 				if (is_words(layer) || (w->crop && w->crop->id == id) || !p.file_here(layer["picture"].as_string())) continue;
-				if (auto made = ready_of(p, layer, shifts, width, height, woken)) ready.emplace(id, std::move(*made));
+				if (auto made = ready_of(p, layer, shifts, width, height, woken, measuring)) ready.emplace(id, std::move(*made));
 				else waiting = true;
 			}
 			if (waiting) {

@@ -15,7 +15,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { cornerAt, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, cropEdgesAt, cropped, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import type { ViewState } from "./data.js";
@@ -208,27 +208,29 @@ function shiftsOf(layers: Row[], matching: boolean, address: ((path: string) => 
   return out;
 }
 
-// A picture as it's drawn: what its crop keeps, its colors moved as its shift says,
-// worked out once.
+// On the page, a picture whose colors are moved is moved no larger than this, as it's
+// never shown larger; saved, it's moved whole. The same as the desktop's.
+const shownLargest = 2048;
+
+// A picture as it's drawn: what its crop keeps, no more than `largest` on its longer
+// side when that says, its colors moved as its shift says, worked out once.
 const tonedOnes = new Map<string, HTMLCanvasElement>();
-function lookOf(l: Row, shown: Picture, shifts: Map<string, ColorShift>): Look {
+function lookOf(l: Row, shown: Picture, shifts: Map<string, ColorShift>, largest = 0): Look {
   const kept = keptOf(l, shown), named = edgeKeyOf(l);
   const shift = shifts.get(str(l["id"]));
   if (!shift) return { picture: kept, key: named };
-  const key = `${named} ${shift.gain.map((g) => g.toFixed(3)).join(" ")} ${shift.offset.map((o) => o.toFixed(1)).join(" ")} ${(shift.to ?? []).map((t) => t.toFixed(1)).join(" ")}`;
+  const s = largest > 0 ? Math.min(1, largest / Math.max(kept.width, kept.height)) : 1;
+  const key = `${named} ${s < 1 ? `at most ${largest} ` : ""}${shift.gain.map((g) => g.toFixed(3)).join(" ")} ${shift.offset.map((o) => o.toFixed(1)).join(" ")} ${(shift.to ?? []).map((t) => t.toFixed(1)).join(" ")}`;
   let made = tonedOnes.get(key);
   if (!made) {
     made = document.createElement("canvas");
-    made.width = kept.width;
-    made.height = kept.height;
+    made.width = Math.max(1, Math.round(kept.width * s));
+    made.height = Math.max(1, Math.round(kept.height * s));
     const g = made.getContext("2d", { willReadFrequently: true });
     if (!g) return { picture: kept, key: named };
-    g.drawImage(kept, 0, 0);
+    g.drawImage(kept, 0, 0, made.width, made.height);
     const pixels = g.getImageData(0, 0, made.width, made.height);
-    for (let i = 0; i < pixels.data.length; i += 4) {
-      const rgb = shifted(shift, pixels.data[i]!, pixels.data[i + 1]!, pixels.data[i + 2]!);
-      for (let k = 0; k < 3; k++) pixels.data[i + k] = Math.max(0, Math.min(255, Math.round(rgb[k]!)));
-    }
+    colorShifter(shift)(pixels.data);
     g.putImageData(pixels, 0, 0);
     if (tonedOnes.size > 32) tonedOnes.clear();
     tonedOnes.set(key, made);
@@ -960,7 +962,7 @@ export function Collage({
             b = kept;
           } else {
             // Only what its crop keeps, its colors as matched, and what's around it as it says.
-            paintPicture(c, l, lookOf(l, shown, shifts), board, b, W, H);
+            paintPicture(c, l, lookOf(l, shown, shifts, shownLargest), board, b, W, H);
           }
         }
       }

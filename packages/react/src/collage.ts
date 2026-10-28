@@ -400,6 +400,55 @@ export function shifted(s: ColorShift, r: number, g: number, b: number): [number
   return toRgb(y, ycc[1] * s.gain[1] + s.offset[1], ycc[2] * s.gain[2] + s.offset[2]);
 }
 
+// A shift made ready to move many pixels' colors, as a large picture's are: each
+// channel's share of the brightness and two colors, and the tone curve and how much the
+// colors follow it, looked up rather than worked out again for every pixel. Its colors
+// are within a hundredth of shifted's. The same as the desktop's.
+export function colorShifter(s: ColorShift): (pixels: Uint8ClampedArray) => void {
+  const steps = 16;
+  const share = [0, 1, 2].map((c) => [0, 1, 2].map((k) => Float64Array.from({ length: 256 }, (_, v) => toYcc(c === 0 ? v : 0, c === 1 ? v : 0, c === 2 ? v : 0)[k]!)));
+  // Brightness reaches past 0 to 255 only by rounding, so the tables cover that and a
+  // step either side.
+  const places = 257 * steps + 1;
+  const bright = new Float64Array(places), follow = new Float64Array(places);
+  const toned = s.from && s.to && s.from.length >= 2 && s.from.length === s.to.length;
+  for (let i = 0; i < places; i++) {
+    const y = i / steps - 1;
+    if (!toned) {
+      bright[i] = y * s.gain[0] + s.offset[0];
+      follow[i] = 1;
+      continue;
+    }
+    const from = s.from!, to = s.to!;
+    let at = 0;
+    while (at + 2 < from.length && y > from[at + 1]!) at++;
+    const span = from[at + 1]! - from[at]!;
+    let made = span > 1e-9 ? to[at]! + ((to[at + 1]! - to[at]!) * (y - from[at]!)) / span : to[at]! + (y - from[at]!);
+    if (y < from[0]!) made = to[0]! + (y - from[0]!);
+    if (y > from[from.length - 1]!) made = to[to.length - 1]! + (y - from[from.length - 1]!);
+    bright[i] = made;
+    follow[i] = Math.min(2, Math.max(0.5, (made + 16) / (y + 16)));
+  }
+  const [r0, r1, r2] = share[0]!, [g0, g1, g2] = share[1]!, [b0, b1, b2] = share[2]!;
+  const gb = s.gain[1], gr = s.gain[2], ob = s.offset[1], or = s.offset[2];
+  return (pixels) => {
+    for (let i = 0; i + 3 < pixels.length; i += 4) {
+      const r = pixels[i]!, g = pixels[i + 1]!, b = pixels[i + 2]!;
+      const y = r0![r]! + g0![g]! + b0![b]!;
+      // The curve's places either side of this brightness, and straight between.
+      const at = Math.min(Math.max((y + 1) * steps, 0), places - 2);
+      const below = Math.floor(at), part = at - below;
+      const yy = bright[below]! + (bright[below + 1]! - bright[below]!) * part;
+      const f = follow[below]! + (follow[below + 1]! - follow[below]!) * part;
+      const cb = (r1![r]! + g1![g]! + b1![b]!) * f * gb + ob;
+      const cr = (r2![r]! + g2![g]! + b2![b]!) * f * gr + or;
+      pixels[i] = Math.round(yy + 1.402 * cr);
+      pixels[i + 1] = Math.round(yy - 0.344136 * cb - 0.714136 * cr);
+      pixels[i + 2] = Math.round(yy + 1.772 * cb);
+    }
+  };
+}
+
 // Pictures' colors matched, so they look like one picture, by matching their statistics
 // (color transfer): each one's cast, the average of its two colors, moved `cast` of the
 // way to all of theirs, as a white balance would; its tones, its darkest to its

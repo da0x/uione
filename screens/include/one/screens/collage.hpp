@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -124,6 +126,23 @@ namespace one::screens::collage {
 
 	// A color, red, green and blue in 0 to 255, as a shift makes it.
 	void shifted(const color_shift& s, double rgb[3]);
+
+	// A shift made ready to move many pixels' colors, as a large picture's are: each
+	// channel's share of the brightness and two colors, and the tone curve and how much
+	// the colors follow it, looked up rather than worked out again for every pixel. Its
+	// colors are within a hundredth of shifted's.
+	class color_shifter {
+	public:
+		explicit color_shifter(const color_shift& s);
+		// Red, green and blue, each 0 to 255, at every `stride` bytes of `pixels`, moved.
+		void shift(std::uint8_t* pixels, std::size_t count, std::size_t stride = 4) const;
+
+	private:
+		static constexpr int steps = 16;  // a table's places for each of 256 brightnesses
+		double share_[3][3][256];         // channel, then brightness and its two colors, by value
+		std::vector<double> bright_, follow_;
+		double gain_[3], offset_[3];
+	};
 
 	// Pictures' colors matched, so they look like one picture, by matching their
 	// statistics (color transfer): each one's cast, the average of its two colors, moved
