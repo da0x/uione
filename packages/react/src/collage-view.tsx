@@ -16,10 +16,10 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
-import { pictureSize, svgIn, svgSize } from "./vectors.js";
+import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
 import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
@@ -730,6 +730,11 @@ export function Collage({
   remove,
   parent,
   name,
+  layers: layersList,
+  layer: layerField,
+  layerCreate,
+  layerPick,
+  layerParent,
   preview,
   previewInto,
   previewWide = 480,
@@ -757,6 +762,14 @@ export function Collage({
   remove?: string; // a layer deleted, like words written away to nothing
   parent?: string; // the field a layer names what the view is per by, like poster
   name?: string; // what its buttons, like crop and add words, name it by
+  // Held in layers: the view's list of them, the field each object names its layer by,
+  // the command a new layer is made by, the screen's pick of a layer, the one new
+  // objects go in, and the field a layer names what the view is per by.
+  layers?: string;
+  layer?: string;
+  layerCreate?: string;
+  layerPick?: string;
+  layerParent?: string;
   preview?: string; // the command a small picture of it is sent to, once changes settle
   previewInto?: string; // in this file field of what the view is per
   previewWide?: number; // this many pixels wide
@@ -779,8 +792,25 @@ export function Collage({
   const kept = JSON.stringify(fields);
   const data = useMemo(() => (view.status === "live" ? partsOf((view.data ?? {}) as Row, list, fields) : {}), [view.status, view.data, list, kept]);
   const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
-  // Those hidden aren't drawn, picked, snapped to or saved.
-  const layers = ((data[list] as Row[] | undefined) ?? []).filter((l) => !hiddenLayer(l));
+  // Those hidden aren't drawn, picked, snapped to or saved; held in layers, they're in
+  // their layers' order, and those of a hidden layer aren't either.
+  const groups = layersList ? ((data[layersList] as Row[] | undefined) ?? []) : [];
+  const shownOnes = ((data[list] as Row[] | undefined) ?? []).filter((l) => !hiddenLayer(l));
+  const layers = layersList && layerField ? inLayers(shownOnes, groups, layerField) : shownOnes;
+  const pickedLayer = usePickedId(layerPick ?? "") ?? "";
+  // Whether it keeps shapes, so an SVG brought in can be its own.
+  const keepsShapes = ["shape", "points", "fill", "stroke", "stroke_width"].every((part) => part in fields);
+  // The layer new objects go in, made first, as Layer 1, when there's none yet.
+  const layerFor = async (): Promise<string | undefined> => {
+    if (!layersList || !layerField) return undefined;
+    const now = currentLayer(groups, pickedLayer);
+    if (now || !layerCreate) return now || undefined;
+    const made: Row = { name: "Layer 1", depth: 0 };
+    if (layerParent) made[layerParent] = subject;
+    const reply = await runner.reply(layerCreate, made);
+    if (reply?.id && layerPick) setPicked(layerPick, reply.id);
+    return reply?.id;
+  };
   const W = num(data[width]), H = num(data[height]);
   const address = files ? (path: string) => files.address(path) : undefined;
   const chosen = layers.find((l) => l["id"] === picked);
@@ -822,15 +852,26 @@ export function Collage({
   // the same as the desktop's.
   const addPictures = async (given: File[], on?: Point) => {
     if (!add || !paste || !("picture" in fields) || !files) return;
+    // The layer pictures go in, worked out once one comes; an SVG makes its own.
+    let inLayer: string | undefined, asked = false;
     const top = layers[layers.length - 1];
     let depth = top && top["depth"] !== undefined ? num(top["depth"]) + 1 : undefined;
     let covered = layers.length > 0, at = 0, first = true;
     for (const file of given) {
+      // An SVG, where the collage keeps shapes, comes in as its own shapes.
+      const svg = keepsShapes ? await svgIn(file) : undefined;
+      if (svg !== undefined) {
+        const where = on && at ? { x: on.x + 40 * at, y: on.y + 40 * at } : on;
+        at++;
+        await addShapes(svg, file.name.replace(/\.svg$/i, "") || "Pasted", where);
+        continue;
+      }
       const size = await pictureSize(file);
       if (!size) {
         say({ text: `${file.name} isn't a picture this can read.`, problem: true });
         continue;
       }
+      if (!asked) (inLayer = await layerFor()), (asked = true);
       let b: Box;
       // An SVG is drawing, not a photograph: it comes in at its own size, fitted, never
       // covering the collage.
@@ -846,6 +887,7 @@ export function Collage({
       }
       const path = await files.upload(file, () => {});
       const made: Record<string, unknown> = { picture: path, x: b.x, y: b.y, w: b.w, h: b.h };
+      if (layerField && inLayer) made[layerField] = inLayer;
       if (parent) made[parent] = subject;
       if (depth !== undefined) made["depth"] = depth++;
       if ("picture_width" in fields) (made["picture_width"] = size.w), (made["picture_height"] = size.h);
@@ -855,16 +897,56 @@ export function Collage({
       if (reply?.id && pick) setPicked(pick, reply.id);
     }
   };
+  // An SVG brought in as its own shapes and curves, each an object, where it would sit
+  // as a picture: as big as it is, smaller where it wouldn't fit, centered on `on` or the
+  // middle. Held in layers, they're a new layer, named for it, on top; all one step to
+  // undo, and the layer picked. The same as the desktop's.
+  const addShapes = async (svg: string, name: string, on?: Point) => {
+    const size = svgSize(svg), shapes = svgShapes(svg);
+    if (!add || !size || shapes.length === 0) return say({ text: `${name} has no shapes to bring in.` });
+    const s = Math.min(1, W / size.w, H / size.h);
+    const cx = on ? on.x : W / 2, cy = on ? on.y : H / 2;
+    const at = { x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
+    let inLayer: string | undefined, joined = false;
+    if (layersList && layerField && layerCreate) {
+      const top = groups.reduce((most, l) => Math.max(most, num(l["depth"])), 0);
+      const made: Row = { name, depth: top + 1 };
+      if (layerParent) made[layerParent] = subject;
+      inLayer = (await runner.reply(layerCreate, made))?.id;
+      if (!inLayer) return;
+      if (layerPick) setPicked(layerPick, inLayer);
+      joined = true;
+    } else {
+      inLayer = await layerFor();
+    }
+    const last = layers[layers.length - 1];
+    let depth = last && last["depth"] !== undefined ? num(last["depth"]) + 1 : 0;
+    for (const shape of shapes) {
+      const b = pathBounds(shape.path);
+      const placed = { x: at.x + b.x * s, y: at.y + b.y * s, w: b.w * s, h: b.h * s };
+      if (placed.w < 1) (placed.x += placed.w / 2 - 0.5), (placed.w = 1);
+      if (placed.h < 1) (placed.y += placed.h / 2 - 0.5), (placed.h = 1);
+      const object: Row = { shape: "path", points: pathFractions(shape.path, b), fill: shape.fill, stroke: shape.stroke, stroke_width: shape.strokeWidth * s, ...placed, depth: depth++ };
+      if ("opacity" in fields) object["opacity"] = shape.opacity;
+      if (parent) object[parent] = subject;
+      if (layerField && inLayer) object[layerField] = inLayer;
+      if (joined) object["one:history"] = "joined";
+      joined = true;
+      await send(add, object);
+    }
+  };
   // Words pasted: a layer of them in the middle, a twelfth of its height; or, when
   // they're an SVG's, as a drawing program copies one, that SVG, as one dropped is.
-  const addWords = (words: string) => {
+  const addWords = async (words: string) => {
     const start = words.replace(/^\uFEFF/, "").trimStart();
     if (paste && start.startsWith("<") && words.includes("<svg")) return void addPictures([new File([words], "pasted.svg", { type: "image/svg+xml" })]);
     if (!add || !("words" in fields)) return;
+    const inLayer = await layerFor();
     const size = Math.max(8, Math.round(H / 12));
     const m = measured(words, size, "700");
     const made: Record<string, unknown> = { words, size, x: (W - m.w) / 2, y: (H - m.h) / 2, w: m.w, h: m.h };
     if (parent) made[parent] = subject;
+    if (layerField && inLayer) made[layerField] = inLayer;
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
     void send(add, made);
@@ -1038,7 +1120,12 @@ export function Collage({
       if (parent) made[parent] = subject;
       const top = layers[layers.length - 1];
       if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-      void send(add, made).then((reply) => {
+      void layerFor()
+        .then((inLayer) => {
+          if (layerField && inLayer) made[layerField] = inLayer;
+          return send(add, made);
+        })
+        .then((reply) => {
         if (!reply?.id) return;
         if (pick) setPicked(pick, reply.id);
         w.editing = { id: reply.id, words, caret: words.length, fresh: true };
@@ -1330,18 +1417,19 @@ export function Collage({
   // when read go back to their first, as a tool goes back to Select. The same as the
   // desktop's.
   const drawingNow = () => draws.find((one) => one.when !== false);
-  const drawLayer = (b: Box, points?: string) => {
+  const drawLayer = async (b: Box, points?: string) => {
     const d = drawingNow();
     if (!d) return;
+    for (const [key, first] of d.back ?? []) setChosen(key, first);
+    const inLayer = await layerFor();
     const made: Row = { x: b.x, y: b.y, w: b.w, h: b.h };
+    if (layerField && inLayer) made[layerField] = inLayer;
     if (points !== undefined) made["points"] = points;
     if (parent) made[parent] = subject;
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
-    void runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given }).then((reply) => {
-      if (reply?.id) pickRow(reply.id);
-    });
-    for (const [key, first] of d.back ?? []) setChosen(key, first);
+    const reply = await runner.reply(d.command, { ...fieldsOf(made, fields), ...d.given });
+    if (reply?.id) pickRow(reply.id);
   };
   const keepCrop = () => {
     const e = w.crop;
@@ -1415,6 +1503,8 @@ export function Collage({
       if (!inside(reached(l, onBoard(b)), p)) continue;
       const id = str(l["id"]);
       pickRow(id);
+      // Its layer is the current one, as new objects go in it.
+      if (layerPick && layerField && str(l[layerField])) setPicked(layerPick, str(l[layerField]));
       if (e.detail >= 2) {
         if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
         else if (isPicture(l) && !vectors.has(str(l["picture"])) && crop) w.crop = cropBegun(l);
@@ -1661,10 +1751,10 @@ export function depthsMoved(layers: Row[], from: number, to: number): [string, n
 
 // A layer alone, drawn where it is on its collage, in the collage's proportions, over a
 // checkerboard when it's clear: what a list of its layers shows of each.
-function LayerPreview({ layer, W, H, clear, hidden, address }: { layer: Row; W: number; H: number; clear: boolean; hidden: boolean; address?: (path: string) => Promise<string> }) {
+function LayerPreview({ objects, W, H, clear, hidden, address }: { objects: Row[]; W: number; H: number; clear: boolean; hidden: boolean; address?: (path: string) => Promise<string> }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const wide = 48, tall = W > 0 && H > 0 ? Math.min(48, Math.max(12, (wide * H) / W)) : 27;
-  const key = JSON.stringify(layer);
+  const wide = 40, tall = W > 0 && H > 0 ? Math.min(40, Math.max(12, (wide * H) / W)) : 23;
+  const key = JSON.stringify(objects);
   useEffect(() => {
     const canvas = ref.current;
     const c = canvas?.getContext("2d");
@@ -1673,9 +1763,12 @@ function LayerPreview({ layer, W, H, clear, hidden, address }: { layer: Row; W: 
     const ratio = window.devicePixelRatio || 1;
     canvas.width = Math.round(wide * ratio);
     canvas.height = Math.round(tall * ratio);
-    const shown = { ...layer };
-    delete shown["hidden"];
-    void drawnWhole([shown], W, H, (wide * ratio) / W, address, false, undefined, true).then((made) => {
+    const shown = objects.map((o) => {
+      const one = { ...o };
+      delete one["hidden"];
+      return one;
+    });
+    void drawnWhole(shown, W, H, (wide * ratio) / W, address, false, undefined, true).then((made) => {
       if (!live) return;
       c.setTransform(1, 0, 0, 1, 0, 0);
       c.fillStyle = clear ? checkers(c) : "#fff";
@@ -1705,6 +1798,10 @@ export function Layers({
   hide,
   order,
   remove,
+  objects,
+  objectLayer,
+  objectRemove,
+  objectPick,
 }: {
   view: ViewState;
   list: string;
@@ -1716,21 +1813,27 @@ export function Layers({
   hide?: string;
   order?: string;
   remove?: string;
+  // Its rows are the layers the collage's objects are held in: their list, the field
+  // each names its layer by, how one's deleted, a layer's going with it, and the
+  // screen's pick of one.
+  objects?: string;
+  objectLayer?: string;
+  objectRemove?: string;
+  objectPick?: string;
 }) {
   const ui = useUI();
   const files = useFiles();
   const runner = useRunner();
   const picked = usePickedId(pick ?? "") ?? "";
-  const data = view.status === "live" ? partsOf((view.data ?? {}) as Row, list, fields) : {};
+  const pickedObject = usePickedId(objectPick ?? "") ?? "";
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const data = view.status === "live" ? partsOf((view.data ?? {}) as Row, objects ?? list, fields) : {};
   const layers = (data[list] as Row[] | undefined) ?? [];
   const W = num(data[width]), H = num(data[height]);
   const address = files ? (path: string) => files.address(path) : undefined;
   const send = (command: string, input: Row) => runner.reply(command, fieldsOf(input, fields));
   if (view.status !== "live") return <p>Loading…</p>;
   if (layers.length === 0) return <p style={{ color: "var(--color-muted)" }}>No layers yet.</p>;
-  const move = (from: number, to: number) => {
-    depthsMoved(layers, from, to).forEach(([id, depth], i) => void send(order!, i === 0 ? { id, depth } : { id, depth, "one:history": "joined" }));
-  };
   const nameOf = (l: Row) => {
     if (isWords(l)) return str(l["words"]).split("\n")[0]!;
     if (isPicture(l)) return pictures.get(str(l["picture"])) === "vector" ? "SVG" : "Picture";
@@ -1739,6 +1842,117 @@ export function Layers({
     const line = (points.match(/L/g) ?? []).length === 1 && !points.includes("C");
     return shape === "ellipse" ? "Ellipse" : shape === "path" ? (line ? "Line" : "Path") : "Rectangle";
   };
+  const rowStyle = (isPicked: boolean, indent: number): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    padding: 4,
+    paddingLeft: 4 + indent,
+    borderRadius: 6,
+    cursor: "pointer",
+    border: `1px solid ${isPicked ? "var(--color-accent, #2457d6)" : "transparent"}`,
+    background: isPicked ? "var(--color-sunken, #f1f3f6)" : undefined,
+  });
+  const quiet = (hidden: boolean) => ({ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: hidden ? "var(--color-muted)" : undefined });
+  // The layers objects are held in, topmost first: each its eye, a preview of its
+  // objects, its name, up, down and delete, and, opened, its objects under it. The same
+  // as the desktop's.
+  if (objects && objectLayer) {
+    const groups = [...layers].sort((a, b) => num(a["depth"]) - num(b["depth"]));
+    const held = ((data[objects] as Row[] | undefined) ?? []).filter((o) => !hiddenLayer(o));
+    const send = (command: string, input: Row) => runner.reply(command, input);
+    return (
+      <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {groups
+          .map((g, i) => ({ g, i }))
+          .reverse()
+          .flatMap(({ g, i }) => {
+            const id = str(g["id"]), hidden = hiddenLayer(g), opened = open.has(id);
+            const mine = held.filter((o) => str(o[objectLayer]) === id);
+            const flip = () => setOpen((was) => (was.has(id) ? new Set([...was].filter((one) => one !== id)) : new Set([...was, id])));
+            const rows = [
+              <div key={id} role="listitem" aria-current={id === picked || undefined} onClick={() => pick && setPicked(pick, id)} style={rowStyle(id === picked, 0)}>
+                <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
+                  {/* Opened or closed by a small chevron, so its name keeps its room. */}
+                  <button type="button" aria-label={opened ? "Close" : "Open"} title={opened ? "Close" : "Open"} onClick={flip} style={{ width: 16, padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer" }}>
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={opened ? "M4 6l4 4 4-4" : "M6 4l4 4-4 4"} />
+                    </svg>
+                  </button>
+                  {hide && (
+                    <ui.Button kind="secondary" icon={hidden ? "eye_off" : "eye"} tool="small" pressed={!hidden} hint={hidden ? "Show" : "Hide"} onClick={() => void send(hide, { id, hidden: hidden ? 0 : 1 })}>
+                      {hidden ? "Show" : "Hide"}
+                    </ui.Button>
+                  )}
+                </span>
+                <LayerPreview objects={mine} W={W} H={H} clear={clear} hidden={hidden} address={address} />
+                <strong style={quiet(hidden)}>{str(g["name"]) || "Layer"}</strong>
+                <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
+                  {order && (
+                    <>
+                      <ui.Button kind="secondary" icon="raise" tool="small" hint="Up" disabled={i === groups.length - 1} onClick={() => depthsMoved(groups, i, i + 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
+                        Up
+                      </ui.Button>
+                      <ui.Button kind="secondary" icon="lower" tool="small" hint="Down" disabled={i === 0} onClick={() => depthsMoved(groups, i, i - 1).forEach(([moved, depth], n) => void send(order, n === 0 ? { id: moved, depth } : { id: moved, depth, "one:history": "joined" }))}>
+                        Down
+                      </ui.Button>
+                    </>
+                  )}
+                  {remove && (
+                    <ui.Button
+                      kind="secondary"
+                      icon="delete"
+                      tool="small"
+                      hint="Delete"
+                      onClick={() => {
+                        // Its objects go with it, in one step.
+                        const gone = objectRemove ? mine : [];
+                        gone.forEach((o, n) => void send(objectRemove!, n === 0 ? { id: str(o["id"]) } : { id: str(o["id"]), "one:history": "joined" }));
+                        void send(remove, gone.length ? { id, "one:history": "joined" } : { id });
+                      }}
+                    >
+                      Delete
+                    </ui.Button>
+                  )}
+                </span>
+              </div>,
+            ];
+            if (opened) {
+              for (const o of [...mine].reverse()) {
+                const object = str(o["id"]);
+                rows.push(
+                  <div
+                    key={object}
+                    role="listitem"
+                    aria-current={object === pickedObject || undefined}
+                    onClick={() => {
+                      if (objectPick) setPicked(objectPick, object);
+                      if (pick) setPicked(pick, id);
+                    }}
+                    style={rowStyle(object === pickedObject, 28)}
+                  >
+                    <LayerPreview objects={[o]} W={W} H={H} clear={clear} hidden={hidden} address={address} />
+                    <span style={quiet(hidden)}>{nameOf(o)}</span>
+                    {objectRemove && (
+                      <span onClick={(e) => e.stopPropagation()}>
+                        <ui.Button kind="secondary" icon="delete" tool="small" hint="Delete" onClick={() => void runner.reply(objectRemove, { id: object })}>
+                          Delete
+                        </ui.Button>
+                      </span>
+                    )}
+                  </div>,
+                );
+              }
+            }
+            return rows;
+          })}
+      </div>
+    );
+  }
+  const move = (from: number, to: number) => {
+    depthsMoved(layers, from, to).forEach(([id, depth], i) => void send(order!, i === 0 ? { id, depth } : { id, depth, "one:history": "joined" }));
+  };
+
   return (
     <div role="list" aria-label="Layers" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {layers
@@ -1771,7 +1985,7 @@ export function Layers({
                   </ui.Button>
                 </span>
               )}
-              <LayerPreview layer={l} W={W} H={H} clear={clear} hidden={hidden} address={address} />
+              <LayerPreview objects={[l]} W={W} H={H} clear={clear} hidden={hidden} address={address} />
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: hidden ? "var(--color-muted)" : undefined }}>{nameOf(l)}</span>
               {/* Its buttons act on it alone, without picking it too. */}
               <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", gap: 2 }}>
@@ -1796,4 +2010,26 @@ export function Layers({
         })}
     </div>
   );
+}
+
+// A collage's objects held in layers, as it draws them: in their layers' order, the
+// lowest layer's first, each layer's in their own; those of a hidden layer left out,
+// and those of none, or of one that isn't there, first. The same as the desktop's.
+export function inLayers(objects: Row[], layers: Row[], field: string): Row[] {
+  const order = [...layers].sort((a, b) => num(a["depth"]) - num(b["depth"]));
+  const place = new Map(order.map((l, i) => [str(l["id"]), { at: i + 1, hidden: hiddenLayer(l) }]));
+  return objects
+    .map((o) => ({ o, found: place.get(str(o[field])) }))
+    .filter(({ found }) => !found?.hidden)
+    .map(({ o, found }, i) => ({ o, at: found?.at ?? 0, i }))
+    .sort((a, b) => a.at - b.at || a.i - b.i)
+    .map(({ o }) => o);
+}
+
+// The layer new objects go in: the one picked, while it's there, or the topmost.
+export function currentLayer(layers: Row[], picked: string): string {
+  if (layers.some((l) => str(l["id"]) === picked)) return picked;
+  let top = "", highest = 0;
+  for (const l of layers) if (!top || num(l["depth"]) >= highest) (top = str(l["id"])), (highest = num(l["depth"]));
+  return top;
 }

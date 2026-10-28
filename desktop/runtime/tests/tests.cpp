@@ -1987,6 +1987,35 @@ TEST("a collage's layers listed beside it, topmost first: each an eye, its previ
 	matches_golden("collage-layers", {900, 420}, [&] { return drawn(nav); });
 }
 
+TEST("a collage's objects held in layers: drawn in their layers' order, a hidden layer's left out, and listed as their layers, one opened to its objects") {
+	memory_source data;
+	auto item = [](std::string id, std::string layer, std::string kind, double x, double y, double w, double h, std::string fill, double depth) {
+		return value(fields{{"id", std::move(id)}, {"layer", std::move(layer)}, {"shape", std::move(kind)}, {"x", x}, {"y", y}, {"w", w}, {"h", h}, {"fill", std::move(fill)}, {"depth", depth}});
+	};
+	data.set("studio::drawing_page", "d1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "back"}, {"name", "Backdrop"}, {"depth", 0}}), value(fields{{"id", "logo"}, {"name", "logo"}, {"depth", 1}}),
+	                                      value(fields{{"id", "notes"}, {"name", "Notes"}, {"depth", 2}, {"hidden", 1}})}},
+	                      {"items", list{item("a", "logo", "ellipse", 600, 200, 500, 500, "#ffd23f", 0), item("b", "back", "rectangle", 100, 100, 1400, 700, "#2e86de", 0),
+	                                     item("c", "logo", "rectangle", 500, 400, 300, 300, "#e4572e", 1), item("d", "notes", "rectangle", 0, 0, 1600, 900, "#1d1d1f", 0)}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Drawing", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::drawing_page", "d1"), .list = "items", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .clear = true, .pick = "/ item", .fills = true, .layers = "layers", .layer = "layer",
+		                                                                         .layer_pick = "/ layer"}))},
+		                                      region{"side", items(layer_list(p, {.view = p.view("studio::drawing_page", "d1"), .list = "layers", .width = "width", .height = "height",
+		                                                                          .fields = named_like_parts, .clear = true, .pick = "/ layer", .hide = "studio::layer::show",
+		                                                                          .order = "studio::layer::arrange", .remove = "studio::layer::delete", .objects = "items",
+		                                                                          .object_layer = "layer", .object_remove = "studio::item::delete", .object_pick = "/ item"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	nav.current().pick("/ layer", "logo");
+	nav.current().kept<bool>("layers open logo").set(true);
+	matches_golden("collage-held-layers", {900, 420}, [&] { return drawn(nav); });
+}
+
 TEST("a collage's shapes: a rectangle rounded and stroked, an ellipse, a path, one half there, drawn smooth from their SVG, and picked as any layer is") {
 	memory_source data;
 	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, std::string stroke, double width, double corners = 0,

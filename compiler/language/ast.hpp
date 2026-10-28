@@ -864,6 +864,14 @@ namespace one::language {
         location preview_where;
         bool snap = false;                    // snap to edges: to the collage's and every other layer's
         bool clear = false;                   // clear: nothing behind its layers, shown over a checkerboard, saved clear
+        // in drawing_page.layers by layer: its rows are objects held in layers, the rows
+        // of another list of the same view, each object in the one its field names. The
+        // layers are drawn in their depth's order, each object within its own, and a
+        // hidden layer's objects aren't drawn. A layer's name is its name, and a new one
+        // is made by its entity's create.
+        std::optional<std::string> in_list;
+        std::string in_field;
+        location in_where;
         expression_ptr match_colors;          // match colors when poster_page.matched: its pictures' colors moved toward one another's
         location snap_where;
         std::optional<std::string> empty;     // empty "Drop a picture": said while it has no layers

@@ -167,8 +167,9 @@ namespace one::terminal::runtime {
 		if (v.status == status::loading) return terminal::text("Loading…", dim());
 		// Read as its parts, whichever of the app's fields keep them.
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
-		// Those hidden aren't shown or picked.
-		const value shown = shown_layers(data[spec.list]);
+		// Those hidden aren't shown or picked; held in layers, they're in their layers'
+		// order, and those of a hidden layer aren't either.
+		const value shown = spec.layers.empty() ? shown_layers(data[spec.list]) : in_layers(shown_layers(data[spec.list]), data[spec.layers], spec.layer);
 		const auto& layers = shown.as_array();
 		std::string chosen = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		// Words being written: a line to type them in, kept with Enter.
@@ -265,10 +266,55 @@ namespace one::terminal::runtime {
 	terminal::view layer_list(page& p, layers_spec spec) {
 		const view_state& v = *spec.view;
 		if (v.status == status::loading) return terminal::text("Loading…", dim());
-		const value data = collage_parts_of(v.data, spec.list, spec.fields);
+		const value data = collage_parts_of(v.data, spec.objects.empty() ? spec.list : spec.objects, spec.fields);
+		std::vector<terminal::view> rows;
+		// The layers objects are held in, topmost first: each by its name, with its buttons,
+		// its objects going with it when it's deleted.
+		if (!spec.objects.empty()) {
+			std::vector<value> groups = data[spec.list].as_array();
+			std::stable_sort(groups.begin(), groups.end(), [](const value& a, const value& b) { return a["depth"].as_double() < b["depth"].as_double(); });
+			const value ordered = value(groups);
+			for (std::size_t i = groups.size(); i-- > 0;) {
+				const value& g = groups[i];
+				std::string id = g["id"].as_string();
+				bool hidden = hidden_layer(g);
+				std::vector<terminal::view> row;
+				row.push_back(terminal::text((id == p.picked_id(spec.pick) ? "> " : "  ") + (g["name"].as_string().empty() ? std::string("Layer") : g["name"].as_string()), hidden ? dim() : terminal::style{}));
+				if (!spec.hide.empty()) row.push_back(terminal::button(hidden ? "Show" : "Hide", [&p, spec, id, hidden] { p.run(spec.hide, value(std::map<std::string, value>{{"id", id}, {"hidden", hidden ? 0 : 1}})); }));
+				if (!spec.order.empty()) {
+					auto move = [&p, spec, ordered, i](std::size_t to) {
+						bool first = true;
+						for (const auto& [moved, depth] : depths_moved(ordered, i, to)) {
+							value sent = value(std::map<std::string, value>{{"id", moved}, {"depth", depth}});
+							if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+							p.run(spec.order, sent);
+						}
+					};
+					if (i + 1 < groups.size()) row.push_back(terminal::button("Up", [move, i] { move(i + 1); }));
+					if (i > 0) row.push_back(terminal::button("Down", [move, i] { move(i - 1); }));
+				}
+				if (!spec.remove.empty()) {
+					row.push_back(terminal::button("Delete", [&p, spec, id, objects = data[spec.objects]] {
+						bool first = true;
+						for (const auto& o : objects.as_array()) {
+							if (o[spec.object_layer].as_string() != id || spec.object_remove.empty()) continue;
+							value sent = value(std::map<std::string, value>{{"id", o["id"]}});
+							if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+							p.run(spec.object_remove, sent);
+						}
+						value gone = value(std::map<std::string, value>{{"id", id}});
+						if (!first) gone.fields["one:history"] = value("joined");
+						p.run(spec.remove, gone);
+					}));
+				}
+				if (!spec.pick.empty()) row.push_back(terminal::button("Pick", [&p, pick = spec.pick, id] { p.pick(pick, id); }));
+				rows.push_back(terminal::flow(std::move(row)).spacing(1));
+			}
+			if (rows.empty()) return terminal::text("No layers yet.", dim());
+			return terminal::column(std::move(rows));
+		}
 		const value& layers = data[spec.list];
 		const auto& all = layers.as_array();
-		std::vector<terminal::view> rows;
 		// Topmost first, as it's seen: its name, then its buttons.
 		for (std::size_t i = all.size(); i-- > 0;) {
 			const value& l = all[i];

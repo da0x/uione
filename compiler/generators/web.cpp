@@ -1406,10 +1406,20 @@ namespace one::generators {
                     std::string view = full_view(ns, c.view.text());
                     std::string kept;
                     for (const auto& [part, field] : model_.collage_fields(ns, c)) kept += (kept.empty() ? "" : ", ") + part + ": " + web_detail::js_string(field);
-                    std::string line = "<Layers view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(c.list) + " width=" + web_detail::js_string(c.width) +
+                    bool held = c.in_list && *c.in_list == l->list;
+                    std::string line = "<Layers view={" + view_variable(parts, view) + "} list=" + web_detail::js_string(l->list) + " width=" + web_detail::js_string(c.width) +
                                        " height=" + web_detail::js_string(c.height) + " fields={{ " + kept + " }}";
                     if (c.clear) line += " clear";
-                    if (c.over) line += " pick=" + web_detail::js_string(route_ + " " + *c.over);
+                    if (held) {
+                        for (const auto& [name, of] : picks_) {
+                            if (of.view == view && of.list == l->list) line += " pick=" + web_detail::js_string(route_ + " " + name);
+                        }
+                        line += " objects=" + web_detail::js_string(c.list) + " objectLayer=" + web_detail::js_string(c.in_field);
+                        if (c.remove) line += " objectRemove=" + web_detail::js_string(full_command(ns, *c.remove));
+                        if (c.over) line += " objectPick=" + web_detail::js_string(route_ + " " + *c.over);
+                    } else if (c.over) {
+                        line += " pick=" + web_detail::js_string(route_ + " " + *c.over);
+                    }
                     if (l->hide) line += " hide=" + web_detail::js_string(full_command(ns, *l->hide));
                     if (l->order) line += " order=" + web_detail::js_string(full_command(ns, *l->order));
                     if (l->remove) line += " remove=" + web_detail::js_string(full_command(ns, *l->remove));
@@ -1460,6 +1470,22 @@ namespace one::generators {
                             for (const auto& f : layer->fields) {
                                 if (f.type && f.type->text() == *per) line += " parent=" + web_detail::js_string(f.name);
                             }
+                        }
+                    }
+                    // Held in layers: the list of them, how an object names its own, how one's
+                    // made, and the screen's pick of one.
+                    if (c->in_list) {
+                        line += " layers=" + web_detail::js_string(*c->in_list) + " layer=" + web_detail::js_string(c->in_field);
+                        if (const language::entity_declaration* group = listed(ns, c->view.text(), *c->in_list)) {
+                            line += " layerCreate=" + web_detail::js_string(web_detail::join(ns, group->name + "::create"));
+                            if (auto per = per_entity(view)) {
+                                for (const auto& f : group->fields) {
+                                    if (f.type && f.type->text() == *per) line += " layerParent=" + web_detail::js_string(f.name);
+                                }
+                            }
+                        }
+                        for (const auto& [name, of] : picks_) {
+                            if (of.view == view && of.list == *c->in_list) line += " layerPick=" + web_detail::js_string(route_ + " " + name);
                         }
                     }
                     line += " name=" + web_detail::js_string(route_ + " " + (c->over ? *c->over : std::string("collage")));

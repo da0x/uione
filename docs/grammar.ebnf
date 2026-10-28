@@ -237,6 +237,8 @@ screen_block   ::= "{" NEWLINE? screen_item* "}"
 given          ::= "{" NEWLINE? ((NAME "=" expression)+ END)* "}"
 collage_line   ::= ("place" qualified | "add" qualified | "crop" qualified | "write" qualified | "delete" qualified
                   | "snap" "to" "edges" | "clear" | "match" "colors" "when" expression | "empty" STRING | "over" NAME screen_block
+                  /* its objects held in layers, another list of its view, each naming its own by a field */
+                  | "in" qualified "." NAME "by" NAME
                   /* a drag on it makes a layer as big as the drag, given these values, while the when holds;
                      by line, a line from where the drag began to where it ended, kept as a path's points */
                   | "draw" qualified given? ("by" "line")? ("when" expression)?

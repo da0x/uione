@@ -2204,6 +2204,19 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     across, down or at 45 degrees; a click alone makes a line across a fifth of the
     collage's shorter side. A path is picked by a press within 6 pixels of its box, so
     a thin line can be.
+  - `in drawing_page.layers by layer`: its rows are objects held in layers, as a
+    drawing program's are: the rows of another list of its view, each with its
+    `name` and `depth`, each object naming its own by a field that points at one.
+    Layers are drawn in their depth's order, each one's objects in theirs, and a
+    hidden layer's objects aren't drawn. New objects go in the current layer: the one
+    picked, by a `pick` over that list, or else the topmost; picking an object makes
+    its layer current. When there's none yet, the first is made, Layer 1, by the
+    layers' entity's create. An SVG brought into a collage that keeps shapes, its
+    `shape`, `points`, `fill`, `stroke` and `stroke_width`, comes in as its own shapes
+    and curves, each an object, as a new layer named for it, all one step to undo;
+    one that keeps no shapes takes it as one picture, drawn from its vectors.
+    `layers drawing_page.layers { ... }` then lists the layers, each opening to its
+    objects, and a layer deleted takes its objects with it, by the collage's delete.
   - `clear`: nothing is behind its layers, as a drawing's page is. Where nothing is,
     it's shown over a gray and white checkerboard, as drawing programs show what's
     clear, and a picture or a preview of it is clear there too. Without it, its page

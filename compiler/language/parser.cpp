@@ -2435,6 +2435,17 @@ namespace one::language {
                         if (!at_word("when")) fail_expecting("when, as in match colors when poster_page.matched == 1");
                         advance();
                         collage.match_colors = parse_expression();
+                    } else if (at_word("in") && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::dot) {
+                        // in drawing_page.layers by layer: its objects held in layers.
+                        advance();
+                        collage.in_where = peek().where;
+                        qualified_name view = parse_qualified_name("the view whose list holds its layers, like drawing_page");
+                        if (view.text() != collage.view.text()) fail_expecting("a list of the collage's own view, " + collage.view.text() + ", as in in " + collage.view.text() + ".layers by layer");
+                        expect(token_kind::dot, "'.' and the list of its layers, like drawing_page.layers");
+                        collage.in_list = expect(token_kind::identifier, "the list of its layers, like layers").text;
+                        if (!at_word("by")) fail_expecting("by and the field naming each object's layer, as in in drawing_page.layers by layer");
+                        advance();
+                        collage.in_field = expect(token_kind::identifier, "the field naming each object's layer, like layer").text;
                     } else if (at_word("clear") && (peek(1).kind == token_kind::newline || peek(1).kind == token_kind::right_brace)) {
                         // clear: nothing behind its layers, as a drawing's page is.
                         advance();

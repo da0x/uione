@@ -8,6 +8,7 @@
 
 import { act, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { App, Cards, Collage, CollageButton, Layers, Picture, Table, memorySource, screen as defineScreen, useView } from "../src/index.js";
+import { currentLayer, inLayers } from "../src/collage-view.js";
 import type { MemorySource } from "../src/index.js";
 import { setChosen, setPicked, useChosen, usePickedId } from "../src/workspace.js";
 import { plain } from "../src/plain.js";
@@ -312,6 +313,48 @@ describe("a collage's layers, listed", () => {
     expect((within(top!).getByRole("button", { name: "Up" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(top!);
     expect(drawn.getByTestId("picked").textContent).toBe("top");
+  });
+});
+
+describe("a collage's objects held in layers", () => {
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
+  });
+
+  it("draws them in their layers' order, a hidden layer's left out, and new ones go in the one picked, or the topmost", () => {
+    const layers = [{ id: "top", depth: 2 }, { id: "back", depth: 0 }, { id: "gone", depth: 1, hidden: 1 }];
+    const objects = [{ id: "a", layer: "top" }, { id: "b", layer: "back" }, { id: "c", layer: "gone" }, { id: "d", layer: "nowhere" }, { id: "e", layer: "back" }];
+    expect(inLayers(objects, layers, "layer").map((o) => o.id)).toEqual(["d", "b", "e", "a"]);
+    expect(currentLayer(layers, "back")).toBe("back");
+    expect(currentLayer(layers, "missing")).toBe("top");
+    expect(currentLayer([], "")).toBe("");
+  });
+
+  it("lists the layers topmost first, each opening to its objects, a layer deleted taking them with it in one step", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const source = memorySource({ commands: { "studio::layer::delete": () => ({ id: "x" }), "studio::item::delete": () => ({ id: "x" }) } });
+    source.set("studio::drawing_page", {
+      width: 1600,
+      height: 900,
+      layers: [{ id: "back", name: "Backdrop", depth: 0 }, { id: "logo", name: "logo", depth: 1 }],
+      items: [{ id: "a", layer: "logo", shape: "ellipse", x: 0, y: 0, w: 10, h: 10 }, { id: "b", layer: "logo", words: "Hi", size: 10, x: 0, y: 0, w: 10, h: 10 }],
+    }, "d1");
+    function Drawer() {
+      const page = useView("studio::drawing_page", "d1");
+      return <Layers view={page} list="layers" width="width" height="height" fields={namedLikeParts} pick="/ layer" remove="studio::layer::delete" objects="items" objectLayer="layer" objectRemove="studio::item::delete" objectPick="/ item" />;
+    }
+    const only = defineScreen({ title: "Drawing", route: "/" }, () => <Drawer />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/logo|Backdrop/)?.[0])).toEqual(["logo", "Backdrop"]));
+    fireEvent.click(within(drawn.getAllByRole("listitem")[0]!).getByRole("button", { name: "Open" }));
+    expect(drawn.getAllByRole("listitem").map((r) => r.textContent?.match(/logo|Backdrop|Hi|Ellipse/)?.[0])).toEqual(["logo", "Hi", "Ellipse", "Backdrop"]);
+    fireEvent.click(within(drawn.getAllByRole("listitem")[0]!).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(source.runs.length).toBe(3));
+    expect(source.runs.map((r) => [r.command, r.input])).toEqual([
+      ["studio::item::delete", { id: "a" }],
+      ["studio::item::delete", { id: "b", "one:history": "joined" }],
+      ["studio::layer::delete", { id: "logo", "one:history": "joined" }],
+    ]);
   });
 });
 

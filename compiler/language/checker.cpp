@@ -3309,7 +3309,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -4172,6 +4172,26 @@ namespace one::language {
                 if (draw.by && !kept.contains("points")) error(draw.by_where, "a line is kept as a path's points, which " + layer->name + " doesn't have; add points text to it, or say its field");
                 if (!has({"x", "y", "w", "h"})) error(draw.command.where, "a drawn layer is as big as the drag, kept in its x y w h, which " + layer->name + " doesn't have");
             }
+            // Held in layers: another list of its view, each object naming its layer by a
+            // field, the layers in their depth's order, named, and made by their create.
+            if (collage.in_list) {
+                const view_each* groups = named_list(ns, collage.view, *collage.in_list, route);
+                const entity_declaration* group = groups ? listed_entity(ns, *groups) : nullptr;
+                if (group) {
+                    const field* naming = find_field(*layer, collage.in_field);
+                    if (!naming || !naming->type || naming->type->text() != group->name) {
+                        error(collage.in_where, "each " + layer->name + " names its layer by " + collage.in_field + ", so it's a field pointing at " + group->name + ", like " + collage.in_field + "  " + group->name);
+                    } else if (!in_rows(*layers, collage.in_field)) {
+                        error(collage.in_where, "view " + collage.view.text() + " has no " + collage.in_field + " in its " + collage.list + "; add it to the list's block");
+                    }
+                    for (const char* needed : {"name", "depth"}) {
+                        if (!in_rows(*groups, needed)) error(collage.in_where, "a layer's " + std::string(needed) + " is read from its row, and view " + collage.view.text() + " has no " + needed + " in its " + *collage.in_list + "; add it to the list's block");
+                    }
+                    if (!find_command(ns, qualified_name{{group->name, "create"}, collage.in_where})) {
+                        error(collage.in_where, "a new layer is made by " + group->name + "::create, which isn't declared " + in_namespace(ns));
+                    }
+                }
+            }
             // Pasted pictures are made by its add, the file in the layer's picture.
             if (collage.paste) {
                 if (!collage.add) error(collage.paste_where, "pasted pictures are made by the collage's add, so it says one too, like add " + layer->name + "::create");
@@ -4214,10 +4234,31 @@ namespace one::language {
         void verify_layers(const std::string& ns, const layers_item& l, location where, const std::string& route) {
             const collage_item* collage = nullptr;
             for (const auto* c : collages_) {
-                if (c->view.text() == l.view.text() && c->list == l.list) collage = c;
+                if (c->view.text() == l.view.text() && (c->list == l.list || (c->in_list && *c->in_list == l.list))) collage = c;
             }
             if (!collage) {
                 error(where, "layers lists the layers of a collage on this screen, and none here is of " + l.view.text() + "." + l.list);
+                return;
+            }
+            // The layers its objects are held in: each hidden by its own hidden, and ordered by its depth.
+            if (collage->in_list && *collage->in_list == l.list) {
+                const view_each* groups = named_list(ns, collage->view, l.list, route);
+                const entity_declaration* group = groups ? listed_entity(ns, *groups) : nullptr;
+                if (!group) return;
+                for (const auto& [command, needs, line] : {std::tuple{&l.hide, "hidden", "hide"}, {&l.order, "depth", "order"}, {&l.remove, "", "delete"}}) {
+                    if (!*command) continue;
+                    verify_command_use(ns, **command);
+                    const entity_declaration* on = find_command(ns, **command);
+                    if (on && on != group) error((*command)->where, "the layers are " + group->name + "s, so " + line + " names a command on " + group->name);
+                    if (*needs && !in_rows(*groups, needs)) {
+                        error((*command)->where, std::string(line) + " sets a layer's " + needs + ", which view " + collage->view.text() + " doesn't read in its " + l.list + "; add it to the list's block");
+                    }
+                }
+                if (l.remove && !collage->remove) {
+                    const view_each* objects = named_list(ns, collage->view, collage->list, route);
+                    const entity_declaration* object = objects ? listed_entity(ns, *objects) : nullptr;
+                    error(l.remove->where, "a layer deleted takes its objects with it, by the collage's delete, so it says one too, like delete " + (object ? object->name : std::string("item")) + "::delete");
+                }
                 return;
             }
             const view_each* rows = named_list(ns, collage->view, collage->list, route);

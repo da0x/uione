@@ -330,6 +330,20 @@ namespace one::generators {
                     if (f.type && f.type->text() == *per) out += ", .parent = " + str(f.name);
                 }
             }
+            // Held in layers: the list of them, how an object names its own, how one's made,
+            // and the screen's pick of one.
+            if (c.in_list) {
+                out += ", .layers = " + str(*c.in_list) + ", .layer = " + str(c.in_field);
+                if (const language::entity_declaration* group = model_.listed(ns, c.view.text(), *c.in_list)) {
+                    out += ", .layer_create = " + str(screens::join(ns, group->name + "::create"));
+                    for (const auto& f : group->fields) {
+                        if (per && f.type && f.type->text() == *per) out += ", .layer_parent = " + str(f.name);
+                    }
+                }
+                for (const auto& [name, of] : picks_) {
+                    if (of.view == view && of.list == *c.in_list) out += ", .layer_pick = " + str(route_ + " " + name);
+                }
+            }
             out += ", .key = " + str(collage_key(c));
             std::string asks;
             for (const auto& tool : c.tools) {
@@ -350,15 +364,27 @@ namespace one::generators {
         // layers drawing_page.layers { ... }: the collage's layers as a list, read as it reads them.
         std::string layers(screen_parts& parts, const std::string& ns, const language::layers_item& l, const language::collage_item& c) {
             std::string view = screens::full_view(ns, c.view.text());
-            std::string out = "layer_list(p, {.view = " + view_variable(parts, view) + ", .list = " + str(c.list) + ", .width = " + str(c.width) + ", .height = " + str(c.height);
+            bool held = c.in_list && *c.in_list == l.list;
+            std::string out = "layer_list(p, {.view = " + view_variable(parts, view) + ", .list = " + str(l.list) + ", .width = " + str(c.width) + ", .height = " + str(c.height);
             std::string kept;
             for (const auto& [part, field] : model_.collage_fields(ns, c)) kept += (kept.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
             out += ", .fields = {" + kept + "}";
             if (c.clear) out += ", .clear = true";
-            if (c.over) out += ", .pick = " + str(route_ + " " + *c.over);
+            if (held) {
+                for (const auto& [name, of] : picks_) {
+                    if (of.view == view && of.list == l.list) out += ", .pick = " + str(route_ + " " + name);
+                }
+            } else if (c.over) {
+                out += ", .pick = " + str(route_ + " " + *c.over);
+            }
             if (l.hide) out += ", .hide = " + str(screens::full_command(ns, *l.hide));
             if (l.order) out += ", .order = " + str(screens::full_command(ns, *l.order));
             if (l.remove) out += ", .remove = " + str(screens::full_command(ns, *l.remove));
+            if (held) {
+                out += ", .objects = " + str(c.list) + ", .object_layer = " + str(c.in_field);
+                if (c.remove) out += ", .object_remove = " + str(screens::full_command(ns, *c.remove));
+                if (c.over) out += ", .object_pick = " + str(route_ + " " + *c.over);
+            }
             return out + "})";
         }
 

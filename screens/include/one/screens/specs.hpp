@@ -9,6 +9,7 @@
 #pragma once
 
 #include <functional>
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
@@ -395,6 +396,12 @@ namespace one::screens {
 		std::string write = "";   // words written, or resized: their words, size and place
 		std::string remove = "";  // a layer deleted, like words written away to nothing
 		std::string parent = "";  // the field a layer names what the view is per by, like poster
+		// Held in layers: the view's list of them, the field each object names its layer
+		// by, the command a new layer is made by, and the screen's pick of a layer, the
+		// one new objects go in.
+		std::string layers = "", layer = "", layer_create = "";
+		std::string layer_parent = "";  // the field a layer names what the view is per by
+		std::string layer_pick = "";
 		std::string key = "";     // what its buttons, like crop and add words, name it by
 		std::vector<collage_ask> asks = {};  // over the picked layer too, before the commands, like crop
 		bool paste = false;       // a file dropped or pasted made a picture, by add
@@ -417,6 +424,9 @@ namespace one::screens {
 		bool clear = false;
 		std::string pick = "";
 		std::string hide = "", order = "", remove = "";
+		// Its rows are the layers the collage's objects are held in: their list, the field
+		// each names its layer by, and how one's deleted, a layer's going with it.
+		std::string objects = "", object_layer = "", object_remove = "", object_pick = "";
 	};
 
 	// A list's rows as one upright sheet of paper, written on in place, as a page of a
@@ -497,6 +507,37 @@ namespace one::screens {
 			if (!hidden_layer(l)) shown.push_back(l);
 		}
 		return value(std::move(shown));
+	}
+
+	// A collage's objects held in layers, as it draws them: in their layers' order, the
+	// lowest layer's first, each layer's in their own; those of a hidden layer left out,
+	// and those of none, or of one that isn't there, first.
+	inline value in_layers(const value& objects, const value& layers, const std::string& field) {
+		std::map<std::string, std::pair<std::size_t, bool>> place;  // each layer's place, and whether it's hidden
+		std::vector<value> groups = layers.as_array();
+		std::stable_sort(groups.begin(), groups.end(), [](const value& a, const value& b) { return a["depth"].as_double() < b["depth"].as_double(); });
+		for (std::size_t i = 0; i < groups.size(); ++i) place[groups[i]["id"].as_string()] = {i + 1, hidden_layer(groups[i])};
+		std::vector<std::pair<std::size_t, value>> held;
+		for (const auto& o : objects.as_array()) {
+			auto found = place.find(o[field].as_string());
+			if (found != place.end() && found->second.second) continue;
+			held.emplace_back(found == place.end() ? 0 : found->second.first, o);
+		}
+		std::stable_sort(held.begin(), held.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+		std::vector<value> out;
+		for (auto& [at, o] : held) out.push_back(std::move(o));
+		return value(std::move(out));
+	}
+
+	// The layer new objects go in: the one picked, while it's there, or the topmost.
+	inline std::string current_layer(const value& layers, const std::string& picked) {
+		std::string top;
+		double highest = 0;
+		for (const auto& l : layers.as_array()) {
+			if (l["id"].as_string() == picked) return picked;
+			if (top.empty() || l["depth"].as_double() >= highest) top = l["id"].as_string(), highest = l["depth"].as_double();
+		}
+		return top;
 	}
 
 	// The depths its layers, lowest first, take after the one at `from` moves to `to`:

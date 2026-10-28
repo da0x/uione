@@ -473,6 +473,77 @@ TEST_CASE("a collage's layers are listed, each hidden or shown by its hidden, or
           std::string::npos);
 }
 
+TEST_CASE("a collage's objects held in layers: each naming its layer, the layers named, ordered and made by their create, and listed with their objects") {
+    const std::string drawing = R"(namespace studio at / {
+	entity drawing {
+		width   number  = 1600
+		height  number  = 900
+	}
+	entity layer {
+		drawing  drawing  required
+		name     text
+		depth    number  = 0
+		hidden   number  = 0
+	}
+	entity item {
+		drawing  drawing  required
+		layer    layer
+		depth    number  = 0
+		x  number = 0
+		y  number = 0
+		w  number = 0
+		h  number = 0
+	}
+	command layer::create
+	command layer::delete
+	command layer::show {
+		changes hidden
+	}
+	command item::create
+	command item::delete
+	view drawing_page per drawing {
+		width  height
+		layers = each layer in drawing {
+			order by depth
+			name  depth  hidden
+		}
+		items = each item in drawing {
+			order by depth
+			layer  depth  x  y  w  h
+		}
+	}
+)";
+    auto on_screen = [&](const std::string& body) { return project + drawing + "\n\tscreen \"Drawing\" /drawings/:drawing {\n" + body + "\t}\n}\n"; };
+    const std::string fine = R"(		pick item from drawing_page.items
+		pick layer from drawing_page.layers
+		collage drawing_page.items size width height {
+			in drawing_page.layers by layer
+			add item::create
+			delete item::delete
+			over item {
+			}
+		}
+		layers drawing_page.layers {
+			hide layer::show
+			delete layer::delete
+		}
+)";
+    CHECK(messages(on_screen(fine)).empty());
+    auto files = built(on_screen(fine));
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"( layers="layers" layer="layer" layerCreate="studio::layer::create" layerParent="drawing" layerPick="/drawings/:drawing layer")") != std::string::npos);
+    CHECK(native.find(R"(.layers = "layers", .layer = "layer", .layer_create = "studio::layer::create", .layer_parent = "drawing", .layer_pick = "/drawings/:drawing layer")") != std::string::npos);
+    CHECK(web.find(R"(<Layers view={drawingPage} list="layers")") != std::string::npos);
+    CHECK(web.find(R"(pick="/drawings/:drawing layer" objects="items" objectLayer="layer" objectRemove="studio::item::delete" objectPick="/drawings/:drawing item")") != std::string::npos);
+    CHECK(native.find(R"(.objects = "items", .object_layer = "layer", .object_remove = "studio::item::delete", .object_pick = "/drawings/:drawing item")") != std::string::npos);
+    // Each object names its layer by a field pointing at one, read by the view.
+    std::string wrong = on_screen("\t\tcollage drawing_page.items size width height {\n\t\t\tin drawing_page.layers by depth\n\t\t}\n");
+    CHECK(messages(wrong) == std::vector<std::string>{"49: each item names its layer by depth, so it's a field pointing at layer, like depth  layer"});
+}
+
 TEST_CASE("a collage is a view's list as layers, as big as two of its values, placed by a command, with buttons over the picked layer") {
     const std::string fine = R"(		pick layer from poster_page.layers
 		collage poster_page.layers size width height {

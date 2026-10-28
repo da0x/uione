@@ -14,6 +14,7 @@
 // collage model, the web's too.
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -579,6 +580,81 @@ namespace one::desktop::runtime {
 		}
 
 
+		// The layer new objects go in, worked out as the collage is built: the one picked,
+		// or the topmost; none while it isn't held in layers, or has none yet.
+		std::string layer_now(page& p, const collage_spec& spec) { return p.kept<std::string>("collage layer " + spec.key).peek(); }
+
+		// Whether there's a layer for a new object to go in. When it's held in layers and
+		// has none yet, one's made first, Layer 1, and `again` runs once it's there.
+		bool layer_ready(page& p, const collage_spec& spec, std::function<void()> again) {
+			if (spec.layers.empty() || spec.layer_create.empty() || !layer_now(p, spec).empty()) return true;
+			value made = value(fields{{"name", "Layer 1"}, {"depth", 0}});
+			if (!spec.layer_parent.empty()) made.fields[spec.layer_parent] = value(spec.subject);
+			p.run(spec.layer_create, made, [&p, kept = p.kept<std::string>("collage layer " + spec.key), pick = spec.layer_pick, again](const answer& a) {
+				if (!a) return;
+				kept.set(*a);
+				if (!pick.empty()) p.pick(pick, *a);
+				again();
+			});
+			return false;
+		}
+
+		// A new object put in the layer it goes in.
+		void in_layer(page& p, const collage_spec& spec, value& made) {
+			if (!spec.layer.empty()) made.fields[spec.layer] = value(layer_now(p, spec));
+		}
+
+		// Whether a collage keeps shapes, so an SVG brought in can be its own.
+		bool keeps_shapes(const collage_spec& spec) {
+			return std::ranges::all_of(std::array{"shape", "points", "fill", "stroke", "stroke_width"}, [&](const char* part) { return spec.fields.contains(part); });
+		}
+
+		// An SVG brought in as its own shapes and curves, each an object, where it would
+		// sit as a picture: as big as it is, smaller where it wouldn't fit, centered on
+		// `on` or the middle. Held in layers, they're a new layer, named for it, on top;
+		// all one step to undo, and the layer picked.
+		void add_shapes(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::string& svg, const std::string& name,
+		                std::optional<model::point> on) {
+			auto size = desktop::picture::svg_size(svg);
+			auto shapes = desktop::svg_shapes(svg);
+			if (!size || shapes.empty()) {
+				p.told().set(name + " has no shapes to bring in.");
+				return;
+			}
+			double s = std::min({1.0, width / size->first, height / size->second});
+			double cx = on ? on->x : width / 2, cy = on ? on->y : height / 2;
+			model::box at{cx - size->first * s / 2, cy - size->second * s / 2, size->first * s, size->second * s};
+			const auto& all = layers.as_array();
+			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
+			auto made = [&p, spec, shapes, at, s, depth](const std::string& layer, bool joined) {
+				double d = depth;
+				for (const auto& shape : shapes) {
+					model::box b = model::path_bounds(shape.path);
+					std::string points = model::path_fractions(shape.path, b);
+					model::box placed{at.x + b.x * s, at.y + b.y * s, b.w * s, b.h * s};
+					if (placed.w < 1) placed.x += placed.w / 2 - 0.5, placed.w = 1;
+					if (placed.h < 1) placed.y += placed.h / 2 - 0.5, placed.h = 1;
+					value object = value(fields{{"shape", "path"}, {"points", points}, {"fill", shape.fill}, {"stroke", shape.stroke}, {"stroke_width", shape.stroke_width * s},
+					                            {"x", placed.x}, {"y", placed.y}, {"w", placed.w}, {"h", placed.h}, {"depth", d++}});
+					if (spec.fields.contains("opacity")) object.fields["opacity"] = value(shape.opacity);
+					if (!spec.parent.empty()) object.fields[spec.parent] = value(spec.subject);
+					if (!spec.layer.empty() && !layer.empty()) object.fields[spec.layer] = value(layer);
+					value sent = collage_fields_of(object, spec.fields);
+					if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
+					p.run(spec.add, sent);
+				}
+			};
+			if (spec.layers.empty() || spec.layer_create.empty()) return made(layer_now(p, spec), false);
+			// A new layer, named for it, on top of the rest.
+			value layer = value(fields{{"name", name}, {"depth", p.kept<double>("collage top layer " + spec.key).peek() + 1}});
+			if (!spec.layer_parent.empty()) layer.fields[spec.layer_parent] = value(spec.subject);
+			p.run(spec.layer_create, layer, [&p, made, pick = spec.layer_pick](const answer& a) {
+				if (!a) return;
+				if (!pick.empty()) p.pick(pick, *a);
+				made(*a, true);
+			});
+		}
+
 		// Pictures dropped or pasted: the first on a collage with nothing on it covers it,
 		// and the rest, and every SVG, are as big as they are, smaller where they wouldn't
 		// fit, centered where they were let go, each a little further along; all one step
@@ -587,11 +663,23 @@ namespace one::desktop::runtime {
 		void add_pictures(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::vector<std::filesystem::path>& files,
 		                  std::optional<model::point> on) {
 			if (spec.add.empty() || !spec.paste || !spec.fields.contains("picture")) return;
+			// The layer pictures go in, made first when there's none; an SVG makes its own.
+			bool pictures = std::ranges::any_of(files, [&](const auto& f) { return vector_of(f).empty() || !keeps_shapes(spec); });
+			if (pictures && !layer_ready(p, spec, [&p, spec, layers, width, height, files, on] { add_pictures(p, spec, layers, width, height, files, on); })) return;
 			const auto& all = layers.as_array();
 			double depth = !all.empty() && !all.back()["depth"].is_null() ? all.back()["depth"].as_double() + 1 : 0;
 			bool first = true, covered = !all.empty();
 			int at = 0;
 			for (const auto& file : files) {
+				// An SVG, where the collage keeps shapes, comes in as its own shapes.
+				if (std::string svg = vector_of(file); !svg.empty() && keeps_shapes(spec)) {
+					std::string name = file.stem().string().starts_with("one-picture-") ? "Pasted" : file.stem().string();
+					std::optional<model::point> where = on;
+					if (where && at) where = model::point{where->x + 40.0 * at, where->y + 40.0 * at};
+					++at;
+					add_shapes(p, spec, layers, width, height, svg, name, where);
+					continue;
+				}
 				auto read = desktop::picture::read(file);
 				if (!read || !*read) {
 					p.told().set(std::format("{} isn't a picture this can read.", file.filename().string()));
@@ -612,6 +700,7 @@ namespace one::desktop::runtime {
 				}
 				value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+				in_layer(p, spec, made);
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(depth++);
 				if (spec.fields.contains("picture_width")) made.fields["picture_width"] = value(pw), made.fields["picture_height"] = value(ph);
 				if (!std::exchange(first, false)) made.fields["one:history"] = value("joined");
@@ -637,7 +726,9 @@ namespace one::desktop::runtime {
 		void draw_layer(page& p, const collage_spec& spec, const value& layers, model::box b, std::optional<std::string> points = std::nullopt) {
 			const collage_draw* d = drawing_now(spec);
 			if (!d) return;
+			if (!layer_ready(p, spec, [&p, spec, layers, b, points] { draw_layer(p, spec, layers, b, points); })) return;
 			value made = value(fields{{"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}});
+			in_layer(p, spec, made);
 			if (points) made.fields["points"] = value(*points);
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
 			const auto& all = layers.as_array();
@@ -653,10 +744,12 @@ namespace one::desktop::runtime {
 		// Words pasted: a layer of them in the middle, a twelfth of its height.
 		void add_words(page& p, const collage_spec& spec, const value& layers, double width, double height, const std::string& words) {
 			if (spec.add.empty() || !spec.fields.contains("words")) return;
+			if (!layer_ready(p, spec, [&p, spec, layers, width, height, words] { add_words(p, spec, layers, width, height, words); })) return;
 			double size = std::max(8.0, std::round(height / 12));
 			auto [mw, mh] = measured(words, size, 700, false);
 			value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
 			if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+			in_layer(p, spec, made);
 			const auto& all = layers.as_array();
 			if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
 			p.run(spec.add, collage_fields_of(made, spec.fields));
@@ -1199,8 +1292,19 @@ namespace one::desktop::runtime {
 		if (v.status == status::failed) return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, current_theme().quiet());
 		// Read as its parts, whichever of the app's fields keep them.
 		const value data = collage_parts_of(v.data, spec.list, spec.fields);
-		// Those hidden aren't drawn, picked, snapped to or saved.
-		const value layers = shown_layers(data[spec.list]);
+		// Those hidden aren't drawn, picked, snapped to or saved; held in layers, they're
+		// in their layers' order, and those of a hidden layer aren't either.
+		const value layers = spec.layers.empty() ? shown_layers(data[spec.list]) : in_layers(shown_layers(data[spec.list]), data[spec.layers], spec.layer);
+		if (!spec.layers.empty()) {
+			auto now = p.kept<std::string>("collage layer " + spec.key);
+			std::string current = current_layer(data[spec.layers], spec.layer_pick.empty() ? "" : p.picked_id(spec.layer_pick));
+			if (now.peek() != current) now.set(current);
+			// And the topmost layer's depth, which a new one goes past.
+			double top = 0;
+			for (const auto& l : data[spec.layers].as_array()) top = std::max(top, l["depth"].as_double());
+			auto kept_top = p.kept<double>("collage top layer " + spec.key);
+			if (kept_top.peek() != top) kept_top.set(top);
+		}
 		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
 		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
 		bool full = fullscreen();
@@ -1341,6 +1445,7 @@ namespace one::desktop::runtime {
 				auto [mw, mh] = measured(words, size, 700, false);
 				value made = value(fields{{"words", words}, {"size", size}, {"x", (width - mw) / 2}, {"y", (height - mh) / 2}, {"w", mw}, {"h", mh}});
 				if (!spec.parent.empty()) made.fields[spec.parent] = value(spec.subject);
+				in_layer(p, spec, made);
 				const auto& all = layers.as_array();
 				if (!all.empty() && !all.back()["depth"].is_null()) made.fields["depth"] = value(all.back()["depth"].as_double() + 1);
 				p.run(spec.add, collage_fields_of(made, spec.fields), [&p, w, pick = spec.pick, words](const answer& a) {
@@ -1672,6 +1777,8 @@ namespace one::desktop::runtime {
 				        if (!reached(all[i], w->on_board(b)).contains(on)) continue;
 				        std::string id = all[i]["id"].as_string();
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
+				        // Its layer is the current one, as new objects go in it.
+				        if (!spec.layer_pick.empty() && !all[i][spec.layer].as_string().empty()) p.pick(spec.layer_pick, all[i][spec.layer].as_string());
 				        if (clicks >= 2) {
 					        if (is_words(all[i]) && !spec.write.empty()) w->editing = placed::writing{id, all[i]["words"].as_string(), false};
 					        else if (is_picture(all[i]) && vector_here(p, all[i]).empty() && !spec.crop.empty()) w->crop = crop_begun(all[i]);
@@ -1797,20 +1904,180 @@ namespace one::desktop::runtime {
 		return std::move(drawn).grow();
 	}
 
+	namespace {
+		// A list's preview of some of a collage's objects, as wide as this, as tall as the
+		// collage's proportions make it: them alone, drawn where they are, faint while
+		// hidden, made once for each look of them.
+		constexpr float preview_wide = 40;
+		desktop::view preview_of(page& p, const value& objects, double width, double height, bool clear, bool hidden) {
+			float tall = width > 0 && height > 0 ? std::clamp(static_cast<float>(preview_wide * height / width), 12.f, preview_wide) : preview_wide * 9 / 16;
+			desktop::picture drawn;
+			if (width > 0 && height > 0 && !objects.as_array().empty()) {
+				static kept_by<desktop::picture> made(256);
+				std::vector<value> shown;
+				for (const auto& o : objects.as_array()) {
+					value one = o;
+					one.fields.erase("hidden");
+					shown.push_back(std::move(one));
+				}
+				value all = value(std::move(shown));
+				drawn = made.get(std::format("{} {} {} {}", ember::to_json(all), width, height, preview_wide), [&] {
+					auto alone = gathered(p, all, width, height, 2 * preview_wide / width, false);
+					alone.clear = true;
+					return drawn_whole(alone);
+				});
+			}
+			return desktop::drawing([drawn, clear, hidden](desktop::canvas& c, desktop::rect area) {
+				       const auto& th = current_theme();
+				       if (clear) paint_checkers(c, area);
+				       else c.box(area, {.fill = desktop::color::hex(0xffffff)});
+				       if (drawn) c.picture(drawn, area, {0, 0, 1, 1}, hidden ? 0.35f : 1.f);
+				       c.box(area, {.border = th.line, .border_width = 1});
+			       })
+			    .width(preview_wide)
+			    .height(tall)
+			    .grow(0);
+		}
+
+		// Words on one line, cut off at the edge of their room rather than running past it.
+		desktop::view one_line(std::string words, desktop::text_style style) {
+			float tall = style.size * 1.4f;
+			return desktop::drawing([words = std::move(words), style](desktop::canvas& c, desktop::rect area) {
+				       auto kept = c.clip(area);
+				       auto laid = desktop::lay_out(desktop::text_span{words, style}, 100000, c.scale());
+				       c.text(laid, {area.x, area.y + (area.height - laid.height()) / 2});
+			       })
+			    .height(tall)
+			    .width(0)
+			    .grow();
+		}
+
+		// An object's name in a list: its words' first line, or what it is.
+		std::string object_name(page& p, const value& l) {
+			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
+			if (!is_words(l)) {
+				// A path of two points is a line.
+				std::string shape = l["shape"].as_string(), points = l["points"].as_string();
+				bool line = std::ranges::count(points, 'L') == 1 && points.find('C') == std::string::npos;
+				name = is_picture(l) ? (vector_here(p, l).empty() ? "Picture" : "SVG") : shape == "ellipse" ? "Ellipse" : shape == "path" ? (line ? "Line" : "Path") : "Rectangle";
+			}
+			if (name.size() > 28) name = name.substr(0, 27) + "…";
+			return name;
+		}
+
+		// Renumbered by their place after the one at `from` moves to `to`, in one step.
+		void moved(page& p, const std::string& command, const value& rows, std::size_t from, std::size_t to, const std::map<std::string, std::string>& fields) {
+			bool first = true;
+			for (const auto& [id, depth] : depths_moved(rows, from, to)) {
+				value sent = collage_fields_of(value(std::map<std::string, value>{{"id", id}, {"depth", depth}}), fields);
+				if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+				p.run(command, sent);
+			}
+		}
+
+		desktop::view list_row(std::vector<desktop::view> row, bool picked, float indent, std::function<void()> pick) {
+			const auto& t = current_theme();
+			return desktop::row(std::move(row))
+			    .spacing(4)
+			    .align(align::center)
+			    .padding(edges(4, 4, 4, 4 + indent))
+			    .background({.fill = picked ? t.sunken : t.surface, .border = picked ? t.accent : t.surface, .border_width = 1, .radius = t.corners})
+			    .on_click(std::move(pick));
+		}
+
+		// The layers a collage's objects are held in, topmost first: each its eye, a
+		// preview of its objects, its name, up, down and delete, and, opened, its
+		// objects under it, topmost first, each its preview and name, and delete.
+		desktop::view held_layers(page& p, const layers_spec& spec, const value& data, double width, double height) {
+			const auto& t = current_theme();
+			std::vector<value> groups = data[spec.list].as_array();
+			std::stable_sort(groups.begin(), groups.end(), [](const value& a, const value& b) { return a["depth"].as_double() < b["depth"].as_double(); });
+			const value ordered = value(groups);
+			const auto& objects = data[spec.objects].as_array();
+			if (groups.empty()) return desktop::text("No layers yet.", t.quiet());
+			std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
+			std::string picked_object = spec.object_pick.empty() ? "" : p.picked_id(spec.object_pick);
+			std::vector<desktop::view> rows;
+			for (std::size_t i = groups.size(); i-- > 0;) {
+				const value& g = groups[i];
+				std::string id = g["id"].as_string();
+				bool hidden = hidden_layer(g);
+				std::vector<value> held;
+				for (const auto& o : objects) {
+					if (o[spec.object_layer].as_string() == id && !hidden_layer(o)) held.push_back(o);
+				}
+				auto open = p.kept<bool>("layers open " + id);
+				std::vector<desktop::view> row;
+				// Opened or closed by a small chevron, so its name keeps its room.
+				bool opened = open.get();
+				row.push_back(desktop::drawing([opened](desktop::canvas& c, desktop::rect area) {
+					              desktop::draw_icon(c, opened ? "chevron_down" : "chevron_right", {area.x, area.y + (area.height - 16) / 2, 16, 16}, current_theme().ink);
+				              })
+				                  .width(16)
+				                  .height(28)
+				                  .grow(0)
+				                  .on_click([open] { open.set(!open.peek()); }));
+				if (!spec.hide.empty()) {
+					row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide", [&p, command = spec.hide, id, hidden] {
+						p.run(command, value(std::map<std::string, value>{{"id", id}, {"hidden", hidden ? 0 : 1}}));
+					}, {.on = !hidden}));
+				}
+				row.push_back(preview_of(p, value(held), width, height, spec.clear, hidden));
+				std::string name = g["name"].as_string().empty() ? "Layer" : g["name"].as_string();
+				row.push_back(one_line(std::move(name), hidden ? t.quiet() : t.strong()));
+				if (!spec.order.empty()) {
+					row.push_back(desktop::tool_button("raise", "Up", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i + 1, {}); }, {.off = i + 1 == groups.size()}));
+					row.push_back(desktop::tool_button("lower", "Down", [&p, command = spec.order, ordered, i] { moved(p, command, ordered, i, i - 1, {}); }, {.off = i == 0}));
+				}
+				if (!spec.remove.empty()) {
+					// Its objects go with it, in one step.
+					row.push_back(desktop::tool_button("delete", "Delete", [&p, spec, id, held] {
+						bool first = true;
+						for (const auto& o : held) {
+							value sent = value(std::map<std::string, value>{{"id", o["id"]}});
+							if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
+							if (!spec.object_remove.empty()) p.run(spec.object_remove, sent);
+						}
+						value gone = value(std::map<std::string, value>{{"id", id}});
+						if (!first) gone.fields["one:history"] = value("joined");
+						p.run(spec.remove, gone);
+					}));
+				}
+				rows.push_back(list_row(std::move(row), id == picked, 0, [&p, pick = spec.pick, id] {
+					if (!pick.empty()) p.pick(pick, id);
+				}));
+				if (!open.get()) continue;
+				for (std::size_t j = held.size(); j-- > 0;) {
+					const value& o = held[j];
+					std::string object = o["id"].as_string();
+					std::vector<desktop::view> inside;
+					inside.push_back(preview_of(p, value(std::vector<value>{o}), width, height, spec.clear, hidden));
+					inside.push_back(one_line(object_name(p, o), hidden ? t.quiet() : t.body()));
+					if (!spec.object_remove.empty()) {
+						inside.push_back(desktop::tool_button("delete", "Delete", [&p, command = spec.object_remove, object] { p.run(command, value(std::map<std::string, value>{{"id", object}})); }));
+					}
+					rows.push_back(list_row(std::move(inside), object == picked_object, 28, [&p, spec, id, object] {
+						if (!spec.object_pick.empty()) p.pick(spec.object_pick, object);
+						if (!spec.pick.empty()) p.pick(spec.pick, id);
+					}));
+				}
+			}
+			return desktop::column(std::move(rows)).spacing(2).align(align::stretch);
+		}
+	}  // namespace
+
 	desktop::view layer_list(page& p, layers_spec spec) {
 		const auto& t = current_theme();
 		const view_state& v = *spec.view;
 		if (v.status == status::loading) return desktop::text("Loading…", t.quiet());
 		if (v.status == status::failed) return desktop::text(v.error.empty() ? "This couldn't be read." : v.error, t.quiet());
-		const value data = collage_parts_of(v.data, spec.list, spec.fields);
+		const value data = collage_parts_of(v.data, spec.objects.empty() ? spec.list : spec.objects, spec.fields);
+		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
+		if (!spec.objects.empty()) return held_layers(p, spec, data, width, height);
 		const value& layers = data[spec.list];
 		const auto& all = layers.as_array();
-		double width = data[spec.width].as_double(), height = data[spec.height].as_double();
 		if (all.empty()) return desktop::text("No layers yet.", t.quiet());
 		std::string picked = spec.pick.empty() ? "" : p.picked_id(spec.pick);
-		// Its preview as wide as this, as tall as the collage's proportions make it.
-		constexpr float wide = 48;
-		float tall = width > 0 && height > 0 ? std::clamp(static_cast<float>(wide * height / width), 12.f, 48.f) : wide * 9 / 16;
 		std::vector<desktop::view> rows;
 		// Topmost first, as it's seen.
 		for (std::size_t i = all.size(); i-- > 0;) {
@@ -1822,66 +2089,17 @@ namespace one::desktop::runtime {
 				row.push_back(desktop::tool_button(hidden ? "eye_off" : "eye", hidden ? "Show" : "Hide",
 				                                   [&p, spec, id, hidden] { p.run(spec.hide, collage_fields_of(value(fields{{"id", id}, {"hidden", hidden ? 0 : 1}}), spec.fields)); }, {.on = !hidden}));
 			}
-			// The layer alone, drawn where it is on the collage, made once for each look of it.
-			desktop::picture drawn;
-			if (width > 0 && height > 0) {
-				static kept_by<desktop::picture> made(256);
-				std::string key = std::format("{} {} {} {}", ember::to_json(l), width, height, wide);
-				value shown = l;
-				shown.fields.erase("hidden");
-				value one = value(std::vector<value>{shown});
-				drawn = made.get(key, [&] {
-					auto alone = gathered(p, one, width, height, 2 * wide / width, false);
-					alone.clear = true;
-					return drawn_whole(alone);
-				});
-			}
-			bool clear = spec.clear;
-			row.push_back(desktop::drawing([drawn, clear, hidden](desktop::canvas& c, desktop::rect area) {
-				              const auto& th = current_theme();
-				              if (clear) paint_checkers(c, area);
-				              else c.box(area, {.fill = desktop::color::hex(0xffffff)});
-				              if (drawn) c.picture(drawn, area, {0, 0, 1, 1}, hidden ? 0.35f : 1.f);
-				              c.box(area, {.border = th.line, .border_width = 1});
-			              })
-			                  .width(wide)
-			                  .height(tall)
-			                  .grow(0));
-			// Its name: its words' first line, or what it is.
-			std::string name = l["words"].as_string().substr(0, l["words"].as_string().find('\n'));
-			if (!is_words(l)) {
-				std::string shape = l["shape"].as_string();
-				// A path of two points is a line.
-				std::string points = l["points"].as_string();
-				bool line = std::ranges::count(points, 'L') == 1 && points.find('C') == std::string::npos;
-				name = is_picture(l) ? (vector_here(p, l).empty() ? "Picture" : "SVG") : shape == "ellipse" ? "Ellipse" : shape == "path" ? (line ? "Line" : "Path") : "Rectangle";
-			}
-			if (name.size() > 28) name = name.substr(0, 27) + "…";
-			auto said = hidden ? t.quiet() : t.body();
-			row.push_back(desktop::text(std::move(name), said).width(0).grow());
+			row.push_back(preview_of(p, value(std::vector<value>{l}), width, height, spec.clear, hidden));
+			row.push_back(one_line(object_name(p, l), hidden ? t.quiet() : t.body()));
 			if (!spec.order.empty()) {
-				auto move = [&p, spec, layers, i](std::size_t to) {
-					bool first = true;
-					for (const auto& [moved, depth] : depths_moved(layers, i, to)) {
-						value sent = collage_fields_of(value(fields{{"id", moved}, {"depth", depth}}), spec.fields);
-						if (!std::exchange(first, false)) sent.fields["one:history"] = value("joined");
-						p.run(spec.order, sent);
-					}
-				};
 				bool top = i + 1 == all.size(), bottom = i == 0;
-				row.push_back(desktop::tool_button("raise", "Up", [move, i] { move(i + 1); }, {.off = top}));
-				row.push_back(desktop::tool_button("lower", "Down", [move, i] { move(i - 1); }, {.off = bottom}));
+				row.push_back(desktop::tool_button("raise", "Up", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i + 1, spec.fields); }, {.off = top}));
+				row.push_back(desktop::tool_button("lower", "Down", [&p, spec, layers, i] { moved(p, spec.order, layers, i, i - 1, spec.fields); }, {.off = bottom}));
 			}
 			if (!spec.remove.empty()) row.push_back(desktop::tool_button("delete", "Delete", [&p, spec, id] { p.run(spec.remove, value(fields{{"id", id}})); }));
-			bool is_picked = id == picked;
-			rows.push_back(desktop::row(std::move(row))
-			                   .spacing(4)
-			                   .align(align::center)
-			                   .padding(edges(4, 4))
-			                   .background({.fill = is_picked ? t.sunken : t.surface, .border = is_picked ? t.accent : t.surface, .border_width = 1, .radius = t.corners})
-			                   .on_click([&p, pick = spec.pick, id] {
-				                   if (!pick.empty()) p.pick(pick, id);
-			                   }));
+			rows.push_back(list_row(std::move(row), id == picked, 0, [&p, pick = spec.pick, id] {
+				if (!pick.empty()) p.pick(pick, id);
+			}));
 		}
 		return desktop::column(std::move(rows)).spacing(2).align(align::stretch);
 	}
