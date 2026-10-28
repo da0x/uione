@@ -147,6 +147,7 @@ TEST_CASE("a local project's commands and views are written on one::local, as it
     CHECK(generated.files[0].content == R"(// Generated from main.one by one. Do not edit.
 
 #include <one/local/package.hpp>
+#include <one/screens/screens.hpp>
 
 namespace app {
 
@@ -254,7 +255,7 @@ TEST_CASE("a local project's web app is given the same commands and views, on @u
     CHECK(generated.web[0].path == "src/local.generated.ts");
     CHECK(generated.web[0].content == R"(// Generated from main.one by one. Do not edit.
 
-import { all, by, command, compare, divided, entity, failed, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from "@uione/react/local";
+import { all, by, command, compare, divided, entity, failed, keyOf, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from "@uione/react/local";
 
 // Each namespace's entities, commands and views, kept in this browser.
 export const packages = [
@@ -331,6 +332,78 @@ TEST_CASE("a local body that changes other rows is written the same way in both"
     CHECK(ts.find(R"({ const done = c.update("pinned::layer", text(row["id"]), { "x": 0 }); if (done) return done; })") != std::string::npos);
     CHECK(cpp.find(R"(if (auto done = c.update("pinned::board", e["id"].as_string(), value(fields{{"name", value("cleared")}})); !done) return done;)") != std::string::npos);
     CHECK(ts.find(R"({ const done = c.update("pinned::board", text(e["id"]), { "name": "cleared" }); if (done) return done; })") != std::string::npos);
+}
+
+TEST_CASE("a local body makes and deletes rows by their plain commands, and names a row keyed by its own, in both") {
+    language::diagnostics out;
+    auto files = parsed(with(board, "\tcommand board::create\n", R"(	entity shelf {
+		board  board  required  key
+		name   text   required  key
+	}
+
+	command board::create {
+		dispatch shelf::create { board = id  name = "top" }
+		dispatch layer::create { board = id }
+	}
+
+	command board::clear {
+		each layer where board == id {
+			dispatch layer::delete
+		}
+	}
+
+	command layer::delete
+	command shelf::create
+	command shelf::delete {
+		require name != "top"  "the top shelf stays"
+	}
+
+	command board::trim {
+		each shelf where board == id {
+			dispatch shelf::delete
+		}
+	}
+)"),
+                        out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    auto generated = generators::generate_local(files);
+    // A delete that does more than delete isn't run from another yet.
+    REQUIRE(generated.errors.size() == 1);
+    CHECK(generated.errors[0].message == "not supported yet in a project that says storage local: running a delete that does more than delete from another");
+    auto plain = parsed(with(board, "\tcommand board::create\n", R"(	entity shelf {
+		board  board  required  key
+		name   text   required  key
+	}
+
+	entity board_note {
+		board  board  required
+		shelf  shelf
+	}
+
+	command board::create {
+		dispatch shelf::create { board = id  name = "top" }
+	}
+	command board::clear {
+		each layer where board == id {
+			dispatch layer::delete
+		}
+	}
+	command board_note::create
+	command layer::delete
+	command shelf::create
+)"),
+                        out);
+    for (const auto& d : out) FAIL_CHECK(language::format(d));
+    generated = generators::generate_local(plain);
+    for (const auto& e : generated.errors) FAIL_CHECK(language::format(e));
+    REQUIRE(generated.files.size() == 1);
+    REQUIRE(generated.web.size() == 1);
+    const std::string& cpp = generated.files[0].content;
+    const std::string& ts = generated.web[0].content;
+    CHECK(cpp.find(R"(if (auto made = c.create("pinned::shelf", value(fields{{"board", e["id"]}, {"name", value("top")}})); !made) return c.fail(made.error());)") != std::string::npos);
+    CHECK(ts.find(R"({ const made = c.create("pinned::shelf", { "board": e["id"], "name": "top" }); if (failed(made)) return made; })") != std::string::npos);
+    CHECK(cpp.find(R"(if (auto done = c.remove("pinned::layer", row["id"].as_string()); !done) return done;)") != std::string::npos);
+    CHECK(ts.find(R"({ const done = c.remove("pinned::layer", text(row["id"])); if (done) return done; })") != std::string::npos);
 }
 
 TEST_CASE("a / between two values divides, while a / alone after a screen's name is still its address") {

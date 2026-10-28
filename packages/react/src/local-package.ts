@@ -28,6 +28,7 @@
 // (decision 0015): no me, no views per person, no roles or readers.
 
 import { keyOf } from "./keys.js";
+export { keyOf };
 
 // A value as a row keeps it: what JSON holds.
 export type Value = null | boolean | number | string | Value[] | { [field: string]: Value };

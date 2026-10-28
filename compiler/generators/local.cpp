@@ -273,6 +273,17 @@ namespace one::generators {
                         if (s.row && (field(s.row, name) || name == "id")) return {"row[" + str(name) + "]"};
                         if (field(s.own, name) || name == "id") return {"e[" + str(name) + "]"};
                     }
+                    // stage::to_do, on a board: its own stage of that name, the one keyed by
+                    // the board and the name.
+                    if (parts.size() == 2 && s.own) {
+                        if (const language::entity_declaration* named = entity(parts[0])) {
+                            bool keyed_by_own = std::ranges::any_of(named->fields, [&](const language::field& f) { return f.key && f.type && f.type->text() == s.own->name; });
+                            if (keyed_by_own) {
+                                if (typescript()) return {"keyOf([text(e[\"id\"]), " + str(parts[1]) + "])"};
+                                return {"value(one::screens::key_of({e[\"id\"].as_string(), " + str(parts[1]) + "}))"};
+                            }
+                        }
+                    }
                     unsupported(e.where, "the name " + n->name.text() + " here");
                     return {nothing_value()};
                 }
@@ -398,20 +409,38 @@ namespace one::generators {
                                 out.line(or_refuse("c.create(" + str(full(n.entity)) + ", " + given(n.values, s, nullptr) + ")", "made", true));
                             } else if constexpr (std::is_same_v<kind, language::dispatch_statement>) {
                                 const auto& parts = n.command.parts;
-                                if (parts.empty() || parts.back() != "update" || !n.lists.empty()) {
-                                    unsupported(st.where, "running a command other than an update from another");
+                                std::string verb = parts.empty() ? "" : parts.back();
+                                if ((verb != "update" && verb != "create" && verb != "delete") || !n.lists.empty()) {
+                                    unsupported(st.where, "running a command other than an update, a create or a delete from another");
                                     return;
                                 }
                                 std::string target = n.command.text();
                                 target = target.substr(0, target.rfind("::"));
+                                // A create or a delete that does no more than make or delete, as
+                                // the store does it; one with a body of its own would need it run too.
+                                if (verb != "update") {
+                                    const language::command_declaration* run = nullptr;
+                                    for (const auto& [c, _] : parts_->commands) {
+                                        if (c->name.text() == n.command.text() || c->name.text() == ns_ + "::" + n.command.text()) run = c;
+                                    }
+                                    if (!run || !run->body.empty()) {
+                                        unsupported(st.where, "running a " + verb + " that does more than " + (verb == "create" ? "make" : "delete") + " from another");
+                                        return;
+                                    }
+                                }
+                                if (verb == "create") {
+                                    out.line(or_refuse("c.create(" + str(full(target)) + ", " + given(n.values, s, nullptr) + ")", "made", true));
+                                    return;
+                                }
                                 std::string id;
                                 std::string fields = given(n.values, s, &id);
                                 if (id.empty() && s.row) id = text_of("row[\"id\"]");  // the row an each picked
                                 if (id.empty()) {
-                                    unsupported(st.where, "an update that doesn't say which, with id = ...");
+                                    unsupported(st.where, (verb == "update" ? "an update" : "a delete") + std::string(" that doesn't say which, with id = ..."));
                                     return;
                                 }
-                                out.line(or_refuse("c.update(" + str(full(target)) + ", " + id + ", " + fields + ")", "done", false));
+                                if (verb == "delete") out.line(or_refuse("c.remove(" + str(full(target)) + ", " + id + ")", "done", false));
+                                else out.line(or_refuse("c.update(" + str(full(target)) + ", " + id + ", " + fields + ")", "done", false));
                             } else if constexpr (std::is_same_v<kind, language::each_statement>) {
                                 const language::entity_declaration* over = entity(n.entity);
                                 if (!over || n.other) {
@@ -725,6 +754,7 @@ namespace one::generators {
                 {
                     auto fixed = out.fixed();
                     out.line("#include <one/local/package.hpp>");
+                    out.line("#include <one/screens/screens.hpp>");
                     out.line();
                     out.open("namespace app {");
                     out.line();
@@ -750,7 +780,7 @@ namespace one::generators {
                 out.generated_from(std::filesystem::path(path).filename().string());
                 {
                     auto fixed = out.fixed();
-                    out.line("import { all, by, command, compare, divided, entity, failed, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
+                    out.line("import { all, by, command, compare, divided, entity, failed, keyOf, localPackage, number, remainder, row, same, subject, subjectField, text, truthy, view } from \"@uione/react/local\";");
                     out.line();
                     out.line("// Each namespace's entities, commands and views, kept in this browser.");
                     out.open("export const packages = [");
