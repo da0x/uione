@@ -62,11 +62,28 @@ namespace one::desktop::runtime {
 		bool is_words(const value& layer) { return !is_picture(layer) && !layer["words"].as_string().empty(); }
 		bool is_shape(const value& layer) { return !is_picture(layer) && !is_words(layer); }
 
-		// Where a press reaches a layer, as drawn: its box, or a path's 6 pixels around it,
-		// so a thin line can be picked. The same as the web's.
-		model::box reached(const value& layer, model::box b) {
-			if (!is_shape(layer) || layer["shape"].as_string() != "path") return b;
-			return {b.x - 6, b.y - 6, b.w + 12, b.h + 12};
+		bool is_path(const value& layer) { return is_shape(layer) && layer["shape"].as_string() == "path"; }
+
+		// A path's outline where it is, in the collage's own units, its box `b`.
+		std::string outline_of(const value& layer, model::box b) { return model::path_in(layer["points"].as_string(), b.x, b.y, b.w, b.h); }
+
+		// Whether a press at `at`, in the collage's units, reaches a layer, its box `b`: a
+		// path by its stroke, 6 window pixels around it and half its width, or inside it
+		// while it's filled; anything else within its box. The same as the web's.
+		bool hits(const value& layer, model::box b, model::point at, double per_pixel) {
+			if (!is_path(layer)) return at.x >= b.x && at.x <= b.x + b.w && at.y >= b.y && at.y <= b.y + b.h;
+			double reach = 6 * per_pixel + (layer["stroke"].as_string().empty() ? 0 : layer["stroke_width"].as_double() / 2);
+			std::string fill = layer["fill"].as_string();
+			return model::path_reaches(outline_of(layer, b), at, reach, fill.size() == 7 && fill[0] == '#');
+		}
+
+		// A path reshaped, as its points and its box: its box a pixel wide where it's
+		// straight across or down, as a line drawn is.
+		std::pair<std::string, model::box> reshaped_as(const std::string& outline) {
+			model::box b = model::path_bounds(outline);
+			if (b.w < 1) b.x += b.w / 2 - 0.5, b.w = 1;
+			if (b.h < 1) b.y += b.h / 2 - 0.5, b.h = 1;
+			return {model::path_fractions(outline, b), b};
 		}
 
 		// How much of a layer shows: all of it, unless its opacity says less.
@@ -422,7 +439,7 @@ namespace one::desktop::runtime {
 
 		// What the pointer is doing to a layer, from where it was and where the pointer was.
 		struct gesture {
-			enum { none, moving, resizing, cropping, shifting, drawing } what = none;
+			enum { none, moving, resizing, cropping, shifting, drawing, reshaping } what = none;
 			std::string id;
 			model::box from;
 			desktop::point at;
@@ -457,6 +474,9 @@ namespace one::desktop::runtime {
 			std::optional<writing> editing;
 			std::optional<model::box> drawing;  // a layer being drawn, as big as the drag so far
 			std::optional<model::line> line;    // or a line, as far as the drag has gone
+			// A path being reshaped: its outline as it was, and as it is now, by its id.
+			std::string reshape_from;
+			std::optional<std::pair<std::string, std::string>> reshaped;
 			std::vector<std::pair<desktop::rect, std::size_t>> tools;
 			model::box on_board(const model::box& b) const {
 				return {board.x + b.x * scale, board.y + b.y * scale, b.w * scale, b.h * scale};
@@ -1551,6 +1571,7 @@ namespace one::desktop::runtime {
 			std::optional<desktop::rect> framed;
 			float framed_radius = 0;  // a picture's frame follows its corners, round as they are
 			bool framed_words = false, chosen_picture = false;
+			std::vector<desktop::point> nodes;  // a picked path's, drawn instead of its frame
 			// While something's moved, resized or cropped, its pictures alone, nothing worked
 			// out from where they are drawn around them, so what's being done is plain to see.
 			bool effects = w->now.what == gesture::none && !w->crop;
@@ -1585,8 +1606,24 @@ namespace one::desktop::runtime {
 					}
 					desktop::rect on = as_rect(w->on_board(b));
 					if (is_shape(layer)) {
-						paint_shape(c, on, b, layer);
-						if (id == picked && !full) framed = on, chosen_picture = true;
+						// Being reshaped: as its nodes are now.
+						value shown = layer;
+						if (w->reshaped && w->reshaped->first == id) {
+							auto [points, now] = reshaped_as(w->reshaped->second);
+							shown.fields["points"] = value(points);
+							b = now, on = as_rect(w->on_board(b));
+						}
+						paint_shape(c, on, b, shown);
+						if (id == picked && !full) {
+							framed = on, chosen_picture = true;
+							// A path picked shows its nodes, not a box.
+							if (is_path(shown) && !spec.reshape.empty()) {
+								for (const auto& n : model::path_nodes(outline_of(shown, b))) {
+									model::box at = w->on_board({n.x, n.y, 0, 0});
+									nodes.push_back({static_cast<float>(at.x), static_cast<float>(at.y)});
+								}
+							}
+						}
 						continue;
 					}
 					if (std::string svg = vector_here(p, layer); !svg.empty()) {
@@ -1641,9 +1678,9 @@ namespace one::desktop::runtime {
 			// handles too, and its buttons just above it, or below when there's no room.
 			w->tools.clear();
 			if (!framed) return;
-			c.box(*framed, {.border = t.accent, .border_width = 2, .radius = framed_radius});
-			std::vector<desktop::point> handles;
-			bool corners = w->crop ? true : framed_words ? !spec.write.empty() : !spec.place.empty();
+			if (nodes.empty()) c.box(*framed, {.border = t.accent, .border_width = 2, .radius = framed_radius});
+			std::vector<desktop::point> handles = nodes;
+			bool corners = nodes.empty() && (w->crop ? true : framed_words ? !spec.write.empty() : !spec.place.empty());
 			if (corners && !w->editing) handles = {{framed->x, framed->y}, {framed->right(), framed->y}, {framed->right(), framed->bottom()}, {framed->x, framed->bottom()}};
 			if (w->crop) {
 				float mid_x = framed->x + framed->width / 2, mid_y = framed->y + framed->height / 2;
@@ -1749,10 +1786,23 @@ namespace one::desktop::runtime {
 				        w->now = {.what = gesture::drawing, .id = d->by, .from = {}, .at = at, .corner = 0, .edges = 0, .kept_from = {}};
 				        return true;
 			        }
-			        // A corner of the picked layer resizes it: a picture with its shape kept,
-			        // words by their size.
+			        // A node of the picked path reshapes it.
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked) continue;
+				        if (l["id"].as_string() != picked || !is_path(l) || spec.reshape.empty()) continue;
+				        std::string outline = outline_of(l, box_of(l));
+				        auto nodes = model::path_nodes(outline);
+				        for (std::size_t k = 0; k < nodes.size(); ++k) {
+					        model::box node = w->on_board({nodes[k].x, nodes[k].y, 0, 0});
+					        if (std::abs(node.x - at.x) > handle || std::abs(node.y - at.y) > handle) continue;
+					        w->now = {.what = gesture::reshaping, .id = picked, .from = box_of(l), .at = at, .corner = static_cast<int>(k), .edges = 0, .kept_from = {}};
+					        w->reshape_from = outline;
+					        return true;
+				        }
+			        }
+			        // A corner of the picked layer resizes it: a picture with its shape kept,
+			        // words by their size. A path has nodes, not corners.
+			        for (const auto& l : layers.as_array()) {
+				        if (l["id"].as_string() != picked || is_path(l)) continue;
 				        if (is_words(l) ? spec.write.empty() : spec.place.empty()) continue;
 				        model::box b = where_is(l, *w);
 				        if (is_words(l)) {
@@ -1774,7 +1824,7 @@ namespace one::desktop::runtime {
 					        auto [mw, mh] = measured(all[i]["words"].as_string(), all[i]["size"].as_double(), weight_of(all[i]), italic_of(all[i]));
 					        b.w = mw, b.h = mh;
 				        }
-				        if (!reached(all[i], w->on_board(b)).contains(on)) continue;
+				        if (!hits(all[i], b, w->on_collage(at), 1 / w->scale)) continue;
 				        std::string id = all[i]["id"].as_string();
 				        if (!spec.pick.empty()) p.pick(spec.pick, id);
 				        // Its layer is the current one, as new objects go in it.
@@ -1797,6 +1847,11 @@ namespace one::desktop::runtime {
 		    .on_drag =
 		        [w, width, height, snap = spec.snap](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::reshaping) {
+				        double dx = (at.x - w->now.at.x) / w->scale, dy = (at.y - w->now.at.y) / w->scale;
+				        w->reshaped = std::pair{w->now.id, model::path_moved(w->reshape_from, static_cast<std::size_t>(w->now.corner), dx, dy)};
+				        return;
+			        }
 			        if (w->now.what == gesture::drawing) {
 				        bool line = w->now.id == "line";
 				        if (line) w->line = model::drawn_line(w->on_collage(w->now.at), w->on_collage(at), desktop::held().shift, 4 / w->scale, width, height);
@@ -1813,6 +1868,18 @@ namespace one::desktop::runtime {
 		    .on_release =
 		        [&p, w, width, height, layers, spec](desktop::point at) {
 			        if (w->now.what == gesture::none) return;
+			        if (w->now.what == gesture::reshaping) {
+				        gesture g = std::exchange(w->now, {});
+				        double dx = (at.x - g.at.x) / w->scale, dy = (at.y - g.at.y) / w->scale;
+				        if (dx == 0 && dy == 0) return w->reshaped.reset();
+				        std::string outline = model::path_moved(w->reshape_from, static_cast<std::size_t>(g.corner), dx, dy);
+				        w->reshaped = std::pair{g.id, outline};
+				        auto [points, b] = reshaped_as(outline);
+				        // Kept, it's drawn from the view again; turned down, as it was.
+				        p.run(spec.reshape, collage_fields_of(value(fields{{"id", g.id}, {"points", points}, {"x", b.x}, {"y", b.y}, {"w", b.w}, {"h", b.h}}), spec.fields),
+				              [w](const answer&) { w->reshaped.reset(); });
+				        return;
+			        }
 			        if (w->now.what == gesture::drawing) {
 				        gesture g = std::exchange(w->now, {});
 				        w->drawing.reset(), w->line.reset();
@@ -1871,14 +1938,14 @@ namespace one::desktop::runtime {
 			        if (w->editing) return desktop::cursor::text;
 			        if (drawing_now(spec) && w->board.contains(at)) return desktop::cursor::crosshair;
 			        for (const auto& l : layers.as_array()) {
-				        if (l["id"].as_string() != picked || is_words(l) || spec.place.empty()) continue;
+				        if (l["id"].as_string() != picked || is_words(l) || is_path(l) || spec.place.empty()) continue;
 				        int corner = model::corner_at(w->on_board(where_is(l, *w)), on, handle);
 				        if (corner == 0 || corner == 2) return desktop::cursor::resize_falling;
 				        if (corner == 1 || corner == 3) return desktop::cursor::resize_rising;
 			        }
 			        const auto& all = layers.as_array();
 			        for (std::size_t i = all.size(); i-- > 0;) {
-				        if (reached(all[i], w->on_board(where_is(all[i], *w))).contains(on)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
+				        if (hits(all[i], where_is(all[i], *w), w->on_collage(at), 1 / w->scale)) return spec.place.empty() ? desktop::cursor::pointer : desktop::cursor::move;
 			        }
 			        return desktop::cursor::normal;
 		        },

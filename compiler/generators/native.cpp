@@ -281,6 +281,7 @@ namespace one::generators {
             for (const auto& [part, field] : fields) kept += (kept.empty() ? "" : ", ") + std::string("{") + str(part) + ", " + str(field) + "}";
             out += ", .fields = {" + kept + "}";
             if (c.place) out += ", .place = " + str(screens::full_command(ns, *c.place));
+            if (c.reshape) out += ", .reshape = " + str(screens::full_command(ns, *c.reshape));
             if (c.snap) out += ", .snap = true";
             if (c.clear) out += ", .clear = true";
             if (c.match_colors) out += ", .match_colors = " + condition(parts, ns, *c.match_colors);

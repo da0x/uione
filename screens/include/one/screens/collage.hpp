@@ -193,6 +193,16 @@ namespace one::screens::collage {
 	box path_bounds(std::string_view absolute);
 	std::string path_fractions(std::string_view absolute, box in);
 
+	// A path's nodes, where it is, written as path_in writes it: where each of its
+	// segments ends, M, L and C alike, in order.
+	std::vector<point> path_nodes(std::string_view absolute);
+	// The path with its node at `node` moved by dx and dy, the control points either
+	// side of it moving with it, as a drawing program moves them.
+	std::string path_moved(std::string_view absolute, std::size_t node, double dx, double dy);
+	// Whether a press at `at` reaches the path: within `reach` of its outline, or, when
+	// it's `filled` and closed, inside it.
+	bool path_reaches(std::string_view absolute, point at, double reach, bool filled);
+
 	// A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a
 	// 100 by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is
 	// left out.

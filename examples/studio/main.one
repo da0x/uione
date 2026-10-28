@@ -126,6 +126,10 @@ namespace studio at / {
 	command layer::show {
 		changes hidden
 	}
+	// A path's nodes moved.
+	command layer::reshape {
+		changes points x y w h
+	}
 
 	// Opened once more: counted, but never a step undo takes back.
 	// Shown on another day, as a calendar's poster dragged there is.
@@ -309,6 +313,7 @@ namespace studio at / {
 				draw layer::create { fill = "#2e86de" } when tool == tool::box
 				draw layer::create { shape = shape::path  stroke = "#1d1d1f"  stroke_width = 6 } by line when tool == tool::line
 				place layer::place
+				reshape layer::reshape
 				crop layer::crop
 				write layer::write
 				delete layer::delete

@@ -582,6 +582,17 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 			auto got = c::path_bounds(k["path"].as_string());
 			std::string fractions = c::path_fractions(k["path"].as_string(), got);
 			check::verify(same(got, box_of(k["box"])) && fractions == k["points"].as_string(), "path_bounds", note + ": " + said(got) + " " + fractions);
+		} else if (what == "path_nodes") {
+			auto got = c::path_nodes(k["path"].as_string());
+			bool same_nodes = got.size() == k["nodes"].as_array().size();
+			for (std::size_t i = 0; same_nodes && i < got.size(); ++i) same_nodes = near(got[i].x, n(k["nodes"].as_array()[i], 0)) && near(got[i].y, n(k["nodes"].as_array()[i], 1));
+			check::verify(same_nodes, "path_nodes", note);
+		} else if (what == "path_moved") {
+			auto got = c::path_moved(k["path"].as_string(), static_cast<std::size_t>(k["node"].as_integer()), n(k["by"], 0), n(k["by"], 1));
+			check::verify(got == k["moved"].as_string(), "path_moved", note + ": " + got);
+		} else if (what == "path_reaches") {
+			bool got = c::path_reaches(k["path"].as_string(), {n(k["at"], 0), n(k["at"], 1)}, k["reach"].as_double(), k["filled"].as_bool());
+			check::verify(got == k["reaches"].as_bool(), "path_reaches", note);
 		} else if (what == "drawn_line") {
 			auto got = c::drawn_line({n(k["from"], 0), n(k["from"], 1)}, {n(k["to"], 0), n(k["to"], 1)}, k["straight"].as_bool(), k["click"].as_double(), width, height);
 			check::verify(same(got.at, box_of(k["box"])) && got.points == k["points"].as_string(), "drawn_line", note + ": " + said(got.at) + " " + got.points);

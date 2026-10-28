@@ -614,6 +614,95 @@ export function pathFractions(absolute: string, b: Box): string {
   return out.join(" ");
 }
 
+// A path's commands, each its letter and its numbers.
+function commandsOf(absolute: string): { letter: string; numbers: number[] }[] {
+  const out: { letter: string; numbers: number[] }[] = [];
+  eachOf(
+    absolute,
+    (letter) => void out.push({ letter, numbers: [] }),
+    (n) => void out[out.length - 1]?.numbers.push(n),
+  );
+  return out;
+}
+const writtenOf = (commands: { letter: string; numbers: number[] }[]) => commands.map((c) => [c.letter, ...c.numbers.map(said)].join(" ")).join(" ");
+
+// The path as straight pieces, each curve cut in 16, and whether each run of them is closed.
+function flattened(absolute: string): { run: Point[]; closed: boolean }[] {
+  const runs: { run: Point[]; closed: boolean }[] = [];
+  let now: Point = { x: 0, y: 0 };
+  for (const { letter, numbers: n } of commandsOf(absolute)) {
+    const last = runs[runs.length - 1];
+    if (letter === "M" && n.length >= 2) {
+      now = { x: n[0]!, y: n[1]! };
+      runs.push({ run: [now], closed: false });
+    } else if (letter === "L" && n.length >= 2 && last) {
+      now = { x: n[0]!, y: n[1]! };
+      last.run.push(now);
+    } else if (letter === "C" && n.length >= 6 && last) {
+      const a = now, b = { x: n[0]!, y: n[1]! }, d = { x: n[2]!, y: n[3]! }, e = { x: n[4]!, y: n[5]! };
+      for (let i = 1; i <= 16; i++) {
+        const t = i / 16, u = 1 - t;
+        last.run.push({ x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * d.x + t * t * t * e.x, y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * d.y + t * t * t * e.y });
+      }
+      now = e;
+    } else if (letter === "Z" && last) {
+      last.closed = true;
+      now = last.run[0]!;
+    }
+  }
+  return runs;
+}
+
+// A path's nodes, where it is, written as pathIn writes it: where each of its segments
+// ends, M, L and C alike, in order.
+export function pathNodes(absolute: string): Point[] {
+  return commandsOf(absolute)
+    .filter((c) => c.letter !== "Z" && c.numbers.length >= 2)
+    .map((c) => ({ x: c.numbers[c.numbers.length - 2]!, y: c.numbers[c.numbers.length - 1]! }));
+}
+
+// The path with its node at `node` moved by dx and dy, the control points either side of
+// it moving with it, as a drawing program moves them.
+export function pathMoved(absolute: string, node: number, dx: number, dy: number): string {
+  const commands = commandsOf(absolute);
+  let at = 0;
+  for (let i = 0; i < commands.length; i++) {
+    const n = commands[i]!.numbers;
+    if (n.length < 2 || commands[i]!.letter === "Z") continue;
+    if (at++ !== node) continue;
+    (n[n.length - 2]! += dx), (n[n.length - 1]! += dy);
+    // Its own curve's last control point, and the next curve's first, go with it.
+    if (commands[i]!.letter === "C" && n.length >= 6) (n[2]! += dx), (n[3]! += dy);
+    const next = commands[i + 1];
+    if (next?.letter === "C" && next.numbers.length >= 6) (next.numbers[0]! += dx), (next.numbers[1]! += dy);
+    break;
+  }
+  return writtenOf(commands);
+}
+
+// Whether a press at `at` reaches the path: within `reach` of its outline, or, when it's
+// `filled` and closed, inside it.
+export function pathReaches(absolute: string, at: Point, reach: number, filled: boolean): boolean {
+  const near = (a: Point, b: Point) => {
+    const vx = b.x - a.x, vy = b.y - a.y, length = vx * vx + vy * vy;
+    const t = length > 0 ? Math.min(1, Math.max(0, ((at.x - a.x) * vx + (at.y - a.y) * vy) / length)) : 0;
+    const px = a.x + t * vx - at.x, py = a.y + t * vy - at.y;
+    return px * px + py * py <= reach * reach;
+  };
+  let inside = false;
+  for (const { run, closed } of flattened(absolute)) {
+    for (let i = 1; i < run.length; i++) if (near(run[i - 1]!, run[i]!)) return true;
+    if (closed && run.length > 1 && near(run[run.length - 1]!, run[0]!)) return true;
+    // Inside a closed filled run, by how many of its edges a line to its right crosses.
+    if (!filled || run.length < 3) continue;
+    for (let i = 0, j = run.length - 1; i < run.length; j = i++) {
+      const a = run[i]!, b = run[j]!;
+      if (a.y > at.y !== b.y > at.y && at.x < ((b.x - a.x) * (at.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
+  }
+  return inside;
+}
+
 // A path's points in the box they're fractions of, at x y, w by h: M 0 0 L 1 1 in a 100
 // by 50 box at 10 20 is M 10 20 L 110 70. What isn't a command and a number is left out.
 export function pathIn(points: string, x: number, y: number, w: number, h: number): string {

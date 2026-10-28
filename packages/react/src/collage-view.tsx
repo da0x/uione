@@ -16,7 +16,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, halo, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
 import type { Box, ColorShift, ColorStats, Guided, Lines, Point, SavedLayer } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
@@ -36,6 +36,17 @@ const cropOf = (l: Row): Box => ({ x: num(l["crop_x"], 0), y: num(l["crop_y"], 0
 // What a layer is: a picture, when it has one; words, when it has those; or else a shape,
 // as its parts say (decision 0025). The same as the desktop's.
 const isPicture = (l: Row) => str(l["picture"]) !== "";
+const isPath = (l: Row) => isShape(l) && str(l["shape"]) === "path";
+// A path's outline where it is, in the collage's own units, its box `b`.
+const outlineOf = (l: Row, b: Box) => pathIn(str(l["points"]), b.x, b.y, b.w, b.h);
+// A path reshaped, as its points and its box: its box a pixel wide where it's straight
+// across or down, as a line drawn is. The same as the desktop's.
+function reshapedAs(outline: string): { points: string; box: Box } {
+  const box = pathBounds(outline);
+  if (box.w < 1) (box.x += box.w / 2 - 0.5), (box.w = 1);
+  if (box.h < 1) (box.y += box.h / 2 - 0.5), (box.h = 1);
+  return { points: pathFractions(outline, box), box };
+}
 // Whether a layer is hidden: not drawn, picked or saved.
 const hiddenLayer = (l: Row) => l["hidden"] !== undefined && l["hidden"] !== null && num(l["hidden"]) !== 0;
 const isWords = (l: Row) => !isPicture(l) && str(l["words"]) !== "";
@@ -671,7 +682,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing";
+  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping";
   id: string;
   from: Box;
   at: Point;
@@ -696,6 +707,9 @@ interface Placed {
   editing?: { id: string; words: string; caret: number; fresh: boolean };
   drawing?: Box; // a layer being drawn, as big as the drag so far
   line?: { at: Box; points: string }; // or a line, as far as the drag has gone
+  // A path being reshaped: its outline as it was, and as it is now, by its id.
+  reshapeFrom?: string;
+  reshaped?: { id: string; outline: string };
 }
 
 // draw layer::create { fill = "#2e86de" } when tool == tool::box: a drag makes a layer
@@ -716,6 +730,7 @@ export function Collage({
   height,
   fields,
   place,
+  reshape,
   snap = false,
   clear = false,
   matchColors = false,
@@ -748,6 +763,7 @@ export function Collage({
   height: string;
   fields: Record<string, string>; // the field each of its parts is kept in, like words: "caption"
   place?: string; // the command a layer moved or resized is sent to, with x y w h
+  reshape?: string; // and the one a path's nodes moved are, with its points and x y w h
   snap?: boolean;
   clear?: boolean; // nothing behind its layers: shown over a checkerboard, saved clear
   matchColors?: boolean; // its pictures' colors moved toward one another's, so they look like one picture
@@ -1198,6 +1214,7 @@ export function Collage({
     const shifts = shiftsOf(layers, matchColors, address);
     let framed: Box | undefined;
     let framedRadius = 0;
+    let nodes: Box[] = []; // a picked path's, drawn instead of its frame
     c.save();
     c.beginPath();
     c.rect(board.x, board.y, bw, bh);
@@ -1243,7 +1260,16 @@ export function Collage({
           c.fillRect(b.x + c.measureText(before[line]!).width, b.y + line * size * 1.2, 2, size * 1.2);
         }
       } else if (isShape(l)) {
-        paintShape(c, l, b, whereIs(l));
+        // Being reshaped: as its nodes are now.
+        let shown = l, kept = whereIs(l);
+        const reshaped = w.reshaped;
+        if (reshaped && reshaped.id === l["id"]) {
+          const now = reshapedAs(reshaped.outline);
+          (shown = { ...l, points: now.points }), (kept = now.box), (b = onBoard(kept));
+        }
+        paintShape(c, shown, b, kept);
+        // A path picked shows its nodes, not a box.
+        if (l["id"] === picked && !full && isPath(shown) && reshape) nodes = pathNodes(outlineOf(shown, kept)).map((n) => onBoard({ x: n.x, y: n.y, w: 0, h: 0 }));
       } else {
         const path = str(l["picture"]);
         const p = pictureOf(path, address);
@@ -1316,8 +1342,17 @@ export function Collage({
       c.fillText(empty, board.x + bw / 2, board.y + bh / 2);
       c.textAlign = "start";
     }
-    // The picked layer's frame and corners, over everything, a crop's edges too.
-    if (framed) {
+    // The picked layer's frame and corners, over everything, a crop's edges too; a
+    // picked path's nodes instead.
+    if (framed && nodes.length) {
+      c.strokeStyle = accent;
+      c.lineWidth = 2;
+      for (const n of nodes) {
+        c.fillStyle = "#fff";
+        c.fillRect(n.x - handle / 2, n.y - handle / 2, handle, handle);
+        c.strokeRect(n.x - handle / 2, n.y - handle / 2, handle, handle);
+      }
+    } else if (framed) {
       c.strokeStyle = accent;
       c.lineWidth = 2;
       if (framedRadius > 0) {
@@ -1409,9 +1444,14 @@ export function Collage({
     return to.at;
   };
   const pickRow = (id: string) => pick && setPicked(pick, id || undefined);
-  // Where a press reaches a layer, as drawn: its box, or a path's 6 pixels around it,
-  // so a thin line can be picked. The same as the desktop's.
-  const reached = (l: Row, b: Box): Box => (isShape(l) && str(l["shape"]) === "path" ? { x: b.x - 6, y: b.y - 6, w: b.w + 12, h: b.h + 12 } : b);
+  // Whether a press at `p`, in the window, reaches a layer, its box `b`: a path by its
+  // stroke, 6 pixels around it and half its width, or inside it while it's filled;
+  // anything else within its box. The same as the desktop's.
+  const hits = (l: Row, b: Box, p: Point) => {
+    if (!isPath(l)) return inside(onBoard(b), p);
+    const reach = 6 / w.scale + (str(l["stroke"]) ? num(l["stroke_width"]) / 2 : 0);
+    return pathReaches(outlineOf(l, b), onCollage(p), reach, /^#[0-9a-fA-F]{6}$/.test(str(l["fill"])));
+  };
   const onCollage = (p: Point): Point => ({ x: (p.x - w.board.x) / w.scale, y: (p.y - w.board.y) / w.scale });
   // A layer drawn, on top of the rest, picked once it's made; then the choices its
   // when read go back to their first, as a tool goes back to Select. The same as the
@@ -1485,7 +1525,22 @@ export function Collage({
       return;
     }
     // A corner of the picked layer resizes it: a picture with its shape kept, words by their size.
-    if (chosen && (isWords(chosen) ? write : place)) {
+    // A node of the picked path reshapes it.
+    if (chosen && isPath(chosen) && reshape) {
+      const outline = outlineOf(chosen, boxOf(chosen));
+      const node = pathNodes(outline).findIndex((n) => {
+        const at = onBoard({ x: n.x, y: n.y, w: 0, h: 0 });
+        return Math.abs(at.x - p.x) <= handle && Math.abs(at.y - p.y) <= handle;
+      });
+      if (node >= 0) {
+        w.now = { what: "reshaping", id: picked, from: boxOf(chosen), at: p, corner: node, edges: 0 };
+        w.reshapeFrom = outline;
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+    // A corner of the picked one resizes it; a path has nodes, not corners.
+    if (chosen && !isPath(chosen) && (isWords(chosen) ? write : place)) {
       const b = whereIs(chosen);
       const corner = cornerAt(onBoard(b), p, handle);
       if (corner >= 0) {
@@ -1500,7 +1555,7 @@ export function Collage({
     for (let i = layers.length - 1; i >= 0; i--) {
       const l = layers[i]!;
       const b = whereIs(l);
-      if (!inside(reached(l, onBoard(b)), p)) continue;
+      if (!hits(l, b, p)) continue;
       const id = str(l["id"]);
       pickRow(id);
       // Its layer is the current one, as new objects go in it.
@@ -1525,6 +1580,11 @@ export function Collage({
     const g = w.now;
     if (!g) return;
     const p = at(e);
+    if (g.what === "reshaping") {
+      w.reshaped = { id: g.id, outline: pathMoved(w.reshapeFrom ?? "", g.corner, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale) };
+      paint();
+      return;
+    }
     if (g.what === "drawing") {
       if (drawingNow()?.by === "line") w.line = drawnLine(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
       else w.drawing = drawn(onCollage(g.at), onCollage(p), e.shiftKey, 4 / w.scale, W, H);
@@ -1546,6 +1606,23 @@ export function Collage({
       move(e);
       w.now = undefined;
       return;
+    }
+    if (g.what === "reshaping") {
+      w.now = undefined;
+      const p = at(e);
+      if (p.x === g.at.x && p.y === g.at.y) {
+        w.reshaped = undefined;
+        return paint();
+      }
+      const outline = pathMoved(w.reshapeFrom ?? "", g.corner, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale);
+      w.reshaped = { id: g.id, outline };
+      const { points, box } = reshapedAs(outline);
+      // Kept, it's drawn from the view again; turned down, as it was.
+      void send(reshape!, { id: g.id, points, x: box.x, y: box.y, w: box.w, h: box.h }).finally(() => {
+        w.reshaped = undefined;
+        paint();
+      });
+      return paint();
     }
     if (g.what === "drawing") {
       w.now = undefined;
@@ -1607,10 +1684,10 @@ export function Collage({
     } else if (w.editing) cursor = "text";
     else if (draws.some((d) => d.when !== false)) cursor = "crosshair";
     else {
-      const corner = chosen && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
+      const corner = chosen && !isPath(chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";
       else if (corner === 1 || corner === 3) cursor = "nesw-resize";
-      else if (layers.some((l) => inside(reached(l, onBoard(whereIs(l))), p))) cursor = place ? "move" : "pointer";
+      else if (layers.some((l) => hits(l, whereIs(l), p))) cursor = place ? "move" : "pointer";
     }
     e.currentTarget.style.cursor = cursor;
   };

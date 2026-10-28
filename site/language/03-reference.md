@@ -2217,6 +2217,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     one that keeps no shapes takes it as one picture, drawn from its vectors.
     `layers drawing_page.layers { ... }` then lists the layers, each opening to its
     objects, and a layer deleted takes its objects with it, by the collage's delete.
+  - `reshape layer::reshape`: a path, a shape whose `shape` is `path`, is picked by a
+    press on its stroke alone, within 6 pixels of it and half its width, or inside it
+    while it's filled, never by its box. Picked, it shows its nodes, where each of its
+    segments ends, rather than a frame and corners, and a node dragged reshapes it,
+    the control points either side moving with it. Let go, the command is sent its
+    new `points` and its box, `x y w h`, worked out again around them, a pixel wide
+    where it's straight across or down.
   - `clear`: nothing is behind its layers, as a drawing's page is. Where nothing is,
     it's shown over a gray and white checkerboard, as drawing programs show what's
     clear, and a picture or a preview of it is clear there too. Without it, its page

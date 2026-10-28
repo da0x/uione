@@ -2384,6 +2384,9 @@ namespace one::language {
                     if (at_word("place") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.place = parse_qualified_name("the command a layer moved or resized is sent to, like layer::place");
+                    } else if (at_word("reshape") && peek(1).kind == token_kind::identifier) {
+                        advance();
+                        collage.reshape = parse_qualified_name("the command a path's nodes moved are sent to, like layer::reshape");
                     } else if (at_word("add") && peek(1).kind == token_kind::identifier) {
                         advance();
                         collage.add = parse_qualified_name("the command that makes its layers, like layer::create");

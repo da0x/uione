@@ -211,6 +211,8 @@ describe("a layer drawn on a collage", () => {
     Object.defineProperty(HTMLCanvasElement.prototype, "clientHeight", { configurable: true, get: () => 564 });
     HTMLCanvasElement.prototype.setPointerCapture = () => {};
     if (!globalThis.PointerEvent) globalThis.PointerEvent = class extends MouseEvent {} as unknown as typeof PointerEvent;
+    // A path drawn on a context that draws nothing.
+    if (!globalThis.Path2D) globalThis.Path2D = class { addPath() {} roundRect() {} ellipse() {} } as unknown as typeof Path2D;
   });
   afterEach(() => {
     delete (HTMLCanvasElement.prototype as { clientWidth?: number }).clientWidth;
@@ -245,6 +247,41 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[0]).toMatchObject({ command: "studio::layer::create", input: { x: 100, y: 100, w: 200, h: 100, fill: "#2e86de", poster: "p1" } });
     await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("drawn"));
     expect(drawn.getByTestId("tool").textContent).toBe("move");
+  });
+
+  it("picks a path by its stroke alone, shows its nodes, and reshapes it by one dragged, its box worked out again", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const source = memorySource({ commands: { "studio::layer::reshape": () => ({ id: "l1" }) } });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [{ id: "l1", shape: "path", points: "M 0 0 L 1 1", stroke: "#1d1d1f", stroke_width: 2, x: 100, y: 100, w: 200, h: 100 }] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, points: "points" }} pick="/ layer" name="/ layer" place="studio::layer::place" reshape="studio::layer::reshape" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    // Inside its box, far from its stroke: nothing.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 280, clientY: 32 + 110, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 280, clientY: 32 + 110, pointerId: 1 });
+    expect(drawn.getByTestId("picked").textContent).toBe("");
+    // On its stroke: picked.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 200, clientY: 32 + 151, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 200, clientY: 32 + 151, pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
+    await act(async () => {});
+    // Its first node, at 100 100, dragged down 50: from 100 150 to 300 200.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 100, clientY: 32 + 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 100, clientY: 32 + 130, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 100, clientY: 32 + 150, pointerId: 1 });
+    await waitFor(() => expect(source.runs.length).toBe(1));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::reshape", input: { id: "l1", points: "M 0 0 L 1 1", x: 100, y: 150, w: 200, h: 50 } });
   });
 
   it("makes a line from where the drag began to where it ended, by line, kept as a path's points in its box", async () => {

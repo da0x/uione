@@ -4147,7 +4147,8 @@ namespace one::language {
             if (collage.write && !has({"words", "size"})) error(collage.write->where, "words written are kept in a layer's words and size, which " + layer->name + " doesn't have; add them, or say its fields, like words caption sized letters");
             if (kept.contains("picture_width") != kept.contains("picture_height")) error(collage.list_where, "a picture's own size is its picture_width and picture_height together");
             // Placed, cropped, written and made by commands on what its layers are.
-            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}}) {
+            if (collage.reshape && !kept.contains("points")) error(collage.reshape->where, "a path's nodes are kept in its points, which " + layer->name + " doesn't have; add points text to it, or say its field");
+            for (const auto& [command, like] : {std::pair{&collage.place, "place"}, {&collage.reshape, "reshape"}, {&collage.crop, "crop"}, {&collage.write, "write"}, {&collage.add, "create"}, {&collage.remove, "delete"}}) {
                 if (!*command) continue;
                 verify_command_use(ns, **command);
                 const entity_declaration* on = find_command(ns, **command);

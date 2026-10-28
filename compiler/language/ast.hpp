@@ -844,6 +844,7 @@ namespace one::language {
         std::string width = "width", height = "height";
         location size_where;
         std::optional<qualified_name> place;  // place layer::place: a layer moved or resized, kept
+        std::optional<qualified_name> reshape;  // reshape layer::reshape: a path's nodes moved, its points and box kept
         std::optional<qualified_name> add;    // add layer::create: what makes new layers, like words added
         std::optional<qualified_name> crop;   // crop layer::crop: a picture cropped in place, kept
         std::optional<qualified_name> write;  // write layer::write: words written in place, or resized, kept

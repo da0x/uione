@@ -575,6 +575,105 @@ namespace one::screens::collage {
 		return out;
 	}
 
+	namespace {
+		// A path's commands, each its letter and its numbers.
+		struct command {
+			char letter;
+			std::vector<double> numbers;
+		};
+		std::vector<command> commands_of(std::string_view absolute) {
+			std::vector<command> out;
+			each_of(absolute, [&](char c) { out.push_back({c, {}}); },
+			        [&](double n) {
+				        if (!out.empty()) out.back().numbers.push_back(n);
+			        });
+			return out;
+		}
+		std::string written(const std::vector<command>& commands) {
+			std::string out;
+			for (const auto& c : commands) {
+				out += (out.empty() ? "" : " ") + std::string(1, c.letter);
+				for (double n : c.numbers) out += " " + said(n);
+			}
+			return out;
+		}
+		// The path as straight pieces, each curve cut in 16, and whether each run of them
+		// is closed.
+		std::vector<std::pair<std::vector<point>, bool>> flattened(std::string_view absolute) {
+			std::vector<std::pair<std::vector<point>, bool>> runs;
+			point now{0, 0};
+			for (const auto& c : commands_of(absolute)) {
+				const auto& n = c.numbers;
+				if (c.letter == 'M' && n.size() >= 2) {
+					now = {n[0], n[1]};
+					runs.push_back({{now}, false});
+				} else if (c.letter == 'L' && n.size() >= 2 && !runs.empty()) {
+					now = {n[0], n[1]};
+					runs.back().first.push_back(now);
+				} else if (c.letter == 'C' && n.size() >= 6 && !runs.empty()) {
+					point a = now, b{n[0], n[1]}, d{n[2], n[3]}, e{n[4], n[5]};
+					for (int i = 1; i <= 16; ++i) {
+						double t = i / 16.0, u = 1 - t;
+						runs.back().first.push_back({u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * d.x + t * t * t * e.x,
+						                             u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * d.y + t * t * t * e.y});
+					}
+					now = e;
+				} else if (c.letter == 'Z' && !runs.empty()) {
+					runs.back().second = true;
+					now = runs.back().first.front();
+				}
+			}
+			return runs;
+		}
+	}  // namespace
+
+	std::vector<point> path_nodes(std::string_view absolute) {
+		std::vector<point> out;
+		for (const auto& c : commands_of(absolute)) {
+			if (c.numbers.size() >= 2 && c.letter != 'Z') out.push_back({c.numbers[c.numbers.size() - 2], c.numbers.back()});
+		}
+		return out;
+	}
+
+	std::string path_moved(std::string_view absolute, std::size_t node, double dx, double dy) {
+		auto commands = commands_of(absolute);
+		std::size_t at = 0;
+		for (std::size_t i = 0; i < commands.size(); ++i) {
+			auto& n = commands[i].numbers;
+			if (n.size() < 2 || commands[i].letter == 'Z') continue;
+			if (at++ != node) continue;
+			n[n.size() - 2] += dx, n.back() += dy;
+			// Its own curve's last control point, and the next curve's first, go with it.
+			if (commands[i].letter == 'C' && n.size() >= 6) n[2] += dx, n[3] += dy;
+			if (i + 1 < commands.size() && commands[i + 1].letter == 'C' && commands[i + 1].numbers.size() >= 6) commands[i + 1].numbers[0] += dx, commands[i + 1].numbers[1] += dy;
+			break;
+		}
+		return written(commands);
+	}
+
+	bool path_reaches(std::string_view absolute, point at, double reach, bool filled) {
+		auto runs = flattened(absolute);
+		auto near = [&](point a, point b) {
+			double vx = b.x - a.x, vy = b.y - a.y, length = vx * vx + vy * vy;
+			double t = length > 0 ? std::clamp(((at.x - a.x) * vx + (at.y - a.y) * vy) / length, 0.0, 1.0) : 0;
+			double px = a.x + t * vx - at.x, py = a.y + t * vy - at.y;
+			return px * px + py * py <= reach * reach;
+		};
+		bool inside = false;
+		for (const auto& [run, closed] : runs) {
+			for (std::size_t i = 1; i < run.size(); ++i) {
+				if (near(run[i - 1], run[i])) return true;
+			}
+			if (closed && run.size() > 1 && near(run.back(), run.front())) return true;
+			// Inside a closed filled run, by how many of its edges a line to its right crosses.
+			if (!filled || run.size() < 3) continue;
+			for (std::size_t i = 0, j = run.size() - 1; i < run.size(); j = i++) {
+				if ((run[i].y > at.y) != (run[j].y > at.y) && at.x < (run[j].x - run[i].x) * (at.y - run[i].y) / (run[j].y - run[i].y) + run[i].x) inside = !inside;
+			}
+		}
+		return inside;
+	}
+
 	std::string svg_element(const shape& s, double x, double y, double w, double h) {
 		std::string drawn = std::format(R"(fill="{}" stroke="{}" stroke-width="{}")", paint(s.fill), paint(s.stroke), said(s.stroke_width));
 		if (s.kind == "ellipse") return std::format(R"(<ellipse cx="{}" cy="{}" rx="{}" ry="{}" {}/>)", said(x + w / 2), said(y + h / 2), said(w / 2), said(h / 2), drawn);
