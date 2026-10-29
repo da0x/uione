@@ -438,9 +438,16 @@ class Reader {
 }
 
 // An equation read, or where and why it can't be.
+// What a phone's keyboard, or a page's editing, puts in place of what was typed, read as
+// what it stands for: its spaces that don't break as spaces, its curly quotes as
+// straight ones, and the dash a double hyphen becomes as a minus. Each is one character
+// for one, so where a problem is said stays where it was.
+const typedAs: Record<string, string> = { "\u00a0": " ", "\u2009": " ", "\u202f": " ", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "\u2212", "\u2014": "\u2212" };
+const typedAsAny = new RegExp(`[${Object.keys(typedAs).join("")}]`, "g");
+
 export function parseMath(written: string): { node: MathNode } | { problem: MathProblem } {
   try {
-    return { node: new Reader(written).whole() };
+    return { node: new Reader(written.replace(typedAsAny, (c) => typedAs[c] ?? c)).whole() };
   } catch (e) {
     if (e instanceof Failed) return { problem: e.problem };
     throw e;

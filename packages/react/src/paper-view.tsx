@@ -1338,7 +1338,10 @@ function PaperBlock({
         role="textbox"
         aria-multiline
         aria-label={hint ?? block.kind}
-        spellCheck
+        // An equation's and code's words are written as they're meant, so a phone's
+        // keyboard neither corrects nor capitalizes them.
+        spellCheck={block.kind !== "math" && block.kind !== "code"}
+        {...(block.kind === "math" || block.kind === "code" ? { autoCorrect: "off", autoCapitalize: "off" } : {})}
         style={editable}
         onInput={(e) => {
           setWords(wordsOf(e.currentTarget));

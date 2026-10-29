@@ -38,6 +38,20 @@ const layouts = readFileSync(join(here, "../../../math/tests/layouts.txt"), "utf
     return [written!, lines] as const;
   });
 
+describe("an equation typed on a phone", () => {
+  it("reads its keyboard's spaces, quotes and dashes as what they stand for", () => {
+    for (const [typed, plain] of [
+      ["x\u00a0=\u00a02", "x = 2"],
+      ["x\u2009= 2", "x = 2"],
+      ["a\u2019 = 2", "a' = 2"],
+      ["x = a \u2014 b", "x = a \u2212 b"],
+    ]) {
+      expect(parseMath(typed!)).toEqual(parseMath(plain!));
+      expect("node" in parseMath(typed!)).toBe(true);
+    }
+  });
+});
+
 describe("equations set as one::math sets them", () => {
   it("has the layouts", () => expect(layouts.length).toBeGreaterThan(30));
   it.each(layouts)("%s", (written, lines) => {
