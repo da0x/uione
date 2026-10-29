@@ -781,7 +781,9 @@ namespace one::desktop {
 			const text_layout& small_words() {
 				double scale = detail::layout_scale();
 				if (!small_ || scale != small_scale_) {
+					// As small as the web's, 12 points to its 15.
 					text_style s = current_theme().quiet();
+					s.size = current_theme().text_size - 3;
 					s.color = tool_.off ? mixed(current_theme().surface, current_theme().ink, 0.35f) : current_theme().ink;
 					small_ = lay_out({label_, s}, 0, scale);
 					small_scale_ = scale;

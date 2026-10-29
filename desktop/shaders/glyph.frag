@@ -16,7 +16,7 @@ layout(location = 0) out vec4 result;
 void main() {
 	if (gl_FragCoord.x < clip.x || gl_FragCoord.y < clip.y || gl_FragCoord.x > clip.z || gl_FragCoord.y > clip.w) discard;
 	float coverage = texture(atlas, uv).r;
-	coverage = pow(coverage, 1.0 / 1.45);
+	coverage = pow(coverage, 1.0 / 1.3);
 	if (coverage <= 0.0) discard;
 	result = color * coverage;
 }

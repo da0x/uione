@@ -194,8 +194,9 @@ namespace one::desktop::runtime {
 		} else {
 			laid = desktop::row(std::move(tools)).spacing(2);
 		}
+		// As small as the web's, 11 points to its 15.
 		auto label = t.quiet();
-		label.size -= 1;
+		label.size = t.text_size - 4;
 		// Its name at the bottom, in line with every other group's, however many rows of
 		// tools are over it, as the web's.
 		auto drawn = desktop::column(std::move(laid), desktop::spacer(), desktop::text(std::move(name), label)).spacing(2).align(align::center).padding(edges(0, 8));
