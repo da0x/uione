@@ -2821,6 +2821,10 @@ issue::verify "Verify" when {
   "tel:+15555550100" "Call us"`. A link to an address or a
   namespace has to reach a screen that's there, so a renamed namespace or a typo
   is an error rather than a page that isn't found.
+- A screen shown again while the app is open, gone back to or opened by a link, is
+  as it was left: scrolled where it was, once what it shows reaches that far, with
+  what was last opened from it, like a card, given the keyboard and in view.
+  Nothing of this is kept once the app is closed.
 - `menu { link /:project/settings "General"  link /:project/settings/deployments
   "Deployments" }` puts its links down the side of the page, with everything after
   it on the screen beside them, and marks the link to the page it's on. On a phone

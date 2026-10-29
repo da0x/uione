@@ -160,7 +160,7 @@ namespace one::desktop::runtime {
 		}
 		bool fills = main.get() && std::ranges::any_of(main.get()->children, [](const auto& c) { return c && c->grow > 0; });
 		if (fills || !main.get()) middle.push_back(std::move(main).padding(edges(12, 12)).grow());
-		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12))).grow());
+		else middle.push_back(desktop::scroll(std::move(main).padding(edges(12, 12)), p.where_left().scroll).grow());
 		if (auto side = taken("side"); side.get()) middle.push_back(desktop::scroll(std::move(side).padding(edges(12, 12))).width(288).grow(0).background({.fill = t.surface}));
 		parts.push_back(desktop::row(std::move(middle)).align(align::stretch).grow());
 		if (auto status = taken("status"); status.get()) {

@@ -7,7 +7,7 @@
 import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useParams } from "react-router";
+import { BrowserRouter, MemoryRouter, Route, Routes, matchPath, useLocation, useNavigationType, useParams } from "react-router";
 import type { Analytics, Build, ComponentSet } from "./contract.js";
 import { buildLinks } from "./contract.js";
 import { DataProvider, useAuth, useAuthorize, useShownOnce, useView } from "./data.js";
@@ -258,6 +258,7 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
     <>
       {color && <style>{accentOf(color)}</style>}
       {analytics && <Counting analytics={analytics} />}
+      <Returning />
       <Routes>
       {screens.map((s) => (
         <Route key={s.info.route} path={routerPath(s.info.route, s.info.shown)} element={<Page name={name} icon={icon} screen={s} screens={screens} />} />
@@ -290,6 +291,78 @@ export function App({ name, icon, screens: given, ui, data, location, authentica
       </BadgeSpec.Provider>
     </UIContext.Provider>
   );
+}
+
+// Where each address was left, for as long as the page is open: how far down it was
+// scrolled, and what was last opened from it, like a card, or what has taken that
+// one's place. Going back to it, or opening it again, finds it as it was: scrolled
+// there once what it shows reaches that far, and what was opened from it given the
+// keyboard, in view. An address opened afresh starts at its top.
+const placesLeft = new Map<string, { scroll: number; opened?: string }>();
+
+function Returning() {
+  const { pathname, search, hash } = useLocation();
+  const how = useNavigationType();
+  const here = pathname + search;
+  const was = useRef<string | undefined>(undefined);
+  useLayoutEffect(() => {
+    const before = was.current;
+    was.current = here;
+    if (before !== undefined && before !== here) {
+      if (how === "PUSH") placesLeft.set(before, { scroll: placesLeft.get(before)?.scroll ?? 0, opened: here });
+      if (how === "REPLACE") for (const place of placesLeft.values()) if (place.opened === before) place.opened = here;
+    }
+    const page = document.scrollingElement ?? document.documentElement;
+    const place = placesLeft.get(here);
+    let wanted = place?.scroll ?? 0;
+    let opened = place?.opened;
+    if (how === "PUSH" && before !== undefined && before.split("?")[0] !== pathname && !hash) page.scrollTop = 0;
+    const settle = () => {
+      if (wanted > 0 && page.scrollHeight - page.clientHeight >= wanted) {
+        page.scrollTop = wanted;
+        wanted = 0;
+      }
+      const found = wanted > 0 || !opened ? null : document.querySelector<HTMLElement>(`a[href="${opened.replace(/["\\]/g, "\\$&")}"]`);
+      if (found) {
+        opened = undefined;
+        found.focus({ preventScroll: true });
+        const at = found.getBoundingClientRect();
+        if (at.top < 0 || at.bottom > window.innerHeight) found.scrollIntoView?.({ block: "nearest" });
+      }
+      if (wanted === 0 && !opened) stop();
+    };
+    // Kept as it's scrolled, once it's where it was.
+    const scrolled = () => {
+      if (wanted === 0) placesLeft.set(here, { scroll: page.scrollTop, opened: placesLeft.get(here)?.opened });
+    };
+    // Scrolled or typed in first, it's left where the person put it.
+    const moved = () => {
+      wanted = 0;
+      opened = undefined;
+      stop();
+    };
+    const changes = new MutationObserver(settle);
+    const sizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(settle);
+    function stop() {
+      changes.disconnect();
+      sizes?.disconnect();
+      window.removeEventListener("wheel", moved);
+      window.removeEventListener("touchmove", moved);
+      window.removeEventListener("keydown", moved);
+    }
+    changes.observe(document.body, { childList: true, subtree: true });
+    sizes?.observe(document.body);
+    window.addEventListener("wheel", moved, { passive: true });
+    window.addEventListener("touchmove", moved, { passive: true });
+    window.addEventListener("keydown", moved);
+    window.addEventListener("scroll", scrolled, { passive: true });
+    settle();
+    return () => {
+      stop();
+      window.removeEventListener("scroll", scrolled);
+    };
+  }, [here]);
+  return null;
 }
 
 // A key a command's answer gave, like a service's new one: shown this once, to copy,

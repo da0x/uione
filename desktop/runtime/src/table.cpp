@@ -247,6 +247,10 @@ namespace one::desktop::runtime {
 			options.on_open = [&p, by_id, link = spec.link, keyed = spec.keyed, named = spec.named](const std::string& id) {
 				if (auto found = by_id.find(id); found != by_id.end()) p.open(row_link(link, found->second, p.params(), keyed, named));
 			};
+			// The row the page was left from, when it's back.
+			for (const auto& [id, row] : by_id) {
+				if (!p.where_left().opened.empty() && row_link(spec.link, row, p.params(), spec.keyed, spec.named) == p.where_left().opened) options.start = id;
+			}
 		}
 		// Put in order with Alt and the arrows while nothing typed hides some of them.
 		if (model.arranging) {

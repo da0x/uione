@@ -76,8 +76,9 @@ namespace one::desktop::runtime {
 			parts.push_back(desktop::divider());
 			parts.push_back(s.footer(p));
 		}
-		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)));
-		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880)).align(align::center);
+		// Scrolled where it was left, when it's shown again.
+		if (wide) return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)), p.where_left().scroll);
+		return desktop::scroll(desktop::column(std::move(parts)).spacing(16).padding(edges(24, 32)).width(880), p.where_left().scroll).align(align::center);
 	}
 
 	namespace {

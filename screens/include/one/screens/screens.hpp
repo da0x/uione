@@ -110,6 +110,14 @@ namespace one::screens {
 
 	// Pages
 
+	// Where a page was left, kept by its address for as long as the app runs, so going
+	// back to it, or opening it again, finds it as it was: how far down it was scrolled,
+	// and what was last opened from it, like a card, or what has taken that one's place.
+	struct place {
+		state<float> scroll;
+		std::string opened;
+	};
+
 	// A page that's open: the screen it shows, what its address said, and the views
 	// it reads, listened to from when it first reads them until it's left.
 	class page_base {
@@ -123,6 +131,7 @@ namespace one::screens {
 
 		std::size_t screen() const { return screen_; }
 		const std::string& address() const { return address_; }
+		screens::place& where_left() { return *place_; }
 		const std::map<std::string, std::string>& params() const { return params_; }
 		std::string param(const std::string& name) const;
 		// What its address's query says, like ?is=Assigned to me&assignees=me.
@@ -248,7 +257,9 @@ namespace one::screens {
 		}
 
 	private:
+		friend class navigator_base;
 		screens::source& source_;
+		std::shared_ptr<screens::place> place_ = std::make_shared<screens::place>();
 		std::optional<state<std::chrono::sys_seconds>> clock_;
 		listening ticking_;
 		std::size_t screen_;
@@ -435,6 +446,7 @@ namespace one::screens {
 		std::vector<std::string> routes_;
 		std::vector<std::unique_ptr<page_base>> trail_;
 		std::unique_ptr<page_base> retired_;  // the page last replaced, kept until the next
+		std::map<std::string, std::shared_ptr<place>> places_;  // where each address was left
 		state<int> changed_ = 0;
 		std::map<std::string, std::pair<state<view_state>, listening>> views_;
 	};

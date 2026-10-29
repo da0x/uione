@@ -47,18 +47,27 @@ namespace one::desktop::runtime {
 		// it, cropped around its middle, what else it shows over its foot. Its columns share
 		// its width, less the gaps between, and its rows are as tall as a column is wide, so
 		// it scales as it's resized and no card changes tile. Only what's in view, and as
-		// much again around it, is drawn, each picture read as it comes into view.
+		// much again around it, is drawn, each picture read as it comes into view. One tile
+		// is chosen, ringed while the mosaic has the keyboard: moved with the arrows, to the
+		// card before or after, or to the one above or below, and opened with Enter.
 		class mosaic_element : public element {
 		public:
 			struct tile {
 				std::string picture, address;
 			};
-			mosaic_element(page& p, std::vector<tile> tiles, std::vector<desktop::view> captions) : p_(p), tiles_(std::move(tiles)) {
+			// `start` is the address of the tile chosen first, like the card a page was left
+			// from, brought into view as it's first placed.
+			mosaic_element(page& p, std::vector<tile> tiles, std::vector<desktop::view> captions, const std::string& start) : p_(p), tiles_(std::move(tiles)) {
 				for (auto& c : captions) {
 					children.push_back(std::move(c).take());
 					children.back()->parent = this;
 				}
+				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					if (!start.empty() && tiles_[i].address == start) chosen_ = i, shown_ = false;
+				}
 			}
+
+			bool focusable() const override { return !tiles_.empty(); }
 
 			extent measure_content(float width) override {
 				int rows = mosaic_rows(tiles_.size());
@@ -75,6 +84,7 @@ namespace one::desktop::runtime {
 					extent e = children[i]->measure(f.width - 2 * inset);
 					children[i]->place({f.x + inset, f.y + f.height - e.height - inset, f.width - 2 * inset, e.height});
 				}
+				if (!std::exchange(shown_, true) && chosen_ < frames_.size()) reveal(frames_[chosen_]);
 			}
 
 			void paint_content(canvas& c) override {
@@ -93,16 +103,56 @@ namespace one::desktop::runtime {
 					}
 					children[i]->paint(c);
 				}
+				if (shows_focus() && chosen_ < frames_.size()) c.box(frames_[chosen_].inset(-2), {.border = t.accent, .border_width = 2, .radius = t.corners + 2});
+			}
+
+			bool handle_key(const key_event& e) override {
+				if (e.alt || e.control || e.super || tiles_.empty()) return false;
+				if (e.is(keys::enter) || e.is(keys::keypad_enter)) {
+					if (!tiles_[chosen_].address.empty()) p_.open(tiles_[chosen_].address);
+					return true;
+				}
+				// Past either end, the key is left for what's beyond, as a list leaves it.
+				std::size_t to = chosen_;
+				if (e.is(keys::right) || e.is('l')) {
+					if (chosen_ + 1 == tiles_.size()) return false;
+					to = chosen_ + 1;
+				} else if (e.is(keys::left) || e.is('h')) {
+					if (chosen_ == 0) return false;
+					to = chosen_ - 1;
+				} else if (e.is(keys::down) || e.is('j') || e.is(keys::up) || e.is('k')) {
+					auto found = nearest(e.is(keys::down) || e.is('j'));
+					if (!found) return false;
+					to = *found;
+				} else {
+					return false;
+				}
+				chosen_ = to;
+				if (chosen_ < frames_.size()) reveal(frames_[chosen_]);
+				return true;
 			}
 
 			bool click(point at) override {
 				for (std::size_t i = 0; i < frames_.size(); ++i) {
 					if (frames_[i].contains(at) && !tiles_[i].address.empty()) {
+						chosen_ = i;
 						p_.open(tiles_[i].address);
 						return true;
 					}
 				}
 				return false;
+			}
+
+			void adopt(element& before) override {
+				element::adopt(before);
+				auto& was = static_cast<mosaic_element&>(before);
+				shown_ = was.shown_ || shown_;
+				if (was.chosen_ >= was.tiles_.size()) return;
+				// The same card, if it's still here; otherwise the one now where it was.
+				chosen_ = std::min(was.chosen_, tiles_.empty() ? 0 : tiles_.size() - 1);
+				for (std::size_t i = 0; i < tiles_.size(); ++i) {
+					if (tiles_[i].address == was.tiles_[was.chosen_].address) chosen_ = i;
+				}
 			}
 
 			element* hit(point at) override { return frame.contains(at) ? this : nullptr; }
@@ -112,9 +162,27 @@ namespace one::desktop::runtime {
 			static constexpr float gap = 16;   // as plain cards are apart
 			static constexpr float inset = 8;  // a caption from its tile's edges
 			static float column(float width) { return std::max(0.f, (width - 2 * gap) / 3); }
+			// The tile above or below the chosen one nearest it across.
+			std::optional<std::size_t> nearest(bool below) const {
+				if (chosen_ >= frames_.size()) return std::nullopt;
+				const rect& from = frames_[chosen_];
+				float across = from.x + from.width / 2;
+				std::optional<std::size_t> best;
+				float best_score = 0;
+				for (std::size_t i = 0; i < frames_.size(); ++i) {
+					const rect& r = frames_[i];
+					float ahead = below ? r.y - from.bottom() : from.y - r.bottom();
+					if (i == chosen_ || ahead < -1) continue;
+					float score = std::max(0.f, ahead) + 2 * std::abs(r.x + r.width / 2 - across);
+					if (!best || score < best_score) best = i, best_score = score;
+				}
+				return best;
+			}
 			page& p_;
 			std::vector<tile> tiles_;
 			std::vector<rect> frames_;
+			std::size_t chosen_ = 0;
+			bool shown_ = true;  // whether the chosen tile was brought into view, as it's first placed
 		};
 
 		// What a mosaic's tile says over its picture's foot: its title, strong, and what
@@ -487,7 +555,11 @@ namespace one::desktop::runtime {
 				captions.push_back(caption_of(card));
 			}
 			if (tiles.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
-			return desktop::view(std::make_unique<mosaic_element>(p, std::move(tiles), std::move(captions)));
+			// The card the page was left from, when it's back, chosen and given the keyboard.
+			const std::string& left = p.where_left().opened;
+			bool back = std::ranges::any_of(tiles, [&](const auto& tile) { return !left.empty() && tile.address == left; });
+			desktop::view shown(std::make_unique<mosaic_element>(p, std::move(tiles), std::move(captions), left));
+			return back ? std::move(shown).autofocus() : std::move(shown);
 		}
 		std::vector<desktop::list_row> shown;
 		std::map<std::string, std::string> opens;
@@ -526,20 +598,28 @@ namespace one::desktop::runtime {
 			shown.push_back({card.id, desktop::column(std::move(inside)).spacing(8).padding(16).background({.fill = t.surface, .border = t.line, .border_width = 1, .radius = t.corners})});
 		}
 		if (shown.empty()) return spec.hide_empty ? desktop::view() : !spec.add.empty() ? quiet("Nothing here yet. Drop pictures here to add them.").padding(edges(48, 0)) : quiet("Nothing here yet.");
+		// The card the page was left from, when it's back, chosen and given the keyboard.
+		const std::string& left = p.where_left().opened;
+		std::string start;
+		for (const auto& [id, address] : opens) {
+			if (!left.empty() && address == left) start = id;
+		}
 		// Cards with pictures are a gallery, side by side as many as fit, as on the web.
 		if (!spec.picture.empty()) {
 			std::vector<desktop::view> tiles;
 			for (auto& card : shown) {
 				std::string address = opens[card.key];
-				tiles.push_back(std::move(card.shown).width(280).on_click([&p, address] {
+				auto tile = desktop::pressable(std::move(card.shown), [&p, address] {
 					if (!address.empty()) p.open(address);
-				}));
+				}).width(280);
+				tiles.push_back(card.key == start ? std::move(tile).autofocus().brought_into_view() : std::move(tile));
 			}
 			return desktop::flow(std::move(tiles)).spacing(16);
 		}
-		return desktop::list(std::move(shown), [&p, opens](const std::string& id) {
+		auto listed = desktop::list(std::move(shown), {.on_open = [&p, opens](const std::string& id) {
 			if (auto found = opens.find(id); found != opens.end() && !found->second.empty()) p.open(found->second);
-		});
+		}, .start = start});
+		return start.empty() ? std::move(listed) : std::move(listed).autofocus();
 	}
 
 	desktop::view details(page&, state<view_state> from, std::vector<screens::column> fields, std::map<std::string, std::vector<screens::option>> choices,

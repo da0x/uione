@@ -420,6 +420,31 @@ TEST("a mosaic's cards each go in their tile by their place alone, two blocks of
 	CHECK(mosaic_rows(11) == 6);
 }
 
+TEST("a page is found as it was left when it's gone back to or opened again: scrolled as it was, with what was opened from it, or stepped to from that") {
+	site s{.name = "studio"};
+	s.screens.push_back({"Posters", "/posters"});
+	s.screens.push_back({"", "/posters/:poster"});
+	memory_source data;
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.current().where_left().scroll.set(420);
+	nav.open("/posters/p2");
+	nav.replace("/posters/p3");
+	CHECK(nav.back());
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	CHECK(nav.current().where_left().scroll.peek() == 420);
+	// Opened again, as a link back to it does, it's the same.
+	nav.open("/posters/p3");
+	nav.open("/posters");
+	CHECK(nav.depth() == 3);
+	CHECK(nav.current().where_left().opened == "/posters/p3");
+	CHECK(nav.current().where_left().scroll.peek() == 420);
+	// Each address its own.
+	nav.open("/posters/p1");
+	CHECK(nav.current().where_left().opened.empty());
+	CHECK(nav.current().where_left().scroll.peek() == 0);
+}
+
 TEST("a page reads from and runs on its source, which keeps no file ahead of a command unless it keeps files itself") {
 	memory_source data;
 	auto s = tracker();

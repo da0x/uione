@@ -170,9 +170,10 @@ namespace one::desktop {
 		if (w.root && (w.needs_placing || w.placed_at != w.size || w.placed_scale != w.scale)) {
 			w.root->place({0, 0, static_cast<float>(w.size.width), static_cast<float>(w.size.height)});
 			each_element(*w.root, [](element& e) {
-				if (!e.to_top || e.brought) return;
+				if ((!e.to_top && !e.in_view) || e.brought) return;
 				e.brought = true;
-				e.bring_to_top();
+				if (e.to_top) e.bring_to_top();
+				else e.reveal(e.frame);
 			});
 			w.placed_at = w.size;
 			w.placed_scale = w.scale;

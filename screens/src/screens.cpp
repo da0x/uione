@@ -682,12 +682,17 @@ namespace one::screens {
 		std::map<std::string, std::string> params;
 		int at = match(address, params);
 		if (at < 0) return nullptr;
-		return made(static_cast<std::size_t>(at), address, std::move(params), query_of(address));
+		auto p = made(static_cast<std::size_t>(at), address, std::move(params), query_of(address));
+		auto& left = places_[address];
+		if (!left) left = p->place_;
+		p->place_ = left;
+		return p;
 	}
 
 	bool navigator_base::open(const std::string& address) {
 		auto p = page_at(address);
 		if (!p) return false;
+		if (!trail_.empty()) trail_.back()->place_->opened = address;
 		trail_.push_back(std::move(p));
 		changed_.set(changed_.peek() + 1);
 		return true;
@@ -696,6 +701,11 @@ namespace one::screens {
 	bool navigator_base::replace(const std::string& address) {
 		auto p = page_at(address);
 		if (!p) return false;
+		// What another page opened, now shown as this, is this for that page too, so going
+		// back to it finds this one where that one was.
+		for (auto& [at, left] : places_) {
+			if (left->opened == trail_.back()->address()) left->opened = address;
+		}
 		// The page it replaces is kept until the next, as it may be that page's own build
 		// replacing it, like a screen's on open.
 		retired_ = std::move(trail_.back());

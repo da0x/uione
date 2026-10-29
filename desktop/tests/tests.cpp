@@ -640,6 +640,52 @@ TEST("the chosen row and the scroll stay where they were when the view is built 
 	CHECK(opened == "issue-9");  // gone, so the nearest that's left
 }
 
+TEST("a page shown again is scrolled where it was left once what it holds reaches that far, what it was left from given the keyboard and brought into view") {
+	one::desktop::detail::theme_in_use() = &tested_theme();
+	one::desktop::state<float> left(300);
+	one::desktop::state<int> rows(3);
+	int pressed = -1;
+	one::desktop::app::state app;
+	one::desktop::window::state w;
+	w.owner = &app;
+	w.size = {300, 200};
+	w.build = [&] {
+		std::vector<one::desktop::view> shown;
+		for (int i = 0; i < rows.get(); ++i) {
+			auto row = one::desktop::pressable(one::desktop::text("Piece " + std::to_string(i)).height(40), [&pressed, i] { pressed = i; });
+			// The piece it was left from.
+			shown.push_back(i == 9 ? std::move(row).autofocus().brought_into_view() : std::move(row));
+		}
+		return one::desktop::scroll(one::desktop::column(std::move(shown)), left);
+	};
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	// While it's too short to scroll that far, as while what it holds comes in, it's
+	// at the top, and where it was left is kept.
+	CHECK(w.root->children[0]->frame.y == 0);
+	CHECK(left.peek() == 300);
+	rows.set(40);
+	one::desktop::bring_up_to_date(w);
+	CHECK(w.root->children[0]->frame.y == -300);
+	auto& piece = *w.root->children[0]->children[9];
+	CHECK(piece.focused);
+	CHECK(piece.shows_focus());
+	CHECK(piece.handle_key(key(one::desktop::keys::enter)));
+	CHECK(pressed == 9);
+	// Scrolled on, it's kept there.
+	CHECK(w.root->wheel({10, 10}, 0, 100));
+	CHECK(left.peek() == 400);
+	// And shown afresh with one left from further down, that one's brought into view.
+	w.root.reset();
+	left.set(0);
+	w.needs_building = true;
+	one::desktop::bring_up_to_date(w);
+	auto& again = *w.root->children[0]->children[9];
+	CHECK(again.frame.y >= 0);
+	CHECK(again.frame.bottom() <= 200);
+	CHECK(left.peek() > 0);
+}
+
 TEST("a view: rows, a list, buttons, an avatar and a divider, at scale 1") {
 	matches_golden("view-1", {520, 260}, 1, [](one::desktop::canvas& c) {
 		one::desktop::detail::theme_in_use() = &tested_theme();
