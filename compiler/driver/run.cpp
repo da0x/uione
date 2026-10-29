@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <regex>
+#include <string>
+#include <thread>
 
 namespace one::driver {
 
@@ -50,7 +52,10 @@ namespace one::driver {
                 return plan;
             }
             plan.before.push_back({{"cmake", "-S", folder, "-B", folder + "/out"}, "."});
-            plan.before.push_back({{"cmake", "--build", folder + "/out"}, "."});
+            // On every core, as Make otherwise builds one file at a time.
+            std::vector<std::string> build{"cmake", "--build", folder + "/out"};
+            if (unsigned cores = std::thread::hardware_concurrency()) build.insert(build.end(), {"--parallel", std::to_string(cores)});
+            plan.before.push_back({build, "."});
             plan.app = {{folder + "/out/" + program}, "."};
             return plan;
         }
