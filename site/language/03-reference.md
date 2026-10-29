@@ -2607,7 +2607,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   printed portfolio, the site's name large and plain, then what it offers as
   numbered entries between hairlines, each group's title in the margin, or, when
   every offering in a group has an icon, as a launcher, each icon on a tile with its
-  name under it; with no motion at all. The design takes the screen's `hero`, with its
+  name under it, and an offering standing alone, with no others beside it, as a
+  title in the margin like a group's; with no motion at all. The design takes the screen's `hero`, with its
   words and links, the first link the one it's for; its sections of words alone, as
   what the site offers; and its other sections, like one with a form, as what it
   asks. Anything else, like a table, comes before the design, or, in `relay`, right

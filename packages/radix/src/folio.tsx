@@ -5,7 +5,8 @@
 // and plain with its title under it, then everything it offers as numbered entries
 // between hairlines, each group's title in the margin to their left. A group whose
 // offerings all have icons is drawn as a launcher instead, each an icon with its name
-// under it. No motion, no glow and no gradient: only type, rules and the theme's colors.
+// under it, and an offering standing alone is a title in the margin, as a group's is.
+// No motion, no glow and no gradient: only type, rules and the theme's colors.
 
 import type { ReactNode } from "react";
 import type { LandingFeature, LandingProps } from "@uione/react";
@@ -125,11 +126,17 @@ export function Folio(p: LandingProps) {
           )}
         </section>
 
-        {grouped(p.features).map((g, at) => (
-          <Part key={at} overline={g.heading?.overline} title={g.heading?.title} text={g.heading?.text}>
-            {g.features.every((f) => f.icon) ? <Launcher features={g.features} /> : <Entries entries={g.features} />}
-          </Part>
-        ))}
+        {grouped(p.features).map((g, at) =>
+          !g.heading && g.features.length === 1 && !g.features[0].icon ? (
+            <Part key={at} overline={g.features[0].overline} title={g.features[0].title} text={g.features[0].text}>
+              {null}
+            </Part>
+          ) : (
+            <Part key={at} overline={g.heading?.overline} title={g.heading?.title} text={g.heading?.text}>
+              {g.features.every((f) => f.icon) ? <Launcher features={g.features} /> : <Entries entries={g.features} />}
+            </Part>
+          ),
+        )}
 
         {p.statement !== undefined && (
           <section className="grid border-t border-line pt-10 lg:grid-cols-12 lg:gap-12">
