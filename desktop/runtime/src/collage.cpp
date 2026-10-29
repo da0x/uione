@@ -733,6 +733,18 @@ namespace one::desktop::runtime {
 		// or the topmost; none while it isn't held in layers, or has none yet.
 		std::string layer_now(page& p, const collage_spec& spec) { return p.kept<std::string>("collage layer " + spec.key).peek(); }
 
+		// What was last copied or cut from a collage, to be pasted back as itself: its
+		// layers, a group's all it holds, and the SVG put on the clipboard with them.
+		struct copied_layers {
+			std::string svg;
+			std::vector<value> rows;
+		};
+		copied_layers& copied() {
+			static copied_layers kept;
+			return kept;
+		}
+
+
 		// Whether there's a layer for a new object to go in. When it's held in layers and
 		// has none yet, one's made first, Layer 1, and `again` runs once it's there.
 		bool layer_ready(page& p, const collage_spec& spec, std::function<void()> again) {
@@ -746,6 +758,67 @@ namespace one::desktop::runtime {
 				again();
 			});
 			return false;
+		}
+
+		// What was copied, made again where it was, in the current layer, above what's
+		// there: each group before what it holds, in it again; all one step to undo; then
+		// it's picked.
+		void paste_objects(page& p, const collage_spec& spec, const value& layers) {
+			if (spec.add.empty()) return;
+			auto rows = copied().rows;
+			std::set<std::string> ids;
+			for (const auto& r : rows) ids.insert(r["id"].as_string());
+			// Groups first, outermost first, then the rest, as they were stacked.
+			auto nesting = [&](const value& r) {
+				int depth = 0;
+				for (std::string at = r["group"].as_string(); ids.contains(at) && depth < 64; ++depth) {
+					auto up = std::ranges::find_if(rows, [&](const value& o) { return o["id"].as_string() == at; });
+					at = up == rows.end() ? "" : (*up)["group"].as_string();
+				}
+				return depth;
+			};
+			std::ranges::stable_sort(rows, [&](const value& a, const value& b) {
+				bool ga = holds_others(a), gb = holds_others(b);
+				if (ga != gb) return ga;
+				return ga && nesting(a) < nesting(b);
+			});
+			double top = 0;
+			for (const auto& l : layers.as_array()) top = std::max(top, l["depth"].as_double());
+			auto made = std::make_shared<std::map<std::string, std::string>>();
+			auto next = std::make_shared<std::function<void(std::size_t)>>();
+			std::weak_ptr<std::function<void(std::size_t)>> going_on = next;
+			*next = [&p, spec, rows, ids, made, going_on, top](std::size_t i) {
+				std::string layer = layer_now(p, spec);
+				if (i == rows.size()) {
+					// The ones not in another pasted with them, picked.
+					std::vector<std::string> picked;
+					for (const auto& r : rows) {
+						if (!ids.contains(r["group"].as_string())) picked.push_back((*made)[r["id"].as_string()]);
+					}
+					if (picked.size() == 1 && !spec.pick.empty()) p.pick(spec.pick, picked.front());
+					return;
+				}
+				const value& r = rows[i];
+				value again = value::map();
+				for (const auto& [part, field] : spec.fields) {
+					if (part == "group" || part == "hidden" || !r.fields.contains(part)) continue;
+					again.fields[part] = r[part];
+				}
+				again.fields["depth"] = value(top + 1 + static_cast<double>(i));
+				std::string group = r["group"].as_string();
+				if (spec.fields.contains("group")) again.fields["group"] = ids.contains(group) ? value((*made)[group]) : value();
+				if (!spec.parent.empty()) again.fields[spec.parent] = value(spec.subject);
+				if (!spec.layer.empty() && !layer.empty()) again.fields[spec.layer] = value(layer);
+				value sent = collage_fields_of(again, spec.fields);
+				if (i > 0) sent.fields["one:history"] = value("joined");
+				p.run(spec.add, sent, [made, next = going_on.lock(), i, id = r["id"].as_string()](const answer& a) {
+					if (!a || !next) return;
+					(*made)[id] = *a;
+					(*next)(i + 1);
+				});
+			};
+			if (!layer_ready(p, spec, [next] { (*next)(0); })) return;
+			(*next)(0);
 		}
 
 		// A new object put in the layer it goes in.
@@ -943,6 +1016,8 @@ namespace one::desktop::runtime {
 		// What's on the clipboard, pasted: files a file manager copied, or a picture, as
 		// pictures; or words.
 		void paste(page& p, const collage_spec& spec, const value& layers, double width, double height) {
+			// What this copied, still on the clipboard, comes back as itself.
+			if (auto words = desktop::clipboard_text(); words && !copied().rows.empty() && *words == copied().svg) return paste_objects(p, spec, layers);
 			if (auto files = desktop::clipboard_files(); !files.empty()) add_pictures(p, spec, layers, width, height, files, std::nullopt);
 			else if (auto bytes = desktop::clipboard_picture()) add_pictures(p, spec, layers, width, height, {kept_for_now(*bytes)}, std::nullopt);
 			else if (auto words = desktop::clipboard_text(); words && words->find_first_not_of(" \n\t") != std::string::npos) {
@@ -1367,17 +1442,20 @@ namespace one::desktop::runtime {
 
 		// The drawing as a saved SVG, from its vectors: all of it, or only one layer, as
 		// big as that layer, a group's all it holds.
-		std::string svg_of(page& p, const value& layers, double width, double height, const std::string& only) {
+		std::string svg_of(page& p, const value& layers, double width, double height, const std::vector<std::string>& only) {
 			std::vector<model::saved_layer> saved;
 			model::box area{0, 0, width, height};
 			placed groups;
+			std::vector<model::box> around;
 			for (const auto& l : layers.as_array()) {
-				if (!only.empty() && l["id"].as_string() == only) area = box_of(l);
+				if (std::ranges::contains(only, l["id"].as_string())) around.push_back(box_of(l));
 				if (std::string group = l["group"].as_string(); !group.empty()) groups.group_of[l["id"].as_string()] = group;
 			}
+			if (!only.empty() && !around.empty()) area = model::around(around);
 			for (const auto& l : layers.as_array()) {
 				if (holds_others(l)) continue;
-				if (!only.empty() && l["id"].as_string() != only && !groups.inside(l["id"].as_string(), only)) continue;
+				std::string id = l["id"].as_string();
+				if (!only.empty() && std::ranges::none_of(only, [&](const std::string& o) { return o == id || groups.inside(id, o); })) continue;
 				model::box b = box_of(l);
 				model::saved_layer one{.at = {b.x - area.x, b.y - area.y, b.w, b.h}, .opacity = opacity_of(l)};
 				if (is_words(l)) {
@@ -1661,18 +1739,40 @@ namespace one::desktop::runtime {
 						chosen.set(std::vector<std::string>(files->begin(), files->end()));
 					});
 				}).detach();
-			} else if (does == "copy svg" || does == "copy svg picked" || does == "save svg" || does == "save svg picked") {
-				// As SVG, from its vectors: copied as its text, which drawing programs paste, or saved.
-				bool one = does.ends_with("picked"), copying = does.starts_with("copy");
-				if (one && !chosen) p.told().set("Pick a layer first.");
+			} else if (does == "copy svg" || does == "copy svg picked" || does == "cut svg picked" || does == "save svg" || does == "save svg picked") {
+				// As SVG, from its vectors: copied as its text, which drawing programs paste, or
+				// saved. What's picked, several or one, is kept too, to be pasted back as itself.
+				bool one = does.ends_with("picked"), copying = !does.starts_with("save"), cutting = does.starts_with("cut");
+				std::vector<std::string> picks = w->chosen.size() > 1 ? w->chosen : picked.empty() ? std::vector<std::string>{} : std::vector<std::string>{picked};
+				if (one && picks.empty()) p.told().set("Pick something first.");
 				else if (layers.as_array().empty() || width <= 0 || height <= 0) p.told().set(copying ? "There's nothing to copy yet." : "There's nothing to save yet.");
 				else if (copying) {
-					desktop::copy_text(svg_of(p, layers, width, height, one ? picked : ""));
-					p.told().set(one ? "Copied the layer as SVG. Paste it anywhere." : "Copied the drawing as SVG. Paste it anywhere.");
+					std::string svg = svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{});
+					desktop::copy_text(svg);
+					copied() = {};
+					if (one) {
+						copied().svg = svg;
+						for (const auto& l : layers.as_array()) {
+							std::string id = l["id"].as_string();
+							if (std::ranges::any_of(picks, [&](const std::string& o) { return o == id || w->inside(id, o); })) copied().rows.push_back(l);
+						}
+					}
+					if (cutting && !spec.remove.empty()) {
+						// Taken away, all of it, in one step.
+						bool joined = false;
+						for (const auto& l : copied().rows) {
+							value sent = value(fields{{"id", l["id"]}});
+							if (std::exchange(joined, true)) sent.fields["one:history"] = value("joined");
+							p.run(spec.remove, sent);
+						}
+						w->chosen.clear();
+						if (!spec.pick.empty()) p.pick(spec.pick, "");
+					}
+					p.told().set(!one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG.");
 				} else {
 					std::string name = data["title"].as_string().empty() ? data["name"].as_string() : data["title"].as_string();
 					if (name.empty()) name = app_name();
-					save_svg(p, svg_of(p, layers, width, height, one ? picked : ""), one ? name + " layer" : name);
+					save_svg(p, svg_of(p, layers, width, height, one ? picks : std::vector<std::string>{}), one ? name + " layer" : name);
 				}
 			} else if (does == "copy" || does == "copy picked" || does == "save" || does == "save picked") {
 				// Copied for another program to paste, or saved: all of it, or the picked layer.

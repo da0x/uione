@@ -906,6 +906,17 @@ TEST_CASE("a collage is copied or saved as a picture, all of it or its picked la
 )"));
     CHECK(as_svg["web/src/screens/main.tsx"].find(R"(does="save svg" label="Save SVG")") != std::string::npos);
     CHECK(as_svg["desktop/src/screens/main.cpp"].find(R"(.does = "copy svg picked", .label = "Copy SVG")") != std::string::npos);
+
+    // Cut: copied, then taken away, so it's the pick's, kept as SVG, and the collage deletes.
+    auto cut = [&](const std::string& as, const std::string& deletes) {
+        return on_screen("\t\tpick layer from poster_page.layers\n\t\tcollage poster_page.layers size width height {\n" + deletes + "\t\t\tover layer {\n\t\t\t\tcut layer as " + as + " \"Cut\" icon cut key ctrl+x\n\t\t\t}\n\t\t}\n");
+    };
+    CHECK(messages(cut("svg", "")) == std::vector<std::string>{"52: a cut takes the collage's pick away, so it names its pick, as in cut layer as svg, and the collage says delete layer::delete"});
+    CHECK(messages(cut("picture", "\t\t\tdelete layer::delete\n")) == std::vector<std::string>{"53: a cut is pasted back as what it was, so it's kept as svg, as in cut layer as svg"});
+    auto cuts = built(cut("svg", "\t\t\tdelete layer::delete\n"));
+    CAPTURE(cuts["web/src/screens/main.tsx"]);
+    CHECK(cuts["web/src/screens/main.tsx"].find(R"(does="cut svg picked" label="Cut" icon="cut" keys={["ctrl+x"]})") != std::string::npos);
+    CHECK(cuts["desktop/src/screens/main.cpp"].find(R"(.does = "cut svg picked", .label = "Cut", .icon = "cut")") != std::string::npos);
 }
 
 TEST_CASE("cards show a file each row holds as a picture on top, fitted in or filling its place") {

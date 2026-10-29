@@ -423,7 +423,7 @@ namespace one::language {
                             : n.does == kind::paste      ? "collage.paste"
                             : n.does == kind::screenshot ? "collage.screenshot"
                             : n.does == kind::add_pictures ? "pictures.choose"
-                            : n.does == kind::copy       ? "collage.copy"
+                            : n.does == kind::copy || n.does == kind::cut ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
                             : n.does == kind::ungroup || n.does == kind::group_picked ? "collage.group"
                             : n.does == kind::raise || n.does == kind::lower ? "collage.order"

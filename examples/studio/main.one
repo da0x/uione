@@ -369,6 +369,7 @@ namespace studio at / {
 					crop "Crop" icon crop key c
 					edit words "Edit" icon edit key enter
 					copy layer as picture "Copy" icon copy
+					cut layer as svg "Cut" icon cut key ctrl+x
 					layer::delete "Delete" icon delete key delete
 				}
 			}

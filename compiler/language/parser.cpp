@@ -1757,7 +1757,7 @@ namespace one::language {
             // Alone, or with no words and only an icon, keys or when after it, as in crop key c.
             bool alone = peek(1).kind != token_kind::scope &&
                          (peek(1).kind != token_kind::identifier || peek(1).text == "icon" || peek(1).text == "key" || peek(1).text == "when");
-            bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
+            bool as_picture = (at_word("copy") || at_word("save") || at_word("cut")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
                               peek(3).kind == token_kind::identifier && (peek(3).text == "picture" || peek(3).text == "svg");
             // zoom in, zoom out, zoom to fit: how near the screen's collage is looked at.
             bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
@@ -1784,6 +1784,7 @@ namespace one::language {
                               : first == "paste"      ? collage_button::kind::paste
                               : first == "screenshot" ? collage_button::kind::screenshot
                               : first == "copy"       ? collage_button::kind::copy
+                              : first == "cut"        ? collage_button::kind::cut
                               : first == "save"       ? collage_button::kind::save
                               : first == "ungroup"    ? collage_button::kind::ungroup
                               : first == "group"      ? collage_button::kind::group_picked

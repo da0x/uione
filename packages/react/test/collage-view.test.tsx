@@ -431,6 +431,53 @@ describe("a layer drawn on a collage", () => {
     await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("g"));
   });
 
+  it("cuts what's picked, a group with all it holds, in one step, and pastes it back as itself, in the current layer, on top", async () => {
+    act(() => setPicked("/ layer", "g"));
+    let made = 0;
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: `n${++made}` }), "studio::layer::delete": (input) => ({ id: String(input["id"]) }) } });
+    const shape = (id: string, x: number, group: string) => ({ id, shape: "rectangle", fill: "#2e86de", x, y: 100, w: 100, h: 100, group, depth: 1 });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [{ id: "g", x: 0, y: 0, w: 0, h: 0, depth: 0 }, shape("a", 100, "g"), shape("b", 300, "g"), { ...shape("c", 700, ""), depth: 4 }] }, "p1");
+    let clipboard = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (text: string) => void (clipboard = text), readText: async () => clipboard, read: async () => [] },
+    });
+    const fields = { ...namedLikeParts, shape: "shape", fill: "fill", group: "group" };
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <CollageButton collage="/ layer" does="cut svg picked" label="Cut" />
+          <CollageButton collage="/ layer" does="paste" label="Paste" />
+          <Collage view={page} list="layers" width="width" height="height" fields={fields} pick="/ layer" name="/ layer" add="studio::layer::create" remove="studio::layer::delete" paste />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    await act(async () => {});
+    fireEvent.click(drawn.getByRole("button", { name: "Cut" }));
+    await waitFor(() => expect(source.runs.length).toBe(3));
+    expect(source.runs.map((r) => [r.command, r.input["id"], r.input["one:history"]])).toEqual([
+      ["studio::layer::delete", "g", undefined],
+      ["studio::layer::delete", "a", "joined"],
+      ["studio::layer::delete", "b", "joined"],
+    ]);
+    await waitFor(() => expect(clipboard).toContain("<svg"));
+    expect(drawn.getByTestId("picked").textContent).toBe("");
+    // Pasted: the group first, then each it holds, in it again, above all there is.
+    fireEvent.click(drawn.getByRole("button", { name: "Paste" }));
+    await waitFor(() => expect(source.runs.length).toBe(6));
+    const pasted = source.runs.slice(3).map((r) => r.input);
+    expect(pasted[0]).toMatchObject({ x: 100, y: 100, w: 300, h: 100, depth: 5, group: null });
+    expect(pasted[0]!["one:history"]).toBeUndefined();
+    expect(pasted[1]).toMatchObject({ x: 100, shape: "rectangle", fill: "#2e86de", depth: 6, group: "n1", "one:history": "joined" });
+    expect(pasted[2]).toMatchObject({ x: 300, depth: 7, group: "n1", "one:history": "joined" });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("n1"));
+  });
+
   it("picks what a group holds when it's pressed twice", async () => {
     act(() => setPicked("/ layer", undefined));
     const source = memorySource();

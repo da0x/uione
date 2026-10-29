@@ -3326,7 +3326,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3649,6 +3649,12 @@ namespace one::language {
                     keys(does->keys);
                     using kind = collage_button::kind;
                     bool takes_pictures = does->does == kind::paste || does->does == kind::screenshot || does->does == kind::add_pictures;
+                    if (does->does == kind::cut) {
+                        // Cut: copied, then deleted, so it's the pick, and the collage deletes.
+                        bool picks = does->of && std::ranges::any_of(collages_, [&](const collage_item* c) { return c->over && *c->over == *does->of && c->remove; });
+                        if (!picks) error(item.where, "a cut takes the collage's pick away, so it names its pick, as in cut layer as svg, and the collage says delete layer::delete");
+                        else if (!does->svg) error(item.where, "a cut is pasted back as what it was, so it's kept as svg, as in cut layer as svg");
+                    }
                     if (does->of) {
                         // Copied or saved: the collage's view, all of it, or its pick, one layer.
                         bool named = std::ranges::any_of(collages_, [&](const collage_item* c) { return c->view.text() == *does->of || (c->over && *c->over == *does->of); });

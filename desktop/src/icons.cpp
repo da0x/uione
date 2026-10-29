@@ -123,6 +123,8 @@ namespace one::desktop {
 			    {"group", {path("M1.5 1.5h13v13h-13zM4 4h5v5H4zM7 7h5v5H7z")}},
 			    {"ungroup", {path("M2 2.5h6v6H2zM8 7.5h6v6H8z")}},
 			    // How see-through: a circle, half of it shaded.
+			    // Cut away: a pair of scissors.
+			    {"cut", {path("M5.5 4.5A2 2 0 1 1 1.5 4.5 2 2 0 1 1 5.5 4.5zM5.5 11.5A2 2 0 1 1 1.5 11.5 2 2 0 1 1 5.5 11.5zM5.2 5.6l9.3 6.4M5.2 10.4l9.3-6.4")}},
 			    // A star of five points, and a polygon of five corners, as tools draw them.
 			    {"star", {path("M8.0 1.9 L9.72 6.03 L14.18 6.39 L10.78 9.3 L11.82 13.66 L8.0 11.33 L4.18 13.66 L5.22 9.3 L1.82 6.39 L6.28 6.03z")}},
 			    {"polygon", {path("M8.0 1.9 L14.18 6.39 L11.82 13.66 L4.18 13.66 L1.82 6.39z")}},

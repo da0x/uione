@@ -2356,7 +2356,13 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     text, its SVG layers as their own vectors, and its pictures held in it, cropped,
     turned and rounded as they're shown. It's as big as the collage in its own units,
     with nothing behind its layers, so it's clear wherever nothing is. `copy layer as
-    svg` copies one as SVG's text, which drawing programs paste. A picture's halo,
+    svg` copies one as SVG's text, which drawing programs paste. `cut layer as svg
+    "Cut" icon cut key ctrl+x` copies it the same way, then deletes it, all it holds
+    with it, in one step; the collage must say `delete`. What's copied or cut this
+    way, the pick or each of several chosen, is kept too: while the clipboard still
+    holds that SVG, a paste makes it again as itself, in the current layer, above
+    what's there, groups and all, in one step, so it can move between layers. A
+    picture's halo,
     what fills around it and matched colors are drawn effects, so an SVG leaves them
     out. A terminal doesn't save or copy one yet.
 - `layers drawing_page.layers { hide layer::show  order layer::update  delete

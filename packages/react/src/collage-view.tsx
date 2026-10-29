@@ -578,15 +578,16 @@ async function drawnWhole(layers: Row[], W: number, H: number, scale: number, ad
 // The drawing as a saved SVG, from its vectors: all of it, or only one layer, as big as
 // that layer. Pictures are read first, and held in it as data: addresses. The same as
 // the desktop's.
-async function svgOf(layers: Row[], W: number, H: number, address: ((path: string) => Promise<string>) | undefined, only?: string): Promise<string> {
-  const one = only ? layers.find((l) => l["id"] === only) : undefined;
-  const area = one ? boxOf(one) : { x: 0, y: 0, w: W, h: H };
+async function svgOf(layers: Row[], W: number, H: number, address: ((path: string) => Promise<string>) | undefined, only?: string[]): Promise<string> {
+  const ones = only ? layers.filter((l) => only.includes(str(l["id"]))) : [];
+  const area = ones.length > 0 ? around(ones.map(boxOf)) : { x: 0, y: 0, w: W, h: H };
   const saved: SavedLayer[] = [];
   const groupOf = groupsOf(layers);
   // A group's all it holds.
   for (const l of layers) {
     if (holdsOthers(l)) continue;
-    if (only && l["id"] !== only && !inGroup(groupOf, str(l["id"]), only)) continue;
+    const id = str(l["id"]);
+    if (only && !only.some((o) => o === id || inGroup(groupOf, id, o))) continue;
     const b = boxOf(l);
     const at = { x: b.x - area.x, y: b.y - area.y, w: b.w, h: b.h };
     const opacity = opacityOf(l);
@@ -650,8 +651,12 @@ function ask(name: string, does: string) {
 // without asking to read the clipboard.
 const pastes = new Map<string, { files: File[]; words: string }>();
 
+// What was last copied or cut from a collage, to be pasted back as itself: its layers, a
+// group's all it holds, and the SVG put on the clipboard with them.
+let copiedLayers: { svg: string; rows: Row[] } = { svg: "", rows: [] };
+
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "raise" | "lower" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "cut svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -1017,6 +1022,8 @@ export function Collage({
   // Words pasted: a layer of them in the middle, a twelfth of its height; or, when
   // they're an SVG's, as a drawing program copies one, that SVG, as one dropped is.
   const addWords = async (words: string) => {
+    // What this copied, still on the clipboard, comes back as itself.
+    if (copiedLayers.rows.length > 0 && words === copiedLayers.svg) return pasteLayers();
     const start = words.replace(/^\uFEFF/, "").trimStart();
     if (paste && start.startsWith("<") && words.includes("<svg")) return void addPictures([new File([words], "pasted.svg", { type: "image/svg+xml" })]);
     if (!add || !("words" in fields)) return;
@@ -1029,6 +1036,43 @@ export function Collage({
     const top = layers[layers.length - 1];
     if (top && top["depth"] !== undefined) made["depth"] = num(top["depth"]) + 1;
     void send(add, made);
+  };
+  // What was copied, made again where it was, in the current layer, above what's there:
+  // each group before what it holds, in it again; all one step to undo; then it's
+  // picked. The same as the desktop's.
+  const pasteLayers = async () => {
+    if (!add) return;
+    const rows = [...copiedLayers.rows];
+    const ids = new Set(rows.map((r) => str(r["id"])));
+    // Groups first, outermost first, then the rest, as they were stacked.
+    const nesting = (r: Row) => {
+      let depth = 0;
+      for (let at = str(r["group"]); ids.has(at) && depth < 64; depth++) at = str(rows.find((o) => str(o["id"]) === at)?.["group"]);
+      return depth;
+    };
+    rows.sort((a, b) => {
+      const ga = holdsOthers(a), gb = holdsOthers(b);
+      if (ga !== gb) return ga ? -1 : 1;
+      return ga ? nesting(a) - nesting(b) : 0;
+    });
+    const top = layers.reduce((most, l) => Math.max(most, num(l["depth"])), 0);
+    const inLayer = await layerFor();
+    const made = new Map<string, string>();
+    for (const [i, r] of rows.entries()) {
+      const again: Row = {};
+      for (const part of Object.keys(fields)) if (part !== "group" && part !== "hidden" && part in r) again[part] = r[part];
+      again["depth"] = top + 1 + i;
+      const group = str(r["group"]);
+      if ("group" in fields) again["group"] = ids.has(group) ? (made.get(group) ?? null) : null;
+      if (parent) again[parent] = subject;
+      if (layerField && inLayer) again[layerField] = inLayer;
+      if (i > 0) again["one:history"] = "joined";
+      const reply = await send(add, again);
+      if (reply?.id) made.set(str(r["id"]), reply.id);
+    }
+    // The ones not in another pasted with them, picked.
+    const outer = rows.filter((r) => !ids.has(str(r["group"])));
+    if (outer.length === 1) pickRow(made.get(str(outer[0]!["id"])) ?? "");
   };
   // What's on the clipboard, pasted: pictures, or words.
   const pasteNow = async () => {
@@ -1166,17 +1210,32 @@ export function Collage({
       pickRow("");
     } else if (asking === "edit" && chosen && isWords(chosen) && write) {
       w.editing = { id: picked, words: str(chosen["words"]), caret: str(chosen["words"]).length, fresh: false };
-    } else if (asking.startsWith("copy svg") || asking.startsWith("save svg")) {
-      // As SVG, from its vectors: copied as its text, which drawing programs paste, or saved.
-      const one = asking.endsWith("picked"), copying = asking.startsWith("copy");
-      if (one && !chosen) say({ text: "Pick a layer first." });
+    } else if (asking.startsWith("copy svg") || asking.startsWith("cut svg") || asking.startsWith("save svg")) {
+      // As SVG, from its vectors: copied as its text, which drawing programs paste, or
+      // saved. What's picked, several or one, is kept too, to be pasted back as itself.
+      const one = asking.endsWith("picked"), copying = !asking.startsWith("save"), cutting = asking.startsWith("cut");
+      const picks = w.chosen.length > 1 ? [...w.chosen] : picked ? [picked] : [];
+      if (one && picks.length === 0) say({ text: "Pick something first." });
       else if (layers.length === 0 || W <= 0 || H <= 0) say({ text: copying ? "There's nothing to copy yet." : "There's nothing to save yet." });
       else {
-        const svg = svgOf(layers, W, H, address, one ? picked : undefined);
+        const svg = svgOf(layers, W, H, address, one ? picks : undefined);
         if (copying) {
+          const rows = one ? layers.filter((l) => picks.some((o) => o === str(l["id"]) || inGroup(groupOf, str(l["id"]), o))) : [];
+          copiedLayers = { svg: "", rows: [] };
+          if (cutting && remove) {
+            // Taken away, all of it, in one step.
+            void (async () => {
+              for (const [i, l] of rows.entries()) await send(remove, { id: str(l["id"]), ...(i > 0 ? { "one:history": "joined" } : {}) });
+            })();
+            w.chosen = [];
+            pickRow("");
+          }
           void svg
-            .then((text) => navigator.clipboard.writeText(text))
-            .then(() => say({ text: one ? "Copied the layer as SVG. Paste it anywhere." : "Copied the drawing as SVG. Paste it anywhere." }))
+            .then((text) => {
+              if (one) copiedLayers = { svg: text, rows };
+              return navigator.clipboard.writeText(text);
+            })
+            .then(() => say({ text: !one ? "Copied the drawing as SVG. Paste it anywhere." : cutting ? "Cut. Paste it into any layer, or anywhere as SVG." : "Copied. Paste it into any layer, or anywhere as SVG." }))
             .catch(() => say({ text: "This browser didn't let the page copy.", problem: true }));
         } else {
           const title = str(data["title"]) || str(data["name"]) || site.name;

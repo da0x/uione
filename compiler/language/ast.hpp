@@ -971,7 +971,7 @@ namespace one::language {
     // crop "Crop" icon crop key c, edit words "Edit", add words "Text": what the screen's
     // collage does to its picked layer, or adds to it, from a toolbar or over the layer.
     struct collage_button {
-        enum class kind { crop, edit_words, add_words, add_pictures, paste, screenshot, copy, save, ungroup, group_picked, raise, lower, zoom_in, zoom_out, zoom_fit };
+        enum class kind { crop, edit_words, add_words, add_pictures, paste, screenshot, copy, save, cut, ungroup, group_picked, raise, lower, zoom_in, zoom_out, zoom_fit };
         kind does = kind::crop;
         // copy layer as picture, save poster_page as picture: the picked layer, or all of it.
         std::optional<std::string> of;
@@ -1019,6 +1019,7 @@ namespace one::language {
             case kind::screenshot: return "screenshot";
             case kind::copy: return std::string(b.svg ? "copy svg" : "copy") + (picked ? " picked" : "");
             case kind::save: return std::string(b.svg ? "save svg" : "save") + (picked ? " picked" : "");
+            case kind::cut: return std::string(b.svg ? "cut svg" : "cut") + (picked ? " picked" : "");
             case kind::ungroup: return "ungroup";
             case kind::group_picked: return "group picked";
             case kind::raise: return "raise";
@@ -1041,6 +1042,7 @@ namespace one::language {
             case kind::screenshot: return "Screenshot";
             case kind::copy: return "Copy";
             case kind::save: return "Save";
+            case kind::cut: return "Cut";
             case kind::ungroup: return "Ungroup";
             case kind::group_picked: return "Group";
             case kind::raise: return "Raise";
