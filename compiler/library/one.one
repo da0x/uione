@@ -118,9 +118,10 @@ namespace one {
 		// The uione it's built with, like "0.18.0", which one upgrade moves on.
 		one         version
 		// Another project this one is built on, like a hosted edition on an open-source
-		// app: a project beside it by name, like extends tracker, or a folder by its
-		// path. Its files are this project's too, and its settings are taken where this
-		// one doesn't say them.
+		// app: a project beside it by name, like extends tracker, a folder by its
+		// path, or a release of a repository, like extends "github.com/da0x/tracker"
+		// "0.1.0". Its files are this project's too, and its settings are taken where
+		// this one doesn't say them.
 		extends     base_project
 		// What the site is called, when it isn't the project's own name.
 		title       text

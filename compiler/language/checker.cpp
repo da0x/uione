@@ -1217,6 +1217,17 @@ namespace one::language {
                     check_value(s, *f, s.to, true);
                     return;
                 }
+                // extends "github.com/da0x/tracker" "0.1.0": a repository's release.
+                if (s.key == "extends" && names_a_release(s)) {
+                    if (!repository_address(s.value)) {
+                        error(s.where, "extends names a repository by its host and path, like extends \"github.com/da0x/tracker\" \"0.1.0\"");
+                    } else if (!release_version(s.to)) {
+                        error(s.where, "extends names a release by its version, like extends \"" + s.value + "\" \"0.1.0\"");
+                    } else if (!std::filesystem::is_directory(kept_release(s))) {
+                        error(s.where, "there's no release " + s.to + " of " + s.value + " to extend; it's fetched from https://" + s.value + ", tagged v" + s.to + " or " + s.to);
+                    }
+                    return;
+                }
                 if (!s.to.empty()) error(s.where, s.key + " takes one value");
                 // The icon is an SVG, so it's sharp at any size.
                 if (s.key == "icon" && !s.value.ends_with(".svg")) {

@@ -326,7 +326,11 @@ doesn't stand in for a screen reader or a magnifier.
 
 `extends tracker` builds the project on another one: a hosted edition, say, on an
 open-source app kept in a repository of its own. A name is a project's folder beside
-this one's, and a path in quotes is anywhere, `extends "../tracker"`. The other
+this one's, a path in quotes is anywhere, `extends "../tracker"`, and a repository
+and a release name one that's published, `extends "github.com/da0x/tracker"
+"0.1.0"`: it's fetched once, over https, at its tag, `v0.1.0` or else `0.1.0`, and
+kept in `~/.cache/uione/projects`, so the project names no folder on anyone's
+computer and builds the same everywhere. The other
 project's files are this project's too, checked and built together, and a file one of
 them names, like `markdown "license/*.md"`, is still found beside it. This project
 adds what it likes: namespaces, entities, screens, roles, and screens in a namespace

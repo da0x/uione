@@ -56,6 +56,11 @@ namespace one::driver {
                 }
             }
             if (!extends) break;
+            std::string why;
+            if (!language::fetch_release(*extends, why)) {
+                found.push_back({from, extends->where, why});
+                break;
+            }
             std::string next = language::extended_folder(language::folder_of(from), *extends);
             if (!fs::is_directory(next)) break;
             if (seen.contains(canonical(next))) {
