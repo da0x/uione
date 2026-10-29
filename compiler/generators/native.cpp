@@ -2649,6 +2649,11 @@ namespace one::generators {
             out.line();
             out.line("set(CMAKE_CXX_STANDARD 26)");
             out.line("set(CMAKE_CXX_STANDARD_REQUIRED ON)");
+            out.line("# Built optimized unless another build is asked for, here or by CMAKE_BUILD_TYPE in");
+            out.line("# the environment: unoptimized, a camera's picture takes seconds to read.");
+            out.open("if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)");
+            out.line("set(CMAKE_BUILD_TYPE Release CACHE STRING \"how the app is built\" FORCE)");
+            out.close("endif()");
             out.line();
             out.line("# uione's libraries: a checkout of uione named by UIONE, or the release installed with");
             out.line("# the compiler, in ~/.local/share/uione/" + std::string(version) + ".");
