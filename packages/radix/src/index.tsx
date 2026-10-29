@@ -371,7 +371,8 @@ function Options({ label, icon, tool, open, onToggle, onClose, children }: Optio
         } ${open ? "border-accent/50 bg-accent-soft text-accent" : ""}`}
       >
         {icon && buttonIcons[icon]}
-        <span className="whitespace-nowrap leading-none">{label}</span>
+        {/* Small, as its group's other tools are: its icon alone, its words its hint. */}
+        <span className={tool === "small" && icon ? "sr-only" : "whitespace-nowrap leading-none"}>{label}</span>
       </button>
       {open &&
         under &&
