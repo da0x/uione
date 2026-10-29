@@ -102,6 +102,10 @@ namespace one::screens {
 	// give it gave it.
 	value last_given(page_base& p, const std::string& command);
 	void remember_given(page_base& p, const std::string& command, const value& given);
+	// What a collage's style applies to, by its pick's name: each of several chosen, or
+	// all a picked group holds; none while one alone is picked. Said by the collage.
+	std::vector<std::string> styled(page_base& p, const std::string& pick);
+	void style_these(page_base& p, const std::string& pick, std::vector<std::string> ids);
 	// Whether what a button gives is what's remembered, so it's drawn pressed.
 	bool holds_last_given(page_base& p, const command_button& b);
 	// What a screen does as it's opened, once a visit, the first of its lines that

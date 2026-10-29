@@ -1318,11 +1318,12 @@ namespace one::generators {
                     }
                     // A command on what's picked, like layer::delete, acts on the picked row,
                     // and is there only while one is.
-                    std::string on_pick;
+                    std::string on_pick, pick_name;
                     if (id.empty() && entity && command.substr(command.rfind("::") + 2) != "create") {
                         for (const auto& [name, of] : picks_) {
                             if (of.entity != entity->name) continue;
                             on_pick = picked(parts, name);
+                            pick_name = route_ + " " + name;
                             id = " id={" + on_pick + "?.id as string | undefined}";
                             break;
                         }
@@ -1396,6 +1397,7 @@ namespace one::generators {
                     std::string then = button->then_open ? " thenOpen=" + web_detail::js_string(full_route(ns, *button->then_open)) : "";
                     if (button->about) then += " about=" + web_detail::js_string(*button->about);
                     if (remembers) then += " remembers";
+                    if (remembers && !pick_name.empty()) then += " picks=" + web_detail::js_string(pick_name);
                     std::string icon = button->icon ? " icon=" + web_detail::js_string(*button->icon) : "";
                     if (std::string swatch = screens::swatch_of(*button, collage_colors(ns)); !swatch.empty()) icon += " swatch=" + web_detail::js_string(swatch);
                     out.line("<Command name=" + web_detail::js_string(command) + id + label + icon + keys_of(button->keys) + given + slide + pressed + then + when + allowed(parts, ns, command) + " />");

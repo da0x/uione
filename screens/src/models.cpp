@@ -470,6 +470,13 @@ namespace one::screens {
 		kept.set(std::move(now));
 	}
 
+	std::vector<std::string> styled(page_base& p, const std::string& pick) { return p.kept<std::vector<std::string>>("styled " + pick).get(); }
+
+	void style_these(page_base& p, const std::string& pick, std::vector<std::string> ids) {
+		auto kept = p.kept<std::vector<std::string>>("styled " + pick);
+		if (kept.peek() != ids) kept.set(std::move(ids));
+	}
+
 	bool holds_last_given(page_base& p, const command_button& b) {
 		value kept = last_given(p, b.command);
 		if (!b.fields.is_map() || b.fields.as_map().empty()) return false;

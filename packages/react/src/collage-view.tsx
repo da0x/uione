@@ -24,7 +24,7 @@ import type { ViewState } from "./data.js";
 import { useUI } from "./ui.js";
 import { useSaying } from "./said.js";
 import { useSite } from "./app.js";
-import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { OverKind, OverLayer, OverRun, choosePictures, lastGiven, styleThese, hintOf, setChosen, setPicked, typing, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 
 type Row = Record<string, unknown>;
 
@@ -1591,6 +1591,12 @@ export function Collage({
     };
     canvas.addEventListener("wheel", turned, { passive: false });
     return () => canvas.removeEventListener("wheel", turned);
+  });
+  // What a style applies to: each of several chosen, or all a picked group holds.
+  useEffect(() => {
+    if (!pick) return;
+    const allIn = (top: string) => layers.filter((l) => !holdsOthers(l) && (str(l["id"]) === top || inGroup(groupOf, str(l["id"]), top))).map((l) => str(l["id"]));
+    styleThese(pick, w.chosen.length > 1 ? w.chosen.flatMap(allIn) : chosen && holdsOthers(chosen) ? allIn(picked) : []);
   });
   // Drawn again as light and dark trade places, by the page's switch or the system's,
   // as its colors come from the theme.

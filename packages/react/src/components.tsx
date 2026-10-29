@@ -11,7 +11,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { partsOf } from "./keys.js";
 import { ShownPath, fill, useConfirmContext, useFill, usePageTitle, useSignIn, useSite } from "./app.js";
-import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
+import { hintOf, rememberGiven, setPicked as pickRow, useInGroup, useInOptions, useLastGiven, useOverRun, useStyled, useKeys, useOff, usePickedId, useTool } from "./workspace.js";
 import type { BoardCard, CanvasRegion, ChartProps, FieldProps, Filtered, Hue, LandingFeature, LandingProps, LinkProps, PipelineRow, TrackStep } from "./contract.js";
 import { readValue, scaleTop, seriesOf, toneOfState, valueAt, type ChartUnit } from "./series.js";
 import { calendarGo, calendarOf, dateOf, dayOf, movedTo } from "./calendar.js";
@@ -1057,6 +1057,7 @@ export function Command({
   slide,
   color,
   remembers = false,
+  picks,
 }: {
   name: string;
   id?: string;
@@ -1073,6 +1074,7 @@ export function Command({
   slide?: { field: string; from: number; to: number; by: number; now: unknown }; // drawn as a slider from what it is now, run as it's let go
   color?: { field: string; now: unknown }; // or as a color picker, run with each one chosen
   remembers?: boolean; // what it gives remembered for what's drawn next; with nothing to act on, only that
+  picks?: string; // and the pick whose collage says what it acts on, several chosen or a group's all
 }) {
   const ui = useUI();
   const runner = useConfirmedRunner();
@@ -1089,16 +1091,26 @@ export function Command({
   const overRun = useOverRun();
   // With nothing to act on, one whose values are remembered for what's drawn next only
   // remembers them, pressed while they're what's remembered.
-  const onlyRemembers = remembers && !id;
+  // A style given to several chosen, or a group, goes to each, in one step.
+  const many = useStyled(picks ?? "");
+  const several = remembers && Boolean(picks) && many.length > 0;
+  const onlyRemembers = remembers && !id && !several;
+  const give = (input: Record<string, unknown>) => {
+    if (!several) return void runner.run(name, input);
+    void (async () => {
+      for (const [i, each] of many.entries()) await replier.reply(name, { ...input, id: each, ...(i > 0 ? { "one:history": "joined" } : {}) });
+    })();
+  };
   const last = useLastGiven(name);
   if (onlyRemembers) pressed = Object.keys(given ?? {}).length > 0 && Object.entries(given ?? {}).every(([field, v]) => sameValue(last[field] ?? null, v));
   const settle = (input: Record<string, unknown>) => {
     if (remembers) rememberGiven(name, input);
-    if (!onlyRemembers) void runner.run(name, input);
+    if (!onlyRemembers) give(input);
   };
   const run = () => {
     if (remembers) rememberGiven(name, sent);
     if (onlyRemembers) return;
+    if (several) return give(sent);
     if (overRun?.(name, sent)) return;
     if (!thenOpen) return void runner.run(name, sent);
     // What it made, opened: its id in the route's last parameter.

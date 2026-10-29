@@ -678,7 +678,8 @@ TEST_CASE("a collage draws with what a command's buttons last gave, and those bu
     CHECK(web.find(R"( remembers)") != std::string::npos);
     CHECK(web.find(R"(when={layer !== null})") == std::string::npos);
     CHECK(native.find(R"(.with = {"x"}, .with_from = "studio::layer::place")") != std::string::npos);
-    CHECK(native.find(R"(.remembers = true)") != std::string::npos);
+    CHECK(native.find(R"(.remembers = true, .picks = "/posters/:poster layer")") != std::string::npos);
+    CHECK(web.find(R"( remembers picks="/posters/:poster layer")") != std::string::npos);
     // Only what the command changes.
     std::string wrong = body;
     wrong.replace(wrong.find("with x from"), std::string("with x from").size(), "with depth from");

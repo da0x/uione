@@ -776,11 +776,12 @@ namespace one::generators {
             bool named = entity && command.substr(command.rfind("::") + 2) != "create" && screens::names_parameter(route_, entity->name) && model_.entity_named(ns, entity->name);
             // A command on what's picked, like layer::delete, acts on the picked row, and
             // is there only while one is.
-            std::string on_pick;
+            std::string on_pick, pick_name;
             if (!named && entity && command.substr(command.rfind("::") + 2) != "create") {
                 for (const auto& [name, of] : picks_) {
                     if (of.entity == entity->name) {
                         on_pick = picked(parts, name);
+                        pick_name = route_ + " " + name;
                         break;
                     }
                 }
@@ -853,6 +854,7 @@ namespace one::generators {
             if (button.about) out += ", .about = " + str(*button.about);
             out += slide;
             if (remembers) out += ", .remembers = true";
+            if (remembers && !pick_name.empty()) out += ", .picks = " + str(pick_name);
             return out + "})";
         }
 

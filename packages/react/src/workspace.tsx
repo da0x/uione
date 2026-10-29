@@ -264,6 +264,29 @@ export function rememberGiven(command: string, given: Record<string, unknown>) {
   giving.forEach((changed) => changed());
 }
 
+// What a collage's style applies to, by its pick's name: each of several chosen, or all
+// a picked group holds; none while one alone is picked. Said by the collage. The same
+// as the desktop's.
+const styledNow = new Map<string, string[]>();
+const styling = new Set<() => void>();
+const noneStyled: string[] = [];
+export function useStyled(pick: string): string[] {
+  return useSyncExternalStore(
+    (changed) => {
+      styling.add(changed);
+      return () => styling.delete(changed);
+    },
+    () => styledNow.get(pick) ?? noneStyled,
+    () => noneStyled,
+  );
+}
+export function styleThese(pick: string, ids: string[]) {
+  const was = styledNow.get(pick) ?? noneStyled;
+  if (was.length === ids.length && was.every((id, i) => id === ids[i])) return;
+  styledNow.set(pick, ids);
+  styling.forEach((changed) => changed());
+}
+
 export function Choose({ name, choice, first, label, icon, keys }: { name: string; choice: string; first: string; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";

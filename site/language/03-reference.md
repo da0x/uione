@@ -2250,7 +2250,9 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     them, as a drawing program draws in the colors last chosen, or else as the draw
     gives them. Those buttons stay on with nothing picked, and then only remember what
     they give, pressed while it's what's remembered; with a layer picked they change it
-    and remember too. The command is one on the collage's layers that changes each.
+    and remember too. With several chosen, or a group picked, they change each chosen,
+    or all the group holds, in one step. The command is one on the collage's layers
+    that changes each.
   - Every collage can be looked at nearer: Ctrl and the wheel, or a trackpad's pinch,
     zoom it about the pointer, from a tenth of fitted to 64 times, and the wheel moves
     what's shown, across with Shift. `zoom in "Zoom in" icon zoom_in key ctrl+equal`,

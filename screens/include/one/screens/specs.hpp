@@ -89,6 +89,7 @@ namespace one::screens {
 		std::optional<command_slide> slide = std::nullopt;  // drawn as a slider, run as it's let go
 		std::optional<command_color> color = std::nullopt;  // or as a color picker, run as one's chosen
 		bool remembers = false;  // what it gives remembered for what's drawn next; with nothing to act on, only that
+		std::string picks = "";  // and the pick whose collage says what it acts on, several chosen or a group's all
 	};
 
 	// Links down the side to a part's pages, like a project's settings, beside what

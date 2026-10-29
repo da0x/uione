@@ -6,10 +6,10 @@
 // one at a time, undo and redo said in the messages, and a command turned down said
 // there too.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useLocation } from "react-router";
 import { App, Choose, Command, Form, Group, History, Layout, Live, Messages, OnOpen, Region, Table, Options, Toggle, Tools, keyShown, memorySource, screen as defineScreen, useChosen, useToggled, useView } from "../src/index.js";
-import { lastGiven, usePicked } from "../src/workspace.js";
+import { lastGiven, styleThese, usePicked } from "../src/workspace.js";
 import type { MemorySource } from "../src/index.js";
 import { plain } from "../src/plain.js";
 
@@ -189,6 +189,16 @@ describe("a workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ink" }));
     await waitFor(() => expect(source.runs.length).toBe(1));
     expect(lastGiven("studio::layer::paint")).toEqual({ stroke: "#1d1d1f" });
+  });
+
+  it("gives a style to each of several chosen, in one step", async () => {
+    const source = memorySource({ commands: { "studio::layer::paint": (input) => ({ id: String(input["id"]) }) } });
+    act(() => styleThese("/ layer", ["a", "b"]));
+    renderScreen(source, () => <Command name="studio::layer::paint" label="Red" given={{ stroke: "#e4572e" }} remembers picks="/ layer" />);
+    fireEvent.click(screen.getByRole("button", { name: "Red" }));
+    await waitFor(() => expect(source.runs.length).toBe(2));
+    expect(source.runs.map((r) => [r.input["id"], r.input["stroke"], r.input["one:history"]])).toEqual([["a", "#e4572e", undefined], ["b", "#e4572e", "joined"]]);
+    act(() => styleThese("/ layer", []));
   });
 
   it("says what an undo took back, and why a command was turned down", async () => {

@@ -1503,6 +1503,24 @@ namespace one::desktop::runtime {
 		if (!picked.empty() && w->chosen.size() > 1) w->chosen.clear();
 		std::erase_if(w->chosen, [&](const std::string& id) { return std::ranges::none_of(layers.as_array(), [&](const value& l) { return l["id"].as_string() == id; }); });
 		if (!w->entered.empty() && std::ranges::none_of(layers.as_array(), [&](const value& l) { return l["id"].as_string() == w->entered; })) w->entered.clear();
+		// What a style applies to: each of several chosen, or all a picked group holds.
+		if (!spec.pick.empty()) {
+			std::vector<std::string> styles;
+			auto all_in = [&](const std::string& top) {
+				for (const auto& l : layers.as_array()) {
+					std::string id = l["id"].as_string();
+					if (!holds_others(l) && (id == top || w->inside(id, top))) styles.push_back(id);
+				}
+			};
+			if (w->chosen.size() > 1) {
+				for (const auto& c : w->chosen) all_in(c);
+			} else {
+				for (const auto& l : layers.as_array()) {
+					if (l["id"].as_string() == picked && holds_others(l)) all_in(picked);
+				}
+			}
+			style_these(p, spec.pick, std::move(styles));
+		}
 		bool full = fullscreen();
 		std::optional<value> chosen;
 		for (const auto& l : layers.as_array()) {
