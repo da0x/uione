@@ -489,6 +489,10 @@ namespace one::desktop::runtime {
 			std::optional<std::pair<std::string, std::string>> reshaped;
 			// The picked path's node last pressed, whose control points show, by its id.
 			std::optional<std::pair<std::string, std::size_t>> node;
+			// How it's looked at, zoomed and moved, and the area it was last drawn in.
+			model::view_at view;
+			desktop::rect area{};
+			float margin = 32;
 			// The group each layer is in, as last drawn; and while a group is moved or
 			// resized, where it and each it holds were as it began.
 			std::map<std::string, std::string> group_of;
@@ -1523,6 +1527,12 @@ namespace one::desktop::runtime {
 				}
 				if (!spec.remove.empty()) p.run(spec.remove, value(fields{{"id", picked}, {"one:history", "joined"}}));
 				if (!spec.pick.empty()) p.pick(spec.pick, "");
+			} else if (does == "zoom in" || does == "zoom out") {
+				// About the middle of where it's shown.
+				desktop::rect a = w->area;
+				w->view = model::zoomed(w->view, {a.x, a.y, a.width, a.height}, width, height, w->margin, does == "zoom in" ? 1.25 : 0.8, {a.x + a.width / 2, a.y + a.height / 2});
+			} else if (does == "zoom to fit") {
+				w->view = {};
 			} else if (does == "edit" && chosen && is_words(*chosen) && !spec.write.empty()) {
 				w->editing = placed::writing{picked, (*chosen)["words"].as_string(), false};
 			} else if (does == "paste") {
@@ -1684,11 +1694,14 @@ namespace one::desktop::runtime {
 			const auto& t = current_theme();
 			c.box(area, {.fill = full ? desktop::color::hex(0x000000) : t.sunken});
 			if (width <= 0 || height <= 0) return;
+			// Fitted in its area, then zoomed and moved as it's looked at; what's past its
+			// area isn't drawn.
 			float margin = full ? 0 : 32;
-			float scale = std::min((area.width - 2 * margin) / static_cast<float>(width), (area.height - 2 * margin) / static_cast<float>(height));
-			if (scale <= 0) return;
-			float bw = static_cast<float>(width) * scale, bh = static_cast<float>(height) * scale;
-			desktop::rect board{area.x + (area.width - bw) / 2, area.y + (area.height - bh) / 2, bw, bh};
+			w->area = area, w->margin = margin;
+			desktop::rect board = as_rect(model::board_of(w->view, {area.x, area.y, area.width, area.height}, width, height, margin));
+			if (board.width <= 0) return;
+			float scale = board.width / static_cast<float>(width), bw = board.width, bh = board.height;
+			auto in_area = c.clip(area);
 			w->board = board;
 			w->scale = scale;
 			if (!full) {
@@ -2183,6 +2196,20 @@ namespace one::desktop::runtime {
 				        }
 			        }
 			        p.run(spec.place, collage_fields_of(value(fields{{"id", g.id}, {"x", to.x}, {"y", to.y}, {"w", to.w}, {"h", to.h}}), spec.fields), back);
+		        },
+		    // The wheel, with Ctrl, zooms about the pointer, as a trackpad's pinch does; without,
+		    // it moves what's shown, across with Shift.
+		    .on_wheel =
+		        [w, width, height](desktop::point at, float dx, float dy) {
+			        if (width <= 0 || height <= 0) return false;
+			        desktop::rect a = w->area;
+			        if (desktop::held().control) {
+				        w->view = model::zoomed(w->view, {a.x, a.y, a.width, a.height}, width, height, w->margin, std::exp(-dy * 0.01), {at.x, at.y});
+				        return true;
+			        }
+			        if (desktop::held().shift) std::swap(dx, dy);
+			        w->view.pan_x -= dx, w->view.pan_y -= dy;
+			        return true;
 		        },
 		    .cursor =
 		        [&p, w, data, layers, width, height, picked, spec](desktop::point at) {

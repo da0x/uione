@@ -357,6 +357,45 @@ describe("a layer drawn on a collage", () => {
     expect(source.runs[4]).toMatchObject({ command: "studio::layer::delete", input: { id: "g" } });
   });
 
+  it("zooms in about its middle, so what's on it is picked where it's now shown, and back to fit", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const source = memorySource();
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [{ id: "l1", shape: "rectangle", fill: "#000000", x: 100, y: 100, w: 100, h: 100 }] }, "p1");
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <CollageButton collage="/ layer" does="zoom in" label="Zoom in" />
+          <CollageButton collage="/ layer" does="zoom to fit" label="Fit" />
+          <Collage view={page} list="layers" width="width" height="height" fields={{ ...namedLikeParts, shape: "shape", fill: "fill" }} pick="/ layer" name="/ layer" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    fireEvent.click(drawn.getByRole("button", { name: "Zoom in" }));
+    await act(async () => {});
+    // Its middle stays where it was, and all of it a quarter larger: 150 150 is now here.
+    const cw = canvas.clientWidth || 1064, ch = canvas.clientHeight || 564;
+    const at = (x: number, y: number) => ({ clientX: cw / 2 - (cw / 2 - 32 - x) * 1.25, clientY: ch / 2 - (ch / 2 - 32 - y) * 1.25 });
+    fireEvent.pointerDown(canvas, { ...at(150, 150), pointerId: 1 });
+    fireEvent.pointerUp(canvas, { ...at(150, 150), pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
+    // Fitted again: where it was.
+    fireEvent.click(drawn.getByRole("button", { name: "Fit" }));
+    await act(async () => {});
+    fireEvent.pointerDown(canvas, { clientX: 32 + 400, clientY: 32 + 400, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 400, clientY: 32 + 400, pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe(""));
+    fireEvent.pointerDown(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 150, clientY: 32 + 150, pointerId: 1 });
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
+  });
+
   it("picks what a group holds when it's pressed twice", async () => {
     act(() => setPicked("/ layer", undefined));
     const source = memorySource();

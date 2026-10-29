@@ -16,8 +16,8 @@
 
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
-import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, carried, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
-import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer } from "./collage.js";
+import { colorShifter, cornerAt, pathIn, cropEdgesAt, cropped, drawn, drawnLine, freehand, halo, penPath, haloInside, haloReach, harmonicFill, matched, matchingCast, matchingStrength, moved, resized, sitting, pathBounds, pathFractions, around, boardOf, carried, zoomed, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, snapLines, statsOf, svgDocument, wholeOf } from "./collage.js";
+import type { Box, ColorShift, ColorStats, Guided, Lines, PenNode, Point, SavedLayer, ViewAt } from "./collage.js";
 import { useFiles, useRunner } from "./data.js";
 import { pictureSize, svgIn, svgShapes, svgSize } from "./vectors.js";
 import type { ViewState } from "./data.js";
@@ -650,7 +650,7 @@ function ask(name: string, does: string) {
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -728,6 +728,9 @@ interface Placed {
   node?: { id: string; at: number };
   // While a group is moved or resized, where it and each it holds were as it began.
   carried?: { group: Box; from: Map<string, Box> };
+  // How it's looked at, zoomed and moved, and how far in from its edges it's fitted.
+  view: ViewAt;
+  margin: number;
 }
 
 // A path as a reshape has it so far: its node moved, or one of its control points, in
@@ -828,7 +831,7 @@ export function Collage({
   const runner = useRunner();
   const picked = usePickedId(pick ?? "") ?? "";
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] } });
+  const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] }, view: { zoom: 1, panX: 0, panY: 0 }, margin: 32 });
   const [, setRead] = useState(0);
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
@@ -1110,6 +1113,12 @@ export function Collage({
     asked.delete(name);
     if (asking === "crop" && chosen && isPicture(chosen) && crop) {
       w.crop = cropBegun(chosen);
+    } else if ((asking === "zoom in" || asking === "zoom out") && canvasRef.current) {
+      // About the middle of where it's shown.
+      const area = { x: 0, y: 0, w: canvasRef.current.clientWidth, h: canvasRef.current.clientHeight };
+      w.view = zoomed(w.view, area, W, H, w.margin, asking === "zoom in" ? 1.25 : 0.8, { x: area.w / 2, y: area.h / 2 });
+    } else if (asking === "zoom to fit") {
+      w.view = { zoom: 1, panX: 0, panY: 0 };
     } else if (asking === "ungroup" && chosen && holdsOthers(chosen) && group) {
       // What it holds, each in no group, and it gone, all one step to undo.
       const held = layers.filter((l) => str(l["group"]) === picked);
@@ -1252,11 +1261,12 @@ export function Collage({
       c.fillRect(0, 0, cw, ch);
     }
     if (W <= 0 || H <= 0) return;
+    // Fitted in its area, then zoomed and moved as it's looked at.
     const margin = full ? 0 : 32;
-    const scale = Math.min((cw - 2 * margin) / W, (ch - 2 * margin) / H);
-    if (scale <= 0) return;
-    const bw = W * scale, bh = H * scale;
-    const board = { x: (cw - bw) / 2, y: (ch - bh) / 2, w: bw, h: bh };
+    w.margin = margin;
+    const board = boardOf(w.view, { x: 0, y: 0, w: cw, h: ch }, W, H, margin);
+    if (board.w <= 0) return;
+    const scale = board.w / W, bw = board.w, bh = board.h;
     w.board = board;
     w.scale = scale;
     c.save();
@@ -1499,6 +1509,28 @@ export function Collage({
     const watching = new ResizeObserver(() => paint());
     watching.observe(canvas);
     return () => watching.disconnect();
+  });
+  // The wheel, with Ctrl, zooms about the pointer, as a trackpad's pinch does; without,
+  // it moves what's shown, across with Shift. Heard as it's turned, so the page doesn't
+  // scroll or zoom instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const turned = (e: WheelEvent) => {
+      if (W <= 0 || H <= 0) return;
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      const lines = e.deltaMode === 1 ? 16 : 1;
+      let dx = e.deltaX * lines, dy = e.deltaY * lines;
+      if (e.ctrlKey) w.view = zoomed(w.view, { x: 0, y: 0, w: r.width, h: r.height }, W, H, w.margin, Math.exp(-dy * 0.01), { x: e.clientX - r.left, y: e.clientY - r.top });
+      else {
+        if (e.shiftKey) [dx, dy] = [dy, dx];
+        w.view = { ...w.view, panX: w.view.panX - dx, panY: w.view.panY - dy };
+      }
+      paint();
+    };
+    canvas.addEventListener("wheel", turned, { passive: false });
+    return () => canvas.removeEventListener("wheel", turned);
   });
   // Drawn again as light and dark trade places, by the page's switch or the system's,
   // as its colors come from the theme.

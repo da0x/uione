@@ -123,6 +123,9 @@ namespace one::desktop {
 			    {"group", {path("M1.5 1.5h13v13h-13zM4 4h5v5H4zM7 7h5v5H7z")}},
 			    {"ungroup", {path("M2 2.5h6v6H2zM8 7.5h6v6H8z")}},
 			    // How see-through: a circle, half of it shaded.
+			    // Looked at nearer or further: a glass with a plus or a minus.
+			    {"zoom_in", {path("M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4M7 5v4")}},
+			    {"zoom_out", {path("M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4")}},
 			    // Any color: a ring of every hue, drawn in its colors, whatever it's tinted.
 			    {"spectrum", {path("M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8z")}},
 			    {"opacity", {path("M14 8A6 6 0 1 1 2 8 6 6 0 1 1 14 8zM8 2v12M8 6l4.5-2.6M8 9.5l5.6-3.2M8 13l4.4-2.5")}},

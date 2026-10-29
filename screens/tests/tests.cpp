@@ -578,6 +578,13 @@ TEST("a collage's layers go where collage-cases.json says, as they do on the web
 		} else if (what == "cropped") {
 			auto got = c::cropped(box_of(k["kept"]), static_cast<int>(k["edges"].as_integer()), n(k["by"], 0), n(k["by"], 1), box_of(k["whole"]));
 			check::verify(same(got, box_of(k["box"])), "cropped", note + ": " + said(got));
+		} else if (what == "zoomed") {
+			c::view_at was{n(k["view"], 0), n(k["view"], 1), n(k["view"], 2)};
+			c::box area = box_of(k["area"]);
+			auto got = c::zoomed(was, area, n(k["size"], 0), n(k["size"], 1), k["margin"].as_double(), k["by"].as_double(), {n(k["at"], 0), n(k["at"], 1)});
+			auto board = c::board_of(got, area, n(k["size"], 0), n(k["size"], 1), k["margin"].as_double());
+			check::verify(near(got.zoom, n(k["zoomed"], 0)) && near(got.pan_x, n(k["zoomed"], 1)) && near(got.pan_y, n(k["zoomed"], 2)) && same(board, box_of(k["board"])), "zoomed",
+			              note + ": " + std::format("{} {} {} {}", got.zoom, got.pan_x, got.pan_y, said(board)));
 		} else if (what == "around") {
 			std::vector<c::box> boxes;
 			for (const auto& b : k["boxes"].as_array()) boxes.push_back(box_of(b));

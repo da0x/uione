@@ -2273,6 +2273,56 @@ TEST("a collage's group is picked by a press on what it holds, moved as one in o
 	CHECK(runs[4].fields["id"].as_string() == "g");
 }
 
+TEST("a collage zoomed in about its middle has what's on it picked where it's now shown, and the wheel moves what's shown") {
+	memory_source data;
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "l1"}, {"shape", "rectangle"}, {"fill", "#000000"}, {"x", 100}, {"y", 100}, {"w", 200}, {"h", 200}})}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	s.screens.push_back({"Poster", "/", "", [](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = named_like_parts, .pick = "/ layer", .fills = true, .key = "/ layer"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto draw = [&] { (void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); }); };
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	draw();
+	auto area = board->frame;
+	float fit = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point middle{area.x + area.width / 2, area.y + area.height / 2};
+	one::desktop::point origin{middle.x - 800 * fit, middle.y - 450 * fit};
+	// Zoomed in a quarter about its middle: 200 200 is a quarter further from it.
+	nav.current().kept<std::string>("collage do / layer").set("zoom in");
+	root = built(nav);
+	board = drawing(*root);
+	draw();
+	auto shown = [&](double x, double y, float zoom) {
+		return one::desktop::point{middle.x + (origin.x + static_cast<float>(x) * fit - middle.x) * zoom, middle.y + (origin.y + static_cast<float>(y) * fit - middle.y) * zoom};
+	};
+	CHECK(board->press(shown(290, 290, 1.25f), 1));
+	board->release(shown(290, 290, 1.25f), board);
+	CHECK(nav.current().picked_id("/ layer") == "l1");
+	// Not where it was before.
+	nav.current().pick("/ layer", "");
+	board->press(shown(310, 310, 1.f), 1);
+	board->release(shown(310, 310, 1.f), board);
+	CHECK(nav.current().picked_id("/ layer").empty());
+	// The wheel without Ctrl moves what's shown.
+	CHECK(board->wheel(middle, 0, 40));
+}
+
 TEST("a collage's layers listed beside it, topmost first: each an eye, its preview in the collage's proportions, its name, up, down and delete; a hidden one isn't drawn") {
 	memory_source data;
 	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, double depth, double hidden = 0) {

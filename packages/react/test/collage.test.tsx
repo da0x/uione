@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { around, carried, colorShifter, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
+import { around, boardOf, carried, colorShifter, zoomed, svgElement, cornerAt, cropEdgesAt, cropped, drawn, drawnLine, freehand, penPath, pathBounds, pathFractions, pathHandleMoved, pathHandles, pathMoved, pathNodes, pathReaches, svgDocument, halo, harmonicFill, matched, moved, resized, shifted, sitting, snapLines, statsOf, wholeOf } from "../src/collage.js";
 import type { Box, Guided } from "../src/collage.js";
 
 type Numbers = number[];
@@ -74,6 +74,11 @@ interface Case {
   moved?: string;
   out?: boolean;
   boxes?: Numbers[];
+  view?: Numbers;
+  area?: Numbers;
+  margin?: number;
+  zoomed?: Numbers;
+  board?: Numbers;
   one?: Numbers;
   handles?: (number | boolean)[][];
   filled?: boolean;
@@ -166,6 +171,13 @@ describe("where a collage's layers go", () => {
       case "path_reaches":
         expect(pathReaches(k.path!, { x: k.at![0]!, y: k.at![1]! }, k.reach!, k.filled!)).toBe(k.reaches);
         break;
+      case "zoomed": {
+        const area = boxOf(k.area!);
+        const got = zoomed({ zoom: k.view![0]!, panX: k.view![1]!, panY: k.view![2]! }, area, k.size![0]!, k.size![1]!, k.margin!, k.by as unknown as number, { x: k.at![0]!, y: k.at![1]! });
+        expect([got.zoom, got.panX, got.panY].map((v) => Math.round(v * 1e6) / 1e6)).toEqual(k.zoomed);
+        expect(same(boardOf(got, area, k.size![0]!, k.size![1]!, k.margin!), boxOf(k.board!))).toBe(true);
+        break;
+      }
       case "around":
         expect(same(around(k.boxes!.map(boxOf)), boxOf(k.box!))).toBe(true);
         break;

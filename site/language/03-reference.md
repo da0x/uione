@@ -2250,6 +2250,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     gives them. Those buttons stay on with nothing picked, and then only remember what
     they give, pressed while it's what's remembered; with a layer picked they change it
     and remember too. The command is one on the collage's layers that changes each.
+  - Every collage can be looked at nearer: Ctrl and the wheel, or a trackpad's pinch,
+    zoom it about the pointer, from a tenth of fitted to 64 times, and the wheel moves
+    what's shown, across with Shift. `zoom in "Zoom in" icon zoom_in key ctrl+equal`,
+    `zoom out` and `zoom to fit` buttons zoom about its middle, or fit it to its place
+    again. How it's looked at is the screen's own, never stored.
   - `group layer::group`: what puts a layer in a group or takes it out, sent its
     `group`. An `ungroup "Ungroup" icon ungroup` button over the picked group sends
     each it holds with no group and deletes the group by the collage's `delete`.

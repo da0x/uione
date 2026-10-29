@@ -525,6 +525,8 @@
     {"what": "path_nodes", "note": "where each segment ends, a curve's too, not its control points", "path": "M 0 0 L 10 0 C 10 5 5 10 0 10 Z", "nodes": [[0, 0], [10, 0], [0, 10]]},
     {"what": "path_moved", "note": "a node moved takes the next curve's first control point with it", "path": "M 0 0 L 10 0 C 10 5 5 10 0 10 Z", "node": 1, "by": [2, 3], "moved": "M 0 0 L 12 3 C 12 8 5 10 0 10 Z"},
     {"what": "path_moved", "note": "a curve's end moved takes its last control point with it", "path": "M 0 0 L 10 0 C 10 5 5 10 0 10 Z", "node": 2, "by": [1, 1], "moved": "M 0 0 L 10 0 C 10 5 6 11 1 11 Z"},
+    {"what": "zoomed", "note": "fitted in the middle, then twice as large about its top left, which stays where it was", "view": [1, 0, 0], "area": [0, 0, 264, 164], "size": [200, 100], "margin": 32, "by": 2, "at": [32, 32], "zoomed": [2, 100, 50], "board": [32, 32, 400, 200]},
+    {"what": "zoomed", "note": "no smaller than a tenth of fitted", "view": [0.1, 0, 0], "area": [0, 0, 264, 164], "size": [200, 100], "margin": 32, "by": 0.5, "at": [132, 82], "zoomed": [0.1, 0, 0], "board": [122, 77, 20, 10]},
     {"what": "around", "note": "a group is the box around what it holds", "boxes": [[10, 20, 30, 40], [50, 0, 10, 10]], "box": [10, 0, 50, 60]},
     {"what": "carried", "note": "one of a group's moves with it", "one": [20, 20, 10, 10], "from": [10, 10, 100, 50], "to": [40, 30, 100, 50], "box": [50, 40, 10, 10]},
     {"what": "carried", "note": "and is resized with it, as far along for its size", "one": [60, 10, 50, 50], "from": [10, 10, 100, 50], "to": [10, 10, 200, 100], "box": [110, 10, 100, 100]},

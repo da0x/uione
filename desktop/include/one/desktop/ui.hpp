@@ -301,6 +301,9 @@ namespace one::desktop {
 		std::function<bool(point at, int clicks)> on_press = {};
 		std::function<void(point at)> on_drag = {};
 		std::function<void(point at)> on_release = {};
+		// The wheel turned over it, across and down, as a trackpad's two fingers move too:
+		// whether it took it.
+		std::function<bool(point at, float dx, float dy)> on_wheel = {};
 		std::function<one::desktop::cursor(point at)> cursor = {};
 	};
 	// Painted by the app itself into all the space it's given, as a drawing app's

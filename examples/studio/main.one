@@ -336,6 +336,9 @@ namespace studio at / {
 			}
 			group "View" at end {
 				toggle layers "Layers" icon layers key ctrl+l
+				zoom in "Zoom in" icon zoom_in key ctrl+equal
+				zoom out "Zoom out" icon zoom_out key ctrl+minus
+				zoom to fit "Fit" icon fit key ctrl+0
 			}
 		}
 		main {

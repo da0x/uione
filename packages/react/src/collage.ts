@@ -715,6 +715,29 @@ export function penPath(nodes: PenNode[], closed: boolean): string {
   return out;
 }
 
+// How a collage is looked at: how much larger than fitted to its area, and how far it's
+// moved from the middle of it, in the window's pixels.
+export interface ViewAt {
+  zoom: number;
+  panX: number;
+  panY: number;
+}
+// Where it's drawn in `area`, fitted inside `margin` and then zoomed and moved.
+export function boardOf(v: ViewAt, area: Box, width: number, height: number, margin: number): Box {
+  if (width <= 0 || height <= 0) return { x: 0, y: 0, w: 0, h: 0 };
+  const fit = Math.min((area.w - 2 * margin) / width, (area.h - 2 * margin) / height);
+  const s = Math.max(fit, 0) * v.zoom, w = width * s, h = height * s;
+  return { x: area.x + (area.w - w) / 2 + v.panX, y: area.y + (area.h - h) / 2 + v.panY, w, h };
+}
+// Zoomed by `by` about `at` in the window, so what's under it stays under it; from a
+// tenth of fitted to 64 times.
+export function zoomed(v: ViewAt, area: Box, width: number, height: number, margin: number, by: number, at: Point): ViewAt {
+  const was = boardOf(v, area, width, height, margin);
+  const zoom = Math.min(64, Math.max(0.1, v.zoom * by)), f = zoom / v.zoom;
+  const centered = boardOf({ zoom, panX: 0, panY: 0 }, area, width, height, margin);
+  return { zoom, panX: at.x - (at.x - was.x) * f - centered.x, panY: at.y - (at.y - was.y) * f - centered.y };
+}
+
 // What a group is: the box around all it holds; nothing, around nothing.
 export function around(boxes: Box[]): Box {
   if (boxes.length === 0) return { x: 0, y: 0, w: 0, h: 0 };

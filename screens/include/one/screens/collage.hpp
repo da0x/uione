@@ -210,6 +210,17 @@ namespace one::screens::collage {
 	// either has a handle; closed, back to the first and Z.
 	std::string pen_path(const std::vector<pen_node>& nodes, bool closed);
 
+	// How a collage is looked at: how much larger than fitted to its area, and how far
+	// it's moved from the middle of it, in the window's pixels.
+	struct view_at {
+		double zoom = 1, pan_x = 0, pan_y = 0;
+	};
+	// Where it's drawn in `area`, fitted inside `margin` and then zoomed and moved.
+	box board_of(const view_at& v, const box& area, double width, double height, double margin);
+	// Zoomed by `by` about `at` in the window, so what's under it stays under it; from a
+	// tenth of fitted to 64 times.
+	view_at zoomed(const view_at& v, const box& area, double width, double height, double margin, double by, point at);
+
 	// What a group is: the box around all it holds; nothing, around nothing.
 	box around(const std::vector<box>& boxes);
 	// Where one of a group's goes as the group goes from `from` to `to`: as far along

@@ -385,6 +385,16 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M2 2.5h6v6H2zM8 7.5h6v6H8z" />
     </svg>
   ),
+  zoom_in: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4M7 5v4" />
+    </svg>
+  ),
+  zoom_out: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.5 7A4.5 4.5 0 1 1 2.5 7 4.5 4.5 0 1 1 11.5 7zM10.2 10.2l3.8 3.8M5 7h4" />
+    </svg>
+  ),
   // Any color: a ring of every hue, in its colors.
   spectrum: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" strokeWidth="3" aria-hidden="true">

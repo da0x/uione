@@ -959,6 +959,7 @@ namespace one::desktop {
 			void release(point at, element*) override {
 				if (pointer_.on_release) pointer_.on_release(at);
 			}
+			bool wheel(point at, float dx, float dy) override { return pointer_.on_wheel ? pointer_.on_wheel(at, dx, dy) : element::wheel(at, dx, dy); }
 			// Where the pointer is, as it's found over this, for the cursor it shows there.
 			element* hit(point at) override {
 				element* found = element::hit(at);

@@ -1759,7 +1759,9 @@ namespace one::language {
                          (peek(1).kind != token_kind::identifier || peek(1).text == "icon" || peek(1).text == "key" || peek(1).text == "when");
             bool as_picture = (at_word("copy") || at_word("save")) && peek(1).kind == token_kind::identifier && peek(2).kind == token_kind::identifier && peek(2).text == "as" &&
                               peek(3).kind == token_kind::identifier && (peek(3).text == "picture" || peek(3).text == "svg");
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture ||
+            // zoom in, zoom out, zoom to fit: how near the screen's collage is looked at.
+            bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture || zooms ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
             if (collage_does) {
@@ -1767,6 +1769,8 @@ namespace one::language {
                 std::string first = advance().text;
                 bool pictures = first == "add" && peek().text == "pictures";
                 if (first == "edit" || first == "add") advance();
+                std::string zoom = first == "zoom" ? advance().text : "";
+                if (zoom == "to") advance();
                 if (as_picture) {
                     button.of_where = peek().where;
                     button.of = advance().text;
@@ -1779,6 +1783,9 @@ namespace one::language {
                               : first == "copy"       ? collage_button::kind::copy
                               : first == "save"       ? collage_button::kind::save
                               : first == "ungroup"    ? collage_button::kind::ungroup
+                              : zoom == "in"          ? collage_button::kind::zoom_in
+                              : zoom == "out"         ? collage_button::kind::zoom_out
+                              : zoom == "to"          ? collage_button::kind::zoom_fit
                               : first == "edit"       ? collage_button::kind::edit_words
                               : pictures              ? collage_button::kind::add_pictures
                                                       : collage_button::kind::add_words;

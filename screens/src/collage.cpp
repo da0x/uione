@@ -691,6 +691,23 @@ namespace one::screens::collage {
 		return out;
 	}
 
+	box board_of(const view_at& v, const box& area, double width, double height, double margin) {
+		if (width <= 0 || height <= 0) return {};
+		double fit = std::min((area.w - 2 * margin) / width, (area.h - 2 * margin) / height);
+		double s = std::max(fit, 0.0) * v.zoom, w = width * s, h = height * s;
+		return {area.x + (area.w - w) / 2 + v.pan_x, area.y + (area.h - h) / 2 + v.pan_y, w, h};
+	}
+
+	view_at zoomed(const view_at& v, const box& area, double width, double height, double margin, double by, point at) {
+		box was = board_of(v, area, width, height, margin);
+		double zoom = std::clamp(v.zoom * by, 0.1, 64.0), f = zoom / v.zoom;
+		view_at now{zoom, 0, 0};
+		box centered = board_of(now, area, width, height, margin);
+		now.pan_x = at.x - (at.x - was.x) * f - centered.x;
+		now.pan_y = at.y - (at.y - was.y) * f - centered.y;
+		return now;
+	}
+
 	box around(const std::vector<box>& boxes) {
 		if (boxes.empty()) return {};
 		double left = boxes[0].x, top = boxes[0].y, right = boxes[0].x + boxes[0].w, bottom = boxes[0].y + boxes[0].h;
