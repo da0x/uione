@@ -2323,6 +2323,62 @@ TEST("a collage zoomed in about its middle has what's on it picked where it's no
 	CHECK(board->wheel(middle, 0, 40));
 }
 
+TEST("a collage's group gone into by pressing it twice has what it holds picked by a press, and Esc picks the group again; a drag around several chooses them") {
+	memory_source data;
+	auto shape = [](std::string id, double x, double y, std::string group) {
+		return value(fields{{"id", std::move(id)}, {"shape", "rectangle"}, {"fill", "#2e86de"}, {"x", x}, {"y", y}, {"w", 100}, {"h", 100}, {"group", std::move(group)}});
+	};
+	data.set("studio::poster_page", "p1",
+	         value(fields{{"width", 1600}, {"height", 900},
+	                      {"layers", list{value(fields{{"id", "g"}, {"x", 0}, {"y", 0}, {"w", 0}, {"h", 0}}), shape("a", 100, 100, "g"), shape("b", 300, 200, "g"), shape("c", 900, 500, ""),
+	                                      shape("d", 1100, 500, "")}}}));
+	site s{.name = "studio", .id = "org.uione.runtime-tests"};
+	s.look = tested_theme();
+	auto parts = named_like_parts;
+	parts["group"] = "group";
+	s.screens.push_back({"Poster", "/", "", [parts](page& p) {
+		                     return workspace(p, region{"main", items(collage(p, {.view = p.view("studio::poster_page", "p1"), .list = "layers", .width = "width", .height = "height",
+		                                                                         .fields = parts, .place = "studio::layer::place", .pick = "/ layer", .fills = true, .key = "/ layer"}))});
+	                     }});
+	navigator nav(s, data);
+	nav.open("/");
+	auto root = built(nav);
+	std::function<one::desktop::element*(one::desktop::element&)> drawing = [&](one::desktop::element& e) -> one::desktop::element* {
+		if (e.children.empty() && e.frame.width > 400 && e.frame.height > 200) return &e;
+		for (auto& child : e.children) {
+			if (auto* found = drawing(*child)) return found;
+		}
+		return nullptr;
+	};
+	auto* board = drawing(*root);
+	CHECK(board != nullptr);
+	if (!board) return;
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	auto area = board->frame;
+	float scale = std::min((area.width - 64) / 1600.f, (area.height - 64) / 900.f);
+	one::desktop::point origin{area.x + (area.width - 1600 * scale) / 2, area.y + (area.height - 900 * scale) / 2};
+	auto on = [&](double x, double y) { return one::desktop::point{origin.x + static_cast<float>(x) * scale, origin.y + static_cast<float>(y) * scale}; };
+	// Pressed twice, gone into: then a press on b picks b, not the group.
+	board->press(on(150, 150), 2);
+	board->release(on(150, 150), board);
+	CHECK(nav.current().picked_id("/ layer") == "a");
+	board->press(on(350, 250), 1);
+	board->release(on(350, 250), board);
+	CHECK(nav.current().picked_id("/ layer") == "b");
+	// Esc: the group again.
+	root = built(nav);
+	CHECK(key(nav, one::desktop::key_event{.symbol = one::desktop::keys::escape, .text = "", .control = false}));
+	CHECK(nav.current().picked_id("/ layer") == "g");
+	// A drag around c and d chooses them both, so neither alone is picked.
+	root = built(nav);
+	board = drawing(*root);
+	(void)one::desktop::offscreen::draw({900, 900}, 1, tested_theme().page, [&](one::desktop::canvas& c) { root->paint(c); });
+	CHECK(board->press(on(850, 450), 1));
+	board->drag(on(1000, 550));
+	board->release(on(1250, 650), board);
+	CHECK(nav.current().picked_id("/ layer").empty());
+}
+
 TEST("a collage's layers listed beside it, topmost first: each an eye, its preview in the collage's proportions, its name, up, down and delete; a hidden one isn't drawn") {
 	memory_source data;
 	auto shape = [](std::string id, std::string kind, double x, double y, double w, double h, std::string fill, double depth, double hidden = 0) {

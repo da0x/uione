@@ -650,7 +650,7 @@ function ask(name: string, does: string) {
 const pastes = new Map<string, { files: File[]; words: string }>();
 
 // crop "Crop", edit words "Edit", add words "Text": what's asked of the screen's collage.
-export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
+export function CollageButton({ collage, does, label, icon, keys }: { collage: string; does: "crop" | "edit" | "ungroup" | "group picked" | "zoom in" | "zoom out" | "zoom to fit" | "add" | "add pictures" | "paste" | "screenshot" | "copy" | "copy picked" | "save" | "save picked" | "copy svg" | "copy svg picked" | "save svg" | "save svg picked"; label: string; icon?: string; keys?: string[] }) {
   const ui = useUI();
   const tool = useTool() ?? "small";
   const off = useOff();
@@ -693,7 +693,7 @@ export function CollageButton({ collage, does, label, icon, keys }: { collage: s
 
 // What the pointer is doing to a layer, from where it was and where the pointer was.
 interface Gesture {
-  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping";
+  what: "moving" | "resizing" | "cropping" | "shifting" | "drawing" | "reshaping" | "selecting";
   id: string;
   from: Box;
   at: Point;
@@ -727,7 +727,14 @@ interface Placed {
   // The picked path's node last pressed, whose control points show, by its id.
   node?: { id: string; at: number };
   // While a group is moved or resized, where it and each it holds were as it began.
-  carried?: { group: Box; from: Map<string, Box> };
+  carried?: { id: string; group: Box; from: Map<string, Box> }; // the group carried, or "chosen"
+  // A group gone into by pressing it twice: what's pressed in it is picked from among
+  // what it holds, until Esc or a press outside it.
+  entered?: string;
+  // Several picked at once, by a drag around them or with Shift, besides the screen's
+  // pick of one; and a drag around what's to be, as far as it's gone.
+  chosen: string[];
+  marquee?: Box;
   // How it's looked at, zoomed and moved, and how far in from its edges it's fitted.
   view: ViewAt;
   margin: number;
@@ -831,7 +838,7 @@ export function Collage({
   const runner = useRunner();
   const picked = usePickedId(pick ?? "") ?? "";
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] }, view: { zoom: 1, panX: 0, panY: 0 }, margin: 32 });
+  const placed = useRef<Placed>({ board: { x: 0, y: 0, w: 0, h: 0 }, scale: 0, lines: { across: [], down: [] }, view: { zoom: 1, panX: 0, panY: 0 }, margin: 32, chosen: [] });
   const [, setRead] = useState(0);
   const [, redraw] = useState(0);
   const [frame, setFrame] = useState<Box | undefined>();
@@ -867,6 +874,11 @@ export function Collage({
   const address = files ? (path: string) => files.address(path) : undefined;
   const chosen = layers.find((l) => l["id"] === picked);
   const w = placed.current;
+  // Several chosen are let go as one's picked, as the layers' list may; and a group gone
+  // into is left once it's gone.
+  if (picked && w.chosen.length > 1) w.chosen = [];
+  w.chosen = w.chosen.filter((id) => layers.some((l) => str(l["id"]) === id));
+  if (w.entered && !layers.some((l) => str(l["id"]) === w.entered)) w.entered = undefined;
 
   useEffect(() => {
     const changed = () => setRead((n) => n + 1);
@@ -1119,6 +1131,23 @@ export function Collage({
       w.view = zoomed(w.view, area, W, H, w.margin, asking === "zoom in" ? 1.25 : 0.8, { x: area.w / 2, y: area.h / 2 });
     } else if (asking === "zoom to fit") {
       w.view = { zoom: 1, panX: 0, panY: 0 };
+    } else if (asking === "group picked" && w.chosen.length > 1 && add && group) {
+      // A new group, as big as what's chosen, where the topmost of them is, and each of
+      // them in it, all one step to undo; then it's picked.
+      const members = layers.filter((l) => w.chosen.includes(str(l["id"])));
+      const top = members[members.length - 1]!;
+      const made: Row = { ...chosenBox(), depth: num(top["depth"]) };
+      if ("name" in fields) made["name"] = "Group";
+      if (parent) made[parent] = subject;
+      if (layerField && top[layerField] !== undefined) made[layerField] = top[layerField];
+      if (w.entered) made["group"] = w.entered;
+      w.chosen = [];
+      void (async () => {
+        const reply = await send(add, made);
+        if (!reply?.id) return;
+        for (const m of members) await send(group, { id: str(m["id"]), group: reply.id, "one:history": "joined" });
+        pickRow(reply.id);
+      })();
     } else if (asking === "ungroup" && chosen && holdsOthers(chosen) && group) {
       // What it holds, each in no group, and it gone, all one step to undo.
       const held = layers.filter((l) => str(l["group"]) === picked);
@@ -1223,7 +1252,7 @@ export function Collage({
       const near = (a: number, z: number) => Math.abs(a - z) < 0.01;
       if (near(b.x, g.box.x) && near(b.y, g.box.y) && near(b.w, g.box.w) && near(b.h, g.box.h) && !w.now) (w.going = undefined), (w.carried = undefined);
       else b = g.box;
-    } else if (g && w.carried?.from.has(str(l["id"])) && inGroup(groupOf, str(l["id"]), g.id)) {
+    } else if (g && w.carried?.from.has(str(l["id"])) && w.carried.id === g.id) {
       // One a group holds, carried with it.
       b = carried(w.carried.from.get(str(l["id"]))!, w.carried.group, g.box);
     }
@@ -1452,6 +1481,37 @@ export function Collage({
       c.fillText(empty, board.x + bw / 2, board.y + bh / 2);
       c.textAlign = "start";
     }
+    // A group gone into, faintly framed; several chosen, each framed finely and all of
+    // them together, moving as one; and a drag around what's to be chosen.
+    c.save();
+    c.strokeStyle = accent;
+    c.globalAlpha = 0.45;
+    c.lineWidth = 1;
+    const entered = w.entered ? layers.find((l) => str(l["id"]) === w.entered) : undefined;
+    if (entered) {
+      const e = onBoard(whereIs(entered));
+      c.strokeRect(e.x - 4, e.y - 4, e.w + 8, e.h + 8);
+    }
+    if (w.chosen.length > 1) {
+      const moving = w.going?.id === "chosen";
+      if (!moving) for (const l of layers) if (w.chosen.includes(str(l["id"]))) {
+        const o = onBoard(whereIs(l));
+        c.strokeRect(o.x, o.y, o.w, o.h);
+      }
+      c.globalAlpha = 1;
+      c.lineWidth = 1.5;
+      const all = onBoard(moving ? w.going!.box : chosenBox());
+      c.strokeRect(all.x - 3, all.y - 3, all.w + 6, all.h + 6);
+    }
+    if (w.marquee) {
+      const m = onBoard(w.marquee);
+      c.globalAlpha = 0.08;
+      c.fillStyle = accent;
+      c.fillRect(m.x, m.y, m.w, m.h);
+      c.globalAlpha = 1;
+      c.strokeRect(m.x, m.y, m.w, m.h);
+    }
+    c.restore();
     // The picked layer's frame and corners, over everything, a crop's edges too; a
     // picked path's nodes instead.
     if (framed && nodes.length) {
@@ -1608,7 +1668,7 @@ export function Collage({
     snapLines(
       W,
       H,
-      layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !holdsOthers(l)).map((l) => whereIs(l)),
+      layers.filter((l) => l["id"] !== moving && !inGroup(groupOf, str(l["id"]), moving) && !w.carried?.from.has(str(l["id"])) && !holdsOthers(l)).map((l) => whereIs(l)),
     );
   // The collage's delete of a group, run by a button over it, deletes all it holds with
   // it, in one step.
@@ -1623,9 +1683,21 @@ export function Collage({
     })();
     return true;
   };
-  // A group's gesture begun: where it and each it holds are.
+  // A group's gesture begun, or what's chosen: where it and each it holds are.
   const carryFrom = (group: string, from: Box) => {
-    w.carried = { group: from, from: new Map(layers.filter((l) => !holdsOthers(l) && inGroup(groupOf, str(l["id"]), group)).map((l) => [str(l["id"]), boxOf(l)])) };
+    const carriedOne = (id: string) => (group === "chosen" ? w.chosen.some((c) => c === id || inGroup(groupOf, id, c)) : inGroup(groupOf, id, group));
+    w.carried = { id: group, group: from, from: new Map(layers.filter((l) => !holdsOthers(l) && carriedOne(str(l["id"]))).map((l) => [str(l["id"]), boxOf(l)])) };
+  };
+  // The box around what's chosen, where each is.
+  const chosenBox = () => around(layers.filter((l) => w.chosen.includes(str(l["id"]))).map(whereIs));
+  // What's chosen made the screen's pick: one alone is picked; several, none is, and
+  // they're drawn chosen.
+  const pickChosen = () => {
+    if (w.chosen.length === 1) {
+      pickRow(w.chosen[0]!);
+      w.chosen = [];
+    } else pickRow("");
+    redraw((n) => n + 1);
   };
   // A group taken to `to`: each it holds carried with it, all one step to undo.
   const placeCarried = async (to: Box) => {
@@ -1635,6 +1707,11 @@ export function Collage({
     for (const [id, from] of c.from) {
       const b = carried(from, c.group, to);
       await send(place!, { id, x: b.x, y: b.y, w: b.w, h: b.h, ...(i++ > 0 ? { "one:history": "joined" } : {}) });
+    }
+    // Once the last is answered, it's drawn from the view again.
+    if (c.id === "chosen") {
+      w.going = w.carried = undefined;
+      paint();
     }
   };
   const goingTo = (p: Point, e: { altKey: boolean; shiftKey: boolean }): Box => {
@@ -1808,19 +1885,43 @@ export function Collage({
       let l = layers[i]!;
       let b = whereIs(l);
       if (!hits(l, b, p)) continue;
-      // One a group holds is picked as its outermost group; pressed twice, as itself, as
-      // a drawing program goes into a group.
-      if (e.detail < 2 && outermost(groupOf, str(l["id"])) !== str(l["id"])) {
-        const top = outermost(groupOf, str(l["id"]));
-        l = layers.find((r) => str(r["id"]) === top) ?? l;
+      // One a group holds is picked as the group, the outermost, or the one just inside
+      // the group gone into; a press outside that leaves it. A group pressed twice is
+      // gone into, as a drawing program does.
+      const hit = str(l["id"]);
+      if (w.entered && !inGroup(groupOf, hit, w.entered)) w.entered = undefined;
+      let id = pickedBelow(groupOf, hit, w.entered ?? "");
+      if (e.detail >= 2 && id !== hit) {
+        w.entered = id;
+        id = pickedBelow(groupOf, hit, id);
+      }
+      if (id !== hit) {
+        l = layers.find((r) => str(r["id"]) === id) ?? l;
         b = whereIs(l);
       }
-      const id = str(l["id"]);
       w.node = undefined;
+      // With Shift, it's chosen or let go, beside what's chosen already.
+      if (e.shiftKey) {
+        if (w.chosen.length === 0 && picked) w.chosen = [picked];
+        w.chosen = w.chosen.includes(id) ? w.chosen.filter((c) => c !== id) : [...w.chosen, id];
+        pickChosen();
+        return;
+      }
+      // One of several chosen moves them all.
+      if (w.chosen.length > 1 && w.chosen.includes(id)) {
+        if (!place) return;
+        const all = chosenBox();
+        w.now = { what: "moving", id: "chosen", from: all, at: p, corner: 0, edges: 0 };
+        carryFrom("chosen", all);
+        w.lines = linesFor("chosen");
+        e.currentTarget.setPointerCapture(e.pointerId);
+        return;
+      }
+      w.chosen = [];
       pickRow(id);
       // Its layer is the current one, as new objects go in it.
       if (layerPick && layerField && str(l[layerField])) setPicked(layerPick, str(l[layerField]));
-      if (e.detail >= 2) {
+      if (e.detail >= 2 && id === hit) {
         if (isWords(l) && write) w.editing = { id, words: str(l["words"]), caret: str(l["words"]).length, fresh: false };
         else if (isPicture(l) && !vectors.has(str(l["picture"])) && crop) w.crop = cropBegun(l);
         redraw((n) => n + 1);
@@ -1834,14 +1935,30 @@ export function Collage({
       }
       return;
     }
-    // On nothing, nothing is picked.
+    // On nothing, nothing is picked, and a group gone into is left; a drag from there
+    // picks what it goes all the way around.
     w.node = undefined;
-    pickRow("");
+    w.entered = undefined;
+    if (!e.shiftKey) {
+      w.chosen = [];
+      pickRow("");
+    }
+    if (!pick || !inside(onBoard({ x: 0, y: 0, w: W, h: H }), p)) return;
+    const from = onCollage(p);
+    w.now = { what: "selecting", id: "", from: { ...from, w: 0, h: 0 }, at: p, corner: 0, edges: 0 };
+    w.marquee = { ...from, w: 0, h: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
   const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = w.now;
     if (!g) return;
     const p = at(e);
+    if (g.what === "selecting") {
+      const z = onCollage(p);
+      w.marquee = { x: Math.min(g.from.x, z.x), y: Math.min(g.from.y, z.y), w: Math.abs(z.x - g.from.x), h: Math.abs(z.y - g.from.y) };
+      paint();
+      return;
+    }
     if (g.what === "reshaping") {
       w.reshaped = { id: g.id, outline: reshapedBy(w.reshapeFrom ?? "", g, (p.x - g.at.x) / w.scale, (p.y - g.at.y) / w.scale) };
       paint();
@@ -1870,6 +1987,21 @@ export function Collage({
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const g = w.now;
     if (!g) return;
+    // What the drag went all the way around is chosen, as the groups they're in are, or
+    // what's just inside the group gone into.
+    if (g.what === "selecting") {
+      move(e);
+      w.now = undefined;
+      const m = w.marquee;
+      w.marquee = undefined;
+      if (!m || (m.w * w.scale < 3 && m.h * w.scale < 3)) return paint();
+      for (const l of layers) {
+        const id = str(l["id"]), b = whereIs(l);
+        if (str(l["group"]) !== (w.entered ?? "")) continue;
+        if (b.x >= m.x && b.y >= m.y && b.x + b.w <= m.x + m.w && b.y + b.h <= m.y + m.h && !w.chosen.includes(id)) w.chosen = [...w.chosen, id];
+      }
+      return pickChosen();
+    }
     if (g.what === "shifting" || g.what === "cropping") {
       move(e);
       w.now = undefined;
@@ -1932,7 +2064,7 @@ export function Collage({
         paint();
       }
     };
-    if (w.carried && [...w.carried.from.keys()].some((id) => inGroup(groupOf, id, g.id))) {
+    if (w.carried && w.carried.id === g.id) {
       void placeCarried(to).catch(() => back(undefined));
       paint();
       return;
@@ -1960,7 +2092,7 @@ export function Collage({
             ? "grab"
             : "default"
           : edgesAt === 0
-            ? "move"
+            ? "all-scroll"
             : edgesAt === 3 || edgesAt === 12
               ? "nwse-resize"
               : edgesAt === 6 || edgesAt === 9
@@ -1974,7 +2106,7 @@ export function Collage({
       const corner = chosen && !isPath(chosen) && (isWords(chosen) ? write : place) ? cornerAt(onBoard(whereIs(chosen)), p, handle) : -1;
       if (corner === 0 || corner === 2) cursor = "nwse-resize";
       else if (corner === 1 || corner === 3) cursor = "nesw-resize";
-      else if (layers.some((l) => hits(l, whereIs(l), p))) cursor = place ? "move" : "pointer";
+      else if (layers.some((l) => hits(l, whereIs(l), p))) cursor = place ? "all-scroll" : "pointer"; // four arrows; many themes draw move as a hand
     }
     e.currentTarget.style.cursor = cursor;
   };
@@ -1987,7 +2119,27 @@ export function Collage({
     w.crop = undefined;
     redraw((n) => n + 1);
   });
-  useKeys(picked && !busy ? ["escape"] : undefined, () => pickRow(""));
+  // Esc in a group gone into picks the group again.
+  useKeys(picked && !busy ? ["escape"] : undefined, () => {
+    const back = w.entered ?? "";
+    w.entered = undefined;
+    pickRow(back);
+  });
+  // Several chosen: Esc lets them go, and Delete deletes them, a group with all it
+  // holds, in one step.
+  const several = w.chosen.length > 1 && !busy;
+  useKeys(several ? ["escape"] : undefined, () => {
+    w.chosen = [];
+    redraw((n) => n + 1);
+  });
+  useKeys(several && remove ? ["delete"] : undefined, () => {
+    const gone = layers.filter((l) => w.chosen.some((c) => c === str(l["id"]) || inGroup(groupOf, str(l["id"]), c))).map((l) => str(l["id"]));
+    w.chosen = [];
+    void (async () => {
+      for (const [i, id] of gone.entries()) await send(remove!, { id, ...(i > 0 ? { "one:history": "joined" } : {}) });
+    })();
+    redraw((n) => n + 1);
+  });
   const nudge = (dx: number, dy: number) => {
     if (!chosen || !place) return;
     const b = boxOf(chosen);
@@ -2575,8 +2727,14 @@ function inGroup(groups: Map<string, string>, id: string, group: string): boolea
   for (let depth = 0, at = groups.get(id); at !== undefined && depth < 64; at = groups.get(at), depth++) if (at === group) return true;
   return false;
 }
-function outermost(groups: Map<string, string>, id: string): string {
-  for (let depth = 0; groups.has(id) && depth < 64; depth++) id = groups.get(id)!;
+// What's picked by a press on `id`: the group it's in just inside `top`, or the
+// outermost when `top` is none, or itself. The same as the desktop's.
+function pickedBelow(groups: Map<string, string>, id: string, top: string): string {
+  for (let depth = 0; depth < 64; depth++) {
+    const up = groups.get(id);
+    if (up === undefined || up === top) break;
+    id = up;
+  }
   return id;
 }
 

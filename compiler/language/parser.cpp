@@ -1761,7 +1761,9 @@ namespace one::language {
                               peek(3).kind == token_kind::identifier && (peek(3).text == "picture" || peek(3).text == "svg");
             // zoom in, zoom out, zoom to fit: how near the screen's collage is looked at.
             bool zooms = at_word("zoom") && peek(1).kind == token_kind::identifier && (peek(1).text == "in" || peek(1).text == "out" || (peek(1).text == "to" && peek(2).text == "fit"));
-            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture || zooms ||
+            // group picked: what's picked, several at once, made one group.
+            bool groups = at_word("group") && peek(1).kind == token_kind::identifier && peek(1).text == "picked";
+            bool collage_does = ((at_word("crop") || at_word("paste") || at_word("screenshot") || at_word("ungroup")) && alone) || as_picture || zooms || groups ||
                                 ((at_word("edit") || at_word("add")) && peek(1).kind == token_kind::identifier && peek(1).text == "words") ||
                                 (at_word("add") && peek(1).kind == token_kind::identifier && peek(1).text == "pictures");
             if (collage_does) {
@@ -1770,6 +1772,7 @@ namespace one::language {
                 bool pictures = first == "add" && peek().text == "pictures";
                 if (first == "edit" || first == "add") advance();
                 std::string zoom = first == "zoom" ? advance().text : "";
+                if (first == "group") advance();
                 if (zoom == "to") advance();
                 if (as_picture) {
                     button.of_where = peek().where;
@@ -1783,6 +1786,7 @@ namespace one::language {
                               : first == "copy"       ? collage_button::kind::copy
                               : first == "save"       ? collage_button::kind::save
                               : first == "ungroup"    ? collage_button::kind::ungroup
+                              : first == "group"      ? collage_button::kind::group_picked
                               : zoom == "in"          ? collage_button::kind::zoom_in
                               : zoom == "out"         ? collage_button::kind::zoom_out
                               : zoom == "to"          ? collage_button::kind::zoom_fit

@@ -318,6 +318,7 @@ namespace studio at / {
 				}
 			}
 			group "Look" small {
+				group picked "Group" icon group key ctrl+g
 				poster::update "Match colors" icon magic { matched = 0 } on when poster_page.matched == 1 when poster_page.matched == 1
 				poster::update "Match colors" icon magic { matched = 1 } when poster_page.matched != 1
 			}

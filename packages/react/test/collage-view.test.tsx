@@ -396,6 +396,41 @@ describe("a layer drawn on a collage", () => {
     await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("l1"));
   });
 
+  it("chooses what a drag goes all the way around, and groups them by Group", async () => {
+    act(() => setPicked("/ layer", undefined));
+    const reply = (input: Record<string, unknown>) => ({ id: String(input["id"] ?? "made") });
+    const source = memorySource({ commands: { "studio::layer::create": () => ({ id: "g" }), "studio::layer::group": reply, "studio::layer::place": reply } });
+    const shape = (id: string, x: number, y: number) => ({ id, shape: "rectangle", fill: "#2e86de", x, y, w: 100, h: 100, group: "" });
+    source.set("studio::poster_page", { width: 1000, height: 500, layers: [shape("a", 100, 100), shape("b", 300, 100), shape("c", 700, 300)] }, "p1");
+    const fields = { ...namedLikeParts, shape: "shape", fill: "fill", group: "group" };
+    function Poster() {
+      const page = useView("studio::poster_page", "p1");
+      return (
+        <>
+          <CollageButton collage="/ layer" does="group picked" label="Group" />
+          <Collage view={page} list="layers" width="width" height="height" fields={fields} pick="/ layer" name="/ layer" add="studio::layer::create" place="studio::layer::place" group="studio::layer::group" />
+          <Picked />
+        </>
+      );
+    }
+    const only = defineScreen({ title: "Poster", route: "/" }, () => <Poster />);
+    const drawn = render(<App name="studio" screens={[only]} ui={plain} data={source} location="/" />);
+    await waitFor(() => expect(drawn.container.querySelector("canvas")).toBeTruthy());
+    const canvas = drawn.container.querySelector("canvas")!;
+    await act(async () => {});
+    // A drag from 50 50 to 450 250 goes all the way around a and b, not c.
+    fireEvent.pointerDown(canvas, { clientX: 32 + 50, clientY: 32 + 50, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 32 + 300, clientY: 32 + 200, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 32 + 450, clientY: 32 + 250, pointerId: 1 });
+    await act(async () => {});
+    expect(drawn.getByTestId("picked").textContent).toBe("");
+    fireEvent.click(drawn.getByRole("button", { name: "Group" }));
+    await waitFor(() => expect(source.runs.length).toBe(3));
+    expect(source.runs[0]).toMatchObject({ command: "studio::layer::create", input: { x: 100, y: 100, w: 300, h: 100 } });
+    expect(source.runs.slice(1).map((r) => [r.input["id"], r.input["group"]])).toEqual([["a", "g"], ["b", "g"]]);
+    await waitFor(() => expect(drawn.getByTestId("picked").textContent).toBe("g"));
+  });
+
   it("picks what a group holds when it's pressed twice", async () => {
     act(() => setPicked("/ layer", undefined));
     const source = memorySource();

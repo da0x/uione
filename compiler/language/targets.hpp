@@ -423,7 +423,7 @@ namespace one::language {
                             : n.does == kind::add_pictures ? "pictures.choose"
                             : n.does == kind::copy       ? "collage.copy"
                             : n.does == kind::save       ? "collage.save"
-                            : n.does == kind::ungroup    ? "collage.group"
+                            : n.does == kind::ungroup || n.does == kind::group_picked ? "collage.group"
                             : n.does == kind::zoom_in || n.does == kind::zoom_out || n.does == kind::zoom_fit ? "collage.zoom"
                                                          : "collage.add");
                         if (n.svg) use("collage.svg");

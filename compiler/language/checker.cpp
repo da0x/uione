@@ -3661,10 +3661,10 @@ namespace one::language {
                     bool into_paper = (does->does == kind::paste || does->does == kind::add_pictures) && std::ranges::any_of(papers_, [](const paper_item* p) { return p->paste; });
                     bool can = does->of.has_value() || into_paper || std::ranges::any_of(collages_, [&](const collage_item* c) {
                         bool zooms = does->does == kind::zoom_in || does->does == kind::zoom_out || does->does == kind::zoom_fit;
-                        return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : takes_pictures ? c->paste : c->add.has_value());
+                        return zooms || (does->does == kind::crop ? c->crop.has_value() : does->does == kind::edit_words ? c->write.has_value() : does->does == kind::ungroup ? c->group.has_value() : does->does == kind::group_picked ? c->group.has_value() && c->add.has_value() : takes_pictures ? c->paste : c->add.has_value());
                     });
                     if (!can) {
-                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : takes_pictures ? "paste" : "add layer::create";
+                        std::string needs = does->does == kind::crop ? "crop layer::crop" : does->does == kind::edit_words ? "write layer::write" : does->does == kind::ungroup ? "group layer::group" : does->does == kind::group_picked ? "group layer::group and add layer::create" : takes_pictures ? "paste" : "add layer::create";
                         error(item.where, "this screen has no collage that says " + needs + " for this button to use");
                     }
                 } else if (auto* opening = std::get_if<on_open_item>(&item.node)) {

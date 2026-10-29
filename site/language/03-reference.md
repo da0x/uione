@@ -2241,7 +2241,8 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     box around them. A press on anything it holds picks the group, the outermost one
     it's in, framed with corners, and a drag or the arrows move it and all it holds,
     resized keeping their shape unless Shift; each is sent to `place`, all one step to
-    undo. Pressed twice, what's under the pointer is picked on its own. An SVG
+    undo. Pressed twice, the group is gone into, framed faintly: a press picks what it
+    holds, and Esc, or a press outside it, leaves it with the group picked again. An SVG
     brought in comes in as one group of its shapes, named for it. A list of the
     layers shows what a group holds under it, opened by its caret.
   - `draw layer::create { stroke = "#1d1d1f" } by hand with stroke stroke_width from
@@ -2255,6 +2256,11 @@ board project_page.issues by stage over project_page.stages link /:project/issue
     what's shown, across with Shift. `zoom in "Zoom in" icon zoom_in key ctrl+equal`,
     `zoom out` and `zoom to fit` buttons zoom about its middle, or fit it to its place
     again. How it's looked at is the screen's own, never stored.
+  - A drag from where nothing is chooses what it goes all the way around, and Shift
+    with a press chooses one more or lets one go. Several chosen are framed together,
+    moved as one by a drag on any of them, deleted by Delete, and let go by Esc. A
+    `group picked "Group" icon group key ctrl+g` button makes them one new group, by
+    the collage's `add`, named Group, and puts each in it.
   - `group layer::group`: what puts a layer in a group or takes it out, sent its
     `group`. An `ungroup "Ungroup" icon ungroup` button over the picked group sends
     each it holds with no group and deletes the group by the collage's `delete`.
