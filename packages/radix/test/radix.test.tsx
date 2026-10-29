@@ -10,6 +10,7 @@ import { useState } from "react";
 import {
   App,
   Board,
+  Cards,
   Code,
   Command,
   Confirm,
@@ -193,6 +194,21 @@ describe("dialogs", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(source.runs).toEqual([]);
+  });
+});
+
+describe("cards", () => {
+  it("name each card in a heading set in the text's face, not the headings'", () => {
+    const source = memorySource();
+    source.set("studio::room_page", { pieces: [{ id: "c1", name: "Harbor" }] });
+    function Pieces() {
+      const page = useView("studio::room_page");
+      return <Cards view={page} list="pieces" columns={{ name: "Name" }} />;
+    }
+    renderScreen(() => <Pieces />, source);
+    const title = screen.getByRole("heading", { name: "Harbor" });
+    expect(title.tagName).toBe("H2");
+    expect(title.className.split(" ")).toContain("font-sans");
   });
 });
 

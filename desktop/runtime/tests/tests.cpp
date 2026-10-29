@@ -919,6 +919,34 @@ TEST("cards: each with what it holds counted, and links opening it filtered") {
 	matches_golden("cards", {900, 520}, [&] { return drawn(nav); });
 }
 
+TEST("a card's title is set in the theme's text face, strong, not in its headings' face, which the page's title keeps") {
+	memory_source data;
+	data.set("projects::project_page", "atlas", value(fields{{"boards", list{value(fields{{"id", "atlas-main"}, {"title", "Main"}}), value(fields{{"id", "atlas-ops"}, {"title", "Operations"}})}}}));
+	auto drawn_in = [&](const std::string& heading_family, bool titled) {
+		one::desktop::theme look = tested_theme();
+		look.heading_family = heading_family;
+		site s{.name = "tracker", .id = "org.uione.runtime-tests"};
+		s.look = look;
+		s.screens.push_back({titled ? "Atlas" : "tracker", "/:project", "", [](page& p) {
+			                     return items(cards(p, {.view = p.view("projects::project_page", p.param("project")), .list = "boards", .columns = {{"title", "Title"}}}));
+		                     }});
+		navigator nav(s, data);
+		nav.open("/atlas");
+		std::unique_ptr<one::desktop::element> root;
+		return one::desktop::offscreen::draw({900, 400}, 1, look.page, [&](one::desktop::canvas& c) {
+			one::desktop::detail::theme_in_use() = &look;
+			root = drawn(nav).take();
+			root->place({0, 0, 900, 400});
+			root->paint(c);
+		});
+	};
+	// The cards alone are drawn the same whatever face headings are in.
+	CHECK(one::desktop::offscreen::differences(drawn_in("", false), drawn_in("Noto Serif", false), 3) == 0);
+	// The page's title over them is a heading, and changes with it.
+	CHECK(one::desktop::offscreen::differences(drawn_in("", true), drawn_in("Noto Serif", true), 3) > 0);
+	one::desktop::detail::theme_in_use() = &tested_theme();
+}
+
 TEST("cards take pictures chosen or dropped, each a record made by their add, its file in their picture and its own size, name, bytes and date in the fields that keep them") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-cards-pictures";
 	std::filesystem::remove_all(folder);

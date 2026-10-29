@@ -396,12 +396,16 @@ namespace one::desktop::runtime {
 					if (row["id"].as_string() == card.id) inside.push_back(picture_of(p, row[spec.picture].as_string(), spec.fit, 180, 640));
 				}
 			}
+			// Its title in the text's face, strong, as large as a small heading: a card's name,
+			// not a heading over the page's parts.
+			auto title = t.strong();
+			title.size = 18, title.line_height = 1.3f;
 			if (card.tags.empty()) {
-				inside.push_back(desktop::text(card.title, t.heading(18)));
+				inside.push_back(desktop::text(card.title, title));
 			} else {
 				// Its tags beside its title, like Private.
 				std::vector<desktop::view> top;
-				top.push_back(desktop::text(card.title, t.heading(18)).grow());
+				top.push_back(desktop::text(card.title, title).grow());
 				for (const auto& tag : card.tags) top.push_back(desktop::text(tag, t.quiet()).padding(edges(1, 8)).background({.fill = t.sunken, .border = t.line, .border_width = 1, .radius = 9}));
 				inside.push_back(desktop::row(std::move(top)).spacing(6));
 			}

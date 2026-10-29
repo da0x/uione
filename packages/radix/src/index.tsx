@@ -1157,7 +1157,8 @@ export const radix: ComponentSet = {
               </div>
             )}
             <div className="flex items-start justify-between gap-3">
-              <h2 className="text-lg leading-snug font-semibold">
+              {/* A card's name, in the text's face, not the headings': still a heading to a screen reader. */}
+              <h2 className="font-sans text-lg leading-snug font-semibold">
                 {card.link ? (
                   <a {...card.link} className="text-ink hover:text-accent hover:underline">
                     {card.title}
