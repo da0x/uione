@@ -385,6 +385,7 @@ export function Details({
   choices = {},
   labels = [],
   files = [],
+  bytes = [],
   tint,
 }: {
   view: ViewState;
@@ -392,6 +393,7 @@ export function Details({
   choices?: Record<string, Record<string, string>>;
   labels?: string[];
   files?: string[]; // the values holding a file, or a list of them
+  bytes?: string[]; // the numbers of bytes, said as KB, MB or GB
   tint?: Tint; // the box colored by how urgent what it's about is, like its priority
 }) {
   const ui = useUI();
@@ -406,14 +408,23 @@ export function Details({
       const words = value.map((word) => show(word)).filter((word) => word !== "");
       return words.length ? [{ label, value: <ui.Labels items={words} /> }] : [];
     }
-    const said = typeof value === "string" ? (choices[name]?.[value] ?? value) : show(value);
+    // A moment is said with its time of day, as a record's own details are read closely.
+    const said =
+      typeof value === "string"
+        ? (choices[name]?.[value] ?? value)
+        : bytes.includes(name) && typeof value === "number"
+          ? readValue(value, "bytes")
+          : value instanceof Date && !dateOnly(value)
+            ? value.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+            : show(value);
     return said === "" ? [] : [{ label, value: said }];
   });
   return items.length ? <ui.Details items={items} tone={toneOf(view.data ?? {}, tint)} /> : null;
 }
 
-// One region of a screen's layout, like main: what's in it, which Layout places.
-export function Region({ children }: { name: string; children?: ReactNode }) {
+// One region of a screen's layout, like main: what's in it, which Layout places. A
+// drawer, like side when about, is opened and closed by what it's shown while.
+export function Region({ children }: { name: string; drawer?: boolean; children?: ReactNode }) {
   return <>{children}</>;
 }
 
@@ -438,12 +449,14 @@ export function Layout({ name, alone = false, children }: { name: string; alone?
     () => false,
   );
   const regions: Record<string, ReactNode> = {};
+  const drawers: string[] = [];
   Children.forEach(children, (child) => {
-    if (isValidElement<{ name: string; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || alone || child.props.name === "main")) {
+    if (isValidElement<{ name: string; drawer?: boolean; children?: ReactNode }>(child) && child.type === Region && (!full || name !== "workspace" || alone || child.props.name === "main")) {
       regions[child.props.name] = child.props.children;
+      if (child.props.drawer) drawers.push(child.props.name);
     }
   });
-  return <ui.Layout name={name} regions={regions} site={site.name} alone={alone ? { awake: awake && !full } : undefined} />;
+  return <ui.Layout name={name} regions={regions} site={site.name} alone={alone ? { awake: awake && !full, drawers } : undefined} />;
 }
 
 // Buttons one after another, in a row.

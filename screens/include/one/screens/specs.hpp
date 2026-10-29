@@ -27,6 +27,9 @@ namespace one::screens {
 	struct basic_region {
 		std::string name;
 		View inside;
+		// side when about: a drawer, opened and closed by what it's shown while, which
+		// stays over a picture alone as long as it's open, its bars resting or not.
+		bool drawer = false;
 	};
 
 	// The pages above this one, nearest last, each followed back with a click. A
@@ -124,6 +127,7 @@ namespace one::screens {
 	struct column {
 		std::string field;
 		std::string label;
+		bool bytes = false;  // a number of bytes, said as KB, MB or GB
 	};
 
 	// A form for a command: each field asked for as its kind is, and a button that

@@ -3062,6 +3062,12 @@ namespace one::language {
                         field.where = peek().where;
                         field.value = parse_postfix();
                         if (at(token_kind::string)) field.label = advance().text;
+                        // picture_bytes "Size" as bytes
+                        if (at_word("as") && peek(1).kind == token_kind::identifier && peek(1).text == "bytes") {
+                            advance();
+                            advance();
+                            field.bytes = true;
+                        }
                         details.fields.push_back(std::move(field));
                     }
                     end_line();

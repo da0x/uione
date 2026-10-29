@@ -232,7 +232,7 @@ export const plain: ComponentSet = {
   Layout: ({ name, regions, site, alone }) => (
     <>
       {Object.entries(regions).map(([region, content]) => (
-        <div key={region} data-region={region} hidden={alone && !alone.awake && region !== "main"}>
+        <div key={region} data-region={region} hidden={alone && !alone.awake && region !== "main" && !alone.drawers?.includes(region)}>
           {name === "workspace" && region === "bar" && site && <strong>{site} </strong>}
           {content}
         </div>

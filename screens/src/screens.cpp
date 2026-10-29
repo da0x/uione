@@ -109,6 +109,13 @@ namespace one::screens {
 		}
 	}
 
+	std::string said_with_time(const value& v) {
+		auto when = std::chrono::zoned_time(time_zone(), std::chrono::floor<std::chrono::minutes>(v.as_time())).get_local_time();
+		std::string day = std::format("{:%b %e, %Y, %H:%M}", when);
+		if (auto doubled = day.find("  "); doubled != std::string::npos) day.erase(doubled, 1);
+		return day;
+	}
+
 	std::string this_year() {
 		auto today = std::chrono::year_month_day(std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now()));
 		return std::to_string(static_cast<int>(today.year()));

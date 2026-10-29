@@ -196,7 +196,7 @@ namespace studio at / {
 	}
 
 	view clipping_page per clipping {
-		name  image  picture_bytes  picture_date  picture_camera
+		name  image  picture_bytes  picture_date  picture_camera  picture_width  picture_height
 	}
 
 	view notes_page per poster {
@@ -334,7 +334,7 @@ namespace studio at / {
 	}
 
 	// A clipping on its own, all of the screen, stepped through as they're set out, its
-	// bars over it until the pointer's still.
+	// bars over it until the pointer's still, and what's known of it in a drawer beside.
 	screen "{clipping_page.name}" /clippings/:clipping {
 		layout workspace
 		bar {
@@ -349,11 +349,18 @@ namespace studio at / {
 				zoom out "Smaller" icon zoom_out
 				zoom in "Larger" icon zoom_in
 				zoom to fit "Fit" icon zoom_fit
+				toggle about "About" icon info key i
 				full screen "Full screen" icon fullscreen key f11
 			}
 		}
 		main {
 			picture clipping_page.image fit alone
+		}
+		side when about {
+			details clipping_page {
+				name  picture_date "Taken"  picture_camera "Camera"
+				picture_bytes "Size" as bytes  picture_width "Width"  picture_height "Height"
+			}
 		}
 		status {
 			text "{clipping_page.name}, taken {clipping_page.picture_date} with {clipping_page.picture_camera}"

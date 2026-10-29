@@ -277,6 +277,8 @@ paper_line     ::= ("write" qualified | "add" qualified | "delete" qualified | "
 key            ::= "key" (NAME | NUMBER) ("+" (NAME | NUMBER))*
 screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" NAME)? ("as" "steps")? ("when" expression)? screen_block END
                  | "menu" screen_block END
+                 /* with when, there only while it holds; side when a toggle, a drawer it opens, which stays
+                    over a picture alone while it's open, its bars resting or not */
                  | ("main" | "side" | "bar" | "toolbar" | "tools" | "status") ("when" expression)? screen_block END
                  /* a named part of a workspace's toolbar, its buttons tools */
                  | "group" STRING "small"? ("rows" "of" NUMBER)? ("at" "end")? ("when" expression)? screen_block END
@@ -344,7 +346,8 @@ screen_item    ::= ("hero" | "section") STRING ANCHOR? ("icon" NAME)? ("color" N
                  | "timeline" qualified "." NAME "by" NAME END
                  | "copy" qualified STRING? END
                  | "themes" END
-                 | "details" qualified "{" NEWLINE? (("tint" "by" NAME | column+) END)* "}" END
+                 /* a record's values, each beside its name; as bytes: a number of them, said as KB, MB or GB */
+                 | "details" qualified "{" NEWLINE? (("tint" "by" NAME | (column ("as" "bytes")?)+) END)* "}" END
                  /* a box finding rows of several lists as it's typed in */
                  | "find" STRING "{" NEWLINE? find_line* "}" END
                  | ("grid" | "diagram") qualified "." NAME "by" NAME "and" NAME "over" qualified "." NAME ("{" NEWLINE? (postfix END)? "}")? END

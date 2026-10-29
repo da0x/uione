@@ -729,6 +729,7 @@ namespace one::language {
         std::string when_written;
         std::optional<std::string> icon;  // issue::create "New issue" icon add: a toolbar's button drawn as that
         location icon_where;
+        bool bytes = false;  // picture_bytes "Size" as bytes: a number of bytes, said as KB, MB or GB
     };
 
     // track milestone over board_page.milestones { due }: a list's records as cards in

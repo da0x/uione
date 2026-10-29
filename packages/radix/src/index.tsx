@@ -2464,7 +2464,9 @@ export const radix: ComponentSet = {
         {regions.tools}
       </div>
     );
-    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over}`}>{regions.side}</aside>;
+    // An open drawer stays over a picture alone while the rest rests.
+    const stays = alone?.drawers?.includes("side") && !alone.awake;
+    const side = regions.side && <aside className={`w-72 shrink-0 overflow-y-auto border-l border-line p-3 ${over} ${stays ? "visible" : ""}`}>{regions.side}</aside>;
     const status = regions.status && <div className={`flex shrink-0 items-center gap-4 overflow-hidden whitespace-nowrap border-t border-line px-3 py-1 text-xs text-muted ${over}`}>{regions.status}</div>;
     // Only its picture, all of the window on black, the rest over it while it's awake:
     // what's between them is the picture's to point at.

@@ -5,7 +5,8 @@
 // been still, zoomed and moved about as it's looked at, and fitted again on the next.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import { App, CollageButton, Layout, Picture, Region, StepLink, memorySource, screen as defineScreen, useParam, useView } from "../src/index.js";
+import { vi } from "vitest";
+import { App, CollageButton, Details, Layout, Picture, Region, StepLink, Toggle, memorySource, screen as defineScreen, useParam, useToggled, useView } from "../src/index.js";
 import { actual, drawnAt, fitted, moved, rest, zoomed } from "../src/alone.js";
 import { plain } from "../src/plain.js";
 
@@ -206,5 +207,50 @@ describe("a picture alone on its screen", () => {
     expect(parseFloat(picture.style.left)).toBeCloseTo(-300);
     fireEvent.doubleClick(place, { clientX: 450, clientY: 300 });
     expect(picture.style.width).toBe("900px");
+  });
+});
+
+describe("a drawer over a picture alone", () => {
+  it("is closed until its toggle opens it, then stays while the bars rest, its record's size in KB, MB or GB and its moment with the time of day", async () => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => kept.get(key) ?? null, setItem: (key: string, value: string) => void kept.set(key, value) });
+    const source = memorySource({ files: true });
+    source.set("studio::piece_page", { name: "Harbor", image: "uploads/harbor.jpg", bytes: 1536 * 1024, taken: new Date(Date.UTC(2025, 2, 4, 14, 32)) }, "harbor");
+    function Piece() {
+      const page = useView("studio::piece_page", "harbor");
+      const about = useToggled("/pieces/:piece about");
+      return (
+        <Layout name="workspace" alone>
+          <Region name="toolbar">
+            <Toggle name="/pieces/:piece about" label="About" icon="info" keys={["i"]} />
+          </Region>
+          <Region name="main">
+            <Picture source={page.data?.["image"] ?? null} fit alone zoom="/pieces/:piece collage" />
+          </Region>
+          {about && (
+            <Region name="side" drawer>
+              <Details view={page} fields={[["name", "Name"], ["bytes", "Size"], ["taken", "Taken"]]} bytes={["bytes"]} />
+            </Region>
+          )}
+        </Layout>
+      );
+    }
+    const screens = [defineScreen({ title: "Piece", route: "/pieces/:piece" }, () => <Piece />)];
+    const drawn = render(<App name="studio" screens={screens} ui={plain} data={source} location="/pieces/harbor" />);
+    await waitFor(() => expect(drawn.container.querySelector(".one-picture-alone")).toBeTruthy());
+    expect(drawn.container.querySelector("[data-region=side]")).toBeNull();
+    fireEvent.keyDown(window, { key: "i" });
+    await waitFor(() => expect(drawn.container.querySelector("[data-region=side]")).toBeTruthy());
+    expect(kept.get("uione toggle /pieces/:piece about")).toBe("on");
+    act(() => rest());
+    expect(drawn.container.querySelector<HTMLElement>("[data-region=toolbar]")!.hidden).toBe(true);
+    const side = drawn.container.querySelector<HTMLElement>("[data-region=side]")!;
+    expect(side.hidden).toBe(false);
+    expect(side.textContent).toContain("1.5 MB");
+    expect(side.textContent).toContain(new Date(Date.UTC(2025, 2, 4, 14, 32)).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }));
+    fireEvent.keyDown(window, { key: "i" });
+    await waitFor(() => expect(drawn.container.querySelector("[data-region=side]")).toBeNull());
+    expect(kept.get("uione toggle /pieces/:piece about")).toBe("off");
+    vi.unstubAllGlobals();
   });
 });

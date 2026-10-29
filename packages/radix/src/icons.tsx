@@ -177,6 +177,12 @@ export const buttonIcons: Record<string, ReactNode> = {
       <path d="M6 3l5 5-5 5" />
     </svg>
   ),
+  info: (
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M8 7.25V11.5M8 4.75v.5" />
+    </svg>
+  ),
   // A table of contents: headings, and what's under them set in.
   contents: (
     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

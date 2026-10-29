@@ -282,6 +282,16 @@ describe("a workspace that's only its picture", () => {
     expect(screen.getByText("Next")).toBeTruthy();
     expect(window.style.cursor).toBe("none");
   });
+
+  it("keeps an open drawer shown over it while its bars rest", () => {
+    const Layout = radix.Layout;
+    const regions = { main: <p>The picture</p>, toolbar: <button type="button">About</button>, side: <span>1.5 MB</span> };
+    const drawn = render(<Layout name="workspace" regions={regions} alone={{ awake: false }} />);
+    expect(screen.getByText("1.5 MB").closest("aside")!.className.split(" ")).not.toContain("visible");
+    drawn.rerender(<Layout name="workspace" regions={regions} alone={{ awake: false, drawers: ["side"] }} />);
+    expect(screen.getByText("1.5 MB").closest("aside")!.className.split(" ")).toContain("visible");
+    expect(screen.getByRole("toolbar", { hidden: true }).parentElement!.className.split(" ")).toContain("invisible");
+  });
 });
 
 describe("tables and live values", () => {

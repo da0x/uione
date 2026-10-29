@@ -10,6 +10,7 @@
 #include <cctype>
 #include <chrono>
 #include <map>
+#include <set>
 #include <thread>
 
 #include "one/desktop/folder.hpp"
@@ -204,8 +205,10 @@ namespace one::desktop::runtime {
 		p.fill();
 		const auto& t = current_theme();
 		std::map<std::string, desktop::view> by;
+		std::set<std::string> drawers;
 		for (auto& r : regions) {
 			if (r.inside.get()) by[r.name] = std::move(r.inside);
+			if (r.drawer) drawers.insert(r.name);
 		}
 		auto taken = [&](const std::string& name) -> desktop::view {
 			auto found = by.find(name);
@@ -259,6 +262,14 @@ namespace one::desktop::runtime {
 				if (auto tools = taken("tools"); tools.get()) over.emplace_back(alone_element::edge::left, std::move(tools).padding(edges(8, 6)).background({.fill = veiled}));
 				if (auto side = taken("side"); side.get()) over.emplace_back(alone_element::edge::right, desktop::scroll(std::move(side).padding(edges(12, 12))).width(288).background({.fill = veiled}));
 				if (auto status = taken("status"); status.get()) over.emplace_back(alone_element::edge::bottom, std::move(status).padding(edges(4, 12)).background({.fill = veiled}));
+			}
+			// A drawer that's open stays, as it was asked for, while the rest rests.
+			if (drawers.contains("side")) {
+				if (auto side = taken("side"); side.get()) {
+					desktop::color veiled = t.surface;
+					veiled.alpha = 0.86f;
+					over.emplace_back(alone_element::edge::right, desktop::scroll(std::move(side).padding(edges(12, 12))).width(288).background({.fill = veiled}));
+				}
 			}
 			return desktop::view(std::make_unique<alone_element>(taken("main").grow(), std::move(over))).grow();
 		}

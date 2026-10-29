@@ -131,8 +131,9 @@ export interface LayoutProps {
   // Only its picture, a workspace's main all of it: its other regions over it, see
   // through, while they're awake, as they are for a moment after the pointer moves;
   // while they're not, hidden but still there, so their keys still work, and the
-  // pointer hidden too. The picture never moves for them.
-  alone?: { awake: boolean };
+  // pointer hidden too. The picture never moves for them. A drawer that's open, like
+  // side when about, stays shown, as it was asked for, while the rest rests.
+  alone?: { awake: boolean; drawers?: string[] };
 }
 
 // Buttons that sit together in a row, like Edit and Close issue.
@@ -531,7 +532,7 @@ export interface ChartProps {
   title: string;
   values: number[]; // newest last
   top: number; // the top of its scale
-  latest: string; // its newest value, as it reads, like 42% or 1.5 GiB
+  latest: string; // its newest value, as it reads, like 42% or 1.5 GB
   topSaid: string; // the top of its scale, as it reads
   read: (value: number) => string; // any value as it reads, for what's pointed at
   size: "small" | "large";

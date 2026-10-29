@@ -455,7 +455,7 @@ namespace one::generators {
                         const auto& region = std::get<language::content_block>(item->node);
                         // side when layers: there only while it holds.
                         if (item->when) items.open("{" + condition(parts, ns, *item->when) + " && (");
-                        items.open("<Region name=" + web_detail::js_string(region.title) + ">");
+                        items.open("<Region name=" + web_detail::js_string(region.title) + (item->when ? " drawer" : "") + ">");
                         if (layout == "workspace" && region.title == "tools") {
                             // A workspace's tools, a column of them down its side, each a small tool.
                             parts.components.insert("Tools");
@@ -2227,7 +2227,7 @@ namespace one::generators {
                     if (auto found = scope->second.find(*view->per); found != scope->second.end()) entity = found->second;
                 }
             }
-            std::string fields, shown, labels, files;
+            std::string fields, shown, labels, files, bytes;
             for (const auto& f : details.fields) {
                 std::string key = web_detail::text_of(*f.value);
                 // Called as it says, or as its field is everywhere: assignees.name as
@@ -2239,6 +2239,8 @@ namespace one::generators {
                 }
                 fields += (fields.empty() ? "" : ", ") + std::string("[") + web_detail::js_string(key) + ", " +
                           web_detail::js_string(label ? *label : web_detail::label(key)) + "]";
+                // A number of bytes, said as KB, MB or GB.
+                if (f.bytes) bytes += (bytes.empty() ? "" : ", ") + web_detail::js_string(key);
                 if (!view || !entity) continue;
                 for (const auto& value : view->values) {
                     if ((value.name ? *value.name : web_detail::text_of(*value.value)) != key) continue;
@@ -2260,6 +2262,7 @@ namespace one::generators {
             if (!shown.empty()) line += " choices={{ " + shown + " }}";
             if (!labels.empty()) line += " labels={[" + labels + "]}";
             if (!files.empty()) line += " files={[" + files + "]}";
+            if (!bytes.empty()) line += " bytes={[" + bytes + "]}";
             // tint by priority: a value of the view holding a choice of the entity's.
             if (details.tint && view && entity) {
                 for (const auto& value : view->values) {

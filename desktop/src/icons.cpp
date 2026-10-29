@@ -83,6 +83,8 @@ namespace one::desktop {
 			    {"inbox", {path("M2 9.5l2-6.5h8l2 6.5v3.5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zM2 9.5h3.5l1 1.5h3l1-1.5H14")}},
 			    {"previous", {path("M10 3L5 8l5 5")}},
 			    {"next", {path("M6 3l5 5-5 5")}},
+			    // About it: an i in a ring.
+			    {"info", {ring(8, 8, 6.5f), path("M8 7.25V11.5M8 4.75v.5")}},
 			    // A table of contents: headings, and what's under them set in.
 			    {"contents", {path("M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M2.5 12.5h11")}},
 			    // What a picture's toolbar does to it: crop or copy it, turn or flip it, raise

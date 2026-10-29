@@ -1194,7 +1194,7 @@ namespace one::generators {
                 for (const auto& field : (entity ? entity->fields : no_fields_)) {
                     if (!label && field.name == first && (rest.empty() || rest == "name" || rest == "title") && field.label) label = field.label;
                 }
-                fields += (fields.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label ? *label : screens::label(key)) + "}";
+                fields += (fields.empty() ? "" : ", ") + std::string("{") + str(key) + ", " + str(label ? *label : screens::label(key)) + (f.bytes ? ", true" : "") + "}";
                 if (!view || !entity) continue;
                 for (const auto& v : view->values) {
                     if ((v.name ? *v.name : screens::text_of(*v.value)) != key) continue;
@@ -2151,7 +2151,7 @@ namespace one::generators {
                         quiet_ = quiet;
                         // side when layers: there only while it holds.
                         if (item->when) drawn = "[&] { if (" + condition(parts, ns, *item->when) + ") return " + drawn + "; return view(); }()";
-                        inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + "}";
+                        inside += (inside.empty() ? "" : ", ") + std::string("region{") + str(region.title) + ", " + drawn + (item->when ? ", true" : "") + "}";
                     }
                     if (layout == "workspace") shown.push_back({"workspace(p, " + inside + ")", where.line});
                     else shown.push_back({"layout(" + str(layout) + ", " + inside + ")", where.line});

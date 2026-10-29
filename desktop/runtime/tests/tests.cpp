@@ -3623,6 +3623,50 @@ TEST("a picture alone is all of its screen, fitted on black, its bars over it un
 	std::filesystem::remove_all(folder);
 }
 
+TEST("a side a toggle opens is a drawer over a picture alone, there while it's open whether the bars are resting or not, and closed until it's opened") {
+	auto folder = banded_picture(std::filesystem::temp_directory_path() / "uione-drawer");
+	struct kept_there : memory_source {
+		std::filesystem::path in;
+		std::optional<std::filesystem::path> file_here(const std::string& kept) const override { return in / kept; }
+	} data;
+	data.in = folder;
+	auto s = archive_of(2, data, {.view = {}, .list = "posters", .columns = {{"title", "Title"}}, .link = "/posters/:poster"});
+	s.screens.back().build = [](page& p) {
+		auto archive = p.view("studio::archive");
+		one::desktop::view drawer;
+		if (p.toggled("/posters/:poster about")) drawer = items(details(p, archive, {{"posters", "Posters"}}));
+		return items(workspace(p, region{"toolbar", along(toggle(p, "/posters/:poster about", "About", "info", std::vector<std::string>{"i"}))},
+		                          region{"main", items(picture_alone(p, "files/banded.png", "/posters/:poster collage"))}, region{"side", std::move(drawer), true}));
+	};
+	navigator nav(s, data);
+	nav.open("/posters");
+	nav.open("/posters/p0");
+	kept_window window(nav);
+	window.update();
+	window.update();
+	// Closed at first, the picture's right half is blue under the bars.
+	CHECK(!nav.current().toggled("/posters/:poster about"));
+	CHECK(looked(window.w).at(850, 300) == blue);
+	// Opened by its key, it's over the picture, and stays while the bars rest.
+	const one::desktop::key_event i_key{.symbol = 'i', .text = "i"};
+	key_down(i_key);
+	CHECK(key(nav, i_key));
+	window.update();
+	CHECK(looked(window.w).at(850, 300) != blue);
+	rest();
+	window.update();
+	auto shown = looked(window.w);
+	CHECK(shown.at(450, 20) == black);
+	CHECK(shown.at(850, 300) != blue);
+	CHECK(shown.at(200, 300) == red);
+	// Closed again, it's gone with them.
+	CHECK(key(nav, i_key));
+	rest();
+	window.update();
+	CHECK(looked(window.w).at(850, 300) == blue);
+	std::filesystem::remove_all(folder);
+}
+
 TEST("a picture alone fills its window, edge to edge, fitted on black, wide or tall, at any size and at any scale") {
 	auto folder = std::filesystem::temp_directory_path() / "uione-alone-fills";
 	std::filesystem::remove_all(folder);

@@ -46,6 +46,8 @@ namespace one::screens {
 	// A value as a person reads it: a number without needless decimals, a list
 	// joined, a time as a date or, today, as its time, and nothing for nothing.
 	std::string show(const value& v);
+	// A moment as a record's details say it: its day and its time of day, like Mar 4, 2025, 14:32.
+	std::string said_with_time(const value& v);
 
 	// A time a screen names, worked out as it's read: counted from now, like +10m or
 	// -7d; or by the calendar, d for a day, w for a week from Monday and M for a month,

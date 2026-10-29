@@ -1148,6 +1148,53 @@ TEST_CASE("a record's screen steps through the list it was opened from when its 
     CHECK(built(own)["desktop/src/screens/main.cpp"].find(R"(step(p, {.view = {}, .list = "", .route = "/posters/:poster", .next = true, .opened = true})") != std::string::npos);
 }
 
+TEST_CASE("a side a toggle opens is a drawer over a picture alone, and details say a number of bytes as KB, MB or GB") {
+    const std::string pieces = R"(namespace studio at / {
+	entity piece {
+		name   text
+		image  file
+		bytes  number = 0
+		taken  date
+	}
+
+	view piece_page per piece {
+		name  image  bytes  taken
+	}
+
+	screen "{piece_page.name}" /pieces/:piece {
+		layout workspace
+		toolbar {
+			group "View" small at end {
+				toggle about "About" icon info key i
+			}
+		}
+		main {
+			picture piece_page.image fit alone
+		}
+		side when about {
+			details piece_page {
+				name  taken "Taken"  bytes "Size" as bytes
+			}
+		}
+	}
+}
+)";
+    CHECK(messages(project + pieces).empty());
+    auto files = built(project + pieces);
+    const std::string& web = files["web/src/screens/main.tsx"];
+    const std::string& native = files["desktop/src/screens/main.cpp"];
+    CAPTURE(web);
+    CAPTURE(native);
+    CHECK(web.find(R"(<Region name="side" drawer>)") != std::string::npos);
+    CHECK(web.find(R"(<Details view={piecePage} fields={[["name", "Name"], ["taken", "Taken"], ["bytes", "Size"]]} bytes={["bytes"]} />)") != std::string::npos);
+    CHECK(native.find(R"(details(p, piece_page, {{"name", "Name"}, {"taken", "Taken"}, {"bytes", "Size", true}}))") != std::string::npos);
+    CHECK(native.find(R"(return view(); }(), true})") != std::string::npos);
+    // Only a number is said as bytes.
+    std::string named = project + pieces;
+    named.replace(named.find("name  taken \"Taken\""), std::string("name").size(), "name as bytes");
+    CHECK(messages(named) == std::vector<std::string>{"32: name isn't a number, so it isn't said as bytes"});
+}
+
 TEST_CASE("a picture alone is all of a workspace's screen, its bars over it, zoomed by the screen's zoom buttons") {
     const std::string pieces = R"(namespace studio at / {
 	entity clipping {

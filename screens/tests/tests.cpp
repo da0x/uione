@@ -196,6 +196,25 @@ TEST("a list ordered by a date is under a heading for each month as it's read he
 	CHECK(!within("2025-10", "2026"));
 }
 
+TEST("a record's details say a number of bytes as KB, MB or GB, a date as its day, and a moment as its day and time of day") {
+	auto at = [](int y, unsigned m, unsigned d, int hour, int minute) {
+		using namespace std::chrono;
+		value v;
+		v.type = value::kind::time;
+		v.time.seconds = duration_cast<seconds>((sys_days(year(y) / month(m) / day(d)) + hours(hour) + minutes(minute)).time_since_epoch()).count();
+		return v;
+	};
+	use_time_zone("UTC");
+	view_state piece{status::ready, value(fields{{"name", "Harbor"}, {"bytes", 1536 * 1024}, {"small", 512}, {"taken", at(2025, 3, 4, 14, 32)}, {"due", at(2025, 3, 9, 0, 0)}}), ""};
+	std::vector<std::string> said;
+	for (const auto& line : details_of(piece, {{"name", "Name"}, {"bytes", "Size", true}, {"small", "Small", true}, {"taken", "Taken"}, {"due", "Due"}}, {}, std::nullopt)) {
+		said.push_back(line.label + ": " + line.value);
+	}
+	CHECK((said == std::vector<std::string>{"Name: Harbor", "Size: 1.5 MB", "Small: 512 B", "Taken: Mar 4, 2025, 14:32", "Due: Mar 9, 2025"}));
+	CHECK(read_value(3.0 * 1024 * 1024 * 1024, "bytes") == "3 GB");
+	CHECK(read_value(2048, "rate") == "2 KB/s");
+}
+
 TEST("a value reads as the web shows it: a date alone as that day, wherever it's read") {
 	value due;
 	due.type = value::kind::time;

@@ -2140,7 +2140,9 @@ form step::update "Save" {
   the pointer itself; they come back as it moves, or as a key is pressed, but not
   for a key that only steps to the next picture, like a `link next` line's. They
   take no room, so the picture never moves as they come and go, and filling the
-  screen they stay hidden. Ctrl and `=`, `-` or `0`, the screen's `zoom in`, `zoom
+  screen they stay hidden. A side opened by a toggle, like `side when about` with
+  `toggle about "About" icon info key i`, is a drawer: once it's open, it stays over
+  the picture until it's closed, whether the rest is resting or not. Ctrl and `=`, `-` or `0`, the screen's `zoom in`, `zoom
   out` and `zoom to fit` buttons, and the wheel with Ctrl or a touchpad's pinch
   zoom it, from fitted to eight times its own size; a double click goes to 100%, a
   pixel of it a pixel of the screen, about where it's clicked, and back. Larger than
@@ -2557,7 +2559,10 @@ board project_page.issues by stage over project_page.stages link /:project/issue
   for. One form can serve several commands.
 - `details issue_page { status "Status"  implementer "Implemented by" }` shows a
   view's values, each beside what it is, a choice as it's shown and a list of words
-  each on its own, and leaves out the ones with nothing in them.
+  each on its own, and leaves out the ones with nothing in them. A date is its day,
+  and a moment its day and its time of day. `picture_bytes "Size" as bytes` says a
+  number of bytes as KB, MB or GB, each K 1,024 of what's under it, as a chart's
+  `bytes` does; only a number can say it.
 - `text "Taken by {issue_page.owner_name}" when issue_page.owner != none` shows a
   text only while its when holds, as a button's does.
 - A view can read a person's `name`, `picture` or `username` through a field

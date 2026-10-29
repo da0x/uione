@@ -652,7 +652,7 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	screen_at t(nav, 110, 12);
 	std::string drawn = t.text();
 	CHECK_SAYING(drawn.find("Working 1m") != std::string::npos && drawn.find("3/5") != std::string::npos && drawn.find("90%") == std::string::npos &&
-	                 drawn.find("64%") != std::string::npos && drawn.find("610 MiB") != std::string::npos,
+	                 drawn.find("64%") != std::string::npos && drawn.find("610 MB") != std::string::npos,
 	             drawn);
 	CHECK_SAYING(drawn.find("Offline") != std::string::npos, drawn);
 	CHECK_SAYING(drawn.find("⣷") != std::string::npos, drawn);  // the graph, its last samples near the top
@@ -660,7 +660,7 @@ TEST("a monitor of agents, working and offline, and an agent's charts in braille
 	nav.open("/atlas/agents/npm");
 	screen_at page(nav, 80, 30);
 	std::string large = page.text();
-	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GiB") != std::string::npos, large);
+	CHECK_SAYING(large.find("of 100%") != std::string::npos && large.find("of 1 GB") != std::string::npos, large);
 }
 
 // A card whose holder says how far it is shows it, in btop's squares, while they

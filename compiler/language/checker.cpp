@@ -3408,7 +3408,7 @@ namespace one::language {
                 "lower",  "rotate_left", "rotate_right", "flip_horizontal", "flip_vertical", "check", "close", "paste", "save", "undo", "redo",
                 "text",   "screenshot", "picture", "folder", "gallery", "fullscreen", "sun", "moon", "bold", "smaller", "larger", "fill", "fit", "stretch",
                 "center", "color", "edges", "blend", "harmonize", "clear", "square", "rounded", "pointer", "rectangle", "ellipse", "line", "italic", "magic", "align_left", "align_center", "align_right",
-                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next"};
+                "title", "heading", "quote", "equation", "book", "letters", "quill", "typewriter", "coffee", "eye", "eye_off", "opacity", "spectrum", "zoom_in", "zoom_out", "zoom_fit", "star", "polygon", "cut", "group", "ungroup", "chevron_right", "chevron_down", "spread", "contents", "calendar", "bell", "inbox", "previous", "next", "info"};
             if (name && !known.contains(*name)) error(where, "there's no icon " + *name + nearest(*name, {known.begin(), known.end()}));
         }
 
@@ -3555,6 +3555,14 @@ namespace one::language {
                                 }
                             }
                             if (!has) error(f.where, "view " + details->view.text() + " has no " + key + " to show");
+                            // Only a number of bytes is said as KB, MB or GB.
+                            const entity_declaration* per = f.bytes && view->per ? find_entity(ns, qualified_name{{*view->per}, f.where}) : nullptr;
+                            for (const auto& v : view->values) {
+                                if (!per) break;
+                                auto* member = std::get_if<member_expression>(&v.value->node);
+                                const field* named = member && (v.name ? *v.name : written(*v.value)) == key ? find_field(*per, member->member) : nullptr;
+                                if (named && (!named->type || named->type->text() != "number" || named->list)) error(f.where, key + " isn't a number, so it isn't said as bytes");
+                            }
                         }
                         if (details->tint && std::none_of(view->values.begin(), view->values.end(), [&](const view_value& v) { return (v.name ? *v.name : written(*v.value)) == *details->tint; })) {
                             error(details->tint_where, "view " + details->view.text() + " has no " + *details->tint + " to tint by");

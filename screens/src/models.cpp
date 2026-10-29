@@ -1312,7 +1312,7 @@ namespace one::screens {
 	std::string read_value(double v, const std::string& unit) {
 		if (unit == "percent") return std::format("{}%", static_cast<long long>(std::llround(v)));
 		if (unit == "bytes" || unit == "rate") {
-			static const char* names[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"};
+			static const char* names[] = {"B", "KB", "MB", "GB", "TB", "PB"};
 			std::size_t at = 0;
 			double n = std::max(0.0, v);
 			while (n >= 1024 && at + 1 < std::size(names)) n /= 1024, ++at;
@@ -2063,8 +2063,11 @@ namespace one::screens {
 	                                    const std::optional<tint_spec>& tint) {
 		std::vector<detail_line> out;
 		for (const auto& f : fields) {
-			// What holds nothing isn't said, as the web leaves it out.
-			std::string says = cell_text(choices, v.data, f.field);
+			// What holds nothing isn't said, as the web leaves it out. A moment is said
+			// with its time of day, as a record's own details are read closely.
+			const value& held = field_of(v.data, f.field);
+			std::string says = f.bytes && (held.is_integer() || held.is_double()) ? read_value(held.as_double(), "bytes") : cell_text(choices, v.data, f.field);
+			if (held.is_time() && (held.time.seconds % 86400 != 0 || held.time.nanos != 0)) says = said_with_time(held);
 			if (says.empty()) continue;
 			out.push_back({f.field, f.label, says, tint && tint->field == f.field ? tone_of(v.data, tint) : 3});
 		}

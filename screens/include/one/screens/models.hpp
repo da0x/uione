@@ -233,7 +233,7 @@ namespace one::screens {
 	// A field of a record by its path: a joined field whole, like assignee.name, and
 	// otherwise a name within a field of data, like stats.cpu.
 	value value_at(const value& record, const std::string& path);
-	// A value as it reads: 42%, 1.5 GiB, 3.2 MiB/s, or 12.5.
+	// A value as it reads: 42%, 1.5 GB, 3.2 MB/s, or 12.5, each K 1,024 of what's under it.
 	std::string read_value(double v, const std::string& unit);
 	// The top of a chart's scale: 100 for a percent, else the least round number at or
 	// above its highest value.
